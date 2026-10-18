@@ -3161,6 +3161,20 @@ export interface LockDraftView {
 	stations: LockDraftStation[];
 }
 
+/** This device's try to be approved face to face (views/pair.ts). */
+export interface LockPair {
+	/**
+	 * `finding` (dialling the person's trusted devices), `code` (one shows a code: type it), `checking`,
+	 * `wrong` (that code was not it), `none` (no trusted device answered), `failed` (`error`), `done`.
+	 */
+	state: string;
+	/** How many trusted devices show a code now. */
+	devices: number;
+	/** Tries left, after a wrong code. */
+	left?: number;
+	error?: string;
+}
+
 /** This device in the workspace's lock. */
 export interface LockMe {
 	device?: string;
@@ -3177,6 +3191,34 @@ export interface LockMe {
 	 * said on its waiting page, asked again by hand (`lock.request`).
 	 */
 	failed?: string;
+	/** Its try to be approved face to face, once it began (`lock.pair`). */
+	pair?: LockPair;
+}
+
+/** A workspace a device waits in, named as the person knows it. */
+export interface LockPromptWorkspace {
+	id: string;
+	name: string;
+	emoji?: string;
+	icon?: string;
+}
+
+/** A new device met face to face, showing a code of this one's to type there (views/pair.ts). */
+export interface LockPairing {
+	/** The new device's key (its iroh id): what `lockPrompt.deny` names. */
+	device: string;
+	name: string;
+	email: string;
+	kind: string;
+	label: string;
+	/** The code to type on the new device: shown here only, never sent. */
+	code: string;
+	/** Where it asks to be let in and this device approves it. */
+	workspaces: LockPromptWorkspace[];
+	/** When it asked. */
+	created_at: number;
+	/** Its times in words (`created_at`). */
+	time?: Record<string, Stamp>;
 }
 
 /** A member in the workspace's lock, with their devices. */
@@ -3189,42 +3231,10 @@ export interface LockPerson {
 	devices: LockDevice[];
 }
 
-/** A workspace a device waits in, named as the person knows it. */
-export interface LockPromptWorkspace {
-	id: string;
-	name: string;
-	emoji?: string;
-	icon?: string;
-}
-
-/** A device waiting to be confirmed, in each workspace of the person's it asked in and this device approves in. */
-export interface LockPrompt {
-	device: string;
-	sub: string;
-	email: string;
-	name: string;
-	kind: string;
-	label: string;
-	/** The code the device shows: the same in every workspace (it is its key's). */
-	code: string;
-	/** When it asked last. */
-	created_at: number;
-	yours: boolean;
-	/** Where it waits on this device: confirmed (`lockPrompt.confirm`) or turned down in all of them at once. */
-	workspaces: LockPromptWorkspace[];
-	/** Its times in words (`created_at`). */
-	time?: Record<string, Stamp>;
-}
-
-/** The devices waiting on this one to be confirmed, across workspaces (the `lockPrompts` topic; views/lock.ts). */
+/** What waits on this device to approve new ones face to face (the `lockPrompts` topic; views/pair.ts). */
 export interface LockPromptsView {
-	/** Every device waiting on this one, in every workspace of the person's: one per device. */
-	waiting: LockPrompt[];
-	/**
-	 * The one to put up on its own (a dialog, a sheet), wherever the person is: one with a workspace whose prompt
-	 * was not closed here (`lockPrompt.shown`, said as it is closed by hand).
-	 */
-	prompt?: LockPrompt;
+	/** The new devices showing this one's code now, wherever the person is. */
+	pairing: LockPairing[];
 }
 
 /** A device waiting to be confirmed. */

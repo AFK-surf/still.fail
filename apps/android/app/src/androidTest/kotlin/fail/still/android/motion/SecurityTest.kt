@@ -1,7 +1,8 @@
 // The workspace's security mode (Security.kt): its row in the settings, its page off and on, a waiting device confirmed
-// from a bottom sheet once its code is compared (and that sheet put up by itself wherever the app is, naming every
-// workspace it waits in, approved in all at once), turning it on, turning it off only once the workspace's name is
-// typed, and what a device waiting itself shows (and why its request did not go).
+// from a bottom sheet once its code is compared, a new device met face to face shown this one's code (put up by itself
+// wherever the app is, naming every workspace it asks for, turned away only: nothing here approves it), turning it on,
+// turning it off only once the workspace's name is typed, and what a device waiting itself shows (asking by hand, the
+// code typed in, and why its request did not go).
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
@@ -22,7 +23,8 @@ import fail.still.android.data.LockDraftStation
 import fail.still.android.data.LockDraftView
 import fail.still.android.data.LockMe
 import fail.still.android.data.LockPerson
-import fail.still.android.data.LockPrompt
+import fail.still.android.data.LockPair
+import fail.still.android.data.LockPairing
 import fail.still.android.data.LockPromptWorkspace
 import fail.still.android.data.LockPromptsView
 import fail.still.android.data.LockRequest
@@ -141,61 +143,97 @@ class SecurityTest {
         rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lock.disable" && it.second["workspace"]!!.jsonPrimitive.content == ws }) }
     }
 
-    /** The device waiting in two workspaces of the person's, `日常` not the one open. */
+    /** A new device asking in two workspaces of the person's, `日常` not the one open, shown this one's code. */
     private fun prompts(): LockPromptsView {
         val r = on().requests.first()
-        val p = LockPrompt(device = r.device, sub = r.sub, email = r.email, name = r.name, kind = r.kind, label = r.label, code = r.code, created_at = r.created_at, yours = r.yours, time = r.time,
+        val p = LockPairing(device = r.device, email = r.email, name = r.name, kind = r.kind, label = r.label, code = r.code, created_at = r.created_at, time = r.time,
             workspaces = listOf(LockPromptWorkspace(id = ws, name = "Dev"), LockPromptWorkspace(id = "w2", name = "日常")))
-        return LockPromptsView(waiting = listOf(p), prompt = p)
+        return LockPromptsView(pairing = listOf(p))
     }
 
-    @Test fun aDeviceWaitingOnThisOnePutsItselfUp() {
+    @Test fun aNewDeviceShowsThisOnesCodeAndIsNotApprovedHere() {
         val h = Harness(rule)
         h.fake.put(Topics.lock(ws), on())
         h.fake.put(Topics.lockPrompts, prompts())
         h.launch(listOf(Screen.Home))
-        rule.onNodeWithText("验证李二的新设备").assertIsDisplayed()
+        rule.onNodeWithText("李二的新设备请求批准").assertIsDisplayed()
         rule.onNodeWithText("K7F-2QX").assertIsDisplayed()
         rule.onNodeWithText("日常").assertIsDisplayed()
+        rule.onNodeWithText("一致", substring = true).assertDoesNotExist()
         picture(h, "security-prompt")
-        rule.runOnIdle { assertTrue(h.fake.calls.none { it.first == "lockPrompt.shown" }) }
-        // Closed by hand: said shown, so the core puts it up no more.
-        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        rule.onNodeWithText("拒绝").performClick()
         h.settle()
-        rule.onNodeWithText("验证李二的新设备").assertDoesNotExist()
-        rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lockPrompt.shown" && it.second["device"]!!.jsonPrimitive.content == "cc".repeat(32) }) }
-    }
-
-    @Test fun aDeviceWaitingInTwoWorkspacesIsApprovedInBoth() {
-        val h = Harness(rule)
-        h.fake.put(Topics.lock(ws), on())
-        h.fake.put(Topics.lockPrompts, prompts())
-        h.launch(listOf(Screen.Home))
-        rule.onNodeWithText("一致，全部批准").performClick()
-        h.settle()
+        rule.onNodeWithText("李二的新设备请求批准").assertDoesNotExist()
         rule.runOnIdle {
-            val call = h.fake.calls.first { it.first == "lockPrompt.confirm" }.second
+            val call = h.fake.calls.first { it.first == "lockPrompt.deny" }.second
             assertEquals("cc".repeat(32), call["device"]!!.jsonPrimitive.content)
-            assertEquals("K7F-2QX", call["code"]!!.jsonPrimitive.content)
         }
     }
 
-    @Test fun aWaitingDeviceShowsItsCodeInsteadOfTheWorkspace() {
+    @Test fun aNewDeviceClosedByHandIsTurnedAway() {
         val h = Harness(rule)
-        h.fake.put(Topics.lock(ws), off().copy(locked = true, me = me.copy(confirmed = false, waiting = true)))
+        h.fake.put(Topics.lock(ws), on())
+        h.fake.put(Topics.lockPrompts, prompts())
+        h.launch(listOf(Screen.Home))
+        rule.onNodeWithText("李二的新设备请求批准").assertIsDisplayed()
+        rule.runOnIdle { assertTrue(h.fake.calls.none { it.first == "lockPrompt.deny" }) }
+        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        h.settle()
+        rule.onNodeWithText("李二的新设备请求批准").assertDoesNotExist()
+        rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lockPrompt.deny" && it.second["device"]!!.jsonPrimitive.content == "cc".repeat(32) }) }
+    }
+
+    private fun waiting(pair: LockPair? = null, failed: String? = null) =
+        off().copy(locked = true, me = me.copy(confirmed = false, waiting = true, asked = false, failed = failed, pair = pair))
+
+    @Test fun aWaitingDeviceAsksByHand() {
+        val h = Harness(rule)
+        h.fake.put(Topics.lock(ws), waiting())
         h.launch(listOf(Screen.Home))
         rule.onNodeWithText("等待批准此设备").assertIsDisplayed()
-        rule.onNodeWithText("SZN-LYA").assertIsDisplayed()
+        // Its own code is no longer what it shows.
+        rule.onNodeWithText("SZN-LYA").assertDoesNotExist()
         picture(h, "security-waiting")
+        rule.onNodeWithText("发送批准请求").performClick()
+        h.settle()
+        rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lock.pair" && it.second["workspace"]!!.jsonPrimitive.content == ws }) }
+    }
+
+    @Test fun aWaitingDeviceTypesTheCodeItIsShown() {
+        val h = Harness(rule)
+        h.fake.put(Topics.lock(ws), waiting(LockPair(state = "code", devices = 1u)))
+        h.launch(listOf(Screen.Home))
+        rule.onNodeWithText("输入你的受信任设备上显示的安全码").assertIsDisplayed()
+        // No code yet: the button does nothing.
+        rule.onNodeWithText("验证").performClick()
+        h.settle()
+        rule.runOnIdle { assertTrue(h.fake.calls.none { it.first == "lock.pairCode" }) }
+        rule.onNode(hasSetTextAction()).performTextInput("K7F2QX")
+        h.settle()
+        picture(h, "security-waiting-code")
+        rule.onNodeWithText("验证").performClick()
+        h.settle()
+        rule.runOnIdle {
+            val call = h.fake.calls.first { it.first == "lock.pairCode" }.second
+            assertEquals(ws, call["workspace"]!!.jsonPrimitive.content)
+            assertEquals("K7F2QX", call["code"]!!.jsonPrimitive.content)
+        }
+    }
+
+    @Test fun aWrongCodeSaysHowManyTriesAreLeft() {
+        val h = Harness(rule)
+        h.fake.put(Topics.lock(ws), waiting(LockPair(state = "wrong", devices = 1u, left = 2u)))
+        h.launch(listOf(Screen.Home))
+        rule.onNodeWithText("安全码不对，还可以试 2 次").assertIsDisplayed()
     }
 
     @Test fun aWaitingDeviceWhoseRequestDidNotGoSaysWhy() {
         val h = Harness(rule)
-        h.fake.put(Topics.lock(ws), off().copy(locked = true, me = me.copy(confirmed = false, waiting = true, asked = false, failed = "无法在系统钥匙串中保存此设备的密钥：secure.set unsupported")))
+        h.fake.put(Topics.lock(ws), waiting(failed = "无法在系统钥匙串中保存此设备的密钥：secure.set unsupported"))
         h.launch(listOf(Screen.Home))
         rule.onNodeWithText("此设备无法提交批准请求：无法在系统钥匙串中保存此设备的密钥：secure.set unsupported").assertIsDisplayed()
         rule.onNodeWithText("发送批准请求").performClick()
         h.settle()
-        rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lock.request" && it.second["workspace"]!!.jsonPrimitive.content == ws }) }
+        rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lock.pair" && it.second["workspace"]!!.jsonPrimitive.content == ws }) }
     }
 }

@@ -1,7 +1,7 @@
 // The workspace's security mode (its lock, docs/workspace-lock.md), as the narrow web has it (web/src/mobile/Security.tsx):
-// its page from the settings, turning it on, a device to confirm in a bottom sheet, and what a device waiting itself
-// shows. All of it is the core's (`lock`, `lockDraft`, `lockPrompts` topics, `lock.*`, `lockPrompt.*` calls,
-// client/core-ts/src/views/lock.ts).
+// its page from the settings, turning it on, a new device's code shown in a bottom sheet (typed there to approve it),
+// and what a device waiting itself shows (asking by hand, the code typed in). All of it is the core's (`lock`,
+// `lockDraft`, `lockPrompts` topics, `lock.*`, `lockPrompt.*` calls, client/core-ts/src/views/lock.ts, views/pair.ts).
 package fail.still.android.screens
 
 import fail.still.android.ui.BusyIcon
@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,7 +58,7 @@ import fail.still.android.LocalApp
 import fail.still.android.Screen
 import fail.still.android.data.LockDevice
 import fail.still.android.data.LockDraftView
-import fail.still.android.data.LockPrompt
+import fail.still.android.data.LockPairing
 import fail.still.android.data.LockPromptsView
 import fail.still.android.data.LockRequest
 import fail.still.android.data.LockView
@@ -92,10 +94,6 @@ private fun deviceName(kind: String, label: String, older: Boolean = false): Str
 /** `lock.<name>` on this workspace, let go on by itself and said how it ended. */
 private fun AppState.lockCall(workspace: String, name: String, what: String, done: String? = null, vararg params: Pair<String, String>) =
     act(what, done) { core.call("lock.$name", buildJsonObject { put("workspace", workspace); params.forEach { (k, v) -> put(k, v) } }) }
-
-/** `lockPrompt.<name>` on a waiting device, in every workspace it waits on this one in. */
-private fun AppState.promptCall(name: String, what: String, done: String? = null, vararg params: Pair<String, String>) =
-    act(what, done) { core.call("lockPrompt.$name", buildJsonObject { params.forEach { (k, v) -> put(k, v) } }) }
 
 @Composable
 internal fun Dot(on: Boolean, warn: Boolean = false) =
@@ -352,52 +350,50 @@ private fun confirmSheet(app: AppState, ws: String, r: LockRequest, onClose: (()
 }
 
 /**
- * A device waiting on this one in any workspace of the person's (the core's `lockPrompts`): the workspaces it asks to be
- * let into named first, approved in all of them at once once its code is the one on its screen.
+ * The code a new device asks for, met face to face, and where it asks to be let in (the core's `lockPrompts`): nothing
+ * here approves it, only the code typed on the new device. Turned away, or closed by hand, it is denied
+ * (`lockPrompt.deny`) and the code is worth nothing; gone by itself once that device is done or turned away elsewhere.
  */
-private fun promptSheet(app: AppState, r: LockPrompt, onClose: (() -> Unit)? = null) {
-    app.sheet = SheetSpec(0.6f, onClose = onClose) {
-        val who = r.name.ifEmpty { r.email }
-        // Answered on another device: gone here too; asked in one more workspace meanwhile, named too.
+private fun pairSheet(app: AppState, r: LockPairing, deny: () -> Unit) {
+    app.sheet = SheetSpec(0.55f, onClose = deny) {
+        // Done or turned away on another device: gone here too; asked in one more workspace meanwhile, named too.
         val prompts by rememberTopic<LockPromptsView>(app.core, Topics.lockPrompts)
-        val now = prompts.value?.waiting?.firstOrNull { it.device == r.device }
+        val now = prompts.value?.pairing?.firstOrNull { it.device == r.device }
         val gone = prompts.value != null && now == null
         LaunchedEffect(gone) { if (gone) app.sheet = null }
-        val places = (now ?: r).workspaces
-        val many = places.size > 1
+        val shown = now ?: r
         SheetGrab()
-        SheetHead(t("web-pages.security.confirmTitle", "name" to who))
-        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(t("web-pages.security.confirmBody", "device" to deviceName(r.kind, r.label), "name" to who), fontSize = 14.sp, color = C.muted)
+        SheetHead(t("web-pages.security.pairTitle", "name" to r.name.ifEmpty { r.email }))
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(t("web-pages.security.pairBody", "device" to deviceName(r.kind, r.label)), fontSize = 14.sp, color = C.muted)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(t("web-pages.security.promptFor"), fontSize = 13.sp, color = C.muted)
-                places.forEach { Text(it.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
+                shown.workspaces.forEach { Text(it.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
             }
-            Text(r.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            Note(if (r.kind == "web") t("web-pages.security.confirmWeb") else t("web-pages.security.confirmApp"))
-            Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                WideButton(if (many) t("web-pages.security.confirmAll") else t("web-pages.security.confirm"), primary = true, modifier = Modifier.fillMaxWidth()) { app.sheet = null; app.promptCall("confirm", t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed"), "device" to r.device, "code" to r.code) }
-                WideButton(if (many) t("web-pages.security.denyAll") else t("web-pages.security.deny"), primary = false, modifier = Modifier.fillMaxWidth()) { app.sheet = null; app.promptCall("deny", t("web-pages.security.denyDevice"), null, "device" to r.device) }
-            }
+            Text(shown.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Note(t("web-pages.security.pairNote"))
+            WideButton(t("web-pages.security.pairDeny"), primary = false, modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 16.dp)) { app.sheet = null; deny() }
         }
     }
 }
 
 /**
- * A device waiting on this one, in any workspace of the person's, put up over whichever page is open (the core's
- * `lockPrompts`), and again after a page change took the sheet away, until it is answered or closed by hand
- * (`lockPrompt.shown`: then it stays in each workspace's 设置 › 安全).
+ * A new device showing this one's code, in any workspace of the person's, put up over whichever page is open (the
+ * core's `lockPrompts`), and again after a page change took the sheet away, until it is done or turned away.
  */
 @Composable
 fun LockPrompts() {
     val app = LocalApp.current
     val topic by rememberTopic<LockPromptsView>(app.core, Topics.lockPrompts)
-    val prompt = topic.value?.prompt
+    // Turned away here: not put up again while the core has yet to drop it.
+    val denied = remember { mutableStateListOf<String>() }
+    val r = topic.value?.pairing?.firstOrNull { it.device !in denied }
     val free = app.sheet == null
-    LaunchedEffect(prompt?.device, free) {
-        if (prompt == null || !free) return@LaunchedEffect
-        promptSheet(app, prompt) {
-            app.scope.launch { runCatching { app.core.call("lockPrompt.shown", buildJsonObject { put("device", prompt.device) }) } }
+    LaunchedEffect(r?.device, free) {
+        if (r == null || !free) return@LaunchedEffect
+        pairSheet(app, r) {
+            denied += r.device
+            app.act(t("web-pages.security.denyDevice")) { app.core.call("lockPrompt.deny", buildJsonObject { put("device", r.device) }) }
         }
     }
 }
@@ -455,30 +451,71 @@ fun SecurityOpenScreen(current: WorkspaceEntry) {
     }
 }
 
-/** What a device waiting to be confirmed shows instead of the workspace's pages. */
+/**
+ * What a device waiting to be confirmed shows instead of the workspace's pages: asking by hand, its person's trusted
+ * devices reached, the code one of them shows typed here (`me.pair`; views/pair.ts).
+ */
 @Composable
 fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
     val app = LocalApp.current
     val ws = current.workspace.id
-    val asking = app.isDoing("lock.request", "workspace" to ws)
+    val asking = app.isDoing("lock.pair", "workspace" to ws)
+    val checking = app.isDoing("lock.pairCode", "workspace" to ws)
+    var code by remember { mutableStateOf("") }
+    val pair = lock.me?.pair
+    val typing = pair != null && pair.state in setOf("code", "wrong", "checking")
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 28.dp).windowInsetsPadding(WindowInsets.navigationBars),
+        Modifier.fillMaxSize().padding(horizontal = 28.dp).windowInsetsPadding(WindowInsets.navigationBars).imePadding(),
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         IconIn(Icons.ShieldCheck, 44.dp, C.ink)
         Text(t("web-pages.security.waitingTitle"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
         Text(t("web-pages.security.waitingLead", "name" to current.workspace.name), fontSize = 15.sp, lineHeight = 22.sp, color = C.subtle, textAlign = TextAlign.Center)
-        Text(lock.me?.code ?: "", fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 36.sp, letterSpacing = 5.sp, color = C.ink)
         val failed = lock.me?.failed
-        if ((failed != null || lock.me?.asked == false) && !asking) {
-            // Its request did not go: why, in red.
-            if (failed != null) Text(t("web-pages.security.requestFailed", "error" to failed), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
-            else Note(t("web-pages.security.notAsked"))
-            WideButton(t("web-pages.security.request"), primary = true) { app.lockCall(ws, "request", t("web-pages.security.request")) }
-        } else {
-            WaitLine(t("web-pages.security.waitingNote"))
+        when {
+            typing -> {
+                Note(t("web-pages.security.pairEnter"))
+                CodeField(code) { code = it.uppercase().take(7) }
+                if (pair?.state == "wrong") Text(t("web-pages.security.pairWrong", "n" to (pair.left ?: 0u).toInt()), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
+                WideButton(t("web-pages.security.check"), primary = true, busy = checking || pair?.state == "checking",
+                    enabled = code.count { it in '0'..'9' || it in 'A'..'Z' } == 6) {
+                    val typed = code
+                    // Turned down (a wrong code, the try over): typed again from nothing; the page says why.
+                    app.scope.launch { runCatching { app.core.call("lock.pairCode", buildJsonObject { put("workspace", ws); put("code", typed) }) }.onFailure { code = "" } }
+                }
+            }
+            pair?.state == "finding" || asking -> WaitLine(t("web-pages.security.pairFinding"))
+            else -> {
+                when {
+                    pair?.state == "none" -> Note(t("web-pages.security.pairNone"))
+                    pair?.state == "failed" -> Text(pair.error ?: "", fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
+                    failed != null -> Text(t("web-pages.security.requestFailed", "error" to failed), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
+                    else -> Note(t("web-pages.security.notAsked"))
+                }
+                WideButton(t("web-pages.security.request"), primary = true) { app.lockCall(ws, "pair", t("web-pages.security.request")) }
+            }
         }
     }
+}
+
+/** The code shown on a trusted device, typed in: monospace, in the middle, as the code is written (`XXX-XXX`). */
+@Composable
+private fun CodeField(value: String, onChange: (String) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val style = TextStyle(color = C.ink, fontSize = 22.sp, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp, textAlign = TextAlign.Center)
+    BasicTextField(
+        value, onChange, singleLine = true, cursorBrush = SolidColor(C.accent),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
+        textStyle = style,
+        modifier = Modifier.width(220.dp).onFocusChanged { focused = it.isFocused }
+            .border(1.dp, C.ink.copy(alpha = if (focused) 0.32f else 0.18f), Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 11.dp),
+        decorationBox = { inner ->
+            Box(contentAlignment = Alignment.Center) {
+                if (value.isEmpty()) Text("XXX-XXX", style = style.copy(color = C.muted))
+                inner()
+            }
+        },
+    )
 }
 
 /** A device waiting to be confirmed into the workspace's lock sees that instead of the workspace (its settings stay). */

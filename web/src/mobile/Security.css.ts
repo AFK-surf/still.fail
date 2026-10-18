@@ -11,6 +11,9 @@ export const mDot = style({
   selectors: { '&[data-on="true"]': { background: "var(--m-green)" }, '&[data-tone="amber"]': { background: "var(--m-warn)" } },
 });
 export const mWarn = style({ color: "var(--m-warn)", fontSize: vars.textMeta });
+/** The code shown on a trusted device, typed here. */
+export const mCodeField = style({ width: "220px" });
+globalStyle(`${mCodeField} input`, { textAlign: "center", letterSpacing: "4px" });
 /** Its request did not go: why, in red. */
 export const mFailed = style({ color: "var(--m-red)", fontSize: vars.textMeta, lineHeight: vars.leadingMeta });
 /** The workspaces a waiting device asks to be let into, in its sheet: their names, as large as its words. */

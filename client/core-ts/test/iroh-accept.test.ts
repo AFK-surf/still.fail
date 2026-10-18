@@ -70,7 +70,7 @@ async function acceptsOver(iroh: Iroh, bound: (i: number) => J) {
   await run(a.close());
 }
 
-test("the_node_hosts_endpoint_takes_a_connection_on_its_alpn", { skip }, async () => {
+test("the Node host's endpoint takes a connection on its ALPN", { skip }, async () => {
   const addon = loadAddon() as J;
   const seen: J[] = [];
   const watched = {
@@ -83,7 +83,7 @@ test("the_node_hosts_endpoint_takes_a_connection_on_its_alpn", { skip }, async (
   await acceptsOver(nodeIroh(watched)!, (i) => seen[i]);
 });
 
-test("the_bridges_endpoint_takes_a_connection_on_its_alpn", { skip }, async () => {
+test("the bridge's endpoint takes a connection on its ALPN", { skip }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "accept-"));
   const native = new NodeShell(dir);
   const bridge = new Bridge(native);
@@ -94,7 +94,7 @@ test("the_bridges_endpoint_takes_a_connection_on_its_alpn", { skip }, async () =
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("a_binding_without_accept_gives_an_endpoint_without_it", async () => {
+test("a binding without accept gives an endpoint without it", async () => {
   const none = async () => ({ id: () => "00" }) as unknown as BoundEndpoint;
   const endpoint = await run(wrapIroh(none, (b) => b).bind({ secretKey: new Uint8Array(32), relayUrls: [], lookup: false, relayOnly: false }));
   assert.equal(endpoint.accept, undefined);

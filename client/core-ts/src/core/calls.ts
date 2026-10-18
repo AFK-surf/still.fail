@@ -201,9 +201,9 @@ export function counts(call: Call, name: string): boolean {
     case "adb":
       return call.call.kind === "pair" || call.call.kind === "grant";
     case "lock":
-      return call.name !== "state" && call.name !== "toggle" && call.name !== "dismiss" && call.name !== "shown";
+      return call.name !== "state" && call.name !== "toggle" && call.name !== "dismiss" && call.name !== "pair" && call.name !== "pairCode" && call.name !== "pairCancel";
     case "lockPrompt":
-      return call.name !== "shown";
+      return false;
     case "vault":
       return call.name !== "state" && call.name !== "lock" && call.name !== "open";
     default:
@@ -217,10 +217,10 @@ const S = "string" as const;
 export const VAULT_CALLS = ["state", "lock", "setup", "create", "addDevice", "putItem", "deleteItem", "open", "recover", "approve", "deny", "migrate"];
 
 /// The workspace lock's calls (views/lock.ts).
-export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "shown", "request", "confirm", "deny", "addStation", "joinStation", "renew", "removeDevice", "disable"];
+export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "request", "confirm", "deny", "addStation", "joinStation", "renew", "removeDevice", "disable", "pair", "pairCode", "pairCancel"];
 
-/// The calls on a device waiting in several workspaces at once (views/lock.ts `lockPrompts`).
-export const LOCK_PROMPT_CALLS = ["confirm", "deny", "shown"];
+/// The calls on a new device showing this one's code (views/pair.ts, `lockPrompts`).
+export const LOCK_PROMPT_CALLS = ["deny", "state"];
 
 function form(name: string, params: unknown, prefix: string, actions: string[]): { topic: Topic; action: string; patch: unknown } | null {
   if (!name.startsWith(prefix)) return null;
@@ -293,8 +293,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     return { kind: "vault", name: name.slice(6), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
   if (name.startsWith("lockPrompt.") && LOCK_PROMPT_CALLS.includes(name.slice(11))) {
-    read(params, [["device", S, "req"]]);
-    return { kind: "lockPrompt", name: name.slice(11), params: params as Record<string, unknown> };
+    read(params, [["device", S, name === "lockPrompt.state" ? "opt" : "req"]]);
+    return { kind: "lockPrompt", name: name.slice(11), params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
   if (name.startsWith("lock.") && LOCK_CALLS.includes(name.slice(5))) {
     const p = read(params, [["workspace", S, "req"]]);

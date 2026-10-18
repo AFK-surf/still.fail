@@ -3163,6 +3163,19 @@ data class LockDraftView (
 	val stations: List<LockDraftStation>
 )
 
+/// This device's try to be approved face to face (views/pair.ts).
+@Serializable
+data class LockPair (
+	/// `finding` (dialling the person's trusted devices), `code` (one shows a code: type it), `checking`,
+	/// `wrong` (that code was not it), `none` (no trusted device answered), `failed` (`error`), `done`.
+	val state: String,
+	/// How many trusted devices show a code now.
+	val devices: UInt,
+	/// Tries left, after a wrong code.
+	val left: UInt? = null,
+	val error: String? = null
+)
+
 /// This device in the workspace's lock.
 @Serializable
 data class LockMe (
@@ -3177,7 +3190,37 @@ data class LockMe (
 	val asked: Boolean? = null,
 	/// Why its request to be confirmed did not reach the cloud (its key could not be kept, the cloud refused it):
 	/// said on its waiting page, asked again by hand (`lock.request`).
-	val failed: String? = null
+	val failed: String? = null,
+	/// Its try to be approved face to face, once it began (`lock.pair`).
+	val pair: LockPair? = null
+)
+
+/// A workspace a device waits in, named as the person knows it.
+@Serializable
+data class LockPromptWorkspace (
+	val id: String,
+	val name: String,
+	val emoji: String? = null,
+	val icon: String? = null
+)
+
+/// A new device met face to face, showing a code of this one's to type there (views/pair.ts).
+@Serializable
+data class LockPairing (
+	/// The new device's key (its iroh id): what `lockPrompt.deny` names.
+	val device: String,
+	val name: String,
+	val email: String,
+	val kind: String,
+	val label: String,
+	/// The code to type on the new device: shown here only, never sent.
+	val code: String,
+	/// Where it asks to be let in and this device approves it.
+	val workspaces: List<LockPromptWorkspace>,
+	/// When it asked.
+	val created_at: Long,
+	/// Its times in words (`created_at`).
+	val time: Map<String, Stamp>? = null
 )
 
 /// A member in the workspace's lock, with their devices.
@@ -3191,43 +3234,11 @@ data class LockPerson (
 	val devices: List<LockDevice>
 )
 
-/// A workspace a device waits in, named as the person knows it.
-@Serializable
-data class LockPromptWorkspace (
-	val id: String,
-	val name: String,
-	val emoji: String? = null,
-	val icon: String? = null
-)
-
-/// A device waiting to be confirmed, in each workspace of the person's it asked in and this device approves in.
-@Serializable
-data class LockPrompt (
-	val device: String,
-	val sub: String,
-	val email: String,
-	val name: String,
-	val kind: String,
-	val label: String,
-	/// The code the device shows: the same in every workspace (it is its key's).
-	val code: String,
-	/// When it asked last.
-	val created_at: Long,
-	val yours: Boolean,
-	/// Where it waits on this device: confirmed (`lockPrompt.confirm`) or turned down in all of them at once.
-	val workspaces: List<LockPromptWorkspace>,
-	/// Its times in words (`created_at`).
-	val time: Map<String, Stamp>? = null
-)
-
-/// The devices waiting on this one to be confirmed, across workspaces (the `lockPrompts` topic; views/lock.ts).
+/// What waits on this device to approve new ones face to face (the `lockPrompts` topic; views/pair.ts).
 @Serializable
 data class LockPromptsView (
-	/// Every device waiting on this one, in every workspace of the person's: one per device.
-	val waiting: List<LockPrompt>,
-	/// The one to put up on its own (a dialog, a sheet), wherever the person is: one with a workspace whose prompt
-	/// was not closed here (`lockPrompt.shown`, said as it is closed by hand).
-	val prompt: LockPrompt? = null
+	/// The new devices showing this one's code now, wherever the person is.
+	val pairing: List<LockPairing>
 )
 
 /// A device waiting to be confirmed.

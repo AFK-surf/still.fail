@@ -52,6 +52,8 @@ export const waiting = style({ maxWidth: "460px", margin: "110px auto 0", paddin
 export const waitingTitle = style({ margin: "0", fontSize: vars.textHeading, lineHeight: vars.leadingHeading, fontWeight: "600" });
 export const waitingLead = style({ margin: "0", color: vars.muted, fontSize: vars.textBody, lineHeight: vars.leadingBody });
 export const waitingNote = style({ display: "flex", alignItems: "center", gap: "8px", color: vars.muted, fontSize: vars.textMeta });
+/** The code shown on a trusted device, typed here: as large as the code is shown there. */
+export const codeInput = style({ width: "200px", textAlign: "center", fontFamily: vars.fontMono, fontSize: vars.textTitle, letterSpacing: "4px" });
 /** Its request did not go: why, in red. */
 export const waitingFailed = style({ color: vars.red, fontSize: vars.textMeta, lineHeight: vars.leadingBody });
 /** The workspaces a waiting device asks to be let into, first in its prompt: their names, as large as the title's words. */

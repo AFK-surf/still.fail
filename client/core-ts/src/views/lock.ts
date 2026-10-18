@@ -6,8 +6,7 @@
 //   lock {workspace}        how far the lock goes, this device's place in it, who waits, members, devices, stations
 //   lockDraft {workspace}   what turning it on would sign: members, the devices that asked for credentials lately,
 //                           the stations and whether each understands a lock; what is left out
-//   lockPrompts             the devices waiting on this one in every workspace of the person's where it approves,
-//                           one per device with the workspaces it waits in, and the one to put up now
+//   lockPrompts             the new devices showing a code of this one's, met face to face (views/pair.ts)
 // Calls (lock.<name> {workspace, …}):
 //   open                    the owner turns it on, as the draft stands
 //   toggle {id}             a device or station of the draft left out, or put back
@@ -20,10 +19,11 @@
 //   removeDevice {device}   a device taken out of the lock
 //   disable                 the owner turns it off, once the system has asked them (Touch ID, the screen lock)
 //   state                   the `lock` topic's value, as a call (tests, scripts)
-// Calls (lockPrompt.<name> {device, …}), on a waiting device in every workspace it waits on this one in:
-//   confirm {code}          confirmed, its code compared once
-//   deny                    turned down
-//   shown                   its prompt closed by hand: not put up again this run
+//   pair                    this device asks a trusted device of its person's, met face to face, to approve it in every
+//                           workspace it waits in (views/pair.ts); pairCode {code} the code that one shows, typed;
+//                           pairCancel given up
+// Calls (lockPrompt.<name> {device}), on a new device showing this one's code (views/pair.ts):
+//   deny                    turned away
 //
 // A station that refuses this device for the lock (`lock_unconfirmed`) is not asked again until the lock moves on
 // (someone confirmed something): what waits for it then is tried at once.
@@ -80,8 +80,6 @@ type Part = {
   probes: Map<string, "ok" | "old" | "offline">;
   /// The base key of this device (the mesh's), once known.
   base: string | null;
-  /// Waiting devices whose prompt was closed by hand here: not put up again this run.
-  shown: Set<string>;
   /// Why this device's request to be confirmed did not reach the cloud (its signing key could not be kept, the cloud
   /// refused it): said on its waiting page until a request goes.
   failed: CoreError | null;
@@ -92,6 +90,10 @@ const signers = new WeakMap<Inner, string | null>();
 
 /// This device's base key (the mesh's, the same in every workspace), once known, per core.
 const bases = new WeakMap<Inner, string>();
+
+/// This device's signing key (`ed25519:<hex>`) and base key, as known now.
+export const signerOf = (inner: Inner): string | null => signers.get(inner) ?? null;
+export const baseOf = (inner: Inner): string | null => bases.get(inner) ?? null;
 
 /// What each workspace's lock was read at (its head's hash and the waiting count the workspace view said), per core.
 const readAt = new WeakMap<Inner, Map<string, string>>();
@@ -138,7 +140,7 @@ export function fold(entries: Entry[]): Folded {
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), base: bases.get(inner) ?? null, shown: new Set(), failed: null }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), base: bases.get(inner) ?? null, failed: null }));
 
 /// This device's base key known: kept for every workspace.
 const knowBase = (inner: Inner, ws: string, base: string) => {
@@ -149,15 +151,15 @@ const knowBase = (inner: Inner, ws: string, base: string) => {
 /// A workspace's lock changed as this device sees it: its `lock` topic, and the prompts of every workspace.
 const touch = (inner: Inner, ws: string) => inner.store.invalidateAll((t) => (t.topic === "lock" && t.workspace === ws) || t.topic === "lockPrompts");
 
-const held = (inner: Inner, ws: string): Held | null => {
+export const held = (inner: Inner, ws: string): Held | null => {
   const h = inner.data.record("lock", ws);
   return isObject(h) && Array.isArray(h.entries) ? (h as unknown as Held) : null;
 };
 
-const view = (inner: Inner, ws: string): J => inner.data.shared({ topic: "workspace", workspace: ws });
+export const view = (inner: Inner, ws: string): J => inner.data.shared({ topic: "workspace", workspace: ws });
 
 /// A workspace's name as the person knows it: as its view says, else as the account's list does.
-const nameOf = (inner: Inner, ws: string): string =>
+export const nameOf = (inner: Inner, ws: string): string =>
   inner.cloudSync?.workspaceName(ws) ?? str(inner.data.mes().flatMap(([, me]) => arr(get(me, "workspaces"))).find((w) => get(w, "id") === ws)?.name) ?? ws;
 
 /// What the workspace view says of the lock: its head and how many devices wait (undefined: a cloud from before).
@@ -199,7 +201,7 @@ export function install(inner: Inner): void {
 
 /// The lock and the waiting devices, read from the cloud and held; a lock that moved on lets the stations that refused
 /// this device be tried again.
-function read(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
+export function read(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
   // What changed while it read (a request dropped just after an entry came) is read again: an ask made meanwhile
   // under the same key was folded into this one.
   return Effect.gen(function* () {
@@ -418,6 +420,8 @@ export function lockView(inner: Inner, ws: string): J {
       failed: locked && mine === undefined ? (p.failed?.message ?? null) : null,
       // Not in the lock: it waits to be confirmed, and asks by hand.
       waiting: locked && base !== null && mine === undefined,
+      // Its try to be approved face to face (views/pair.ts), once it began.
+      pair: locked && mine === undefined ? pairs.mine(inner, ws) : null,
     },
     signers: [...f.devices.values()].filter((d) => typeof d.sign_key === "string").length,
     members,
@@ -431,69 +435,28 @@ export function lockView(inner: Inner, ws: string): J {
   };
 }
 
-/// The `lockPrompts` topic: the devices waiting on this one in every workspace of the person's where it approves (it is
-/// trusted there), wherever they are now; one per device (it asks in each workspace it is in, by the same key), with
-/// those workspaces by name, in the order the workspaces are listed. `prompt`: the one to put up on its own, a device
-/// with a workspace whose prompt was not closed here.
+/// The `lockPrompts` topic: the new devices showing a code of this one's to type (views/pair.ts), wherever the person is.
 export function promptsView(inner: Inner): J {
-  const by = new Map<string, J>();
-  // As the accounts list them (the switcher's order), any not listed yet after.
-  const listed = inner.data.mes().flatMap(([, me]) => arr(get(me, "workspaces")).flatMap((w) => (typeof get(w, "id") === "string" ? [get(w, "id") as string] : [])));
-  const order = [...new Set([...listed, ...inner.workspaces.owned().map(([ws]) => ws)])].filter((ws) => inner.workspaces.owner(ws) !== null);
-  for (const ws of order) {
-    const lock = lockView(inner, ws);
-    if (!lock.locked || !lock.signs) continue;
-    const v = view(inner, ws);
-    const place = { id: ws, name: nameOf(inner, ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
-    for (const r of lock.requests as J[]) {
-      const one = by.get(r.device) ?? { ...r, workspaces: [] };
-      one.workspaces.push({ ...place, closed: part(inner, ws).shown.has(r.device) });
-      one.created_at = Math.max(one.created_at, r.created_at);
-      by.set(r.device, one);
-    }
-  }
-  const waiting = [...by.values()].map(({ workspaces, ...r }) => ({ ...r, workspaces: workspaces.map(({ closed: _, ...w }: J) => w) }));
-  const open = [...by.values()].find((r) => r.workspaces.some((w: J) => !w.closed));
-  return { waiting, prompt: open ? (waiting.find((r) => r.device === open.device) ?? null) : null };
+  return { pairing: pairs.shown(inner) };
 }
 
-/// The workspaces a device waits on this one in (`lockPrompts`), and the account of each.
-function waitsIn(inner: Inner, device: string): { ws: string; sub: string; name: string }[] {
-  const r = (promptsView(inner).waiting as J[]).find((x) => x.device === device);
-  return (r?.workspaces ?? []).flatMap((w: J) => {
-    const sub = inner.workspaces.owner(w.id);
-    return sub === null ? [] : [{ ws: w.id as string, sub, name: w.name as string }];
-  });
+/// A `lockPrompt.*` call: `deny {device}`, a new device showing this one's code turned away (views/pair.ts); `state`,
+/// the topic's value (tests, scripts).
+export function runPrompt(inner: Inner, name: string, params: Record<string, unknown>, _ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
+  if (name === "state") return Effect.succeed(promptsView(inner));
+  if (name !== "deny") return Effect.fail(CoreError.invalid(`no lockPrompt call ${name}`));
+  pairs.deny(inner, str(params.device) ?? "");
+  return Effect.succeed(null);
 }
 
-/// A `lockPrompt.*` call: on a waiting device, in every workspace it waits on this one in. Confirmed or turned down in
-/// some and not others, it fails naming the ones it did not get to (those stay waiting, in their 设置 › 安全).
-export function runPrompt(inner: Inner, name: string, params: Record<string, unknown>, ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
-  return Effect.gen(function* () {
-    const device = str(params.device) ?? "";
-    const where = waitsIn(inner, device);
-    if (name === "shown") {
-      for (const w of where) part(inner, w.ws).shown.add(device);
-      inner.store.invalidate({ topic: "lockPrompts" });
-      return null;
-    }
-    if (name !== "confirm" && name !== "deny") return yield* Effect.fail(CoreError.invalid(`no lockPrompt call ${name}`));
-    if (where.length === 0) return yield* Effect.fail(CoreError.invalid("no such device waits to be confirmed"));
-    // The code is the device's, the same everywhere: a wrong one is said once.
-    if (name === "confirm" && shortCode(device) !== (str(params.code) ?? "").trim().toUpperCase()) return yield* Effect.fail(CoreError.invalid("the code does not match that device's"));
-    const failed: { name: string; error: CoreError }[] = [];
-    for (const w of where) {
-      const lock = new Lock(inner, w.ws, w.sub, ctx, true);
-      const done = yield* Effect.result(name === "confirm" ? lock.confirm(device, str(params.code) ?? "") : lock.deny(device));
-      if (done._tag === "Failure") failed.push({ name: w.name, error: done.failure });
-      yield* Effect.ignore(read(inner, w.ws));
-    }
-    if (failed.length === 0) return { workspaces: where.map((w) => w.ws) };
-    if (where.length === 1) return yield* Effect.fail(failed[0]!.error);
-    const which = failed.map((f) => t("core-misc.lock.inWorkspace", { name: f.name, error: f.error.message })).join(t("core-misc.lock.listSep"));
-    return yield* Effect.fail(new CoreError(failed[0]!.error.code, which));
-  });
-}
+/// What approving face to face adds (views/pair.ts, installed with it): the new devices showing this one's code, this
+/// device's own try to be approved, and the calls of that try.
+export const pairs: {
+  shown(inner: Inner): J[];
+  mine(inner: Inner, ws: string): J | null;
+  deny(inner: Inner, device: string): void;
+  run(inner: Inner, name: string, ws: string, params: Record<string, unknown>): Effect.Effect<unknown, CoreError>;
+} = { shown: () => [], mine: () => null, deny: () => {}, run: () => Effect.fail(CoreError.invalid("no face-to-face approval here")) };
 
 /// The draft of turning it on: the devices that asked for credentials, the stations asked whether they understand a
 /// lock (GET /lock: one from before answers 404).
@@ -578,11 +541,6 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         inner.store.invalidate({ topic: "prefs" });
         touch(inner, c.workspace);
         return null;
-      // A waiting device's prompt closed by hand: not put up again on this device (it stays in 设置 › 安全).
-      case "shown":
-        part(inner, c.workspace).shown.add(param("device"));
-        touch(inner, c.workspace);
-        return null;
       case "toggle": {
         const ex = part(inner, c.workspace).excluded;
         if (ex.has(param("id"))) ex.delete(param("id"));
@@ -606,6 +564,11 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       case "confirm":
         result = yield* lock.confirm(param("device"), param("code"));
         break;
+      // Approved face to face (views/pair.ts): asked, the code typed, given up.
+      case "pair":
+      case "pairCode":
+      case "pairCancel":
+        return yield* pairs.run(inner, c.name, c.workspace, c.params);
       case "deny":
         result = yield* lock.deny(param("device"));
         break;
@@ -663,7 +626,7 @@ export function takeInJoined(inner: Inner, sub: string, ws: string, station: str
   return new Lock(inner, ws, sub, null).addStation(station, shortCode(station));
 }
 
-class Lock {
+export class Lock {
   readonly #inner: Inner;
   readonly ws: string;
   readonly sub: string;

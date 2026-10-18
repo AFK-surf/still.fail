@@ -11,7 +11,8 @@ import { utf8 } from "../util.ts";
 import { fromB64url } from "./crypto.ts";
 
 export type Device = { id: string; sub: string; kind: "app" | "web"; sign_key?: string; exp?: number };
-export type Checked = { ws: string; head: string; genesis: string; members: Map<string, string>; devices: Map<string, Device>; passkeys: Map<string, string>; origins: string[]; rp_id: string; disabled: boolean };
+/// `cloudKeys`: the keys the cloud signs member credentials with, as the lock names them (a JWKS).
+export type Checked = { ws: string; head: string; genesis: string; members: Map<string, string>; devices: Map<string, Device>; passkeys: Map<string, string>; origins: string[]; rp_id: string; disabled: boolean; cloudKeys: unknown };
 
 const ROLES = ["viewer", "member", "admin", "owner"];
 const rank = (r: string) => ROLES.indexOf(r);
@@ -84,7 +85,7 @@ export function checkLock(entries: Entry[], now: number): Checked {
   if (!first || first.kind !== "genesis" || first.seq !== 0 || first.prev !== null) return refuse("it starts with its genesis");
   const b = (first.body ?? {}) as any;
   const head = entryHash(first);
-  let s: Checked = { ws: first.ws, head, genesis: head, members: new Map(), devices: new Map(), passkeys: new Map(), origins: arr(b.origins).filter((o) => typeof o === "string"), rp_id: typeof b.rp_id === "string" ? b.rp_id : "", disabled: false };
+  let s: Checked = { ws: first.ws, head, genesis: head, members: new Map(), devices: new Map(), passkeys: new Map(), origins: arr(b.origins).filter((o) => typeof o === "string"), rp_id: typeof b.rp_id === "string" ? b.rp_id : "", disabled: false, cloudKeys: b.cloud_keys ?? null };
   for (const m of arr(b.members)) if (typeof m?.sub === "string" && rank(m.role) >= 0) s.members.set(m.sub, m.role);
   for (const d of arr(b.devices)) addDevice(s, device(d));
   for (const p of arr(b.passkeys)) if (typeof p?.key === "string" && typeof p?.sub === "string") s.passkeys.set(p.key, p.sub);
@@ -150,6 +151,7 @@ function apply(prev: Checked, e: Entry, now: number): Checked {
       break;
     case "cloud_keys":
       need(owning);
+      s.cloudKeys = b.keys ?? null;
       break;
     case "disable":
       need(owning);

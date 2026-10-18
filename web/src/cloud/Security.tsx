@@ -15,8 +15,8 @@ import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Security.css.ts";
 
-export type { LockDevice, LockPrompt, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
-import type { LockDevice, LockPrompt, LockPromptsView, LockRequest, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
+export type { LockDevice, LockPairing, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
+import type { LockDevice, LockPairing, LockPromptsView, LockRequest, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
 
 // A function, not a table made as the module loads: words are the page's language when shown (and the site's
 // prerender loads this module before any language is set).
@@ -230,33 +230,28 @@ function ConfirmDevice({ entry, request, onClose }: { entry: WorkspaceEntry; req
   );
 }
 
-/** A device waiting on this one, in any workspace of the person's, put up wherever they are (the core's `lockPrompts`)
- * until it is answered (here or on another device) or closed (`lockPrompt.shown`: then it stays in each workspace's
- * 设置 › 安全). The workspaces it asks to be let into are named first; one code, approved in all of them at once. */
+/** A new device met face to face, showing a code of this one's to type there (the core's `lockPrompts`): put up wherever
+ * the person is, the workspaces it asks to be let into named first. Nothing here approves it: only the code typed on
+ * the new device does. Closed or turned away (`lockPrompt.deny`), the code is worth nothing; done there, it goes. */
 export function SecurityPrompt() {
   const call = useCall();
-  const act = useAct();
-  const r = useLockPrompts()?.prompt ?? null;
-  const many = (r?.workspaces.length ?? 0) > 1;
-  const close = () => { if (r) void call("lockPrompt.shown", { device: r.device }); };
+  const r = useLockPrompts()?.pairing[0] ?? null;
+  const deny = () => { if (r) void call("lockPrompt.deny", { device: r.device }); };
   return (
-    <Dialog open={r !== null} onClose={close} title={r ? t("web-pages.security.confirmTitle", { name: r.name || r.email }) : ""}
-      description={r ? t("web-pages.security.confirmBody", { device: deviceName(r), name: r.name || r.email }) : ""}
-      footer={r && <>
-        <Button variant="ghost" onClick={() => { close(); act(call("lockPrompt.deny", { device: r.device }), t("web-pages.security.denyDevice")); }}>{many ? t("web-pages.security.denyAll") : t("web-pages.security.deny")}</Button>
-        <Button variant="primary" onClick={() => { close(); act(call("lockPrompt.confirm", { device: r.device, code: r.code }), t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed")); }}>{many ? t("web-pages.security.confirmAll") : t("web-pages.security.confirm")}</Button>
-      </>}>
+    <Dialog open={r !== null} onClose={deny} title={r ? t("web-pages.security.pairTitle", { name: r.name || r.email }) : ""}
+      description={r ? t("web-pages.security.pairBody", { device: deviceName(r) }) : ""}
+      footer={r && <Button variant="ghost" onClick={deny}>{t("web-pages.security.pairDeny")}</Button>}>
       {r && <>
         <PromptPlaces r={r} />
         <div className={css.bigCode}>{r.code}</div>
-        <p className={css.note} style={{ textAlign: "center" }}>{r.kind === "web" ? t("web-pages.security.confirmWeb") : t("web-pages.security.confirmApp")}</p>
+        <p className={css.note} style={{ textAlign: "center" }}>{t("web-pages.security.pairNote")}</p>
       </>}
     </Dialog>
   );
 }
 
-/** The workspaces a waiting device asks to be let into, by name and mark. */
-function PromptPlaces({ r }: { r: LockPrompt }) {
+/** The workspaces a new device asks to be let into, by name and mark. */
+export function PromptPlaces({ r }: { r: LockPairing }) {
   return (
     <div className={css.places}>
       <span className={css.placesLabel}>{t("web-pages.security.promptFor")}</span>
@@ -340,22 +335,37 @@ export function SecurityNotice({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** What a device waiting to be confirmed shows instead of the workspace's pages. */
+/** What a device waiting to be confirmed shows instead of the workspace's pages: asking by hand, its person's trusted
+ * devices reached, the code one of them shows typed here (`me.pair`; views/pair.ts). */
 export function SecurityWaiting({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
   const call = useCall();
   const act = useAct();
-  const asking = useDoing("lock.request", { workspace: entry.id });
-  const failed = lock.me?.failed;
+  const asking = useDoing("lock.pair", { workspace: entry.id });
+  const checking = useDoing("lock.pairCode", { workspace: entry.id });
+  const [code, setCode] = useState("");
+  const pair = lock.me?.pair ?? null;
+  const ask = () => act(call("lock.pair", { workspace: entry.id }), t("web-pages.security.request"));
+  const prove = () => { if (code.trim()) void call("lock.pairCode", { workspace: entry.id, code }).catch(() => setCode("")); };
+  const typing = pair !== null && (pair.state === "code" || pair.state === "wrong" || pair.state === "checking");
   return (
     <div className={css.waiting}>
       <ShieldCheck size={40} strokeWidth={1.4} />
       <h1 className={css.waitingTitle}>{t("web-pages.security.waitingTitle")}</h1>
       <p className={css.waitingLead}>{t("web-pages.security.waitingLead", { name: entry.name })}</p>
-      <div className={css.bigCode}>{lock.me?.code}</div>
-      {(failed || lock.me?.asked === false) && !asking
-        ? <><div className={failed ? css.waitingFailed : css.waitingNote}>{failed ? t("web-pages.security.requestFailed", { error: failed }) : t("web-pages.security.notAsked")}</div>
-          <Button variant="primary" onClick={() => act(call("lock.request", { workspace: entry.id }), t("web-pages.security.request"))}>{t("web-pages.security.request")}</Button></>
-        : <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.waitingNote")}</div>}
+      {typing ? <>
+        <div className={css.waitingNote}>{t("web-pages.security.pairEnter")}</div>
+        <input className={`${controlsCss.input} ${css.codeInput}`} value={code} autoFocus autoComplete="one-time-code" spellCheck={false} maxLength={7} placeholder="XXX-XXX"
+          aria-label={t("web-pages.security.pairEnter")} onChange={(e) => setCode(e.target.value.toUpperCase())}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) prove(); }} />
+        {pair.state === "wrong" && <div className={css.waitingFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</div>}
+        <Button variant="primary" busy={checking || pair.state === "checking"} disabled={code.replace(/[^0-9A-Z]/gi, "").length !== 6} onClick={prove}>{t("web-pages.security.check")}</Button>
+      </> : pair?.state === "finding" || asking ? <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.pairFinding")}</div>
+        : <>
+          <div className={pair?.state === "failed" || lock.me?.failed ? css.waitingFailed : css.waitingNote}>
+            {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t("web-pages.security.notAsked")}
+          </div>
+          <Button variant="primary" onClick={ask}>{t("web-pages.security.request")}</Button>
+        </>}
     </div>
   );
 }

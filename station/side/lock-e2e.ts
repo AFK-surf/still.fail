@@ -1,7 +1,9 @@
 // The workspace lock end to end (docs/workspace-lock.md), on a dev cloud (cloud/test/dev.ts) and real stations: what a
 // compromised cloud does — mint a credential for a device of its own, put a station of its own in the roster, swap the
 // grant key, move a station to another workspace — refused by the stations that pinned the lock, and still done to
-// one that did not. The owner's device is a real core (desktop's Node host); the new device's and station's paths too.
+// one that did not. The owner's device is a real core (desktop's Node host); the new device's and station's paths too,
+// a new device approved face to face (its core dialling the owner's straight, the code typed: client/core-ts/src/views/
+// pair.ts) among them.
 //
 //   node station/side/lock-e2e.ts          (from a worktree with `pnpm run build` done in station/, the iroh dev relay
 //                                            on :3340; PORT, default 8877, and PORT+1..+4 free)
@@ -230,46 +232,28 @@ async function main() {
   // The owner's own device still gets in (its claim is in its hello).
   const ownerIn = await owner.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `refused: ${e.message}`);
   check("the owner's own device", `${A.name}: ${ownerIn}`, "-", ownerIn === "admitted");
-  // The laptop, left out while connected, asks to be trusted as it reads the lock: nothing it does, no restart.
-  const laptopAsked = await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.some((r: any) => r.device === laptopId), "the laptop asked by itself", 100).then(() => true, () => false);
-  const laptopWaits = (await laptop.call("lock.state", { workspace: ws })).me.waiting === true;
-  check("a device left out while connected asks by itself", `laptop: before ${laptopIn}; listed for the owner ${laptopAsked}, waiting ${laptopWaits}`, "-", laptopIn === "admitted" && laptopAsked && laptopWaits);
-  // Turned down: it says so and asks again by hand. Turned down again, so the phone below is the one put up.
-  if (laptopAsked) await owner.call("lock.deny", { workspace: ws, device: laptopId });
-  const deniedSays = await until(async () => ((await laptop.call("lock.state", { workspace: ws })).me.asked === false ? "not asked" : null), "the laptop sees it turned down", 50).catch(() => "still asked");
-  await laptop.call("lock.request", { workspace: ws });
-  const askedAgain = await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.some((r: any) => r.device === laptopId), "the laptop asked again", 50).then(() => true, () => false);
-  const laptopSays = (await laptop.call("lock.state", { workspace: ws })).me;
-  check("turned down, it asks again by hand", `laptop: after deny ${deniedSays}; asked again ${askedAgain}, asked ${laptopSays.asked}, waiting ${laptopSays.waiting}`, "-", deniedSays === "not asked" && askedAgain && laptopSays.asked === true && laptopSays.waiting === true);
-  await owner.call("lock.deny", { workspace: ws, device: laptopId });
-  await until(async () => (await laptop.call("lock.state", { workspace: ws })).me.asked === false, "the laptop sees it turned down again", 50).catch(() => false);
+  // The laptop, left out while connected, waits as it reads the lock, and asks nothing by itself (only by hand).
+  const laptopWaits = await until(async () => ((await laptop.call("lock.state", { workspace: ws })).me.waiting === true ? true : null), "the laptop waits", 100).catch(() => false);
+  await new Promise((r) => setTimeout(r, 2000));
+  const laptopAsked = (await owner.call("lock.state", { workspace: ws })).requests.some((r: any) => r.device === laptopId) || (await owner.call("lockPrompt.state", {})).pairing.length > 0;
+  check("a device left out while connected waits, and asks nothing by itself", `laptop: before ${laptopIn}; waiting ${laptopWaits}; asked ${laptopAsked}`, "-", laptopIn === "admitted" && laptopWaits === true && !laptopAsked);
+  laptop.close();
 
-  say("a new device of alice's: waits, asks, the owner compares its code and confirms it");
+  say("a new device of alice's, met face to face: it asks, the owner's device shows a code, typed on the new one");
   await nextMinute();
   const phone = core("phone");
   await phone.call("migrate", { accounts: [await account("alice")] });
   await until(async () => (await phone.call("lock.state", { workspace: ws })).me.device, "phone core up");
   const waits = await phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `${e.code}: ${e.message}`);
-  const asked = await phone.call("lock.request", { workspace: ws });
-  const listed = await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.find((r: any) => r.device === asked.device), "request listed");
-  // Put up by itself on the owner's signing device, once.
-  const prompted = (await owner.call("lock.state", { workspace: ws })).prompt?.device === asked.device;
-  await owner.call("lock.shown", { workspace: ws, device: asked.device });
-  const promptedAgain = (await owner.call("lock.state", { workspace: ws })).prompt?.device === asked.device;
-  const wrong = await owner.call("lock.confirm", { workspace: ws, device: asked.device, code: "AAA-AAA" }).then(() => "confirmed", (e) => `refused: ${e.message}`);
-  await owner.call("lock.confirm", { workspace: ws, device: asked.device, code: listed.code });
-  const after = await until(async () => phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", () => null), "phone admitted", 50);
-  // The lock moved on (the phone's entry): the laptop, turned down, does not ask by itself again.
-  await until(async () => (await laptop.call("lock.state", { workspace: ws })).members.some((m: any) => m.devices.some((d: any) => d.id === asked.device)), "the laptop read the phone's entry", 50).catch(() => false);
-  let laptopBack = false;
-  for (let i = 0; i < 15 && !laptopBack; i++) {
-    laptopBack = (await owner.call("lock.state", { workspace: ws })).requests.some((r: any) => r.device === laptopId);
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  const laptopAfter = (await laptop.call("lock.state", { workspace: ws })).me;
-  check("turned down, it does not ask by itself when the lock moves on", `laptop: listed again ${laptopBack}; asked ${laptopAfter.asked}, waiting ${laptopAfter.waiting}`, "-", !laptopBack && laptopAfter.asked === false && laptopAfter.waiting === true);
-  laptop.close();
-  check("a new device: refused, asks, confirmed by its code", `${A.name}: before ${waits}; code on the phone ${asked.code}, listed for the owner ${listed?.code}, put up ${prompted ? "once" : "never"}${promptedAgain ? " and again" : ""}; a wrong code ${wrong}; after ${after}`, "-", waits.startsWith("lock_unconfirmed") && asked.code === listed?.code && prompted && !promptedAgain && wrong.startsWith("refused") && after === "admitted");
+  await phone.call("lock.pair", { workspace: ws });
+  const reached = await until(async () => ((await phone.call("lock.state", { workspace: ws })).me.pair?.state === "code" ? true : null), "the owner's device shows a code", 60).catch(() => false);
+  const shown = (await owner.call("lockPrompt.state", {})).pairing[0];
+  const wrong = await phone.call("lock.pairCode", { workspace: ws, code: shown?.code === "222-222" ? "333-333" : "222-222" }).then(() => "approved", (e) => `refused: ${e.message}`);
+  const left = (await phone.call("lock.state", { workspace: ws })).me.pair?.left;
+  await phone.call("lock.pairCode", { workspace: ws, code: shown?.code ?? "" }).catch((e) => console.log("  pairCode:", e.message));
+  const gone = (await owner.call("lockPrompt.state", {})).pairing.length === 0;
+  const after = await until(async () => phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", () => null), "phone admitted", 50).catch(() => "refused");
+  check("a new device met face to face: refused, asks, the code typed lets it in", `${A.name}: before ${waits}; reached the owner's device ${reached}, its code ${shown?.code ?? "(none)"} for ${shown?.name ?? "?"}; a wrong code ${wrong}, ${left} left; prompt gone ${gone}; after ${after}`, "-", waits.startsWith("lock_unconfirmed") && reached === true && typeof shown?.code === "string" && wrong.startsWith("refused") && left === 2 && gone && after === "admitted");
 
   say("a new station joins with the lock's hash and is confirmed by the code it printed");
   await nextMinute();

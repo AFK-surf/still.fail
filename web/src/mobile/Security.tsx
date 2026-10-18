@@ -1,17 +1,17 @@
 // The workspace's security mode on a narrow screen (as the Android app has it, screens/Security.kt): its page from
 // the settings, turning it on, a device to confirm in a bottom sheet, and what a device waiting itself shows. The
 // core's (`lock`, `lockDraft`, `lockPrompts`; client/core-ts/src/views/lock.ts): this only draws.
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useCall, useTopic } from "../core/react.ts";
 import { useDoing } from "../doing.ts";
 import { stamp } from "../api.ts";
 import { ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { t } from "../i18n.ts";
-import { deviceName, useLock, useLockPrompts, type LockDraft, type LockPrompt, type LockRequest, type LockView } from "../cloud/Security.tsx";
+import { deviceName, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockRequest, type LockView } from "../cloud/Security.tsx";
 import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
 import { useApp } from "./app.tsx";
-import { Button, LargeTitle, ListCard, ListRow, PickRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Button, Field, LargeTitle, ListCard, ListRow, PickRow, SectionHeader, TopBack } from "./parts.tsx";
 import { Spinner, Waiting } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -169,52 +169,63 @@ function JoinSheet({ s }: { s: LockView["stations"][number] }) {
   );
 }
 
-/** A device waiting on this one, in any workspace of the person's, put up wherever they are (the core's
- * `lockPrompts`) and kept up as pages change, until it is answered or closed by hand (`lockPrompt.shown`: then it stays
- * in each workspace's 设置 › 安全). */
+/** A new device met face to face, showing a code of this one's to type there (the core's `lockPrompts`): put up wherever
+ * the person is and kept up as pages change. Nothing here approves it, only the code typed on the new device; closed or
+ * turned away (`lockPrompt.deny`), the code is worth nothing. */
 export function SecurityPrompt() {
   const app = useApp();
   const call = useCall();
-  const r = useLockPrompts()?.prompt ?? null;
+  const r = useLockPrompts()?.pairing[0] ?? null;
   useEffect(() => {
     if (!r) return;
-    app.sheet({ height: 0.55, keep: true, onClose: () => void call("lockPrompt.shown", { device: r.device }), content: () => <ConfirmSheet r={r} /> });
+    app.sheet({ height: 0.55, keep: true, onClose: () => void call("lockPrompt.deny", { device: r.device }), content: () => <PairSheet r={r} /> });
   }, [r?.device]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 
-/** A waiting device: confirmed once its code is the one on its screen. Put up on its own (`lockPrompts`), the
- * workspaces it asks to be let into are named first, and it is approved in all of them at once; from a workspace's
- * 设置 › 安全 (`workspace`), in that one. */
-function ConfirmSheet({ r, workspace }: { r: LockPrompt | LockRequest; workspace?: string }) {
+/** The code a new device asks for, and where it asks to be let in; gone once it is done there or turned away. */
+function PairSheet({ r }: { r: LockPairing }) {
+  const app = useApp();
+  const call = useCall();
+  const prompts = useLockPrompts();
+  const gone = prompts !== undefined && !prompts.pairing.some((x) => x.device === r.device);
+  useEffect(() => { if (gone) app.sheet(null); }, [gone]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className={css.mSheet}>
+      <b className={css.mSheetTitle}>{t("web-pages.security.pairTitle", { name: r.name || r.email })}</b>
+      <span className={partsCss.mSubtle}>{t("web-pages.security.pairBody", { device: deviceName(r) })}</span>
+      <div className={css.mPlaces}>
+        <span className={partsCss.mSubtle}>{t("web-pages.security.promptFor")}</span>
+        {r.workspaces.map((w) => <span key={w.id} className={css.mPlace}>{marked(w) && <WorkspaceMark w={w} size={16} />}{w.name}</span>)}
+      </div>
+      <div className={css.mBigCode}>{r.code}</div>
+      <span className={css.mNote}>{t("web-pages.security.pairNote")}</span>
+      <div className={`${css.mPair} ${css.mStack}`}>
+        <Button primary={false} label={t("web-pages.security.pairDeny")} onClick={() => { app.sheet(null); void call("lockPrompt.deny", { device: r.device }); }} />
+      </div>
+    </div>
+  );
+}
+
+/** A waiting device from a workspace's 设置 › 安全 (a client from before asking through the cloud): confirmed once its
+ * code is the one on its screen. */
+function ConfirmSheet({ r, workspace }: { r: LockRequest; workspace: string }) {
   const app = useApp();
   const run = useRun();
   const close = (then: () => void) => () => { app.sheet(null); then(); };
-  // Answered on another device: gone here too; asked in one more workspace meanwhile, named too.
-  const prompts = useLockPrompts();
-  const lock = useTopic<LockView>(workspace ? { topic: "lock", workspace } : null).value;
-  const now = prompts?.waiting.find((x) => x.device === r.device);
-  const gone = workspace ? lock !== undefined && !lock.requests.some((x) => x.device === r.device) : prompts !== undefined && now === undefined;
+  // Answered on another device: gone here too.
+  const lock = useTopic<LockView>({ topic: "lock", workspace }).value;
+  const gone = lock !== undefined && !lock.requests.some((x) => x.device === r.device);
   useEffect(() => { if (gone) app.sheet(null); }, [gone]); // eslint-disable-line react-hooks/exhaustive-deps
-  const places = workspace ? [] : (now ?? (r as LockPrompt)).workspaces ?? [];
-  const many = places.length > 1;
-  const deny = () => workspace ? run("lock.deny", { workspace, device: r.device }, t("web-pages.security.denyDevice")) : run("lockPrompt.deny", { device: r.device }, t("web-pages.security.denyDevice"));
-  const confirm = () => workspace
-    ? run("lock.confirm", { workspace, device: r.device, code: r.code }, t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed"))
-    : run("lockPrompt.confirm", { device: r.device, code: r.code }, t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed"));
   return (
     <div className={css.mSheet}>
       <b className={css.mSheetTitle}>{t("web-pages.security.confirmTitle", { name: r.name || r.email })}</b>
       <span className={partsCss.mSubtle}>{t("web-pages.security.confirmBody", { device: deviceName(r), name: r.name || r.email })}</span>
-      {places.length > 0 && <div className={css.mPlaces}>
-        <span className={partsCss.mSubtle}>{t("web-pages.security.promptFor")}</span>
-        {places.map((w) => <span key={w.id} className={css.mPlace}>{marked(w) && <WorkspaceMark w={w} size={16} />}{w.name}</span>)}
-      </div>}
       <div className={css.mBigCode}>{r.code}</div>
       <span className={css.mNote}>{r.kind === "web" ? t("web-pages.security.confirmWeb") : t("web-pages.security.confirmApp")}</span>
       <div className={`${css.mPair} ${css.mStack}`}>
-        <Button primary label={many ? t("web-pages.security.confirmAll") : t("web-pages.security.confirm")} onClick={close(() => void confirm())} />
-        <Button primary={false} label={many ? t("web-pages.security.denyAll") : t("web-pages.security.deny")} onClick={close(() => void deny())} />
+        <Button primary label={t("web-pages.security.confirm")} onClick={close(() => void run("lock.confirm", { workspace, device: r.device, code: r.code }, t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed")))} />
+        <Button primary={false} label={t("web-pages.security.deny")} onClick={close(() => void run("lock.deny", { workspace, device: r.device }, t("web-pages.security.denyDevice")))} />
       </div>
     </div>
   );
@@ -262,22 +273,36 @@ export function SecurityOpenScreen() {
   );
 }
 
-/** What a device waiting to be confirmed shows instead of the workspace. */
+/** What a device waiting to be confirmed shows instead of the workspace: asking by hand, its person's trusted devices
+ * reached, the code one of them shows typed here (`me.pair`; views/pair.ts). */
 export function SecurityWaitingScreen({ lock }: { lock: LockView }) {
   const app = useApp();
   const run = useRun();
-  const asking = useDoing("lock.request", { workspace: app.entry.id });
-  const failed = lock.me?.failed;
+  const call = useCall();
+  const ws = app.entry.id;
+  const asking = useDoing("lock.pair", { workspace: ws });
+  const checking = useDoing("lock.pairCode", { workspace: ws });
+  const [code, setCode] = useState("");
+  const pair = lock.me?.pair ?? null;
+  const typing = pair !== null && (pair.state === "code" || pair.state === "wrong" || pair.state === "checking");
+  const prove = () => void call("lock.pairCode", { workspace: ws, code }).catch(() => setCode(""));
   return (
     <div className={css.mWaiting}>
       <ShieldCheck size={44} strokeWidth={1.4} />
       <b className={css.mWaitingTitle}>{t("web-pages.security.waitingTitle")}</b>
       <span className={partsCss.mSubtle}>{t("web-pages.security.waitingLead", { name: app.entry.name })}</span>
-      <div className={css.mBigCode}>{lock.me?.code}</div>
-      {(failed || lock.me?.asked === false) && !asking
-        ? <><span className={failed ? css.mFailed : css.mNote}>{failed ? t("web-pages.security.requestFailed", { error: failed }) : t("web-pages.security.notAsked")}</span>
-          <Button primary label={t("web-pages.security.request")} onClick={() => void run("lock.request", { workspace: app.entry.id }, t("web-pages.security.request"))} /></>
-        : <span className={css.mNote}><Spinner inline />{t("web-pages.security.waitingNote")}</span>}
+      {typing ? <>
+        <span className={css.mNote}>{t("web-pages.security.pairEnter")}</span>
+        <div className={css.mCodeField}><Field value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder="XXX-XXX" mono /></div>
+        {pair.state === "wrong" && <span className={css.mFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</span>}
+        <Button primary busy={checking || pair.state === "checking"} enabled={code.replace(/[^0-9A-Z]/gi, "").length === 6} label={t("web-pages.security.check")} onClick={prove} />
+      </> : pair?.state === "finding" || asking ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairFinding")}</span>
+        : <>
+          <span className={pair?.state === "failed" || lock.me?.failed ? css.mFailed : css.mNote}>
+            {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t("web-pages.security.notAsked")}
+          </span>
+          <Button primary label={t("web-pages.security.request")} onClick={() => void run("lock.pair", { workspace: ws }, t("web-pages.security.request"))} />
+        </>}
     </div>
   );
 }

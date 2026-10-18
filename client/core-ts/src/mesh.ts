@@ -26,6 +26,7 @@ import { RELAY } from "./status.ts";
 import { Kind, type Tracer } from "./trace.ts";
 import { fromUtf8, hex, parseJson, sha256, toJsonBytes, utf8 } from "./util.ts";
 import { type LockClaim, lockClaim } from "./lock.ts";
+import { PAIR_ALPN } from "./pair.ts";
 import { hooks } from "./core/execute.ts";
 import type { Wakes } from "./wake.ts";
 
@@ -246,7 +247,7 @@ function closeMessage(reason: CloseReason): string {
 }
 
 /// Reads lines off a stream, keeping what followed.
-class Lines {
+export class Lines {
   readonly #stream: IrohStream;
   carry: Uint8Array = new Uint8Array();
 
@@ -536,7 +537,9 @@ type Opening = { done: Deferred.Deferred<Link, CoreError>; result: { ok: Link } 
 /// A link tried beside an opening still under way (`hedge`).
 type Hedge = { serial: number; credentials: CredentialSource; tx: Deferred.Deferred<Link, CoreError> | null };
 
-export type MeshEnv = { host: Host; runner: Runner; tracer: Tracer; iroh: Iroh; wakes: Wakes };
+/// `takes`: the protocols the main endpoint takes connections on, and `incoming` what is done with each (an app, as a
+/// trusted device a new one meets face to face: views/pair.ts).
+export type MeshEnv = { host: Host; runner: Runner; tracer: Tracer; iroh: Iroh; wakes: Wakes; takes?: Uint8Array[]; incoming?: (connection: IrohConnection, alpn: Uint8Array) => void };
 
 /// The links are kept by station address (`"<workspace>/<station>"`, station/addr.ts; a bare station id stands for
 /// itself): a station in two workspaces has a link in each, opened with that workspace's credential, renewed, dropped and
@@ -624,16 +627,31 @@ export class Mesh {
       const days: Record<string, Day> = daysRaw !== null && typeof daysRaw === "object" && !Array.isArray(daysRaw) ? daysRaw : {};
       const speedsRaw = parseJson(yield* Effect.orElseSucceed(host.storageGet(SPEED_KEY), () => null)) as J;
       const speeds: Record<string, Record<string, Speed>> = speedsRaw !== null && typeof speedsRaw === "object" && !Array.isArray(speedsRaw) ? speedsRaw : {};
-      const endpoint = yield* Mesh.#bind(env.iroh, secret, relays);
+      const endpoint = yield* Mesh.#bind(env.iroh, secret, relays, false, env.takes);
       const mesh = new Mesh(env, relays, entries.filter((e) => !relays.some((r) => sameRelay(r, e))), endpoint, secret, days, speeds);
+      env.runner.fork(mesh.#accepting(endpoint));
       env.runner.fork(mesh.#watch());
       env.runner.fork(mesh.#tally());
       return mesh;
     });
   }
 
-  static #bind(iroh: Iroh, secret: Uint8Array, relays: string[], relayOnly = false): Effect.Effect<IrohEndpoint, CoreError> {
-    return Effect.mapError(iroh.bind({ secretKey: secret, relayUrls: relays, lookup: !relayOnly && relays.length > 0, relayOnly }), (e) => meshError(t("core-logic.mesh.bind_failed", { error: e.message })));
+  static #bind(iroh: Iroh, secret: Uint8Array, relays: string[], relayOnly = false, alpns: Uint8Array[] = []): Effect.Effect<IrohEndpoint, CoreError> {
+    return Effect.mapError(iroh.bind({ secretKey: secret, relayUrls: relays, lookup: !relayOnly && relays.length > 0, relayOnly, ...(alpns.length > 0 ? { alpns } : {}) }), (e) => meshError(t("core-logic.mesh.bind_failed", { error: e.message })));
+  }
+
+  /// The connections the main endpoint takes (`MeshEnv.takes`), each handed on, until it is closed (bound anew).
+  #accepting(endpoint: IrohEndpoint): Effect.Effect<void> {
+    const env = this.#env;
+    const accept = endpoint.accept;
+    if (!accept || !env.incoming || (env.takes ?? []).length === 0) return Effect.void;
+    return Effect.gen(function* () {
+      for (;;) {
+        const taken = yield* accept.call(endpoint);
+        if (taken === null) return;
+        env.incoming!(taken.connection, taken.alpn);
+      }
+    });
   }
 
   #openLinks(): [string, Link][] {
@@ -807,9 +825,10 @@ export class Mesh {
       const now = this.#env.host.nowMs();
       if (!always && now - this.#reboundAt < REBIND_MS) return this.#endpoint;
       this.#reboundAt = now;
-      const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, this.#secret, this.relays));
+      const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, this.#secret, this.relays, false, this.#env.takes));
       if (bound._tag === "Failure") return this.#endpoint;
       const endpoint = bound.success;
+      this.#env.runner.fork(this.#accepting(endpoint));
       for (const addr of this.#known) endpoint.addAddr(addr);
       const old = this.#endpoint;
       this.#endpoint = endpoint;
@@ -954,7 +973,8 @@ export class Mesh {
       if (secret.length !== 32) return yield* Effect.fail(CoreError.invalid(t("core-logic.mesh.bad_device_key")));
       const stored = yield* Effect.mapError(this.#env.host.storageGet(DEVICE_KEY), asCoreError);
       if (stored !== null && hex(stored) === hex(secret)) return;
-      const endpoint = yield* Mesh.#bind(this.#env.iroh, secret, this.relays);
+      const endpoint = yield* Mesh.#bind(this.#env.iroh, secret, this.relays, false, this.#env.takes);
+      this.#env.runner.fork(this.#accepting(endpoint));
       yield* Effect.mapError(this.#env.host.storageSet(DEVICE_KEY, secret), asCoreError);
       this.#secret = secret;
       const old = this.#endpoint;
@@ -1926,6 +1946,13 @@ function waiting<A>(status: import("./status.ts").Status, place: import("./statu
   });
 }
 
+/// What an app's main endpoint takes (a trusted device met face to face: views/pair.ts `hooks.lockPair`); a page's
+/// nothing (it approves no one).
+function takes(inner: Inner): Pick<MeshEnv, "takes" | "incoming"> {
+  if (!inner.host.appKeys) return {};
+  return { takes: [PAIR_ALPN], incoming: (connection, alpn) => (alpn.length === PAIR_ALPN.length && alpn.every((b, i) => b === PAIR_ALPN[i]) ? hooks.lockPair?.(inner, connection) : connection.close(0, "no such protocol")) };
+}
+
 /// The core's mesh: brought up on first use with the relays any account's `/v1/me` names, the credentials from
 /// still.fail cloud (kept on the device).
 export function meshWire(inner: Inner): StationWire {
@@ -1941,7 +1968,7 @@ export function meshWire(inner: Inner): StationWire {
       inner.runner.fork(
         Effect.gen(function* () {
           const made = yield* Effect.result(
-            Effect.flatMap(inner.cloudSync.relaysNow(), (relays) => Mesh.make({ host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes }, relays, inner.cloudSync.entriesNow())),
+            Effect.flatMap(inner.cloudSync.relaysNow(), (relays) => Mesh.make({ host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes, ...takes(inner) }, relays, inner.cloudSync.entriesNow())),
           );
           if (made._tag === "Success") {
             up = made.success;
