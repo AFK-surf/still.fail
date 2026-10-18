@@ -289,6 +289,7 @@
   "android-chat.search.cancel": "取消",
   "android-chat.search.chats": "对话",
   "android-chat.search.messages": "消息",
+  "android-chat.search.archived": "已归档",
   "android-chat.search.none": "未找到结果",
   "android-chat.search.update": "更新后才能搜索",
   "android-chat.search.more": "查看更多",

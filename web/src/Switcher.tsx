@@ -249,6 +249,7 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
             );
           }
           if (pick.item) return <ItemRow key={line.key} item={pick.item} {...option(i)} />;
+          // A message found: what it says with the words first, the chat it is in under it.
           if (pick.message) {
             const message = pick.message;
             return (
@@ -256,13 +257,13 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
                 <ChatPicture item={message.chat} />
                 <span className={css.saidBody}>
                   <span className={css.saidHead}>
-                    <span className={css.saidChat}>{message.chat.title}</span>
+                    <span className={css.saidChat}><Marked text={message.text} marks={message.marks} className={css.hit} /></span>
                     <span className={css.meta}>
                       {message.by && <span>{message.by}</span>}
                       <Time stamp={message.time?.createdAt} fixed />
                     </span>
                   </span>
-                  <span className={css.saidText}><Marked text={message.text} marks={message.marks} className={css.hit} /></span>
+                  <span className={css.saidText}>{message.chat.title}</span>
                 </span>
               </div>
             );
@@ -275,17 +276,17 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
               <Time stamp={item.time?.lastActiveAt} fixed />
             </span>
           );
-          // Found by words its title shows late or not at all: the part of it that has them under it.
+          // Found by words its title shows late or not at all: the part of it that has them first, its title under it.
           if (item.foundText) {
             return (
               <div key={line.key} className={`${css.row} ${css.said}`} {...option(i)}>
                 <ChatPicture item={item} />
                 <span className={css.saidBody}>
                   <span className={css.saidHead}>
-                    <span className={css.saidChat} data-unread={item.unread || undefined}>{item.title}</span>
+                    <span className={css.saidChat}><Marked text={item.foundText} marks={item.foundMarks ?? []} className={css.hit} /></span>
                     {meta}
                   </span>
-                  <span className={css.saidText}><Marked text={item.foundText} marks={item.foundMarks ?? []} className={css.hit} /></span>
+                  <span className={css.saidText} data-unread={item.unread || undefined}>{item.title}</span>
                 </span>
               </div>
             );

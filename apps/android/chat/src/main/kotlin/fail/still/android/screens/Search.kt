@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.sp
 import fail.still.android.LocalApp
 import fail.still.android.Screen
 import fail.still.android.AppState
+import fail.still.android.data.ChatItem
 import fail.still.android.data.ChatOf
 import fail.still.android.data.SearchItem
 import fail.still.android.data.SearchView
@@ -201,7 +202,9 @@ internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> 
             if (chats.isNotEmpty()) {
                 item(key = "chats") { SectionHeader(t("android-chat.search.chats")) }
                 items(chats, key = { "c/${it.station}/${it.id}" }) { item ->
-                    ChatRowBody(item, "agents", held = false, modifier = Modifier.clickable { app.push(Screen.Chat(item.station, item.page)) })
+                    val found = item.foundText
+                    if (found != null) FoundChatRow(item, found)
+                    else ChatRowBody(item, "agents", held = false, modifier = Modifier.clickable { app.push(Screen.Chat(item.station, item.page)) })
                 }
                 if (kind == null && view?.chatsMore == true) item(key = "more/chat") { MoreRow { kind = "chat" } }
             }
@@ -323,23 +326,36 @@ private fun SearchNote(text: String) {
     Text(text, fontSize = 14.sp, color = C.muted, modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp))
 }
 
-/** A message the words found: its chat, who said it and when, over the line that has them (in ink, bold); tapped, its
- *  chat opens at it, the words marked there. */
+/** A message the words found: the line that has them (they bold), who said it and when, over its chat; tapped, its chat
+ *  opens at it, the words marked there. */
 @Composable
 private fun FoundRow(found: FoundMessage, words: List<String>?) {
     val app = LocalApp.current
+    val meta = listOfNotNull(found.by.takeIf { it.isNotEmpty() }, found.time?.get("createdAt")?.ago).joinToString(" · ")
+    HitRow(found.text, found.marks, meta, found.chat.title) { app.push(Screen.Chat(found.station, found.chat.page, at = found.seq, words = words)) }
+}
+
+/** A chat found by words its title shows late or not at all: the part of it that has them first, its title under it. */
+@Composable
+private fun FoundChatRow(item: ChatItem, found: String) {
+    val app = LocalApp.current
+    val meta = listOfNotNull(if (item.archived == true) t("android-chat.search.archived") else null, item.time?.get("lastActiveAt")?.ago).joinToString(" · ")
+    HitRow(found, item.foundMarks.orEmpty(), meta, item.title) { app.push(Screen.Chat(item.station, item.page)) }
+}
+
+/** What has the words, on its first line (they in ink and bold), when beside it; where it is (its chat) under it. */
+@Composable
+private fun HitRow(text: String, marks: List<TextMark>, meta: String, under: String, onClick: () -> Unit) {
     val ink = C.ink
-    val line = remember(found.text, found.marks, ink) { marked(found.text, found.marks, ink) }
+    val line = remember(text, marks, ink) { marked(text, marks, ink) }
     Column(
-        Modifier.fillMaxWidth().height(66.dp).clickable { app.push(Screen.Chat(found.station, found.chat.page, at = found.seq, words = words)) }
-            .padding(start = 22.dp, end = 16.dp),
+        Modifier.fillMaxWidth().height(66.dp).clickable(onClick = onClick).padding(start = 22.dp, end = 16.dp),
         verticalArrangement = Arrangement.Center,
     ) {
         Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(found.chat.title, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            val meta = listOfNotNull(found.by.takeIf { it.isNotEmpty() }, found.time?.get("createdAt")?.ago).joinToString(" · ")
-            Text(meta, fontSize = 12.sp, color = C.muted, maxLines = 1)
+            Text(line, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (meta.isNotEmpty()) Text(meta, fontSize = 12.sp, color = C.muted, maxLines = 1)
         }
-        Text(line, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(20.dp))
+        Text(under, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(20.dp))
     }
 }

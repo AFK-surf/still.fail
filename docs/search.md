@@ -59,3 +59,5 @@ Helper; elsewhere looked through as asked), the cloud's own (feedback), Slack ch
   lists that kind alone, Esc back to all. A service opens its preview (`?service=`), a task the chat's services and
   tasks (`?job=`), a station its page, a member the workspace's settings.
 - The phones (web/src/mobile/Home.tsx `SearchPage`, Android screens/Search.kt): the same list and the same places.
+- A message found, and a chat found by words its title shows late or not at all (`foundText`), is listed by the line
+  that has the words (they bold), who said it or where and when beside it, its chat's title under it.

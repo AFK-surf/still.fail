@@ -60,7 +60,7 @@ test("a_search_lists_what_the_device_holds_and_what_its_stations_find_each_once"
   assert.equal(view.items[1].foundText, undefined);
   assert.match(view.items[2].foundText, /部署$/);
   assert.ok(view.items[2].foundMarks.length > 0);
-  assert.match(view.items[2].stateText, /^已归档 · /);
+  assert.equal(view.items[2].stateText, "已归档");
   // Newest first, the one both have once.
   assert.deepEqual(view.messages.map((m: J) => [m.thread, m.seq]), [[9, 3], [7, 1]]);
   assert.equal(view.messages[0].chat.title, "旧的部署");

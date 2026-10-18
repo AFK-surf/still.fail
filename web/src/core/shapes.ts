@@ -1556,7 +1556,7 @@ export interface ChatItem {
 	archived?: boolean;
 	/**
 	 * A chat a search found by words its title shows late or not at all: the part of it that has them, on one line
-	 * (`search`; its `stateText` says it too). Absent otherwise.
+	 * (`search`: listed first, its title under it). Absent otherwise.
 	 */
 	foundText?: string;
 	/** Where the words are in `foundText`. */
