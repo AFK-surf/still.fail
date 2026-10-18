@@ -413,14 +413,14 @@ export function useStationName(station: string): string {
  * the size alone), the … on hover and the same on a right click. Pressed it is chosen, a double click opens it, its name
  * is changed in place; dragged out it carries the file (what is chosen with it) and its path, and a folder takes what
  * is dropped on it. In a tree (`depth`), in by its depth, a folder with its disclosure (`expanded`, `onToggle`); in
- * columns, a folder with › at its end (`column`), the one open (`along`) marked as the way to the next column.
+ * columns (`column`), the folder open (`along`) marked as the way to the next column, with › at its end.
  */
 export function DriveRow({ at, entry, row, compact = false, depth, expanded, onToggle, column = false, along = false }: {
   at: At; entry: DriveEntry; row: RowProps; compact?: boolean;
   depth?: number | undefined; expanded?: boolean | undefined; onToggle?: (() => void) | undefined; column?: boolean; along?: boolean;
 }) {
-  // In a column a folder has › at its end, a file nothing: its name takes the room.
-  const next = column && entry.dir;
+  // In a column only the folder open in the next one has ›, not every folder: their marks already say they open.
+  const next = column && entry.dir && along;
   const full = joinPath(at.path, entry.name);
   const removing = useDoing("drive.remove", { station: at.station, root: at.root, path: full });
   const renamed = useDoing("drive.rename", { station: at.station, root: at.root, from: full });
@@ -440,7 +440,7 @@ export function DriveRow({ at, entry, row, compact = false, depth, expanded, onT
     )}
     <KindIcon kind={entry.kind} size={compact ? 18 : 20} className={css.icon} />
     {row.renaming ? <NameField name={entry.name} dir={entry.dir} onDone={row.rename} /> : <span className={css.name}>{entry.name}</span>}
-    <span className={css.size}>{entry.dir ? (next ? <ChevronRight size={12} strokeWidth={2} className={shellCss.muted} /> : "") : column ? "" : entry.sizeText}</span>
+    <span className={css.size}>{entry.dir || column ? "" : entry.sizeText}</span>
     {!compact && <span className={css.time}>{entry.timeText}</span>}
   </>;
   const el = (
@@ -452,6 +452,7 @@ export function DriveRow({ at, entry, row, compact = false, depth, expanded, onT
           {parts}
         </button>
       )}
+      {next && <span className={css.next}><ChevronRight size={12} strokeWidth={2} /></span>}
       <span className={css.more}>{busy ? <Spinner /> : <Menu items={row.items} />}</span>
     </div>
   );

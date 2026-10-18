@@ -86,14 +86,23 @@ export const size = style({ color: vars.muted, fontSize: vars.textMeta, textAlig
 export const time = style({ color: vars.muted, fontSize: vars.textMeta, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
 /** How far in from a row's end its buttons sit: their corner is the row's less this (concentric). */
 const MORE_IN = 6;
-/** The row's …, at its end: shown on hover (always where nothing hovers). */
+/** The row's …, at its end: shown on hover or the keys (not a click: it would stay on the row pressed), always where nothing hovers. */
 export const more = style({
   position: "absolute", right: `${MORE_IN}px`, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: "2px",
   opacity: "0", transition: `opacity ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    [`${entry}:hover &, ${entry}:focus-within &, &:has([data-state=open]), &[data-shown], ${entry}[data-busy] &`]: { opacity: "1" },
+    [`${entry}:hover &, ${entry}:has(:focus-visible) &, &:has([data-state=open]), &[data-shown], ${entry}[data-busy] &`]: { opacity: "1" },
   },
   "@media": { "(hover: none)": { opacity: "1" } },
+});
+/** In columns, › on the folder open in the next column alone, where the … is: it gives way to it whenever the … shows. */
+export const next = style({
+  position: "absolute", right: `${MORE_IN}px`, top: "50%", transform: "translateY(-50%)", display: "grid", placeItems: "center",
+  width: "24px", height: "24px", color: vars.muted, pointerEvents: "none", transition: `opacity ${vars.dur} ${vars.easeOut}`,
+  selectors: {
+    [`${entry}:hover > &, ${entry}:has(:focus-visible) > &, ${entry}[data-state=open] > &, ${entry}:has(${more} [data-state=open]) > &, ${entry}[data-busy] > &`]: { opacity: "0" },
+  },
+  "@media": { "(hover: none)": { display: "none" } },
 });
 
 // Its buttons concentric with the row's corner; a compact row's are smaller, as far in from its top as from its end.
