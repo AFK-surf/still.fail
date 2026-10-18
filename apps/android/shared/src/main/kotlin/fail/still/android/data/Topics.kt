@@ -249,6 +249,10 @@ object Topics {
     fun memberships(station: String) = buildJsonObject { put("topic", "memberships"); put("station", station) }
     /** A station's screens a person can see and drive (docs/remote-screens.md): its page lists them. */
     fun screens(station: String) = buildJsonObject { put("topic", "screens"); put("station", station) }
+    /** A station's logins to command-line tools, those under way and those done there (docs/remote-login.md). */
+    fun machineLogins(station: String) = buildJsonObject { put("topic", "machineLogins"); put("station", station) }
+    /** One login on a station, as its card shows it (null: one it does not know). */
+    fun machineLogin(station: String, id: String) = buildJsonObject { put("topic", "machineLogin"); put("station", station); put("id", id) }
     /** One of a station's screens as a link to it in a message shows it (its card). */
     fun screenCard(station: String, screen: String) = buildJsonObject { put("topic", "screenCard"); put("station", station); put("screen", screen) }
     fun loginSessions(account: String) = buildJsonObject { put("topic", "loginSessions"); put("account", account) }

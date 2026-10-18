@@ -110,7 +110,8 @@ sealed interface Screen {
     /** Rises from the bottom rather than coming in from the side. */
     data object NewChat : Screen { override val id = "new" }
     data object Stations : Screen { override val id = "stations" }
-    data class Station(val address: String) : Screen { override val id = "station/$address" }
+    /** A station's page; `login`: the login a link pointed to (its card brought into view and marked). */
+    data class Station(val address: String, val login: String? = null) : Screen { override val id = "station/$address" }
     /** This phone's adb lent to a station's agents (screens/AdbShare.kt). */
     data class AdbShare(val address: String) : Screen { override val id = "adb/$address" }
     /** An agent’s execution history, opened as a page over its chat. */
@@ -573,6 +574,15 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
                 sheet = null; menu = null; forward = true
                 stack = (if (outside || ws != workspace) listOf(Screen.Home) else stack) + Screen.AdbShare(address)
             }
+            // A login an agent started on a station (docs/remote-login.md): its card on the station's page.
+            "login" -> {
+                val login = t.login ?: return false
+                if (station.isEmpty()) return false
+                val address = "$ws/$station"
+                if (ws != workspace) pickWorkspace(ws)
+                sheet = null; menu = null; forward = true
+                stack = (if (outside || ws != workspace) listOf(Screen.Home) else stack) + Screen.Station(address, login)
+            }
             // One of a station's screens, as its agent asks a person to take over (docs/remote-screens.md): the viewer
             // over whatever page is open (back comes back to it).
             "screen" -> {
@@ -665,6 +675,11 @@ object AppHooks {
     var placed: (from: Screen?, to: Screen) -> Unit = { _, _ -> }
     /** An invitation's link opened: what it leads to, in a sheet (screens/Workspaces.kt openInvite). */
     var invite: (app: AppState, token: String) -> Unit = { _, _ -> }
+    /**
+     * This phone listens for a login's browser to come back (screens/LoginCards.kt), the browser about to open: the app
+     * holds itself up meanwhile (LoginRelay.kt). `title`: 在 Studio 上登录 gcloud.
+     */
+    var relaying: (title: String) -> Unit = {}
 }
 
 /**

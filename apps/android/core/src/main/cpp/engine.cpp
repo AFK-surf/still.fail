@@ -2,8 +2,10 @@
 // runtime and its loop (tasks posted to it, timers due, microtasks drained after each); the core's script
 // (client/core-ts hosts/hermes.ts, as bytecode) gets `__native`, whose calls go to the Rust shell (client/shell: HTTP,
 // still.fail cloud's socket, files and core.db, TCP, iroh) and whose answers come back as tasks; what the core says to
-// the app goes to Kotlin (HermesEngine.kt) through JNI. The calls for what is kept sealed (`secure.*`: the Keystore, and
-// the prompt for the person) go to Kotlin instead of the shell (SecureStore.kt), answered through `complete`. A JS error that escapes, or a bug the core reports, ends the
+// the app goes to Kotlin (HermesEngine.kt) through JNI. The calls only the app can do go to Kotlin instead of the shell,
+// answered through `complete`: what is kept sealed (`secure.*`: the Keystore, and the prompt for the person;
+// SecureStore.kt) and a login's loopback listener (`listen.*`: Loopback.kt, the app kept running while it listens). A
+// JS error that escapes, or a bug the core reports, ends the
 // core as a panic ended the Rust one: `{"fatal": …}`, and the app starts another.
 #include <jni.h>
 #include <android/log.h>
@@ -193,12 +195,13 @@ class Engine {
     if (e->ExceptionCheck()) e->ExceptionClear();
   }
 
-  /// A `secure.*` call, to Kotlin (Engine.kt `onSecure`): it answers on its own threads, through HermesNative.complete.
-  void secure(uint64_t id, const std::string& op, const std::string& json, const uint8_t* data, size_t size, bool hasBytes) {
+  /// A call only the app does (`secure.*`, `listen.*`), to Kotlin (Engine.kt `onApp`): it answers on its own threads,
+  /// through HermesNative.complete.
+  void toApp(uint64_t id, const std::string& op, const std::string& json, const uint8_t* data, size_t size, bool hasBytes) {
     JNIEnv* e = env();
-    if (!onSecure_) {
+    if (!onApp_) {
       jclass cls = e->GetObjectClass(listener_);
-      onSecure_ = e->GetMethodID(cls, "onSecure", "(JLjava/lang/String;[B[B)V");
+      onApp_ = e->GetMethodID(cls, "onApp", "(JLjava/lang/String;[B[B)V");
       e->DeleteLocalRef(cls);
     }
     jstring name = e->NewStringUTF(op.c_str());
@@ -209,7 +212,7 @@ class Engine {
       bytes = e->NewByteArray(jsize(size));
       if (size > 0) e->SetByteArrayRegion(bytes, 0, jsize(size), reinterpret_cast<const jbyte*>(data));
     }
-    e->CallVoidMethod(listener_, onSecure_, jlong(id), name, head, bytes);
+    e->CallVoidMethod(listener_, onApp_, jlong(id), name, head, bytes);
     e->DeleteLocalRef(name);
     e->DeleteLocalRef(head);
     if (bytes) e->DeleteLocalRef(bytes);
@@ -255,12 +258,12 @@ class Engine {
       std::string op = a[1].asString(rt).utf8(rt);
       std::string json = a[2].asString(rt).utf8(rt);
       bool hasBytes = n > 3 && a[3].isObject() && a[3].asObject(rt).isArrayBuffer(rt);
-      if (op.rfind("secure.", 0) == 0) {
+      if (op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0) {
         if (hasBytes) {
           jsi::ArrayBuffer b = a[3].asObject(rt).getArrayBuffer(rt);
-          secure(id, op, json, b.data(rt), b.size(rt), true);
+          toApp(id, op, json, b.data(rt), b.size(rt), true);
         } else {
-          secure(id, op, json, nullptr, 0, false);
+          toApp(id, op, json, nullptr, 0, false);
         }
         return jsi::Value::undefined();
       }
@@ -414,7 +417,7 @@ class Engine {
   jobject listener_;
   jmethodID onBytes_ = nullptr;
   jmethodID onFrame_ = nullptr;
-  jmethodID onSecure_ = nullptr;
+  jmethodID onApp_ = nullptr;
   std::string script_, url_, dataDir_, cloudOrigin_;
   bool beta_;
   void* shell_ = nullptr;
@@ -466,7 +469,8 @@ extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_receive(JNIE
   reinterpret_cast<Engine*>(handle)->receive(client, utf8(env, json));
 }
 
-/// Kotlin's answer to a `secure.*` call (Engine.kt): `error` null when it succeeded. Never after `close`.
+/// Kotlin's answer to a call it was handed (`secure.*`, `listen.*`; Engine.kt): `error` null when it succeeded. Never
+/// after `close`.
 extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_complete(JNIEnv* env, jobject, jlong handle, jlong id, jstring json, jstring error, jbyteArray bytes) {
   std::string data;
   if (bytes) {

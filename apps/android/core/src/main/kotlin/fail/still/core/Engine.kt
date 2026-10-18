@@ -8,7 +8,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-/** Where `secure.*` calls are done: off the engine's thread (the Keystore is slow; a prompt waits on the person). */
+/**
+ * Where the calls the app does are done (`secure.*`, `listen.*`): off the engine's thread (the Keystore is slow; a prompt
+ * waits on the person; a listener waits on the browser).
+ */
 private val sealedScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /** One running core as [StillFailCore] sees it: a client id, JSON messages each way. Tests put a fake in its place. */
@@ -32,10 +35,11 @@ internal interface HermesListener {
     /** A message with bytes beside it (`__native.emitBytes`): its JSON without them, and the bytes as they are. */
     fun onFrame(json: ByteArray, bytes: ByteArray)
     /**
-     * A `secure.*` call (client/core-ts hosts/bridge.ts): its JSON as UTF-8, and the bytes it carries (null: none).
-     * Answered later, on another thread, through [HermesNative.complete].
+     * A call the app does, not the shell (client/core-ts hosts/bridge.ts): `secure.*` (SecureStore.kt), `listen.*`
+     * (Loopback.kt); its JSON as UTF-8, and the bytes it carries (null: none). Answered later, on another thread, through
+     * [HermesNative.complete].
      */
-    fun onSecure(id: Long, op: String, json: ByteArray, bytes: ByteArray?)
+    fun onApp(id: Long, op: String, json: ByteArray, bytes: ByteArray?)
 }
 
 /** The engine's JNI (cpp/engine.cpp): Hermes running the core in TypeScript, its IO in the Rust shell (client/shell). */
@@ -48,7 +52,7 @@ internal object HermesNative {
     external fun connect(handle: Long): Long
     external fun receive(handle: Long, client: Long, json: String)
     external fun close(handle: Long)
-    /** The answer to a call the engine handed to Kotlin ([HermesListener.onSecure]): `error` null when it succeeded. */
+    /** The answer to a call the engine handed to Kotlin ([HermesListener.onApp]): `error` null when it succeeded. */
     external fun complete(handle: Long, id: Long, json: String?, error: String?, bytes: ByteArray?)
 }
 
@@ -68,8 +72,10 @@ internal fun hermesEngines(
     val sealed by lazy { SecureStore.of(context) }
     return { deliver ->
         object : Engine {
-            /** Answers to `secure.*` go only to an engine not closed yet: [close] takes this before it ends the engine. */
+            /** Answers to the app's calls go only to an engine not closed yet: [close] takes this before it ends the engine. */
             private val answering = Any()
+            /** This core's loopback listeners (a login's browser coming back): closed with it. */
+            private val loopback = Loopback()
             private var closed = false
             private val started = CompletableDeferred<Long>()
 
@@ -78,10 +84,11 @@ internal fun hermesEngines(
             private val handle: Long = HermesNative.start(script, CORE_SCRIPT, dataDir, cloudOrigin, beta, object : HermesListener {
                 override fun onBytes(json: ByteArray) = said(json, null)
                 override fun onFrame(json: ByteArray, bytes: ByteArray) = said(json, bytes)
-                override fun onSecure(id: Long, op: String, json: ByteArray, bytes: ByteArray?) {
+                override fun onApp(id: Long, op: String, json: ByteArray, bytes: ByteArray?) {
                     sealedScope.launch {
                         val answer = try {
-                            Result.success(sealed.answer(op, String(json, Charsets.UTF_8), bytes))
+                            val text = String(json, Charsets.UTF_8)
+                            Result.success(if (op.startsWith("listen.")) loopback.answer(op, text, bytes) else sealed.answer(op, text, bytes))
                         } catch (e: Throwable) {
                             Result.failure(e)
                         }
@@ -109,6 +116,7 @@ internal fun hermesEngines(
             override fun receive(client: Long, json: String) = HermesNative.receive(handle, client, json)
             override fun close() {
                 synchronized(answering) { closed = true }
+                loopback.closeAll()
                 HermesNative.close(handle)
             }
         }

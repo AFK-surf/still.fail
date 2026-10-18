@@ -125,6 +125,9 @@ private val Ease = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 fun StillFailApp(app: AppState) {
     // An invitation's link opens its sheet, a page of the app's (AppState.openLink).
     AppHooks.invite = ::openInvite
+    // A login's browser on this phone: the app held up while it listens for it (LoginRelay.kt).
+    val context = LocalContext.current
+    AppHooks.relaying = { title -> LoginRelay.start(context.applicationContext, title) }
     // What a page of one module shows or opens of another's (screens/Elsewhere.kt).
     Elsewhere.stationPeek = ::openStationPeek
     Elsewhere.workspaces = ::openWorkspaces
@@ -408,7 +411,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Home -> fail.still.android.screens.LockGate(current) { HomeScreen(current) }
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
                     Screen.Stations -> StationsScreen(current)
-                    is Screen.Station -> StationScreen(current, screen.address)
+                    is Screen.Station -> StationScreen(current, screen.address, screen.login)
                     is Screen.AdbShare -> fail.still.android.screens.AdbShareScreen(current, screen.address)
                     is Screen.Profile -> ProfileScreen(current, screen.address, screen.profile)
                     is Screen.History -> fail.still.android.screens.HistoryScreen(screen.station, screen.of, screen.key, screen.entry)
