@@ -151,6 +151,7 @@ async function main() {
   const confirm = page.getByRole("button", { name: "归档" });
   if (await confirm.isVisible({ timeout: 1500 }).catch(() => false)) await confirm.click();
   await page.waitForTimeout(3000);
+  console.log(`the station says, archived: ${(await agentSearch(data, dir, "duckdb")).replace(/\s+/g, " ").slice(0, 400)}`);
   const archived = await switcher("duckdb", "desktop-duckdb-archived");
   check("an archived chat is found, its message from its station", archived.replace(/\s+/g, " ").slice(0, 300), /已归档/.test(archived) && /DuckDB/.test(archived));
   await page.emulateMedia({ colorScheme: "dark" });
@@ -172,17 +173,22 @@ async function main() {
   check("the phone's search finds the archived chat's message", found.replace(/\s+/g, " ").slice(0, 300), /DuckDB/.test(found));
 
   // An agent's search: the station's MCP endpoint, as a session asks it.
-  const db = new DatabaseSync(join(data, "stillfail.db"), { readOnly: true });
-  const token = db.prepare("SELECT token FROM sessions ORDER BY created_at LIMIT 1").get().token;
-  db.close();
-  const door = /agents' door open.*?(http:\/\/[^"\s]+)/.exec(readFileSync(join(dir, "station.log"), "utf8"))?.[1];
-  const answer = await (await fetch(door, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "search", arguments: { query: "部署" } } }) })).json();
-  const said = answer?.result?.content?.[0]?.text ?? JSON.stringify(answer);
+  const said = await agentSearch(data, dir, "部署");
   console.log(said);
   check("an agent's search finds the messages and the chat's link", said.replace(/\s+/g, " ").slice(0, 300), /部署/.test(said) && /\/o\//.test(said));
 
   console.table(results.map((r) => ({ check: r.name, ok: r.ok ? "PASS" : "FAIL" })));
   return results.every((r) => r.ok);
+}
+
+/// What an agent's `search` says (the station's MCP endpoint, as its first session asks it).
+async function agentSearch(data, dir, query) {
+  const db = new DatabaseSync(join(data, "stillfail.db"), { readOnly: true });
+  const token = db.prepare("SELECT token FROM sessions ORDER BY created_at LIMIT 1").get().token;
+  db.close();
+  const door = /agents' door open.*?(http:\/\/[^"\s]+)/.exec(readFileSync(join(dir, "station.log"), "utf8"))?.[1];
+  const answer = await (await fetch(door, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "search", arguments: { query } } }) })).json();
+  return answer?.result?.content?.[0]?.text ?? JSON.stringify(answer);
 }
 
 let ok = false;
