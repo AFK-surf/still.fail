@@ -18,6 +18,9 @@ const T = {
   notes: "media.notes",
   timeline: "media.timeline",
   albums: "media.albums",
+  videos: "media.videos",
+  video: "media.video",
+  progress: "media.progress",
 } as const;
 
 /// How many days with photos a timeline's window holds each side of its day, at most.
@@ -78,6 +81,18 @@ export const media: CoreModule = {
         }
         case T.albums:
           return { path: "/photos/albums", key: "albums", take: (got) => got };
+        // The films and shows: the library's first page (films, shows, what is being watched), one film or show, and
+        // where the viewer is in one.
+        case T.videos:
+          return { path: "/videos/library", key: "videos", take: (got) => got };
+        case T.video: {
+          const id = typeof t.id === "string" ? t.id : "";
+          return { path: `/videos/titles/${enc(id)}`, key: `video/${id}`, take: (got) => got };
+        }
+        case T.progress: {
+          const id = typeof t.id === "string" ? t.id : "";
+          return { path: `/videos/${enc(id)}/progress`, key: `progress/${id}`, take: (got) => ({ progress: obj(got).progress ?? null }) };
+        }
       }
       return null;
     };
@@ -118,6 +133,20 @@ export const media: CoreModule = {
               // The photos changed: every window of the timeline shown, and the albums.
               if (event === "photos") {
                 for (const t of [...of.values()].filter((t) => t.topic === T.timeline || t.topic === T.albums)) yield* Effect.ignore(read(t));
+                continue;
+              }
+              // The films and shows changed: the library and each shown; the viewer's place in one: it, and the library
+              // (what is being watched).
+              if (event === "videos" || event === "progress") {
+                const id = (() => {
+                  try {
+                    return String(obj(JSON.parse(data)).id ?? "");
+                  } catch {
+                    return "";
+                  }
+                })();
+                const which = [...of.values()].filter((t) => t.topic === T.videos || (event === "videos" ? t.topic === T.video : t.topic === T.progress && t.id === id));
+                for (const t of which) yield* Effect.ignore(read(t));
                 continue;
               }
               const asked = event === "shelf" ? topic.shelf(station) : event === "place" ? topic.place(station, book) : event === "notes" ? topic.notes(station, book) : null;
@@ -175,6 +204,7 @@ export const media: CoreModule = {
         [T.notes]: { fields: { notes: { key: ["id"] } } },
         [T.timeline]: { fields: { days: { key: ["day"], item: { fields: { items: { key: ["id"] } } } } } },
         [T.albums]: { fields: { albums: { key: ["id"] } } },
+        [T.videos]: { fields: { movies: { key: ["id"] }, shows: { key: ["id"] }, recent: { key: ["id"] } } },
       },
       calls: {
         // A chapter's text: kept on the device once read, so a book read before opens without the station.
@@ -332,6 +362,83 @@ export const media: CoreModule = {
             });
           },
           station: (p: { station: string }) => p.station,
+        },
+        // How a film or an episode is played on this client (`client`: the formats it decodes itself): its file as it is
+        // (read as a drive file), or an HLS stream made as it is played; its subtitles and audio tracks.
+        "video.play": {
+          parse: (params) => {
+            const p = obj(params);
+            const client = typeof p.client === "string" && /^[a-z0-9,]{0,200}$/.test(p.client) ? p.client : "";
+            return { station: str(p, "station"), id: str(p, "id"), client };
+          },
+          run: (p: { station: string; id: string; client: string }) => env.request(p.station, "GET", `/videos/${enc(p.id)}/play?client=${p.client}`, null),
+          station: (p: { station: string }) => p.station,
+        },
+        // Any of a film's streamed parts (`/videos/…`: its HLS lists and segments, its subtitles), bytes beside the answer:
+        // what an app's player loads through its own loader.
+        "video.fetch": {
+          parse: (params) => {
+            const p = obj(params);
+            const path = str(p, "path");
+            if (!/^\/videos\/[^?#]*(\?[^#]*)?$/.test(path) || path.includes("..")) throw CoreError.invalid("path: one of the videos' own");
+            return { station: str(p, "station"), path };
+          },
+          run: (p: { station: string; path: string }) =>
+            Effect.flatMap(env.exchange(p.station, "GET", p.path, [], new Uint8Array(), { quiet: true }), (r) => {
+              if (r.status < 200 || r.status >= 300) return Effect.fail(new CoreError("not_found", `读取失败（${r.status}）`));
+              const type = r.headers.find(([k]) => k.toLowerCase() === "content-type")?.[1] ?? "application/octet-stream";
+              return Effect.succeed(new Beside({ type, size: r.body.length }, r.body));
+            }),
+          station: (p: { station: string }) => p.station,
+        },
+        "video.poster": {
+          parse: (params) => {
+            const p = obj(params);
+            return { station: str(p, "station"), id: str(p, "id") };
+          },
+          run: (p: { station: string; id: string }) =>
+            Effect.flatMap(env.exchange(p.station, "GET", `/videos/posters/${enc(p.id)}`, [], new Uint8Array()), (r) => {
+              if (r.status < 200 || r.status >= 300) return Effect.fail(new CoreError("not_found", `海报读取失败（${r.status}）`));
+              const header = (name: string) => r.headers.find(([k]) => k.toLowerCase() === name)?.[1];
+              return Effect.succeed(new Beside({ type: header("content-type") ?? "image/jpeg", w: Number(header("stillfail-width") ?? 0), h: Number(header("stillfail-height") ?? 0) }, r.body));
+            }),
+          station: (p: { station: string }) => p.station,
+        },
+        // Where the viewer is in a film or an episode: shown at once, the service keeping the latest (`at`).
+        "video.progress.set": {
+          parse: (params) => {
+            const p = obj(params);
+            const position = typeof p.position === "number" && Number.isFinite(p.position) && p.position >= 0 ? p.position : -1;
+            if (position < 0) throw CoreError.invalid("position: seconds into it");
+            return { station: str(p, "station"), id: str(p, "id"), progress: { position, at: count(p, "at"), ...(p.done === true ? { done: true } : {}) } };
+          },
+          run: (p: { station: string; id: string; progress: { position: number; at: number; done?: boolean } }) => {
+            const key = `progress/${p.id}`;
+            const was = obj(obj(env.kept(p.station, key)).progress);
+            if (typeof was.at !== "number" || was.at <= p.progress.at) env.keep(p.station, key, { progress: p.progress }, { topic: T.progress, station: p.station, id: p.id });
+            return Effect.as(env.request(p.station, "PUT", `/videos/${enc(p.id)}/progress`, p.progress, { quiet: true }), null);
+          },
+          station: (p: { station: string }) => p.station,
+        },
+        "video.folders": {
+          parse: (params) => ({ station: str(obj(params), "station") }),
+          run: (p: { station: string }) => env.request(p.station, "GET", "/videos/folders", null),
+          station: (p: { station: string }) => p.station,
+        },
+        "video.setFolders": {
+          parse: (params) => {
+            const p = obj(params);
+            const folders = Array.isArray(p.folders)
+              ? p.folders.map(obj).map((f) => {
+                  if (f.kind !== "movies" && f.kind !== "shows") throw CoreError.invalid("kind: movies or shows");
+                  return { root: str(f, "root"), path: typeof f.path === "string" ? f.path : "", kind: f.kind };
+                })
+              : [];
+            return { station: str(p, "station"), folders };
+          },
+          run: (p: { station: string; folders: unknown[] }) => Effect.as(env.request(p.station, "PUT", "/videos/folders", { folders: p.folders }), null),
+          station: (p: { station: string }) => p.station,
+          counts: true,
         },
         // A book file, or every book in a folder, of the station's drive put on the shelf.
         import: {
