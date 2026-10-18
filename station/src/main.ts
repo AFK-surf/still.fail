@@ -31,6 +31,7 @@ import { version } from "./ops/version.ts";
 import { AdbShares, AdminApi, AgentsSide, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
 import { ModulesLive } from "./modules/live.ts";
 import { VaultLive } from "./vault/module.ts";
+import { PluginsLive } from "./plugins/module.ts";
 import { AdbLive } from "./adb/module.ts";
 import { BrowserLive } from "./browser/module.ts";
 import { LinksLive } from "./links/module.ts";
@@ -138,7 +139,7 @@ function run() {
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
   const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
-    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, PublishLive, LoginsLive, UsageLive, SearchLive, SlackLive)),
+    Layer.provideMerge(Layer.mergeAll(VaultLive, PluginsLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, PublishLive, LoginsLive, UsageLive, SearchLive, SlackLive)),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     // The drive, the admin API's and the modules' local API's (modules/local.ts): the platform's, before the agents.

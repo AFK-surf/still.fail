@@ -93,6 +93,7 @@ export const TOPICS: Record<string, Spec> = {
   stationSearch: { station: S, q: S, kind: ["string", "skip"], limit: ["u32", "skip"] },
   newChat: { scope: S },
   shareIn: { scope: S, source: S, query: ["string", "def"] },
+  plugins: { scope: S, source: ["string", "skip"] },
   pick: { station: S, of: S },
   chatJobs: { station: S, thread: ["u64", "opt"], session: ["string", "opt"] },
   imageNear: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], path: S },

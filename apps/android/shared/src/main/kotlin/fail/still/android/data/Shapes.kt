@@ -3813,6 +3813,44 @@ data class OpenChat (
 	val key: String
 )
 
+@Serializable
+data class PluginAction (
+	/// `chat`: what is shared goes into a chat.
+	val kind: String,
+	/// That chat's session on the station.
+	val session: String,
+	/// `auto`: sent at once as the person's message; `composer`: put in the chat's composer.
+	val send: String
+)
+
+@Serializable
+data class PluginEntry (
+	/// `share`: what another app shares.
+	val kind: String,
+	/// A regular expression (any case) what is shared must have; none: anything.
+	val match: String? = null
+)
+
+@Serializable
+data class PluginItem (
+	/// The address of the station keeping it (its chat is there).
+	val station: String,
+	val id: String,
+	/// What the person sees: 抖音下载.
+	val name: String,
+	val entries: List<PluginEntry>,
+	val action: PluginAction,
+	/// The title of the chat it sends to, as the chats view has it.
+	val chat: String? = null
+)
+
+/// A person's plugins (the `plugins` topic; docs/client-plugins.md): what their agent made, kept by the workspace's stations.
+@Serializable
+data class PluginsView (
+	/// This person's plugins in the workspace, by name; with a `source`, those with a share entry that takes it.
+	val items: List<PluginItem>
+)
+
 /// What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide
 /// screen the decisions waiting for the viewer (奏) or the archived chats (已归档) in place of the chats.
 typealias ListFilter = String

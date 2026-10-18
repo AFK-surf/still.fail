@@ -52,6 +52,7 @@ import * as memberships from "./views/memberships.ts";
 import * as publish from "./views/publish.ts";
 import * as lockCalls from "./views/lock.ts";
 import * as vaultCalls from "./views/vault.ts";
+import * as pluginCalls from "./views/plugins.ts";
 import { isObject } from "./util.ts";
 import { type CoreModule, type ModuleCall, installModules } from "./module.ts";
 
@@ -218,6 +219,7 @@ export class Core {
       inner.attention.install();
       inner.choose = installChoose(inner);
       installShareIn(inner);
+      pluginCalls.install(inner);
       inner.forms = installForms(inner);
       const asks = new Asks(inner.host, (app, from, to) => inner.changelog.brings(app, from, to));
       inner.adb = new Adb({

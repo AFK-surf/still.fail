@@ -34,6 +34,7 @@
   "core-misc.join.oldStation": "This station can't be in more than one workspace yet: update it first",
   "core-misc.join.same": "This station is already in this workspace",
   "core-misc.join.tooMany": "This workspace has as many stations as its plan allows",
+  "core-misc.plugins.unknown": "This plugin no longer exists",
   "core-misc.xshare.workspace": "The workspace and station don't match",
   "core-misc.xshare.notRead": "{name}'s stations aren't loaded yet",
   "core-misc.xshare.oldStation": "This station needs an update",

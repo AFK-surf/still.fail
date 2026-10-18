@@ -57,7 +57,7 @@ function keyOf(args: Json): string {
 }
 
 /// The person who started session `key`'s chat (whom a chat it opens goes to).
-function starterOf(hub: Hub, key: string): string {
+export function starterOf(hub: Hub, key: string): string {
   let thread = null;
   try {
     thread = sessionThreadOf(hub, key).thread;

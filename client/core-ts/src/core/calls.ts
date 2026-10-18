@@ -105,6 +105,7 @@ export type Call =
   | { kind: "lock"; name: string; workspace: string; params: Record<string, unknown> }
   /// The vault (views/vault.ts): `vault.<name>` on a workspace, with what it takes.
   | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> }
+  | { kind: "plugins"; name: "run" | "delete"; scope: string; station: string; id: string; source: string }
   /// An app's module's call (module.ts): `<module>.<name>`, its params as the module checked them.
   | { kind: "module"; name: string; call: HeldCall };
 
@@ -282,6 +283,15 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     return files as { id: string; name: string; size: number; width?: number; height?: number }[];
   };
   const uploadFields = () => { const files = uploads(); return files.length ? { uploads: files } : {}; };
+  if (name === "plugins.run" || name === "plugins.delete") {
+    const p = read(params, [
+      ["scope", S, "req"],
+      ["station", S, "req"],
+      ["id", S, "req"],
+      ["source", S, "default"],
+    ]);
+    return { kind: "plugins", name: name === "plugins.run" ? "run" : "delete", scope: p.scope as string, station: p.station as string, id: p.id as string, source: p.source as string };
+  }
   if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
     const p = read(params, [["workspace", S, "req"]]);
     return { kind: "vault", name: name.slice(6), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
