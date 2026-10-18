@@ -16,6 +16,8 @@ export class NodeShell implements Native {
   readonly #handles = new Map<number, J>();
   #next = 1;
   readonly calls: string[] = [];
+  /// The addon's endpoints bound, in order (a test reads where one listens).
+  readonly bound: J[] = [];
 
   constructor(dataDir: string) {
     this.host = new NodeHost(dataDir, "http://unused", false, () => {});
@@ -134,8 +136,14 @@ export class NodeShell implements Native {
         return done({});
       case "iroh.bind": {
         const addon = loadAddon() as J;
-        const e = await addon.bind({ secretKey: Buffer.from(bytes!), alpns: [], relayUrls: a.relayUrls, discovery: false, lookup: a.lookup, relayOnly: a.relayOnly });
+        const alpns = ((a.alpns ?? []) as string[]).map((x) => Buffer.from(x, "hex"));
+        const e = await addon.bind({ secretKey: Buffer.from(bytes!), alpns, relayUrls: a.relayUrls, discovery: false, lookup: a.lookup, relayOnly: a.relayOnly });
+        this.bound.push(e);
         return done({ id: this.#keep(e) });
+      }
+      case "iroh.accept": {
+        const c = await this.#handles.get(a.id).accept();
+        return done(c === null ? { end: true } : { id: this.#keep(c), alpn: Buffer.from(c.alpn()).toString("hex") });
       }
       case "iroh.connect": {
         const additional = (a.additional as string[]).map((x) => Buffer.from(x, "hex"));

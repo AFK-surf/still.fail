@@ -21,8 +21,9 @@
 //     listen.close {id} — a login's loopback listener (docs/remote-login.md), answered by the app (Kotlin:
 //     Loopback.kt, where the app keeps itself running while it listens), not the shell
 //   reset {} — the connections kept for requests are taken for gone
-//   iroh.bind {relayUrls, lookup, relayOnly} + key → {id}; iroh.connect {id, addr, additional: [hex]} + alpn → {id};
-//     iroh.networkChange {id}; iroh.close {id}
+//   iroh.bind {relayUrls, lookup, relayOnly, alpns: [hex]} + key → {id}; iroh.connect {id, addr, additional: [hex]} +
+//     alpn → {id}; iroh.accept {id} → {id, alpn: hex} (the next connection coming, its handshake done; {end} once the
+//     endpoint is gone); iroh.networkChange {id}; iroh.close {id}
 //   conn.openBi / conn.acceptBi / conn.openUni {id} → {id} (acceptBi: {end} once gone); conn.closed {id} → reason;
 //     conn.close {id, code, reason}
 //   istream.read {id} → bytes or {end}; istream.write {id} + bytes; istream.finish {id}; istream.stopped {id} → {code};
@@ -112,6 +113,7 @@ function concat(parts: Uint8Array[]): Uint8Array {
 }
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16));
 
 /// A pull over a shell operation that answers bytes, or `{end}`.
 function pullBytes(bridge: Bridge, op: string, id: number): Pull<Uint8Array> {
@@ -347,12 +349,19 @@ export function bridgeIroh(bridge: Bridge): Iroh {
   const endpoint = (id: number): IrohEndpoint => ({
     id: () => String(bridge.sync("iroh.endpointId", { id })),
     connect: (addr: IrohAddr, alpn, additional) => Effect.map(bridge.call("iroh.connect", { id, addr, additional: additional.map(hex) }, alpn), (a) => connection(handle(a))),
+    accept: () =>
+      Effect.orElseSucceed(
+        Effect.map(bridge.call("iroh.accept", { id }), (a) => ((a.json as J)?.end === true ? null : { connection: connection(handle(a)), alpn: unhex(String((a.json as J).alpn)) })),
+        () => null,
+      ),
     addAddr: (addr) => void bridge.sync("iroh.addAddr", { id, addr }),
     networkChange: () => Effect.ignore(bridge.call("iroh.networkChange", { id })),
     relayStatus: () => (bridge.sync("iroh.relayStatus", { id }) as { url: string; connected: boolean }[]) ?? [],
     close: () => Effect.ignore(bridge.call("iroh.close", { id })),
   });
-  return { bind: (o) => Effect.map(bridge.call("iroh.bind", { relayUrls: o.relayUrls, lookup: o.lookup, relayOnly: o.relayOnly }, o.secretKey), (a) => endpoint(handle(a))) };
+  return {
+    bind: (o) => Effect.map(bridge.call("iroh.bind", { relayUrls: o.relayUrls, lookup: o.lookup, relayOnly: o.relayOnly, alpns: (o.alpns ?? []).map(hex) }, o.secretKey), (a) => endpoint(handle(a))),
+  };
 }
 
 /// A core on a shell: the API the Rust core's Node addon had (connect / receive(json) / disconnect). A bug that ends a fiber ends it as a

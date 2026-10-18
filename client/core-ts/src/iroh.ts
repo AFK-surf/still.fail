@@ -53,6 +53,9 @@ export interface IrohEndpoint {
   id(): string;
   /// A connection offering `alpn` (and the `additional` ones, for a station from before a rename).
   connect(addr: IrohAddr, alpn: Uint8Array, additional: Uint8Array[]): Effect.Effect<IrohConnection, HostError>;
+  /// The next connection another endpoint opened to this one, on one of the ALPNs it was bound to take (`alpns`), with
+  /// the one agreed; null once the endpoint is closed. A host that takes none (the browser's) has no `accept`.
+  accept?(): Effect.Effect<{ connection: IrohConnection; alpn: Uint8Array } | null>;
   /// Where an endpoint is, without looking it up (tests, a LAN with no relay).
   addAddr(addr: IrohAddr): void;
   /// The network changed: its sockets and relay connection looked at anew.
@@ -71,6 +74,8 @@ export type BindOptions = {
   lookup: boolean;
   /// Relays alone, no IP transports (what measures a relay's way must not go direct).
   relayOnly: boolean;
+  /// The ALPNs it takes connections on (`accept`): none, it takes none.
+  alpns?: Uint8Array[];
 };
 
 export interface Iroh {

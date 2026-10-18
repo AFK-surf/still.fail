@@ -67,12 +67,16 @@ struct Halves {
     finished: std::sync::atomic::AtomicBool,
 }
 
+/// The connections coming to an endpoint whose handshakes are done, as each finishes (`iroh.accept`), once one was
+/// first asked for.
+type Accepted = Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Connection>>>>;
+
 #[derive(Clone)]
 enum Handle {
     Response(Arc<tokio::sync::Mutex<reqwest::Response>>),
     Ws { incoming: Arc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<Result<String, String>>>>, outgoing: tokio::sync::mpsc::UnboundedSender<String> },
     Tcp { read: Arc<tokio::sync::Mutex<tokio::net::tcp::OwnedReadHalf>>, write: Arc<tokio::sync::Mutex<tokio::net::tcp::OwnedWriteHalf>> },
-    Endpoint(Endpoint),
+    Endpoint(Endpoint, Accepted),
     Conn(Connection),
     IStream(Arc<Halves>),
 }
@@ -403,7 +407,7 @@ impl Inner {
             }
             "iroh.bind" => self.bind(&a, bytes.unwrap_or_default()).await,
             "iroh.connect" => {
-                let Handle::Endpoint(endpoint) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
+                let Handle::Endpoint(endpoint, _) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
                 let additional: Vec<Vec<u8>> = a.get("additional").and_then(Value::as_array).into_iter().flatten().filter_map(|x| hex::decode(x.as_str()?).ok()).collect();
                 let options = iroh::endpoint::ConnectOptions::new().with_additional_alpns(additional);
                 let addr = endpoint_addr(a.get("addr").ok_or("missing addr")?)?;
@@ -411,13 +415,40 @@ impl Inner {
                 let conn = connecting.await.map_err(err)?;
                 Ok(Answer::json(json!({ "id": self.keep(Handle::Conn(conn)) })))
             }
+            // As the station's addon takes them: handshakes side by side, each on its own, so one never finished (a
+            // device gone half way) holds up no other; one that fails is skipped.
+            "iroh.accept" => {
+                let Handle::Endpoint(endpoint, accepted) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
+                let mut accepted = accepted.lock().await;
+                let done = accepted.get_or_insert_with(|| {
+                    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+                    tokio::spawn(async move {
+                        while let Some(incoming) = endpoint.accept().await {
+                            let tx = tx.clone();
+                            tokio::spawn(async move {
+                                if let Ok(conn) = incoming.await {
+                                    let _ = tx.send(conn);
+                                }
+                            });
+                        }
+                    });
+                    rx
+                });
+                match done.recv().await {
+                    Some(conn) => {
+                        let alpn = hex::encode(conn.alpn());
+                        Ok(Answer::json(json!({ "id": self.keep(Handle::Conn(conn)), "alpn": alpn })))
+                    }
+                    None => Ok(Answer::json(json!({ "end": true }))),
+                }
+            }
             "iroh.networkChange" => {
-                let Handle::Endpoint(endpoint) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
+                let Handle::Endpoint(endpoint, _) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
                 endpoint.network_change().await;
                 Ok(Answer::json(json!({})))
             }
             "iroh.close" => {
-                if let Some(Handle::Endpoint(endpoint)) = self.drop_handle(id_of(&a)?) {
+                if let Some(Handle::Endpoint(endpoint, _)) = self.drop_handle(id_of(&a)?) {
                     endpoint.close().await;
                 }
                 Ok(Answer::json(json!({})))
@@ -574,8 +605,10 @@ impl Inner {
         let relays: Vec<RelayUrl> = a.get("relayUrls").and_then(Value::as_array).into_iter().flatten().map(|u| relay_url(u.as_str().unwrap_or_default())).collect::<Result<_, _>>()?;
         let mut cubic = noq_proto::congestion::CubicConfig::default();
         cubic.initial_window(256 * 1024);
+        let alpns: Vec<Vec<u8>> = a.get("alpns").and_then(Value::as_array).into_iter().flatten().map(|x| hex::decode(x.as_str().unwrap_or_default()).map_err(err)).collect::<Result<_, _>>()?;
         let mut builder = Endpoint::builder(Minimal)
             .secret_key(key)
+            .alpns(alpns)
             .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
             .transport_config(QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build());
         if a.get("relayOnly").and_then(Value::as_bool).unwrap_or(false) {
@@ -589,7 +622,7 @@ impl Inner {
                 .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish());
         }
         let endpoint = builder.bind().await.map_err(err)?;
-        Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint)) })))
+        Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint, Accepted::default())) })))
     }
 
     /// An account's database: opened, a statement run, its rows, closed, its file removed.
@@ -677,13 +710,13 @@ impl Inner {
     fn run_sync(&self, op: &str, a: &Value) -> Result<Value, String> {
         let handle = self.handle(id_of(a)?)?;
         match (op, handle) {
-            ("iroh.endpointId", Handle::Endpoint(e)) => Ok(json!(hex::encode(e.id().as_bytes()))),
-            ("iroh.addAddr", Handle::Endpoint(e)) => {
+            ("iroh.endpointId", Handle::Endpoint(e, _)) => Ok(json!(hex::encode(e.id().as_bytes()))),
+            ("iroh.addAddr", Handle::Endpoint(e, _)) => {
                 let addr = endpoint_addr(a.get("addr").ok_or("missing addr")?)?;
                 e.address_lookup().map_err(err)?.add(iroh::address_lookup::MemoryLookup::from_endpoint_info([addr]));
                 Ok(Value::Null)
             }
-            ("iroh.relayStatus", Handle::Endpoint(e)) => Ok(Value::Array(e.home_relay_status().get().iter().map(|s| json!({ "url": s.url().to_string(), "connected": s.is_connected() })).collect())),
+            ("iroh.relayStatus", Handle::Endpoint(e, _)) => Ok(Value::Array(e.home_relay_status().get().iter().map(|s| json!({ "url": s.url().to_string(), "connected": s.is_connected() })).collect())),
             ("conn.remoteId", Handle::Conn(c)) => Ok(json!(hex::encode(c.remote_id().as_bytes()))),
             ("conn.closeReason", Handle::Conn(c)) => Ok(c.close_reason().map(|e| close_info(&e)).unwrap_or(Value::Null)),
             ("conn.paths", Handle::Conn(c)) => Ok(Value::Array(
