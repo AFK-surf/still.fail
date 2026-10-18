@@ -77,3 +77,27 @@ test("a_station_from_before_search_is_said_to_need_an_update", async () => {
   assert.deepEqual(v(values, 1).items.map((i: J) => i.id), ["a"]);
   core.close();
 });
+
+test("a_search_shown_again_asks_its_stations_again", async () => {
+  const replies: Record<string, unknown> = { ...base(), "GET /chats": [row("a", 7, "部署页")], "GET /threads": [threadView(7, 0, 0, 0)], "GET /search?q=%E9%83%A8%E7%BD%B2&limit=6": found };
+  const { host, core } = await started(replies);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "search", scope: "ws", query: "部署" });
+  await host.settle();
+  await host.time.pass(SEARCH_SETTLE_MS + 10);
+  await host.settle();
+  core.receive(ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
+  await host.settle();
+  // Archived meanwhile: the station says so now.
+  replies["GET /search?q=%E9%83%A8%E7%BD%B2&limit=6"] = { building: false, groups: [{ kind: "chat", more: false, hits: [{ kind: "chat", key: "c:7", title: "部署页", text: "", at: 9, thread: 7, chat: "a", archived: true }] }] };
+  replies["GET /chats"] = [];
+  subscribe(core, ui, 2, { topic: "search", scope: "ws", query: "部署" });
+  await host.settle();
+  await host.time.pass(SEARCH_SETTLE_MS + 10);
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 2).groups, []);
+  assert.equal(v(values, 2).messages.length, 0);
+  core.close();
+});

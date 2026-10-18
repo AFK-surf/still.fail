@@ -288,14 +288,15 @@ export class StationsSync {
   }
 
   /// What a search finds on the station (`stationSearch`, docs/search.md): asked a moment after the words stop changing
-  /// (one shown that long), at the urgency of what is shown; held in memory while shown, the station's answer as it
-  /// came. A station from before search answers 404: said so (its `err`), and it is not asked again while shown.
+  /// (one shown that long), at the urgency of what is shown, and again as it is shown again; held in memory while
+  /// shown, the station's answer as it came. A station from before search answers 404: said so (its `err`), and it is not asked again while shown.
   searchShown(topic: Topic): void {
     const address = topic.station as string;
     const key = topicKey(topic);
     const link = this.#links.get(address);
+    // Asked again each time it is shown (what was found before shown meanwhile): what a station holds changes.
     const refused = link?.errors.get(key);
-    if (!link || link.memory.has(key) || (refused && (refused.status ?? 500) < 500)) return;
+    if (!link || (refused && (refused.status ?? 500) < 500)) return;
     this.#core.runner.fork(
       Effect.sleep(SEARCH_SETTLE_MS).pipe(
         Effect.andThen(
