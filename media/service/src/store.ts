@@ -1,5 +1,5 @@
 // media.db (node:sqlite, WAL): the books of each workspace with their chapters and images, and each account's reading
-// place and notes. Its own schema version (`user_version`), moved forward by MIGRATIONS in order; a database newer
+// place and notes; the station's photo library (its items, its folders). Its own schema version (`user_version`), moved forward by MIGRATIONS in order; a database newer
 // than this service is refused.
 import { DatabaseSync } from "node:sqlite";
 import { type Parsed, type TocEntry, chapterChars } from "./blocks.ts";
@@ -60,6 +60,39 @@ CREATE TABLE notes (
   PRIMARY KEY (book, id)
 );
 `,
+  `
+CREATE TABLE photo_items (
+  id TEXT PRIMARY KEY,
+  root TEXT NOT NULL,
+  path TEXT NOT NULL,
+  dir TEXT NOT NULL,
+  album TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  mtime INTEGER NOT NULL,
+  taken INTEGER NOT NULL,
+  day TEXT NOT NULL,
+  w INTEGER,
+  h INTEGER,
+  duration REAL,
+  camera TEXT,
+  lens TEXT,
+  lat REAL,
+  lon REAL,
+  thumbhash TEXT,
+  sha256 TEXT,
+  seen INTEGER NOT NULL
+);
+CREATE INDEX photo_items_day ON photo_items (day, taken);
+CREATE INDEX photo_items_album ON photo_items (album, taken);
+CREATE INDEX photo_items_dir ON photo_items (root, dir);
+CREATE INDEX photo_items_sha256 ON photo_items (sha256) WHERE sha256 IS NOT NULL;
+CREATE INDEX photo_items_unhashed ON photo_items (taken) WHERE thumbhash IS NULL;
+CREATE TABLE photo_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+`,
 ];
 
 export type BookRow = { id: string; workspace: string; title: string; author: string; format: string; root: string; path: string; size: number; mtime: number; added: number; cover: string | null; toc: TocEntry[] };
@@ -80,6 +113,34 @@ const noteOf = (r: Row): Note => ({
   color: r.color as string,
   at: r.at as number,
 });
+
+/// A photo or video of the library: where it is (`dir` is its folder's path under `root`), which album (`album`: the
+/// library folder's id, or "backup"), what it says of itself. `thumbhash` null until its thumbnail was made ("" when
+/// none could be); `sha256` known for what was uploaded; `seen` the pass that last found it.
+export type PhotoRow = {
+  id: string;
+  root: string;
+  path: string;
+  dir: string;
+  album: string;
+  kind: "photo" | "video";
+  size: number;
+  mtime: number;
+  taken: number;
+  day: string;
+  w: number | null;
+  h: number | null;
+  duration: number | null;
+  camera: string | null;
+  lens: string | null;
+  lat: number | null;
+  lon: number | null;
+  thumbhash: string | null;
+  sha256: string | null;
+  seen: number;
+};
+
+const PHOTO_COLUMNS = ["id", "root", "path", "dir", "album", "kind", "size", "mtime", "taken", "day", "w", "h", "duration", "camera", "lens", "lat", "lon", "thumbhash", "sha256", "seen"] as const;
 
 export type Store = ReturnType<typeof openStore>;
 
@@ -136,7 +197,28 @@ export function openStore(file: string) {
       "INSERT INTO notes (book, id, sub, chapter, start, stop, text, note, color, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (book, id) DO UPDATE SET chapter = excluded.chapter, start = excluded.start, stop = excluded.stop, text = excluded.text, note = excluded.note, color = excluded.color, at = excluded.at WHERE excluded.at > notes.at AND notes.sub = excluded.sub",
     ),
     removeNote: db.prepare("DELETE FROM notes WHERE book = ? AND id = ? AND sub = ?"),
+    setting: db.prepare("SELECT value FROM photo_settings WHERE key = ?"),
+    setSetting: db.prepare("INSERT INTO photo_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value"),
+    photo: db.prepare("SELECT * FROM photo_items WHERE id = ?"),
+    putPhoto: db.prepare(`INSERT OR REPLACE INTO photo_items (${PHOTO_COLUMNS.join(", ")}) VALUES (${PHOTO_COLUMNS.map(() => "?").join(", ")})`),
+    seePhoto: db.prepare("UPDATE photo_items SET seen = ?, album = ? WHERE id = ?"),
+    removePhoto: db.prepare("DELETE FROM photo_items WHERE id = ?"),
+    photosOfRoot: db.prepare("SELECT id, path, dir, album, seen FROM photo_items WHERE root = ?"),
+    photosUnder: db.prepare("SELECT id, path, dir, album, seen FROM photo_items WHERE root = ? AND (dir = ? OR substr(dir, 1, length(?)) = ?)"),
+    photosOfAlbum: db.prepare("SELECT id, path, dir, album, seen FROM photo_items WHERE album = ?"),
+    newestDay: db.prepare("SELECT max(day) AS day FROM photo_items"),
+    hasDay: db.prepare("SELECT 1 AS one FROM photo_items WHERE day = ? LIMIT 1"),
+    daysOlder: db.prepare("SELECT DISTINCT day FROM photo_items WHERE day < ? ORDER BY day DESC LIMIT ?"),
+    daysNewer: db.prepare("SELECT DISTINCT day FROM photo_items WHERE day > ? ORDER BY day ASC LIMIT ?"),
+    photosOn: db.prepare("SELECT * FROM photo_items WHERE day = ? ORDER BY taken DESC, id"),
+    albums: db.prepare("SELECT album, count(*) AS count FROM photo_items GROUP BY album"),
+    cover: db.prepare("SELECT id FROM photo_items WHERE album = ? ORDER BY taken DESC, id LIMIT 1"),
+    byHash: db.prepare("SELECT id FROM photo_items WHERE sha256 = ? ORDER BY id LIMIT 1"),
+    unhashed: db.prepare("SELECT * FROM photo_items WHERE thumbhash IS NULL ORDER BY taken DESC LIMIT ?"),
+    setThumbhash: db.prepare("UPDATE photo_items SET thumbhash = ? WHERE id = ? AND mtime = ? AND size = ?"),
   };
+  const photoOf = (r: Row): PhotoRow => r as PhotoRow;
+  type Placed = { id: string; path: string; dir: string; album: string; seen: number };
 
   return {
     /// The book at `root`/`path` in the workspace, if it was imported.
@@ -221,6 +303,78 @@ export function openStore(file: string) {
       if (owner.sub !== sub) return "theirs";
       q.removeNote.run(book, id, sub);
       return "removed";
+    },
+
+    /// A photo library setting (JSON or a header, as kept).
+    photoSetting(key: string): string | undefined {
+      return (q.setting.get(key) as { value: string } | undefined)?.value;
+    },
+
+    setPhotoSetting(key: string, value: string) {
+      q.setSetting.run(key, value);
+    },
+
+    photo(id: string): PhotoRow | undefined {
+      const r = q.photo.get(id) as Row | undefined;
+      return r ? photoOf(r) : undefined;
+    },
+
+    putPhoto(p: PhotoRow) {
+      q.putPhoto.run(...PHOTO_COLUMNS.map((c) => p[c]));
+    },
+
+    /// Found again by the pass `seen`, in `album`.
+    seePhoto(id: string, seen: number, album: string) {
+      q.seePhoto.run(seen, album, id);
+    },
+
+    removePhotos(ids: string[]) {
+      if (ids.length > 0) tx(() => ids.forEach((id) => q.removePhoto.run(id)));
+    },
+
+    /// What the library has in the folder `dir` of `root` and below ("": all of the root).
+    photosUnder(root: string, dir: string): Placed[] {
+      return (dir === "" ? q.photosOfRoot.all(root) : q.photosUnder.all(root, dir, `${dir}/`, `${dir}/`)) as Placed[];
+    },
+
+    photosOfAlbum(album: string): Placed[] {
+      return q.photosOfAlbum.all(album) as Placed[];
+    },
+
+    newestDay(): string | null {
+      return (q.newestDay.get() as { day: string | null }).day;
+    },
+
+    hasDay(day: string): boolean {
+      return q.hasDay.get(day) !== undefined;
+    },
+
+    /// Up to `n` days with photos before `day` (newest first), or after it (oldest first).
+    days(day: string, n: number, older: boolean): string[] {
+      return ((older ? q.daysOlder : q.daysNewer).all(day, n) as { day: string }[]).map((r) => r.day);
+    },
+
+    photosOn(day: string): PhotoRow[] {
+      return (q.photosOn.all(day) as Row[]).map(photoOf);
+    },
+
+    /// Each album's count and newest item.
+    photoAlbums(): { album: string; count: number; cover: string }[] {
+      return (q.albums.all() as { album: string; count: number }[]).map((a) => ({ ...a, cover: (q.cover.get(a.album) as { id: string }).id }));
+    },
+
+    photoByHash(sha256: string): string | undefined {
+      return (q.byHash.get(sha256) as { id: string } | undefined)?.id;
+    },
+
+    /// Up to `n` of the photos whose thumbnail was not made yet, newest first.
+    unhashed(n: number): PhotoRow[] {
+      return (q.unhashed.all(n) as Row[]).map(photoOf);
+    },
+
+    /// The ThumbHash of the item as it was (`mtime`, `size`) when its thumbnail was made; "" when none could be.
+    setThumbhash(id: string, hash: string, mtime: number, size: number): boolean {
+      return Number(q.setThumbhash.run(hash, id, mtime, size).changes) > 0;
     },
 
     close() {
