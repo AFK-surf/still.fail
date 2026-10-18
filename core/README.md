@@ -186,11 +186,23 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
   Built: `src/host/apple_auth.m` and `@core.sign_in`; `MBUI_AUTH_DRY=1` makes the session but does not start it (no one
   has signed in through it yet: a real sign-in is the person's to do). Caveat: another installed still.fail app
   (Studio has one) also owns `stillfail://`; ASWebAuthenticationSession avoids that clash, a registered scheme does not.
-- **Loopback listener** (`http://127.0.0.1:<port>/oauth/callback`, the desktop app's and the Android app's way for a
-  station's login, docs/remote-login.md): the core asks `listen.open/next/respond/close` itself, which apple_core.m
-  answers `"unsupported"` today. Implementing it is a small server on 127.0.0.1 (`nw_listener` from
-  Network.framework, or BSD sockets on a dispatch source) answering on the core thread through `complete`, with the
-  request's body as bytes. It is also what `canRelay` (taking a station's login callback for it) needs.
+- **Loopback** (`http://127.0.0.1:<port>/oauth/callback`, what command-line tools do): `@core.sign_in_loopback`
+  listens on 127.0.0.1 (a port the system picks, `@core.listen`), begins with that address, hands the page to an
+  `open` of the app's, takes the one request that comes back to that path under that host name, `auth.complete`s it,
+  answers the browser with a page saying how it went, then closes. The listener is `src/host/apple_listen.m`
+  (`listen_api.h`: BSD sockets on a dispatch source, a request read whole, answered once, its connection closed);
+  the engine hands it to mbui/core (`mbc_engine.listen_*`, core_client.h). The core demo's login command uses it:
+  `scripts/mac.sh login` (MBUI_AUTH_LOGIN=1) opens the page with `$BROWSER`, else `open`, and exits 0 once signed in
+  (1 when not). That is what a station's remote login (ember docs/remote-login.md) can run as its command: it takes
+  the page from `BROWSER`, sees the loopback `redirect_uri` and its `state`, and the person's phone (the still.fail
+  Android or desktop app) listens on that port there and relays the browser's way back to this process, after
+  checking with `lsof` that the port is this command's. `scripts/core.sh login-test` runs it up to the person's
+  step, with curl as the browser coming back.
+
+The core's own `listen.*` (`listen.open/next/respond/close`, ember client/core-ts hosts/bridge.ts) is the other way
+round: this device taking a station's login callback for it (`canRelay`; machine logins on the station page and in
+login cards). apple_core.m answers it on the same listener, as Android's Loopback.kt does there; `scripts/core.sh
+listen` tests it with core/listen-test.js in the core's place.
 
 `secure.*` is the other gap: at start the core asks `secure.get` twice (the lock's signing key `lock-signer`, and the
 vault's) and goes on without them (the smoke run shows it); after login, making a lock signer or opening a vault

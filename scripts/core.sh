@@ -1,7 +1,7 @@
 #!/bin/bash
 # The still.fail client core (client/core-ts of github.com/zzj3720/ember) in JavaScriptCore, on its Rust shell
 # (client/shell): builds the pieces from an ember checkout and runs a headless smoke test. See core/README.md.
-#   scripts/core.sh deps | shell [TARGET] | bundle | smoke [build|run] | vectors | sizes | clean | all
+#   scripts/core.sh deps | shell [TARGET] | bundle | smoke [build|run] | listen | login-test | vectors | sizes | clean | all
 # EMBER: the ember checkout (default: ember-src beside this session's tools); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -71,7 +71,7 @@ print(" ".join(out))' $OUT/shell-$1.libs
 smoke_build() {
   local target=aarch64-apple-darwin
   [ -f $OUT/$target/libstillfail_shell.a ] || shell $target
-  clang -fobjc-arc -O2 -Wall -Isrc/host core/smoke.m src/host/apple_core.m \
+  clang -fobjc-arc -O2 -Wall -Isrc/host core/smoke.m src/host/apple_core.m src/host/apple_listen.m \
     $OUT/$target/libstillfail_shell.a $(libs $target) \
     -framework Foundation -framework JavaScriptCore -Wl,-dead_strip -o $OUT/smoke
   strip -o $OUT/smoke.stripped $OUT/smoke
@@ -94,6 +94,67 @@ smoke_run() {
   return $code
 }
 
+# listen.* (apple_core.m on apple_listen.m) with core/listen-test.js in the core's place: core/listen_test.m.
+listen_test() {
+  local target=aarch64-apple-darwin
+  [ -f $OUT/$target/libstillfail_shell.a ] || shell $target
+  clang -fobjc-arc -O2 -Wall -Isrc/host core/listen_test.m src/host/apple_core.m src/host/apple_listen.m \
+    $OUT/$target/libstillfail_shell.a $(libs $target) \
+    -framework Foundation -framework JavaScriptCore -Wl,-dead_strip -o $OUT/listen_test
+  local dir=$(mktemp -d /tmp/mbui-core-listen.XXXXXX) code=0
+  MB_CORE_BUNDLE=$ROOT/core/listen-test.js $OUT/listen_test "$dir" || code=1
+  rm -rf "$dir"
+  return $code
+}
+
+# The core demo's login command (scripts/mac.sh login, MBUI_AUTH_LOGIN) as a station's remote login would run it, up
+# to the person's browser step, against still.fail cloud: a fresh data directory, BROWSER a stand-in that keeps the
+# page's address. Nobody signs in: the browser that comes back is curl, with a state that is not the sign-in's.
+login_test() {
+  MBUI_CORE=1 "$D/mac.sh" build > /dev/null
+  local exe=$ROOT/_build/native/release/build/coredemo/coredemo.exe
+  local dir=$(mktemp -d /tmp/mbui-login.XXXXXX) code=0
+  printf '#!/bin/sh\necho "$1" > "%s/url"\n' "$dir" > $dir/browser
+  chmod +x $dir/browser
+  MB_CORE_BUNDLE=$OUT/core.js MBUI_CORE_DATA=$dir/data BROWSER=$dir/browser MBUI_AUTH_LOGIN=1 $exe > $dir/out.log 2>&1 &
+  local pid=$!
+  # Not waited for forever: a minute is ample for what follows.
+  (sleep 60; kill $pid 2> /dev/null) &
+  local watchdog=$!
+  for _ in $(seq 60); do [ -s $dir/url ] && break; sleep 0.5; done
+  local url=$(cat $dir/url 2>/dev/null)
+  ok() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; code=1; fi; }
+  ok "the page went to BROWSER" '[ -n "$url" ]'
+  local port=$(python3 -c '
+import sys, urllib.parse as u
+p = u.urlparse(sys.argv[1]); q = u.parse_qs(p.query); back = u.urlparse(q.get("redirect_uri", [""])[0])
+ok = p.scheme == "https" and p.path == "/v1/auth/google/start" and "state" in q and back.scheme == "http" and back.hostname == "127.0.0.1" and back.path == "/oauth/callback"
+print(back.port if ok else 0)' "$url")
+  ok "it is still.fail cloud's login page, coming back to 127.0.0.1:$port/oauth/callback" '[ "$port" -gt 0 ]'
+  if [ -f "$EMBER/station/src/logins/parse.ts" ]; then
+    local seen=$(node --experimental-strip-types --no-warnings --input-type=module -e "
+const { loopbackOf } = await import('$EMBER/station/src/logins/parse.ts');
+const b = loopbackOf(process.argv[1]);
+console.log(b && b.state ? b.host + ':' + b.port + b.path : 'none');" "$url" 2>&1)
+    ok "a station's login takes it as a loopback login with a state ($seen)" '[ "$seen" = "127.0.0.1:$port/oauth/callback" ]'
+  fi
+  ok "the app itself listens there (lsof, as the station checks before relaying)" 'lsof -a -p $pid -iTCP:$port -sTCP:LISTEN -n -P | grep -q "127.0.0.1:$port"'
+  ok "another path is not taken" '[ "$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$port/favicon.ico)" = 404 ]'
+  ok "nor the callback under another host name" '[ "$(curl -s -o /dev/null -w "%{http_code}" -H "Host: elsewhere.example:$port" "http://127.0.0.1:$port/oauth/callback?code=x&state=y")" = 404 ]'
+  ok "the app still waits" 'kill -0 $pid 2>/dev/null'
+  local page=$(curl -s "http://127.0.0.1:$port/oauth/callback?code=x&state=not-this-one")
+  ok "the browser coming back gets the app's page" 'echo "$page" | grep -q "登录没有完成"'
+  local exit_code=0
+  wait $pid || exit_code=$?
+  kill $watchdog 2> /dev/null || true
+  wait $watchdog 2> /dev/null || true
+  ok "the app exits 1 (the state was not the sign-in's: $(grep -a 'Sign-in failed' $dir/out.log | head -1))" '[ $exit_code = 1 ] && grep -q "Sign-in failed" $dir/out.log'
+  ok "it no longer listens" '! lsof -iTCP:$port -sTCP:LISTEN -n -P > /dev/null'
+  [ $code = 0 ] || cat $dir/out.log
+  rm -rf "$dir"
+  return $code
+}
+
 # src/core/vectors_test.mbt: core-ts's diff and apply over values shaped like the topics (core/delta-vectors.ts).
 vectors() {
   EMBER=$EMBER node core/delta-vectors.ts > src/core/vectors_test.mbt
@@ -108,6 +169,8 @@ case "${1:-all}" in
   deps) deps ;;
   shell) shell "$2" ;;
   bundle) bundle ;;
+  listen) listen_test ;;
+  login-test) login_test ;;
   smoke)
     case "${2:-all}" in
       build) smoke_build ;;
@@ -118,5 +181,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; bundle; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | bundle | smoke [build|run] | vectors | sizes | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | bundle | smoke [build|run] | listen | login-test | vectors | sizes | clean | all"; exit 2 ;;
 esac

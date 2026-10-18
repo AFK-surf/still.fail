@@ -3,6 +3,7 @@
 // (mbc_use, from a constructor), so mbui/core builds, tests and links without the 57 MB shell.
 #pragma once
 #include "../host/core_api.h"
+#include "../host/listen_api.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,6 +21,11 @@ typedef struct {
   /// Opens `url` in the system's browser session and calls `done` (on any thread) with the URL it is sent to on
   /// `scheme`; NULL when the platform has none.
   void (*web_auth)(const char *url, const char *scheme, mbc_auth_done done, void *ctx);
+  /// A loopback listener of the app's own (src/host/listen_api.h: its open, respond, close); NULL when the platform
+  /// has none.
+  int (*listen_open)(const char *host, int port, mb_listen_fn fn, void *ctx, int *bound, char *why, size_t why_len);
+  void (*listen_respond)(int id, long request, int status, const char *const *headers, int n, const uint8_t *body, size_t blen);
+  void (*listen_close)(int id);
 } mbc_engine;
 
 void mbc_use(const mbc_engine *engine);

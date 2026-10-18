@@ -7,6 +7,11 @@
 // login page's URL (AUTH_URL …), whose end is a loopback address that page on the phone can't open: the person sends
 // back the address it shows, and MBUI_AUTH_COMPLETE=<that URL> finishes the sign-in (AUTH_DONE … or AUTH_FAILED …).
 // Both runs on the same MBUI_CORE_DATA: the core keeps the sign-in it began there.
+//
+// MBUI_AUTH_LOGIN=1 (`scripts/mac.sh login`) signs in the way a command-line tool does (@core.sign_in_loopback):
+// the app listens on 127.0.0.1, hands the login page to $BROWSER (else `open`), and exits 0 once the browser has come
+// back and the sign-in is done (1 when it failed). A station's remote login runs it as its login command: the page goes
+// to the person's phone, whose still.fail app relays the browser's way back here (ember docs/remote-login.md).
 
 ///|
 struct App {
@@ -17,6 +22,8 @@ struct App {
   mut by_hand : String
   /// the shelf over the core's media module (shelf.mbt) rather than the accounts
   mut shelf : Bool
+  /// MBUI_AUTH_LOGIN: sign in as a login command
+  mut login : Bool
 }
 
 ///|
@@ -26,6 +33,7 @@ let app : App = {
   auto_sign_in: false,
   by_hand: "",
   shelf: false,
+  login: false,
 }
 
 ///|
@@ -60,6 +68,38 @@ fn by_hand(step : String) -> Unit {
       @host.request_frame()
     })
   }
+}
+
+///|
+/// MBUI_AUTH_LOGIN: the sign-in a login command makes. What it prints is for whoever runs it (a station's login reads
+/// the page's address from $BROWSER, or from here); its exit code says how it went.
+fn login_command() -> Unit {
+  app.status = "正在等浏览器登录…"
+  @core.sign_in_loopback(
+    device_name="mbui",
+    open=fn(url) {
+      @host.log("Sign in to still.fail in a browser: " + url)
+      if open_url(url) == 0 {
+        @host.log("No browser opened: open the address above")
+      }
+    },
+    fn(r) {
+      match r {
+        Ok(v) => {
+          let email = match v {
+            Object(m) => str(m.get("account"), "email")
+            _ => ""
+          }
+          @host.log("Signed in to still.fail as " + email)
+          @host.exit(0)
+        }
+        Err(e) => {
+          @host.log("Sign-in failed: " + str(Some(e), "message"))
+          @host.exit(1)
+        }
+      }
+    },
+  )
 }
 
 ///|
@@ -188,6 +228,10 @@ fn view(c : @ui.Ctx) -> Unit {
     sign_in()
   }
   dump(accounts)
+  if app.login && accounts.value is Some(_) {
+    app.login = false
+    login_command()
+  }
   if app.by_hand.length() > 0 && accounts.value is Some(_) {
     let step = app.by_hand
     app.by_hand = ""
@@ -257,6 +301,7 @@ fn main {
   }
   app.auto_sign_in = env("MBUI_CORE_SIGNIN") == "1"
   app.shelf = env("MBUI_SHELF") == "1"
+  app.login = env("MBUI_AUTH_LOGIN") == "1"
   app.by_hand = if env("MBUI_AUTH_BEGIN") == "1" {
     "begin"
   } else {

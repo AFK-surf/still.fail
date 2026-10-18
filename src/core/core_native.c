@@ -226,3 +226,75 @@ double mbc_now_ms(void) {
   clock_gettime(CLOCK_MONOTONIC, &t);
   return (double)t.tv_sec * 1000.0 + (double)t.tv_nsec / 1e6;
 }
+
+// ── an app's own loopback listeners (core.mbt `listen`) ──
+
+// Which engine listener each of core.mbt's tokens is.
+enum { LISTEN_SLOTS = 16 };
+static struct {
+  int32_t token;
+  int id;
+} slots[LISTEN_SLOTS];
+
+static int slot_of(int32_t token) {
+  for (int i = 0; i < LISTEN_SLOTS; i++)
+    if (slots[i].id && slots[i].token == token) return i;
+  return -1;
+}
+
+// What a listener took, queued as a message of ours: {"mbui_listen": token, "request": n, "method", "path",
+// "headers"} (the listener's JSON with the token put first), or {"mbui_listen": token, "end": true}.
+static void listen_took(void *ctx, const char *json, size_t len, const uint8_t *body, size_t blen) {
+  char head[48];
+  int n = snprintf(head, sizeof head, "{\"mbui_listen\":%ld", (long)(intptr_t)ctx);
+  if (!json || len < 2 || json[0] != '{') {
+    char buf[80];
+    int m = snprintf(buf, sizeof buf, "%s,\"end\":true}", head);
+    push(buf, (size_t)m);
+    return;
+  }
+  char *buf = malloc((size_t)n + len + 1);
+  memcpy(buf, head, (size_t)n);
+  size_t o = (size_t)n;
+  // `{}` stays `{"mbui_listen":t}`; else the listener's fields follow the token.
+  if (len > 2) buf[o++] = ',';
+  memcpy(buf + o, json + 1, len - 1);
+  push(buf, o + len - 1);
+  free(buf);
+}
+
+// Listens on 127.0.0.1 at `port` (0: one the system picks): the port, 0 when it cannot (taken), -1 when this build has
+// no listener.
+int32_t mbc_listen_open(int32_t token, int32_t port) {
+  if (!engine || !engine->listen_open) return -1;
+  int free_slot = -1;
+  for (int i = 0; i < LISTEN_SLOTS && free_slot < 0; i++)
+    if (!slots[i].id) free_slot = i;
+  if (free_slot < 0) return 0;
+  int bound = 0;
+  char why[160];
+  int id = engine->listen_open("127.0.0.1", port, listen_took, (void *)(intptr_t)token, &bound, why, sizeof why);
+  if (!id) return 0;
+  slots[free_slot].token = token;
+  slots[free_slot].id = id;
+  return bound;
+}
+
+void mbc_listen_respond(int32_t token, int32_t request, int32_t status, moonbit_string_t type, moonbit_string_t body) {
+  int i = slot_of(token);
+  if (i < 0 || !engine->listen_respond) return;
+  char *t = utf8_of(type, NULL);
+  size_t blen;
+  char *b = utf8_of(body, &blen);
+  const char *headers[] = {"Content-Type", t, "Cache-Control", "no-store"};
+  engine->listen_respond(slots[i].id, request, status, headers, 2, (const uint8_t *)b, blen);
+  free(t);
+  free(b);
+}
+
+void mbc_listen_close(int32_t token) {
+  int i = slot_of(token);
+  if (i < 0) return;
+  if (engine->listen_close) engine->listen_close(slots[i].id);
+  slots[i].id = 0;
+}

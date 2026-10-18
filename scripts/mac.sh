@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build the macOS app and run it. MODE=release|debug, APP=demo|photos (only that
 # app is built), then:
-#   scripts/mac.sh build | run [env...] | script ime | bench | shot
+#   scripts/mac.sh build | run [env...] | script ime | bench | shot | login
 # MBUI_CORE=1: the app with the still.fail core in it (src/coredemo: the shell's .a and JavaScriptCore linked in, the
 # core's script from out/core/core.js; scripts/core.sh shell + bundle make them). Without it, only src/demo is built:
 # the default app stays lean (the shell is some 57 MB stripped).
@@ -12,6 +12,9 @@ cd "$D/.."
 MODE=${MODE:-release}
 FLAG=""; [ "$MODE" = release ] && FLAG=--release
 PKG=${APP:-demo}
+# login: the core demo signing in the way a command-line tool does (MBUI_AUTH_LOGIN, src/coredemo): what a station's
+# remote login runs on this machine. MBUI_CORE_DATA says whose sign-in it is.
+[ "${1:-}" = login ] && MBUI_CORE=1
 if [ "${MBUI_CORE:-0}" != 0 ]; then
   PKG=coredemo
   [ -f out/core/aarch64-apple-darwin/libstillfail_shell.a ] || "$D/core.sh" shell
@@ -33,4 +36,6 @@ case "${1:-build}" in
     MBUI_SCRIPT=shot MBUI_SHOT_DIR=$PWD/out/shot ./$EXE ;;
   bench)
     MBUI_BENCH=1 ./$EXE ;;
+  login)
+    MBUI_AUTH_LOGIN=1 exec ./$EXE ;;
 esac

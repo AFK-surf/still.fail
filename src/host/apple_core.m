@@ -9,9 +9,9 @@
 // the accounts' SQLite, TCP, iroh), whose answers come from its threads (`complete`) and are posted here as tasks.
 // `__native` is ember's HermesNative (hosts/hermes-globals.ts; bytes as ArrayBuffers both ways) plus `os`, so the
 // script starts the core as on Android, through hosts/engine.ts (core/jsc-start.ts).
-// What only an app can do is not the shell's: `secure.*` (the Keychain) and `listen.*` (a login's loopback listener)
-// are answered "unsupported" for now. A JS error that escapes, or a bug the core reports, ends the core as on Android:
-// `{"fatal": …}` to the UI, and the host starts another.
+// What only an app can do is not the shell's: `listen.*` (a login's loopback listener) is answered here, on
+// apple_listen.m; `secure.*` (the Keychain) is answered "unsupported" for now. A JS error that escapes, or a bug the
+// core reports, ends the core as on Android: `{"fatal": …}` to the UI, and the host starts another.
 #import <Foundation/Foundation.h>
 #import <JavaScriptCore/JavaScriptCore.h>
 #include <pthread.h>
@@ -19,6 +19,7 @@
 #include <string.h>
 #include <time.h>
 #include "core_api.h"
+#include "listen_api.h"
 
 typedef void (*sf_complete)(void *, uint64_t, const uint8_t *, size_t, const uint8_t *, size_t, const uint8_t *, size_t, uint8_t);
 extern void *sf_shell_start(const char *data_dir, sf_complete complete, void *ctx);
@@ -206,7 +207,138 @@ static void set_timer(double id, double ms) {
 
 // ── __native ──
 
-static int app_only(NSString *op) { return [op hasPrefix:@"secure."] || [op hasPrefix:@"listen."]; }
+static int app_only(NSString *op) { return [op hasPrefix:@"secure."]; }
+
+// ── listen.* (ember client/core-ts hosts/bridge.ts; Android's Loopback.kt) ──
+//   listen.open {port, host} → {id, port}, or the error (the port taken: "Address already in use")
+//   listen.next {id} → {request, method, path, headers} + the body, or {end: true} once the listener is closed
+//   listen.respond {id, request, status, headers: [[name, value]]} + the body → {}
+//   listen.close {id} → {}
+// The listeners are apple_listen.m's; what they take waits here, on the core's thread, for a listen.next.
+
+@interface MBCoreListen : NSObject
+@property(nonatomic) int lid;
+@property(nonatomic) BOOL ended;
+/// Requests no listen.next has taken yet: @[json, body].
+@property(nonatomic, strong) NSMutableArray<NSArray<NSData *> *> *requests;
+/// listen.next calls waiting for a request.
+@property(nonatomic, strong) NSMutableArray<NSNumber *> *waiting;
+@end
+
+@implementation MBCoreListen
+@end
+
+// The core's listeners by id; only on the core's thread.
+static NSMutableDictionary<NSNumber *, MBCoreListen *> *core_listens;
+
+static JSValue *js_null(void) { return [JSValue valueWithNullInContext:C.js]; }
+static JSValue *js_undefined(void) { return [JSValue valueWithUndefinedInContext:C.js]; }
+
+// An answer, later on the core's thread, as the shell's come.
+static void answer_later(double id, NSData *json, NSString *error, NSData *bytes) {
+  post(^{
+    if (error) complete((uint64_t)id, js_null(), [JSValue valueWithObject:error inContext:C.js], js_undefined());
+    else complete((uint64_t)id, js_string(json.bytes, json.length), js_null(), bytes ? array_buffer(bytes.bytes, bytes.length) : js_undefined());
+  });
+}
+
+static NSData *const_json(const char *s) { return [NSData dataWithBytes:s length:strlen(s)]; }
+
+// What a listener says, from its queue: a request (handed to a waiting listen.next, else kept), or its end.
+static void core_listen_took(void *ctx, const char *json, size_t len, const uint8_t *body, size_t blen) {
+  if (!json) {
+    MBCoreListen *l = (__bridge_transfer MBCoreListen *)ctx;
+    post(^{
+      l.ended = YES;
+      for (NSNumber *id in l.waiting) complete(id.unsignedLongLongValue, js_string((const uint8_t *)"{\"end\":true}", 12), js_null(), js_undefined());
+      [l.waiting removeAllObjects];
+      [l.requests removeAllObjects];
+      if (core_listens[@(l.lid)] == l) [core_listens removeObjectForKey:@(l.lid)];
+    });
+    return;
+  }
+  MBCoreListen *l = (__bridge MBCoreListen *)ctx;
+  NSData *j = [NSData dataWithBytes:json length:len];
+  NSData *b = [NSData dataWithBytes:body length:blen];
+  post(^{
+    if (l.ended) return;
+    if (l.waiting.count) {
+      NSNumber *id = l.waiting.firstObject;
+      [l.waiting removeObjectAtIndex:0];
+      complete(id.unsignedLongLongValue, js_string(j.bytes, j.length), js_null(), array_buffer(b.bytes, b.length));
+    } else {
+      [l.requests addObject:@[ j, b ]];
+    }
+  });
+}
+
+static void core_listen(double id, NSString *op, NSData *json, const uint8_t *bytes, size_t blen) {
+  NSDictionary *a = [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
+  if (![a isKindOfClass:NSDictionary.class]) a = @{};
+  NSNumber *which = [a[@"id"] isKindOfClass:NSNumber.class] ? a[@"id"] : nil;
+  if (!core_listens) core_listens = [NSMutableDictionary dictionary];
+  if ([op isEqualToString:@"listen.open"]) {
+    NSNumber *port = [a[@"port"] isKindOfClass:NSNumber.class] ? a[@"port"] : nil;
+    NSString *host = [a[@"host"] isKindOfClass:NSString.class] ? a[@"host"] : nil;
+    if (!port || !host) { answer_later(id, nil, @"listen.open: port and host", nil); return; }
+    MBCoreListen *l = [MBCoreListen new];
+    l.requests = [NSMutableArray array];
+    l.waiting = [NSMutableArray array];
+    char why[160] = "";
+    int bound = 0;
+    void *ctx = (__bridge_retained void *)l;
+    int lid = mb_listen_open(host.UTF8String, port.intValue, core_listen_took, ctx, &bound, why, sizeof why);
+    if (!lid) {
+      CFRelease(ctx);
+      answer_later(id, nil, @(why), nil);
+      return;
+    }
+    l.lid = lid;
+    core_listens[@(lid)] = l;
+    answer_later(id, [NSJSONSerialization dataWithJSONObject:@{@"id" : @(lid), @"port" : @(bound)} options:0 error:nil], nil, nil);
+    return;
+  }
+  if ([op isEqualToString:@"listen.next"]) {
+    MBCoreListen *l = which ? core_listens[which] : nil;
+    if (!l || l.ended) { answer_later(id, const_json("{\"end\":true}"), nil, nil); return; }
+    if (l.requests.count) {
+      NSArray<NSData *> *r = l.requests.firstObject;
+      [l.requests removeObjectAtIndex:0];
+      answer_later(id, r[0], nil, r[1]);
+      return;
+    }
+    [l.waiting addObject:@(id)];
+    return;
+  }
+  if ([op isEqualToString:@"listen.respond"]) {
+    NSNumber *request = [a[@"request"] isKindOfClass:NSNumber.class] ? a[@"request"] : nil;
+    NSNumber *status = [a[@"status"] isKindOfClass:NSNumber.class] ? a[@"status"] : @502;
+    NSMutableArray<NSString *> *kv = [NSMutableArray array];
+    for (NSArray *h in [a[@"headers"] isKindOfClass:NSArray.class] ? a[@"headers"] : @[]) {
+      if (![h isKindOfClass:NSArray.class] || h.count < 2 || ![h[0] isKindOfClass:NSString.class] || ![h[1] isKindOfClass:NSString.class]) continue;
+      [kv addObject:h[0]];
+      [kv addObject:h[1]];
+    }
+    const char **pairs = calloc(kv.count ? kv.count : 1, sizeof(char *));
+    for (NSUInteger i = 0; i < kv.count; i++) pairs[i] = kv[i].UTF8String;
+    if (which && request) mb_listen_respond(which.intValue, request.longValue, status.intValue, pairs, (int)(kv.count / 2), bytes, blen);
+    free(pairs);
+    answer_later(id, const_json("{}"), nil, nil);
+    return;
+  }
+  if ([op isEqualToString:@"listen.close"]) {
+    if (which) mb_listen_close(which.intValue);
+    answer_later(id, const_json("{}"), nil, nil);
+    return;
+  }
+  answer_later(id, nil, @"unsupported", nil);
+}
+
+// Every listener of this core closed (the core ends).
+static void core_listen_close_all(void) {
+  for (NSNumber *lid in core_listens.allKeys) mb_listen_close(lid.intValue);
+  core_listens = nil;
+}
 
 static void install(JSContext *js) {
   JSValue *native = [JSValue valueWithNewObjectInContext:js];
@@ -223,6 +355,11 @@ static void install(JSContext *js) {
     const uint8_t *p = NULL;
     size_t n = 0;
     int has = bytes_of(bytes, &p, &n);
+    if ([op hasPrefix:@"listen."]) {
+      if (tracing()) fprintf(stderr, "[core trace] -> %llu %s %.*s (here)\n", (unsigned long long)id, op.UTF8String, (int)MIN(j.length, 120), (const char *)j.bytes);
+      core_listen(id, op, j, has ? p : NULL, has ? n : 0);
+      return;
+    }
     if (tracing()) fprintf(stderr, "[core trace] -> %llu %s %.*s%s\n", (unsigned long long)id, op.UTF8String, (int)MIN(j.length, 120), (const char *)j.bytes, has ? [NSString stringWithFormat:@" +%zu bytes", n].UTF8String : "");
     sf_shell_call(C.shell, (uint64_t)id, op.UTF8String, j.bytes, j.length, p, n, (uint8_t)has);
   };
@@ -323,6 +460,7 @@ static void run(NSString *dataDir, NSString *cloud, int beta) {
   }
 
   @autoreleasepool {
+    core_listen_close_all();
     for (NSNumber *key in C.timers.allKeys) clear_timer(key);
     C.timers = nil;
     C.sf = nil;

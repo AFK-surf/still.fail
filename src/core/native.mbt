@@ -21,3 +21,16 @@ extern "C" fn ffi_now() -> Double = "mbc_now_ms"
 extern "C" fn ffi_next_bytes() -> Bytes = "mbc_next_bytes"
 
 extern "C" fn ffi_wall_ms() -> Double = "mbc_wall_ms"
+
+extern "C" fn ffi_listen_open(token : Int, port : Int) -> Int = "mbc_listen_open"
+
+#borrow(content_type, body)
+extern "C" fn ffi_listen_respond(
+  token : Int,
+  request : Int,
+  status : Int,
+  content_type : String,
+  body : String,
+) -> Unit = "mbc_listen_respond"
+
+extern "C" fn ffi_listen_close(token : Int) -> Unit = "mbc_listen_close"
