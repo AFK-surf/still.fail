@@ -43,24 +43,3 @@ fn ffi_next_bytes() -> Bytes {
 ///|
 extern "js" fn ffi_wall_ms() -> Double =
   #|() => Date.now()
-
-///|
-fn ffi_listen_open(_token : Int, _port : Int) -> Int {
-  -1
-}
-
-///|
-fn ffi_listen_respond(
-  _token : Int,
-  _request : Int,
-  _status : Int,
-  _content_type : String,
-  _body : String,
-) -> Unit {
-
-}
-
-///|
-fn ffi_listen_close(_token : Int) -> Unit {
-
-}

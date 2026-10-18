@@ -211,3 +211,22 @@ pub fn image_info(id : Int, out : FixedArray[Double]) -> Int {
 pub fn image_free(id : Int) -> Unit {
   ffi_image_free(id)
 }
+
+// A sign-in in the browser that comes back here (browser_login.mbt; apple_browser_login.m).
+
+///|
+#borrow(path)
+extern "C" fn bl_start(path : String) -> Int = "mb_host_browser_login_start"
+
+///|
+extern "C" fn bl_port(id : Int) -> Int = "mb_host_browser_login_port"
+
+///|
+#borrow(url)
+extern "C" fn bl_open(id : Int, url : String) -> Int = "mb_host_browser_login_open"
+
+///|
+extern "C" fn bl_back(id : Int) -> String = "mb_host_browser_login_back"
+
+///|
+extern "C" fn bl_end(id : Int) -> Unit = "mb_host_browser_login_end"

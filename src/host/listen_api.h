@@ -1,6 +1,7 @@
 // A small HTTP listener on a loopback address (on macOS and iOS: apple_listen.m): a login's browser coming back to
-// http://127.0.0.1:<port>/… (core/README.md, Login). Two users: the core's `listen.*` (apple_core.m: taking a
-// station's login callback on this device, `canRelay`) and an app's own sign-in (mbui/core `listen`, core_native.c).
+// http://127.0.0.1:<port>/… (core/README.md, Login). Two users: an app's own sign-in in the browser (mbui/host
+// `browser_login`, apple_browser_login.m) and the still.fail core's `listen.*` (apple_core.m: taking a station's login
+// callback on this device, `canRelay`).
 //
 // Each request is read whole (head up to 64 KB, body up to 1 MB, 15 s at most) and handed on once; it is answered once
 // with mb_listen_respond, which closes its connection. Nothing else is answered: a request nobody answers waits until

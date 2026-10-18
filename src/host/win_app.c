@@ -494,3 +494,10 @@ double mb_host_mem_bytes(void) {
   return (double)pmc.PrivateUsage;
 }
 
+
+// A sign-in in the browser that comes back here (host_native.mbt `browser_login`): not on this host yet.
+int32_t mb_host_browser_login_start(moonbit_string_t path) { return 0; }
+int32_t mb_host_browser_login_port(int32_t id) { return 0; }
+int32_t mb_host_browser_login_open(int32_t id, moonbit_string_t url) { return 0; }
+moonbit_string_t mb_host_browser_login_back(int32_t id) { return moonbit_make_string_raw(0); }
+void mb_host_browser_login_end(int32_t id) {}

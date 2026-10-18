@@ -214,3 +214,30 @@ pub fn image_info(id : Int, out : FixedArray[Double]) -> Int {
 pub fn image_free(id : Int) -> Unit {
   js_image_free(id)
 }
+
+// A sign-in in the browser that comes back here (browser_login.mbt): a page cannot listen.
+
+///|
+fn bl_start(_path : String) -> Int {
+  0
+}
+
+///|
+fn bl_port(_id : Int) -> Int {
+  0
+}
+
+///|
+fn bl_open(_id : Int, _url : String) -> Int {
+  0
+}
+
+///|
+fn bl_back(_id : Int) -> String {
+  ""
+}
+
+///|
+fn bl_end(_id : Int) -> Unit {
+
+}

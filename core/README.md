@@ -186,18 +186,18 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
   Built: `src/host/apple_auth.m` and `@core.sign_in`; `MBUI_AUTH_DRY=1` makes the session but does not start it (no one
   has signed in through it yet: a real sign-in is the person's to do). Caveat: another installed still.fail app
   (Studio has one) also owns `stillfail://`; ASWebAuthenticationSession avoids that clash, a registered scheme does not.
-- **Loopback** (`http://127.0.0.1:<port>/oauth/callback`, what command-line tools do): `@core.sign_in_loopback`
-  listens on 127.0.0.1 (a port the system picks, `@core.listen`), begins with that address, hands the page to an
-  `open` of the app's, takes the one request that comes back to that path under that host name, `auth.complete`s it,
-  answers the browser with a page saying how it went, then closes. The listener is `src/host/apple_listen.m`
-  (`listen_api.h`: BSD sockets on a dispatch source, a request read whole, answered once, its connection closed);
-  the engine hands it to mbui/core (`mbc_engine.listen_*`, core_client.h). The core demo's login command uses it:
-  `scripts/mac.sh login` (MBUI_AUTH_LOGIN=1) opens the page with `$BROWSER`, else `open`, and exits 0 once signed in
-  (1 when not). That is what a station's remote login (ember docs/remote-login.md) can run as its command: it takes
-  the page from `BROWSER`, sees the loopback `redirect_uri` and its `state`, and the person's phone (the still.fail
-  Android or desktop app) listens on that port there and relays the browser's way back to this process, after
-  checking with `lsof` that the port is this command's. `scripts/core.sh login-test` runs it up to the person's
-  step, with curl as the browser coming back.
+- **Loopback** (`http://127.0.0.1:<port>/oauth/callback`, what command-line tools do). Nothing of it is
+  still.fail's: mbui/host's `browser_login` (browser_login.mbt, `src/host/apple_browser_login.m`) listens on
+  127.0.0.1 at a port the system picks, gives the app the address to come back to, opens the app's login page with
+  `$BROWSER`, else `open` (the system on iOS), and gives back the address the browser came back to, any app, any
+  service. The listener is `src/host/apple_listen.m` (`listen_api.h`: BSD sockets on a dispatch source, a request
+  read whole, answered once, its connection closed). The core demo's login command is still.fail's sign-in on it:
+  `scripts/mac.sh login` (MBUI_AUTH_LOGIN=1) asks `auth.begin` with that address, `auth.complete`s what comes back,
+  and exits 0 once signed in (1 when not). An app like that is what a station's remote login (ember
+  docs/remote-login.md) can run as its command: it takes the page from `BROWSER`, sees the loopback `redirect_uri`
+  and its `state`, and the person's phone (the still.fail Android or desktop app) listens on that port there and
+  relays the browser's way back to this process, after checking with `lsof` that the port is this command's.
+  `scripts/core.sh login-test` runs it up to the person's step, with curl as the browser coming back.
 
 The core's own `listen.*` (`listen.open/next/respond/close`, ember client/core-ts hosts/bridge.ts) is the other way
 round: this device taking a station's login callback for it (`canRelay`; machine logins on the station page and in

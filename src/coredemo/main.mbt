@@ -8,9 +8,9 @@
 // back the address it shows, and MBUI_AUTH_COMPLETE=<that URL> finishes the sign-in (AUTH_DONE … or AUTH_FAILED …).
 // Both runs on the same MBUI_CORE_DATA: the core keeps the sign-in it began there.
 //
-// MBUI_AUTH_LOGIN=1 (`scripts/mac.sh login`) signs in the way a command-line tool does (@core.sign_in_loopback):
-// the app listens on 127.0.0.1, hands the login page to $BROWSER (else `open`), and exits 0 once the browser has come
-// back and the sign-in is done (1 when it failed). A station's remote login runs it as its login command: the page goes
+// MBUI_AUTH_LOGIN=1 (`scripts/mac.sh login`) signs in the way a command-line tool does (@host.browser_login, which
+// knows nothing of still.fail): the app listens on 127.0.0.1, hands the login page to $BROWSER (else `open`), and
+// exits 0 once the browser has come back and the sign-in is done (1 when it failed). A station's remote login runs it as its login command: the page goes
 // to the person's phone, whose still.fail app relays the browser's way back here (ember docs/remote-login.md).
 
 ///|
@@ -71,35 +71,67 @@ fn by_hand(step : String) -> Unit {
 }
 
 ///|
-/// MBUI_AUTH_LOGIN: the sign-in a login command makes. What it prints is for whoever runs it (a station's login reads
-/// the page's address from $BROWSER, or from here); its exit code says how it went.
+/// MBUI_AUTH_LOGIN: the sign-in a login command makes, on the host's browser login (@host.browser_login): auth.begin
+/// with its loopback address, the page to the browser, auth.complete with what comes back. What it prints is for
+/// whoever runs it (a station's login reads the page's address from $BROWSER, or from here); its exit code says how it
+/// went.
+let login : Ref[@host.BrowserLogin?] = Ref::new(None)
+
+///|
 fn login_command() -> Unit {
+  guard @host.browser_login(path="/oauth/callback") is Some(l) else {
+    @host.log("Sign-in failed: this host cannot take a browser coming back")
+    @host.exit(1)
+    return
+  }
   app.status = "正在等浏览器登录…"
-  @core.sign_in_loopback(
-    device_name="mbui",
-    open=fn(url) {
-      @host.log("Sign in to still.fail in a browser: " + url)
-      if open_url(url) == 0 {
-        @host.log("No browser opened: open the address above")
-      }
-    },
-    fn(r) {
-      match r {
-        Ok(v) => {
-          let email = match v {
-            Object(m) => str(m.get("account"), "email")
-            _ => ""
-          }
-          @host.log("Signed in to still.fail as " + email)
-          @host.exit(0)
+  let params : Map[String, Json] = {
+    "redirect_uri": Json::string(l.redirect),
+    "return_to": Json::string("/"),
+    "device_name": Json::string("mbui"),
+  }
+  @core.call("auth.begin", params=Json::object(params), on_done=fn(r) {
+    let url = match r {
+      Ok(ok) => str(Some(ok), "url")
+      Err(_) => ""
+    }
+    if url == "" {
+      @host.log("Sign-in failed: auth.begin gave no page")
+      @host.exit(1)
+      return
+    }
+    @host.log("Sign in to still.fail in a browser: " + url)
+    if !l.open(url) {
+      @host.log("No browser opened: open the address above")
+    }
+    login.val = Some(l)
+  })
+}
+
+///|
+/// Each frame while it waits: the browser back, the sign-in finished with what it brought.
+fn login_back() -> Unit {
+  guard login.val is Some(l) else { return }
+  guard l.back() is Some(back) else { return }
+  login.val = None
+  l.end()
+  let params : Map[String, Json] = { "query": Json::string(@core.query_of(back)) }
+  @core.call("auth.complete", params=Json::object(params), on_done=fn(r) {
+    match r {
+      Ok(ok) => {
+        let email = match ok {
+          Object(m) => str(m.get("account"), "email")
+          _ => ""
         }
-        Err(e) => {
-          @host.log("Sign-in failed: " + str(Some(e), "message"))
-          @host.exit(1)
-        }
+        @host.log("Signed in to still.fail as " + email)
+        @host.exit(0)
       }
-    },
-  )
+      Err(e) => {
+        @host.log("Sign-in failed: " + str(Some(e), "message"))
+        @host.exit(1)
+      }
+    }
+  })
 }
 
 ///|
@@ -232,6 +264,7 @@ fn view(c : @ui.Ctx) -> Unit {
     app.login = false
     login_command()
   }
+  login_back()
   if app.by_hand.length() > 0 && accounts.value is Some(_) {
     let step = app.by_hand
     app.by_hand = ""

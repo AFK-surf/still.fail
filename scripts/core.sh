@@ -107,8 +107,8 @@ listen_test() {
   return $code
 }
 
-# The core demo's login command (scripts/mac.sh login, MBUI_AUTH_LOGIN) as a station's remote login would run it, up
-# to the person's browser step, against still.fail cloud: a fresh data directory, BROWSER a stand-in that keeps the
+# The core demo's login command (scripts/mac.sh login, MBUI_AUTH_LOGIN: still.fail's sign-in on the host's
+# browser_login) as a station's remote login would run it, up to the person's browser step, against still.fail cloud: a fresh data directory, BROWSER a stand-in that keeps the
 # page's address. Nobody signs in: the browser that comes back is curl, with a state that is not the sign-in's.
 login_test() {
   MBUI_CORE=1 "$D/mac.sh" build > /dev/null
@@ -143,7 +143,7 @@ console.log(b && b.state ? b.host + ':' + b.port + b.path : 'none');" "$url" 2>&
   ok "nor the callback under another host name" '[ "$(curl -s -o /dev/null -w "%{http_code}" -H "Host: elsewhere.example:$port" "http://127.0.0.1:$port/oauth/callback?code=x&state=y")" = 404 ]'
   ok "the app still waits" 'kill -0 $pid 2>/dev/null'
   local page=$(curl -s "http://127.0.0.1:$port/oauth/callback?code=x&state=not-this-one")
-  ok "the browser coming back gets the app's page" 'echo "$page" | grep -q "登录没有完成"'
+  ok "the browser coming back gets the host's page" 'echo "$page" | grep -q "已回到 app"'
   local exit_code=0
   wait $pid || exit_code=$?
   kill $watchdog 2> /dev/null || true

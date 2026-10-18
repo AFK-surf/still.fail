@@ -43,7 +43,7 @@ case "${1:-build}" in
     for f in runtime env utf sync_io backtrace; do
       [ -f $MOON_HOME/lib/runtime/$f.c ] && { $CC $CFLAGS -c $MOON_HOME/lib/runtime/$f.c -o $OUT/obj/rt_$f.o 2>$OUT/rt_$f.err || echo "skip runtime/$f.c: $(head -1 $OUT/rt_$f.err)"; }
     done
-    for f in apple_render apple_text apple_image ios_app; do
+    for f in apple_render apple_text apple_image apple_listen apple_browser_login ios_app; do
       $CC $CFLAGS -fobjc-arc -c src/host/$f.m -o $OUT/obj/$f.o
     done
     $CC $OUT/obj/*.o -o $APP/mbui -framework UIKit -framework Metal -framework QuartzCore \
