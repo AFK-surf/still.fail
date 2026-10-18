@@ -107,6 +107,12 @@ Inside a trace:
   deviation); `.paths`: every way iroh has for that connection (`*` the one
   chosen; a relay's host or a direct way's `ip:port`, round trip, packets
   sent/lost); `stillfail.from.missed`: its pings missed in a row.
+- **core, on its own**: `mesh.path` when a way's paths change at a tick (one
+  opened or gone, another chosen; a way first seen already direct) or it misses
+  its first ping in a row (`stillfail.why`: `paths`, `missed`, or both), with
+  `stillfail.way` (its key now), `stillfail.current` (whether the requests go
+  on it), `stillfail.paths` and `stillfail.before.paths` as the tick before saw
+  them (the same form as `mesh.route`'s), docs/mesh-lan.md.
 - **still.fail cloud**: a span of each `/v1/*` call that carries a recorded
   `traceparent`.
 - **ember-mesh**: a span per request stream, from the stream accepted to the

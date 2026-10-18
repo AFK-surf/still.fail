@@ -76,10 +76,8 @@ const FLAKY_LOSSES = 2;
 export const DIRECT_HOLD_MS = 2 * 60_000;
 export const DIRECT_HOLD_MAX_MS = 30 * 60_000;
 /// While a way on the LAN endpoint answered within this long, the requests keep off the main endpoint unless no other
-/// way is up. Its link goes through a relay, and iroh punches a path to the station beside it about every minute and
-/// sends on it: the station sent a few packets on such a path and nothing more, the device heard nothing back on it and
-/// let it go 15 s later, and the requests sent on it meanwhile went unanswered (mini1 and studio, 2026-10-18;
-/// docs/mesh-lan.md). A link dialled by address, as on the LAN endpoint, carried every request.
+/// way is up: the LAN way is enough, and the main endpoint's link would only punch one more path to the station
+/// (docs/mesh-lan.md).
 export const LAN_RECALL_MS = DIRECT_RECALL_MS;
 /// The least a read waits for its answer on its way before it is asked on the next best way as well.
 export const HEDGE_FLOOR_MS = 1_000;
@@ -196,6 +194,9 @@ export class Way {
   /// Its first ping answered: not counted, it carried the link's own start (its first streams, the station taking the
   /// credential), and smoothed an eighth at a time it kept a way just dialled looking slower than it is.
   warm = false;
+  /// Its link's paths as the last tick saw them (`Link.paths`), and which they were (`Link.pathShape`): `Mesh.#watchPaths`.
+  saw: string | null = null;
+  shape: string | null = null;
 
   constructor(link: Link) {
     this.link = link;
@@ -482,6 +483,15 @@ export class Link {
       .paths()
       .map((p) => `${p.selected ? "*" : ""}${p.relay !== null ? relayHost(p.relay) : (p.ip ?? "direct")} ${Math.round(p.rttMs)}ms ${p.txPackets}/${p.lostPackets}`)
       .join("; ");
+  }
+
+  /// Which ways iroh has for it, where each goes and the one chosen, without their counts: what changes as one opens, goes
+  /// or is chosen.
+  pathShape(): string {
+    return this.conn
+      .paths()
+      .map((p) => `${p.selected ? "*" : ""}${p.id}@${p.relay ?? p.ip ?? "direct"}`)
+      .join(",");
   }
 
   net(): LinkNet {
@@ -1356,6 +1366,7 @@ export class Mesh {
         const cur = this.current(addr);
         if (this.#live(addr).length === 0 && (cur === null || !cur.usable())) break;
         yield* this.#sample(addr);
+        for (const w of this.#live(addr)) this.#watchPaths(addr, w);
         this.#choose(addr, false);
         this.#prune(addr);
         // The way direct requests moved to stayed: one lost after this is not lost soon after.
@@ -1378,6 +1389,30 @@ export class Mesh {
       }
       this.#steering.delete(addr);
     });
+  }
+
+  /// 2026-10-17: a phone's punched paths went quiet seconds after they opened, which no Mac on the LAN did again
+  /// (docs/mesh-lan.md). Each tick, a `mesh.path` span says a way's paths changed (one opened, one went, another chosen)
+  /// (or first seen, direct) or that it missed its first ping in a row: its paths now and as the tick before saw them,
+  /// round trips and counts.
+  #watchPaths(addr: string, w: Way): void {
+    const shape = w.link.pathShape();
+    const paths = w.link.paths();
+    // First seen, a way is told if it is direct already (iroh punches within a second, well before a tick).
+    const changed = w.shape === null ? w.link.path() === "direct" : shape !== w.shape;
+    const missed = w.missed === 1;
+    if (changed || missed) {
+      const span = this.#env.tracer.span("mesh.path", Kind.Internal);
+      span.set("stillfail.station", stationId(addr));
+      span.set("stillfail.way", w.key());
+      span.set("stillfail.why", changed && missed ? "paths missed" : changed ? "paths" : "missed");
+      span.set("stillfail.current", w.link === this.current(addr));
+      span.set("stillfail.paths", paths);
+      if (w.saw !== null) span.set("stillfail.before.paths", w.saw);
+      span.end();
+    }
+    w.shape = shape;
+    w.saw = paths;
   }
 
   /// The way a read slow on `link` is asked on as well: the best other way open, going another way than `link` (not the

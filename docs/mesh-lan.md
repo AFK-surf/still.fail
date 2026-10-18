@@ -19,7 +19,9 @@ looked like punched paths carrying nothing back in the same measurements came fr
 endpoints with one key. iroh picks one path per remote key for all its connections; on the others, the punched path was
 made a backup and the station answered through the relay, which passes what is sent to a key to only one of the
 endpoints holding it. A phone's endpoints each have a key of their own (`pinnedKey`), so this is not what it saw. Why
-its punched paths went quiet on 2026-10-17 is not known.
+its punched paths went quiet on 2026-10-17 is not known. A phone says how its ways' paths change in `mesh.path` spans
+(docs/telemetry.md): which opened, went or was chosen, round trips and packets a tick before and after, and the first
+ping missed on each.
 
 ## How
 

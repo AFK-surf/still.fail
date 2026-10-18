@@ -836,8 +836,22 @@ async function onLan(s: Sim, quietAfterMs?: number) {
   const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
   await s.settle(station.endpoint.online());
   station.endpoint.keep([b]);
-  const mesh = await s.run(Mesh.make(env(s), [a, b]));
-  return { station, mesh, id: station.id() };
+  const e = env(s);
+  const mesh = await s.run(Mesh.make(e, [a, b]));
+  return { station, mesh, id: station.id(), tracer: e.tracer };
+}
+
+/// The spans `tracer` sends from now on, by name, each with its attributes.
+function spansOf(tracer: Tracer): { name: string; at: Record<string, unknown> }[] {
+  const seen: { name: string; at: Record<string, unknown> }[] = [];
+  tracer.setExport((body) =>
+    Effect.sync(() => {
+      for (const r of JSON.parse(Buffer.from(body).toString()).resourceSpans)
+        for (const sc of r.scopeSpans)
+          for (const sp of sc.spans) seen.push({ name: sp.name, at: Object.fromEntries(sp.attributes.map((a: { key: string; value: Record<string, unknown> }) => [a.key, Object.values(a.value)[0]])) });
+    }),
+  );
+  return seen;
 }
 
 const direct = (mesh: Mesh, id: string) => mesh.current(id)?.path() === "direct";
@@ -941,11 +955,9 @@ sim("ways_direct_that_keep_going_quiet_are_held_off_a_while", async (s) => {
   await close(s, station, mesh);
 });
 
-/// 2026-10-18, mini1 and studio: a link through a relay had iroh punch a path to the station on the LAN about every
-/// minute, which carried nothing back and went 15 s later, the requests on it meanwhile unanswered; a link dialled by
-/// address carried every one. On its station's LAN, the requests keep off the main endpoint (whose link that is), and
-/// it is not dialled again every REDIAL_MAIN_MS: its LAN way lost, they go to a relay's own way until the LAN
-/// endpoint's is dialled again.
+/// On its station's LAN, the requests keep off the main endpoint: the LAN way is enough, and the main endpoint's link
+/// would only punch one more path to the station. It is not dialled again every REDIAL_MAIN_MS: its LAN way lost, they
+/// go to a relay's own way until the LAN endpoint's is dialled again.
 sim("on_its_stations_lan_the_requests_keep_off_the_main_endpoint", async (s) => {
   const { station, mesh, id } = await onLan(s);
   station.lan = station.addr().ips;
@@ -974,6 +986,28 @@ sim("on_its_stations_lan_the_requests_keep_off_the_main_endpoint", async (s) => 
   assert.equal(on.at(-1), "lan", on.join(" "));
   assert.equal(mains, 0, `a way on the main endpoint open ${mains} ticks of ${on.length}`);
   assert.equal((await request(s, mesh.current(id)!, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
+/// 2026-10-17: a phone's punched paths went quiet seconds after they opened, which no Mac on the LAN did again. A
+/// `mesh.path` span says each change of a way's paths and its first ping missed, with its paths then and a tick before.
+sim("a_ways_paths_changing_and_going_quiet_are_told_in_spans", async (s) => {
+  const { station, mesh, id, tracer } = await onLan(s, 5_000);
+  const spans = spansOf(tracer);
+  await reach(s, mesh, id);
+  await s.time.pass(2 * 60_000);
+  tracer.flush();
+  await s.time.pass(TICK_MS);
+  const told = spans.filter((x) => x.name === "mesh.path");
+  const direct = /^\*127\.0\.0\.1:\d+ \d+ms \d+\/\d+$/;
+  const punched = told.find((x) => x.at["stillfail.why"] === "paths" && direct.test(String(x.at["stillfail.paths"])));
+  assert.ok(punched, JSON.stringify(told));
+  assert.equal(punched.at["stillfail.way"], "direct");
+  // Gone quiet: its first ping missed, said with the punched path it was missed on; then back through the relay.
+  assert.ok(told.some((x) => x.at["stillfail.why"] === "missed" && direct.test(String(x.at["stillfail.paths"]))), JSON.stringify(told));
+  assert.ok(told.some((x) => x.at["stillfail.why"] === "paths" && direct.test(String(x.at["stillfail.before.paths"])) && /^\*a\.relay\.test /.test(String(x.at["stillfail.paths"]))), JSON.stringify(told));
+  // Not every tick: a few changes in two minutes.
+  assert.ok(told.length < 20, `${told.length} spans`);
   await close(s, station, mesh);
 });
 
