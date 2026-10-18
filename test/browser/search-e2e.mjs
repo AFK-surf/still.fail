@@ -17,7 +17,8 @@ const ROOT = join(import.meta.dirname, "..", "..");
 const PORT = Number(process.env.PORT ?? 8963);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const RELAY = process.env.RELAY ?? "http://127.0.0.1:3340";
-const WORK = process.env.WORK ?? join(process.env.TMPDIR ?? "/tmp", "search-e2e");
+// Short: a runner's socket path under it must fit in sun_path.
+const WORK = process.env.WORK ?? "/tmp/search-e2e";
 const SHOTS = process.env.SHOTS ?? join(ROOT, "search-shots");
 const playwright = await import(process.env.PLAYWRIGHT_MODULE || "playwright-core");
 const native = (what) => execFileSync(process.execPath, [join(ROOT, "scripts/native.ts"), "file", what], { encoding: "utf8" }).trim();
@@ -105,7 +106,8 @@ async function main() {
     await page.keyboard.insertText(`${text} post:${answer}`);
     await page.keyboard.press("Enter");
     // The agent's post in its chat (the composer empty by then).
-    await page.waitForFunction((a) => document.body.innerText.includes(a) && !Array.from(document.querySelectorAll("textarea")).some((t) => t.value.includes(a)), answer, { timeout: 90_000 });
+    // Said twice: in the person's message (after post:) and as the agent's.
+    await page.waitForFunction((a) => document.body.innerText.split(a).length > 2, answer, { timeout: 90_000 });
   };
   await say("帮我看看本地分析用什么", "结论：用 DuckDB 直接查 Parquet，不用导数据");
   await say("把预览部署到 studio", "已部署，预览在 5173 端口");
