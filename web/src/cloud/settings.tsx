@@ -570,10 +570,9 @@ export function useStationEdits(view: WorkspaceView | undefined, account: Accoun
     <DoingMark calls={["workspace.renameStation", "workspace.removeStation"]} on={{ account: account.sub, workspace, station: s.id }}
       label={renaming(s) ? t("web-pages.settings.stations.renaming") : t("web-main.activity.busy")} />
   );
-  /** `drive`: its 文件 among them (the card's ⋯; its page has a button of its own). */
-  const menu = (s: StationView, manager: boolean, drive = true) => [
+  const menu = (s: StationView, manager: boolean) => [
     // Its drive (docs/drive.md), for every member, where the station has one.
-    ...(drive && s.overview?.drive ? [{ label: t("web-pages.drive.title"), icon: Folder, onSelect: () => navigate(`${stationBase(s.station)}/files`) }] : []),
+    ...(s.overview?.drive ? [{ label: t("web-pages.drive.title"), icon: Folder, onSelect: () => navigate(`${stationBase(s.station)}/files`) }] : []),
     ...(manager ? [
       { label: t("web-pages.settings.stations.rename"), icon: Edit, disabled: renaming(s), onSelect: () => setNaming(s) },
       { label: t("web-pages.settings.stations.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(s) },

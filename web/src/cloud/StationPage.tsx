@@ -5,7 +5,6 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link, Navigate, NavLink, useParams, useSearchParams } from "react-router";
 import { stamp, useMemberships, useStations, type StationView } from "../api.ts";
-import { useGo } from "../go.ts";
 import { MeterChip, MeterDials } from "../components.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { drivePath } from "../drive/useDrive.ts";
@@ -146,15 +145,14 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
 type Edits = ReturnType<typeof useStationEdits>;
 
 /** Its mark and name (a title its managers rename where it is, as the workspace's), how it is and what it is; beside
- * them its folders, trying it again while away, and its ⋯. */
+ * them trying it again while away, and its ⋯ (its 文件 there, its folders in the overview). */
 function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: Edits }) {
   const [name, setName] = useState(s.name);
   useEffect(() => setName(s.name), [s.name]);
   const keep = () => { const to = name.trim(); if (!to) setName(s.name); else edits.rename(s, to); };
   const silent = useLong(s.online && !s.host, 15_000);
   const wrong = problems(s, silent);
-  const items = edits.menu(s, manager, false);
-  const navigate = useGo();
+  const items = edits.menu(s, manager);
   return (
     <>
       <header className={settingsCss.workspaceHead}>
@@ -177,7 +175,6 @@ function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: 
         </div>
         <div className={css.headActions}>
           {(!s.online || silent) && <RetryPill trying={s.link.retrying === true} />}
-          {s.overview?.drive && <Button icon={Folder} onClick={() => navigate(`${stationBase(s.station)}/files`)}>{t("web-pages.drive.title")}</Button>}
           {manager && edits.busy(s)}
           {items.length > 0 && <Menu items={items} />}
         </div>
