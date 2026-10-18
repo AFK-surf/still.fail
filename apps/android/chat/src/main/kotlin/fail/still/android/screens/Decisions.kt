@@ -170,6 +170,17 @@ internal fun OptionButton(label: String, modifier: Modifier = Modifier, strong: 
 internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
     val card = m.card
     if (card == null && m.options == null) return
+    // A login card stays as its login goes (waiting, done, failed, cancelled): it says how it ended itself, once closed
+    // (LoginCards.kt). Who is to do it above it while it is open.
+    val login = card?.login
+    if (card?.type == "login" && login != null) {
+        val open = m.decision?.resolved != true && m.decision?.dismissed != true
+        Column {
+            if (open) card.assigneeText?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
+            LoginCard(loginStation(ctx.station, card.station), login)
+        }
+        return
+    }
     // Buttons only for an options card (a core before cards: `options` alone); a text card is answered on the 奏 page.
     val options = if (card != null) card.options.takeIf { card.type == "options" } else m.options
     val decision = m.decision
@@ -597,6 +608,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
                 // An agent's request for a vault item: approved here (Vault.kt); the 奏 page's are the viewer's.
                 "options" -> card?.vault?.let { Elsewhere.VaultApproval(item.station.substringBefore('/'), it, mine = true) } ?: DecisionOptions(card?.options ?: item.options, onPick = onPick)
                 "text" -> {}
+                // The login an agent started (LoginCards.kt): done here, as in its chat.
+                "login" -> card?.login?.let { LoginCard(loginStation(item.station, card.station), it) }
                 else -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(t("android-misc.decisions.replyInChat"), fontSize = 13.sp, color = C.muted)
                     Box(

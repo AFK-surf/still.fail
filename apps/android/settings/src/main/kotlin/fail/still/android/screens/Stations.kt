@@ -280,7 +280,7 @@ private fun Bar(width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.
     Box(Modifier.width(width).height(height).breathing(rememberBreath()).clip(Smooth(radius)).background(C.bubble))
 
 @Composable
-fun StationScreen(current: WorkspaceEntry, address: String) {
+fun StationScreen(current: WorkspaceEntry, address: String, login: String? = null) {
     val app = LocalApp.current
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     val s = stations.value?.firstOrNull { it.station == address }
@@ -318,6 +318,8 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
             StationScreens(address)
             // What macOS lets a Mac station's helper do (StationPermissions.kt); nothing from another or an older one.
             if (s.online) overview?.permissions?.let { StationPermissionsSection(address, s.name, it) }
+            // The logins its agents did there (LoginCards.kt): those under way as their cards; nothing when none.
+            StationLogins(address, marked = login)
             if (manager) StationWorkspaces(address)
             // Its updates are its home workspace's managers' (docs/multi-workspace.md).
             if (s.online && overview != null) Versions(address, overview.updates, manager, beta = s.betaOffered == true)

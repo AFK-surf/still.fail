@@ -179,6 +179,9 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun addProfile(runtime: String?, kind: String, key: String?, provider: String? = null, endpoint: String? = null): String = ops.profileAdd() { if (runtime != null) this.runtime = runtime
         this.access = buildJsonObject { put("kind", kind); if (key != null) put("key", key); if (provider != null) put("provider", provider); if (endpoint != null) put("endpoint", endpoint) } }.jsonObject["id"]!!.jsonPrimitive.content
     /** A profile on the machine's own login of `runtime` (one kept in a file); answers its id. */
+    /** Ends a login an agent started here (docs/remote-login.md): its command stopped, its card a line saying so. */
+    suspend fun cancelMachineLogin(id: String) { ops.machineLoginCancel(id) }
+
     suspend fun useMachineLogin(runtime: String): String =
         ops.profileUseMachineLogin() { this.runtime = runtime }.jsonObject["id"]!!.jsonPrimitive.content
 
