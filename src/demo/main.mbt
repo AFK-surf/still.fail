@@ -163,7 +163,7 @@ fn view(c : @ui.Ctx) -> Unit {
           item_w=if narrow { 58.0 } else { 76.0 },
         )
         c.spacer()
-        if !narrow {
+        if !narrow && !c.stable() {
           c.text(
           "\{app.msgs.length()} 条 · 帧 \{fmt_ms(c.frame_ms())} ms",
           size=12.0,

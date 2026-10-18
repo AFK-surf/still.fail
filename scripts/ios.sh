@@ -58,7 +58,7 @@ case "${1:-build}" in
     xcrun simctl install "$ID" $APP
     xcrun simctl terminate "$ID" $BID 2>/dev/null || true
     mkdir -p $PWD/$OUT/shots
-    SIMCTL_CHILD_MBUI_SCRIPT=${2:-} SIMCTL_CHILD_MBUI_BENCH=${BENCH:-} \
+    SIMCTL_CHILD_MBUI_SCRIPT=${2:-} SIMCTL_CHILD_MBUI_BENCH=${BENCH:-0} \
       SIMCTL_CHILD_MBUI_SHOT_DIR=$PWD/$OUT/shots xcrun simctl launch "$ID" $BID
     ;;
   shot)

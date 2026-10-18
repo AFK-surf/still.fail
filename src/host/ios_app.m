@@ -356,6 +356,9 @@ static void run_script_step(int step) {
       default: break;
     }
     [v requestFrame];
+  } else if (strcmp(script, "shot") == 0) {
+    if (step == 30) shot("main");
+    [v requestFrame];
   }
 }
 

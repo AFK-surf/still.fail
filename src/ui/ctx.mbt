@@ -468,3 +468,11 @@ fn Ctx::wake_at_time(self : Ctx, t : Double) -> Unit {
     self.wake_at = t
   }
 }
+
+///|
+/// True when the host wants output that is the same on every run (screenshot
+/// comparisons): views leave out clocks and timings.
+pub fn Ctx::stable(self : Ctx) -> Bool {
+  ignore(self)
+  bench.mode < 0
+}
