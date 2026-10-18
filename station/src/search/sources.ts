@@ -8,8 +8,9 @@
 //   them): what the agent said and thought, the calls it made (as a history names them) and the start of what they gave.
 // - a session's jobs (`j:<key>`), each job (`j:<id>`).
 // - a workspace's memory and skills (`k:<ws>`), the profiles (`p`).
-import { readdirSync, statSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { type Dirent, readdirSync, statSync } from "node:fs";
+import { readFile, readdir, stat } from "node:fs/promises";
+import { isAbsolute, join, sep } from "node:path";
 import * as store from "../read/store.ts";
 import type { MessageRow, SessionRow, Store } from "../read/store.ts";
 import { type ReadState, brief, timelineOf, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
@@ -360,4 +361,61 @@ export function profileDocs(profiles: Profiles): Indexed {
     at: null, ref: { profile: p.id, runtime: p.runtime },
   }));
   return { version: JSON.stringify(docs.map((d) => [d.key, d.title, d.body])), docs, whole: true };
+}
+
+// ── the machine's files, where no system index has them (Linux, Windows; macOS asks Spotlight: search/files.ts) ──
+
+/// Folders not gone into: what tools make and keep (dependencies, builds, caches, version control), and the hidden ones.
+const SKIPPED = new Set(["node_modules", "target", "dist", "build", ".git", "__pycache__", ".venv", "venv", "Pods", "DerivedData", ".cache", "Library", "AppData"]);
+/// What of a file is read for its words: text, at most this much.
+const TEXTS = /\.(md|markdown|txt|text|log|csv|tsv|json|jsonl|ya?ml|toml|ini|conf|cfg|xml|html?|css|scss|less|js|jsx|mjs|cjs|ts|tsx|py|rb|go|rs|java|kt|kts|swift|c|cc|cpp|h|hpp|cs|php|sh|bash|zsh|fish|ps1|sql|r|lua|pl|ex|exs|erl|hs|scala|clj|vue|svelte|tex|rst|org|srt|vtt)$/i;
+const TEXT_MAX = 256 * 1024;
+/// At most this many of a walk's files.
+export const FILES_MOST = 200_000;
+
+/// The files under `top` as documents, a folder at a time (`each` told each batch, to index and let the thread through):
+/// names of all, the words of small text files; `skip` what is the station's own; `ws`/`scope` whom they are for.
+export async function walkFiles(top: string, options: { ws: string | null; scope: string | null; skip: string[]; source: string; each: (docs: Doc[]) => Promise<void> }): Promise<number> {
+  const skipped = (p: string) => options.skip.some((d) => p === d || p.startsWith(d + sep));
+  const folders = [top];
+  let count = 0;
+  while (folders.length > 0 && count < FILES_MOST) {
+    const dir = folders.shift()!;
+    let names: Dirent[];
+    try {
+      names = await readdir(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    const docs: Doc[] = [];
+    for (const d of names) {
+      if (d.name.startsWith(".")) continue;
+      const path = join(dir, d.name);
+      if (skipped(path)) continue;
+      if (d.isDirectory()) {
+        if (!SKIPPED.has(d.name)) folders.push(path);
+        continue;
+      }
+      if (!d.isFile()) continue;
+      let size = 0;
+      let at: number | null = null;
+      try {
+        const st = await stat(path);
+        size = st.size;
+        at = Math.round(st.mtimeMs);
+      } catch {
+        continue;
+      }
+      let body = "";
+      if (TEXTS.test(d.name) && size <= TEXT_MAX) {
+        try {
+          body = await readFile(path, "utf8");
+        } catch {}
+      }
+      docs.push({ key: `f:${path}`, kind: "file", source: options.source, ws: options.ws, scope: options.scope, title: d.name, body: `${dir}\n${body}`, at, ref: { path, size } });
+      if (++count >= FILES_MOST) break;
+    }
+    if (docs.length > 0) await options.each(docs);
+  }
+  return count;
 }

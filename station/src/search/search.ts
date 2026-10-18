@@ -6,7 +6,8 @@ import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
 import type { Store } from "../store/store.ts";
 import type { StoreChange } from "../store/rows.ts";
-import type { Asker, Group } from "./index.ts";
+import { type Asker, type Group, terms } from "./index.ts";
+import type { FileSearch } from "./files.ts";
 import type { Answered, Told } from "./worker.ts";
 
 /// How often everything is looked over for what the station did not say (memory an agent wrote, the profiles).
@@ -29,9 +30,13 @@ export class Search {
   #again: (() => void) | null = null;
   #closed = false;
 
-  constructor(options: { data: string; store: Store }) {
+  /// The machine's files, where Spotlight finds them (macOS); elsewhere they are in the index.
+  #files: FileSearch | null;
+
+  constructor(options: { data: string; store: Store; files?: FileSearch | null }) {
     this.#data = options.data;
     this.#store = options.store;
+    this.#files = options.files ?? null;
   }
 
   start(): void {
@@ -102,8 +107,19 @@ export class Search {
     }
   }
 
-  /// What `query` finds for `asker`: by kind, at most `limit` of each (those of `kinds` only, when given).
-  query(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number } = {}): Promise<Found> {
+  /// What `query` finds for `asker`: by kind, at most `limit` of each (those of `kinds` only, when given); the machine's
+  /// files beside what the index has, where Spotlight finds them.
+  async query(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number } = {}): Promise<Found> {
+    const files = this.#files;
+    const wantsFiles = files !== null && (!options.kinds || options.kinds.length === 0 || options.kinds.includes("file")) && (options.offset ?? 0) === 0;
+    const [indexed, found] = await Promise.all([
+      this.#indexed(query, asker, options),
+      wantsFiles ? files.query(terms(query), asker, Math.max(1, Math.min(options.limit ?? 8, 200))).catch(() => null) : Promise.resolve(null),
+    ]);
+    return found === null ? indexed : { ...indexed, groups: [...indexed.groups.filter((g) => g.kind !== "file"), found] };
+  }
+
+  #indexed(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number }): Promise<Found> {
     const worker = this.#worker;
     if (!worker) return Promise.reject(new Error("the search index is starting"));
     const id = this.#next++;

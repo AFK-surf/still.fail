@@ -50,6 +50,9 @@ import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { UsageCounter } from "../usage/counter.ts";
 import { Search } from "../search/search.ts";
+import { FileSearch } from "../search/files.ts";
+import { rootsOf } from "../drive/drive.ts";
+import { ownPaths } from "../ops/own.ts";
 import { SEARCH, searchForPeer, searchTools } from "../tools/search.ts";
 import { sessionUsage } from "../read/usage.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
@@ -387,7 +390,16 @@ export const AgentsLive = (control: Control) =>
         }),
       ];
       // What a search finds here: the index kept as the store is (docs/search.md), started once the hub is.
-      const search = new Search({ data, store });
+      const search = new Search({
+        data, store,
+        files: FileSearch.here()
+          ? new FileSearch({
+              protect: () => ownPaths(data, config.path, hub.config().profiles.map((p) => p.home)),
+              roots: (ws) => rootsOf(config.raw(), ws),
+              personal: () => config.raw()?.search?.personal === true,
+            })
+          : null,
+      });
       const tools = [
         ...chatTools(hub),
         ...archiveTools(hub),

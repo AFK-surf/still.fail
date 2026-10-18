@@ -8,10 +8,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { openStore } from "../read/store.ts";
 import { wall } from "../ops/fibers.ts";
+import { homedir } from "node:os";
+import { ownPaths } from "../ops/own.ts";
+import { rootsOf } from "../drive/drive.ts";
 import * as store from "../read/store.ts";
 import { agentHomeOf } from "../read/memory.ts";
 import { type Asker, SearchIndex } from "./index.ts";
-import { READING, Readings, historyDocs, jobDocs, memoryDocs, memoryWorkspaces, profileDocs, profilesOf, sessionKeys, threadDocs, threadIds, type Indexed } from "./sources.ts";
+import { READING, Readings, historyDocs, jobDocs, walkFiles, memoryDocs, memoryWorkspaces, profileDocs, profilesOf, sessionKeys, threadDocs, threadIds, type Indexed } from "./sources.ts";
 
 export type Told =
   | { type: "thread"; id: number }
@@ -111,6 +114,39 @@ async function sweep(): Promise<void> {
     apply(`j:${key}`, jobDocs(s, key));
     await history(key, profiles);
     await tick();
+  }
+  // Last: the first walk of a home can take a while.
+  await files(raw, profiles);
+}
+
+/// How often the machine's files are walked again where no system index has them (macOS asks Spotlight).
+const FILES_EVERY_MS = 6 * 3600_000;
+
+/// The machine's files indexed (not on macOS): the home's for members who may write, each workspace's pinned folders for
+/// its members; walked again every FILES_EVERY_MS.
+async function files(raw: any, profiles: ReturnType<typeof profilesOf>): Promise<void> {
+  if (process.platform === "darwin") return;
+  const last = Number(index.mark("fs") ?? 0);
+  if (wall.now() - last < FILES_EVERY_MS) return;
+  index.setMark("fs", String(wall.now()));
+  const skip = ownPaths(data, join(data, "config.json"), profiles.map((p) => p.home));
+  const spaces: (string | null)[] = [null, ...Object.keys(raw?.drive?.workspaces ?? {})];
+  const tops: { top: string; ws: string | null; scope: string | null; source: string }[] = [{ top: homedir(), ws: "*", scope: "write", source: "fs:home" }];
+  for (const ws of spaces) for (const root of rootsOf(raw, ws)) tops.push({ top: root, ws, scope: null, source: `fs:${ws ?? ""}:${root}` });
+  const known = new Set(tops.map((t) => t.source));
+  for (const source of index.marked("fs:")) if (!known.has(source)) index.drop(source);
+  for (const t of tops) {
+    index.drop(t.source);
+    await walkFiles(t.top, {
+      ws: t.ws, scope: t.scope, skip, source: t.source,
+      each: async (docs) => {
+        index.tx(() => {
+          for (const d of docs) index.put(d);
+        });
+        await tick();
+      },
+    });
+    index.setMark(t.source, String(wall.now()));
   }
 }
 
