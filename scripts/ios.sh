@@ -41,7 +41,7 @@ case "${1:-build}" in
     mkdir -p $OUT/obj $APP
     $CC $CFLAGS -c $C -o $OUT/obj/demo.o
     for f in runtime env utf sync_io backtrace; do
-      [ -f $MOON_HOME/lib/runtime/$f.c ] && $CC $CFLAGS -c $MOON_HOME/lib/runtime/$f.c -o $OUT/obj/rt_$f.o
+      [ -f $MOON_HOME/lib/runtime/$f.c ] && { $CC $CFLAGS -c $MOON_HOME/lib/runtime/$f.c -o $OUT/obj/rt_$f.o 2>$OUT/rt_$f.err || echo "skip runtime/$f.c: $(head -1 $OUT/rt_$f.err)"; }
     done
     for f in apple_render apple_text ios_app; do
       $CC $CFLAGS -fobjc-arc -c src/host/$f.m -o $OUT/obj/$f.o
