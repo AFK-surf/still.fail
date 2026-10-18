@@ -1,8 +1,9 @@
 // The model a chat an agent opens runs when its agent names none (chat_create): the one the person it goes to (its
 // starter) has opened most chats with on the station it is opened on, of those a profile there has enabled for its
 // workspace. Not its opener's: the opener runs on another station, or on a model the person does not use here (2026-10-19:
-// chats opened on Studio took the opener's Opus, which no profile there runs, and failed on their first turn). When
-// several are as used (or none was, and there is more than one), nobody guesses: the agent is told them, to ask.
+// chats opened on Studio took the opener's Opus, which no profile there runs, and failed on their first turn). The most
+// used one has to lead clearly, used at least twice as often as any other; when another is close to it (or none was
+// used, and there is more than one), nobody guesses: the agent is told them, to ask (the user's rule: 差距不大就要问).
 import { type Runtime, type Profile, sameModel } from "./config.ts";
 
 /// What is counted: the starter's chats over this long.
@@ -34,7 +35,8 @@ function counted(cands: Candidate[], u: Used): number {
   return named >= 0 ? named : cands.findIndex((c) => c.runtime === u.runtime && c.model === null);
 }
 
-/// The one to run, or those to ask about (the most used, as used as each other; all of them when none was).
+/// The one to run: used at least twice as often as any other. Else those to ask about: the most used and those close to
+/// it (used more than half as often), most used first; all of them when none was used.
 export function choose(cands: Candidate[], used: Used[]): Choice {
   if (cands.length === 1) return { pick: cands[0]! };
   const n = cands.map(() => 0);
@@ -43,13 +45,13 @@ export function choose(cands: Candidate[], used: Used[]): Choice {
     if (i >= 0) n[i]! += u.n;
   }
   const most = Math.max(0, ...n);
-  const top = cands.map((candidate, i) => ({ candidate, n: n[i]! })).filter((c) => c.n === most);
-  if (most > 0 && top.length === 1) return { pick: top[0]!.candidate };
-  return { ask: top };
+  const close = cands.map((candidate, i) => ({ candidate, n: n[i]! })).filter((c) => (most === 0 ? true : c.n * 2 > most));
+  if (most > 0 && close.length === 1) return { pick: close[0]!.candidate };
+  return { ask: close.sort((a, b) => b.n - a.n) };
 }
 
 /// Why no chat was opened, for the agent: the models to ask the person about.
 export function askWhich(ask: { candidate: Candidate; n: number }[], where: string): string {
   const named = ask.map(({ candidate: c, n }) => `${c.model ?? `${c.runtime}'s default`} (runtime ${c.runtime}, ${n === 0 ? "not used" : `${n} chat${n === 1 ? "" : "s"}`} in 30 days)`);
-  return `no model given, and the person this chat goes to has no one most used model on ${where}: ${named.join("; ")}. Ask them which (in your chat, an options card fits), then call chat_create again with that model and its runtime, and the same key`;
+  return `no model given, and no one model is clearly the most used by the person this chat goes to on ${where} (the most used must be used at least twice as often as any other): ${named.join("; ")}. Ask them which (in your chat, an options card fits), then call chat_create again with that model and its runtime, and the same key`;
 }

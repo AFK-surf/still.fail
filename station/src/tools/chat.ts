@@ -368,7 +368,7 @@ export const CHAT_CREATE = {
       },
       "model": {
         "type": "string",
-        "description": "Its agent's model. Default: the one the person it goes to has opened most chats with on that station (of the models its profiles run there, of runtime when given); when several are as used, it is not opened and you are told them: ask the person which, then call again with it."
+        "description": "Its agent's model. Default: the one the person it goes to has opened most chats with on that station (of the models its profiles run there, of runtime when given), when it is used at least twice as often as any other; when not, it is not opened and you are told them: ask the person which, then call again with it."
       },
       "effort": {
         "type": "string",

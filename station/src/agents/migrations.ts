@@ -53,7 +53,7 @@ export const NOTES: [number, string][] = [
   [46, "A job_start cwd, station_task dir, or a file you attach in a folder macOS protects (Documents, Desktop, Downloads, disks, iCloud Drive) may now be refused, saying the station needs that folder's permission: call permissions with the grant it names (request), post its answer with chat_post kind=need_human, end your turn, and try again once it is granted."],
   [47, "New tool search: find anything in the workspace, on all its stations at once (chats, every message, execution histories, services and tasks, skills and memory, profiles), with the chats' links."],
   [48, "search now also finds the files on each station's machine, by name and by what they say (kinds: [\"file\"])."],
-  [49, "chat_create without a model no longer takes yours: it runs the model the person it goes to uses most on that station; when several are as used it opens nothing and names them: ask the person which, then call again with model (and runtime)."],
+  [49, "chat_create without a model no longer takes yours: it runs the model the person it goes to uses most on that station, when that one is used at least twice as often as any other; when not, it opens nothing and names them: ask the person which, then call again with model (and runtime)."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

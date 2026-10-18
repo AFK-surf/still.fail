@@ -38,14 +38,26 @@ test("the starter's most used model there is the one; another station's model th
   assert.deepEqual(choose(cands, [{ runtime: "claude", model: "deepseek-v4.1-flash", n: 1 }]), { pick: { runtime: "claude", model: "deepseek-v4.1-flash" } });
 });
 
-test("several as used, or none used with several to choose from: asked, not guessed", () => {
+test("one close to the most used, or none used with several to choose from: asked, not guessed", () => {
   const cands = candidates(studio, null);
+  // Close: used more than half as often as the most used.
+  const close = choose(cands, [
+    { runtime: "codex", model: "gpt-6-astra", n: 3 },
+    { runtime: "claude", model: "deepseek-v4.1-flash", n: 2 },
+  ]);
+  assert.ok("ask" in close);
+  assert.deepEqual(close.ask.map((a) => [a.candidate.model, a.n]), [["gpt-6-astra", 3], ["deepseek-v4.1-flash", 2]]);
+  // Twice as often: that one.
+  assert.deepEqual(choose(cands, [{ runtime: "codex", model: "gpt-6-astra", n: 4 }, { runtime: "claude", model: "deepseek-v4.1-flash", n: 2 }]), { pick: { runtime: "codex", model: "gpt-6-astra" } });
   const tie = choose(cands, [
     { runtime: "codex", model: "gpt-6-astra", n: 4 },
     { runtime: "claude", model: "deepseek-v4.1-flash", n: 4 },
   ]);
   assert.ok("ask" in tie);
   assert.deepEqual(tie.ask.map((a) => [a.candidate.model, a.n]), [["gpt-6-astra", 4], ["deepseek-v4.1-flash", 4]]);
+  // Most used first, whatever order the profiles are in.
+  const second = choose(cands, [{ runtime: "codex", model: "gpt-6-astra", n: 2 }, { runtime: "claude", model: "deepseek-v4.1-flash", n: 3 }]);
+  assert.ok("ask" in second && second.ask[0]!.candidate.model === "deepseek-v4.1-flash");
   const none = choose(cands, []);
   assert.ok("ask" in none && none.ask.length === 2);
   const said = askWhich(none.ask, "Studio");

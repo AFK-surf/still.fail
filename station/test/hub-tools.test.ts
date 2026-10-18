@@ -953,7 +953,7 @@ test("an agent opens a chat on another station: made there once per key, its fir
   writeFileSync(join(near.session(keyA).workspace, "plan.txt"), "run them all");
   // Nothing used there yet, and two runtimes to choose from: not opened, the agent is told which to ask about.
   const which = await near.refused(keyA, "chat_create", { key: "tests", station: "studio", text: "run the tests" });
-  assert.ok(which.includes("no one most used model") && which.includes("claude's default") && which.includes("codex's default"), which);
+  assert.ok(which.includes("no one model is clearly the most used") && which.includes("claude's default") && which.includes("codex's default"), which);
   assert.equal(far.store.listSessions().length, 0);
   asked.length = 0;
   const said = await near.call(keyA, "chat_create", { key: "tests", station: "studio", runtime: "claude", text: "run the tests", title: "跑测试", files: ["plan.txt"] });
@@ -1048,11 +1048,10 @@ test("a chat opened on another station without a model runs what its starter use
   await near.call(keyA, "chat_create", { key: "login", station: "Studio", text: "run the login" });
   const child = far.store.openedWith("near", keyA, "login", "")!.child;
   assert.deepEqual([far.session(child).runtime, far.session(child).model], ["codex", "gpt-6-astra"]);
-  // As used as each other (the chat just opened counts too): asked.
+  // Close to it (3 to 2, the chat just opened counting too): asked.
   used("u7", "claude", "deepseek-v4.1-flash", now - 3600_000);
-  used("u8", "claude", "deepseek-v4.1-flash", now - 3600_000);
   const which = await near.refused(keyA, "chat_create", { key: "login-2", station: "Studio", text: "run the login" });
-  assert.ok(which.includes("gpt-6-astra (runtime codex, 3 chats") && which.includes("deepseek-v4.1-flash (runtime claude, 3 chats"), which);
+  assert.ok(which.includes("gpt-6-astra (runtime codex, 3 chats") && which.includes("deepseek-v4.1-flash (runtime claude, 2 chats"), which);
   // A runtime named: its model there.
   await near.call(keyA, "chat_create", { key: "login-3", station: "Studio", runtime: "claude", text: "run the login" });
   const third = far.store.openedWith("near", keyA, "login-3", "")!.child;
