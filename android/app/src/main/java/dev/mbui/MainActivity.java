@@ -4,7 +4,12 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Insets;
+import android.os.Build;
 import android.os.Bundle;
+import android.window.BackEvent;
+import android.window.OnBackAnimationCallback;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.view.WindowInsets;
@@ -71,6 +76,54 @@ public class MainActivity extends Activity {
         setIntent(intent);
         Host.log("activity onNewIntent " + (intent.getData() != null ? intent.getData().getScheme() + "://" + intent.getData().getHost() : "(in front again)"));
         Host.requestFrame();
+    }
+
+    // Back: while the app has a page to go back to (Host.backEnabled), the system's back is the app's, its
+    // predictive back gesture followed as it goes (Android 14 on: OnBackAnimationCallback; 13: back only once
+    // done); otherwise the system's own (leaving the app). Told to MoonBit on the GL thread (Native.back).
+    private boolean backOn;
+    private Object backCallback;
+
+    private void back(int kind, float x, float progress, int edge) {
+        MBView v = Host.view;
+        if (v == null) return;
+        float d = v.density;
+        v.toGL(() -> Native.back(kind, x / d, progress, edge));
+    }
+
+    void setBackEnabled(boolean on) {
+        if (on == backOn) return;
+        backOn = on;
+        if (Build.VERSION.SDK_INT < 33) return;  // onBackPressed asks backOn
+        OnBackInvokedDispatcher dispatcher = getOnBackInvokedDispatcher();
+        if (on) {
+            if (Build.VERSION.SDK_INT >= 34) {
+                backCallback = new OnBackAnimationCallback() {
+                    @Override public void onBackStarted(BackEvent e) {
+                        back(0, e.getTouchX(), e.getProgress(), e.getSwipeEdge() == BackEvent.EDGE_RIGHT ? 1 : 0);
+                    }
+                    @Override public void onBackProgressed(BackEvent e) {
+                        back(1, e.getTouchX(), e.getProgress(), e.getSwipeEdge() == BackEvent.EDGE_RIGHT ? 1 : 0);
+                    }
+                    @Override public void onBackInvoked() { back(2, 0, 1, 0); }
+                    @Override public void onBackCancelled() { back(3, 0, 0, 0); }
+                };
+            } else {
+                backCallback = (OnBackInvokedCallback) () -> back(2, 0, 1, 0);
+            }
+            dispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    (OnBackInvokedCallback) backCallback);
+        } else if (backCallback != null) {
+            dispatcher.unregisterOnBackInvokedCallback((OnBackInvokedCallback) backCallback);
+            backCallback = null;
+        }
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        if (backOn) back(2, 0, 1, 0);
+        else super.onBackPressed();
     }
 
     @Override

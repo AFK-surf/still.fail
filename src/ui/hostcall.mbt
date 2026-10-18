@@ -13,6 +13,8 @@ struct FakeHost {
   mut ime_sel : (Int, Int)
   mut ime_rect : (Double, Double, Double, Double)
   mut clipboard : String
+  // whether the app takes back (a page to go back to), as last told
+  mut back_on : Bool
   logs : Array[String]
   // images: sources the test made up, with their size in pixels; loads
   // asked for (source, max_px); decodes, ready from the next frame on
@@ -78,24 +80,31 @@ fn h_wake_after(ms : Double) -> Unit {
 }
 
 ///|
-fn h_font_metrics(size : Double, weight : Int, out : FixedArray[Double]) -> Unit {
+fn h_font_metrics(
+  size : Double,
+  weight : Int,
+  style : Int,
+  out : FixedArray[Double],
+) -> Unit {
   match fake.val {
     Some(_) => {
       out[0] = size * 0.8
       out[1] = size * 0.2
       out[2] = (size * 1.42).round()
     }
-    None => @host.font_metrics(size, weight, out)
+    None => @host.font_metrics(size, weight, style, out)
   }
 }
 
 ///|
 /// Fake shaping: one cluster per extended grapheme cluster, as real hosts
-/// make them; Latin half an em wide, everything else a full em.
+/// make them; Latin half an em wide (0.6 in the code face), everything else
+/// a full em.
 fn h_shape(
   text : String,
   size : Double,
   weight : Int,
+  style : Int,
   out : FixedArray[Double],
 ) -> Int {
   match fake.val {
@@ -110,7 +119,11 @@ fn h_shape(
         let adv = if c == 10 {
           0.0
         } else if c < 0x2E80 {
-          size * 0.5
+          if (style & @host.style_mono) != 0 {
+            size * 0.6
+          } else {
+            size * 0.5
+          }
         } else {
           size
         }
@@ -123,7 +136,7 @@ fn h_shape(
       }
       k
     }
-    None => @host.shape(text, size, weight, out)
+    None => @host.shape(text, size, weight, style, out)
   }
 }
 
@@ -187,6 +200,14 @@ fn h_clipboard_set(s : String) -> Unit {
   match fake.val {
     Some(f) => f.clipboard = s
     None => @host.clipboard_set(s)
+  }
+}
+
+///|
+fn h_back_enabled(on : Bool) -> Unit {
+  match fake.val {
+    Some(f) => f.back_on = on
+    None => @host.back_enabled(on)
   }
 }
 

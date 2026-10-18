@@ -268,6 +268,7 @@ pub fn Ctx::editor(
         pref_x: -1.0,
       }
       self.editors[id] = s
+      self.own(id)
       s
     }
   }

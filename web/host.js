@@ -3,6 +3,8 @@
 // atlas, and a hidden textarea that receives the system input method.
 (() => {
   const FAMILY = 'system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", "Segoe UI", sans-serif';
+  // the code face (style bit 2), its Han from the system's sans
+  const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, "JetBrains Mono", "PingFang SC", "Noto Sans CJK SC", monospace';
   const ATLAS = 2048;
   const params = new URLSearchParams(location.search);
   const H = {};
@@ -249,18 +251,19 @@
   const rc = document.createElement('canvas');
   const rctx = rc.getContext('2d', { willReadFrequently: true });
   const emojiRe = /\p{Extended_Pictographic}/u;
-  const font = (size, weight) => `${weight} ${size}px ${FAMILY}`;
+  // style: 1 slanted, 2 the code face
+  const font = (size, weight, style) => `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${style & 2 ? MONO : FAMILY}`;
 
-  H.fontMetrics = (size, weight, out) => {
-    mctx.font = font(size, weight);
+  H.fontMetrics = (size, weight, style, out) => {
+    mctx.font = font(size, weight, style);
     const m = mctx.measureText('Hg国');
     out[0] = m.fontBoundingBoxAscent;
     out[1] = m.fontBoundingBoxDescent;
     out[2] = Math.round(size * 1.42);
   };
 
-  H.shape = (text, size, weight, out) => {
-    const f = font(size, weight);
+  H.shape = (text, size, weight, style, out) => {
+    const f = font(size, weight, style);
     mctx.font = f;
     const cap = out.length / 4;
     let k = 0;
@@ -276,11 +279,11 @@
       let key = -1;
       if (c === '\n') adv = 0;
       else if (c !== ' ' && c !== '\t') {
-        const kk = c + '\x01' + size + '\x01' + weight;
+        const kk = c + '\x01' + size + '\x01' + weight + '\x01' + style;
         key = keys.get(kk);
         if (key === undefined) {
           key = entries.length;
-          entries.push({ c, size, weight, done: false });
+          entries.push({ c, size, weight, style, done: false });
           keys.set(kk, key);
         }
       }
@@ -298,7 +301,7 @@
   function rasterize(e) {
     e.done = true;
     const sc = dpr;
-    mctx.font = font(e.size, e.weight);
+    mctx.font = font(e.size, e.weight, e.style);
     const m = mctx.measureText(e.c);
     const left = m.actualBoundingBoxLeft, right = m.actualBoundingBoxRight;
     const asc = m.actualBoundingBoxAscent, desc = m.actualBoundingBoxDescent;
@@ -320,7 +323,7 @@
     rc.width = pw;
     rc.height = ph;
     rctx.clearRect(0, 0, pw, ph);
-    rctx.font = font(e.size * sc, e.weight);
+    rctx.font = font(e.size * sc, e.weight, e.style);
     rctx.fillStyle = '#fff';
     rctx.textBaseline = 'alphabetic';
     rctx.fillText(e.c, pad + l, pad + a);
@@ -421,6 +424,16 @@
   H.benchMode = () => Number(params.get('bench') || 0);
   H.exit = (code) => { window.__done = code; document.title = 'DONE ' + code; };
   H.memBytes = () => (performance.memory ? performance.memory.usedJSHeapSize : 0);
+
+  // ---- back ----
+  // No system back gesture here (the page's own edge swipe is MoonBit's): Alt+Left and a mouse's back button go
+  // back, when the app takes it.
+  let back = null, backOn = false;
+  H.setBack = (b) => { back = b; };
+  H.backEnabled = (on) => { backOn = on; };
+  const goBack = (e) => { if (back && backOn) { e.preventDefault(); back(2, 0, 1, 0); } };
+  window.addEventListener('keydown', (e) => { if (e.altKey && e.key === 'ArrowLeft') goBack(e); });
+  window.addEventListener('mouseup', (e) => { if (e.button === 3) goBack(e); });
 
   H.run = (title, frame, pointer, wheel, key, text) => {
     document.title = title;

@@ -7,6 +7,14 @@
 
 mb_callbacks mb_cb;
 
+// Back (host_native.mbt `set_back`): ⌘[ and a mouse's back button, while the app takes it.
+typedef void (*mb_back_fn)(int32_t, double, double, int32_t);
+static mb_back_fn back_cb;
+static int back_on;
+static void go_back(void) {
+  if (back_cb && back_on) back_cb(2, 0, 1, 0);
+}
+
 @interface MBView : NSView <NSTextInputClient>
 @property(nonatomic) BOOL imeActive;
 @property(nonatomic) NSRect caretRect;
@@ -24,12 +32,12 @@ static const char *script;
 
 double mb_now_ms(void) { return CACurrentMediaTime() * 1000.0; }
 
-CTFontRef mb_platform_font(double size, int weight) {
+CTFontRef mb_platform_font(double size, int weight, int mono) {
   NSFontWeight w = weight >= 700 ? NSFontWeightBold
                    : weight >= 600 ? NSFontWeightSemibold
                    : weight >= 500 ? NSFontWeightMedium
                                    : NSFontWeightRegular;
-  NSFont *f = [NSFont systemFontOfSize:size weight:w];
+  NSFont *f = mono ? [NSFont monospacedSystemFontOfSize:size weight:w] : [NSFont systemFontOfSize:size weight:w];
   return (CTFontRef)CFBridgingRetain(f);
 }
 
@@ -132,6 +140,9 @@ static int frames_drawn;
   NSPoint p = [self pt:e];
   mb_cb.pointer(2, p.x, p.y, 0);
 }
+- (void)otherMouseUp:(NSEvent *)e {
+  if (e.buttonNumber == 3) go_back();
+}
 - (void)scrollWheel:(NSEvent *)e {
   NSPoint p = [self pt:e];
   double dy = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 12.0;
@@ -149,6 +160,7 @@ static int frames_drawn;
   if (m & NSEventModifierFlagCommand) {
     NSString *c = e.charactersIgnoringModifiers.lowercaseString;
     if ([c isEqualToString:@"q"]) [NSApp terminate:nil];
+    else if ([c isEqualToString:@"["]) go_back();
     else if ([c isEqualToString:@"a"]) mb_cb.key(12, mods);
     else if ([c isEqualToString:@"c"]) mb_cb.key(13, mods);
     else if ([c isEqualToString:@"x"]) mb_cb.key(14, mods);
@@ -324,6 +336,23 @@ static void run_script_step(int step) {
     if (step == 340) shot("photos-3-viewer");
     if (step == 341) exit(0);
     [v requestFrame];
+  } else if (strcmp(script, "kit") == 0) {
+    // the demo's kit screen (MBUI_SCREEN=kit): the first page; scrolled, the next one pushed (the bar's button at its
+    // right); swiped back from the left edge, held halfway; let go: the first page as it was left
+    switch (step) {
+      case 30: shot("kit-1-root"); break;
+      // scrolled down first: back, it is where it was left
+      case 31: mb_cb.wheel(200, 500, 0, 360, 0); break;
+      case 40: mb_cb.pointer(0, s.width - 50, 26, 0); mb_cb.pointer(2, s.width - 50, 26, 0); break;
+      case 80: shot("kit-2-pushed"); break;
+      case 81: mb_cb.pointer(0, 5, 400, 0); break;
+      case 120: shot("kit-3-swipe"); break;
+      case 121: mb_cb.pointer(2, 5 + 10 * 20, 400, 0); break;
+      case 170: shot("kit-4-back"); break;
+      case 171: exit(0);
+    }
+    if (step > 81 && step <= 91) mb_cb.pointer(1, 5 + (step - 81) * 20, 400, 0);
+    [v requestFrame];
   } else if (strcmp(script, "shot") == 0) {
     // MBUI_SHOT_AT: the frame to take it at (later for what waits on something, as the core's first answers)
     static int at;
@@ -412,6 +441,14 @@ int32_t mb_host_bench_mode(void) {
 }
 
 void mb_host_exit(int32_t code) { exit(code); }
+
+void mb_host_set_back(mb_back_fn f) { back_cb = f; }
+void mb_host_back_enabled(int32_t on) { back_on = on; }
+
+moonbit_string_t mb_host_env(moonbit_string_t name) {
+  const char *v = getenv(mb_ns_from_string(name).UTF8String);
+  return mb_string_from_ns(v ? [NSString stringWithUTF8String:v] ?: @"" : @"");
+}
 
 double mb_host_mem_bytes(void) {
   task_vm_info_data_t info;

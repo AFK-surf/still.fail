@@ -26,6 +26,7 @@ final class MBText {
         String text;
         float size;
         int weight;
+        int style;  // 1 italic, 2 the code face
         boolean done;
         double u, v, w, h, ox, oy;
         int color;
@@ -44,12 +45,13 @@ final class MBText {
         generation++;
     }
 
-    static Paint paint(float size, int weight) {
-        String k = size + "/" + weight;
+    static Paint paint(float size, int weight, int style) {
+        String k = size + "/" + weight + "/" + style;
         Paint p = paints.get(k);
         if (p == null) {
             p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
-            p.setTypeface(Typeface.create(Typeface.DEFAULT, weight, false));
+            Typeface base = (style & 2) != 0 ? Typeface.MONOSPACE : Typeface.DEFAULT;
+            p.setTypeface(Typeface.create(base, weight, (style & 1) != 0));
             p.setTextSize(size);
             p.setColor(Color.WHITE);
             paints.put(k, p);
@@ -61,15 +63,15 @@ final class MBText {
         return generation;
     }
 
-    static void fontMetrics(double size, int weight, double[] out) {
-        Paint.FontMetrics m = paint((float) size, weight).getFontMetrics();
+    static void fontMetrics(double size, int weight, int style, double[] out) {
+        Paint.FontMetrics m = paint((float) size, weight, style).getFontMetrics();
         out[0] = -m.ascent;
         out[1] = m.descent;
         out[2] = Math.round(size * 1.42);
     }
 
-    static int shape(String text, double size, int weight, double[] out) {
-        Paint p = paint((float) size, weight);
+    static int shape(String text, double size, int weight, int style, double[] out) {
+        Paint p = paint((float) size, weight, style);
         int n = text.length();
         if (adv.length < n) adv = new float[n * 2];
         char[] chars = text.toCharArray();
@@ -90,7 +92,7 @@ final class MBText {
             } else if (c == ' ' || c == '\t') {
                 key = -1;
             } else {
-                key = intern(text.substring(start, end), (float) size, weight);
+                key = intern(text.substring(start, end), (float) size, weight, style);
             }
             out[k * 4] = start;
             out[k * 4 + 1] = end - start;
@@ -101,14 +103,15 @@ final class MBText {
         return k;
     }
 
-    static int intern(String cluster, float size, int weight) {
-        String k = cluster + '\u0001' + size + '\u0001' + weight;
+    static int intern(String cluster, float size, int weight, int style) {
+        String k = cluster + '\u0001' + size + '\u0001' + weight + '\u0001' + style;
         Integer id = keys.get(k);
         if (id != null) return id;
         Entry e = new Entry();
         e.text = cluster;
         e.size = size;
         e.weight = weight;
+        e.style = style;
         entries.add(e);
         keys.put(k, entries.size() - 1);
         return entries.size() - 1;
@@ -139,7 +142,7 @@ final class MBText {
         e.done = true;
         e.w = 0;
         float sc = Host.view.density;
-        Paint p = paint(e.size * sc, e.weight);
+        Paint p = paint(e.size * sc, e.weight, e.style);
         Rect b = new Rect();
         p.getTextBounds(e.text, 0, e.text.length(), b);
         int pad = 1;

@@ -35,6 +35,12 @@ jobs:
           ls -la out/shot-win
       - name: IME script
         run: scripts/win.sh script ime
+      - name: The kit screen (rich text, Markdown, pages) in a phone's window
+        run: |
+          mkdir -p out/shot-kit
+          MBUI_BENCH=-1 MBUI_SCREEN=kit MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_NAME=kit \
+            MBUI_SHOT_DIR="$(cygpath -w "$PWD/out/shot-kit")" out/win/mod/_build/native/release/build/demo/demo.exe
+          ls -la out/shot-kit
       - name: Compare with the golden
         run: |
           mkdir -p out/shots
@@ -72,6 +78,7 @@ jobs:
           path: |
             out/shots/
             out/shot-win/
+            out/shot-kit/
             out/ime/
             out/photos/
           if-no-files-found: warn

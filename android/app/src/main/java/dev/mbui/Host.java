@@ -64,6 +64,11 @@ final class Host {
         });
     }
 
+    /** Whether the app takes back (a page to go back to); MainActivity's callback follows it. */
+    static void backEnabled(boolean on) {
+        main.post(() -> { if (activity != null) activity.setBackEnabled(on); });
+    }
+
     static void log(String s) {
         Log.i("mbui", s);
     }

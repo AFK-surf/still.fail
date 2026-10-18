@@ -1,0 +1,760 @@
+// Rich text: one paragraph of runs, each in a style of its own (weight,
+// slant, the code face, size, colour, a ground, strikethrough, a link),
+// wrapped as one text: the runs are shaped apart (each in its own font, by
+// the host) and their clusters laid end to end, lines broken where UAX #14
+// allows in the whole paragraph's text, so a line breaks between runs as
+// within one. A line is as high as the tallest run on it needs; runs share
+// its baseline.
+//
+// The layout answers what selection will ask (offset_at, caret, rects over
+// a range of the paragraph's text), and links are found the same way: each
+// link's pieces of lines are hit targets with an id of their own, pressed
+// and clicked as any widget.
+
+///|
+/// A run of a paragraph's words in one style. `span` makes one with only
+/// what differs from the paragraph said.
+pub(all) struct Run {
+  text : String
+  /// 0: the paragraph's
+  weight : Int
+  italic : Bool
+  /// the paragraph's look for code: the code face at its code_scale, in its
+  /// code_color on its code_bg
+  code : Bool
+  /// the code face alone
+  mono : Bool
+  /// of the paragraph's size
+  scale : Double
+  /// 0: the paragraph's (a link's own colour, a code run's)
+  color : Int64
+  /// a ground behind the words, rounded, a little room either side; 0 none
+  bg : Int64
+  strike : Bool
+  underline : Bool
+  /// where it leads ("" nowhere): tapped, the paragraph's on_link hears it
+  link : String
+} derive(Eq, Debug)
+
+///|
+pub fn span(
+  text : String,
+  weight? : Int = 0,
+  bold? : Bool = false,
+  italic? : Bool = false,
+  code? : Bool = false,
+  mono? : Bool = false,
+  scale? : Double = 1.0,
+  color? : Int64 = 0L,
+  bg? : Int64 = 0L,
+  strike? : Bool = false,
+  underline? : Bool = false,
+  link? : String = "",
+) -> Run {
+  {
+    text,
+    weight: if bold && weight == 0 { 700 } else { weight },
+    italic,
+    code,
+    mono,
+    scale,
+    color,
+    bg,
+    strike,
+    underline,
+    link,
+  }
+}
+
+///|
+pub fn plain(text : String) -> Run {
+  span(text)
+}
+
+///|
+pub fn bold(text : String) -> Run {
+  span(text, bold=true)
+}
+
+///|
+pub fn italic(text : String) -> Run {
+  span(text, italic=true)
+}
+
+///|
+pub fn code(text : String) -> Run {
+  span(text, code=true)
+}
+
+///|
+pub fn strike(text : String) -> Run {
+  span(text, strike=true)
+}
+
+///|
+pub fn link(text : String, href : String) -> Run {
+  span(text, link=href)
+}
+
+///|
+/// A paragraph as its node keeps it: its runs and its own look.
+struct Rich {
+  runs : Array[Run]
+  size : Double
+  weight : Int
+  color : Int64
+  line : Double
+  wrap : Bool
+  link_color : Int64
+  pressed_bg : Int64
+  code_color : Int64
+  code_bg : Int64
+  code_scale : Double
+  // the id its links' ids come from
+  base : Int
+}
+
+///|
+/// The id of run `k`'s link in a paragraph.
+fn link_id(base : Int, k : Int) -> Int {
+  mix(base, k + 1)
+}
+
+///|
+/// A paragraph laid out: its clusters (from every run, in order), its
+/// lines, and each run's metrics.
+pub struct RichLayout {
+  text : String
+  /// where each run starts in the text (UTF-16)
+  run_start : Array[Int]
+  /// each run's clusters: run k has clusters run_c0[k] until run_c1[k]
+  run_c0 : Array[Int]
+  run_c1 : Array[Int]
+  run_size : Array[Double]
+  /// the run's font's ascent and descent (its ink's room)
+  run_a : Array[Double]
+  run_d : Array[Double]
+  /// and with its share of the line's leading
+  run_lasc : Array[Double]
+  run_ldesc : Array[Double]
+  starts : Array[Int]
+  lens : Array[Int]
+  adv : Array[Double]
+  /// where the glyph is in its advance (a code run's first: after its room)
+  pre : Array[Double]
+  keys : Array[Int]
+  cu : Array[Int]
+  brk : Array[Int]
+  run_of : Array[Int]
+  xs : Array[Double]
+  line_of : Array[Int]
+  line_start : Array[Int]
+  line_end : Array[Int]
+  line_w : Array[Double]
+  line_y : Array[Double]
+  line_h : Array[Double]
+  /// the baseline, down from the line's top
+  line_base : Array[Double]
+  len : Int
+  w : Double
+  h : Double
+}
+
+///|
+fn RichLayout::hard_end(self : RichLayout, i : Int) -> Bool {
+  is_nl(self.cu[i]) && (i + 1 >= self.starts.length() || self.brk[i + 1] == 2)
+}
+
+///|
+fn run_style(r : Run) -> Int {
+  (if r.italic { @host.style_italic } else { 0 }) |
+  (if r.code || r.mono { @host.style_mono } else { 0 })
+}
+
+///|
+fn Rich::run_size(self : Rich, r : Run) -> Double {
+  self.size * r.scale * (if r.code { self.code_scale } else { 1.0 })
+}
+
+///|
+fn Rich::run_weight(self : Rich, r : Run) -> Int {
+  if r.weight > 0 {
+    r.weight
+  } else {
+    self.weight
+  }
+}
+
+///|
+fn Rich::run_bg(self : Rich, r : Run) -> Int64 {
+  if r.bg != 0L {
+    r.bg
+  } else if r.code {
+    self.code_bg
+  } else {
+    0L
+  }
+}
+
+///|
+fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
+  let (a0, d0, own0) = font_metrics(r.size, r.weight)
+  let lh = if r.line > 0.0 { r.line } else { own0 }
+  let base_asc = (lh - a0 - d0) / 2.0 + a0
+  let base_desc = lh - base_asc
+  let sb = StringBuilder()
+  let run_start = []
+  let run_c0 = []
+  let run_c1 = []
+  let run_size = []
+  let run_a = []
+  let run_d = []
+  let run_lasc = []
+  let run_ldesc = []
+  let starts = []
+  let lens = []
+  let adv = []
+  let pre = []
+  let keys = []
+  let cu = []
+  let run_of = []
+  let mut off = 0
+  for k, run in r.runs {
+    let size = r.run_size(run)
+    let weight = r.run_weight(run)
+    let style = run_style(run)
+    let s = shape(run.text, size, weight, style~)
+    let (a, d, _) = font_metrics(size, weight, style~)
+    let l = lh * size / r.size
+    let lasc = (l - a - d) / 2.0 + a
+    run_start.push(off)
+    run_size.push(size)
+    run_a.push(a)
+    run_d.push(d)
+    run_lasc.push(lasc)
+    run_ldesc.push(l - lasc)
+    run_c0.push(starts.length())
+    let n = s.starts.length()
+    let room = if r.run_bg(run) != 0L {
+      (size * 0.3 * 2.0).round() / 2.0
+    } else {
+      0.0
+    }
+    for i in 0..<n {
+      starts.push(s.starts[i] + off)
+      lens.push(s.lens[i])
+      let mut a = s.adv[i]
+      let mut p = 0.0
+      if i == 0 {
+        a = a + room
+        p = room
+      }
+      if i == n - 1 {
+        a = a + room
+      }
+      adv.push(a)
+      pre.push(p)
+      keys.push(s.keys[i])
+      cu.push(s.cu[i])
+      run_of.push(k)
+    }
+    run_c1.push(starts.length())
+    sb.write_string(run.text)
+    off = off + run.text.length()
+  }
+  let text = sb.to_string()
+  let n = starts.length()
+  let brk = Array::make(n, 0)
+  if n > 1 {
+    let b = @text.line_breaks(text)
+    for i in 1..<n {
+      brk[i] = b[starts[i]]
+    }
+  }
+  let xs = Array::make(n, 0.0)
+  let line_of = Array::make(n, 0)
+  let line_start = []
+  let line_end = []
+  let line_w = []
+  let lay : RichLayout = {
+    text,
+    run_start,
+    run_c0,
+    run_c1,
+    run_size,
+    run_a,
+    run_d,
+    run_lasc,
+    run_ldesc,
+    starts,
+    lens,
+    adv,
+    pre,
+    keys,
+    cu,
+    brk,
+    run_of,
+    xs,
+    line_of,
+    line_start,
+    line_end,
+    line_w,
+    line_y: [],
+    line_h: [],
+    line_base: [],
+    len: off,
+    w: 0.0,
+    h: 0.0,
+  }
+  let mut w_max = 0.0
+  fn finish(start : Int, end : Int) {
+    // its width without the spaces it ends in
+    let mut e = end
+    while e > start && (cu[e - 1] == 32 || is_nl(cu[e - 1])) {
+      e = e - 1
+    }
+    let lw = if e > start { xs[e - 1] + adv[e - 1] } else { 0.0 }
+    line_start.push(start)
+    line_end.push(end)
+    line_w.push(lw)
+    if lw > w_max {
+      w_max = lw
+    }
+  }
+
+  let mut ls = 0
+  let mut i = 0
+  let mut x = 0.0
+  let mut last_break = -1
+  while i < n {
+    let c = cu[i]
+    if lay.hard_end(i) {
+      xs[i] = x
+      line_of[i] = line_start.length()
+      finish(ls, i + 1)
+      ls = i + 1
+      i = i + 1
+      x = 0.0
+      last_break = -1
+      continue
+    }
+    if i > ls && brk[i] != 0 {
+      last_break = i
+    }
+    let a = adv[i]
+    if r.wrap && x + a > max_w + 0.01 && i > ls && c != 32 {
+      let b = if last_break > ls { last_break } else { i }
+      finish(ls, b)
+      ls = b
+      i = b
+      x = 0.0
+      last_break = -1
+      continue
+    }
+    xs[i] = x
+    line_of[i] = line_start.length()
+    x = x + a
+    i = i + 1
+  }
+  if ls < n || line_start.length() == 0 || (n > 0 && lay.hard_end(n - 1)) {
+    finish(ls, n)
+  }
+  // each line as high as its tallest run needs, its baseline shared
+  let mut y = 0.0
+  for l in 0..<line_start.length() {
+    let mut asc = base_asc
+    let mut desc = base_desc
+    for c in line_start[l]..<line_end[l] {
+      let k = run_of[c]
+      asc = dmax(asc, run_lasc[k])
+      desc = dmax(desc, run_ldesc[k])
+    }
+    lay.line_y.push(y)
+    lay.line_h.push(asc + desc)
+    lay.line_base.push(asc)
+    y = y + asc + desc
+  }
+  { ..lay, w: w_max, h: y }
+}
+
+///|
+pub fn RichLayout::line_count(self : RichLayout) -> Int {
+  self.line_start.length()
+}
+
+///|
+/// The start and end offsets (UTF-16, in the paragraph's text) of a line.
+pub fn RichLayout::line_range(self : RichLayout, line : Int) -> (Int, Int) {
+  let a = self.line_start[line]
+  let b = self.line_end[line]
+  let n = self.starts.length()
+  (
+    if a < n {
+      self.starts[a]
+    } else {
+      self.len
+    },
+    if b < n {
+      self.starts[b]
+    } else {
+      self.len
+    },
+  )
+}
+
+///|
+/// Which line a point's y is on.
+pub fn RichLayout::line_at(self : RichLayout, y : Double) -> Int {
+  let lines = self.line_start.length()
+  let mut l = 0
+  while l + 1 < lines && y >= self.line_y[l + 1] {
+    l = l + 1
+  }
+  l
+}
+
+///|
+/// The UTF-16 offset nearest to a point in the paragraph (relative to its
+/// top left).
+pub fn RichLayout::offset_at(self : RichLayout, x : Double, y : Double) -> Int {
+  let n = self.starts.length()
+  if n == 0 || self.line_start.length() == 0 {
+    return 0
+  }
+  let line = self.line_at(y)
+  let a = self.line_start[line]
+  let b = self.line_end[line]
+  for c in a..<b {
+    if is_nl(self.cu[c]) {
+      return self.starts[c]
+    }
+    if x < self.xs[c] + self.adv[c] / 2.0 {
+      return self.starts[c]
+    }
+  }
+  if b >= n {
+    self.len
+  } else {
+    self.starts[b]
+  }
+}
+
+///|
+/// Where a caret at `off` would be: x, the top of its line, the line's
+/// height.
+pub fn RichLayout::caret(self : RichLayout, off : Int) -> (Double, Double, Double) {
+  let n = self.starts.length()
+  if n == 0 {
+    return (0.0, 0.0, if self.line_h.length() > 0 { self.line_h[0] } else { 0.0 })
+  }
+  let mut c = 0
+  while c < n && self.starts[c] < off {
+    c = c + 1
+  }
+  if c >= n {
+    let last = n - 1
+    let l = self.line_start.length() - 1
+    if self.hard_end(last) {
+      return (0.0, self.line_y[l], self.line_h[l])
+    }
+    let ll = self.line_of[last]
+    (self.xs[last] + self.adv[last], self.line_y[ll], self.line_h[ll])
+  } else {
+    let l = self.line_of[c]
+    (self.xs[c], self.line_y[l], self.line_h[l])
+  }
+}
+
+///|
+/// The rectangles (x, y, w, h; one a line) the text from `a` until `b`
+/// covers: a selection's, a link's.
+pub fn RichLayout::rects(
+  self : RichLayout,
+  a : Int,
+  b : Int,
+) -> Array[(Double, Double, Double, Double)] {
+  let out = []
+  let n = self.starts.length()
+  let mut l = -1
+  let mut x0 = 0.0
+  let mut x1 = 0.0
+  for c in 0..<n {
+    let s = self.starts[c]
+    if s < a || s >= b || is_nl(self.cu[c]) {
+      continue
+    }
+    let cl = self.line_of[c]
+    if cl != l {
+      if l >= 0 {
+        out.push((x0, self.line_y[l], x1 - x0, self.line_h[l]))
+      }
+      l = cl
+      x0 = self.xs[c]
+    }
+    x1 = self.xs[c] + self.adv[c]
+  }
+  if l >= 0 {
+    out.push((x0, self.line_y[l], x1 - x0, self.line_h[l]))
+  }
+  out
+}
+
+///|
+/// The run the text at `off` is in (-1 past the end).
+pub fn RichLayout::run_at(self : RichLayout, off : Int) -> Int {
+  let mut k = -1
+  for i, s in self.run_start {
+    if s <= off {
+      k = i
+    }
+  }
+  if off >= self.len {
+    -1
+  } else {
+    k
+  }
+}
+
+///|
+/// Run k's pieces of lines: (line, first cluster, past its last), without
+/// the spaces a line ends in.
+fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
+  let out = []
+  let c0 = self.run_c0[k]
+  let c1 = self.run_c1[k]
+  let mut c = c0
+  while c < c1 {
+    let l = self.line_of[c]
+    let mut e = c
+    while e < c1 && self.line_of[e] == l {
+      e = e + 1
+    }
+    let mut t = e
+    while t > c && (self.cu[t - 1] == 32 || is_nl(self.cu[t - 1])) {
+      t = t - 1
+    }
+    if t > c {
+      out.push((l, c, t))
+    }
+    c = e
+  }
+  out
+}
+
+// ---------------------------------------------------------------------------
+// Building and painting
+
+///|
+/// A paragraph of runs, wrapped as one text in `size` (the runs' sizes
+/// relative to it) with lines `line` high (0: the font's own). Links are
+/// drawn in `link_color` (unless a run has its own), with `pressed_bg`
+/// behind them while held; tapped, `on_link` is told where they lead. Code
+/// runs: the code face at `code_scale`, in `code_color` (0: the
+/// paragraph's) on `code_bg` (0: none). `key` keeps its links' ids apart
+/// from another paragraph's with the same words.
+pub fn Ctx::rich(
+  self : Ctx,
+  runs : Array[Run],
+  key? : String = "",
+  size? : Double = 15.0,
+  weight? : Int = 400,
+  color? : Int64 = 0x1D1D1FFFL,
+  line? : Double = 0.0,
+  wrap? : Bool = true,
+  w? : Size = Auto,
+  link_color? : Int64 = 0x0A84FFFFL,
+  pressed_bg? : Int64 = 0x0A84FF29L,
+  code_color? : Int64 = 0L,
+  code_bg? : Int64 = 0x7676801FL,
+  code_scale? : Double = 0.9,
+  on_link? : (String) -> Unit = fn(_) {  },
+) -> Int {
+  let sb = StringBuilder()
+  for r in runs {
+    sb.write_string(r.text)
+  }
+  let text = sb.to_string()
+  let base = self.id(if key == "" { "\u{1}rich\u{1}" + text } else { key })
+  for k, r in runs {
+    if r.link != "" && self.clicked(link_id(base, k)) {
+      on_link(r.link)
+    }
+  }
+  let i = self.alloc(kind_rich)
+  let n = self.nodes[i]
+  n.text = text
+  n.font_size = size
+  n.weight = weight
+  n.color = color
+  n.wrap = wrap
+  n.line_h = line
+  n.w = w
+  n.rich = Some({
+    runs,
+    size,
+    weight,
+    color,
+    line,
+    wrap,
+    link_color,
+    pressed_bg,
+    code_color,
+    code_bg,
+    code_scale,
+    base,
+  })
+  i
+}
+
+///|
+/// The paragraph laid out in `max_w`; as text_layout, one layout serves
+/// every width from its widest line up to the one it was laid out in.
+fn Node::rich_layout(self : Node, max_w : Double) -> RichLayout? {
+  match self.rich {
+    None => None
+    Some(r) => {
+      match self.rl {
+        Some(rl) if !r.wrap || (rl.w <= max_w + 0.01 && max_w <= self.rl_max) =>
+          return Some(rl)
+        _ => ()
+      }
+      let rl = layout_rich(r, max_w)
+      self.rl = Some(rl)
+      self.rl_max = max_w
+      Some(rl)
+    }
+  }
+}
+
+///|
+fn Ctx::paint_rich(self : Ctx, n : Node, alpha : Double) -> Unit {
+  let (r, lay) = match (n.rich, n.rl) {
+    (Some(r), Some(l)) => (r, l)
+    _ => return
+  }
+  let ox = n.x + n.pad_l
+  let oy = n.y + n.pad_t
+  let k = clip_stack.length() - 4
+  let cx0 = clip_stack[k]
+  let cy0 = clip_stack[k + 1]
+  let cx1 = clip_stack[k + 2]
+  let cy1 = clip_stack[k + 3]
+  let sc = self.scale
+  let colors = Array::makei(r.runs.length(), fn(k) {
+    let run = r.runs[k]
+    if run.color != 0L {
+      run.color
+    } else if run.link != "" {
+      r.link_color
+    } else if run.code && r.code_color != 0L {
+      r.code_color
+    } else {
+      n.color
+    }
+  })
+  // grounds (code, a pressed link), then the words, then the lines through
+  // or under them; links' pieces are hit targets
+  for k, run in r.runs {
+    let id = if run.link != "" { link_id(r.base, k) } else { 0 }
+    let pressed = id != 0 && self.pressed(id)
+    let bg = if pressed { r.pressed_bg } else { r.run_bg(run) }
+    if bg == 0L && id == 0 {
+      continue
+    }
+    for p in lay.pieces(k) {
+      let (l, c0, c1) = p
+      let top = oy + lay.line_y[l]
+      let x0 = ox + lay.xs[c0]
+      let x1 = ox + lay.xs[c1 - 1] + lay.adv[c1 - 1]
+      if bg != 0L {
+        let base = top + lay.line_base[l]
+        let a = lay.run_a[k]
+        let d = lay.run_d[k]
+        let (bx0, bx1) = if pressed && r.run_bg(run) == 0L {
+          (x0 - 2.0, x1 + 2.0)
+        } else {
+          (x0, x1)
+        }
+        self.emit_rect(
+          bx0,
+          base - a - 1.0,
+          bx1 - bx0,
+          a + d + 2.0,
+          dmin(4.0, (a + d) / 2.0),
+          bg,
+          0.0,
+          0L,
+          alpha,
+        )
+      }
+      if id != 0 {
+        self.next_hit_ids.push(id)
+        self.next_hit_rects.push(dmax(x0, cx0))
+        self.next_hit_rects.push(dmax(top, cy0))
+        self.next_hit_rects.push(dmin(x1, cx1))
+        self.next_hit_rects.push(dmin(top + lay.line_h[l], cy1))
+      }
+    }
+  }
+  for c in 0..<lay.starts.length() {
+    let key = lay.keys[c]
+    if key < 0 {
+      continue
+    }
+    let l = lay.line_of[c]
+    let top = oy + lay.line_y[l]
+    if top > cy1 || top + lay.line_h[l] < cy0 {
+      continue
+    }
+    let g = glyph(key)
+    if g.gw <= 0.0 {
+      continue
+    }
+    let gx = ((ox + lay.xs[c] + lay.pre[c] + g.ox) * sc).round() / sc
+    let gy = ((top + lay.line_base[l] + g.oy) * sc).round() / sc
+    self.push_inst(
+      gx,
+      gy,
+      g.gw,
+      g.gh,
+      0.0,
+      if g.color { 3.0 } else { 1.0 },
+      0.0,
+      0.0,
+      if g.color { 0xFFFFFFFFL } else { colors[lay.run_of[c]] },
+      alpha,
+      g.u,
+      g.v,
+      g.gw * sc,
+      g.gh * sc,
+    )
+  }
+  for k, run in r.runs {
+    if !run.strike && !run.underline {
+      continue
+    }
+    let size = lay.run_size[k]
+    let t = dmax(1.0, (size / 15.0 * sc).round() / sc)
+    // a code run's room either side is not under the line
+    let room = if lay.run_c1[k] > lay.run_c0[k] {
+      lay.pre[lay.run_c0[k]]
+    } else {
+      0.0
+    }
+    for p in lay.pieces(k) {
+      let (l, c0, c1) = p
+      let base = oy + lay.line_y[l] + lay.line_base[l]
+      let x0 = ox + lay.xs[c0] + (if c0 == lay.run_c0[k] { room } else { 0.0 })
+      let x1 = ox + lay.xs[c1 - 1] + lay.adv[c1 - 1] -
+        (if c1 == lay.run_c1[k] { room } else { 0.0 })
+      if run.strike {
+        let y = ((base - size * 0.27 - t / 2.0) * sc).round() / sc
+        self.emit_rect(x0, y, x1 - x0, t, 0.0, colors[k], 0.0, 0L, alpha)
+      }
+      if run.underline {
+        let y = ((base + size * 0.12) * sc).round() / sc
+        self.emit_rect(x0, y, x1 - x0, t, 0.0, colors[k], 0.0, 0L, alpha)
+      }
+    }
+  }
+}

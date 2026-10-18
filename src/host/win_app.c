@@ -24,6 +24,16 @@
 
 mb_callbacks mb_cb;
 
+// Back (host_native.mbt `set_back`): a mouse's back button and Alt+Left, while the app takes it.
+typedef void (*mb_back_fn)(int32_t, double, double, int32_t);
+static mb_back_fn back_cb;
+static int back_on;
+static int go_back(void) {
+  if (!back_cb || !back_on) return 0;
+  back_cb(2, 0, 1, 0);
+  return 1;
+}
+
 static HWND hwnd;
 static int want_frame;
 static double wake_at = -1;  // mb_now_ms() of the earliest wake_after, or -1
@@ -260,6 +270,12 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_MOUSEWHEEL: wheel(wp, lp, 0); return 0;
     case WM_MOUSEHWHEEL: wheel(wp, lp, 1); return 0;
     case WM_KEYDOWN: key_down(wp); return 0;
+    case WM_SYSKEYDOWN:
+      if (wp == VK_LEFT && go_back()) return 0;
+      break;
+    case WM_XBUTTONUP:
+      if (GET_XBUTTON_WPARAM(wp) == XBUTTON1) go_back();
+      return TRUE;
     case WM_CHAR: char_in((WCHAR)wp); return 0;
     case WM_SETFOCUS:
       if (ime_active) {
@@ -346,7 +362,7 @@ static void run_script_step(int step) {
     }
     want_frame = 1;
   } else if (strcmp(script, "shot") == 0) {
-    if (step == 30) shot("main");
+    if (step == 30) shot(getenv("MBUI_SHOT_NAME") ? getenv("MBUI_SHOT_NAME") : "main");
     if (step == 31) exit(0);
     want_frame = 1;
   }
@@ -375,13 +391,17 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   WCHAR *t = (WCHAR *)calloc((size_t)n + 1, sizeof(WCHAR));
   memcpy(t, title, (size_t)n * sizeof(WCHAR));
   DWORD style = WS_OVERLAPPEDWINDOW;
-  hwnd = CreateWindowExW(0, L"mbui", t, style, CW_USEDEFAULT, CW_USEDEFAULT, 900, 720, NULL, NULL,
+  // MBUI_WIN=<w>x<h>: the client area's size in points (a phone's, for the narrow layouts); 900 x 720 by default
+  double ww = 900, wh = 720;
+  const char *win = getenv("MBUI_WIN");
+  if (win) sscanf(win, "%lfx%lf", &ww, &wh);
+  hwnd = CreateWindowExW(0, L"mbui", t, style, CW_USEDEFAULT, CW_USEDEFAULT, (int)ww, (int)wh, NULL, NULL,
                          wc.hInstance, NULL);
   free(t);
-  // a 900 x 720 point client area at the monitor's scale
+  // that client area at the monitor's scale
   UINT dpi = GetDpiForWindow(hwnd);
   scale = dpi / 96.0;
-  RECT r = {0, 0, (LONG)lround(900 * scale), (LONG)lround(720 * scale)};
+  RECT r = {0, 0, (LONG)lround(ww * scale), (LONG)lround(wh * scale)};
   AdjustWindowRectExForDpi(&r, style, FALSE, 0, dpi);
   SetWindowPos(hwnd, NULL, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER);
   ImmAssociateContextEx(hwnd, NULL, 0);  // no input method until an editor has focus
@@ -487,6 +507,21 @@ int32_t mb_host_bench_mode(void) {
 }
 
 void mb_host_exit(int32_t code) { exit(code); }
+
+void mb_host_set_back(mb_back_fn f) { back_cb = f; }
+void mb_host_back_enabled(int32_t on) { back_on = on; }
+
+moonbit_string_t mb_host_env(moonbit_string_t name) {
+  int n = Moonbit_array_length(name);
+  WCHAR *k = (WCHAR *)calloc((size_t)n + 1, sizeof(WCHAR));
+  memcpy(k, name, (size_t)n * sizeof(WCHAR));
+  const WCHAR *v = _wgetenv(k);
+  free(k);
+  int len = v ? (int)wcslen(v) : 0;
+  moonbit_string_t out = moonbit_make_string_raw(len);
+  if (len) memcpy(out, v, (size_t)len * sizeof(WCHAR));
+  return out;
+}
 
 double mb_host_mem_bytes(void) {
   PROCESS_MEMORY_COUNTERS_EX pmc = {sizeof pmc};

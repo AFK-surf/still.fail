@@ -13,7 +13,7 @@
             <data android:scheme="https" />
         </intent>
     </queries>
-    <application android:label="MoonBit UI" android:hasCode="true" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <application android:label="MoonBit UI" android:hasCode="true" android:enableOnBackInvokedCallback="true" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <!-- singleTask, as still.fail's: coming back (BrowserLogin, or the page's link) closes the Custom Tab above it -->
         <activity android:name=".MainActivity" android:exported="true"
             android:launchMode="singleTask"

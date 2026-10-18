@@ -39,7 +39,7 @@ id<MTLTexture> mb_image_texture(int iid);
 
 // text (apple_text.m)
 extern double mb_text_scale;
-CTFontRef mb_platform_font(double size, int weight); // per platform
+CTFontRef mb_platform_font(double size, int weight, int mono); // per platform, retained
 moonbit_string_t mb_string_from_ns(NSString *s);
 NSString *mb_ns_from_string(moonbit_string_t s);
 

@@ -55,12 +55,12 @@ static int frames_drawn;
 
 double mb_now_ms(void) { return CACurrentMediaTime() * 1000.0; }
 
-CTFontRef mb_platform_font(double size, int weight) {
+CTFontRef mb_platform_font(double size, int weight, int mono) {
   UIFontWeight w = weight >= 700 ? UIFontWeightBold
                    : weight >= 600 ? UIFontWeightSemibold
                    : weight >= 500 ? UIFontWeightMedium
                                    : UIFontWeightRegular;
-  UIFont *f = [UIFont systemFontOfSize:size weight:w];
+  UIFont *f = mono ? [UIFont monospacedSystemFontOfSize:size weight:w] : [UIFont systemFontOfSize:size weight:w];
   return (CTFontRef)CFBridgingRetain(f);
 }
 
@@ -422,4 +422,17 @@ double mb_host_mem_bytes(void) {
   mach_msg_type_number_t n = TASK_VM_INFO_COUNT;
   if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &n) != KERN_SUCCESS) return 0;
   return (double)info.phys_footprint;
+}
+
+// Back (host_native.mbt `set_back`): iOS has no system back; a page's own swipe from the left edge is MoonBit's,
+// from the touches. Kept for a hardware keyboard's later.
+typedef void (*mb_back_fn)(int32_t, double, double, int32_t);
+static mb_back_fn back_cb;
+static int back_on;
+void mb_host_set_back(mb_back_fn f) { back_cb = f; }
+void mb_host_back_enabled(int32_t on) { back_on = on; }
+
+moonbit_string_t mb_host_env(moonbit_string_t name) {
+  const char *v = getenv(mb_ns_from_string(name).UTF8String);
+  return mb_string_from_ns(v ? [NSString stringWithUTF8String:v] ?: @"" : @"");
 }

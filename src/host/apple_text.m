@@ -8,6 +8,7 @@ double mb_text_scale = 2.0;
 typedef struct {
   double size;
   int weight;
+  int style;  // 1 slanted, 2 the code face
   int done;
   double u, v, w, h, ox, oy;
   int color;
@@ -32,19 +33,31 @@ NSString *mb_ns_from_string(moonbit_string_t s) {
   return [[NSString alloc] initWithCharacters:(const unichar *)s length:Moonbit_array_length(s)];
 }
 
-static CTFontRef font_for(double size, int weight) {
+// The system font (style & 2: its monospaced face) at this size and weight;
+// style & 1 its italic. A face without one (and what the cascade draws a
+// cluster in, PingFang's Han) is slanted 12° as it is rasterized, as
+// browsers synthesize an oblique.
+static CTFontRef font_for(double size, int weight, int style) {
   if (!fonts) fonts = [NSMutableDictionary new];
-  NSString *k = [NSString stringWithFormat:@"%g/%d", size, weight];
+  NSString *k = [NSString stringWithFormat:@"%g/%d/%d", size, weight, style];
   id f = fonts[k];
   if (!f) {
-    f = (__bridge_transfer id)mb_platform_font(size, weight);
+    CTFontRef base = mb_platform_font(size, weight, (style & 2) != 0);
+    if (style & 1) {
+      CTFontRef it = CTFontCreateCopyWithSymbolicTraits(base, 0, NULL, kCTFontTraitItalic, kCTFontTraitItalic);
+      if (it) {
+        CFRelease(base);
+        base = it;
+      }
+    }
+    f = (__bridge_transfer id)base;
     fonts[k] = f;
   }
   return (__bridge CTFontRef)f;
 }
 
-void mb_host_font_metrics(double size, int32_t weight, double *out) {
-  CTFontRef f = font_for(size, weight);
+void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *out) {
+  CTFontRef f = font_for(size, weight, style);
   out[0] = CTFontGetAscent(f);
   out[1] = CTFontGetDescent(f);
   out[2] = round(size * 1.42);
@@ -59,12 +72,12 @@ static CTLineRef make_line(NSString *s, CTFontRef f) {
   return CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)as);
 }
 
-static int intern(NSString *cluster, double size, int weight) {
+static int intern(NSString *cluster, double size, int weight, int style) {
   if (!keys) {
     keys = [NSMutableDictionary new];
     texts = [NSMutableArray new];
   }
-  NSString *k = [NSString stringWithFormat:@"%@\x01%g\x01%d", cluster, size, weight];
+  NSString *k = [NSString stringWithFormat:@"%@\x01%g\x01%d\x01%d", cluster, size, weight, style];
   NSNumber *n = keys[k];
   if (n) return n.intValue;
   if (n_entries == cap_entries) {
@@ -72,18 +85,18 @@ static int intern(NSString *cluster, double size, int weight) {
     entries = realloc(entries, sizeof(glyph_entry) * cap_entries);
   }
   int id_ = n_entries++;
-  entries[id_] = (glyph_entry){size, weight, 0, 0, 0, 0, 0, 0, 0, 0};
+  entries[id_] = (glyph_entry){size, weight, style, 0, 0, 0, 0, 0, 0, 0, 0};
   [texts addObject:cluster];
   keys[k] = @(id_);
   return id_;
 }
 
-int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, double *out) {
+int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, int32_t style, double *out) {
   @autoreleasepool {
     int32_t len = Moonbit_array_length(text);
     int32_t cap = Moonbit_array_length(out) / 4;
     NSString *s = [[NSString alloc] initWithCharacters:(const unichar *)text length:len];
-    CTFontRef f = font_for(size, weight);
+    CTFontRef f = font_for(size, weight, style);
     CTLineRef line = make_line(s, f);
     int32_t k = 0;
     NSUInteger i = 0;
@@ -100,7 +113,7 @@ int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, double
       } else if (c == ' ' || c == '\t') {
         key = -1;
       } else {
-        key = intern([s substringWithRange:r], size, weight);
+        key = intern([s substringWithRange:r], size, weight, style);
       }
       out[k * 4] = r.location;
       out[k * 4 + 1] = r.length;
@@ -120,22 +133,32 @@ static void rasterize(int key) {
   glyph_entry *e = &entries[key];
   e->done = 1;
   NSString *cluster = texts[key];
-  CTFontRef f = font_for(e->size, e->weight);
+  CTFontRef f = font_for(e->size, e->weight, e->style);
   CTLineRef line = make_line(cluster, f);
   double sc = mb_text_scale;
-  // is it drawn from a color font (emoji)?
-  int color = 0;
+  // is it drawn from a color font (emoji)? slanted, from a face with no italic?
+  int color = 0, oblique = 0;
+  const double slant = 0.2126;  // tan 12°
   CFArrayRef runs = CTLineGetGlyphRuns(line);
   if (CFArrayGetCount(runs) > 0) {
     CTRunRef run = CFArrayGetValueAtIndex(runs, 0);
     CTFontRef rf = CFDictionaryGetValue(CTRunGetAttributes(run), kCTFontAttributeName);
-    if (rf && (CTFontGetSymbolicTraits(rf) & kCTFontTraitColorGlyphs)) color = 1;
+    CTFontSymbolicTraits traits = rf ? CTFontGetSymbolicTraits(rf) : 0;
+    if (traits & kCTFontTraitColorGlyphs) color = 1;
+    if ((e->style & 1) && !color && !(traits & kCTFontTraitItalic)) oblique = 1;
   }
   CGRect b = CTLineGetBoundsWithOptions(line, kCTLineBoundsUseGlyphPathBounds);
   if (color || b.size.width <= 0 || b.size.height <= 0) {
     CGFloat asc, desc;
     double w = CTLineGetTypographicBounds(line, &asc, &desc, NULL);
     b = CGRectMake(0, -desc, w, asc + desc);
+  }
+  if (oblique) {
+    // what is above the baseline leans right, what is below left
+    double top = b.origin.y + b.size.height, bottom = b.origin.y;
+    double l = b.origin.x + (bottom < 0 ? slant * bottom : 0);
+    double r = b.origin.x + b.size.width + (top > 0 ? slant * top : 0);
+    b = CGRectMake(l, b.origin.y, r - l, b.size.height);
   }
   // The bitmap's edges on whole pixels from the baseline, a pixel of room
   // around: the baseline then falls on a pixel row of every glyph's bitmap,
@@ -169,6 +192,7 @@ static void rasterize(int key) {
   CGContextScaleCTM(ctx, sc, sc);
   CGContextSetRGBFillColor(ctx, 1, 1, 1, 1);
   CGContextSetShouldSmoothFonts(ctx, false);
+  CGContextSetTextMatrix(ctx, oblique ? CGAffineTransformMake(1, 0, slant, 1, 0, 0) : CGAffineTransformIdentity);
   CGContextSetTextPosition(ctx, -b.origin.x, -b.origin.y);
   CTLineDraw(line, ctx);
   mb_atlas_upload(pack_x, pack_y, pw, ph, px);

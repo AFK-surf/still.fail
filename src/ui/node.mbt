@@ -53,6 +53,9 @@ let kind_image = 5
 let kind_page = 6
 
 ///|
+let kind_rich = 7
+
+///|
 struct Node {
   mut kind : Int
   mut id : Int
@@ -86,6 +89,8 @@ struct Node {
   mut clip : Bool
   mut tx : Double
   mut ty : Double
+  // moved sideways by this share of its own width (a page sliding in)
+  mut slide : Double
   mut opacity : Double
   // text
   mut text : String
@@ -113,6 +118,10 @@ struct Node {
   mut tl : TextLayout?
   // the width tl was laid out in
   mut tl_max : Double
+  // rich text: its runs, and as laid out (in rl_max)
+  mut rich : Rich?
+  mut rl : RichLayout?
+  mut rl_max : Double
   // list rows: index of the item this child shows
   mut item : Int
   // its node in the flex engine, and how the engine measures it as a leaf
@@ -157,6 +166,7 @@ fn Node::new() -> Node {
     clip: false,
     tx: 0.0,
     ty: 0.0,
+    slide: 0.0,
     opacity: 1.0,
     text: "",
     font_size: 14.0,
@@ -176,6 +186,9 @@ fn Node::new() -> Node {
     fh: 0.0,
     tl: None,
     tl_max: 0.0,
+    rich: None,
+    rl: None,
+    rl_max: 0.0,
     item: -1,
     fl: @flex.Node::new(),
     leaf: None,
@@ -217,6 +230,7 @@ fn Node::reset(self : Node) -> Unit {
   self.clip = false
   self.tx = 0.0
   self.ty = 0.0
+  self.slide = 0.0
   self.opacity = 1.0
   self.text = ""
   self.font_size = 14.0
@@ -236,6 +250,9 @@ fn Node::reset(self : Node) -> Unit {
   self.fh = 0.0
   self.tl = None
   self.tl_max = 0.0
+  self.rich = None
+  self.rl = None
+  self.rl_max = 0.0
   self.item = -1
 }
 

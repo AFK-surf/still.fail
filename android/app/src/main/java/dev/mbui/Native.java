@@ -13,6 +13,7 @@ final class Native {
     static native void pointer(int kind, float x, float y);
     static native void key(int code, int mods);
     static native void text(int kind, String s, int a, int b);
+    static native void back(int kind, float x, float progress, int edge);
     static native int atlasTexture();
     static native boolean snapshot(String path);
     static native void imageDone(int id, int tex, int w, int h, int ow, int oh);

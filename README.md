@@ -9,11 +9,19 @@ src/ui      the framework (MoonBit, target independent)
   node.mbt    the tree: pooled nodes linked by index
   layout.mbt  flexbox subset (row/column, gap, padding, align, justify, fill)
   text.mbt    shaping cache, line breaking (UAX #14), caret geometry
+  rich.mbt    rich text: runs (bold, italic, code, links, strike…) in one
+              paragraph, wrapped as one text; offsets, carets and rects
+  nav.mbt     a stack of pages: pushed and popped sliding, swiped back from
+              the left edge or by the system's back gesture
+  motion.mbt  CSS curves (cubic-bezier) for timed motion
   list.mbt    virtual list, rows of any height, anchored scrolling, fling
   editor.mbt  multi-line text field with input-method composition
   widgets.mbt button, segmented control with a spring indicator
   scene.mbt   paint: one flat array of 24-float instances
   app.mbt     frame loop, input dispatch, bench mode
+src/md      a small Markdown parser (blocks, inlines; still.fail's subset)
+src/sf      still.fail's design system: tokens, parts, Markdown as its
+            messages show it
 src/text    Unicode text segmentation (target independent, no host calls)
   grapheme.mbt   extended grapheme clusters, UAX #29 (caret, backspace)
   linebreak.mbt  line break opportunities, UAX #14 (wrapping)
@@ -29,7 +37,8 @@ src/host    the platform boundary
   win_text.cpp    DirectWrite shaping, Direct2D glyphs into the same atlas
   win_app.c       Win32 window, per-monitor DPI, IMM32 input method
 web/        browser host: WebGL2, canvas-2D text, hidden textarea for IME
-src/demo    the demo: a chat screen with 10,000 messages
+src/demo    the demo: a chat screen with 10,000 messages; MBUI_SCREEN=kit
+            (?MBUI_SCREEN=kit in a browser) its kit: rich text, Markdown, pages
 ```
 
 Every renderer draws the same instances with the same shader (rounded rects

@@ -219,5 +219,10 @@ fn fmt_ms(x : Double) -> String {
 
 ///|
 fn main {
-  @ui.run("MoonBit UI 原型", view)
+  // MBUI_SCREEN=kit: the parts for still.fail's pages (kit.mbt)
+  if @host.env("MBUI_SCREEN") == "kit" {
+    @ui.run("MoonBit UI 组件", kit_view)
+  } else {
+    @ui.run("MoonBit UI 原型", view)
+  }
 }

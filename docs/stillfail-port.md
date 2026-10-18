@@ -37,6 +37,29 @@ meanwhile.
 6. Fields: multi-line composer with IME, selection and the keyboard's insets
    (the editor has most of it).
 
+Done (branch fw-richtext-nav, 2026-10-19):
+
+- 1, rich text: `Ctx::rich(runs)` (src/ui/rich.mbt): runs with their own
+  weight, slant, code face (monospace on a tinted ground, or still.fail's
+  inline code: its own colour, no box), size, colour, strikethrough,
+  underline and links (pressed, tapped: `on_link`), wrapped as one text
+  (UAX #14 over the whole paragraph). Hosts shape and measure by run: a
+  `style` (italic, mono) beside size and weight on every host. The layout
+  answers offsets, carets and a range's rects, for selection later.
+  src/md parses Markdown; `@sf.markdown` draws it as a message does
+  (Markdown.kt). Not yet: tables, code highlighting, a code block's sideways
+  scroll, a link's long-press menu, selection itself.
+- 2, the page stack: `Nav[P]` and `Ctx::nav` (src/ui/nav.mbt), App.kt's
+  Pages: push/pop sliding side by side (300 ms, standard curve), the left
+  edge's swipe and the system's back gesture (`@host.set_back`; Android's
+  OnBackAnimationCallback) following the finger, going on or coming back as
+  App.kt does; pages under the top keep their widgets' state, forgotten when
+  they leave (`on_leave` for what the app keeps, as followed topics). Not
+  yet: Settings' slide from the left, a new chat's rise, the bar's place
+  switch.
+- The demo's kit screen shows both: `MBUI_SCREEN=kit` (`?MBUI_SCREEN=kit`),
+  `scripts/shots.sh kit web-kit`.
+
 ## What the hosts need (platform)
 
 Hermes + shell on Android; secure storage with biometrics (`secure.*`);

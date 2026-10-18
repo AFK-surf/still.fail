@@ -21,6 +21,8 @@ struct ListState {
   // rows in view after the last layout, first to last (-1 when none)
   mut vis_first : Int
   mut vis_last : Int
+  // the page its state belongs to (Ctx::own), which its rows' states do too
+  mut owner : Int
 }
 
 ///|
@@ -94,6 +96,22 @@ pub struct Ctx {
   lists : Map[Int, ListState]
   editors : Map[Int, EditorState]
   springs : Map[Int, Spring]
+  // the page being built (a page of a Nav, by its serial; 0 none), and the
+  // ids of the state each page's widgets made, forgotten with the page
+  mut owner : Int
+  owned : Map[Int, Array[Int]]
+  // back: where it goes this frame (the Nav drawn that can go back) and the
+  // node it is drawn in, as the last frame had them; whether the host was
+  // told that the app takes back; a finger on the left edge (1: there, 2:
+  // moving the page)
+  mut back : ((Int, Double, Double, Double) -> Unit)?
+  mut back_node : Int
+  mut back_edge : Double
+  mut back_next : ((Int, Double, Double, Double) -> Unit)?
+  mut back_node_next : Int
+  mut back_edge_next : Double
+  mut back_told : Bool
+  mut edge : Int
   // output
   mut inst : FixedArray[Double]
   mut ninst : Int
@@ -151,6 +169,16 @@ fn Ctx::new() -> Ctx {
     lists: Map::new(),
     editors: Map::new(),
     springs: Map::new(),
+    owner: 0,
+    owned: Map::new(),
+    back: None,
+    back_node: -1,
+    back_edge: 20.0,
+    back_next: None,
+    back_node_next: -1,
+    back_edge_next: 20.0,
+    back_told: false,
+    edge: 0,
     inst: FixedArray::make(24 * 4096, 0.0),
     ninst: 0,
     ime_sig: "",
@@ -477,6 +505,7 @@ pub fn Ctx::spring(
       }
       let s = { x, v: 0.0, target, frame: -1 }
       self.springs[id] = s
+      self.own(id)
       s
     }
   }
@@ -543,4 +572,18 @@ pub fn Ctx::rect_of(self : Ctx, id : Int) -> (Double, Double, Double, Double)? {
 /// The pointer, and whether it is down.
 pub fn Ctx::pointer(self : Ctx) -> (Double, Double, Bool) {
   (self.px, self.py, self.down)
+}
+
+///|
+/// Puts `s` on the system's clipboard.
+pub fn Ctx::copy_text(self : Ctx, s : String) -> Unit {
+  ignore(self)
+  h_clipboard_set(s)
+}
+
+///|
+/// A frame again `ms` from now (for what changes then: words that say
+/// "copied" for a while), without frames in between.
+pub fn Ctx::wake_in(self : Ctx, ms : Double) -> Unit {
+  self.wake_at_time(self.now + dmax(ms, 1.0))
 }

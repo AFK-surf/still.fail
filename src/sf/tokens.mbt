@@ -43,6 +43,12 @@ pub(all) struct Palette {
   card : Int64
   /// the narrow screen's quiet button
   chip : Int64
+  /// links (--blue)
+  blue : Int64
+  /// inline code's words (--code-inline), a code block's ground (the text
+  /// at 4% in the canvas)
+  code_ink : Int64
+  code_ground : Int64
 }
 
 ///|
@@ -169,6 +175,9 @@ let wide_light : Palette = {
   // the text at 4% over the canvas (pages.css.ts cardGround)
   card: 0xF6F6F7FFL,
   chip: 0xEFECE6FFL,
+  blue: 0x1559C4FFL,
+  code_ink: 0x7C3FA0FFL,
+  code_ground: 0xF5F5F5FFL,
 }
 
 ///|
@@ -200,6 +209,9 @@ let wide_dark : Palette = {
   on_primary: 0x1F2023FFL,
   card: 0x28292CFFL,
   chip: 0x313237FFL,
+  blue: 0x81AEFAFFL,
+  code_ink: 0xC9A2E6FFL,
+  code_ground: 0x26272AFFL,
 }
 
 ///|

@@ -73,14 +73,19 @@ fn check_atlas() -> Unit {
 }
 
 ///|
-/// Ascent, descent and line height of the system font at this size.
-fn font_metrics(size : Double, weight : Int) -> (Double, Double, Double) {
-  let key = (size * 10.0).to_int() * 1000 + weight
+/// Ascent, descent and line height of the system font at this size (its
+/// code face, slanted: `style`, @host.style_mono and style_italic).
+fn font_metrics(
+  size : Double,
+  weight : Int,
+  style? : Int = 0,
+) -> (Double, Double, Double) {
+  let key = ((size * 10.0).to_int() * 1000 + weight) * 4 + style
   match text_cache.metrics.get(key) {
     Some(m) => m
     None => {
       let o = FixedArray::make(3, 0.0)
-      h_font_metrics(size, weight, o)
+      h_font_metrics(size, weight, style, o)
       let m = (o[0], o[1], o[2])
       text_cache.metrics[key] = m
       m
@@ -89,8 +94,8 @@ fn font_metrics(size : Double, weight : Int) -> (Double, Double, Double) {
 }
 
 ///|
-fn shape(text : String, size : Double, weight : Int) -> Shaped {
-  let key = "\{text}\u{1}\{size}\u{1}\{weight}"
+fn shape(text : String, size : Double, weight : Int, style? : Int = 0) -> Shaped {
+  let key = "\{text}\u{1}\{size}\u{1}\{weight}\u{1}\{style}"
   match text_cache.shapes.get(key) {
     Some(s) => s
     None => {
@@ -101,7 +106,7 @@ fn shape(text : String, size : Double, weight : Int) -> Shaped {
       let n = if text.length() == 0 {
         0
       } else {
-        h_shape(text, size, weight, out)
+        h_shape(text, size, weight, style, out)
       }
       let starts = Array::new(capacity=n)
       let lens = Array::new(capacity=n)

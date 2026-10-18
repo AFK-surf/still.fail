@@ -66,6 +66,11 @@ fn leaf_size(
   if n.kind == kind_text {
     let tl = n.text_layout(max_w)
     (if wm == Exactly { w } else { tl.w }, tl.h)
+  } else if n.kind == kind_rich {
+    match n.rich_layout(max_w) {
+      Some(rl) => (if wm == Exactly { w } else { rl.w }, rl.h)
+      None => (0.0, 0.0)
+    }
   } else if n.kind == kind_editor {
     // an editor takes the width it is offered
     let s = g.editor_display(n)
@@ -135,7 +140,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
         s.align_self = Stretch
       }
     Auto =>
-      if in_row && !(n.kind == kind_text && !n.wrap) {
+      if in_row && !((n.kind == kind_text || n.kind == kind_rich) && !n.wrap) {
         s.shrink = 1.0
       }
   }
@@ -160,6 +165,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
     Auto => ()
   }
   if n.kind == kind_text ||
+    n.kind == kind_rich ||
     n.kind == kind_editor ||
     n.kind == kind_list ||
     n.kind == kind_image {
@@ -201,7 +207,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
     self.place_pager_slot(i)
   }
   let f = n.fl
-  n.x = px + f.left + n.tx
+  n.x = px + f.left + n.tx + n.slide * f.width
   n.y = py + f.top + n.ty
   n.fw = f.width
   n.fh = f.height
@@ -214,6 +220,8 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
     if !n.wrap && tl.w > iw + 0.5 {
       n.tl = Some(ellipsized(n, tl, iw))
     }
+  } else if n.kind == kind_rich {
+    n.rich_layout(iw) |> ignore
   } else if n.kind == kind_editor {
     match self.editors.get(n.id) {
       Some(st) => {

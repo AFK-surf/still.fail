@@ -21,6 +21,7 @@ extern "C" fn ffi_wake_after(ms : Double) -> Unit = "mb_host_wake_after"
 extern "C" fn ffi_font_metrics(
   size : Double,
   weight : Int,
+  style : Int,
   out : FixedArray[Double],
 ) -> Unit = "mb_host_font_metrics"
 
@@ -29,6 +30,7 @@ extern "C" fn ffi_shape(
   text : String,
   size : Double,
   weight : Int,
+  style : Int,
   out : FixedArray[Double],
 ) -> Int = "mb_host_shape"
 
@@ -70,6 +72,15 @@ extern "C" fn ffi_exit(code : Int) -> Unit = "mb_host_exit"
 
 extern "C" fn ffi_mem_bytes() -> Double = "mb_host_mem_bytes"
 
+extern "C" fn ffi_set_back(
+  back : FuncRef[(Int, Double, Double, Int) -> Unit],
+) -> Unit = "mb_host_set_back"
+
+extern "C" fn ffi_back_enabled(on : Int) -> Unit = "mb_host_back_enabled"
+
+#borrow(name)
+extern "C" fn ffi_env(name : String) -> String = "mb_host_env"
+
 ///|
 pub fn run(
   title : String,
@@ -98,18 +109,29 @@ pub fn wake_after(ms : Double) -> Unit {
 }
 
 ///|
-pub fn font_metrics(size : Double, weight : Int, out : FixedArray[Double]) -> Unit {
-  ffi_font_metrics(size, weight, out)
+/// Ascent, descent and line height of the system font (or its code face,
+/// `style` & style_mono; slanted with style_italic) at this size and weight.
+pub fn font_metrics(
+  size : Double,
+  weight : Int,
+  style : Int,
+  out : FixedArray[Double],
+) -> Unit {
+  ffi_font_metrics(size, weight, style, out)
 }
 
 ///|
+/// `text` shaped in that font into grapheme clusters: four numbers each
+/// (start, length, advance, glyph key; -1 for none) in `out`; returns how
+/// many.
 pub fn shape(
   text : String,
   size : Double,
   weight : Int,
+  style : Int,
   out : FixedArray[Double],
 ) -> Int {
-  ffi_shape(text, size, weight, out)
+  ffi_shape(text, size, weight, style, out)
 }
 
 ///|
@@ -170,6 +192,31 @@ pub fn exit(code : Int) -> Unit {
 ///|
 pub fn mem_bytes() -> Double {
   ffi_mem_bytes()
+}
+
+///|
+/// Where the system's back goes (Android's back gesture, predictive or not,
+/// and its back button; a mouse's back button): `back(kind, x, progress,
+/// edge)`, kind 0 a back gesture started at x (logical pixels), 1 it moved
+/// (to x, `progress` 0-1 as the system has it), 2 let go to go back (or a
+/// back with no gesture), 3 called off; edge 0 the left, 1 the right.
+/// Called before `run`.
+pub fn set_back(back : FuncRef[(Int, Double, Double, Int) -> Unit]) -> Unit {
+  ffi_set_back(back)
+}
+
+///|
+/// Whether the app takes back now (a page to go back to): when not, the
+/// system does what it does (Android leaves the app).
+pub fn back_enabled(on : Bool) -> Unit {
+  ffi_back_enabled(if on { 1 } else { 0 })
+}
+
+///|
+/// An environment variable ("" when unset; in a browser, the page's query
+/// parameter of that name).
+pub fn env(name : String) -> String {
+  ffi_env(name)
 }
 
 // Images: decoded off the UI thread to at most max_px on the long side,

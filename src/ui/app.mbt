@@ -34,6 +34,7 @@ struct Bench {
 pub fn run(title : String, view : (Ctx) -> Unit) -> Unit {
   g_view.val = view
   bench.mode = @host.bench_mode()
+  @host.set_back(fn(k, x, p, e) { on_back(k, x, p, e) })
   @host.run(
     title,
     fn(w, h, s, t) { on_frame(w, h, s, t) },
@@ -63,6 +64,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let t0 = h_now()
   c.count = 0
   c.cur = -1
+  c.back_next = None
+  c.back_node_next = -1
   let root = c.alloc(kind_box)
   c.nodes[root].w = Px(w)
   c.nodes[root].h = Px(h)
@@ -78,6 +81,18 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   c.next_scroll_ids.clear()
   c.next_scroll_rects.clear()
   c.paint(root, 1.0)
+  // back goes where the stack drawn now says (Ctx::nav, while building)
+  c.back = c.back_next
+  c.back_node = c.back_node_next
+  c.back_edge = c.back_edge_next
+  let takes = match c.back {
+    Some(_) => true
+    None => false
+  }
+  if takes != c.back_told {
+    c.back_told = takes
+    h_back_enabled(takes)
+  }
   let hi = c.hit_ids
   c.hit_ids = c.next_hit_ids
   c.next_hit_ids = hi
@@ -197,6 +212,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
       None => ()
     }
     c.editor_drag = false
+    c.edge = if c.on_edge(x, y) { 1 } else { 0 }
     match c.editors.get(target) {
       Some(st) => {
         c.focus = target
@@ -219,7 +235,9 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
   } else if kind == 1 {
     c.hover = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.down {
-      if c.editor_drag {
+      if c.edge > 0 && c.edge_move(x, y, t) {
+        ()
+      } else if c.editor_drag {
         match c.editors.get(c.active) {
           Some(st) =>
             match st.tl {
@@ -260,6 +278,10 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
       c.last_t = t
     }
   } else if kind == 2 {
+    if c.edge == 2 {
+      c.back_gesture(2, x, t)
+    }
+    c.edge = 0
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.active != 0 && target == c.active && !c.dragging {
       c.clicked.push(c.active)
@@ -281,9 +303,91 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
     c.active = 0
     c.editor_drag = false
   } else {
+    if c.edge == 2 {
+      c.back_gesture(3, x, t)
+    }
+    c.edge = 0
     c.down = false
     c.dragging = false
     c.active = 0
+  }
+  h_request_frame()
+}
+
+///|
+/// Whether a press at (x, y) is on the left edge of the stack that takes
+/// back (Ctx::nav), where a swipe back starts.
+fn Ctx::on_edge(self : Ctx, x : Double, y : Double) -> Bool {
+  match self.back {
+    Some(_) if self.back_node >= 0 && self.back_node < self.count => {
+      let n = self.nodes[self.back_node]
+      x >= n.x && x < n.x + self.back_edge && y >= n.y && y < n.y + n.fh
+    }
+    _ => false
+  }
+}
+
+///|
+/// The back gesture's step to the stack that takes back: x in its own
+/// terms (from its left), its width.
+fn Ctx::back_gesture(self : Ctx, kind : Int, x : Double, t : Double) -> Unit {
+  match self.back {
+    Some(f) => {
+      let (left, w) = if self.back_node >= 0 && self.back_node < self.count {
+        let n = self.nodes[self.back_node]
+        (n.x, n.fw)
+      } else {
+        (0.0, self.width)
+      }
+      f(kind, x - left, w, t)
+    }
+    None => ()
+  }
+}
+
+///|
+/// A finger that went down on the left edge: once it has moved sideways
+/// more than up or down, it moves the page back (and nothing under it sees
+/// it); up or down first, it is the list's. True while it is the page's.
+fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
+  if self.edge == 1 {
+    let dx = x - self.press_x
+    let dy = y - self.press_y
+    if dx > 6.0 && dx.abs() > dy.abs() {
+      self.edge = 2
+      self.active = 0
+      self.dragging = true
+      self.drag_scroll = 0
+      self.editor_drag = false
+      self.back_gesture(0, self.press_x, self.last_t)
+    } else if dy.abs() > 6.0 || dx < -6.0 {
+      self.edge = 0
+    }
+  }
+  if self.edge == 2 {
+    self.back_gesture(1, x, t)
+    self.last_x = x
+    self.last_y = y
+    self.last_t = t
+    return true
+  }
+  false
+}
+
+///|
+/// The system's back (host_native.mbt set_back): its gesture followed (x
+/// from the edge it came from), let go to go back, called off; or a back
+/// with no gesture.
+fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
+  let c = g
+  let t = h_now()
+  // from the right edge, the finger's way is mirrored
+  let from_left = if edge == 1 { c.width - x } else { x }
+  match kind {
+    0 => c.back_gesture(0, from_left, t)
+    1 => c.back_gesture(1, from_left, t)
+    2 => c.back_gesture(4, 0.0, t)
+    _ => c.back_gesture(3, 0.0, t)
   }
   h_request_frame()
 }

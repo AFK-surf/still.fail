@@ -18,12 +18,14 @@
 #pragma comment(lib, "windowscodecs.lib")
 
 static const WCHAR *FAMILY = L"Segoe UI";
+static const WCHAR *MONO = L"Consolas";  // the code face (style & 2)
 static const int RT_SIZE = 512;  // largest cluster bitmap, in pixels
 
 typedef struct {
   int off, len;  // the cluster's text in pool
   double size;
   int weight;
+  int style;  // 1 italic, 2 the code face
   int done;
   double u, v, w, h, ox, oy;
   int color;
@@ -47,7 +49,7 @@ static int *table;  // open addressing: entry index + 1, 0 is empty
 static size_t table_cap;
 static int pack_x, pack_y, pack_h;
 static int generation;
-static struct { double size; int weight; IDWriteTextFormat *f; } formats[32];
+static struct { double size; int weight; int style; IDWriteTextFormat *f; } formats[32];
 static int n_formats;
 
 static void init(void) {
@@ -86,11 +88,12 @@ static void init(void) {
   wic->CreateBitmap(RT_SIZE, RT_SIZE, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnDemand, &bitmap);
 }
 
-static IDWriteTextFormat *format_for(double size, int weight) {
+static IDWriteTextFormat *format_for(double size, int weight, int style) {
   for (int i = 0; i < n_formats; i++)
-    if (formats[i].size == size && formats[i].weight == weight) return formats[i].f;
+    if (formats[i].size == size && formats[i].weight == weight && formats[i].style == style) return formats[i].f;
   IDWriteTextFormat *f = NULL;
-  dw->CreateTextFormat(FAMILY, NULL, (DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STYLE_NORMAL,
+  dw->CreateTextFormat((style & 2) ? MONO : FAMILY, NULL, (DWRITE_FONT_WEIGHT)weight,
+                       (style & 1) ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
                        DWRITE_FONT_STRETCH_NORMAL, (FLOAT)size, L"zh-cn", &f);
   f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
   if (n_formats == 32) {
@@ -99,13 +102,14 @@ static IDWriteTextFormat *format_for(double size, int weight) {
   }
   formats[n_formats].size = size;
   formats[n_formats].weight = weight;
+  formats[n_formats].style = style;
   formats[n_formats++].f = f;
   return f;
 }
 
-static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int weight) {
+static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int weight, int style) {
   IDWriteTextLayout *l = NULL;
-  dw->CreateTextLayout(s, (UINT32)len, format_for(size, weight), 1e6f, 1e6f, &l);
+  dw->CreateTextLayout(s, (UINT32)len, format_for(size, weight, style), 1e6f, 1e6f, &l);
   IDWriteTextLayout2 *l2 = NULL;
   if (SUCCEEDED(l->QueryInterface(__uuidof(IDWriteTextLayout2), (void **)&l2))) {
     l2->SetFontFallback(fallback);
@@ -116,7 +120,7 @@ static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int 
   return l;
 }
 
-extern "C" void mb_host_font_metrics(double size, int32_t weight, double *out) {
+extern "C" void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *out) {
   init();
   IDWriteFontCollection *fc = NULL;
   IDWriteFontFamily *fam = NULL;
@@ -128,10 +132,10 @@ extern "C" void mb_host_font_metrics(double size, int32_t weight, double *out) {
   m.ascent = 2210;
   m.descent = 514;
   dw->GetSystemFontCollection(&fc, FALSE);
-  if (SUCCEEDED(fc->FindFamilyName(FAMILY, &i, &found)) && found &&
+  if (SUCCEEDED(fc->FindFamilyName((style & 2) ? MONO : FAMILY, &i, &found)) && found &&
       SUCCEEDED(fc->GetFontFamily(i, &fam)) &&
       SUCCEEDED(fam->GetFirstMatchingFont((DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STRETCH_NORMAL,
-                                          DWRITE_FONT_STYLE_NORMAL, &font)))
+                                          (style & 1) ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, &font)))
     font->GetMetrics(&m);
   if (font) font->Release();
   if (fam) fam->Release();
@@ -141,30 +145,31 @@ extern "C" void mb_host_font_metrics(double size, int32_t weight, double *out) {
   out[2] = round(size * 1.42);
 }
 
-static uint32_t hash(const WCHAR *s, int len, double size, int weight) {
+static uint32_t hash(const WCHAR *s, int len, double size, int weight, int style) {
   uint32_t h = 2166136261u;
   for (int i = 0; i < len; i++) h = (h ^ s[i]) * 16777619u;
   h = (h ^ (uint32_t)(size * 64)) * 16777619u;
+  h = (h ^ (uint32_t)style) * 16777619u;
   return (h ^ (uint32_t)weight) * 16777619u;
 }
 
-static int same(const glyph_entry *e, const WCHAR *s, int len, double size, int weight) {
-  return e->len == len && e->size == size && e->weight == weight &&
+static int same(const glyph_entry *e, const WCHAR *s, int len, double size, int weight, int style) {
+  return e->len == len && e->size == size && e->weight == weight && e->style == style &&
          memcmp(pool + e->off, s, (size_t)len * sizeof(WCHAR)) == 0;
 }
 
 static void table_put(int id) {
   glyph_entry *e = &entries[id];
-  size_t i = hash(pool + e->off, e->len, e->size, e->weight) & (table_cap - 1);
+  size_t i = hash(pool + e->off, e->len, e->size, e->weight, e->style) & (table_cap - 1);
   while (table[i]) i = (i + 1) & (table_cap - 1);
   table[i] = id + 1;
 }
 
-static int intern(const WCHAR *s, int len, double size, int weight) {
+static int intern(const WCHAR *s, int len, double size, int weight, int style) {
   if (table_cap) {
-    size_t i = hash(s, len, size, weight) & (table_cap - 1);
+    size_t i = hash(s, len, size, weight, style) & (table_cap - 1);
     for (; table[i]; i = (i + 1) & (table_cap - 1))
-      if (same(&entries[table[i] - 1], s, len, size, weight)) return table[i] - 1;
+      if (same(&entries[table[i] - 1], s, len, size, weight, style)) return table[i] - 1;
   }
   if (n_entries == cap_entries) {
     cap_entries = cap_entries ? cap_entries * 2 : 1024;
@@ -176,7 +181,7 @@ static int intern(const WCHAR *s, int len, double size, int weight) {
   }
   memcpy(pool + pool_len, s, (size_t)len * sizeof(WCHAR));
   int id = n_entries++;
-  entries[id] = {(int)pool_len, len, size, weight, 0, 0, 0, 0, 0, 0, 0, 0};
+  entries[id] = {(int)pool_len, len, size, weight, style, 0, 0, 0, 0, 0, 0, 0, 0};
   pool_len += len;
   if ((size_t)n_entries * 2 > table_cap) {
     free(table);
@@ -189,12 +194,12 @@ static int intern(const WCHAR *s, int len, double size, int weight) {
   return id;
 }
 
-extern "C" int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, double *out) {
+extern "C" int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, int32_t style, double *out) {
   init();
   int32_t len = Moonbit_array_length(text);
   int32_t cap = Moonbit_array_length(out) / 4;
   const WCHAR *s = (const WCHAR *)text;
-  IDWriteTextLayout *l = make_layout(s, len, size, weight);
+  IDWriteTextLayout *l = make_layout(s, len, size, weight, style);
   static DWRITE_CLUSTER_METRICS *cm;
   static UINT32 cm_cap;
   UINT32 n = 0;
@@ -215,7 +220,7 @@ extern "C" int32_t mb_host_shape(moonbit_string_t text, double size, int32_t wei
     } else if (c == ' ' || c == '\t') {
       key = -1;
     } else {
-      key = intern(s + pos, clen, size, weight);
+      key = intern(s + pos, clen, size, weight, style);
     }
     out[k * 4] = pos;
     out[k * 4 + 1] = clen;
@@ -307,7 +312,7 @@ static void ensure_target(void) {
 static void rasterize(int key) {
   glyph_entry *e = &entries[key];
   e->done = 1;
-  IDWriteTextLayout *l = make_layout(pool + e->off, e->len, e->size, e->weight);
+  IDWriteTextLayout *l = make_layout(pool + e->off, e->len, e->size, e->weight, e->style);
   double sc = text_scale;
   ColorProbe probe;
   l->Draw(NULL, &probe, 0, 0);

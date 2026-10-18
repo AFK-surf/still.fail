@@ -18,6 +18,7 @@ typedef void (*mb_pointer_fn)(int32_t, double, double, int32_t);
 typedef void (*mb_wheel_fn)(double, double, double, double, int32_t);
 typedef void (*mb_key_fn)(int32_t, int32_t);
 typedef void (*mb_text_fn)(int32_t, moonbit_string_t, int32_t, int32_t);
+typedef void (*mb_back_fn)(int32_t, double, double, int32_t);
 
 static struct {
   mb_frame_fn frame;
@@ -31,7 +32,8 @@ static JavaVM *vm;
 static jclass host_cls, text_cls, images_cls, login_cls;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
-    m_bl_open, m_bl_back, m_bl_end;
+    m_bl_open, m_bl_back, m_bl_end, m_back_enabled;
+static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
 
@@ -62,8 +64,9 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_log = (*env)->GetStaticMethodID(env, host_cls, "log", "(Ljava/lang/String;)V");
   m_bench = (*env)->GetStaticMethodID(env, host_cls, "benchMode", "()I");
   m_exit = (*env)->GetStaticMethodID(env, host_cls, "exit", "(I)V");
-  m_metrics = (*env)->GetStaticMethodID(env, text_cls, "fontMetrics", "(DI[D)V");
-  m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DI[D)I");
+  m_back_enabled = (*env)->GetStaticMethodID(env, host_cls, "backEnabled", "(Z)V");
+  m_metrics = (*env)->GetStaticMethodID(env, text_cls, "fontMetrics", "(DII[D)V");
+  m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
   m_generation = (*env)->GetStaticMethodID(env, text_cls, "atlasGeneration", "()I");
   m_img_load = (*env)->GetStaticMethodID(env, images_cls, "load", "(ILjava/lang/String;[BI)V");
@@ -330,6 +333,13 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_text(JNIEnv *env, jclass c, jint kin
   if (cb.text) cb.text(kind, mstr(env, s), a, b);
 }
 
+// The system's back (MainActivity: OnBackAnimationCallback, its predictive back gesture; on older systems
+// onBackPressed): kind 0 started, 1 moved, 2 gone back, 3 called off; x in logical pixels, edge 0 left, 1 right.
+JNIEXPORT void JNICALL Java_dev_mbui_Native_back(JNIEnv *env, jclass c, jint kind, jfloat x, jfloat progress,
+                                                jint edge) {
+  if (back_cb) back_cb(kind, x, progress, edge);
+}
+
 // ---------------------------------------------------------------------------
 // The host API MoonBit calls
 
@@ -359,16 +369,16 @@ void mb_host_wake_after(double ms) {
   (*env)->CallStaticVoidMethod(env, host_cls, m_wake_after, ms);
 }
 
-void mb_host_font_metrics(double size, int32_t weight, double *out) {
+void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *out) {
   JNIEnv *env = env_();
-  (*env)->CallStaticVoidMethod(env, text_cls, m_metrics, size, weight, small_buf);
+  (*env)->CallStaticVoidMethod(env, text_cls, m_metrics, size, weight, style, small_buf);
   (*env)->GetDoubleArrayRegion(env, small_buf, 0, 3, out);
 }
 
-int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, double *out) {
+int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, int32_t style, double *out) {
   JNIEnv *env = env_();
   jstring s = jstr(env, text);
-  jint n = (*env)->CallStaticIntMethod(env, text_cls, m_shape, s, size, weight, shape_buf);
+  jint n = (*env)->CallStaticIntMethod(env, text_cls, m_shape, s, size, weight, style, shape_buf);
   (*env)->DeleteLocalRef(env, s);
   int32_t cap = Moonbit_array_length(out) / 4;
   if (n > cap) n = cap;
@@ -418,6 +428,46 @@ int32_t mb_host_bench_mode(void) {
 void mb_host_exit(int32_t code) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_exit, code);
+}
+
+void mb_host_set_back(mb_back_fn f) { back_cb = f; }
+
+void mb_host_back_enabled(int32_t on) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, host_cls, m_back_enabled, (jboolean)(on != 0));
+}
+
+// MainActivity sets the intent's `env` extras as the process's environment before the app starts.
+moonbit_string_t mb_host_env(moonbit_string_t name) {
+  int n = Moonbit_array_length(name);
+  char k[256];
+  if (n >= (int)sizeof k) n = sizeof k - 1;
+  for (int i = 0; i < n; i++) k[i] = name[i] < 128 ? (char)name[i] : '?';
+  k[n] = 0;
+  const unsigned char *v = (const unsigned char *)getenv(k);
+  if (!v) return moonbit_make_string_raw(0);
+  // UTF-8 to UTF-16
+  size_t len = strlen((const char *)v);
+  uint16_t *tmp = malloc((len + 1) * 2 * sizeof(uint16_t));
+  int m = 0;
+  for (size_t i = 0; i < len;) {
+    uint32_t cp = v[i];
+    int extra = cp >= 0xF0 ? 3 : cp >= 0xE0 ? 2 : cp >= 0xC0 ? 1 : 0;
+    if (extra) cp &= (0x3F >> extra);
+    i++;
+    for (int j = 0; j < extra && i < len; j++, i++) cp = (cp << 6) | (v[i] & 0x3F);
+    if (cp >= 0x10000) {
+      cp -= 0x10000;
+      tmp[m++] = (uint16_t)(0xD800 + (cp >> 10));
+      tmp[m++] = (uint16_t)(0xDC00 + (cp & 0x3FF));
+    } else {
+      tmp[m++] = (uint16_t)cp;
+    }
+  }
+  moonbit_string_t out = moonbit_make_string_raw(m);
+  memcpy(out, tmp, (size_t)m * 2);
+  free(tmp);
+  return out;
 }
 
 double mb_host_mem_bytes(void) {

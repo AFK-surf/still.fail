@@ -423,6 +423,7 @@ pub fn Ctx::pager(
         told: index,
       }
       pagers[id] = s
+      self.own(id)
       s
     }
   }

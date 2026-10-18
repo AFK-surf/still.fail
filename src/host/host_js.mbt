@@ -23,17 +23,19 @@ extern "js" fn js_wake_after(ms : Double) -> Unit =
 extern "js" fn js_font_metrics(
   size : Double,
   weight : Int,
+  style : Int,
   out : FixedArray[Double],
 ) -> Unit =
-  #|(s, w, o) => globalThis.__mbhost.fontMetrics(s, w, o)
+  #|(s, w, st, o) => globalThis.__mbhost.fontMetrics(s, w, st, o)
 
 extern "js" fn js_shape(
   text : String,
   size : Double,
   weight : Int,
+  style : Int,
   out : FixedArray[Double],
 ) -> Int =
-  #|(t, s, w, o) => globalThis.__mbhost.shape(t, s, w, o)
+  #|(t, s, w, st, o) => globalThis.__mbhost.shape(t, s, w, st, o)
 
 extern "js" fn js_glyph(key : Int, out : FixedArray[Double]) -> Unit =
   #|(k, o) => globalThis.__mbhost.glyph(k, o)
@@ -77,6 +79,17 @@ extern "js" fn js_exit(code : Int) -> Unit =
 extern "js" fn js_mem_bytes() -> Double =
   #|() => globalThis.__mbhost.memBytes()
 
+extern "js" fn js_set_back(
+  back : FuncRef[(Int, Double, Double, Int) -> Unit],
+) -> Unit =
+  #|(b) => globalThis.__mbhost && globalThis.__mbhost.setBack && globalThis.__mbhost.setBack(b)
+
+extern "js" fn js_back_enabled(on : Bool) -> Unit =
+  #|(on) => globalThis.__mbhost && globalThis.__mbhost.backEnabled && globalThis.__mbhost.backEnabled(on)
+
+extern "js" fn js_env(name : String) -> String =
+  #|(n) => (typeof location !== "undefined" && new URLSearchParams(location.search).get(n)) || ""
+
 ///|
 pub fn run(
   title : String,
@@ -105,8 +118,13 @@ pub fn wake_after(ms : Double) -> Unit {
 }
 
 ///|
-pub fn font_metrics(size : Double, weight : Int, out : FixedArray[Double]) -> Unit {
-  js_font_metrics(size, weight, out)
+pub fn font_metrics(
+  size : Double,
+  weight : Int,
+  style : Int,
+  out : FixedArray[Double],
+) -> Unit {
+  js_font_metrics(size, weight, style, out)
 }
 
 ///|
@@ -114,9 +132,10 @@ pub fn shape(
   text : String,
   size : Double,
   weight : Int,
+  style : Int,
   out : FixedArray[Double],
 ) -> Int {
-  js_shape(text, size, weight, out)
+  js_shape(text, size, weight, style, out)
 }
 
 ///|
@@ -177,6 +196,24 @@ pub fn exit(code : Int) -> Unit {
 ///|
 pub fn mem_bytes() -> Double {
   js_mem_bytes()
+}
+
+///|
+/// Where the system's back goes (host_native.mbt `set_back`); in a browser:
+/// Alt+Left and a mouse's back button.
+pub fn set_back(back : FuncRef[(Int, Double, Double, Int) -> Unit]) -> Unit {
+  js_set_back(back)
+}
+
+///|
+pub fn back_enabled(on : Bool) -> Unit {
+  js_back_enabled(on)
+}
+
+///|
+/// The page's query parameter `name` ("" when there is none).
+pub fn env(name : String) -> String {
+  js_env(name)
 }
 
 ///|

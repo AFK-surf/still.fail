@@ -1,24 +1,38 @@
 #!/bin/bash
 # Screenshots of the demo on every platform, compared with goldens/.
-#   scripts/shots.sh [mac web ios android | windows]   UPDATE=1 accepts them as goldens
-# Writes out/shots/<platform>.png and, where a golden exists,
-# out/shots/<platform>-review.png (golden | new | differences).
+#   scripts/shots.sh [mac kit web web-kit ios android | windows]   UPDATE=1 accepts them as goldens
+# Writes out/shots/<name>.png and, where a golden exists,
+# out/shots/<name>-review.png (golden | new | differences). `kit` (macOS) and
+# `web-kit` are the demo's kit screen (MBUI_SCREEN=kit, a phone's window: rich
+# text, Markdown, pages): kit gives mac-kit (its first page) and mac-kit-swipe
+# (the next page pushed, then swiped halfway back from the left edge).
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac web ios android}
+PLATFORMS=${*:-mac kit web web-kit ios android}
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
 fi
 fail=0
 for p in $PLATFORMS; do
+  names=$p
   case $p in
     mac)
       MODE=release bash scripts/mac.sh build >/dev/null
       rm -rf out/shot-mac; mkdir -p out/shot-mac
       MBUI_BENCH=-1 MBUI_SCRIPT=shot MBUI_SHOT_DIR=$PWD/out/shot-mac ./_build/native/release/build/demo/demo.exe >/dev/null
       cp out/shot-mac/main.png out/shots/mac.png ;;
+    kit)
+      MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-kit; mkdir -p out/shot-kit
+      MBUI_BENCH=-1 MBUI_SCREEN=kit MBUI_WIN=390x844 MBUI_SCRIPT=kit MBUI_SHOT_DIR=$PWD/out/shot-kit ./_build/native/release/build/demo/demo.exe >/dev/null
+      cp out/shot-kit/kit-1-root.png out/shots/mac-kit.png
+      cp out/shot-kit/kit-3-swipe.png out/shots/mac-kit-swipe.png
+      names="mac-kit mac-kit-swipe" ;;
+    web-kit)
+      bash scripts/web.sh build >/dev/null
+      QUERY=MBUI_SCREEN=kit NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-kit.png ;;
     windows)  # on Windows (Git Bash), not part of the default set
       MODE=release bash scripts/win.sh build >/dev/null
       MODE=release bash scripts/win.sh shot >/dev/null
@@ -44,12 +58,14 @@ for p in $PLATFORMS; do
       sleep 4
       $A -s emulator-5580 exec-out screencap -p > out/shots/android.png ;;
   esac
-  if [ "${UPDATE:-}" = 1 ]; then
-    cp out/shots/$p.png goldens/$p.png && echo "$p: golden updated"
-  elif [ -f goldens/$p.png ]; then
-    NODE_PATH=$PWD/out/node/node_modules node scripts/imgdiff.mjs goldens/$p.png out/shots/$p.png out/shots/$p-review.png || fail=1
-  else
-    echo "$p: no golden yet (UPDATE=1 to accept)"
-  fi
+  for p in $names; do
+    if [ "${UPDATE:-}" = 1 ]; then
+      cp out/shots/$p.png goldens/$p.png && echo "$p: golden updated"
+    elif [ -f goldens/$p.png ]; then
+      NODE_PATH=$PWD/out/node/node_modules node scripts/imgdiff.mjs goldens/$p.png out/shots/$p.png out/shots/$p-review.png || fail=1
+    else
+      echo "$p: no golden yet (UPDATE=1 to accept)"
+    fi
+  done
 done
 exit $fail

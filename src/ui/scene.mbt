@@ -211,6 +211,10 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     }
     return
   }
+  if n.kind == kind_rich {
+    self.paint_rich(n, alpha)
+    return
+  }
   if n.kind == kind_editor {
     self.paint_editor(n, alpha)
     return

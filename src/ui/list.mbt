@@ -108,8 +108,10 @@ pub fn Ctx::list(
         seed: 0,
         vis_first: -1,
         vis_last: -1,
+        owner: self.owner,
       }
       self.lists[id] = s
+      self.own(id)
       s
     }
   }
@@ -122,6 +124,7 @@ pub fn Ctx::list(
   st.count = count
   st.row = row
   st.seed = self.id_seed
+  st.owner = self.owner
   if st.vel != 0.0 {
     st.pending = st.pending + st.vel * self.dt
     st.vel = st.vel * 0.997.pow(self.dt)
@@ -150,14 +153,17 @@ pub fn Ctx::list(
 fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let saved_cur = self.cur
   let saved_seed = self.id_seed
+  let saved_owner = self.owner
   self.cur = li
   self.id_seed = st.seed
+  self.owner = st.owner
   let r = self.alloc(kind_box)
   self.nodes[r].item = k
   let row = st.row
   self.with_parent(r, fn() { self.scope(k, fn() { row(k) }) })
   self.id_seed = saved_seed
   self.cur = saved_cur
+  self.owner = saved_owner
   r
 }
 
