@@ -97,6 +97,27 @@ function lockProof(v: any): { base: string; proof: string } | undefined {
   return typeof v?.device === "string" && typeof v?.proof === "string" && v.device.length === 64 && v.proof.length === 128 ? { base: v.device, proof: v.proof } : undefined;
 }
 
+/// How many entries a hello may bring (they come in its first line, MAX_HEAD at most).
+const BROUGHT_MOST = 64;
+
+/// The entries a device brings with its hello (`lock.entries`, docs/workspace-lock.md): what put it in the lock, which
+/// this station has not heard of yet (the cloud, or the device that signed them, has not reached it). Taken as any
+/// are, entry by entry, only onto a lock this station has pinned (they never pin one); whether any was.
+function brought(hello: any, cloud: Cloud, workspace: string): boolean {
+  const raw = hello?.lock?.entries;
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > BROUGHT_MOST) return false;
+  const entries = raw.map(asEntry);
+  if (entries.some((e) => e === null)) return false;
+  const ws = joinedOf(cloud, workspace);
+  if (!cloud.locked(ws)?.state) return false;
+  try {
+    return cloud.takeLock(entries as Entry[], ws) > 0;
+  } catch (e) {
+    log.info("lock", "a device brought lock entries this station does not take", { error: (e as Error).message });
+    return false;
+  }
+}
+
 /// `ws` when it is a workspace the station joined, null for its home one (whose lock is the home's).
 const joinedOf = (cloud: Cloud, ws: string) => (ws && ws !== cloud.home() ? ws : null);
 
@@ -164,6 +185,17 @@ export function inLock(cloud: Cloud, admitted: Admitted, named: string, endpoint
   return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
 }
 
+/// inLock, for a hello that may bring what put the device in the lock (`lock.entries`): not in the lock as this station
+/// has it, the entries it brought are taken (checked as any) and it is asked again.
+export function inLockBringing(cloud: Cloud, admitted: Admitted, named: string, endpoint: string, hello: unknown): Admitted {
+  try {
+    return inLock(cloud, admitted, named, endpoint);
+  } catch (e) {
+    if (!(e instanceof LockRefusal) || !brought(hello, cloud, admitted.viewer.workspace)) throw e;
+    return inLock(cloud, admitted, named, endpoint);
+  }
+}
+
 export type Members = {
   cloud: Cloud;
   admin: Admin;
@@ -203,7 +235,7 @@ export async function serve(m: Members, conn: Connection) {
     const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
     named = admitted.viewer.role;
     if (proof) admitted.viewer.lockDevice = proof;
-    return inLock(m.cloud, admitted, named, device);
+    return inLockBringing(m.cloud, admitted, named, device, line);
   };
   let current: Admitted;
   try {

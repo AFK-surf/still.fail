@@ -11,8 +11,9 @@ export type Sig = { key: string; alg: "Ed25519"; sig: string };
 export type Entry = { v: 1; ws: string; seq: number; prev: string | null; at: number; kind: string; body: unknown; sig: Sig };
 /// How far a lock goes: its last entry's number and hash, and its genesis's hash (which lock it is).
 export type Head = { seq: number; hash: string; genesis: string };
-/// What a connection says of the device in its hello: its base key, and that key's signature for this endpoint.
-export type LockClaim = { device: string; proof: string };
+/// What a connection says of the device in its hello: its base key, and that key's signature for this endpoint;
+/// `entries`, what put it in the lock lately, for a station that has not heard of it yet (views/lock.ts `carried`).
+export type LockClaim = { device: string; proof: string; entries?: Entry[] };
 
 /// JSON with object keys sorted, no space: what is hashed. Only integers, strings, booleans, null, arrays, objects.
 export function canonical(v: unknown): string {

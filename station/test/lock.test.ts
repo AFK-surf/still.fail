@@ -12,7 +12,7 @@ import { type Entry, admit, apply, canonical, endpointBytes, entryHash, fold, ge
 import { applyState } from "../src/cloud/presence.ts";
 import { Cloud, writeState } from "../src/cloud/state.ts";
 import { verifyMember } from "../src/mesh/credential.ts";
-import { inLock, lockRoute } from "../src/mesh/serve.ts";
+import { inLock, inLockBringing, lockRoute } from "../src/mesh/serve.ts";
 import { GrantKey } from "./fake-control-plane.ts";
 
 const WS = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
@@ -403,4 +403,34 @@ test("over the stations' own transport: a station the control plane stuffs in is
   } finally {
     await Promise.all([target!.close(), source!.close(), intruder!.close()]);
   }
+});
+
+test("a device brings what put it in the lock to a station that has not heard of it yet, taken only as any entry is", () => {
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  const at = (who: { sub: string; base: Key }, endpoint: string) => ({ sub: who.sub, email: "", name: "", role: "member", workspace: WS, device: endpoint, lockDevice: { base: who.base.hex, proof: who.base.sign(endpointBytes(WS, endpoint)) } });
+  const admitted = (v: ReturnType<typeof at>) => ({ viewer: v, exp: 4102444800 }) as any;
+  // carol's new phone, approved by alice: the entry is at the cloud, not here.
+  const phone = { sub: "carol", base: ed() };
+  const endpoint = ed().hex;
+  const v = at(phone, endpoint);
+  // Unpinned, what a device brings pins nothing.
+  const approval = signed(after({ seq: 0, head: entryHash(w.first) }, "device", { id: phone.base.hex, sub: "carol", kind: "app", label: "phone" }), w.alice.signer);
+  assert.equal(inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [w.first, approval] } }).viewer.role, "member");
+  assert.equal(cloud.locked(), null, "it goes by the control plane, as before, and pins nothing it was brought");
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first] })), { ...at(w.alice, ed().hex), role: "owner" } as any)[0], 200);
+  assert.throws(() => inLockBringing(cloud, admitted(v), "member", endpoint, {}), LockRefusal, "nothing brought: refused");
+  // Made up, or signed by someone who may not: not taken, refused.
+  const forged = signed(after(cloud.locked()!.state!, "device", { id: phone.base.hex, sub: "carol", kind: "app", label: "phone" }), ed());
+  assert.throws(() => inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [forged] } }), LockRefusal);
+  const forAlice = signed(after(cloud.locked()!.state!, "device", { id: phone.base.hex, sub: "alice", kind: "app", label: "phone" }), w.carol.signer);
+  assert.throws(() => inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [forAlice] } }), LockRefusal);
+  assert.equal(cloud.locked()?.state?.seq, 0);
+  // The approval: taken, and the phone let in on it.
+  assert.equal(inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [approval] } }).viewer.role, "member");
+  assert.equal(cloud.locked()?.state?.seq, 1);
+  // A device it does not name gets nothing from it.
+  const other = { sub: "carol", base: ed() };
+  const otherEnd = ed().hex;
+  assert.throws(() => inLockBringing(cloud, admitted(at(other, otherEnd)), "member", otherEnd, { lock: { entries: [approval] } }), LockRefusal);
 });

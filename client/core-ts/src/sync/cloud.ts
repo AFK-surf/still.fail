@@ -45,6 +45,8 @@ export class CloudSync {
   onRelays: ((relays: string[], entries: string[]) => void) | null = null;
   /// Told when the stations each account reaches may have changed (the station sync follows).
   onReach: (() => void) | null = null;
+  /// The lock entries a hello to a station of the workspace brings (views/lock.ts `carried`): none, null.
+  carry: ((workspace: string) => import("../lock.ts").Entry[] | null) | null = null;
   /// Whose operator lists are synced (as `admin.me` answered).
   readonly #admins = new Set<string>();
 
@@ -374,7 +376,8 @@ export class CloudSync {
   /// `claim`: the device's base key's word that `device` is its own endpoint (lock.ts), told to the cloud with the ask
   /// (it lists the devices for a lock's owner to check) and to the station with the credential.
   credential(workspace: string, device: string, fresh: boolean, main: string | null, claim: LockClaim | null = null): Effect.Effect<Credential, CoreError> {
-    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: claim });
+    const entries = claim === null ? null : (this.carry?.(workspace) ?? null);
+    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: entries ? { ...claim, entries } : claim });
     return Effect.map(this.#credential(workspace, device, fresh, main, claim), claimed);
   }
 

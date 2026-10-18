@@ -52,6 +52,8 @@ const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
 /// How soon before a web page's device runs out its person is reminded.
 export const RENEW_SECS = 5 * 86400;
+/// How much of the lock a hello brings at most (a station reads its first line up to 16 KiB).
+const CARRY_BYTES = 12 * 1024;
 /// How soon a station that refused this device, though the lock as held here names it, is tried again.
 export const BEHIND_MS = 3_000;
 /// A device of the person's own added this recently is pointed out on their other devices.
@@ -165,6 +167,7 @@ export function install(inner: Inner): void {
   hooks.enrolled = enrolled;
   hooks.lockRefused = refused;
   hooks.lockWaiting = waiting;
+  inner.cloudSync.carry = (ws) => carried(inner, ws);
   handlers.lock = (core, call, _progress, _at, ctx) => run(core, call as Of, ctx);
   handlers.lockPrompt = (core, call, _progress, _at, ctx) => runPrompt(core, (call as Extract<Call, { kind: "lockPrompt" }>).name, (call as Extract<Call, { kind: "lockPrompt" }>).params, ctx);
   // The signing key, once (it is the device's).
@@ -311,6 +314,23 @@ function unconfirmed(inner: Inner, ws: string): CoreError {
   const base = part(inner, ws).base ?? bases.get(inner) ?? null;
   const name = nameOf(inner, ws);
   return new CoreError("lock_unconfirmed", base ? t("core-misc.lock.unconfirmed", { name, code: shortCode(base) }) : t("core-misc.lock.unconfirmedNoCode", { name }));
+}
+
+/// What this device brings a station of the workspace as it connects (its hello's `lock.entries`): the entries from the
+/// one that put it in the lock on, as held here, while that was lately (RECENT_SECS): a station that has not heard of
+/// them yet takes them and lets it in (docs/workspace-lock.md 新设备), the approval coming with the device that needs
+/// it. None when it is not in the lock, was put there long ago or by the genesis, or they would not fit a first line.
+function carried(inner: Inner, ws: string): Entry[] | null {
+  const h = held(inner, ws);
+  const base = part(inner, ws).base ?? bases.get(inner) ?? null;
+  if (!h?.head || base === null) return null;
+  const f = fold(h.entries);
+  if (f.disabled || !f.devices.has(base)) return null;
+  let at = h.entries.length - 1;
+  while (at >= 0 && !(h.entries[at]!.kind === "device" && get(h.entries[at]!.body, "id") === base)) at--;
+  if (at < 0 || now(inner) - h.entries[at]!.at > RECENT_SECS) return null;
+  const tail = h.entries.slice(at);
+  return JSON.stringify(tail).length <= CARRY_BYTES ? tail : null;
 }
 
 /// What a control plane that keeps no lock shows.

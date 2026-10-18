@@ -242,3 +242,24 @@ test("a station that refuses this device though the lock names it has not heard 
   await r.host.time.pass(20);
   assert.deepEqual(woke, ["ws/st"], "and woken soon to be");
 });
+
+test("a hello brings what put this device in the lock lately, for a station that has not heard of it yet", async () => {
+  const owner = elsewhere();
+  const r = await rig(() => ({ ws: genesis("ws", owner, false) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const g = r.cloud.chains.get("ws")![0]!;
+  const head = (e: Entry) => ({ seq: e.seq, hash: entryHash(e), genesis: entryHash(g) });
+  const sign = (e: ReturnType<typeof next>): Entry => ({ ...e, sig: { key: owner.id, alg: "Ed25519", sig: owner.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e))])) } });
+  // Not in the lock: nothing to bring.
+  assert.equal(r.core.inner.cloudSync.carry!("ws"), null);
+  const approval = sign(next("ws", head(g), r.host.nowMs() / 1000, "device", { id: ME, sub: "s1", kind: "app", label: "this" }));
+  const another = sign(next("ws", head(approval), r.host.nowMs() / 1000, "device", { id: PHONE, sub: "s2", kind: "app", label: "phone" }));
+  r.cloud.chains.set("ws", [g, approval, another]);
+  r.core.inner.data.put("lock", "ws", { head: head(another), entries: [g, approval, another], requests: [] });
+  assert.deepEqual(r.core.inner.cloudSync.carry!("ws"), [approval, another], "from the one that put it in on");
+  // Put in long since: every station has heard by now.
+  const old = sign(next("ws", head(g), r.host.nowMs() / 1000 - 8 * 86400, "device", { id: ME, sub: "s1", kind: "app", label: "this" }));
+  r.cloud.chains.set("ws", [g, old]);
+  r.core.inner.data.put("lock", "ws", { head: head(old), entries: [g, old], requests: [] });
+  assert.equal(r.core.inner.cloudSync.carry!("ws"), null);
+});
