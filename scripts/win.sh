@@ -18,14 +18,14 @@ sync() {
   mkdir -p $M/src
   cp -p moon.mod $M/
   cp -rp src/. $M/src/
-  # the core (pthreads, dispatch, JavaScriptCore) isn't built for Windows yet
-  rm -rf $M/src/coredemo
   sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp" ]/' \
       -e 's/-fobjc-arc *//' src/host/moon.pkg > $M/src/host/moon.pkg
   # every app (demo, photos…) links no Apple frameworks
   for p in src/*/moon.pkg; do
     grep -q '"is-main"' $p && sed -e '/"cc-link-flags"/d' $p > $M/$p
   done
+  # the core (pthreads, dispatch, JavaScriptCore) isn't built for Windows yet
+  rm -rf $M/src/coredemo
   if ! grep -q win_app.c $M/src/host/moon.pkg || grep -q -e -framework -e '\.m"' $M/src/*/moon.pkg; then
     echo "win.sh: src/host/moon.pkg or an app's moon.pkg no longer has the expected shape" >&2
     exit 1
