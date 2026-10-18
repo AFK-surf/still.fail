@@ -159,6 +159,9 @@ async function main() {
   await page.emulateMedia({ colorScheme: "dark" });
   await switcher("部署", "desktop-deploy-dark");
   await page.emulateMedia({ colorScheme: "light" });
+  // A member, by their email: opens the workspace's settings.
+  const member = await switcher("alice", "desktop-member");
+  check("⌘K finds a member by their email", member.replace(/\s+/g, " ").slice(0, 300), /成员/.test(member) && /alice/i.test(member));
 
   // The phone's search.
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: "zh-CN" });
@@ -173,6 +176,11 @@ async function main() {
   const found = await mobile.locator("body").innerText();
   await mobile.screenshot({ path: join(SHOTS, "phone-duckdb.png") });
   check("the phone's search finds the archived chat's message", found.replace(/\s+/g, " ").slice(0, 300), /DuckDB/.test(found));
+  await mobile.locator('input[type="search"]').fill("alice");
+  await mobile.waitForTimeout(2500);
+  const people = await mobile.locator("body").innerText();
+  await mobile.screenshot({ path: join(SHOTS, "phone-member.png") });
+  check("the phone's search finds a member", people.replace(/\s+/g, " ").slice(0, 300), /成员/.test(people));
 
   // An agent's search: the station's MCP endpoint, as a session asks it.
   const said = await agentSearch(data, dir, "部署");
