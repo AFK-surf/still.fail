@@ -2,7 +2,7 @@
 // chat under the agent's message, on 奏, and on the station page's 登录, in each of its states (a device code, its code
 // copied on a tap and 复制并打开; 在浏览器里登录 for a loopback login, which listens before the page opens, and says so
 // when this phone's port is taken; a page to open; its agent answering the command; ended, a line), 取消 beside; a
-// read-only member only sees how it stands. Pictured as login-cards-light|dark, login-station-light|dark,
+// read-only member only sees how it stands. Pictured as login-cards(-older)-light|dark, login-station-light|dark,
 // login-decision-light|dark (settled.png).
 package fail.still.android.motion
 
@@ -10,8 +10,12 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -111,12 +115,15 @@ class LoginCardTest {
     // ── each state, pictured ──
 
     private fun cards(dark: Boolean) {
-        val h = chat(listOf(device, loopback, taken, question, done, failed), dark)
+        // The chat opens at its end: the newest cards, then (scrolled up) the older ones.
+        val h = chat(listOf(done, failed, question, taken, loopback, device), dark)
         rule.onNodeWithText("ABCD-1234").assertIsDisplayed()
         h.record("login-cards-${if (dark) "dark" else "light"}").run { frame(); end() }
-        rule.onNodeWithText("本机 8085 端口被占用").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("已在 studio 上登录 gh").performScrollTo().assertIsDisplayed()
-        h.record("login-cards-end-${if (dark) "dark" else "light"}").run { frame(); end() }
+        // The list (the composer's field scrolls too, after it).
+        rule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("已在 studio 上登录 gh"))
+        h.settle()
+        rule.onNodeWithText("已在 studio 上登录 gh").assertIsDisplayed()
+        h.record("login-cards-older-${if (dark) "dark" else "light"}").run { frame(); end() }
     }
 
     @Test fun theCardsInAChatLight() = cards(false)
@@ -129,7 +136,7 @@ class LoginCardTest {
         rule.onNodeWithText("登录页在 www.npmjs.com").assertIsDisplayed()
         h.record("login-station-${if (dark) "dark" else "light"}").run { frame(); end() }
         rule.onNodeWithText("gcloud auth login").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("Ada 取消", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Ada 取消", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     @Test fun theStationsPageLight() = station(false)
