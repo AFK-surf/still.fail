@@ -3,7 +3,7 @@
 import { Effect, Exit, Scope } from "effect";
 import { loadAddon } from "../src/hosts/node-iroh.ts";
 import { NodeHost } from "../src/hosts/node.ts";
-import type { Pull, Sql, TcpConnection } from "../src/host.ts";
+import type { LoopbackRequest, Pull, Sql, TcpConnection } from "../src/host.ts";
 import type { Bridge, Native } from "../src/hosts/bridge.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -62,7 +62,8 @@ export class NodeShell implements Native {
         return take(this.#handles.get(a.id).pull);
       case "stream.close":
       case "ws.close":
-      case "tcp.close": {
+      case "tcp.close":
+      case "listen.close": {
         const it = this.#handles.get(a.id);
         this.#handles.delete(a.id);
         if (it) await Effect.runPromise(Scope.close(it.scope, Exit.void));
@@ -108,6 +109,27 @@ export class NodeShell implements Native {
       case "tcp.end":
         (this.#handles.get(a.id).conn as TcpConnection).end();
         return done({});
+      // A login's loopback listener (in the app, Kotlin's Loopback.kt): its requests numbered as they come, each
+      // answered by its number.
+      case "listen.open": {
+        const { value, scope } = await this.#scoped(h.listen(a.port, a.host));
+        return done({ id: this.#keep({ pull: value, scope, asked: new Map(), next: 1 }) });
+      }
+      case "listen.next": {
+        const it = this.#handles.get(a.id);
+        const r = await run((it.pull as Pull<LoopbackRequest>).take);
+        if (r === null) return done({ end: true });
+        const request = it.next++;
+        it.asked.set(request, r);
+        return done({ request, method: r.method, path: r.path, headers: r.headers }, r.body);
+      }
+      case "listen.respond": {
+        const it = this.#handles.get(a.id);
+        const r = it?.asked.get(a.request) as LoopbackRequest | undefined;
+        it?.asked.delete(a.request);
+        r?.respond(a.status, a.headers, bytes ?? new Uint8Array(0));
+        return done({});
+      }
       case "reset":
         return done({});
       case "iroh.bind": {

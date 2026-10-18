@@ -247,7 +247,10 @@ export class StationTopics implements Owner {
     const now = this.#core.host.nowMs();
     const offset = this.#core.host.utcOffsetMin(now);
     const name = this.#core.views.stationName(station);
-    const shown = (l: unknown) => logins.loginShown(l, station, name, now, offset, this.#sync.relays.listening(station, String(get(l, "id"))));
+    const shown = (l: unknown) => {
+      const id = String(get(l, "id"));
+      return logins.loginShown(l, station, name, now, offset, this.#sync.relays.listening(station, id), this.#sync.relays.refused(station, id));
+    };
     if (topic.topic === "machineLogin") {
       const found = held.logins.find((l) => l.id === topic.id);
       if (found !== undefined) return { ok: shown(found) };

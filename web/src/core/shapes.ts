@@ -2918,7 +2918,8 @@ export interface KeptTabs {
  * What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
  * item (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution
  * history (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in; `screen`, one of a
- * station's screens (docs/remote-screens.md). The call answers null for any other link.
+ * station's screens (docs/remote-screens.md); `login`, a login an agent started (docs/remote-login.md). The call answers
+ * null for any other link.
  */
 export interface LinkTarget {
 	opens: string;
@@ -2932,6 +2933,8 @@ export interface LinkTarget {
 	entry?: number;
 	/** For `screen`: the screen's id on the station (`/w/<workspace>/s/<station>/screen/<id>`). */
 	screen?: string;
+	/** For `login`: the login's id on the station (`/w/<workspace>/s/<station>/login/<id>`), its card on the station's page. */
+	login?: string;
 }
 
 export interface TimelineEntry {
@@ -3217,8 +3220,13 @@ export interface MachineLoginShown {
 	port?: number;
 	/** The command waits on a prompt: its agent answers it (等 agent 回答命令的问题). */
 	waiting: boolean;
-	/** This device listens for its loopback callback now (opened here, in the desktop app): 等浏览器回来. */
+	/** This device listens for its loopback callback now (opened here, in the desktop or Android app): 等浏览器回来. */
 	listening: boolean;
+	/**
+	 * Loopback: why this device could not listen for its callback when it was last opened here (本机 8085 端口被占用),
+	 * said on its card until it is opened again.
+	 */
+	relayText?: string;
 	/** How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 登录完成, 超时了… */
 	statusText: string;
 	/** Failed: why (the command's last lines). */
@@ -3257,7 +3265,10 @@ export interface MachineLoginsView {
 	loaded: boolean;
 	/** The viewer may start, cancel and complete logins here (a read-only member only sees how they stand). */
 	canLogin: boolean;
-	/** This device can take a login's loopback callback for its station (the desktop app): web pages cannot listen. */
+	/**
+	 * This device can take a login's loopback callback for its station (the desktop and Android apps): web pages
+	 * cannot listen.
+	 */
 	canRelay: boolean;
 	/** The logins done through still.fail on this station: under way first, then those ended, newest first. */
 	logins: MachineLoginShown[];

@@ -52,6 +52,8 @@ const cardText = {
 } as const;
 export const cardTitle = style({ ...cardText, fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500" });
 export const cardStatus = style({ ...cardText, display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted });
+/** What kept this device from taking the browser's callback (its port taken): the one line in red. */
+export const cardStatusFailed = style([cardStatus, { color: vars.red }]);
 /** Ended: a line where the card was, as an answered decision's in its chat (Decisions.css.ts settledLine); failed, red. */
 export const ended = style([settledLine, { overflowWrap: "anywhere" }]);
 export const endedFailed = style([ended, { color: vars.red }]);

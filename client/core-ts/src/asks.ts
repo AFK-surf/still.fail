@@ -237,6 +237,9 @@ export function linkTarget(url: string, origin: string): J {
   if (s.length === 5 && s[0] === "w" && s[2] === "s" && s[4] === "adb") return { opens: "adbShare", workspace: s[1], station: s[3] };
   // One of a station's screens (docs/remote-screens.md), as its agents' `screen` tool links it.
   if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "screen" && s[5] !== "") return { opens: "screen", workspace: s[1], station: s[3], screen: s[5] };
+  // A login an agent started on a station (docs/remote-login.md), as its `login` tool links it: its card on the
+  // station's page.
+  if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "login" && s[5] !== "") return { opens: "login", workspace: s[1], station: s[3], login: s[5] };
   if (s.length === 4 && s[0] === "o") {
     const service = param(u.query, "service");
     return { opens: "item", workspace: s[1], station: s[2], session: s[3], service: service !== null && service !== "" ? service : null, ...historyOf(u.query) };
