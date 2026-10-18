@@ -962,8 +962,9 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     return (
       <MineMessage data-vk={`m:${m.seq}`} data-outgoing={m.outgoing} data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
         <MineWords message={m} />
-        {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
-        {m.waiting
+        {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). Their next
+            message soon after: under that one instead. */}
+        {m.followed ? null : m.waiting
           ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><Spinner inline />{t("web-main.chat.waitingAgent")}</span>
           : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}
       </MineMessage>

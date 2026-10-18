@@ -1693,7 +1693,7 @@ const pinnedAt = new WeakMap<object, number>();
 /// agent who said it is one of the chat's (its name opens its history), whose workspace keeps each of its files (and the
 /// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), the 归档 offer and what the archive check made of the chat under its last all-done post, and what its
 /// agents sent to Slack or were given there after it (`elsewhere`; the chat's own `elsewhere` keeps what came before
-/// its first message).
+/// its first message), and which of the viewer's have their time under their next one instead (`followed`).
 function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined): V {
   if (out === undefined || !("ok" in out) || !isObject(out.ok)) return out;
   // Everything said here goes on copies: what the view is made of may be the core's kept values, frozen (a message's
@@ -1756,5 +1756,19 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     }
     view.elsewhere = first;
   }
+  // The viewer's messages sent one after another: the time only under the last of them, while each one's is within
+  // FOLLOWED_MS of the time shown under a later one (nothing else between them: no one else's, nothing sent to Slack).
+  const sending = view.newer === true ? [] : arr(view.outbox).filter((o) => isObject(o) && o.state !== "failed");
+  let shownAt = sending.length > 0 ? u64(sending[0].createdAt) : null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    const at = u64(m.createdAt);
+    if (m.mine !== true || at === null) { shownAt = null; continue; }
+    if (shownAt !== null && m.elsewhere === undefined && shownAt - at <= FOLLOWED_MS) messages[i] = { ...m, followed: true };
+    else shownAt = at;
+  }
   return { ...out, ok: view } as V;
 }
+
+/// How far apart the viewer's messages sent one after another are still one time under the last.
+const FOLLOWED_MS = 5 * 60_000;

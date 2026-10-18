@@ -1691,6 +1691,11 @@ export interface ChatMessage {
 	by: MessageBy;
 	waiting: boolean;
 	/**
+	 * In a chat's page: the viewer's, their next message sent soon after it (within 5 minutes of the time shown under a
+	 * later one): its time (and that its agents have yet to take it) shows under the last of them only. Absent otherwise.
+	 */
+	followed?: boolean;
+	/**
 	 * Said while the chat shows (told as it was said, not caught up on): it comes in rather than being there at once.
 	 * Decided by the core once, when first seen (attend.ts).
 	 */

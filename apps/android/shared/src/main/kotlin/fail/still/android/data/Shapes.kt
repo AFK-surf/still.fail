@@ -1683,6 +1683,9 @@ data class ChatMessage (
 	val profile: String? = null,
 	val by: MessageBy,
 	val waiting: Boolean,
+	/// In a chat's page: the viewer's, their next message sent soon after it (within 5 minutes of the time shown under a
+	/// later one): its time (and that its agents have yet to take it) shows under the last of them only. Absent otherwise.
+	val followed: Boolean? = null,
 	/// Said while the chat shows (told as it was said, not caught up on): it comes in rather than being there at once.
 	/// Decided by the core once, when first seen (attend.ts).
 	val said: Boolean? = null,

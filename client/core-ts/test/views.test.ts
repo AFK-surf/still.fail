@@ -1478,6 +1478,33 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archivi
   assert.deepEqual(v.messages.map((m: J) => m.archive ?? false), [false, false, true]);
 });
 
+test("the_viewers_messages_sent_one_after_another_have_their_time_under_the_last", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(threads("ws/a"), [thread(7, [], now)]);
+  const minute = 60_000;
+  const said = (n: number, at: number, author = "Me@x.com"): J => ({ ...entry(n, `第 ${n} 条`), author, at });
+  // A minute apart, then four minutes on (within 5 of the last's time), then one 5 minutes later than the shown one
+  // before it, someone else's, and two more of the viewer's.
+  const at = [0, 1, 5, 11, 12, 13, 14].map((m) => now - 15 * minute + m * minute);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 7, entries: [said(1, at[0]), said(2, at[1]), said(3, at[2]), said(4, at[3]), said(5, at[4], "a@x.com"), said(6, at[5]), said(7, at[6])], thread: null });
+  await t.read(u, 1);
+  let v = u.value;
+  assert.deepEqual(v.messages.map((m: J) => m.mine), [true, true, true, true, false, true, true]);
+  // 1 and 2 are within 5 minutes of 3's time; 3 is 6 minutes before 4's, so it shows its own; 5 is someone else's.
+  assert.deepEqual(v.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, false]);
+  // One on its way follows the last one too; failed, it does not.
+  const id = t.views.outboxAdd("ws/a", 7, { text: "还有", attachments: [], quotes: [] });
+  await t.read(u, 1);
+  v = u.value;
+  assert.deepEqual(v.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, true]);
+  t.views.local.outboxState("ws/a", 7, id, "无法连接 station");
+  await t.read(u, 1);
+  assert.deepEqual(u.value.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, false]);
+});
+
 test("a_chats_page_is_told_which_files_its_agents_words_place_and_an_open_image_the_ones_beside_it", async () => {
   const t = setup();
   const u = ui();

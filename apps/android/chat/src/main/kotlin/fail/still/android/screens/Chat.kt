@@ -1099,8 +1099,9 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             QuoteCards(m.quotes, jump, Alignment.End)
             if (m.text.isNotEmpty()) CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) { Bubble(m.text, hold, m.ts) }
             Files(ctx, m.attachments, mine = true)
-            // Not taken by its agents yet: after a second it says it waits.
-            if (waitingNow) UnderWay(t("android-chat.chat.waitingAgent"))
+            // Not taken by its agents yet: after a second it says it waits. Your next message soon after: under that one instead.
+            if (m.followed == true) {}
+            else if (waitingNow) UnderWay(t("android-chat.chat.waitingAgent"))
             // Coming in with the words, when they fly here from the composer.
             else LocalFlight.current.let { f -> MessageTime(m.time?.get("createdAt"), if (f == null) Modifier else Modifier.graphicsLayer { alpha = f.e() }) }
         }

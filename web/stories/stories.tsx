@@ -29,7 +29,8 @@ import { AT, apk, clips, folder, HISTORY, JOIN_REFUSED, JOINABLE, LOGINS, logins
 import { LoginCard, LoginsSection } from "../src/MachineLogins.tsx";
 import * as pagesCss from "../src/styles/pages.css.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
-import type { ShareInView } from "../src/core/shapes.ts";
+import type { ChatMessage, ChatView, ShareInView } from "../src/core/shapes.ts";
+import { stamp } from "../src/demo/fixtures.ts";
 import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
@@ -210,6 +211,24 @@ const logins = ({ canLogin = true, canRelay = true, old = false, card, listed }:
     return { ...chat, messages: chat.messages.map((m, i) => (i === first ? { ...m, card: { type: "login", login: card } } : m)) };
   },
 });
+/** The viewer's three messages sent one after another at the chat's end: the time under the last only (`followed`). */
+const followed: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "chat" || !value) return undefined;
+    const chat = value as ChatView;
+    const last = chat.messages.at(-1);
+    if (!last) return undefined;
+    const start = Date.now() - 3 * 60_000;
+    const said: ChatMessage[] = ["首页的图换成新的", "按钮颜色也跟着改", "改完发我看看"].map((text, i) => {
+      const at = start + i * 40_000;
+      return {
+        seq: last.seq + 1 + i, thread: last.thread, ts: `${at / 1000}`, authorKind: "person", author: "local", authorName: "你", text, attachments: [], quotes: [],
+        createdAt: at, mine: true, system: false, by: { name: "你" }, waiting: false, time: { createdAt: stamp(at) }, ...(i < 2 ? { followed: true } : {}),
+      };
+    });
+    return { ...chat, messages: [...chat.messages, ...said] };
+  },
+};
 /** One login's card, as an agent's message has it. */
 const loginCard = (id: string, padding?: number) => loginCards([id], padding);
 /** A chat's login cards, one for each login, as an agent's message has them. */
@@ -451,6 +470,8 @@ export const stories: Story[] = [
   // ── the app (the site's demo) ──
   { id: "app-chat", group: "应用", title: "对话页", app: true },
   { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
+  { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
+  { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
   { id: "phone-chat-files", group: "手机", title: "对话 · 消息里的附件", app: true, phone: true, files: true },
   { id: "app-chat-history", group: "应用", title: "执行历史", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }] },
   { id: "app-chat-history-turns", group: "应用", title: "执行历史 · 一轮一轮", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }], demo: historyTurns },
