@@ -76,6 +76,41 @@ test("a chat's messages are found by any part of their words, in any script, cas
   assert.equal(hit!.text, "我们用 DuckDB 做分析");
 });
 
+test("a word is found whole, not its three characters apart; cased letters beyond ASCII's case aside", () => {
+  const s = station();
+  const t = chat(s.store, "k1", null);
+  say(s.store, t, "1", "abcx bcd");
+  say(s.store, t, "2", "x abcd y");
+  say(s.store, t, "3", "Über die ЖУРНАЛ");
+  index(s, t);
+  assert.deepEqual(kinds(s.index.search("abcd", home, { kinds: ["message"] })), { message: [`m:${t}:2`] });
+  assert.deepEqual(kinds(s.index.search("über журнал", home, { kinds: ["message"] })), { message: [`m:${t}:3`] });
+});
+
+test("an index of another shape is dropped and built again", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const data = mkdtempSync(join(tmpdir(), "search-test-"));
+  dirs.push(data);
+  const path = join(data, "search.db");
+  const old = new DatabaseSync(path);
+  old.exec("CREATE TABLE docs (id INTEGER PRIMARY KEY, key TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, source TEXT NOT NULL, ws TEXT, scope TEXT, title TEXT NOT NULL, body TEXT NOT NULL, at INTEGER, ref TEXT NOT NULL)");
+  old.exec("CREATE VIRTUAL TABLE docs_fts USING fts5(title, body, content='docs', content_rowid='id', tokenize='trigram')");
+  old.exec("CREATE TABLE marks (source TEXT PRIMARY KEY, version TEXT NOT NULL)");
+  old.exec(`INSERT INTO docs VALUES (1, 'm:1:1', 'message', 't:1', NULL, NULL, '', 'old words', 1, '{}'); INSERT INTO marks VALUES ('t:1', 'v')`);
+  old.close();
+  const index = new SearchIndex(path);
+  closing.push(index);
+  assert.deepEqual(index.counts(), {});
+  assert.equal(index.mark("t:1"), null);
+  assert.match(String((index.db.prepare("SELECT sql FROM sqlite_schema WHERE name = 'docs_fts'").get() as { sql: string }).sql), /detail=none/);
+  // Kept as it is the next time.
+  index.put({ key: "m:1:1", kind: "message", source: "t:1", ws: null, title: "", body: "new words", at: 1, ref: {} });
+  index.close();
+  const again = new SearchIndex(path);
+  closing.push(again);
+  assert.deepEqual(again.counts(), { message: 1 });
+});
+
 test("a member of another workspace finds nothing of this one's chats", () => {
   const s = station();
   const mine = chat(s.store, "k1", null);
@@ -181,11 +216,11 @@ test("the station's index thread keeps up with its store, and answers as it does
 });
 
 test("an execution history is found, grown from where it was, and one that stopped the index's thread is passed over until it changes", async () => {
-  const { historyDocs, READING, FAILED, Readings } = await import("../src/search/sources.ts");
+  const { historyChats, historyDocs, READING, FAILED, Readings } = await import("../src/search/sources.ts");
   const { appendFileSync } = await import("node:fs");
   const s = station();
   const key = "k1";
-  chat(s.store, key, null);
+  const t = chat(s.store, key, null);
   s.store.setRuntimeSessionId(key, "rs1");
   const home = join(s.data, "p");
   mkdirSync(join(home, "projects", "w"), { recursive: true });
@@ -196,6 +231,12 @@ test("an execution history is found, grown from where it was, and one that stopp
   const read = s.read();
   const first = (await historyDocs(read, key, profiles, null))!;
   assert.deepEqual(first.docs.map((d) => [d.key, d.body]), [[`h:${key}:0`, "先跑 pnpm run deploy"]]);
+  // Found with its chat as it is now, which the index does not keep with each step.
+  s.index.replace(`h:${key}`, first.version, first.docs);
+  const groups = s.index.search("deploy", { workspace: "W1", home: true, scopes: [] });
+  assert.equal(groups[0]!.hits[0]!.chat, undefined);
+  historyChats(read, groups);
+  assert.deepEqual([groups[0]!.hits[0]!.chat, groups[0]!.hits[0]!.thread, typeof groups[0]!.hits[0]!.chatTitle], [key, t, "string"]);
   appendFileSync(file, said("deploy 完了"));
   const grown = (await historyDocs(read, key, profiles, first.version))!;
   assert.equal(grown.whole, false);

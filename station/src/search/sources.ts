@@ -17,7 +17,7 @@ import { readFrom } from "../usage/counter.ts";
 import { memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
 import { STILLFAIL_SURFACE } from "../read/store.ts";
-import type { Doc } from "./index.ts";
+import type { Doc, Group } from "./index.ts";
 
 /// The workspace documents of nothing in particular are in (`ws` null: the station's home one).
 type Ws = string | null;
@@ -278,8 +278,6 @@ export async function historyDocs(s: Store, key: string, profiles: Profiles, had
     count = all.length;
     readings?.set(key, { paths, at, count });
   }
-  const thread = store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
-  const chatTitle = session.title ?? thread?.title ?? thread?.autoTitle ?? "";
   const docs: Doc[] = [];
   entries.forEach((e, j) => {
     const i = from + j;
@@ -289,10 +287,31 @@ export async function historyDocs(s: Store, key: string, profiles: Profiles, had
     docs.push({
       key: `h:${key}:${i}`, kind: "history", source: `h:${key}`, ws: session.ws, title: "", body: text,
       at: at !== null && Number.isFinite(at) ? at : null,
-      ref: { session: key, index: i, entry: e.kind, ...(e.tool ? { tool: e.tool } : {}), chat: key, chatTitle, ...(thread ? { thread: thread.id } : {}) },
+      // Its chat not kept with each step (a fifth of the index's text): told as it is now when found (`historyChats`).
+      ref: { session: key, index: i, entry: e.kind, ...(e.tool ? { tool: e.tool } : {}) },
     });
   });
   return { version: JSON.stringify({ files: files.version, n: count }), docs, whole: from === 0 };
+}
+
+/// The execution history found told with its chat as it is now: its key, title and thread.
+export function historyChats(s: Store, groups: Group[]): void {
+  const chats = new Map<string, Record<string, unknown>>();
+  for (const g of groups) {
+    if (g.kind !== "history") continue;
+    for (const hit of g.hits) {
+      const key = hit.session;
+      if (typeof key !== "string") continue;
+      let chat = chats.get(key);
+      if (!chat) {
+        const session = store.getSession(s, key);
+        const thread = store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
+        chat = { chat: key, chatTitle: session?.title ?? thread?.title ?? thread?.autoTitle ?? "", ...(thread ? { thread: thread.id } : {}) };
+        chats.set(key, chat);
+      }
+      Object.assign(hit, chat);
+    }
+  }
 }
 
 /// A transcript's mark while it is read, and once its reading stopped the index's thread (with the version it was of).

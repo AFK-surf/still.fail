@@ -24,8 +24,11 @@ Helper; elsewhere an index of its own), the cloud's own (feedback), Slack channe
 - `search.db` beside `stillfail.db`: a database of its own, made where missing, so it is dropped and built again at
   will and no version of the station's data depends on it. One table of documents (`docs`: kind, workspace, scope,
   title, body, time, what opens it) with an FTS5 index over title and body (`tokenize='trigram'`: any part of any word,
-  any script, case aside). A term of fewer than three characters (most Chinese words) has no trigram and is looked for
-  in the text itself (`instr`).
+  any script, case aside), keeping no positions (`detail=none`, a fifth of the size of one that does): it finds the
+  documents with each three characters of a word, and the word is looked for in their text (`instr`). A term of fewer
+  than three characters (most Chinese words) has no trigram and is looked for in the text alone. An execution history's
+  steps do not keep their chat: its title and thread are looked up as a step is found. An index of another shape
+  (`PRAGMA user_version`) is dropped and built again.
 - Each document belongs to a source (a thread, a session's transcript, a session's jobs, a workspace's memory, the
   profiles), indexed as a whole and marked with the version indexed (`marks`): a thread from the last entry indexed
   (what was said since, and what an edit changed), an archived one whole once its file changes; a transcript from the

@@ -11,7 +11,7 @@ import { wall } from "../ops/fibers.ts";
 import * as store from "../read/store.ts";
 import { agentHomeOf } from "../read/memory.ts";
 import { type Asker, SearchIndex } from "./index.ts";
-import { READING, Readings, historyDocs, jobDocs, memoryDocs, memoryWorkspaces, profileDocs, profilesOf, sessionKeys, threadDocs, threadIds, type Indexed } from "./sources.ts";
+import { READING, Readings, historyChats, historyDocs, jobDocs, memoryDocs, memoryWorkspaces, profileDocs, profilesOf, sessionKeys, threadDocs, threadIds, type Indexed } from "./sources.ts";
 
 export type Told =
   | { type: "thread"; id: number }
@@ -183,7 +183,9 @@ parentPort!.on("message", (told: Told) => {
     case "query": {
       let answer: Answered;
       try {
-        answer = { id: told.id, building, groups: index.search(told.query, told.asker, { kinds: told.kinds, limit: told.limit, offset: told.offset }) };
+        const groups = index.search(told.query, told.asker, { kinds: told.kinds, limit: told.limit, offset: told.offset });
+        historyChats(s, groups);
+        answer = { id: told.id, building, groups };
       } catch (error) {
         answer = { id: told.id, error: (error as Error).message };
       }
