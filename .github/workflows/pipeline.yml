@@ -46,6 +46,7 @@ jobs:
       static: ${{ steps.plan.outputs.static }}
       relay: ${{ steps.plan.outputs.relay }}
       station: ${{ steps.plan.outputs.station }}
+      modules: ${{ steps.plan.outputs.modules }}
       android: ${{ steps.plan.outputs.android }}
       android_lint: ${{ steps.plan.outputs.android_lint }}
       desktop: ${{ steps.plan.outputs.desktop }}
@@ -92,6 +93,9 @@ jobs:
           # The station in TypeScript, its native parts (vendor/: the mesh addon's iroh), the words it says, the installer
           # it carries (cloud/src/install*.ts: scripts/installers.ts).
           if has '^(station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
+          # The modules' packages (scripts/module-bundle.ts): what one packs (its module.json says), or how they are packed
+          # and signed: modules=….
+          eval "$(printf '%s\n' "$changed" | node scripts/module-bundle.ts plan)"
           android=false
           if printf '%s\n' "$changed" | sh apps/android/carries.sh; then android=true; fi
           # check-android-lint: only for a change lint can find anything in (apps/android/lints.sh), or a branch's to
@@ -115,13 +119,14 @@ jobs:
             echo "api=$api"
             echo "relay=$relay"
             echo "station=$station"
+            echo "modules=$modules"
             echo "android=$android"
             echo "android_lint=$android_lint"
             echo "desktop=$desktop"
             echo "desktop_web=$desktop_web"
             echo "windows=$windows"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
@@ -633,11 +638,38 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: "release-desktop-web-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
+  # The modules' packages stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): when what one
+  # packs changed. Each one's archive, named by its version, is put at once (one already out is checked to be the same
+  # bytes: scripts/release.sh), its beta feed signed and put by `put` once the check passed. On GitHub's runner: plain
+  # files, nothing of a machine's in them.
+  modules:
+    needs: [plan]
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.modules == 'true' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 } # its version is the build of the last commit that changed what it packs
+      - uses: ./.github/actions/setup
+      - name: Pack and sign the modules' packages
+        env:
+          # The key the feeds are signed with (docs/release-signing.md): none is an error.
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_DIR: ${{ runner.temp }}/release
+        run: sh .github/release.sh modules
+      - name: Put their archives (named by their version, nothing points at them until put writes the feeds)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with: { name: "release-modules-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+
   # What was built put in the bucket, once the check passed and the API and the web are out; nothing when a build
   # failed. Then the changelog that says so (scripts/changelog-put.sh): in this job, not one more after it.
   put:
-    needs: [plan, check, check-linux, check-browser, check-android, api, static, station, android, desktop, desktop-win, desktop-web]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-web.result == 'success')
+    needs: [plan, check, check-linux, check-browser, check-android, api, static, station, modules, android, desktop, desktop-win, desktop-web]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result) && (needs.station.result == 'success' || needs.modules.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-web.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
@@ -690,8 +722,8 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-browser, check-android, check-android-lint, api, static, station, android, desktop, desktop-win, desktop-web, put]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.check-android-lint.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
+    needs: [plan, natives, check, check-linux, check-browser, check-android, check-android-lint, api, static, station, modules, android, desktop, desktop-win, desktop-web, put]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.check-android-lint.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 10
     permissions:
@@ -711,7 +743,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, check-browser, check-android, check-android-lint, bundle, mac-build, api, static, station, station-update, android, desktop, desktop-win, desktop-web, put, changelog, done]
+    needs: [plan, natives, check, check-linux, check-browser, check-android, check-android-lint, bundle, mac-build, api, static, station, station-update, modules, android, desktop, desktop-win, desktop-web, put, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -741,6 +773,7 @@ jobs:
           planned '${{ needs.plan.outputs.api }}' '${{ needs.api.result }}' api
           planned '${{ needs.plan.outputs.static }}' '${{ needs.static.result }}' static
           planned '${{ needs.plan.outputs.station }}' '${{ needs.station.result }}' station
+          planned '${{ needs.plan.outputs.modules }}' '${{ needs.modules.result }}' modules
           planned '${{ needs.plan.outputs.android }}' '${{ needs.android.result }}' android
           planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop.result }}' desktop
           planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop-win.result }}' desktop-win

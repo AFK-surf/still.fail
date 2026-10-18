@@ -80,6 +80,10 @@ const APP_FILES: [RegExp, string][] = [
   // archives it names.
   [/^desktop\/web\/stillfail-beta-web\.json$/, "application/json"],
   [/^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$/, "application/gzip"],
+  // The packages of the modules stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): each
+  // module's signed feeds, stable and beta, and the archives they name (one for every machine, or a platform's).
+  [/^modules\/([a-z][a-z0-9]{0,31})\/\1(-beta)?\.json$/, "application/json"],
+  [/^modules\/([a-z][a-z0-9]{0,31})\/\1-0\.1\.[0-9]+(-(darwin-arm64|linux-x64|linux-arm64|win32-x64))?\.tar\.gz$/, "application/gzip"],
   [/^android\/latest\.json$/, "application/json"],
   // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
   [/^android\/(stillfail|ember|stillfail-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],

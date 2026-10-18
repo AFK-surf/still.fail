@@ -101,6 +101,24 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: sh .github/release.sh --stable station
 
+  # The modules' packages (scripts/module-bundle.ts) on the stable channel, after the station they may need: each one's
+  # archive is the beta's when its version is out already (the same bytes, checked), its stable feed signed anew.
+  modules:
+    needs: [plan, station]
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+      - name: Publish the modules' stable packages from the pinned source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # The key the feeds are signed with (docs/release-signing.md): none is an error.
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: sh .github/release.sh --stable modules
+
   # The official site, still.fail, from the same revision: the pipeline deploys only youdid.wtf's (site-beta), and a
   # stable release that left it out kept still.fail at 2026-10-01's for two weeks (no Windows download on it).
   site:
@@ -118,7 +136,7 @@ jobs:
         run: sh .github/deploy.sh site
 
   done:
-    needs: [plan, android, desktop, web, station, site]
+    needs: [plan, android, desktop, web, station, modules, site]
     runs-on: [self-hosted, mini1]
     timeout-minutes: 10
     permissions:

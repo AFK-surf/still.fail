@@ -31,7 +31,7 @@
 desktop-web job（GitHub 的 ubuntu runner）：
 
 1. `vp build --config web/vite.config.ts --mode cloud`，和 desktop job 的 `build:cloud` 是同一份构建，带 PostHog key。
-2. `desktop-web.ts pack`：把 `dist/cloud-web` 打成 `desktop/web/stillfail-beta-web-0.1.N.tar.gz`（`apps/desktop/src/web-archive.mts`：只放普通文件，按路径排序，同样的文件得到同样的字节），然后用 `release-sign.ts desktop-web` 签出 feed `desktop/web/stillfail-beta-web.json`。
+2. `desktop-web.ts pack`：把 `dist/cloud-web` 打成 `desktop/web/stillfail-beta-web-0.1.N.tar.gz`（`station/src/updates/archive.ts`：只放普通文件，按路径排序，同样的文件得到同样的字节），然后用 `release-sign.ts desktop-web` 签出 feed `desktop/web/stillfail-beta-web.json`。
 3. 压缩包带版本号，马上传到 bucket；feed 由 put job 在检查都过了之后再传（`release-put.sh` 把 `desktop/web/*.json` 当作 feed 处理）。
 
 `release-prune.ts` 会保留 feed 当前指向的那个包、比它新的包，以及最新的 5 个，其余删掉。cloud 只放行这两类文件（`cloud/src/install.ts` 的 `APP_FILES`），压缩包可以长期缓存。

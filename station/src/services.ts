@@ -24,6 +24,9 @@ import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
 import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
 import { ModuleSet } from "./modules/modules.ts";
+import { Packages } from "./modules/packages.ts";
+import { stationVersion } from "./ops/version.ts";
+import { channelOf } from "./updates/versions.ts";
 import { HelperApp, helperApp } from "./helper/app.ts";
 import { HelperGrants } from "./helper/grants.ts";
 import { HelperFiles } from "./helper/files.ts";
@@ -211,6 +214,34 @@ export class Modules extends Context.Service<Modules, ModuleSet>()("stillfail/Mo
     Effect.gen(function* () {
       const events = yield* Events;
       return new ModuleSet((yield* Paths).data, () => events.overviewChanged());
+    }),
+  );
+}
+
+/// The packages of the modules the station installs itself (modules/packages.ts): from where its own releases are, on
+/// its channel, once the process before it is gone; started by ModulesLive, read and updated with the station's own
+/// updates (the agents' side adds them to its updates: a line each).
+export class ModulePackages extends Context.Service<ModulePackages, Packages>()("stillfail/ModulePackages") {
+  static readonly layer = Layer.effect(
+    ModulePackages,
+    Effect.gen(function* () {
+      const { data, app } = yield* Paths;
+      const plane = yield* ControlPlane;
+      const config = yield* StationConfig;
+      const previous = yield* Previous;
+      const version = stationVersion(app);
+      return yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          new Packages({
+            data,
+            station: version === undefined ? null : Number(version.slice("0.1.".length)),
+            base: () => plane.releaseBase(),
+            channel: () => channelOf(config.raw(), app),
+            previousGone: previous.gone,
+          }),
+        ),
+        (packages) => Effect.promise(() => packages.close()),
+      );
     }),
   );
 }

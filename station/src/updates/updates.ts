@@ -10,6 +10,8 @@
 //   station has been quiet a while (never back from the beta, and a version it already went for, not again).
 // - Claude Code and Codex: `--version`, and the latest their npm packages say; updated the way each was installed.
 //   Running agents go on with what they started with; the next process starts the new one.
+// - Software wired in after (`add`): the packages of the modules the station installs itself (modules/packages.ts),
+//   read when the rest is, a line each after the others'.
 //
 // The TS release (docs/station-ts-native.md) is updated by the same files as the Rust one was:
 // run/update.started (this side's, so the process that runs after a handover or restart follows the update to its
@@ -70,6 +72,20 @@ export type SoftwareVersion = {
   done?: string;
   message?: string;
   checkedAt?: number;
+};
+
+/// Software read and updated with the station's own and the runtimes, wired in after the updates are made (the packages
+/// of the modules the station installs itself: modules/packages.ts): its lines follow the others'.
+export type MoreSoftware = {
+  /// Reads what is out (and installs what it takes by itself).
+  read(): Promise<void>;
+  /// Its lines, in `lang` (when what is out was read is the updates').
+  get(lang: Lang): SoftwareVersion[];
+  /// Whether `id` is one of its lines; updating one, as someone asked.
+  has(id: string): boolean;
+  update(id: string, lang: Lang): Promise<void>;
+  /// Hears each change of what `get` says; gives the function that stops it.
+  changes(listener: () => void): () => void;
 };
 
 /// How long things take, given so tests can be quick.
@@ -194,6 +210,7 @@ export class Updates {
   private checkedAt: number | null = null;
   private checking: Promise<void> | null = null;
   private listeners = new Set<() => void>();
+  private more: MoreSoftware[] = [];
   /// The version the station's last update in this process went for: updating by itself, not tried again.
   tried: string | null = null;
   private lastCheck: number | null = null;
@@ -237,6 +254,18 @@ export class Updates {
   /// What to do when a runtime was installed or updated from here.
   onRuntimeChanged(f: () => void) {
     this.runtimeChanged = f;
+  }
+
+  /// Software read and updated with the rest from now on; gives the function that leaves it out again.
+  add(more: MoreSoftware): () => void {
+    this.more.push(more);
+    const unlisten = more.changes(() => this.changed());
+    this.changed();
+    return () => {
+      unlisten();
+      this.more = this.more.filter((m) => m !== more);
+      this.changed();
+    };
   }
 
   /// Hears each change of what `get` says; gives the function that stops it.
@@ -342,7 +371,7 @@ export class Updates {
   /// What the pages show, one line each, in `lang`.
   get(lang: Lang = stationLang()): SoftwareVersion[] {
     const channel = this.channel();
-    return KINDS.map((kind) => {
+    const own = KINDS.map((kind) => {
       const item = this.items[kind];
       const station = kind === "station";
       // Read from another channel than the one it is on now: not yet known.
@@ -375,6 +404,8 @@ export class Updates {
       for (const k of Object.keys(line) as (keyof SoftwareVersion)[]) if (line[k] === undefined) delete line[k];
       return line;
     });
+    const more = this.more.flatMap((m) => m.get(lang)).map((line) => (this.checkedAt === null ? line : { ...line, checkedAt: this.checkedAt }));
+    return [...own, ...more];
   }
 
   /// Reads every version and what is out, now (once at a time: asked while a reading goes on, it is that reading);
@@ -386,6 +417,7 @@ export class Updates {
   }
 
   private async read() {
+    const more = Promise.all(this.more.map((m) => m.read().catch((e) => log.warn("updates", "software beside the station's not read", { error: (e as Error).message }))));
     let [station, ...runtimes] = await Promise.all([this.readStation(this.channel()), ...RUNTIMES.map((kind) => this.readRuntime(kind))]);
     // Put on another channel while it was read: read from that one.
     while (station.channel !== this.channel()) station = await this.readStation(this.channel());
@@ -396,6 +428,7 @@ export class Updates {
       if (item.updating === null) this.items[kind] = { ...read, failed: item.failed, done: item.done };
       else if (!item.installed) this.items[kind] = { ...read, updating: item.updating, progress: item.progress, step: item.step, percent: item.percent };
     }
+    await more;
     this.checkedAt = this.fibers.now();
     this.lastCheck = this.fibers.now();
     this.changed();
@@ -531,9 +564,11 @@ export class Updates {
 
   // ---- updating ----
 
-  /// Updates one (`station`, `claude`, `codex`, `dsh`), or installs a runtime the machine has not: answers once it has
+  /// Updates one (`station`, `claude`, `codex`, `dsh`, or software added: `module:<id>`), or installs a runtime the machine has not: answers once it has
   /// started; how it goes shows in `get`. Refusals are said in `lang`.
   async update(id: string, lang: Lang = stationLang()): Promise<void> {
+    const more = this.more.find((m) => m.has(id));
+    if (more !== undefined) return more.update(id, lang);
     const kind = KINDS.find((k) => k === id);
     if (kind === undefined) throw refused(lang, "station.updates.noSuchItem", { id });
     const item = this.items[kind];

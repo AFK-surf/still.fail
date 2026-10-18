@@ -1,5 +1,6 @@
 // Modules (docs/station-modules.md): programs beside the station, each its own process, that add to what members reach
-// on it without being part of it (a media library, say). config.json `modules` names them; the station starts each
+// on it without being part of it (a media library, say). config.json `modules` names them (by a command, or by a
+// package the station installs itself: modules/packages.ts); the station starts each
 // (modules/live.ts), passes it the admin API's `/m/<id>/…` with who asks (modules/forward.ts), lets a viewer make the
 // writes it declares of its own, and answers its own local API (modules/local.ts) for the drive. What is here: which
 // modules there are, each as it is now, and what the admin API asks of them.
@@ -9,33 +10,45 @@ import { error } from "../api/request.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import { forward } from "./forward.ts";
 
-/// A module as config.json names it: `{ id, command, args?, env?, enabled? }`.
-export type ModuleSpec = { id: string; command: string; args: string[]; env: Record<string, string> };
+/// A module as it is run: `{ id, command, args?, env?, enabled? }` as config.json names it, or one the station installed
+/// itself (`package`: modules/packages.ts), then run by the station's own Node, with the build it runs.
+export type ModuleSpec = { id: string; command: string; args: string[]; env: Record<string, string>; installed?: { package: string; build: number } };
 
-/// A module's id: what its path, its folder and its sockets are named by.
-export const MODULE_ID = /^[a-z][a-z0-9-]{0,31}$/;
+/// A module config.json names by its package (`{ id, package, args?, env?, enabled? }`): the station installs it, and
+/// runs it once it is (modules/packages.ts).
+export type PackageSpec = { id: string; package: string; args: string[]; env: Record<string, string> };
+
+/// A module's id: what its path, its folder and its sockets are named by. A package's name is one too. As the client
+/// core names its modules (client/core-ts/src/module.ts).
+export const MODULE_ID = /^[a-z][a-z0-9]{0,31}$/;
 /// A module's part of the admin API: `/m/<id>`, then its own path (and the query).
-const MODULE_PATH = /^\/m\/([a-z][a-z0-9-]{0,31})(\/[^?]*)?(?:\?.*)?$/;
+const MODULE_PATH = /^\/m\/([a-z][a-z0-9]{0,31})(\/[^?]*)?(?:\?.*)?$/;
 
 /// The modules config.json names (`modules`), those turned off (`enabled: false`) left out; and what is wrong with any
-/// that cannot be taken (each said, then left out).
-export function modulesOf(raw: any): { specs: ModuleSpec[]; refused: string[] } {
-  const specs: ModuleSpec[] = [];
+/// that cannot be taken (each said, then left out). Each is run by its command, or installed as its package: one of
+/// the two.
+export function modulesOf(raw: any): { specs: (ModuleSpec | PackageSpec)[]; refused: string[] } {
+  const specs: (ModuleSpec | PackageSpec)[] = [];
   const refused: string[] = [];
   for (const m of Array.isArray(raw?.modules) ? raw.modules : []) {
     const id = typeof m?.id === "string" ? m.id : "";
     const why =
-      !MODULE_ID.test(id) ? `a module's id is a-z, 0-9 and -, starting with a letter, at most 32: ${JSON.stringify(m?.id)}`
+      !MODULE_ID.test(id) ? `a module's id is a-z and 0-9, starting with a letter, at most 32: ${JSON.stringify(m?.id)}`
       : specs.some((s) => s.id === id) ? `module ${id} is named twice`
-      : typeof m.command !== "string" || m.command === "" ? `module ${id}: command is required`
+      : (m.command === undefined) === (m.package === undefined) ? `module ${id}: either a command or a package, one of them`
+      : m.command !== undefined && (typeof m.command !== "string" || m.command === "") ? `module ${id}: command is a program`
+      : m.package !== undefined && (typeof m.package !== "string" || !MODULE_ID.test(m.package)) ? `module ${id}: package is a package's name (a-z and 0-9, starting with a letter)`
       : m.args !== undefined && (!Array.isArray(m.args) || m.args.some((a: unknown) => typeof a !== "string")) ? `module ${id}: args are strings`
       : m.env !== undefined && (m.env === null || typeof m.env !== "object" || Array.isArray(m.env) || Object.values(m.env).some((v) => typeof v !== "string")) ? `module ${id}: env is an object of strings`
       : null;
     if (why !== null) refused.push(why);
+    else if (m.enabled !== false && m.package !== undefined) specs.push({ id, package: m.package, args: m.args ?? [], env: m.env ?? {} });
     else if (m.enabled !== false) specs.push({ id, command: m.command, args: m.args ?? [], env: m.env ?? {} });
   }
   return { specs, refused };
 }
+
+export const isPackage = (spec: ModuleSpec | PackageSpec): spec is PackageSpec => "package" in spec;
 
 /// The module a path of the admin API (after /admin/api) is for, and the path it asks of it ("/" for its root); null for
 /// none.
