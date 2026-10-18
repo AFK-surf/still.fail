@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import type { ArchivingView, StationView } from "../core/shapes.ts";
 import { useStations } from "../api.ts";
 import { t } from "../i18n.ts";
-import { HINTS, IDLE_DAYS, MODES, SLACK_DAYS, daysLabel, daysOffered, hintLabel, hintNote, modeLabel, modeNote, modeOf, modePatch, reviewOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
+import { HINTS, IDLE_DAYS, MODES, SLACK_DAYS, daysLabel, daysOffered, hintLabel, hintNote, hintReviews, modeLabel, modeNote, modeOf, modePatch, reviewOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
 import { MobileBack, Section, Segmented, Waiting } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
@@ -12,6 +12,7 @@ import * as chatCss from "../styles/chat.css.ts";
 export function ArchivingPage({ back, workspace }: { back: string; workspace: string }) {
   const [hint, setHint] = useArchiveHint();
   const stations = useStations(workspace);
+  const reviews = hintReviews(stations.value);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.appearance.back")} />
@@ -19,9 +20,12 @@ export function ArchivingPage({ back, workspace }: { back: string; workspace: st
       <Section title={t("web-pages.appearance.archive.title")} description={t("web-pages.appearance.archive.description")}>
         <div className={chatCss.appearanceSetting}>
           <Segmented label={t("web-pages.appearance.archive.title")} value={hint} onChange={setHint}
-            options={HINTS.map((h) => ({ value: h, label: hintLabel(h) }))} />
+            options={HINTS.map((h) => ({ value: h, label: hintLabel(h), disabled: h === "reviewed" && reviews?.none === true && hint !== "reviewed" }))} />
         </div>
         <p className={chatCss.appearanceHint}>{hintNote(hint)}</p>
+        {reviews && (hint === "reviewed" || reviews.none) && <p className={chatCss.appearanceHint}>
+          {reviews.text}{" "}<Link className={chatCss.inlineLink} to={`/w/${workspace}/settings/automatic-decisions/completion`}>{t("web-pages.archiving.reviewGo")}</Link>
+        </p>}
       </Section>
       <Section title={t("web-pages.archiving.auto.title")} description={t("web-pages.archiving.auto.description")}>
         {!stations.value && <Waiting count={1} text={t("common.readingStations")} />}
@@ -53,11 +57,12 @@ function StationArchivingForm({ workspace, s, view, review }: { workspace: strin
     <Section title={s.name} description={<>{review.text}{" · "}<Link className={chatCss.inlineLink} to={`/w/${workspace}/settings/automatic-decisions/completion`}>{t("web-pages.archiving.reviewGo")}</Link></>}>
       <div className={chatCss.appearanceSetting}>
         <Segmented label={t("web-pages.archiving.auto.title")} value={mode} onChange={(m) => save(view, modePatch(view, m))}
-          options={MODES.map((m) => ({ value: m, label: modeLabel(m), disabled: locked }))} />
+          options={MODES.map((m) => ({ value: m, label: modeLabel(m), disabled: locked || (m === "reviewed" && !review.on && mode !== "reviewed") }))} />
       </div>
       <p className={chatCss.appearanceHint}>
         {modeNote(mode)}
         {mode === "reviewed" && !review.on && <> {t("web-pages.archiving.reviewNeeded")}</>}
+        {mode !== "reviewed" && !review.on && <> {t("web-pages.archiving.stationNeedsReview")}</>}
         {!view.canEdit && <> {t("web-pages.archiving.adminOnly")}</>}
       </p>
       {mode !== "off" && <>

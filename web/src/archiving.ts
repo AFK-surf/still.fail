@@ -44,6 +44,19 @@ export function reviewOf(s: StationView): { on: boolean; text: string } {
   return { on, text: on ? t("web-pages.archiving.reviewOn", { model }) : t("web-pages.archiving.reviewOff") };
 }
 
+/** 按模型判断 goes by the stations' archive reviews (自动决策): none on, it can suggest nothing; some on, the others'
+ *  chats are never suggested. Null while no station is known, or every one known has its review on. */
+export function hintReviews(stations: StationView[] | undefined): { none: boolean; text: string } | null {
+  // Those it can tell of: online, their overview read.
+  const known = stations?.filter((s) => s.online && s.overview) ?? [];
+  if (known.length === 0) return null;
+  const on = known.filter((s) => reviewOf(s).on).map((s) => s.name);
+  const off = known.filter((s) => !reviewOf(s).on).map((s) => s.name);
+  if (off.length === 0) return null;
+  if (on.length === 0) return { none: true, text: t("web-pages.archiving.hintNoReview") };
+  return { none: false, text: t("web-pages.archiving.hintSomeReview", { on: on.join("、"), off: off.join("、") }) };
+}
+
 /** A station's automatic archiving changed: the whole of it sent, as the station takes it. */
 export function useArchivingSave(station: string): { save: (v: ArchivingView, patch: Partial<Pick<ArchivingView, "days" | "slackDays" | "reviewed">>) => void; busy: boolean } {
   const api = stationApi(useStationCall(station));

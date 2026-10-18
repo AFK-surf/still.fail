@@ -4,7 +4,7 @@ import { Fragment } from "react";
 import type { ArchivingView, StationView } from "../core/shapes.ts";
 import { useStations } from "../api.ts";
 import { t } from "../i18n.ts";
-import { HINTS, IDLE_DAYS, MODES, SLACK_DAYS, daysLabel, daysOffered, hintLabel, hintNote, modeLabel, modeNote, modeOf, modePatch, reviewOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
+import { HINTS, IDLE_DAYS, MODES, SLACK_DAYS, daysLabel, daysOffered, hintLabel, hintNote, hintReviews, modeLabel, modeNote, modeOf, modePatch, reviewOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
 import { useApp } from "./app.tsx";
 import { LargeTitle, SectionHeader, Seg, TopBack } from "./parts.tsx";
 import { Waiting } from "@stillfail/ui/waiting.tsx";
@@ -16,15 +16,21 @@ export function ArchivingScreen() {
   const app = useApp();
   const [hint, setHint] = useArchiveHint();
   const stations = useStations(app.entry.id);
+  const reviews = hintReviews(stations.value);
+  const go = () => app.push(app.at("/settings/automatic-decisions/completion"));
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
       <LargeTitle small="" big={t("web-pages.archiving.title")} />
       <SectionHeader title={t("web-pages.appearance.archive.title")} start={24} />
       <div style={{ padding: "0 12px" }}>
-        <Seg options={HINTS.map(hintLabel)} selected={HINTS.indexOf(hint)} onSelect={(i) => setHint(HINTS[i]!)} height={34} fill />
+        <Seg options={HINTS.map(hintLabel)} selected={HINTS.indexOf(hint)} height={34} fill
+          onSelect={(i) => { if (!(HINTS[i] === "reviewed" && reviews?.none)) setHint(HINTS[i]!); }} />
       </div>
       <div className={css.mSegNote}>{hintNote(hint)}</div>
+      {reviews && (hint === "reviewed" || reviews.none) && <div className={css.mSegNote}>
+        {reviews.text}{" "}<a className={chatCss.inlineLink} href={app.at("/settings/automatic-decisions/completion")} onClick={(e) => { e.preventDefault(); go(); }}>{t("web-pages.archiving.reviewGo")}</a>
+      </div>}
       <div className={css.mSegNote}>{t("web-pages.appearance.archive.description")}</div>
       <SectionHeader title={t("web-pages.archiving.auto.title")} start={24} />
       <div className={css.mSegNote}>{t("web-pages.archiving.auto.description")}</div>
@@ -61,11 +67,12 @@ function StationArchivingForm({ s, view }: { s: StationView; view: ArchivingView
       <a className={chatCss.inlineLink} href={app.at("/settings/automatic-decisions/completion")} onClick={(e) => { e.preventDefault(); app.push(app.at("/settings/automatic-decisions/completion")); }}>{t("web-pages.archiving.reviewGo")}</a>
     </div>
     <div style={{ padding: "8px 12px 0" }}>
-      <Seg options={MODES.map(modeLabel)} selected={MODES.indexOf(mode)} onSelect={(i) => { if (!locked) save(view, modePatch(view, MODES[i]!)); }} height={34} fill />
+      <Seg options={MODES.map(modeLabel)} selected={MODES.indexOf(mode)} onSelect={(i) => { if (!locked && !(MODES[i] === "reviewed" && !review.on)) save(view, modePatch(view, MODES[i]!)); }} height={34} fill />
     </div>
     <div className={css.mSegNote}>
       {modeNote(mode)}
       {mode === "reviewed" && !review.on && <> {t("web-pages.archiving.reviewNeeded")}</>}
+      {mode !== "reviewed" && !review.on && <> {t("web-pages.archiving.stationNeedsReview")}</>}
       {!view.canEdit && <> {t("web-pages.archiving.adminOnly")}</>}
     </div>
     {mode !== "off" && <>
