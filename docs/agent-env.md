@@ -18,10 +18,15 @@ as `agentEnv` (a map of names to one-line strings), read by `station/src/ops/age
 
 ## Changing them
 
-- `PUT /agent-env {env}` (core `agentEnv.set {env}`): a string sets one, null removes it, one left out stays (a masked
-  value survives an edit). Owners and admins only. The overview has them as `agentEnv` (by name, a secret's value
-  masked: a name with KEY/TOKEN/SECRET/PASSWORD/AUTH, or a URL with a password), absent from a station from before them,
-  whose page then has no such section.
+- `PUT /agent-env` (core `agentEnv.set`), owners and admins only: `{text}`, all of them as a .env file's lines
+  (`NAME=value`, blank lines, `#` comments, `export ` and quotes round a value taken; the last of a name kept; a secret
+  left as the overview shows it, masked, keeps its value; a wrong line refused by its number, `parseEnvText`), or `{env}`, a
+  patch (a string sets one, null removes it, one left out stays). The overview has them as `agentEnv` (by name, a
+  secret's value masked: a name with KEY/TOKEN/SECRET/PASSWORD/AUTH, or a URL with a password), absent from a station
+  from before them, whose page then has no such section.
+- The pages edit them as text in the core's draft (`agentEnvForm`, client/core-ts/src/agent-env.ts; calls
+  `agentEnv.form.open|edit|save|drop`): each line read as it is typed into parts (name, value, comment) the pages colour,
+  a line the station would refuse marked with why and the draft not saved while there is one, a name given twice said.
 - Once they change, every session's process takes them now if idle, else before its next turn (`Hub.everyChanged`);
   a Codex app-server's signature includes them, so it starts again once idle. Edited in config.json by hand, they apply to
   whatever starts next.

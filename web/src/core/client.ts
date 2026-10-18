@@ -16,6 +16,7 @@ import { t } from "../i18n.ts";
 export type Topic =
   | { topic: "decisionForm"; station: string; form: string }
   | { topic: "policyForm"; station: string; form: string }
+  | { topic: "agentEnvForm"; station: string; form: string }
   | { topic: "profileFlow"; station: string; form: string }
   | { topic: "connectFlow"; station: string; form: string }
   | { topic: "slackTokens"; station: string; form: string }

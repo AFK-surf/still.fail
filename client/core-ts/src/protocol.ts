@@ -98,6 +98,7 @@ export const TOPICS: Record<string, Spec> = {
   connectFlow: { station: S, form: S },
   decisionForm: { station: S, form: S },
   policyForm: { station: S, form: S },
+  agentEnvForm: { station: S, form: S },
   profileFlow: { station: S, form: S },
   changelog: {},
   workspaceMarks: { workspace: ["string", "skip"] },

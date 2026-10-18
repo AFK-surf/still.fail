@@ -23,7 +23,7 @@ import { linkCodexAuth } from "../agents/machine-logins.ts";
 import { type AccessKind, accessKind, profileVia, type Runtime, type Via } from "../agents/profiles.ts";
 import { cleanEndpoint, endpoints, find, groupOf, LEGACY, runtimesOf as runtimesOfEndpoints, SOURCES } from "../agents/providers.ts";
 import { type Viewer, managesStation } from "../mesh/credential.ts";
-import { startEnv } from "../ops/agent-env.ts";
+import { maskValue, startEnv } from "../ops/agent-env.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -1198,12 +1198,7 @@ export function unique(base: string, taken: Set<string>): string {
 export const secretKey = (key: string) => ["KEY", "TOKEN", "SECRET", "PASSWORD", "AUTH"].some((w) => key.toUpperCase().includes(w));
 
 /// Masks a secret for the pages: its first five and last four characters.
-export function mask(value: string): string {
-  if (value === "") return "";
-  const chars = [...value];
-  if (chars.length <= 8) return "••••";
-  return `${chars.slice(0, 5).join("")}…${chars.slice(-4).join("")}`;
-}
+export const mask = maskValue;
 
 /// A check in a line, for the pages that list them one by one: the option the model picked and what came of it, or
 /// that it failed. Checks from before the policy had options name the fixed four's.

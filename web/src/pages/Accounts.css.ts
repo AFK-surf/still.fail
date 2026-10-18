@@ -4,15 +4,6 @@ import { tiles } from "../Usage.css.ts";
 
 export const identityNameInput = style({ fontSize: vars.textTitle, fontWeight: "600", maxWidth: "360px" });
 export const envTable = style({ display: "grid", gap: "8px" });
-/** Over the rows, what each column is (the rows' words stand under them); none where the rows are one column. */
-export const envHead = style({
-  fontSize: vars.textMeta, color: vars.muted,
-  "@media": { "(max-width: 700px)": { display: "none" } },
-});
-// Where the fields' words start (their padding and line).
-globalStyle(`${envHead} > span:not(:last-child)`, { paddingInline: "13px" });
-/** The head's last column, as wide as a row's button and not seen. */
-export const envHeadEnd = style({ visibility: "hidden" });
 export const envRow = style({
   display: "grid", gridTemplateColumns: "minmax(120px, 1fr) minmax(140px, 1.5fr) auto", gap: "8px",
   "@media": {

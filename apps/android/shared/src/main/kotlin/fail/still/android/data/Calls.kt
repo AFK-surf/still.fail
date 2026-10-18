@@ -154,9 +154,6 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** A new connect; answers its id. */
     suspend fun createConnect(body: JsonObject): String = ops.connectCreate() { this.input = body }.jsonObject["id"]!!.jsonPrimitive.content
 
-    /** The variables everything the station starts for its agents runs with (docs/agent-env.md): a string sets one, null removes it. */
-    suspend fun setAgentEnv(env: JsonObject) { ops.agentEnvSet(env) }
-
     // ── profiles ──
 
     /** Changes a profile: any of `name`, `access`, `env`, `models`. */

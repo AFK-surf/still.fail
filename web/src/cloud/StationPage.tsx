@@ -20,11 +20,8 @@ import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, joinedText, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
-import { EnvEditor } from "../pages/Accounts.tsx";
 import type { EnvVar } from "../core/shapes.ts";
-import { useCall } from "../core/react.ts";
-import { useDoing } from "../doing.ts";
-import { useAct } from "@stillfail/ui/toast.tsx";
+import { AgentEnvText, useAgentEnvForm } from "../AgentEnvText.tsx";
 import { ScreensSection } from "../screen/ScreenList.tsx";
 import { PermissionsSection } from "../StationPermissions.tsx";
 import { LoginsSection } from "../MachineLogins.tsx";
@@ -36,6 +33,7 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as settingsCss from "./settings.css.ts";
 import * as css from "./StationPage.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { t } from "../i18n.ts";
 
 const WIDE = typeof window === "undefined" ? null : window.matchMedia("(min-width: 701px)");
@@ -283,24 +281,34 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
 
 /**
  * The variables everything it starts for its agents runs with (docs/agent-env.md: a proxy, mostly): its managers edit
- * them as a custom profile's; the others see them, a secret's value masked.
+ * them as a .env file's lines (AgentEnvText.tsx); the others see them, a secret's value masked.
  */
 function AgentEnv({ station, env, manager }: { station: string; env: EnvVar[]; manager: boolean }) {
-  const call = useCall();
-  const act = useAct();
-  const busy = useDoing("agentEnv.set", { station });
-  // Made again as the station tells them anew (a secret saved shows masked, as one read from it).
-  if (manager) return <EnvEditor key={env.map((e) => `${e.key}=${e.value}`).join("\n")} env={env} title={t("web-pages.stations.agentEnv")} lead={t("web-pages.stations.agentEnvLead")} busy={busy}
-    onSave={(patch) => act(call("agentEnv.set", { station, env: patch }), t("web-pages.stations.agentEnvSave"), t("web-pages.profiles.saved"))} />;
+  if (manager) return <AgentEnvEditor station={station} />;
   if (env.length === 0) return null;
   return (
-    <Section title={t("web-pages.stations.agentEnv")} description={t("web-pages.stations.agentEnvLead")}>
+    <Section title={t("web-pages.stations.agentEnv")}>
       <div className={pagesCss.card}>
         {env.map((e) => (
           <div key={e.key} className={pagesCss.cardRow}>
             <span className={pagesCss.cardRowText}><strong className={shellCss.mono}>{e.key}</strong><span className={`${shellCss.muted} ${shellCss.mono}`}>{e.value}</span></span>
           </div>
         ))}
+      </div>
+    </Section>
+  );
+}
+
+function AgentEnvEditor({ station }: { station: string }) {
+  const form = useAgentEnvForm(station);
+  return (
+    <Section title={t("web-pages.stations.agentEnv")} description={t("web-pages.stations.agentEnvLead")}>
+      <div className={pagesCss.card}>
+        <AgentEnvText form={form} fieldClass={controlsCss.input} label={t("web-pages.stations.agentEnv")} />
+        <div className={pagesCss.cardActions}>
+          {form.d?.dirty && <Button variant="ghost" onClick={form.reset}>{t("common.cancel")}</Button>}
+          <Button variant="primary" busy={form.saving} disabled={!form.canSave} onClick={form.save}>{t("common.save")}</Button>
+        </div>
       </div>
     </Section>
   );

@@ -735,10 +735,11 @@ export const stories: Story[] = [
   { id: "phone-station-permissions-read-only", group: "权限", title: "手机 · station · 权限 · 只读成员", app: true, phone: true, demo: permissionsDemo("readOnly"), steps: toPhoneStation },
   { id: "phone-station-permissions-none", group: "权限", title: "手机 · station · 权限 · 不是 Mac（不显示）", app: true, phone: true, demo: permissionsDemo("none"), steps: toPhoneStation },
   // The variables what a station starts for its agents runs with (docs/agent-env.md): set, none yet, and edited on a phone.
-  { id: "app-station-agent-env", group: "设置", title: "station · Agent 环境变量", app: true, demo: agentEnvDemo(true), steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "app-station-agent-env-empty", group: "设置", title: "station · Agent 环境变量 · 暂无", app: true, demo: agentEnvDemo(false), steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "phone-station-agent-env", group: "设置", title: "手机 · station · Agent 环境变量", app: true, phone: true, demo: agentEnvDemo(true), steps: toPhoneStation },
-  { id: "phone-station-agent-env-edit", group: "设置", title: "手机 · station · Agent 环境变量 · 编辑", app: true, phone: true, demo: agentEnvDemo(true), steps: [...toPhoneStation, { text: "编辑变量" }] },
+  { id: "app-station-agent-env", group: "设置", title: "station · Agent 环境变量", app: true, demo: agentEnvDemo("set"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-agent-env-empty", group: "设置", title: "station · Agent 环境变量 · 暂无", app: true, demo: agentEnvDemo("empty"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-agent-env-wrong", group: "设置", title: "station · Agent 环境变量 · 有错的行", app: true, demo: agentEnvDemo("wrong"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "phone-station-agent-env", group: "设置", title: "手机 · station · Agent 环境变量", app: true, phone: true, demo: agentEnvDemo("set"), steps: toPhoneStation },
+  { id: "phone-station-agent-env-edit", group: "设置", title: "手机 · station · Agent 环境变量 · 编辑", app: true, phone: true, demo: agentEnvDemo("wrong"), steps: [...toPhoneStation, { text: "编辑变量" }] },
   { id: "phone-screen", group: "屏幕", title: "手机 · 打开屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }, { text: "登录 · GitHub" }] },
 
   // ── the phone ──

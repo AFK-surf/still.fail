@@ -19,7 +19,7 @@ import { agentEnvView, routes } from "../src/api/routes/agent-env.ts";
 import type { Request } from "../src/api/request.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { makeCa, makeLeaf, pem } from "../src/vault/x509.ts";
-import { agentEnv, checkAgentEnv, keepLocal, profileFetch, readAgentEnvFrom, startEnv } from "../src/ops/agent-env.ts";
+import { agentEnv, checkAgentEnv, keepLocal, maskValue, parseEnvText, profileFetch, readAgentEnvFrom, startEnv } from "../src/ops/agent-env.ts";
 
 const owner: Request["viewer"] = { sub: "u", email: "o@x", name: "O", role: "owner", workspace: "w", device: "d" };
 const member: Request["viewer"] = { ...owner, email: "m@x", role: "member" };
@@ -37,6 +37,26 @@ test("config.json's agentEnv is a map of variables to one-line strings", () => {
   // Read leniently: what is not a variable is left out.
   assert.deepEqual(agentEnv({ agentEnv: { OK: "1", "NO WAY": "2", N: 3 } }), { OK: "1" });
   assert.deepEqual(agentEnv({}), {});
+});
+
+test("the variables as written: a .env file's lines, a secret left masked kept, the first line wrong said", () => {
+  const kept = { API_TOKEN: "tok-1234567890", HTTPS_PROXY: "http://user:pw@proxy:3128" };
+  assert.deepEqual(parseEnvText([
+    "# comment",
+    "",
+    "export HTTPS_PROXY = 'http://127.0.0.1:7890'",
+    `API_TOKEN=${maskValue(kept.API_TOKEN)}`,
+    "NO_PROXY=a,b",
+    "NO_PROXY=c",
+    "EMPTY=",
+  ].join("\r\n"), kept), { HTTPS_PROXY: "http://127.0.0.1:7890", API_TOKEN: "tok-1234567890", NO_PROXY: "c", EMPTY: "" });
+  // A masked value of what was not a secret is taken as written.
+  assert.deepEqual(parseEnvText("PLAIN=abcde…7890", { PLAIN: "abcdefghij7890" }), { PLAIN: "abcde…7890" });
+  assert.deepEqual(parseEnvText("A=1\nhttp_proxy http://x"), { line: 2, why: "notPair" });
+  assert.deepEqual(parseEnvText("=x"), { line: 1, why: "notPair" });
+  assert.deepEqual(parseEnvText("1A=x"), { line: 1, why: "badName", name: "1A" });
+  assert.deepEqual(parseEnvText(`A=${"x".repeat(4097)}`), { line: 1, why: "tooLong", name: "A" });
+  assert.deepEqual(parseEnvText(Array.from({ length: 65 }, (_, i) => `V${i}=1`).join("\n")), { line: 0, why: "tooMany" });
 });
 
 test("with a proxy, this machine is left out of it in both cases of NO_PROXY, beside what they name", () => {
@@ -183,6 +203,17 @@ test("PUT /agent-env: owners and admins change the variables, a secret's value m
   assert.equal("agentEnv" in config.raw(), false);
   assert.deepEqual(agentEnvView(config.raw()), []);
 
+  // All of them as written: the masked secret left as shown is kept, those left out are gone.
+  await ask(owner, { env: { API_TOKEN: "tok-1234567890", HTTPS_PROXY: "http://p:1" } });
+  const restartsBefore = restarts;
+  const written = await ask(owner, { text: "API_TOKEN=tok-1…7890\nNO_PROXY=x" });
+  assert.equal(written.status, 200);
+  assert.deepEqual(config.raw().agentEnv, { API_TOKEN: "tok-1234567890", NO_PROXY: "x" });
+  assert.equal(restarts, restartsBefore + 1);
+  const wrong = await ask(owner, { text: "NO_PROXY=y\nnot a pair" });
+  assert.deepEqual(wrong, { status: 400, body: { error: "Line 2 isn't in the form NAME=value" } });
+  assert.deepEqual(config.raw().agentEnv, { API_TOKEN: "tok-1234567890", NO_PROXY: "x" });
+  await ask(owner, { text: "" });
   assert.equal((await ask(owner, { env: { "BAD NAME": "x" } })).status, 400);
   assert.equal((await ask(owner, { env: { A: 1 } })).status, 400);
   assert.equal((await ask(owner, { env: { A: "a\nb" } })).status, 400);

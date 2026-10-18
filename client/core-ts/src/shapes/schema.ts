@@ -2607,6 +2607,22 @@ export const SHAPES: Record<string, Shape> = {
     ["title", opt("String")],
     ["runtime", opt("String")],
   ], { keepNone: true }),
+  AgentEnvDraft: struct([
+    ["text", "String", { doc: "As written: `NAME=value` a line; a secret masked as the station shows it (left so, it is kept)." }],
+    ["lines", vec("AgentEnvLine"), { doc: "The text's lines in order, each read." }],
+    ["errors", "u32", { doc: "How many lines keep it from being saved." }],
+    ["dirty", "bool"],
+    ["pending", "bool"],
+  ], { keepNone: true, doc: "A station's variables for its agents as one page edits them (agentEnvForm, docs/agent-env.md)." }),
+  AgentEnvLine: struct([
+    ["parts", vec("AgentEnvPart"), { doc: "Together, the line as written." }],
+    ["problem", opt("String"), { doc: "What is wrong with it, in a few words." }],
+    ["error", "bool", { doc: "It keeps the variables from being saved (else the problem is only said)." }],
+  ], { keepNone: true }),
+  AgentEnvPart: struct([
+    ["kind", "String", { doc: "name | value | comment | other: how it is coloured." }],
+    ["text", "String"],
+  ], { keepNone: true }),
   ArchivePolicyDraft: struct([
     ["policy", "String"],
     ["options", vec("ArchiveOptionDraft")],

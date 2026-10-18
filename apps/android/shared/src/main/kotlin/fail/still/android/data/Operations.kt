@@ -34,9 +34,12 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["access"] = JsonPrimitive(access)
         return call("tools.setAccess", JsonObject(values))
     }
-    suspend fun agentEnvSet(env: JsonElement): JsonElement {
-        val values = mutableMapOf<String, JsonElement>()
-        values["env"] = env
+    class AgentEnvSetFields : OperationFields() {
+        var env: JsonElement? by field<JsonElement>("env") { it }
+        var text: String? by field<String>("text") { JsonPrimitive(it) }
+    }
+    suspend fun agentEnvSet(fill: AgentEnvSetFields.() -> Unit = {}): JsonElement {
+        val values = AgentEnvSetFields().apply(fill).fields
         return call("agentEnv.set", JsonObject(values))
     }
     suspend fun sessionWarm(key: String): JsonElement {

@@ -124,6 +124,36 @@ data class AgentCardView (
 	val attention: List<AgentCardNote>
 )
 
+@Serializable
+data class AgentEnvPart (
+	/// name | value | comment | other: how it is coloured.
+	val kind: String,
+	val text: String
+)
+
+@Serializable
+data class AgentEnvLine (
+	/// Together, the line as written.
+	val parts: List<AgentEnvPart>,
+	/// What is wrong with it, in a few words.
+	val problem: String? = null,
+	/// It keeps the variables from being saved (else the problem is only said).
+	val error: Boolean
+)
+
+/// A station's variables for its agents as one page edits them (agentEnvForm, docs/agent-env.md).
+@Serializable
+data class AgentEnvDraft (
+	/// As written: `NAME=value` a line; a secret masked as the station shows it (left so, it is kept).
+	val text: String,
+	/// The text's lines in order, each read.
+	val lines: List<AgentEnvLine>,
+	/// How many lines keep it from being saved.
+	val errors: UInt,
+	val dirty: Boolean,
+	val pending: Boolean
+)
+
 /// A runtime: Claude Code, Codex or DeepSeek Harness.
 typealias RuntimeKind = String
 

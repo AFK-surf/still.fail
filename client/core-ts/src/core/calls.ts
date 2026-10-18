@@ -21,6 +21,7 @@ export type Call =
   | { kind: "connectFlow"; topic: Topic; action: string; patch: unknown }
   | { kind: "decisionForm"; topic: Topic; action: string; patch: unknown }
   | { kind: "policyForm"; topic: Topic; action: string; patch: unknown }
+  | { kind: "agentEnvForm"; topic: Topic; action: string; patch: unknown }
   | { kind: "profileFlow"; topic: Topic; action: string; patch: unknown }
   | { kind: "slackTokens"; topic: Topic; action: string; patch: unknown }
   | { kind: "clientError"; source: string; message: string }
@@ -130,6 +131,7 @@ export function callStation(call: Call): string | null {
       return call.call.kind === "view" ? call.call.station : null;
     case "decisionForm":
     case "policyForm":
+    case "agentEnvForm":
     case "profileFlow":
     case "connectFlow":
     case "slackTokens":
@@ -144,6 +146,7 @@ export function counts(call: Call, name: string): boolean {
   switch (call.kind) {
     case "decisionForm":
     case "policyForm":
+    case "agentEnvForm":
       return call.action === "save";
     case "profileFlow":
       return call.action === "submit";
@@ -225,9 +228,10 @@ function b64(text: string, what: string): Uint8Array {
 }
 
 export function parseCall(name: string, params: unknown): Call {
-  const flows: [string, string[], "decisionForm" | "policyForm" | "profileFlow" | "connectFlow" | "slackTokens", string][] = [
+  const flows: [string, string[], "decisionForm" | "policyForm" | "agentEnvForm" | "profileFlow" | "connectFlow" | "slackTokens", string][] = [
     ["automaticDecisions.form.", ["open", "edit", "save", "drop"], "decisionForm", "decisionForm"],
     ["automaticDecisions.policy.", ["open", "edit", "save", "drop"], "policyForm", "policyForm"],
+    ["agentEnv.form.", ["open", "edit", "save", "drop"], "agentEnvForm", "agentEnvForm"],
     ["profile.flow.", ["open", "edit", "submit", "drop"], "profileFlow", "profileFlow"],
     ["connect.flow.", ["open", "edit", "go", "config", "make", "verify", "create", "drop"], "connectFlow", "connectFlow"],
     ["slack.tokens.", ["edit", "verify", "drop"], "slackTokens", "slackTokens"],

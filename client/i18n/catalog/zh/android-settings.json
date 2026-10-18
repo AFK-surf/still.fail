@@ -86,7 +86,7 @@
   "android-settings.devices.times": "{ago}登录 · {until}过期",
   "android-settings.devices.unnamed": "未命名设备",
   "android-settings.agentEnv.empty": "暂无变量",
-  "android-settings.agentEnv.note": "此 station 启动的 agent、登录和任务都会加载这些变量，常用于设置 HTTP 代理。Profile 中的同名变量优先。保存后，空闲的 agent 进程会重新启动，运行中的在本轮结束后生效。",
+  "android-settings.agentEnv.note": "此 station 启动的 agent、登录和任务都会加载这些变量，常用于设置 HTTP 代理。每行一个「变量名=值」，可直接粘贴 .env 内容，打码的值保持原样即不修改。Profile 中的同名变量优先。保存后，空闲的 agent 进程会重新启动，运行中的在本轮结束后生效。",
   "android-settings.agentEnv.title": "Agent 环境变量",
   "android-settings.env.add": "＋ 添加变量",
   "android-settings.env.edit": "编辑变量",

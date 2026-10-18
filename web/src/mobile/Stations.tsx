@@ -3,7 +3,7 @@ import { useAct } from "@stillfail/ui/toast.tsx";
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
 // with the buddy's face for its state and its load as rings; one station's page is the machine (its load, network,
 // versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
-import { useCall, useReady } from "../core/react.ts";
+import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
@@ -28,13 +28,13 @@ import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import { Button, Card, FailedMark, Field, Illustration, LinkButton, ListCard, ListRow, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg } from "./parts.tsx";
-import { EnvSheet } from "./Profiles.tsx";
 import * as profilesCss from "./Profiles.css.ts";
 import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import * as waitCss from "@stillfail/ui/waiting.css.ts";
 import { usePlaceActions } from "./placeActions.tsx";
 import { ScreensCard } from "./Screen.tsx";
 import { PermissionsCard } from "./StationPermissions.tsx";
+import { AgentEnvText, useAgentEnvForm } from "../AgentEnvText.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -350,11 +350,10 @@ function Logins({ station, marked }: { station: string; marked: string | null })
 
 /**
  * The variables everything it starts for its agents runs with (docs/agent-env.md: a proxy, mostly), a row each, a
- * secret's value masked; its managers edit them in a sheet (as a custom profile's, ./Profiles.tsx).
+ * secret's value masked; its managers edit them in a sheet as a .env file's lines.
  */
 function AgentEnv({ station, env, manager }: { station: string; env: EnvVar[]; manager: boolean }) {
   const app = useApp();
-  const call = useCall();
   if (env.length === 0 && !manager) return null;
   return (
     <>
@@ -363,8 +362,7 @@ function AgentEnv({ station, env, manager }: { station: string; env: EnvVar[]; m
         {env.length === 0 && <ListRow><span className={`${partsCss.mGrow} ${partsCss.mMuted}`}>{t("web-mobile.stations.agentEnvEmpty")}</span></ListRow>}
         {env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${profilesCss.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${profilesCss.mMono}`}>{e.value}</span></span></ListRow>)}
         {manager && (
-          <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet env={env} title={t("web-mobile.stations.agentEnv")} note={t("web-mobile.stations.agentEnvNote")}
-            doing={["agentEnv.set", { station }]} save={(patch) => call("agentEnv.set", { station, env: patch })} /> })}>
+          <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <AgentEnvSheet station={station} /> })}>
             <span className={`${partsCss.mGrow} ${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span>
             <AgentEnvDoing station={station} />
           </ListRow>
@@ -374,10 +372,31 @@ function AgentEnv({ station, env, manager }: { station: string; env: EnvVar[]; m
   );
 }
 
+/** The variables as a .env file's lines (../AgentEnvText.tsx), to paste into and change; saved whole, the sheet closed at once. */
+function AgentEnvSheet({ station }: { station: string }) {
+  const app = useApp();
+  const form = useAgentEnvForm(station);
+  const close = () => { form.reset(); app.sheet(null); };
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-mobile.stations.agentEnv")} />
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.stations.agentEnvNote")}</p>
+        <AgentEnvText form={form} fieldClass={listsCss.mField} label={t("web-mobile.stations.agentEnv")} />
+        <div className={sheetsCss.mFormActions}>
+          <Button label={t("common.cancel")} primary={false} onClick={close} />
+          <Button label={t("common.save")} primary busy={form.saving} enabled={form.canSave} onClick={() => { form.save(); app.sheet(null); }} />
+        </div>
+      </div>
+    </>
+  );
+}
+
 /** Saved (the sheet gone): a spinner until the station has them; why it failed, a moment. */
 function AgentEnvDoing({ station }: { station: string }) {
-  const busy = useDoing("agentEnv.set", { station });
-  const failed = useDoingFailed("agentEnv.set", { station });
+  const busy = useDoing("agentEnv.form.save", { station });
+  const failed = useDoingFailed("agentEnv.form.save", { station });
   return busy ? <Spinner /> : failed ? <FailedMark error={failed} /> : null;
 }
 

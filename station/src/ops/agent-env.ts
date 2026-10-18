@@ -47,6 +47,41 @@ export function checkAgentEnv(set: unknown) {
   }
 }
 
+/// What is wrong with a line of the variables as written: its number (from 1), and which refusal.
+export type EnvLineError = { line: number; why: "notPair" | "badName" | "tooLong" | "tooMany"; name?: string };
+
+/// The variables as people write them (as a .env file): `NAME=value` a line, blank lines and `#` comments left out, an
+/// `export ` before it and quotes round the value taken off, the last of a name kept. A value as the pages show a
+/// secret of `shown` (masked) stands for the one kept: it is what was read, left as it was.
+export function parseEnvText(text: string, kept: Record<string, string> = {}): Record<string, string> | EnvLineError {
+  const env: Record<string, string> = {};
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]!.trim();
+    if (line === "" || line.startsWith("#")) continue;
+    if (/^export\s/.test(line)) line = line.slice(6).trimStart();
+    const at = line.indexOf("=");
+    if (at <= 0) return { line: i + 1, why: "notPair" };
+    const name = line.slice(0, at).trim();
+    if (!ENV_NAME.test(name)) return { line: i + 1, why: "badName", name };
+    let value = line.slice(at + 1).trim();
+    if (value.length >= 2 && (value[0] === '"' || value[0] === "'") && value.at(-1) === value[0]) value = value.slice(1, -1);
+    if (value.length > MOST_VALUE) return { line: i + 1, why: "tooLong", name };
+    const before = kept[name];
+    env[name] = before !== undefined && secretValue(name, before) && value === maskValue(before) ? before : value;
+  }
+  if (Object.keys(env).length > MOST_VARS) return { line: 0, why: "tooMany" };
+  return env;
+}
+
+/// A secret as the pages show it: its first five and last four characters.
+export function maskValue(value: string): string {
+  if (value === "") return "";
+  const chars = [...value];
+  if (chars.length <= 8) return "••••";
+  return `${chars.slice(0, 5).join("")}…${chars.slice(-4).join("")}`;
+}
+
 /// A variable, whatever the case it is written in (proxies are read as `HTTPS_PROXY` and `https_proxy`).
 const either = (env: Record<string, string | undefined>, name: string): string | undefined => env[name] || env[name.toLowerCase()] || undefined;
 

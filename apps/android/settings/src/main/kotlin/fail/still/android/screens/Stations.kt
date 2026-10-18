@@ -66,7 +66,25 @@ import fail.still.android.shared.R
 import fail.still.android.Screen
 import fail.still.android.data.StationView
 import fail.still.android.data.EnvVar
+import fail.still.android.data.AgentEnvDraft
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import fail.still.android.ui.Smooth
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import fail.still.android.ui.CodeFont
+import fail.still.android.ui.Button
 import fail.still.android.ui.DoingMark
 import fail.still.android.data.MembershipsView
 import fail.still.android.data.StationNet
@@ -82,7 +100,6 @@ import fail.still.android.ui.hasStationMark
 import fail.still.android.ui.AgentStateMark
 import fail.still.android.ui.MakerIcon
 import fail.still.android.ui.ModelMark
-import fail.still.android.ui.Smooth
 import fail.still.android.data.ChatState
 import fail.still.android.data.Maker
 import androidx.compose.foundation.layout.offset
@@ -406,16 +423,75 @@ private fun StationAgentEnv(address: String, env: List<EnvVar>, manager: Boolean
             }
         }
         if (manager) {
-            ListRow(onClick = {
-                app.sheet = SheetSpec(0.8f, draggable = true) {
-                    EnvSheet(t("android-settings.agentEnv.title"), t("android-settings.agentEnv.note"), env, app.isDoing("agentEnv.set", "station" to address)) { changed -> app.api(address).setAgentEnv(changed) }
-                }
-            }) {
+            ListRow(onClick = { app.sheet = SheetSpec(0.85f, draggable = true) { AgentEnvSheet(address) } }) {
                 Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
                 // Saved (the sheet gone): a spinner until the station has them.
-                DoingMark(app.isDoing("agentEnv.set", "station" to address), app.failedOf("agentEnv.set", "station" to address))
+                DoingMark(app.isDoing("agentEnv.form.save", "station" to address), app.failedOf("agentEnv.form.save", "station" to address))
             }
         }
+    }
+}
+
+/**
+ * The station's variables as a .env file's lines (web AgentEnvText.tsx), in the core's draft (agentEnvForm): coloured as
+ * the core reads them, a line it cannot take in red and what is wrong said under the field; saved whole, the sheet
+ * closed at once.
+ */
+@Composable
+private fun ColumnScope.AgentEnvSheet(station: String) {
+    val app = LocalApp.current
+    val form = remember(station) { java.util.UUID.randomUUID().toString() }
+    val topic by rememberTopic<AgentEnvDraft>(app.core, buildJsonObject { put("topic", "agentEnvForm"); put("station", station); put("form", form) })
+    suspend fun call(action: String, input: JsonObject = buildJsonObject {}) = app.core.call("agentEnv.form.$action", buildJsonObject { put("station", station); put("form", form); put("input", input) })
+    LaunchedEffect(station, form) { app.act(t("web-pages.stations.agentEnvRead")) { call("open") } }
+    DisposableEffect(station, form) { onDispose { app.act(t("web-pages.stations.agentEnvClose")) { call("drop") } } }
+    val d = topic.value
+    // What was typed, until the core has it (the field never waits on it).
+    var typed by remember { mutableStateOf<String?>(null) }
+    if (typed != null && d?.text == typed) typed = null
+    val text = typed ?: d?.text ?: ""
+    val read = d?.takeIf { it.text == text }
+    val colours = remember(read) { read?.let { r -> EnvColours(r) } ?: VisualTransformation.None }
+    SheetGrab()
+    SheetHead(t("android-settings.agentEnv.title"))
+    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(t("android-settings.agentEnv.note"), fontSize = 12.sp, color = C.muted)
+        Box(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
+            if (text.isEmpty()) Text("HTTPS_PROXY=http://127.0.0.1:7890\nNO_PROXY=localhost,.internal", color = C.subtle, fontSize = 13.sp, fontFamily = CodeFont, lineHeight = 20.sp)
+            BasicTextField(
+                text, { next -> typed = next; app.act(t("web-pages.stations.agentEnvEdit")) { call("edit", buildJsonObject { put("text", next) }) } },
+                minLines = 6, cursorBrush = SolidColor(C.accent), visualTransformation = colours,
+                textStyle = TextStyle(color = C.ink, fontSize = 13.sp, fontFamily = CodeFont, lineHeight = 20.sp), modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        read?.lines?.forEachIndexed { i, l ->
+            l.problem?.let { Text(t("web-pages.stations.agentEnvLine", "line" to i + 1, "problem" to it), fontSize = 12.sp, color = if (l.error) C.red else C.muted) }
+        }
+        val canSave = d != null && d.dirty && !d.pending && read != null && read.errors == 0u
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            Button(t("common.cancel"), primary = false) { app.sheet = null }
+            Button(t("common.save"), primary = true, enabled = canSave) {
+                app.sheet = null
+                app.act(t("web-pages.stations.agentEnvSave"), t("android-settings.saved")) { call("save") }
+            }
+        }
+    }
+}
+
+/** The text as the core read it: names, values and comments in their colours, a line it cannot take in red. */
+private class EnvColours(private val read: AgentEnvDraft) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val coloured = buildAnnotatedString {
+            read.lines.forEachIndexed { i, l ->
+                if (i > 0) append("\n")
+                l.parts.forEach { p ->
+                    val colour = if (l.error) C.red else when (p.kind) { "name" -> C.accent; "value" -> C.ink; "comment" -> C.subtle; else -> C.muted }
+                    withStyle(SpanStyle(color = colour)) { append(p.text) }
+                }
+            }
+        }
+        // The same letters (the core's parts are the line as written): only their colours change.
+        return TransformedText(if (coloured.text == text.text) coloured else text, OffsetMapping.Identity)
     }
 }
 

@@ -1,4 +1,4 @@
-import type { EnvVar, MachineLogin } from "../core/shapes.ts";
+import type { MachineLogin } from "../core/shapes.ts";
 import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
 import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "@stillfail/ui/icons.tsx";
 import { useEffect, useRef, useState } from "react";
@@ -451,19 +451,11 @@ let nextRow = 1;
 
 /** The variables a custom profile runs with: what reaches its runtime's model service, set by hand. */
 function EnvSection({ profile, onSave, busy }: { profile: Profile; onSave(input: ProfileInput): void; busy: boolean }) {
-  return <EnvEditor env={profile.env} title={t("web-pages.profiles.env")} lead={t("web-pages.profiles.envLead", { route: "{route}" })} busy={busy} onSave={(env) => onSave({ env })} />;
-}
-
-/**
- * Variables set by hand: a custom profile's, or a station's for what it starts for its agents (cloud/StationPage.tsx).
- * Saved as a patch: a string sets one, null removes it, a masked one left blank is kept.
- */
-export function EnvEditor({ env, title, lead, onSave, busy }: { env: EnvVar[]; title: string; lead: string; onSave(patch: Record<string, string | null>): void; busy: boolean }) {
-  const [rows, setRows] = useState<EnvRow[]>(() => env.map((e) => ({ row: nextRow++, key: e.key, value: e.secret ? "" : e.value, masked: e.secret ? e.value : null, original: e.key })));
+  const [rows, setRows] = useState<EnvRow[]>(() => profile.env.map((e) => ({ row: nextRow++, key: e.key, value: e.secret ? "" : e.value, masked: e.secret ? e.value : null, original: e.key })));
   const patch = (): Record<string, string | null> => {
     const out: Record<string, string | null> = {};
     const kept = new Set(rows.map((r) => r.key.trim()));
-    for (const e of env) if (!kept.has(e.key)) out[e.key] = null;
+    for (const e of profile.env) if (!kept.has(e.key)) out[e.key] = null;
     for (const r of rows) {
       const key = r.key.trim();
       if (!key) continue;
@@ -475,12 +467,9 @@ export function EnvEditor({ env, title, lead, onSave, busy }: { env: EnvVar[]; t
   };
   const update = (row: number, p: Partial<EnvRow>) => setRows(rows.map((r) => (r.row === row ? { ...r, ...p } : r)));
   return (
-    <Section title={title} description={lead}>
+    <Section title={t("web-pages.profiles.env")} description={t("web-pages.profiles.envLead", { route: "{route}" })}>
       <div className={pagesCss.card}>
         <div className={css.envTable}>
-          {rows.length > 0
-            ? <div className={`${css.envRow} ${css.envHead}`} aria-hidden><span>{t("web-pages.profiles.envName")}</span><span>{t("web-pages.profiles.envValue")}</span><span className={css.envHeadEnd}>{t("common.delete")}</span></div>
-            : <span className={shellCss.muted}>{t("web-pages.profiles.envEmpty")}</span>}
           {rows.map((r) => {
             const secret = r.masked !== null || /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(r.key);
             return (
@@ -495,7 +484,7 @@ export function EnvEditor({ env, title, lead, onSave, busy }: { env: EnvVar[]; t
           <div><Button variant="ghost" icon={Plus} onClick={() => setRows([...rows, { row: nextRow++, key: "", value: "", masked: null, original: null }])}>{t("web-pages.profiles.envAdd")}</Button></div>
         </div>
         <div className={pagesCss.cardActions}>
-          <Button variant="primary" busy={busy} onClick={() => onSave(patch())}>{t("common.save")}</Button>
+          <Button variant="primary" busy={busy} onClick={() => onSave({ env: patch() })}>{t("common.save")}</Button>
         </div>
       </div>
     </Section>

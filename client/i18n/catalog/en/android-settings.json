@@ -104,7 +104,7 @@
   "android-settings.devices.times": "Signed in {ago} · expires {until}",
   "android-settings.devices.unnamed": "Unnamed device",
   "android-settings.agentEnv.empty": "No variables yet",
-  "android-settings.agentEnv.note": "Agents, logins and tasks started by this station load these variables, commonly to set an HTTP proxy. A Profile's variable of the same name takes precedence. After saving, idle agent processes restart; running ones pick up the change after their current turn.",
+  "android-settings.agentEnv.note": "Agents, logins and tasks started by this station load these variables, commonly to set an HTTP proxy. One NAME=value per line; you can paste a .env file. Leave a masked value as it is to keep it. A Profile's variable of the same name takes precedence. After saving, idle agent processes restart; running ones pick up the change after their current turn.",
   "android-settings.agentEnv.title": "Agent environment variables",
   "android-settings.env.add": "+ Add variable",
   "android-settings.env.edit": "Edit variables",

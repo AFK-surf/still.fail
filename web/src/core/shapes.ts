@@ -115,6 +115,33 @@ export interface AgentCardView {
 	attention: AgentCardNote[];
 }
 
+export interface AgentEnvPart {
+	/** name | value | comment | other: how it is coloured. */
+	kind: string;
+	text: string;
+}
+
+export interface AgentEnvLine {
+	/** Together, the line as written. */
+	parts: AgentEnvPart[];
+	/** What is wrong with it, in a few words. */
+	problem?: string;
+	/** It keeps the variables from being saved (else the problem is only said). */
+	error: boolean;
+}
+
+/** A station's variables for its agents as one page edits them (agentEnvForm, docs/agent-env.md). */
+export interface AgentEnvDraft {
+	/** As written: `NAME=value` a line; a secret masked as the station shows it (left so, it is kept). */
+	text: string;
+	/** The text's lines in order, each read. */
+	lines: AgentEnvLine[];
+	/** How many lines keep it from being saved. */
+	errors: number;
+	dirty: boolean;
+	pending: boolean;
+}
+
 /** A runtime: Claude Code, Codex or DeepSeek Harness. */
 export type RuntimeKind = "claude" | "codex" | "dsh";
 
