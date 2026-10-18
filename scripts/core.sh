@@ -1,7 +1,7 @@
 #!/bin/bash
 # The still.fail client core (client/core-ts of github.com/zzj3720/ember) in JavaScriptCore, on its Rust shell
 # (client/shell): builds the pieces from an ember checkout and runs a headless smoke test. See core/README.md.
-#   scripts/core.sh deps | shell [TARGET] | bundle | smoke [build|run] | sizes | clean | all
+#   scripts/core.sh deps | shell [TARGET] | bundle | smoke [build|run] | vectors | sizes | clean | all
 # EMBER: the ember checkout (default: ember-src beside this session's tools); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -43,11 +43,13 @@ shell() {
   echo "shell $target in $(since $t0) s: $(stat -f %z $OUT/$target/libstillfail_shell.a) bytes; links: $(libs $target)"
 }
 
-# The core as one script for JavaScriptCore: core/jsc.ts (our entry: hermes-globals' polyfills, bridge.ts's
-# startBridged, typed arrays across the boundary), esbuild IIFE, ES2020. `@core/` is client/core-ts/src.
+# The core as one script for JavaScriptCore: core/jsc.ts (core/jsc-start.ts: hermes-globals' polyfills, then ember's
+# hosts/engine.ts; ENTRY: an app's own entry, with its modules), esbuild IIFE, ES2020. `@core/` is client/core-ts/src.
+# Not ember's scripts/hermes-bundle.ts: its Babel pass (classes as functions) is Hermes's need, and it resolves imports
+# only from inside ember; JavaScriptCore runs classes as they are.
 bundle() {
   local t0=$(now)
-  $CORE_TS/node_modules/.bin/esbuild $ROOT/core/jsc.ts --bundle --format=iife --platform=neutral \
+  $CORE_TS/node_modules/.bin/esbuild ${ENTRY:-$ROOT/core/jsc.ts} --bundle --format=iife --platform=neutral \
     --main-fields=module,main --target=es2020 --minify --legal-comments=none \
     --alias:@core=$CORE_TS/src --resolve-extensions=.ts,.js,.mjs \
     --outfile=$OUT/core.js --metafile=$OUT/core.meta.json --log-level=warning
@@ -92,6 +94,12 @@ smoke_run() {
   return $code
 }
 
+# src/core/vectors_test.mbt: core-ts's diff and apply over values shaped like the topics (core/delta-vectors.ts).
+vectors() {
+  EMBER=$EMBER node core/delta-vectors.ts > src/core/vectors_test.mbt
+  echo "vectors: $(grep -c '^test ' src/core/vectors_test.mbt) tests in src/core/vectors_test.mbt"
+}
+
 sizes() {
   ls -la $OUT/core.js $OUT/*/libstillfail_shell*.a $OUT/smoke $OUT/smoke.stripped 2>/dev/null
 }
@@ -106,8 +114,9 @@ case "${1:-all}" in
       run) smoke_run ;;
       *) bundle; smoke_build; smoke_run ;;
     esac ;;
+  vectors) vectors ;;
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; bundle; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | bundle | smoke [build|run] | sizes | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | bundle | smoke [build|run] | vectors | sizes | clean | all"; exit 2 ;;
 esac
