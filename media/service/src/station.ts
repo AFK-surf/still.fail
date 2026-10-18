@@ -14,11 +14,11 @@ export const PART = 8 * 1024 * 1024;
 
 type Answer = { status: number; headers: Record<string, string | string[] | undefined>; body: Buffer };
 
-function get(link: StationLink, viewer: string, path: string, query: Record<string, string | number>): Promise<Answer> {
+function get(link: StationLink, viewer: string, path: string, query: Record<string, string | number>, signal?: AbortSignal): Promise<Answer> {
   const q = new URLSearchParams(Object.entries(query).map(([k, v]) => [k, String(v)])).toString();
   return new Promise((done, fail) => {
     const req = request(
-      { socketPath: link.socket, path: `${path}?${q}`, method: "GET", headers: { authorization: `Bearer ${link.token}`, "stillfail-viewer": viewer, "accept-language": "zh-CN" } },
+      { socketPath: link.socket, path: `${path}?${q}`, method: "GET", headers: { authorization: `Bearer ${link.token}`, "stillfail-viewer": viewer, "accept-language": "zh-CN" }, ...(signal ? { signal } : {}) },
       (res) => {
         const parts: Buffer[] = [];
         res.on("data", (b: Buffer) => parts.push(b));
@@ -83,4 +83,38 @@ export async function readAll(link: StationLink, viewer: string, root: string, p
     at += part.bytes.length;
   }
   return { bytes: Buffer.concat(parts), mtime: head.mtime };
+}
+
+/// Whether the folder changed (the station's long poll: answered at once when it did since `id` last asked, else as
+/// soon as it does, else after about 25 s with false). Ends (refused) when `signal` aborts.
+export async function watch(link: StationLink, viewer: string, root: string, path: string, id: string, signal?: AbortSignal): Promise<boolean> {
+  const a = await get(link, viewer, "/drive/watch", { root, path, id }, signal);
+  if (a.status !== 200) throw refused(a);
+  return (JSON.parse(a.body.toString("utf8")) as { changed?: boolean }).changed === true;
+}
+
+/// A picture the station made of a file: its bytes and type, and (a thumbnail's) ThumbHash with the size it is of.
+export type Picture = { bytes: Buffer; type: string; hash?: string; w?: number; h?: number };
+
+/// An image's thumbnail (`/thumb`: at most 720×600; png, jpg, jpeg, webp) or a video's poster (`/poster`, a JPEG);
+/// null when the station makes none of that file (its 404 without a drive refusal's code).
+export async function picture(link: StationLink, viewer: string, what: "thumb" | "poster", root: string, path: string): Promise<Picture | null> {
+  const a = await get(link, viewer, `/${what}`, { root, path });
+  if (a.status === 404) {
+    let code = "";
+    try {
+      code = (JSON.parse(a.body.toString("utf8")) as { code?: string }).code ?? "";
+    } catch {}
+    if (code === "not_found" || code === "not_a_root") throw refused(a);
+    return null;
+  }
+  if (a.status !== 200) throw refused(a);
+  const header = (k: string) => {
+    const v = a.headers[k];
+    return typeof v === "string" ? v : undefined;
+  };
+  const w = Number(header("stillfail-width"));
+  const h = Number(header("stillfail-height"));
+  const hash = header("stillfail-thumbhash");
+  return { bytes: a.body, type: header("content-type") ?? "image/jpeg", ...(hash ? { hash } : {}), ...(w > 0 && h > 0 ? { w, h } : {}) };
 }
