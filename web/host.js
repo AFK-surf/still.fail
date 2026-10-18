@@ -302,8 +302,12 @@
     const m = mctx.measureText(e.c);
     const left = m.actualBoundingBoxLeft, right = m.actualBoundingBoxRight;
     const asc = m.actualBoundingBoxAscent, desc = m.actualBoundingBoxDescent;
+    // whole pixels each way from the baseline, so every glyph's baseline is
+    // on a pixel row of its bitmap and glyphs on one line line up
     const pad = 1;
-    const pw = Math.ceil((left + right) * sc) + 2 * pad, ph = Math.ceil((asc + desc) * sc) + 2 * pad;
+    const l = Math.ceil(left * sc), r = Math.ceil(right * sc);
+    const a = Math.ceil(asc * sc), d = Math.ceil(desc * sc);
+    const pw = l + r + 2 * pad, ph = a + d + 2 * pad;
     e.w = 0;
     if (pw <= 2 || ph <= 2 || pw > 512 || ph > 512) return;
     if (packX + pw + 1 > ATLAS) { packX = 0; packY += packH + 1; packH = 0; }
@@ -319,7 +323,7 @@
     rctx.font = font(e.size * sc, e.weight);
     rctx.fillStyle = '#fff';
     rctx.textBaseline = 'alphabetic';
-    rctx.fillText(e.c, pad + left * sc, pad + asc * sc);
+    rctx.fillText(e.c, pad + l, pad + a);
     const img = rctx.getImageData(0, 0, pw, ph);
     gl.bindTexture(gl.TEXTURE_2D, atlasTex);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
@@ -328,8 +332,8 @@
     e.v = packY;
     e.w = pw / sc;
     e.h = ph / sc;
-    e.ox = -left - pad / sc;
-    e.oy = -asc - pad / sc;
+    e.ox = -(l + pad) / sc;
+    e.oy = -(a + pad) / sc;
     e.color = emojiRe.test(e.c) ? 1 : 0;
     packX += pw + 1;
     packH = Math.max(packH, ph);

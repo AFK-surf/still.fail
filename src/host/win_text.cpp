@@ -331,12 +331,15 @@ static void rasterize(int key) {
     x1 = tm.widthIncludingTrailingWhitespace;
     y1 = tm.height;
   }
-  double pad = 1.0 / sc;
-  x0 -= pad;
-  y0 -= pad;
-  x1 += pad;
-  y1 += pad;
-  int pw = (int)ceil((x1 - x0) * sc), ph = (int)ceil((y1 - y0) * sc);
+  // The bitmap's edges on whole pixels from the baseline, a pixel of room
+  // around: the baseline then falls on a pixel row of every glyph's bitmap,
+  // so glyphs placed on the same rounded baseline line up.
+  double base = nl ? lm.baseline : 0;
+  int px0 = (int)floor(x0 * sc) - 1, px1 = (int)ceil(x1 * sc) + 1;
+  int py0 = (int)floor((y0 - base) * sc) - 1, py1 = (int)ceil((y1 - base) * sc) + 1;
+  x0 = px0 / sc;
+  y0 = base + py0 / sc;
+  int pw = px1 - px0, ph = py1 - py0;
   if (pw <= 0 || ph <= 0 || pw > RT_SIZE || ph > RT_SIZE) {
     l->Release();
     return;

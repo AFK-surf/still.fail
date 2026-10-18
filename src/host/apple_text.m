@@ -137,9 +137,15 @@ static void rasterize(int key) {
     double w = CTLineGetTypographicBounds(line, &asc, &desc, NULL);
     b = CGRectMake(0, -desc, w, asc + desc);
   }
-  double pad = 1.0 / sc;
-  b = CGRectInset(b, -pad, -pad);
-  int pw = (int)ceil(b.size.width * sc), ph = (int)ceil(b.size.height * sc);
+  // The bitmap's edges on whole pixels from the baseline, a pixel of room
+  // around: the baseline then falls on a pixel row of every glyph's bitmap,
+  // so glyphs placed on the same rounded baseline line up (rounding each
+  // glyph's own fractional top made them wander up and down a pixel).
+  int x0 = (int)floor(b.origin.x * sc) - 1, y0 = (int)floor(b.origin.y * sc) - 1;
+  int x1 = (int)ceil((b.origin.x + b.size.width) * sc) + 1;
+  int y1 = (int)ceil((b.origin.y + b.size.height) * sc) + 1;
+  b = CGRectMake(x0 / sc, y0 / sc, (x1 - x0) / sc, (y1 - y0) / sc);
+  int pw = x1 - x0, ph = y1 - y0;
   if (pw <= 0 || ph <= 0 || pw > 512 || ph > 512) {
     CFRelease(line);
     return;
