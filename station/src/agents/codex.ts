@@ -8,6 +8,7 @@
 // - threads need sandbox "danger-full-access" with approvalPolicy "never", or MCP tool calls are refused.
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { agentEnv } from "../ops/agent-env.ts";
 import { log } from "../ops/log.ts";
 import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
 import { linkCodexAuth, type Env } from "./machine-logins.ts";
@@ -130,6 +131,8 @@ function hostSignature(profile: Profile): string {
   return JSON.stringify([
     profile.home,
     sorted(Object.entries(profileEnv(profile, "codex"))),
+    // The station's variables for its agents: changed, the app-server starts again with them once idle.
+    sorted(Object.entries(agentEnv())),
     sorted(codexOverrides(accessKind(profile), profileModel(profile), profileVia(profile))),
   ]);
 }

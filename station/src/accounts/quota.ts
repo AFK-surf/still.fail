@@ -11,6 +11,7 @@ import { accessKind } from "../agents/profiles.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { type ProfileQuota, type QuotaWindow, URLS, type Urls } from "./profiles.ts";
+import { profileFetch } from "../ops/agent-env.ts";
 
 type Json = any;
 
@@ -97,7 +98,7 @@ async function refused(provider: string, response: Response, lang: Lang): Promis
   return quota("unavailable", [], tr(lang, "station.quota.providerStatus", { provider, status }));
 }
 
-const get = (url: string, headers: Record<string, string>) => fetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
+const get = (url: string, headers: Record<string, string>) => profileFetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
 
 async function opencode(urls: Urls, key: string, lang: Lang): Promise<ProfileQuota> {
   const response = await get(`${urls.opencode}/v1/usage`, { authorization: `Bearer ${key}` });

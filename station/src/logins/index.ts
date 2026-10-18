@@ -10,6 +10,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Clock } from "effect";
+import { startEnv } from "../ops/agent-env.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -84,7 +85,7 @@ export class Logins {
 
   constructor(o: LoginsOptions) {
     this.#data = o.data;
-    this.#env = o.env ?? (() => Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && !SCRUBBED.includes(e[0]))));
+    this.#env = o.env ?? (() => startEnv(SCRUBBED));
     this.#fibers = new Fibers("logins", o.clock);
     this.#lang = o.lang ?? stationLang;
   }

@@ -16,6 +16,7 @@ import { type RootView, rootView, rootsOf } from "../drive/drive.ts";
 import { sees } from "../store/rows.ts";
 import { titleOf } from "../read/views.ts";
 import { policyView } from "../sessions/archive-policy.ts";
+import { agentEnvView } from "./routes/agent-env.ts";
 
 
 /// What the Slack side adds (src/slack): a connect's connection, the viewer's Slack workspaces and apps.
@@ -133,6 +134,8 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // The folders pinned in its drive (drive/drive.ts), each with whether it can be browsed now; a member who may write
     // browses every folder from the home (`anywhere`).
     // Those of a joined workspace browse only its pinned folders, never the whole machine.
+    // The variables everything it starts for its agents runs with (ops/agent-env.ts): a proxy, mostly.
+    agentEnv: agentEnvView(raw),
     drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map((p) => (d.rootView ?? rootView)(p)), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
     // macOS's grants to still.fail Helper (a Mac's station only; a station from before them says none: not shown).
     ...withPermissions(d, viewer),

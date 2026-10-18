@@ -74,6 +74,7 @@ import { Secrets } from "../vault/secrets.ts";
 import { plainStore } from "../vault/plain.ts";
 import { vaultStore } from "../vault/store.ts";
 import { vaultTools } from "../tools/vault.ts";
+import { readAgentEnvFrom } from "../ops/agent-env.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
@@ -168,6 +169,8 @@ export const AgentsLive = (control: Control) =>
       const config = new ConfigFile(data);
       // An edit is taken only if it checks out as config.rs `parse_config` would have it.
       config.check = checkConfig;
+      // What it starts for its agents runs with the variables set in it (ops/agent-env.ts).
+      readAgentEnvFrom(() => config.raw());
       const place = () => {
         const s = cloud.state;
         return s && s.workspace && !cloud.removed() ? s : null;

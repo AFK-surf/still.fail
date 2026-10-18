@@ -3518,6 +3518,11 @@ export interface Overview {
 	/** How much of the disk it takes (none from a station older than the footprint page, which then is not offered). */
 	footprint?: FootprintBrief;
 	/**
+	 * The variables everything it starts for its agents runs with (docs/agent-env.md), by name, a secret's value
+	 * masked (none from a station older than them, which then does not offer them).
+	 */
+	agentEnv?: EnvVar[];
+	/**
 	 * Its files: the folders pinned, and whether the viewer browses every folder (none from a station older
 	 * than the drive, which then is not offered).
 	 */

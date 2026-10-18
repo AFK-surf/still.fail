@@ -11,6 +11,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writePrivate } from "../ops/files.ts";
+import { profileFetch } from "../ops/agent-env.ts";
 
 type Json = any;
 
@@ -55,7 +56,7 @@ export function readConsole(home: string): ConsoleLogin | null {
 export const writeConsole = (home: string, login: ConsoleLogin) => writePrivate(join(home, CONSOLE_FILE), `${JSON.stringify(login, null, 2)}\n`);
 
 async function post(base: string, path: string, form: Record<string, string>): Promise<{ status: number; body: Json }> {
-  const response = await fetch(`${base}${path}`, {
+  const response = await profileFetch(`${base}${path}`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json", "user-agent": AGENT },
     body: new URLSearchParams(form).toString(),
@@ -113,7 +114,7 @@ export async function renewToken(base: string, refresh: string): Promise<Token> 
 export async function whoIs(base: string, access: string, org: string | null): Promise<{ email: string | null; workspace: string | null }> {
   const get = async (path: string): Promise<Json> => {
     try {
-      const response = await fetch(`${base}${path}`, { headers: { authorization: `Bearer ${access}`, accept: "application/json", "user-agent": AGENT }, signal: AbortSignal.timeout(15_000) });
+      const response = await profileFetch(`${base}${path}`, { headers: { authorization: `Bearer ${access}`, accept: "application/json", "user-agent": AGENT }, signal: AbortSignal.timeout(15_000) });
       return response.ok ? await response.json() : null;
     } catch {
       return null;

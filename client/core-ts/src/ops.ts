@@ -58,6 +58,7 @@ export const PARAMS: Record<string, string> = {
   "session.stop": "key:string",
   "tools.access": "",
   "tools.setAccess": "access:string",
+  "agentEnv.set": "env:json",
   "session.warm": "key:string",
   "session.evict": "key:string",
   "session.delete": "key:string",
@@ -255,6 +256,10 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => "/tools/access", null, NONE);
     case "tools.setAccess":
       return op("PUT", () => "/tools/access", p.pick(["access"]), OVERVIEW);
+    // The variables everything the station starts for its agents runs with (docs/agent-env.md): a string sets one, null
+    // removes it, one left out stays; set by the workspace's owners and admins.
+    case "agentEnv.set":
+      return op("PUT", () => "/agent-env", p.pick(["env"]), OVERVIEW);
     case "session.stop":
       return op("POST", () => `/sessions/${p.at("key")}/stop`, null, process("key"));
     case "session.warm":

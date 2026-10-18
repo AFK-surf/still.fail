@@ -15,6 +15,7 @@ import {
 } from "node:fs";
 import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
+import { startEnv } from "../ops/agent-env.ts";
 import { log } from "../ops/log.ts";
 import { niced } from "../ops/nice.ts";
 import { startLasting } from "../ops/processes.ts";
@@ -305,7 +306,8 @@ export class Jobs {
     closeSync(openSync(job.log, "a"));
     const exit = this.exitFile(job.id);
     rmSync(exit, { force: true });
-    const env: NodeJS.ProcessEnv = platform.prependPath(process.env, join(this.dir, "bin"));
+    // With the variables the station's owners set for what it starts for its agents (ops/agent-env.ts).
+    const env: NodeJS.ProcessEnv = platform.prependPath(startEnv(), join(this.dir, "bin"));
     // Under both names: scripts written against the old ones go on working.
     for (const prefix of ["STILLFAIL_", "EMBER_"]) {
       env[`${prefix}JOB_ID`] = job.id;

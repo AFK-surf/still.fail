@@ -628,6 +628,12 @@ export class Hub {
     await this.actors.get(key)?.changed();
   }
 
+  /// What every runtime process starts with changed (the station's variables for its agents, ops/agent-env.ts): each
+  /// session's process takes it now if idle, else before its next turn.
+  everyChanged() {
+    for (const actor of [...this.actors.values()]) void actor.changed().catch(() => {});
+  }
+
   /// A profile was deleted: the sessions on it are taken on by another of their runtime's (their process ends now if
   /// idle, else when its turn is over); those no other profile can run are stopped, and their process ends.
   async profileGone(id: string) {

@@ -35,6 +35,7 @@ import { writePrivate } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { linkSync } from "../ops/links.ts";
 import { joinPath, relativeParts } from "../ops/paths.ts";
+import { profileFetch } from "../ops/agent-env.ts";
 
 type Json = any;
 
@@ -758,7 +759,7 @@ export class Sharing {
   private async renewCodex(file: string, auth: Json): Promise<Json> {
     const refresh = auth?.tokens?.refresh_token;
     if (typeof refresh !== "string" || refresh === "") throw new Error("no refresh token");
-    const response = await fetch(this.deps.codexTokenUrl ?? CODEX_TOKEN_URL, {
+    const response = await profileFetch(this.deps.codexTokenUrl ?? CODEX_TOKEN_URL, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ client_id: CODEX_CLIENT_ID, grant_type: "refresh_token", refresh_token: refresh, scope: "openid profile email" }),

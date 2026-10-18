@@ -3,6 +3,7 @@
 // comes back as events, in order, to the one listener it was opened with. Processes run under runners (./runner.ts): a
 // station that starts again takes its sessions up from the runners (`adopt`), from what the previous one left
 // (`snapshot`) or, after a crash, from what the runner kept unread.
+import { startEnv } from "../ops/agent-env.ts";
 
 /// The runtimes a station runs, in the order they are offered.
 export type RuntimeKind = "claude" | "codex" | "dsh";
@@ -113,7 +114,6 @@ export interface AgentDriver {
 /// A random UUID (v4), as runtimes take for session ids.
 export const uuid = () => crypto.randomUUID();
 
-/// The station's own environment, less what would let a runtime authenticate as something other than its profile.
-export function cleanEnv(scrubbed: string[]): Record<string, string> {
-  return Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && !scrubbed.includes(e[0])));
-}
+/// The station's own environment with the variables its owners set for what it starts over it (ops/agent-env.ts), less
+/// what would let a runtime authenticate as something other than its profile.
+export const cleanEnv = (scrubbed: string[]): Record<string, string> => startEnv(scrubbed);

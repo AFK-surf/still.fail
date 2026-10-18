@@ -13,6 +13,7 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeToken as tokenOf } from "./oauth.ts";
 import { CONSOLE } from "./console.ts";
 import { platform } from "../platform/index.ts";
+import { profileFetch } from "../ops/agent-env.ts";
 
 type Json = any;
 
@@ -124,7 +125,7 @@ export type CheckOptions = {
 const check = (state: string, detail: string, models: string[] | null): ProfileCheck => ({ state, detail, models, checkedAt: 0 });
 
 async function get(url: string, headers: Record<string, string>): Promise<Response> {
-  return fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+  return profileFetch(url, { headers, signal: AbortSignal.timeout(15_000) });
 }
 
 /// The ids of a `/v1/models` answer.

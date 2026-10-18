@@ -18,6 +18,7 @@ import { routes as publish } from "./routes/publish.ts";
 import { routes as slack } from "./routes/slack.ts";
 import { routes as hub, uploadPath } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
+import { routes as agentEnv } from "./routes/agent-env.ts";
 import { routes as links } from "./routes/links.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
@@ -135,6 +136,7 @@ export class Admin {
           })
         : []),
       ...(deps.agents?.config ? deviceTools({ config: deps.agents.config, changed: () => deps.events?.overviewChanged() }) : []),
+      ...(deps.agents?.config ? agentEnv({ config: deps.agents.config, changed: () => deps.events?.overviewChanged(), restart: () => deps.agents!.hub.everyChanged() }) : []),
       ...(deps.agents?.cloud ? workspaces({ cloud: deps.agents.cloud, data: deps.agents.config.data, changed: () => deps.events?.overviewChanged() }) : []),
       // The vaults (docs/vault.md), by the lock pinned in the asker's workspace.
       ...(deps.agents?.cloud && deps.store

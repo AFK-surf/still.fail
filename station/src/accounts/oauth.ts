@@ -10,6 +10,7 @@ import { writePrivate } from "../agents/no-keychain.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { platform } from "../platform/index.ts";
+import { profileFetch } from "../ops/agent-env.ts";
 
 type Json = any;
 
@@ -166,7 +167,7 @@ async function renew(env: Env, home: string, machine: boolean, rejected: string 
   }
   let response: Response;
   try {
-    response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), redirect: "manual", signal: AbortSignal.timeout(30_000) });
+    response = await profileFetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), redirect: "manual", signal: AbortSignal.timeout(30_000) });
   } catch {
     throw new Error(t("station.claudeAuth.refreshFailed"));
   }

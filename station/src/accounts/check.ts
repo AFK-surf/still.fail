@@ -5,6 +5,7 @@ import { accessKinds, needsKey, runtimesFor } from "./profiles.ts";
 import { cleanEndpoint, endpoints, find } from "../agents/providers.ts";
 import { fallbackEfforts } from "../sessions/pool.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
+import { checkAgentEnv } from "../ops/agent-env.ts";
 
 const ACCESS_KINDS = ["subscription", "opencode-go", "anthropic-api", "env", "api-provider"];
 const RUNTIMES: string[] = RUNTIME_KINDS;
@@ -45,6 +46,8 @@ export function checkConfig(raw: any, _data: string): void {
     if (!isObject(raw.tools)) throw new Error(`invalid type: ${describe(raw.tools)}, expected struct RawTools`);
     if (raw.tools.access !== undefined && !["off", "read", "full"].includes(raw.tools.access)) throw new Error("tools.access: one of off, read, full");
   }
+  // The variables for what it starts for its agents (src/ops/agent-env.ts).
+  checkAgentEnv(raw.agentEnv);
   // The drive's folders (src/drive/drive.ts).
   if (raw.drive !== undefined && raw.drive !== null) {
     if (!isObject(raw.drive)) throw new Error(`invalid type: ${describe(raw.drive)}, expected struct RawDrive`);

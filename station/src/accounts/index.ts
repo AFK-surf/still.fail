@@ -23,6 +23,7 @@ import { linkCodexAuth } from "../agents/machine-logins.ts";
 import { type AccessKind, accessKind, profileVia, type Runtime, type Via } from "../agents/profiles.ts";
 import { cleanEndpoint, endpoints, find, groupOf, LEGACY, runtimesOf as runtimesOfEndpoints, SOURCES } from "../agents/providers.ts";
 import { type Viewer, managesStation } from "../mesh/credential.ts";
+import { startEnv } from "../ops/agent-env.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -153,7 +154,6 @@ export class Accounts {
   private listeners = new Set<() => void>();
   private background: Fibers;
   private stops: (() => void)[] = [];
-  private readonly env: Env;
   private readonly urls: Urls;
   private readonly checkFn: (request: CheckRequest, lang: Lang) => Promise<ProfileCheck>;
   private readonly quotaFn: ((profile: Profile) => Promise<ProfileQuota>) | null;
@@ -162,10 +162,15 @@ export class Accounts {
 
   private deps: AccountsDeps;
 
+  /// The station's environment with the variables set for what it starts for its agents (ops/agent-env.ts): the CLIs
+  /// it checks profiles with run in it.
+  private get env(): Env {
+    return this.deps.env ?? (startEnv() as Env);
+  }
+
   constructor(deps: AccountsDeps) {
     this.deps = deps;
     this.background = new Fibers("accounts", deps.clock);
-    this.env = deps.env ?? (process.env as Env);
     this.urls = deps.urls ?? URLS;
     this.logins = new LoginManager(deps.data, deps.loginCommands, undefined, deps.clock, this.urls.console);
     this.machine =

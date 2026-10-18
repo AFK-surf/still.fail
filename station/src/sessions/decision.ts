@@ -10,6 +10,7 @@ import { accessKind, apiSource, profileEnv, profileVia } from "../agents/profile
 import { endpoints, find } from "../agents/providers.ts";
 import { liveClock, within } from "../ops/fibers.ts";
 import type { Profile } from "./config.ts";
+import { profileFetch } from "../ops/agent-env.ts";
 
 type Json = any;
 
@@ -169,7 +170,7 @@ export async function decide(config: DecisionConfig, question: ChoiceQuestion, s
   if (config.sessionHeader) headers["x-opencode-session"] = randomUUID();
   let response: Response;
   try {
-    response = await fetch(config.endpoint, { method: "POST", headers, body, redirect: "manual", signal: AbortSignal.timeout(12_000) });
+    response = await profileFetch(config.endpoint, { method: "POST", headers, body, redirect: "manual", signal: AbortSignal.timeout(12_000) });
   } catch {
     throw new Error("decision request failed or timed out");
   }
@@ -343,7 +344,7 @@ export async function discover(profile: Profile, check: { state: string; models?
     try {
       const headers: Record<string, string> = { authorization: `Bearer ${c.key}` };
       if (c.sessionHeader) headers["x-opencode-session"] = randomUUID();
-      const response = await fetch(`${c.base.replace(/\/+$/, "")}/models`, { headers, redirect: "manual", signal: AbortSignal.timeout(8000) });
+      const response = await profileFetch(`${c.base.replace(/\/+$/, "")}/models`, { headers, redirect: "manual", signal: AbortSignal.timeout(8000) });
       if (response.ok) {
         const body: Json = await response.json();
         if (Array.isArray(body?.data)) for (const m of body.data) if (typeof m?.id === "string") models.push(m.id);

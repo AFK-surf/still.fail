@@ -666,6 +666,7 @@ export const SHAPES: Record<string, Shape> = {
     ["updates", vec("SoftwareVersion"), { default: true, doc: "The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them)." }],
     ["processesText", "String", { doc: "Its agents' processes, in a line." }],
     ["footprint", opt("FootprintBrief"), { doc: "How much of the disk it takes (none from a station older than the footprint page, which then is not offered)." }],
+    ["agentEnv", vec("EnvVar"), { default: true, doc: "The variables everything it starts for its agents runs with (docs/agent-env.md), by name, a secret's value\nmasked (none from a station older than them, which then does not offer them)." }],
     ["drive", opt("DriveRoots"), { doc: "Its files: the folders pinned, and whether the viewer browses every folder (none from a station older\nthan the drive, which then is not offered)." }],
     ["permissions", opt("StationPermissions"), { doc: "What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then\nshows nothing)." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
