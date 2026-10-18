@@ -17,7 +17,8 @@ import { same } from "../stationPick.ts";
 import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, StatusDot, Time, Waiting } from "../ui.tsx";
 import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
-import { HostDetails, joinedText, Net, problems, state, useLong } from "./StationCards.tsx";
+import { HostDetails, joinedText, LanKept, Net, problems, state, useLong } from "./StationCards.tsx";
+import { useLanKept } from "../localNetwork.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
 import type { EnvVar } from "../core/shapes.ts";
@@ -72,6 +73,7 @@ export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: React
  * there said too. Nothing in colour but what is off. */
 function StationRow({ s, to }: { s: StationView; to: string }) {
   const meters = s.online ? s.host?.meters ?? [] : [];
+  const lanKept = useLanKept(s.online ? s.net?.lan : undefined);
   const newer = s.online && (s.overview?.updates ?? []).some((v) => v.installed && v.updatable && (v.newer || v.downgrade));
   return (
     <NavItem to={to} title={s.name}
@@ -87,6 +89,7 @@ function StationRow({ s, to }: { s: StationView; to: string }) {
         <NavLine>
           <span className={navFill}>
             {s.net && <>{s.net.path}{s.net.rtt && <>{" · "}<span className={css.low} data-level={s.net.rtt.level}>{s.net.rtt.text}</span></>}</>}
+            {s.net && lanKept && <>{" · "}<span className={css.low} data-level="amber">{t("web-pages.stations.page.lanKept")}</span></>}
             {s.net && newer && " · "}
             {newer && t("web-pages.stations.page.newer")}
           </span>
@@ -196,6 +199,7 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           <div className={css.machine}>
             <MeterDials meters={s.host.meters} />
             {s.net && <Net net={s.net} flush />}
+            {s.net && <LanKept lan={s.net.lan} />}
           </div>
         </Section>
       )}

@@ -869,6 +869,7 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
     upTotal: format.bytes(tx),
     loss,
     measured,
+    lan: (arr(r.lan) ?? []).filter((a: J) => typeof a === "string"),
   };
 }
 

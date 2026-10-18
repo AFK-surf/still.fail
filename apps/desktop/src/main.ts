@@ -20,6 +20,8 @@ import { LocalStation, type Place } from "./station";
 import { controlService, installedService, servicePath, updateInstalled } from "./installed";
 import { contextMenu, type Action } from "./context-menu.mts";
 import { systemPermission } from "./notify-permission.ts";
+import { kept, localNetwork } from "./local-network.ts";
+import { LOCAL_NETWORK_SETTINGS } from "../../../station/src/mesh/lan.ts";
 import { Dock, dockHelper, dockKinds, type DockKinds, type DockSettings } from "./dock.mts";
 import { moveUserData } from "./moves.mts";
 import { attachWindowControls, loadSnapTarget } from "./window-controls.ts";
@@ -1599,6 +1601,18 @@ ipcMain.handle("notify:request", (event) => {
   new Notification({ title: NAME, body: t("desktop.notify.allowed") }).show();
 });
 app.on("browser-window-focus", tellPermission);
+
+// macOS's Local Network for the app (local-network.ts): whether it may reach its LAN (the permissions page), whether a
+// station's LAN addresses are kept from it (its row says so), and System Settings' list, where it is switched on.
+ipcMain.handle("lan:check", (event) => (event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? localNetwork() : "unknown"));
+ipcMain.handle("lan:kept", (event, addrs: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)) return false;
+  if (!Array.isArray(addrs) || addrs.length > 16 || !addrs.every((a) => typeof a === "string")) return false;
+  return kept(addrs);
+});
+ipcMain.handle("lan:settings", (event) => {
+  if (event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) && process.platform === "darwin") void shell.openExternal(LOCAL_NETWORK_SETTINGS);
+});
 
 ipcMain.handle("notify:get", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? notifyOn : null);
 ipcMain.handle("notify:set", (event, on: unknown) => {

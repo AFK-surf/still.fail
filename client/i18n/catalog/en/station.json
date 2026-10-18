@@ -52,6 +52,7 @@
   "station.helper.window.removableWhy": "To browse, read and write disks attached to this Mac in Files",
   "station.helper.window.network": "Network disks",
   "station.helper.window.networkWhy": "To browse, read and write network disks this Mac is connected to in Files",
+  "station.helper.window.localNetwork": "Local Network",
   "station.helper.window.deniedWhy": "Refused before: Allow opens System Settings › Files and Folders, to turn it on there",
   "station.helper.window.askTitle": "Allow still.fail to use these permissions on this Mac",
   "station.helper.window.askSubtitle": "Someone in still.fail asked for the permissions below. still.fail Helper uses them only while the feature that needs them is in use.",

@@ -648,6 +648,11 @@ export class Mesh {
     return o?.result && "ok" in o.result ? o.result.ok : null;
   }
 
+  /// Where the station said it is on its LAN (docs/mesh-lan.md), none until it did.
+  lan(addr: string): string[] {
+    return this.#lan.get(addr) ?? [];
+  }
+
   /// What the station's links carried on this device today, both ways (in every workspace it is reached in).
   today(addr: string): [number, number] {
     const id = stationId(addr);
@@ -1866,7 +1871,7 @@ export class MeshWire implements StationWire {
     const key = station.toString();
     const link = mesh?.current(key) ?? null;
     if (mesh === null || link === null) return null;
-    return { ...link.net(), measured: mesh.measured(key), today: mesh.today(key) };
+    return { ...link.net(), measured: mesh.measured(key), today: mesh.today(key), lan: mesh.lan(key) };
   }
 
   measure(station: StationAddr): Effect.Effect<void, CoreError> {

@@ -178,7 +178,7 @@ function grantless(grant: string, top: string) {
     listen: () => () => {},
     onBack: () => () => {},
   } as any;
-  const grants = new HelperGrants({ helper: app });
+  const grants = new HelperGrants({ helper: app, reach: async () => null });
   const files = new HelperFiles({ helper: app, grants, changed: () => {} });
   return { files, shown, close: () => void (up = false) };
 }

@@ -59,6 +59,9 @@ export const netRates = style({ display: "grid", gridTemplateColumns: "auto 9.5c
 /** The machine on its own page: what it is, what is left of it large, the connection, then the rest a quiet row each. */
 export const machine = style({ display: "grid", gap: "16px", justifyItems: "start", minWidth: "0" });
 export const machineNote = style({ fontSize: vars.textUi, color: vars.muted });
+/** The app kept from the station on its LAN: what is wrong in amber, the way to System Settings beside it. */
+export const lanKept = style({ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", fontSize: vars.textUi });
+globalStyle(`${lanKept} [data-level="amber"]`, { color: vars.amber });
 /** The rest of a machine, as a session's details are written (ChatPage.css.ts sessionDetails): small, a label beside
  * each, the labels quieter. On the phone, a size up. */
 export const hostDetails = style({

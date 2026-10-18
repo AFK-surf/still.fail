@@ -52,6 +52,7 @@
   "station.helper.window.removableWhy": "在「文件」里浏览和读写接在这台 Mac 上的磁盘",
   "station.helper.window.network": "网络磁盘",
   "station.helper.window.networkWhy": "在「文件」里浏览和读写这台 Mac 连着的网络磁盘",
+  "station.helper.window.localNetwork": "本地网络",
   "station.helper.window.deniedWhy": "之前被拒绝了：点「允许」会打开系统设置的「文件与文件夹」，在那里打开它",
   "station.helper.window.askTitle": "允许 still.fail 使用这台 Mac 的权限",
   "station.helper.window.askSubtitle": "有人在 still.fail 中申请了下列权限。still.fail Helper 仅在使用相应功能时使用这些权限。",

@@ -14,7 +14,7 @@ import { routes, permissionsView } from "../src/api/routes/permissions.ts";
 import type { Request } from "../src/api/request.ts";
 import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
 import { HelperFiles } from "../src/helper/files.ts";
-import { AGAIN_MS, HelperGrants } from "../src/helper/grants.ts";
+import { AGAIN_MS, HelperGrants, LOCAL_NETWORK_SETTINGS } from "../src/helper/grants.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { Desktop } from "../src/screens/desktop.ts";
 import { permissionTools } from "../src/tools/permissions.ts";
@@ -106,7 +106,10 @@ function station(options: { folders?: boolean } = {}) {
   const fake = new FakeHelper();
   const helper = new HelperApp({ app, dir: join(base, "helper"), launch: fake.launch });
   const clock = { now: 1_000_000 };
-  const grants = new HelperGrants({ helper, folders: options.folders, now: () => clock.now, volumes });
+  // Whether the station reaches its LAN (none by default: no LAN), and System Settings' panes opened on the Mac.
+  const lan: { now: "granted" | "denied" | null } = { now: null };
+  const opened: string[] = [];
+  const grants = new HelperGrants({ helper, folders: options.folders, now: () => clock.now, volumes, reach: async () => lan.now, open: (url) => void opened.push(url) });
   let changes = 0;
   grants.onChange(() => changes++);
   // Ends with its test: nothing left to keep the process.
@@ -115,7 +118,7 @@ function station(options: { folders?: boolean } = {}) {
     fake.close();
     rmSync(base, { recursive: true, force: true });
   };
-  return { base, volumes, fake, helper, grants, clock, changes: () => changes, end };
+  return { base, volumes, fake, helper, grants, clock, lan, opened, changes: () => changes, end };
 }
 
 const member: Request["viewer"] = { sub: "u", email: "a@x", name: "A", role: "member", workspace: "w", device: "d" };
@@ -175,6 +178,44 @@ test("a station without the folders' grants lists the screen's two only", { skip
   await s.grants.refresh(true);
   assert.deepEqual(s.grants.view()!.grants.map((g) => g.grant), ["capture", "control"]);
   assert.equal((await ask(s.grants, "desktop")).status, 400);
+  await s.end();
+});
+
+/// 2026-10-18, a MacBook on studio's Wi-Fi: the desktop app (and the station it runs) could reach nothing on its own
+/// subnet, macOS's Local Network not switched on for it. The station's own: listed last once it is on a LAN, with the
+/// app it is switched on for; asked for, System Settings' Local Network list comes up on the Mac, once in a while.
+test("the station's Local Network: listed once on a LAN, asked for it opens System Settings there", { skip: WINDOWS }, async () => {
+  const s = station();
+  await s.grants.refresh(true);
+  assert.ok(!s.grants.view()!.grants.some((g) => g.grant === "localNetwork"));
+  assert.equal(s.grants.view()!.localNetworkName, undefined);
+  s.lan.now = "denied";
+  const told = s.changes();
+  await s.grants.refresh(true);
+  assert.ok(s.changes() > told);
+  const view = s.grants.view()!;
+  assert.deepEqual(view.grants.at(-1), { grant: "localNetwork", state: "denied" });
+  assert.equal(typeof view.localNetworkName, "string");
+  // Asked for: the list up on the Mac once; again a moment later, not shown again.
+  const first = await ask(s.grants, "localNetwork");
+  assert.deepEqual([first.status, first.body.window], [200, "up"]);
+  assert.deepEqual(s.opened, [LOCAL_NETWORK_SETTINGS]);
+  assert.equal((await ask(s.grants, "localNetwork")).status, 409);
+  assert.equal(s.opened.length, 1);
+  s.clock.now += AGAIN_MS;
+  await ask(s.grants, "localNetwork");
+  assert.equal(s.opened.length, 2);
+  // Switched on (the station started again): granted, nothing opened.
+  s.lan.now = "granted";
+  s.clock.now += AGAIN_MS;
+  assert.deepEqual((await ask(s.grants, "localNetwork")).body, { window: "granted", screen: true });
+  assert.equal(s.opened.length, 2);
+  // The agents' tool says it and where it is switched on.
+  s.lan.now = "denied";
+  await s.grants.refresh(true);
+  const [tool] = permissionTools(s.grants, () => null);
+  const listed = String(await tool!.run("k", {}));
+  assert.match(listed, /localNetwork \(Local Network: .*\): refused: the LAN is not reached \(switched on for .* in System Settings › Privacy & Security › Local Network/);
   await s.end();
 });
 

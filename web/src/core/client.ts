@@ -637,6 +637,15 @@ export interface StillFailDesktop {
     set(settings: Partial<DockSettings>): Promise<DockSettings | null>;
   };
   /** Whether the app tells about the chats (it shows them from its main process); an app from before them has none. */
+  /** macOS's Local Network for the app; an app from before it has none. */
+  localNetwork?: {
+    /** Whether it may reach the LAN it is on: granted | denied | unknown (no LAN, not a Mac). */
+    check(): Promise<string>;
+    /** Whether macOS keeps it from a station at these LAN addresses (`ip:port`). */
+    kept(addrs: string[]): Promise<boolean>;
+    /** Opens System Settings' Local Network list. */
+    settings(): Promise<void>;
+  };
   notify?: {
     get(): Promise<boolean | null>;
     set(on: boolean): Promise<void>;

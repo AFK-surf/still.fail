@@ -674,15 +674,15 @@ export const SHAPES: Record<string, Shape> = {
     ["permissions", opt("StationPermissions"), { doc: "What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then\nshows nothing)." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
   StationPermissions: struct([
-    ["grants", vec("StationGrant"), { doc: "Screen Recording, Accessibility, then the folders macOS protects, in that order." }],
+    ["grants", vec("StationGrant"), { doc: "Screen Recording, Accessibility, the folders macOS protects, then Local Network (the station's own), in that\norder." }],
     ["note", opt("String"), { doc: "What is unavailable now for want of a grant, in a line; none when every one is granted." }],
     ["screen", opt("String"), { doc: "The desktop's page in the app, where a person grants from wherever they are (its screen can be seen and\ndriven): opened once a grant is asked for. None: they go to the Mac." }],
     ["canRequest", "bool", { doc: "The viewer may ask for a grant (`permissions.request`; not a read-only member)." }],
   ], { doc: "What macOS lets a Mac station's still.fail Helper do (docs/remote-screens.md \"Grants\"), as its page shows it." }),
   StationGrant: struct([
-    ["id", "String", { doc: "capture | control | documents | desktop | downloads | removable | network: what `permissions.request` takes." }],
+    ["id", "String", { doc: "capture | control | documents | desktop | downloads | removable | network | localNetwork: what\n`permissions.request` takes (localNetwork's opens System Settings' Local Network list on the Mac)." }],
     ["name", "String"],
-    ["line", "String", { doc: "What it is for; while its window is up on the Mac, how it is given there." }],
+    ["line", "String", { doc: "What it is for; while its window is up on the Mac, how it is given there; Local Network not had, where it is\nswitched on." }],
     ["granted", "bool"],
     ["asking", "bool", { doc: "Its window is up on the Mac now, asking for it." }],
   ], { doc: "One of a station's grants." }),
@@ -2348,6 +2348,7 @@ export const SHAPES: Record<string, Shape> = {
     ["upTotal", opt("String")],
     ["loss", opt("NetFigure"), { doc: "Packets lost over the last minute, when some were." }],
     ["measured", opt("NetMeasured"), { doc: "The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from\na core from before." }],
+    ["lan", vec("String"), { default: true, doc: "Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md): the desktop app sends there to tell\nwhether macOS lets it reach them (Local Network)." }],
   ], { doc: "This device's connection to a station, in words (its card's network line): how it goes, its round trip now and\nover the last minute, and what goes over it." }),
   NetMeasured: struct([
     ["measuring", "bool"],

@@ -3520,10 +3520,12 @@ data class StationSearch (
 /// One of a station's grants.
 @Serializable
 data class StationGrant (
-	/// capture | control | documents | desktop | downloads | removable | network: what `permissions.request` takes.
+	/// capture | control | documents | desktop | downloads | removable | network | localNetwork: what
+	/// `permissions.request` takes (localNetwork's opens System Settings' Local Network list on the Mac).
 	val id: String,
 	val name: String,
-	/// What it is for; while its window is up on the Mac, how it is given there.
+	/// What it is for; while its window is up on the Mac, how it is given there; Local Network not had, where it is
+	/// switched on.
 	val line: String,
 	val granted: Boolean,
 	/// Its window is up on the Mac now, asking for it.
@@ -3533,7 +3535,8 @@ data class StationGrant (
 /// What macOS lets a Mac station's still.fail Helper do (docs/remote-screens.md "Grants"), as its page shows it.
 @Serializable
 data class StationPermissions (
-	/// Screen Recording, Accessibility, then the folders macOS protects, in that order.
+	/// Screen Recording, Accessibility, the folders macOS protects, then Local Network (the station's own), in that
+	/// order.
 	val grants: List<StationGrant>,
 	/// What is unavailable now for want of a grant, in a line; none when every one is granted.
 	val note: String? = null,
@@ -3614,7 +3617,10 @@ data class StationNet (
 	val loss: NetFigure? = null,
 	/// The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from
 	/// a core from before.
-	val measured: NetMeasured? = null
+	val measured: NetMeasured? = null,
+	/// Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md): the desktop app sends there to tell
+	/// whether macOS lets it reach them (Local Network).
+	val lan: List<String>? = null
 )
 
 @Serializable

@@ -12,7 +12,7 @@ import { get, isObject } from "./util.ts";
 type J = any;
 
 /// The grants, in the order they are shown; any other a station names is left out.
-export const GRANTS = ["capture", "control", "documents", "desktop", "downloads", "removable", "network"];
+export const GRANTS = ["capture", "control", "documents", "desktop", "downloads", "removable", "network", "localNetwork"];
 
 /// The desktop's page in the app (the agents' `screen` tool links it so too).
 function desktopPath(station: string): string {
@@ -31,7 +31,14 @@ export function permissionsShown(v: unknown, station: string): J | undefined {
     if (typeof id !== "string" || !GRANTS.includes(id)) return [];
     const granted = get(g, "state") === "granted";
     const up = !granted && asking.has(id);
-    const line = up ? t(screen ? "core-views.permissions.askingHere" : "core-views.permissions.askingThere") : t(`core-views.permissions.${id}.line`);
+    // The LAN not reached: where it is switched on, for the app the station runs in (no window asks for it).
+    const off = id === "localNetwork" && !granted;
+    const app = typeof v.localNetworkName === "string" ? v.localNetworkName : "still.fail";
+    const line = off
+      ? t("core-views.permissions.localNetwork.off", { app })
+      : up
+        ? t(screen ? "core-views.permissions.askingHere" : "core-views.permissions.askingThere")
+        : t(`core-views.permissions.${id}.line`);
     return [{ id, name: t(`core-views.permissions.${id}.name`), line, granted, asking: up }];
   });
   const missing = grants.filter((g: J) => !g.granted);

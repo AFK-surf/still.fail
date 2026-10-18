@@ -83,6 +83,15 @@ const desktop = {
     /** Has the system ask the person, when it has not yet. */
     request: (): Promise<void> => ipcRenderer.invoke("notify:request"),
   },
+  /** macOS's Local Network for the app (main.ts, local-network.ts). */
+  localNetwork: {
+    /** Whether it may reach the LAN it is on: granted, denied, or unknown (no LAN, not a Mac). */
+    check: (): Promise<string> => ipcRenderer.invoke("lan:check"),
+    /** Whether it is kept from a station at these LAN addresses (`ip:port`). */
+    kept: (addrs: string[]): Promise<boolean> => ipcRenderer.invoke("lan:kept", addrs),
+    /** Opens System Settings' Local Network list. */
+    settings: (): Promise<void> => ipcRenderer.invoke("lan:settings"),
+  },
   /** The menu bar's items for the page's actions (main.ts setMenu, web/src/keymap.ts): their keys and which can be done now, and one chosen. */
   menu: {
     state: (state: unknown) => ipcRenderer.send("menu:state", state),

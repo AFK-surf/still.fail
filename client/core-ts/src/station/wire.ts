@@ -53,6 +53,8 @@ export type LinkNet = {
   txBytes: number;
   /// Packets sent and lost on the way in use (`path` its id) since it opened.
   packets: { path: string; sent: number; lost: number } | null;
+  /// Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md); none from a station that said none.
+  lan?: string[];
 };
 
 /// The client's half of a socket stream.

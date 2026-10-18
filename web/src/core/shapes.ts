@@ -3514,10 +3514,16 @@ export interface StationSearch {
 
 /** One of a station's grants. */
 export interface StationGrant {
-	/** capture | control | documents | desktop | downloads | removable | network: what `permissions.request` takes. */
+	/**
+	 * capture | control | documents | desktop | downloads | removable | network | localNetwork: what
+	 * `permissions.request` takes (localNetwork's opens System Settings' Local Network list on the Mac).
+	 */
 	id: string;
 	name: string;
-	/** What it is for; while its window is up on the Mac, how it is given there. */
+	/**
+	 * What it is for; while its window is up on the Mac, how it is given there; Local Network not had, where it is
+	 * switched on.
+	 */
 	line: string;
 	granted: boolean;
 	/** Its window is up on the Mac now, asking for it. */
@@ -3526,7 +3532,10 @@ export interface StationGrant {
 
 /** What macOS lets a Mac station's still.fail Helper do (docs/remote-screens.md "Grants"), as its page shows it. */
 export interface StationPermissions {
-	/** Screen Recording, Accessibility, then the folders macOS protects, in that order. */
+	/**
+	 * Screen Recording, Accessibility, the folders macOS protects, then Local Network (the station's own), in that
+	 * order.
+	 */
 	grants: StationGrant[];
 	/** What is unavailable now for want of a grant, in a line; none when every one is granted. */
 	note?: string;
@@ -3622,6 +3631,11 @@ export interface StationNet {
 	 * a core from before.
 	 */
 	measured?: NetMeasured;
+	/**
+	 * Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md): the desktop app sends there to tell
+	 * whether macOS lets it reach them (Local Network).
+	 */
+	lan?: string[];
 }
 
 export interface StationView {

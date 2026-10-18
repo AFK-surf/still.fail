@@ -640,7 +640,7 @@ export class StationTopics implements Owner {
         } else samples = [];
         while (samples.length > NET_KEPT) samples.shift();
         const measured = net.measured ? { measuring: net.measured.measuring, relays: net.measured.relays.map(([relay, ms]) => ({ relay, rttMs: ms })), moved: net.measured.moved } : null;
-        value = { path: net.path, relay: net.relay, rttMs: net.rttMs, rxBytes: net.rxBytes, txBytes: net.txBytes, samples: [...samples], measured, todayRxBytes: net.today?.[0] ?? null, todayTxBytes: net.today?.[1] ?? null };
+        value = { path: net.path, relay: net.relay, rttMs: net.rttMs, rxBytes: net.rxBytes, txBytes: net.txBytes, samples: [...samples], measured, todayRxBytes: net.today?.[0] ?? null, todayTxBytes: net.today?.[1] ?? null, lan: net.lan ?? [] };
         last = [now, net];
       }
       if (!this.#nets.has(key) || !equal(this.#nets.get(key), value)) {

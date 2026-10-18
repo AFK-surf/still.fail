@@ -132,6 +132,13 @@ brought forward) while it is up asking for it, nor for 3 minutes after it was sh
   they are; without, it says to go to that Mac and click Allow there, the grants on the page changing as they do.
 - The agents' `permissions` tool lists them and, with `request`, puts the window up for one and says what to post with
   need_human: the desktop's link when the screen can be driven, else to go to the Mac.
+- `localNetwork`, last, is the station's own, not the helper's: macOS's Local Network for the app the station runs in
+  (the desktop app, or the launcher under launchd), told as `localNetworkName`. The station sends a byte to the first
+  address of each LAN it is on (mesh/lan.ts `lanReach`): not let, macOS refuses it at once ("No route to host"), and
+  devices on that LAN reach the station only past a router or a relay (a firewall refusing the LAN is told the same).
+  Listed only while the station is on a LAN. No window asks for it (macOS asks once, as the app first reaches the LAN):
+  asked for, System Settings' Local Network list comes up on the Mac, as rarely as the window does; it takes once the
+  app starts again.
 
 ### Clipboard and files
 

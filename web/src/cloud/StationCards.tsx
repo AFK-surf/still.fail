@@ -2,7 +2,8 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { stamp, type StationView } from "../api.ts";
 import type { Level, NetFigure, NetRelay, StationNet } from "../core/shapes.ts";
-import { StatusDot, Time, Tip } from "../ui.tsx";
+import { Button, StatusDot, Time, Tip } from "../ui.tsx";
+import { openLocalNetwork, useLanKept } from "../localNetwork.ts";
 import { UpdateSummary } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips, MeterDials } from "../components.tsx";
@@ -119,6 +120,7 @@ export function MachineDetails({ s, phone = false }: { s: StationView; phone?: b
       {!phone && <span className={css.machineNote}>{s.host.identity}</span>}
       {s.online && <MeterDials meters={s.host.meters} row={phone} />}
       {s.online && s.net && <Net net={s.net} flush />}
+      {s.online && s.net && <LanKept lan={s.net.lan} />}
       <HostDetails details={s.host.details} phone={phone} />
     </div>
   );
@@ -157,6 +159,19 @@ export function Net({ net, stacked = false, flush = false }: { net: StationNet; 
         <span>↑</span><b>{net.up}</b><span>{net.upTotal && t("web-pages.stations.total", { total: net.upTotal })}</span>
         <span>↓</span><b>{net.down}</b><span>{net.downTotal && t("web-pages.stations.total", { total: net.downTotal })}</span>
       </span>
+    </div>
+  );
+}
+
+/** macOS keeps this app from the station on its LAN (Local Network not switched on for it): said, with the way to
+ *  System Settings' list. Nothing elsewhere, nor once it is let. */
+export function LanKept({ lan }: { lan: string[] | undefined }) {
+  const kept = useLanKept(lan);
+  if (!kept) return null;
+  return (
+    <div className={css.lanKept} role="status">
+      <span data-level="amber">{t("web-pages.stations.lanKept", { name: NAME })}</span>
+      <Button onClick={openLocalNetwork}>{t("web-pages.stations.lanKeptOpen")}</Button>
     </div>
   );
 }

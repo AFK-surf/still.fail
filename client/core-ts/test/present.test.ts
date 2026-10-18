@@ -491,6 +491,12 @@ test("a_mac_stations_grants_are_said_in_words_with_what_goes_without_them_and_ho
   assert.equal(o.permissions.grants[1].line, "授权窗口已在该 Mac 上打开，请在该 Mac 上点击「允许」");
   assert.equal(o.permissions.note, "当前不可用：远程控制屏幕、访问桌面、访问下载");
   assert.equal(o.permissions.canRequest, false);
+  // Local Network not had: where it is switched on, for the app the station runs in.
+  o = p.decorate(topic, { permissions: { grants: [{ grant: "localNetwork", state: "denied" }], asking: [], screen: false, request: true, localNetworkName: "youdid.wtf" } }, c);
+  assert.deepEqual([o.permissions.grants[0].name, o.permissions.grants[0].line], ["本地网络", "在 系统设置 › 隐私与安全性 › 本地网络 里打开 youdid.wtf，再重启它"]);
+  assert.equal(o.permissions.note, "当前不可用：局域网直连");
+  o = p.decorate(topic, { permissions: { grants: [{ grant: "localNetwork", state: "granted" }], asking: [], screen: false, request: true, localNetworkName: "youdid.wtf" } }, c);
+  assert.equal(o.permissions.grants[0].line, "同一局域网的设备直接连它");
   // All granted: nothing unavailable.
   o = p.decorate(topic, { permissions: { grants: [{ grant: "capture", state: "granted" }], asking: [], screen: true, request: true } }, c);
   assert.equal(o.permissions.note, undefined);

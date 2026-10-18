@@ -8,16 +8,16 @@ import type { StationGrant, StationPermissions } from "./core/shapes.ts";
 import { useCall } from "./core/react.ts";
 import { useDoing } from "./doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import { Cursor, Disk, Download, FileText, Folder, Monitor, Server, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Cursor, Devices, Disk, Download, FileText, Folder, Monitor, Server, type IconProps } from "@stillfail/ui/icons.tsx";
 import { Button, Section } from "./ui.tsx";
 import { useGo } from "./go.ts";
 import { t } from "./i18n.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./StationPermissions.css.ts";
 
-/** Each grant's mark: the screen's two by what they do, the folders by what they hold. */
+/** Each grant's mark: the screen's two by what they do, the folders by what they hold, the LAN by the devices on it. */
 export const GRANT_MARK: Record<string, ComponentType<IconProps>> = {
-  capture: Monitor, control: Cursor, documents: FileText, desktop: Folder, downloads: Download, removable: Disk, network: Server,
+  capture: Monitor, control: Cursor, documents: FileText, desktop: Folder, downloads: Download, removable: Disk, network: Server, localNetwork: Devices,
 };
 export const grantMark = (id: string) => GRANT_MARK[id] ?? Folder;
 

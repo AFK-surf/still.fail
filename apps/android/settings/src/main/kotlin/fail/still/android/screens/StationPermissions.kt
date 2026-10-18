@@ -36,7 +36,7 @@ import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.DoingMark
 
-/** Each grant's mark (as the web's GRANT_MARK): the screen's two by what they do, the folders by what they hold. */
+/** Each grant's mark (as the web's GRANT_MARK): the screen's two by what they do, the folders by what they hold, the LAN by the devices on it. */
 private fun grantMark(id: String): ImageVector = when (id) {
     "capture" -> Icons.Monitor
     "control" -> Icons.Cursor
@@ -44,6 +44,7 @@ private fun grantMark(id: String): ImageVector = when (id) {
     "downloads" -> Icons.Download
     "removable" -> Icons.Disk
     "network" -> Icons.Server
+    "localNetwork" -> Icons.Devices
     else -> Icons.Folder
 }
 
