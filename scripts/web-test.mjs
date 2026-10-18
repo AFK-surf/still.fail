@@ -20,7 +20,8 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 const shots = 'out/web-shots';
 fs.mkdirSync(shots, { recursive: true });
 
-const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const headed = !!process.env.HEADED;
+const browser = await chromium.launch({ headless: !headed, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const ctx = await browser.newContext({ viewport: { width: 900, height: 720 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
 const errors = [];
@@ -34,6 +35,9 @@ await page.waitForTimeout(500);
 console.log('first frames after', Date.now() - t0, 'ms');
 await page.screenshot({ path: `${shots}/01-start.png` });
 
+if (process.env.BENCH_ONLY) {
+  await page.close();
+} else {
 // click the composer and type through a real composition
 await page.mouse.click(120, 690);
 await page.waitForTimeout(200);
@@ -53,6 +57,7 @@ await page.screenshot({ path: `${shots}/04-sent.png` });
 for (let i = 0; i < 30; i++) await page.mouse.wheel(0, -120);
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${shots}/05-scrolled.png` });
+}
 
 // scroll bench in a fresh page
 const b = await ctx.newPage();

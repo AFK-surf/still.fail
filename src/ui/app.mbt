@@ -133,6 +133,19 @@ fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
     let p = fn(a : Array[Double], q : Double) -> Double {
       a[imin(n - 1, (q * n.to_double()).to_int())]
     }
+    let mut slow = 0
+    for x in bench.cpu {
+      if x > 8.0 {
+        slow = slow + 1
+      }
+    }
+    let mut first_slow = -1
+    for i, x in bench.cpu {
+      if x > 8.0 && first_slow < 0 {
+        first_slow = i
+      }
+    }
+    @host.log("BENCH slow_frames(>8ms)=\{slow} first_slow_at=\{first_slow}")
     @host.log(
       "BENCH frames=\{n} wall_ms=\{wall} fps=\{n.to_double() * 1000.0 / wall} " +
       "cpu_avg=\{sum / n.to_double()} cpu_p50=\{p(cs, 0.5)} cpu_p99=\{p(cs, 0.99)} cpu_max=\{cs[n - 1]} " +
