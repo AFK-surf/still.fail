@@ -11,7 +11,7 @@ import { isIP } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
-import { thumbnail } from "../sessions/thumbs.ts";
+import { thumbnail } from "../drive/thumbs.ts";
 
 type Json = any;
 
@@ -272,7 +272,7 @@ async function iconOf(href: string): Promise<string | null> {
 
 const PICTURE_EXT: Record<string, string> = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp" };
 
-/// A page's picture as a data: URL: itself when it is small, else its thumbnail (sessions/thumbs.ts, made in a directory
+/// A page's picture as a data: URL: itself when it is small, else its thumbnail (drive/thumbs.ts, made in a directory
 /// of its own, gone after); null when it is neither (too big, and no thumbnail made of it).
 async function picture(href: string): Promise<string | null> {
   const found = await fetchImage(href, PICTURE_BYTES);

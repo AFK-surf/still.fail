@@ -3,7 +3,7 @@ import { test, type TestContext } from "node:test";
 import { Effect, Fiber, Layer } from "effect";
 import { MeshLive } from "../src/mesh/mesh.ts";
 import { Agents, type AgentsParts } from "../src/sessions/agents.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, ScreenRegistry, Store, Up } from "../src/services.ts";
+import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Own, Previous, ScreenRegistry, Store, Up } from "../src/services.ts";
 import type { Mesh } from "../src/mesh/native.ts";
 import { memoryMesh } from "./memory-mesh.ts";
 import { settle } from "./hub-fakes.ts";
@@ -21,7 +21,9 @@ function startup(t: TestContext, bindAddr: string | undefined) {
   const binding = Promise.withResolvers<void>();
   let calls = 0;
   const inputs = Layer.mergeAll(
-    Layer.succeed(Agents)({ previousGone: previous.promise } as AgentsParts),
+    Layer.succeed(Agents)({} as AgentsParts),
+    Layer.succeed(Previous)({ gone: previous.promise }),
+    Layer.succeed(Own)(null!),
     Layer.succeed(ControlPlane)({ state: { state: {}, relays: () => [] } } as never),
     Layer.succeed(Key)({ seed: Buffer.alloc(32) } as never),
     Layer.succeed(MeshNative)({ bind: async (options: Parameters<Mesh["bind"]>[0]) => {

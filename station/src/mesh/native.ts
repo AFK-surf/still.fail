@@ -55,7 +55,7 @@ export type Mesh = {
   prepareLocalLinks(text: string, paths: string[], workspace: string): { text: string; paths: string[] };
 };
 
-/// Loaded once: the mesh (services.ts) and the thumbnails (sessions/thumbs.ts) share it.
+/// Loaded once: the mesh (services.ts) and the thumbnails (drive/thumbs.ts) share it.
 let loaded: Mesh | undefined;
 
 /// A fixed UDP address lets an operator admit LAN connections through an egress firewall. The native bind rejects

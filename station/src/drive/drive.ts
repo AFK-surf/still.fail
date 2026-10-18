@@ -26,7 +26,6 @@ import { TooBig, zipFolder } from "./zip.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { type Fs, type Grant, type Protected, direct, protectedTop, realOf } from "./fs.ts";
 import type { ConfigFile } from "../ops/config.ts";
-import { ownPaths } from "../ops/own.ts";
 
 /// Why a request was refused (zdrive's codes, and `protected` for the station's own data), each with its status.
 export const CODES = {
@@ -234,10 +233,10 @@ export type DriveDeps = {
 };
 
 /// The station's drive, one for the admin API's routes and the modules' local API (modules/local.ts): config.json's
-/// roots, the station's own data never reached (its data directory, config, the profiles' homes, ops/own.ts), the
+/// roots, the station's own never reached (its data directory, config, and `more`: what its parts add, ops/own.ts), the
 /// folders macOS protects through still.fail Helper (`files`, where there is one).
-export const stationDrive = (config: ConfigFile, profileHomes: () => string[], files: Protected | null) =>
-  new Drive({ config: () => config.raw(), protect: () => ownPaths(config.data, config.path, profileHomes()), files });
+export const stationDrive = (config: ConfigFile, more: () => string[], files: Protected | null) =>
+  new Drive({ config: () => config.raw(), protect: () => [config.data, config.path, ...more()], files });
 
 export class Drive {
   private deps: DriveDeps;

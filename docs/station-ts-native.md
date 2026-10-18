@@ -120,7 +120,7 @@ station 的逻辑在 macOS、Linux、Windows 上是同一份。各平台不同�
 - 连接：`connect(addr, alpn)`（站间 peer 用），`Connection.paths()`（relay 还是直连，给 trace 用）、`closed()`、`close(code, reason)`、`acceptBi/openBi`。
 - 流：`read()`、`write()`、`finish()`、`reset()`、`stopped()`。
 - 所有异步操作不阻塞 Node 主线程（napi async，tokio 多线程运行时）。
-- 缩略图（`src/thumbs.rs`，就是当时 Rust station 的 `thumbs.rs`，`image`/`thumbhash` 及其编解码 crate 钉在它当时的版本上（station/native/mesh/Cargo.lock），产出与 Rust 版逐字节相同）：`thumbnail(image, dir)` → `{path, type}` 或 null；`thumbhash(image, dir?)` → `{hash, width, height}` 或 null，给了 `dir` 且图大于 24 KiB 时用同一次解码在后台线程做缩略图。哪些文件、何时做由 TS（`src/sessions/thumbs.ts`）决定。
+- 缩略图（`src/thumbs.rs`，就是当时 Rust station 的 `thumbs.rs`，`image`/`thumbhash` 及其编解码 crate 钉在它当时的版本上（station/native/mesh/Cargo.lock），产出与 Rust 版逐字节相同）：`thumbnail(image, dir)` → `{path, type}` 或 null；`thumbhash(image, dir?)` → `{hash, width, height}` 或 null，给了 `dir` 且图大于 24 KiB 时用同一次解码在后台线程做缩略图。哪些文件、何时做由 TS（`src/drive/thumbs.ts`）决定。
 
 ## 4. still.fail Helper（`station/native/helper`，`still.fail Helper.app`，只有 macOS）
 

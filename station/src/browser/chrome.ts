@@ -16,7 +16,7 @@ import { liveClock, wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
-import { endGroup, groupAlive, startTimeOf } from "../jobs/group.ts";
+import { endGroup, groupAlive, startTimeOf } from "../ops/group.ts";
 import { type Cdp, connectCdp } from "./cdp.ts";
 
 /// A Chrome that runs: its DevTools (`port`, the browser's WebSocket `ws`), the program, how it was started.

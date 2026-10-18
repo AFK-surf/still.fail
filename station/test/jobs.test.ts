@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { after, describe, test } from "node:test";
 import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { endGroup, groupAlive, signalGroup } from "../src/jobs/group.ts";
+import { endGroup, groupAlive, signalGroup } from "../src/ops/group.ts";
 import { Jobs, notifyEndpoint, readExit, restartPause, shown, tail, watching } from "../src/jobs/jobs.ts";
 import { agentNice } from "../src/ops/nice.ts";
 import { jobTools } from "../src/tools/jobs.ts";

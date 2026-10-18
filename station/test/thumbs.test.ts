@@ -1,4 +1,4 @@
-// Thumbnails and ThumbHashes (src/sessions/thumbs.ts, the addon's native/mesh/src/thumbs.rs): thumbs.rs's tests, and
+// Thumbnails and ThumbHashes (src/drive/thumbs.ts, the addon's native/mesh/src/thumbs.rs): thumbs.rs's tests, and
 // the same answers as the Rust station: GET /sessions/:key/files?thumb=1 gives the very bytes the Rust gives, and a
 // message keeps the same ThumbHashes. What the Rust gives is test/fixtures/thumbs/golden.json, written by the Rust
 // station's own code (the Rust station's thumbs_golden.rs, which also wrote the JPEG and WebP fixtures; the PNGs are made
@@ -19,7 +19,7 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { Hub } from "../src/sessions/hub.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
-import { SMALL, dir, idOf, keep, kept, thumbnail, wanted } from "../src/sessions/thumbs.ts";
+import { SMALL, dir, idOf, keep, kept, thumbnail, wanted } from "../src/drive/thumbs.ts";
 import { Store } from "../src/store/store.ts";
 import type { Attachment } from "../src/store/rows.ts";
 import { FakeDriver } from "./hub-fakes.ts";

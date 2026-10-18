@@ -22,7 +22,7 @@ import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } fr
 import { setLang, tr } from "./spoken.ts";
 import { brief, readTimeline, transcriptPaths } from "./transcript.ts";
 import { HttpError, messageView } from "./views.ts";
-import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../sessions/thumbs.ts";
+import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../drive/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
 import { agentHomeOf } from "./memory.ts";
 import { shown } from "./jobs.ts";
@@ -361,7 +361,7 @@ function roomOf(dataDir: string, workspace: string): string | null {
 }
 
 /// thumbs.rs `thumbnail`, as far as a reader goes: the image's thumbnail as kept; else whether one is to be made (an
-/// image by its name, over 24 KiB), which the route asks the image codecs for (sessions/thumbs.ts: the addon is not
+/// image by its name, over 24 KiB), which the route asks the image codecs for (drive/thumbs.ts: the addon is not
 /// loaded in the readers, and a reader is not held up decoding); else null, the image shown itself.
 function thumbnail(image: string, dataDir: string): Thumbnail | "make" | null {
   const name = fileName(image);

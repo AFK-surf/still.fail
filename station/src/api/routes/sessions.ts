@@ -9,8 +9,8 @@ import { type Answer, type Request, error, json, param, percentDecode } from "..
 import type { Route, Tools } from "../admin.ts";
 import { changed } from "./changed.ts";
 import { ioMessage } from "../../read/sessions.ts";
-import { dir as thumbsDir, thumbnail, wanted as wantedThumb } from "../../sessions/thumbs.ts";
-import { poster, wanted as wantedPoster } from "../../sessions/posters.ts";
+import { dir as thumbsDir, thumbnail, wanted as wantedThumb } from "../../drive/thumbs.ts";
+import { poster, wanted as wantedPoster } from "../../drive/posters.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
 
 /// admin/mod.rs `segment_decode`.
@@ -46,7 +46,7 @@ async function fromDisk(contentType: string, path: string): Promise<Answer> {
 const STREAMED = 8 * 1024 * 1024;
 
 /// The bytes of a file read (`sessionFile`), answered as files.rs does; an error as it came. An image whose thumbnail is
-/// not made yet (`thumb=1`) has it made here, by the image codecs off this thread (sessions/thumbs.ts), and is answered
+/// not made yet (`thumb=1`) has it made here, by the image codecs off this thread (drive/thumbs.ts), and is answered
 /// with it, or with the image itself when it gets none. One packed with its archived workspace is read out of the archive
 /// here, under the room's lock (files.rs `session_file`; sessions/archive.ts).
 async function file(read: Tools["read"], r: Request, args: unknown): Promise<Answer> {
@@ -122,7 +122,7 @@ async function part(read: Tools["read"], r: Request, key: string): Promise<Answe
   }
 }
 
-/// GET /sessions/:key/poster?name=: a video's poster (sessions/posters.ts), a JPEG; 404 when none can be made.
+/// GET /sessions/:key/poster?name=: a video's poster (drive/posters.ts), a JPEG; 404 when none can be made.
 async function posterOf(read: Tools["read"], r: Request, key: string, dataDir: string | undefined): Promise<Answer> {
   const name = param(r, "name") ?? "";
   if (dataDir === undefined || !wantedPoster(name)) return error(404, "no poster");

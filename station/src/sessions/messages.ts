@@ -11,7 +11,7 @@ import type { Hub } from "./hub.ts";
 import { Refused } from "./neighbours.ts";
 import { fromBefore, linkedSession, linkedStation, named, peersOf, reachable, scopeOf, sessionThreadOf } from "./others.ts";
 import { claim, sendable, sendAlong } from "./peer-files.ts";
-import { dir as thumbsDir, keep } from "./thumbs.ts";
+import { dir as thumbsDir, keep } from "../drive/thumbs.ts";
 
 export { linkedStation };
 

@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { after, describe, test } from "node:test";
 import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { signalGroup } from "../src/jobs/group.ts";
+import { signalGroup } from "../src/ops/group.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
 import { IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, readJson, writeJson } from "../src/jobs/remote.ts";
 import { type Load, OLDER } from "../src/jobs/load.ts";

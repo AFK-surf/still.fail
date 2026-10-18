@@ -3,9 +3,8 @@
 // the endpoint and every connection and loop it started.
 import { Cause, Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, ScreenRegistry, Store, Up } from "../services.ts";
+import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Own, Previous, ScreenRegistry, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
-import { ownPaths } from "../ops/own.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { Agents } from "../sessions/agents.ts";
 import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
@@ -30,6 +29,8 @@ export const MeshLive = Layer.effectDiscard(
     const admin = yield* AdminApi;
     const up = yield* Up;
     const agents = yield* Agents;
+    const own = yield* Own;
+    const previous = yield* Previous;
     const shares = yield* AdbShares;
     const screens = yield* ScreenRegistry;
     const run = Effect.gen(function* () {
@@ -39,7 +40,7 @@ export const MeshLive = Layer.effectDiscard(
       // wait in this background fiber (not layer construction, which must signal ready to start the handover).
       // An unset address or port 0 gets a fresh port and can bind alongside the old process.
       if (Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0) {
-        yield* Effect.promise(() => agents.previousGone);
+        yield* Effect.promise(() => previous.gone);
       }
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
       // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
@@ -97,7 +98,7 @@ export const MeshLive = Layer.effectDiscard(
           new DeviceTools({
             // Never reachable: the station's data (its key, cloud.json, the profiles' homes), its config, the machine's
             // runtime logins.
-            protect: () => ownPaths(cloud.state.data, agents.config.path, agents.hub.config().profiles.map((p) => p.home)),
+            protect: () => own.paths(),
             sessions: adminSessions(
               () => admin,
               () => store,
