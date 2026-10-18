@@ -6,7 +6,8 @@ import { handlers } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
-import { base64 } from "../util.ts";
+import { base64, fromBase64 } from "../util.ts";
+import { Beside } from "../protocol.ts";
 import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
@@ -15,6 +16,16 @@ import { readAll, replyHeader, takeFrames, encodeFrame, type Frame } from "./wir
 import * as logins from "./machine-logins.ts";
 
 const parse = (station: string) => Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
+
+/// A part read's answer: its bytes beside `said`, or none when they went as they came (`stream`).
+function partAnswer(c: { stream: boolean }, said: Record<string, unknown>, bytes: Uint8Array): unknown {
+  return c.stream ? said : new Beside(said, bytes);
+}
+
+/// What is kept small on the device (base64 there), its bytes beside `{ type }`.
+function keptBeside(kept: { type: string; bytes: string }): Beside {
+  return new Beside({ type: kept.type }, fromBase64(kept.bytes) ?? new Uint8Array());
+}
 
 /// What a part read says as it comes: with `stream`, each piece of its bytes beside `{ loaded }`; else with `progress`,
 /// `{ loaded }` alone now and then.
@@ -102,48 +113,53 @@ export function install(): void {
   handlers.stationFile = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFile" }>;
     // A thumbnail is kept on the device: a file sent never changes (AccountDb.keptFile).
+    // Its bytes beside its answer `{ type }` (kept as base64, small).
     const kept = c.thumb ? inner.data.keptFile(c.station, c.key, c.name, "thumb") : null;
-    if (kept !== null) return Effect.succeed(kept);
+    if (kept !== null) return Effect.succeed(keptBeside(kept));
     return Effect.flatMap(parse(c.station), (addr) =>
       Effect.map(
         inner.stations.requests.file(addr, c.key, c.name, c.thumb, (loaded, total) => c.progress && progress({ loaded, total }), ctx),
         ([type, bytes]) => {
-          const file = { type, bytes: base64(bytes) };
-          if (c.thumb) inner.data.keepFile(c.station, c.key, c.name, "thumb", file.type, file.bytes);
-          return file;
+          if (c.thumb) inner.data.keepFile(c.station, c.key, c.name, "thumb", type, base64(bytes));
+          return new Beside({ type }, bytes);
         },
       ),
     );
   };
   // `progress`: the bytes of the part so far, as they come (a part is megabytes: its end alone is too seldom to show).
-  // `stream`: its bytes go as they come, beside values `{ loaded }`, not in its answer as base64 (on a phone, 4 MB made
-  // base64, sent in its JSON and read back took longer than it took to come).
+  // Its bytes beside its answer `{ type, total }`; with `stream`, beside values `{ loaded }` as they come instead (what
+  // takes them writes each where it goes, and nothing waits for the whole part).
   handlers.stationFilePart = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFilePart" }>;
     const [heard, sink] = partProgress(c, progress);
     return Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx, heard, sink), (got) => ({ type: got.type, total: got.total, ...(c.stream ? {} : { bytes: base64(got.bytes) }) })),
+      Effect.map(inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx, heard, sink), (got) => partAnswer(c, { type: got.type, total: got.total }, got.bytes)),
     );
   };
   handlers.stationPoster = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationPoster" }>;
     // Kept on the device as a thumbnail is.
     const kept = inner.data.keptFile(c.station, c.key, c.name, "poster");
-    if (kept !== null) return Effect.succeed(kept);
+    if (kept !== null) return Effect.succeed(keptBeside(kept));
     return Effect.flatMap(parse(c.station), (addr) =>
       Effect.map(inner.stations.requests.poster(addr, c.key, c.name, ctx), (bytes) => {
         if (bytes === null) return null;
-        const poster = { type: "image/jpeg", bytes: base64(bytes) };
-        inner.data.keepFile(c.station, c.key, c.name, "poster", poster.type, poster.bytes);
-        return poster;
+        inner.data.keepFile(c.station, c.key, c.name, "poster", "image/jpeg", base64(bytes));
+        return new Beside({ type: "image/jpeg" }, bytes);
       }),
+    );
+  };
+  handlers.fileOpen = (inner, call, _p, _a, ctx) => {
+    const c = call as Extract<Call, { kind: "fileOpen" }>;
+    return Effect.flatMap(parse(c.station), (addr) =>
+      Effect.map(inner.stations.requests.fileOpen(addr, c.key, c.path, ctx), (got) => new Beside({ name: got.name, path: got.path, type: got.type, size: got.size }, got.bytes)),
     );
   };
   handlers.driveRead = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "driveRead" }>;
     const [heard, sink] = partProgress(c, progress);
     return Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(inner.stations.requests.driveRead(addr, c.root, c.path, c.offset, c.length, ctx, heard, sink), (got) => ({ type: got.type, total: got.total, mtime: got.mtime, ...(c.stream ? {} : { bytes: base64(got.bytes) }) })),
+      Effect.map(inner.stations.requests.driveRead(addr, c.root, c.path, c.offset, c.length, ctx, heard, sink), (got) => partAnswer(c, { type: got.type, total: got.total, mtime: got.mtime }, got.bytes)),
     );
   };
   handlers.driveUploadPart = (inner, call, _p, _a, ctx) => {
@@ -195,8 +211,9 @@ export function install(): void {
   handlers.stationPreview = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationPreview" }>;
     return Effect.flatMap(parse(c.station), (addr) => {
-      if (!c.stream) return Effect.map(inner.stations.requests.preview(addr, c.port, c.method, c.path, c.headers, c.body, ctx), (r) => ({ status: r.status, headers: r.headers, body: base64(r.body) }));
-      // As it comes: its head, then each piece of its body; null at its end. Cancelling the call stops it.
+      if (!c.stream) return Effect.map(inner.stations.requests.preview(addr, c.port, c.method, c.path, c.headers, c.body, ctx), (r) => new Beside({ status: r.status, headers: r.headers }, r.body));
+      // As it comes: its head, then each piece of its body (`{ chunk: true }`, the piece beside it); null at its end.
+      // Cancelling the call stops it.
       return Effect.scoped(
         Effect.gen(function* () {
           const reply = yield* inner.stations.requests.previewStream(addr, c.port, c.method, c.path, c.headers, c.body, ctx);
@@ -204,7 +221,7 @@ export function install(): void {
           for (;;) {
             const chunk = yield* Effect.mapError(reply.body.take, asCoreError);
             if (chunk === null) return null;
-            progress({ chunk: base64(chunk) });
+            progress({ chunk: true }, chunk);
           }
         }),
       );
@@ -257,7 +274,7 @@ export function install(): void {
           buf = rest;
           for (const frame of frames) {
             if ("text" in frame) progress({ text: frame.text });
-            else if ("binary" in frame) progress({ binary: base64(frame.binary) });
+            else if ("binary" in frame) progress({ binary: true }, frame.binary);
             else return { code: frame.close[0], reason: frame.close[1] };
           }
         }

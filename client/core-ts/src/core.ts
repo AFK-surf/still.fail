@@ -16,7 +16,7 @@ import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import * as prefs from "./prefs.ts";
-import { parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
+import { Beside, parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
 import { Runner } from "./runtime.ts";
 import { stationId } from "./station/addr.ts";
 import { Status } from "./status.ts";
@@ -287,19 +287,19 @@ export class Core {
   }
 
   /// A message from a UI as JSON (what the native hosts are given): one that is none answers `bad_message`.
-  receiveJson(client: ClientId, json: string): void {
+  receiveJson(client: ClientId, json: string, bytes?: Uint8Array): void {
     let raw: unknown;
     try {
       raw = JSON.parse(json);
     } catch {
       return;
     }
-    this.receiveRaw(client, raw);
+    this.receiveRaw(client, raw, bytes);
   }
 
-  /// A message from a UI as an object.
-  receiveRaw(client: ClientId, raw: unknown): void {
-    const message = parseClientMessage(raw);
+  /// A message from a UI as an object; `bytes`, those a native host handed over beside it.
+  receiveRaw(client: ClientId, raw: unknown, bytes?: Uint8Array): void {
+    const message = parseClientMessage(raw, bytes);
     if ("invalid" in message) {
       const id = isObject(raw) && typeof raw.id === "number" && Number.isInteger(raw.id) && raw.id >= 0 ? raw.id : null;
       if (id !== null) this.inner.host.emit(client, { id, error: new CoreError("bad_message", t("core-misc.host.bad_message", { error: message.invalid })) });
@@ -326,16 +326,16 @@ export class Core {
         return;
       }
       case "call":
-        return this.#call(client, message.id, message.call, message.params);
+        return this.#call(client, message.id, message.call, message.params, message.bytes);
     }
   }
 
-  #call(client: ClientId, id: RequestId, name: string, params: unknown): void {
+  #call(client: ClientId, id: RequestId, name: string, params: unknown, bytes: Uint8Array | undefined): void {
     const inner = this.inner;
     const asked = heavy(name) ? null : params;
     let call: Call;
     try {
-      call = parseCall(name, params);
+      call = parseCall(name, params, bytes);
     } catch (e) {
       inner.host.emit(client, answer(id, { err: asCoreError(e) }));
       return;
@@ -395,7 +395,8 @@ export class Core {
           if (stoppable) inner.calls.delete(key);
           const result: { ok: unknown } | { err: CoreError } = exit._tag === "Success" ? { ok: exit.value } : { err: failureOf(exit.cause) };
           if (loads && resource) {
-            const status = "ok" in result && isObject(result.ok) ? result.ok.status : undefined;
+            const said = "ok" in result ? (result.ok instanceof Beside ? result.ok.value : result.ok) : undefined;
+            const status = isObject(said) ? said.status : undefined;
             if (typeof status === "number") loads.head(resource, status);
             loads.end(resource, inner.host.nowMs(), "err" in result ? result.err.message : null);
             inner.store.invalidate(resource[0]);
@@ -439,7 +440,8 @@ function failureOf(cause: Cause.Cause<unknown>): CoreError {
 }
 
 export function answer(id: RequestId, result: { ok: unknown } | { err: CoreError }): CoreMessage {
-  return "ok" in result ? { id, ok: result.ok } : { id, error: result.err };
+  if (!("ok" in result)) return { id, error: result.err };
+  return result.ok instanceof Beside ? { id, ok: result.ok.value, bytes: result.ok.bytes } : { id, ok: result.ok };
 }
 
 /// The relays a `/v1/me` names: `relay_urls`, still.fail's own first, or `relay_url` alone from a cloud from before.

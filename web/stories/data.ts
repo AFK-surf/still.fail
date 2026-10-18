@@ -83,19 +83,13 @@ const fetchBytes = (url: string) => {
   if (!got) { got = fetch(url).then(async (r) => new Uint8Array(await r.arrayBuffer())); fetched.set(url, got); }
   return got;
 };
-const base64 = (part: Uint8Array) => {
-  let bin = "";
-  for (let i = 0; i < part.length; i += 8192) bin += String.fromCharCode(...part.subarray(i, i + 8192));
-  return btoa(bin);
-};
-
-/** A file's bytes as the station reads them (`drive.read`: a part from `offset`, `length` long). */
-export async function readFile(path: string, offset: number, length: number): Promise<{ type: string; total: number; bytes: string }> {
+/** A file's bytes as the station reads them (`drive.read`: a part from `offset`, `length` long; its bytes beside the answer). */
+export async function readFile(path: string, offset: number, length: number): Promise<{ type: string; total: number; bytes: Uint8Array }> {
   const [all, type] = path.endsWith(".txt") ? [NOVEL_BYTES, "text/plain"]
     : path.endsWith(".md") ? [NOTE_BYTES, "text/markdown"]
     : path.endsWith(".mp4") ? [await fetchBytes(clipUrl), "video/mp4"]
     : [await fetchBytes(pictureUrl), "image/png"];
-  return { type, total: all.length, bytes: base64(all.subarray(offset, offset + length)) };
+  return { type, total: all.length, bytes: all.slice(offset, offset + length) };
 }
 
 /** What the update just installed brought (the changelog's news). */

@@ -9,7 +9,8 @@ import { conform } from "./conform.ts";
 import { CoreError } from "./error.ts";
 import { header, type Host } from "./host.ts";
 import { t } from "./i18n.ts";
-import { base64, fromUtf8, parseJson } from "./util.ts";
+import { Beside } from "./protocol.ts";
+import { fromUtf8, parseJson } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -47,7 +48,7 @@ export class Asks {
       case "appUpdate":
         return this.update(ask.platform, ask.version, ask.now, this.#host.beta());
       case "picture":
-        return Effect.map(this.picture(ask.url), ([kind, bytes]) => ({ type: kind, bytes: base64(bytes) }));
+        return Effect.map(this.picture(ask.url), ([kind, bytes]) => new Beside({ type: kind }, bytes));
       case "buddies":
         return Effect.succeed(buddies());
       case "devSignIn":

@@ -8,21 +8,32 @@ export type ClientId = number;
 /// Chosen by the UI; answers and subscription values carry it back.
 export type RequestId = number;
 
-/// UI → core.
+/// UI → core. `bytes`: a call may carry bytes beside its JSON (a file's part going up): the web and the desktop post
+/// them in the message, the native hosts hand them over as they are (never as base64 in the JSON).
 export type ClientMessage =
-  | { kind: "call"; id: RequestId; call: string; params: unknown }
+  | { kind: "call"; id: RequestId; call: string; params: unknown; bytes?: Uint8Array }
   | { kind: "subscribe"; id: RequestId; subscribe: Topic; keyed?: boolean }
   | { kind: "unsubscribe"; id: RequestId; unsubscribe: boolean }
   | { kind: "cancel"; id: RequestId; cancel: boolean };
 
-/// core → UI, as it goes on the wire.
+/// core → UI, as it goes on the wire. An answer's `bytes` go as a value's do (a file read: its JSON says what it is).
 export type CoreMessage =
-  | { id: RequestId; ok: unknown }
+  | { id: RequestId; ok: unknown; bytes?: Uint8Array }
   | { id: RequestId; error: CoreError }
   /// `bytes`: a call's value may carry bytes beside its JSON (a screen view's frames): the web transfers them, the
   /// native hosts hand them over as they are (never as base64 in the JSON).
   | { id: RequestId; value: unknown; bytes?: Uint8Array }
   | { id: RequestId; delta: AnyOp[] };
+
+/// A call's answer with bytes beside its JSON (a file read), as a handler gives it: `{id, ok: value, bytes}`.
+export class Beside {
+  readonly value: unknown;
+  readonly bytes: Uint8Array;
+  constructor(value: unknown, bytes: Uint8Array) {
+    this.value = value;
+    this.bytes = bytes;
+  }
+}
 
 /// What a UI can subscribe to: `{ topic, …params }`, its params as protocol.rs declares them (defaults filled, absent
 /// options left out). `station` is `"<workspace>/<station>"`.
@@ -173,13 +184,18 @@ export function isView(topic: Topic): boolean {
   return VIEWS.has(topic.topic);
 }
 
-/// A message from a UI, or why it is none (serde's words, as the native host answers them: `bad_message`).
-export function parseClientMessage(raw: unknown): ClientMessage | { invalid: string } {
+/// A message from a UI, or why it is none (serde's words, as the native host answers them: `bad_message`). `bytes`:
+/// those a native host handed over beside it; a page's come in it.
+export function parseClientMessage(raw: unknown, bytes?: Uint8Array): ClientMessage | { invalid: string } {
   const bad = { invalid: "data did not match any variant of untagged enum ClientMessage" };
   if (!isObject(raw)) return bad;
   const id = raw.id;
   if (typeof id !== "number" || !Number.isInteger(id) || id < 0) return bad;
-  if (typeof raw.call === "string") return { kind: "call", id, call: raw.call, params: raw.params === undefined ? null : raw.params };
+  if (typeof raw.call === "string") {
+    const beside = bytes ?? (raw.bytes instanceof Uint8Array ? raw.bytes : undefined);
+    const params = raw.params === undefined ? null : raw.params;
+    return beside === undefined ? { kind: "call", id, call: raw.call, params } : { kind: "call", id, call: raw.call, params, bytes: beside };
+  }
   if ("subscribe" in raw) {
     const topic = parseTopic(raw.subscribe);
     // `keyed`: the UI applies keyed ops (collections.ts); the Rust core ignores it.

@@ -143,7 +143,7 @@ const PEEK_LINES = 12;
 const PEEK_LINE = 240;
 /// The most an image a peek gives as itself (else its thumbnail).
 const PEEK_IMAGE = 256 * 1024;
-/// The most a file opened whole (GET /sessions/:key/open) takes: its bytes go across as base64.
+/// The most a file opened whole (GET /sessions/:key/open) takes.
 const OPEN_MAX = 16 * 1024 * 1024;
 
 /// The file a request names (`path`), as `sessionPlace` finds it; else the answer to give.
@@ -199,7 +199,8 @@ async function peek(read: Tools["read"], r: Request, key: string, dataDir: strin
 }
 
 /// GET /sessions/:key/open?path=: a file a message names, whole (at most OPEN_MAX), for the preview over the window:
-/// `{name, type, size, bytes}` (base64).
+/// `{name, type, size, bytes}` (base64); with `raw=1`, its bytes as they are, its name and path in `stillfail-name` and
+/// `stillfail-path` (URI-encoded), as a client from now asks it (base64 made it a third bigger, and slow to read back).
 async function openFile(read: Tools["read"], r: Request, key: string): Promise<Answer> {
   const found = await placeOf(read, r, key);
   if ("status" in found) return found;
@@ -207,6 +208,7 @@ async function openFile(read: Tools["read"], r: Request, key: string): Promise<A
   if (found.size > OPEN_MAX) return error(413, "too big to open here");
   try {
     const bytes = await readFile(found.path);
+    if (param(r, "raw") === "1") return answered(found.contentType, bytes, { "stillfail-name": encodeURIComponent(found.name), "stillfail-path": encodeURIComponent(found.path) });
     return jsonAnswer({ name: found.name, path: found.path, type: found.contentType, size: bytes.length, bytes: bytes.toString("base64") });
   } catch (e) {
     return error(500, ioMessage(e as NodeJS.ErrnoException));

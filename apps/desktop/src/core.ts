@@ -67,7 +67,7 @@ function begin(): Generation {
       generation.dead = true;
       current = begin();
     }
-    // A message with bytes (a screen view's frame) goes as its JSON and the bytes beside it, not as base64 in the JSON
+    // A message with bytes (a screen view's frame, a file read) goes as its JSON and the bytes beside it, not as base64 in the JSON
     // (web/src/core/client.ts desktopOpener reads both).
     generation.clients.get(client)?.postMessage(bytes === undefined ? json : { json, bytes });
   }, channel || undefined, sealer ? { sealer } : {});

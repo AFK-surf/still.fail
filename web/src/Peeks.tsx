@@ -6,6 +6,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactElement, type ReactNode } from "react";
 import { HoverCard } from "radix-ui";
 import { stationApi, useStationCall } from "./api.ts";
+import { core } from "./core/react.ts";
 import type { Attachment } from "./core/shapes.ts";
 import { FilePreview, fileSize, type LocalFile } from "./FilePreview.tsx";
 import { Check, Copy, File as FileIcon, Folder, Web } from "@stillfail/ui/icons.tsx";
@@ -304,7 +305,7 @@ type Peek = {
   image?: { type: string; data: string };
   entries?: string[]; count?: number;
 };
-type Opened = { name: string; path: string; type: string; size: number; bytes: string };
+type Opened = { name: string; path: string; type: string; size: number };
 
 /**
  * A file a message names by its path: a chip with its icon and the path as written (chipPath; a directory's once its
@@ -336,11 +337,10 @@ export function FileRef({ path, line, children, words }: { path: string; line: n
       if (local) void reveal(peeked?.path ?? path, toast);
       return;
     }
-    void api.fileOpen<Opened>(session, path).then((f) => {
-      const bin = atob(f.bytes);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes], { type: f.type });
+    // Its bytes beside the answer.
+    void core().callBytes("file.open", { station: station.address, key: session, path }).then((got) => {
+      const f = got.value as Opened;
+      const blob = new Blob(got.bytes ? [got.bytes as Uint8Array<ArrayBuffer>] : [], { type: f.type });
       setOpened({ file: { name: f.name, path: f.path, size: f.size }, local: { blob, url: URL.createObjectURL(blob) } });
     }, (e: unknown) => toast(t("web-main.preview.openFailed", { name, error: failure(e) })));
   };

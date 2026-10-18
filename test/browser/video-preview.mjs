@@ -22,7 +22,7 @@ try {
   import {createRoot} from 'react-dom/client';
   import {Files} from './Chat.tsx';
   import {setCore, setTopicSource} from './core/react.ts';
-  setCore({call: (...args) => window.__videoTestCall(...args), subscribe: () => () => {}} as any);
+  setCore({call: (...args) => window.__videoTestCall(...args), callBytes: async (name, params) => { const got = await window.__videoTestCall(name, params); return {value: got, bytes: Uint8Array.from(atob(got.bytes), (c) => c.charCodeAt(0))}; }, subscribe: () => () => {}} as any);
   setTopicSource(topic => topic.topic === 'prefs' ? {lang:'zh'} : undefined);
   const file = (name: string) => ({name, path: '/test/'+name,size:1000});
   setPageRoot(document.getElementById('root')!);

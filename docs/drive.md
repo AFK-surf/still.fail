@@ -155,10 +155,11 @@ part that leaves a gap is refused `upload_lost` with `have`, where to go on from
   `drive.remove {root, path}`; each change reads its folders again before it
   answers.
 - Calls: `drive.read {station, root, path, offset, length, progress?, stream?}` →
-  `{type, total, mtime, bytes}` (base64; with `progress`, values `{loaded}`,
-  the part's bytes so far, as it comes; with `stream`, its bytes beside those
-  values and none in the answer, as `station.file.part`'s: Android reads so); `drive.upload.part {station, root,
-  path, id, offset, total, replace?, bytes}` → `{have, entry}` (a gap answers
+  `{type, total, mtime}`, the part as the answer's bytes (docs/client-core.md
+  Protocol; with `progress`, values `{loaded}`, the part's bytes so far, as it
+  comes; with `stream`, its bytes beside those values instead, as
+  `station.file.part`'s); `drive.upload.part {station, root,
+  path, id, offset, total, replace?}` with the part as its bytes → `{have, entry}` (a gap answers
   with `have`, the next part starts there; the last reads its folder again);
   `drive.refresh {station, root, path}`; `drive.place {station, root, path, at,
   of?}`.

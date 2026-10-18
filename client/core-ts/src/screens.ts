@@ -18,7 +18,7 @@ import { StationAddr } from "./station/addr.ts";
 import type { ScreenAsk, WireSocket } from "./station/wire.ts";
 import type { ClientId, RequestId } from "./protocol.ts";
 import type { SpanContext } from "./trace.ts";
-import { fromBase64, fromUtf8, get, isObject, utf8 } from "./util.ts";
+import { fromUtf8, get, isObject, utf8 } from "./util.ts";
 import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -58,7 +58,8 @@ function text(params: unknown, field: string): string {
 }
 
 /// The `screen.*` calls by name; null for any other.
-export function parseScreen(name: string, params: unknown): ScreenCall | null {
+/// `bytes`: what the call carries beside its JSON (a picture for the clipboard, `png: true`).
+export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): ScreenCall | null {
   switch (name) {
     case "screen.view": {
       const station = text(params, "station");
@@ -100,8 +101,7 @@ export function parseScreen(name: string, params: unknown): ScreenCall | null {
         if (data.length > CLIP_TEXT_MAX) throw CoreError.invalid(t("core-misc.screen.clipTooLarge"));
         return { kind: "clipboard", view, type: "text", data, paste };
       }
-      const png = get(params, "png");
-      const data = typeof png === "string" ? fromBase64(png) : null;
+      const data = get(params, "png") === true ? (bytes ?? null) : null;
       if (data === null || data.length === 0) throw CoreError.invalid(t("core-misc.params.missing", { field: "text" }));
       if (data.length > CLIP_PNG_MAX) throw CoreError.invalid(t("core-misc.screen.clipTooLarge"));
       if (!PNG_SIGNATURE.every((b, i) => data[i] === b)) throw CoreError.invalid(t("core-misc.screen.notPng"));

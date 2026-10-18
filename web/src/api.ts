@@ -6,7 +6,7 @@ import { bindStationOperations } from "./core/operations.ts";
 // from client/core-ts/src/shapes/schema.ts (core/shapes.ts); what is only sent to a station is
 // declared here.
 import { createContext, useCallback, useContext, useMemo, useRef } from "react";
-import { useCall, useTopic, useTopicSelect, useTopics, type TopicState } from "./core/react.ts";
+import { core, useCall, useTopic, useTopicSelect, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, SearchView, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
@@ -261,27 +261,23 @@ const FILE_PART = 4 * 1024 * 1024;
 /** The most a station from before parts sends (whole). */
 const WHOLE_FILE_MAX = 50 * 1024 * 1024;
 
-/** The whole file as base64, the protocol's form for bytes. */
-/** Bytes from base64: natively where the browser can (a chat's images are megabytes; decoding them char by char held up frames). */
 /** How much of a file has come. */
 export interface FileProgress { loaded: number; total: number | null }
-
-export function fromBase64(text: string): Uint8Array<ArrayBuffer> {
-  const native = (Uint8Array as unknown as { fromBase64?: (s: string) => Uint8Array<ArrayBuffer> }).fromBase64;
-  return native ? native(text) : Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
-}
 
 /** The bytes of a file in one `station.upload.part`. */
 const UPLOAD_PART = 4 * 1024 * 1024;
 
-export function toBase64(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).slice((reader.result as string).indexOf(",") + 1));
-    reader.onerror = () => reject(reader.error ?? new Error(t("web-main.file.unreadable")));
-    reader.readAsDataURL(file);
-  });
+/** A part of a file read, as the core takes it beside a call (never base64). */
+export async function bytesOf(file: Blob): Promise<Uint8Array<ArrayBuffer>> {
+  try {
+    return new Uint8Array(await file.arrayBuffer());
+  } catch (e) {
+    throw e instanceof Error ? e : new Error(t("web-main.file.unreadable"));
+  }
 }
+
+/** The bytes beside a call's answer as a blob (none: empty). */
+const blobOf = (bytes: Uint8Array | undefined, type?: string) => new Blob(bytes ? [bytes as Uint8Array<ArrayBuffer>] : [], type === undefined ? {} : { type });
 
 export function useStationCall(station: string): StationCall {
   const call = useCall();
@@ -299,10 +295,10 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
       // Said at once (nothing yet), then as each part goes.
       onProgress?.(0);
       for (let have = 0; saved === undefined;) {
-        const bytes = await toBase64(file.slice(have, have + UPLOAD_PART));
+        const bytes = await bytesOf(file.slice(have, have + UPLOAD_PART));
         const from = have;
-        const told = await call("station.upload.part", { station, id, name: file.name, size: file.size, offset: have, bytes, ...(onProgress ? { progress: true } : {}) },
-          onProgress && ((p) => onProgress(from + (p as { sent: number }).sent))) as { have: number; file?: Attachment };
+        const told = (await core().callBytes("station.upload.part", { station, id, name: file.name, size: file.size, offset: have, ...(onProgress ? { progress: true } : {}) }, bytes,
+          onProgress && ((p) => onProgress(from + (p as { sent: number }).sent)))).value as { have: number; file?: Attachment };
         if (told.file) saved = told.file;
         // The station goes on from what it has (less, after it lost a part); nothing more is a part it could not take.
         else if (told.have === have) throw new Error(t("web-main.draft.uploadFailed"));
@@ -324,9 +320,9 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
     },
     file: async (key, name, thumb = false, onProgress, size) => {
       const whole = async () => {
-        const { type, bytes } = await call("station.file", { station, key, name, ...(thumb ? { thumb } : {}), ...(onProgress ? { progress: true } : {}) },
-          onProgress && ((got) => onProgress(got as FileProgress))) as { type: string; bytes: string };
-        return new Blob([fromBase64(bytes)], { type });
+        const got = await core().callBytes("station.file", { station, key, name, ...(thumb ? { thumb } : {}), ...(onProgress ? { progress: true } : {}) }, undefined,
+          onProgress && ((p) => onProgress(p as FileProgress)));
+        return blobOf(got.bytes, (got.value as { type: string }).type);
       };
       if (thumb || size === undefined || size <= BIG_FILE) return whole();
       // Big: a part at a time, each a blob of its own (the browser keeps big ones on the disk), so it is never all in
@@ -336,33 +332,33 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
       // Said at once (nothing yet, out of how much), then as each part comes.
       onProgress?.({ loaded: 0, total: size });
       for (let at = 0, total = size; at < total;) {
-        let got: { type: string; total: number; bytes: string };
+        let got: { value: unknown; bytes?: Uint8Array };
         const from = at;
         try {
-          got = await call("station.file.part", { station, key, name, offset: at, length: FILE_PART, ...(onProgress ? { progress: true } : {}) },
-            onProgress && ((p) => onProgress({ loaded: from + (p as { loaded: number }).loaded, total }))) as typeof got;
+          got = await core().callBytes("station.file.part", { station, key, name, offset: at, length: FILE_PART, ...(onProgress ? { progress: true } : {}) }, undefined,
+            onProgress && ((p) => onProgress({ loaded: from + (p as { loaded: number }).loaded, total })));
         } catch (e) {
           // A station from before parts sends it whole, as long as it is not too big for that.
           if (at === 0 && e instanceof CoreError && e.code === "unsupported" && size <= WHOLE_FILE_MAX) return whole();
           throw e;
         }
-        const bytes = fromBase64(got.bytes);
+        const bytes = got.bytes ?? new Uint8Array();
         if (bytes.length === 0) break;
-        parts.push(new Blob([bytes]));
-        type = got.type;
-        total = got.total;
+        parts.push(blobOf(bytes));
+        const said = got.value as { type: string; total: number };
+        type = said.type;
+        total = said.total;
         at += bytes.length;
         onProgress?.({ loaded: at, total });
       }
       return new Blob(parts, { type });
     },
     head: async (key, name, length) => {
-      const got = await call("station.file.part", { station, key, name, offset: 0, length }) as { bytes: string };
-      return new Blob([fromBase64(got.bytes)]);
+      return blobOf((await core().callBytes("station.file.part", { station, key, name, offset: 0, length })).bytes);
     },
     poster: async (key, name) => {
-      const got = await call("station.poster", { station, key, name }) as { type: string; bytes: string } | null;
-      return got ? new Blob([fromBase64(got.bytes)], { type: got.type }) : null;
+      const got = await core().callBytes("station.poster", { station, key, name });
+      return got.value ? blobOf(got.bytes, (got.value as { type: string }).type) : null;
     },
   };
 }
@@ -439,7 +435,6 @@ export function stationApi(t: StationCall) {
     /** A file a message names by its path, for its card (Previews.tsx): what it is, a few lines or a thumbnail. */
     filePeek: <T>(key: string, path: string, line: number | null) => ops.filePeek<T>({ key, path, ...(line !== null ? { line } : {}) }),
     /** That file whole, for the preview over the window. */
-    fileOpen: <T>(key: string, path: string) => ops.fileOpen<T>({ key, path }),
     /** What a web link in a message is, as the station finds it (Previews.tsx). */
     linkPreview: <T>(url: string) => ops.linkPreview<T>({ url }),
     /** What an inline visualization (Viz.tsx) kept: by the session that sent its file and the file's path. */

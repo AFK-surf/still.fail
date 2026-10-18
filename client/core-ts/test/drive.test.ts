@@ -118,7 +118,7 @@ test("an upload's parts go with where they start; a gap answers with what the st
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "drive", station: ST, root: ROOT, path: "" });
   await host.settle();
-  const part = (id: number, offset: number, text: string) => call(core, ui, id, "drive.upload.part", { station: ST, root: ROOT, path: "new.mp4", id: "u1", offset, total: 6, bytes: Buffer.from(text).toString("base64") });
+  const part = (id: number, offset: number, text: string) => call(core, ui, id, "drive.upload.part", { station: ST, root: ROOT, path: "new.mp4", id: "u1", offset, total: 6 }, new TextEncoder().encode(text));
   part(2, 0, "abc");
   await host.settle();
   part(3, 5, "f");

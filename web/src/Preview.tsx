@@ -15,7 +15,7 @@ import { ArrowLeft, ArrowRight, External, Refresh, Web } from "@stillfail/ui/ico
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
 import { useLink } from "./station.tsx";
-import { useCall } from "./core/react.ts";
+import { core } from "./core/react.ts";
 import { useJob } from "./api.ts";
 import { bridge, type Answer, type Asked } from "./previewBridge.ts";
 import * as css from "./Preview.css.ts";
@@ -241,7 +241,7 @@ function DesktopPreview({ station, port, file: _, ...shown }: Shown & { port: nu
  */
 function WebPreview({ station, port, file: _, serve, frame: given, fixed = false, ...shown }:
   Shown & { port: number; serve?: (asked: Asked) => Promise<Answer>; frame?: RefObject<HTMLIFrameElement | null>; fixed?: boolean }) {
-  const call = useCall();
+  const call = useCallback<Parameters<typeof bridge>[1]["call"]>((name, params, bytes, onProgress, signal) => core().callBytes(name, params, bytes, onProgress, signal), []);
   // One frame for as long as this shows: moving about (back, reload, a path) is the frame's own, told to it.
   const [nonce] = useState(() => crypto.randomUUID());
   const [first] = useState("/");

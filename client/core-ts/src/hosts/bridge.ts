@@ -385,8 +385,8 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
       later((core) => core.connect());
       return id;
     },
-    receive(client: number, json: string): void {
-      later((core) => core.receiveJson(client, json));
+    receive(client: number, json: string, bytes?: Uint8Array): void {
+      later((core) => core.receiveJson(client, json, bytes));
     },
     disconnect(client: number): void {
       later((core) => core.disconnect(client));

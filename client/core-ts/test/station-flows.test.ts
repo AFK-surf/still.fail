@@ -11,7 +11,7 @@ import { encode, request } from "../src/ops.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { SseParser } from "../src/station/sse.ts";
 import { run } from "./run.ts";
-import { base, entries, entry, overview, session, started, status, stationReplies, threadView } from "./station-fixture.ts";
+import { Raw, base, entries, entry, overview, session, started, status, stationReplies, threadView } from "./station-fixture.ts";
 import { merge } from "../src/entries.ts";
 import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { COALESCE_MS, EVICT_AFTER_MS } from "../src/store.ts";
@@ -179,6 +179,33 @@ test("hands_a_part_over_as_it_comes", async () => {
   const two = said(2);
   assert.equal(two.filter((m) => m.bytes !== undefined).length, 0);
   assert.equal(two.find((m) => "error" in m)?.error.code, "http_404");
+  core.close();
+});
+
+test("a_file_a_message_names_opens_whole_its_bytes_beside_from_a_station_new_or_old", async () => {
+  const { host, core } = await started(base());
+  stationReplies(host, (req) => {
+    if (req.url.endsWith("/sessions/k/open?path=%2Fw%2Fnew.png&raw=1")) {
+      return new Raw({ status: 200, headers: [["content-type", "image/png"], ["stillfail-name", "new.png"], ["stillfail-path", encodeURIComponent("/w/new.png")]], body: new Uint8Array([1, 2, 3]) });
+    }
+    // A station from before `raw`: its JSON, the bytes in it as base64.
+    if (req.url.endsWith("/sessions/k/open?path=%2Fw%2Fold.png&raw=1")) return { name: "old.png", path: "/w/old.png", type: "image/png", size: 2, bytes: Buffer.from([4, 5]).toString("base64") };
+    if (req.url.endsWith("/sessions/k/open?path=%2Fw%2Fgone.png&raw=1")) return status(404, { error: "no such file" });
+    return undefined;
+  });
+  const ui = core.connect();
+  const said = (id: number) => host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && ("ok" in m || "error" in m)) as J;
+  call(core, ui, 1, "file.open", { station: ST, key: "k", path: "/w/new.png" });
+  await host.settle();
+  const fresh = said(1);
+  assert.deepEqual([fresh.ok, [...fresh.bytes]], [{ name: "new.png", path: "/w/new.png", type: "image/png", size: 3 }, [1, 2, 3]]);
+  call(core, ui, 2, "file.open", { station: ST, key: "k", path: "/w/old.png" });
+  await host.settle();
+  const old = said(2);
+  assert.deepEqual([old.ok, [...old.bytes]], [{ name: "old.png", path: "/w/old.png", type: "image/png", size: 2 }, [4, 5]]);
+  call(core, ui, 3, "file.open", { station: ST, key: "k", path: "/w/gone.png" });
+  await host.settle();
+  assert.equal(said(3).error.code, "http_404");
   core.close();
 });
 
@@ -1304,12 +1331,14 @@ test("what_a_chat_shows_small_is_read_once_and_kept_on_the_device", async () => 
   const asked = async (c: { core: J; ui: number }, id: number, name: string, params: J) => {
     call(c.core, c.ui, id, name, params);
     await s.host.settle();
-    return (s.host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && ("ok" in m || "error" in m)) as J)?.ok;
+    // Its answer and the bytes beside it.
+    const m = s.host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && ("ok" in m || "error" in m)) as J;
+    return { ok: m?.ok, bytes: m?.bytes === undefined ? undefined : new TextDecoder().decode(m.bytes) };
   };
   const thumb = { station: ST, key: "k", name: "a.png", thumb: true };
   const poster = { station: ST, key: "k", name: "v.mp4" };
   const small = await asked(s, 1, "station.file", thumb);
-  assert.equal(new TextDecoder().decode(Uint8Array.from(atob(small.bytes), (c) => c.charCodeAt(0))), JSON.stringify("small"));
+  assert.deepEqual(small, { ok: { type: "application/json" }, bytes: JSON.stringify("small") });
   assert.deepEqual(await asked(s, 2, "station.file", thumb), small, "shown again: from the device");
   const jpeg = await asked(s, 3, "station.poster", poster);
   assert.deepEqual(await asked(s, 4, "station.poster", poster), jpeg);
