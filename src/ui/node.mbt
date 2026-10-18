@@ -94,6 +94,8 @@ struct Node {
   mut page_no : Int
   // a pager's page: the pager's id
   mut pager : Int
+  // laid over its parent rather than beside its siblings
+  mut layer : Bool
   // layout results, absolute, in logical pixels
   mut x : Double
   mut y : Double
@@ -152,6 +154,7 @@ fn Node::new() -> Node {
     pages: None,
     page_no: -1,
     pager: 0,
+    layer: false,
     x: 0.0,
     y: 0.0,
     fw: 0.0,
@@ -205,6 +208,7 @@ fn Node::reset(self : Node) -> Unit {
   self.pages = None
   self.page_no = -1
   self.pager = 0
+  self.layer = false
   self.x = 0.0
   self.y = 0.0
   self.fw = 0.0

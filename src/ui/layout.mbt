@@ -28,6 +28,25 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
 }
 
 ///|
+/// One-line text cut to fit `w`, ending in an ellipsis.
+fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
+  let s = tl.shaped
+  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false)
+  let room = w - dots.w
+  let mut end = 0
+  while end < s.starts.length() && tl.xs[end] + s.adv[end] <= room {
+    end = end + 1
+  }
+  // no space left before the dots
+  while end > 0 && s.cu[end - 1] == 32 {
+    end = end - 1
+  }
+  let cut = if end < s.starts.length() { s.starts[end] } else { s.len }
+  let text = n.text.view(end_offset=cut).to_string() + "…"
+  layout_text(text, n.font_size, n.weight, 1.0e9, false)
+}
+
+///|
 /// The content size of a leaf for the flex engine.
 fn leaf_size(
   n : Node,
@@ -107,7 +126,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
         s.shrink = 1.0
       }
   }
-  if n.pager != 0 {
+  if n.pager != 0 || n.layer {
     // a pager's pages lie over each other, moved sideways as they turn
     s.position = Absolute
     s.inset.left = Pt(0.0)
@@ -178,7 +197,10 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   let iw = dmax(n.fw - n.pad_l - n.pad_r, 0.0)
   let ih = dmax(n.fh - n.pad_t - n.pad_b, 0.0)
   if n.kind == kind_text {
-    n.text_layout(iw) |> ignore
+    let tl = n.text_layout(iw)
+    if !n.wrap && tl.w > iw + 0.5 {
+      n.tl = Some(ellipsized(n, tl, iw))
+    }
   } else if n.kind == kind_editor {
     match self.editors.get(n.id) {
       Some(st) => {

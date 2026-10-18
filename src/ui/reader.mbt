@@ -358,6 +358,10 @@ priv struct PagerState {
   mut vel : Double
   mut width : Double
   mut dragging : Bool
+  /// a turn past the first (-1) or last (1) page, for the app to handle
+  mut edge : Int
+  /// the page the pager last returned to the app
+  mut told : Int
 }
 
 ///|
@@ -366,7 +370,9 @@ let pagers : Map[Int, PagerState] = {}
 ///|
 /// Pages `0..<count` side by side, `page(i)` building page i; the one at
 /// `index` (as the app last set it) shows. Returns the page now showing:
-/// the app keeps it (and sets it to jump).
+/// the app keeps it (and sets it to jump). `on_edge(±1)`: turned past the
+/// first or last page (the app can open the next chapter); `on_middle`: a
+/// tap in the middle third.
 pub fn Ctx::pager(
   self : Ctx,
   key : String,
@@ -375,28 +381,53 @@ pub fn Ctx::pager(
   page : (Int) -> Unit,
   w? : Size = Fill(1.0),
   h? : Size = Fill(1.0),
+  on_edge? : (Int) -> Unit = fn(_) {  },
+  on_middle? : () -> Unit = fn() {  },
 ) -> Int {
   let id = self.id(key)
   let st = match pagers.get(id) {
     Some(s) => s
     None => {
-      let s = { index, count, offset: 0.0, vel: 0.0, width: 0.0, dragging: false }
+      let s = {
+        index,
+        count,
+        offset: 0.0,
+        vel: 0.0,
+        width: 0.0,
+        dragging: false,
+        edge: 0,
+        told: index,
+      }
       pagers[id] = s
       s
     }
   }
   st.count = count
-  if index != st.index && !st.dragging && st.offset == 0.0 {
+  // the app moves to another page (or another chapter) by passing one
+  // other than the pager last told it
+  if index != st.told && !st.dragging {
     st.index = index
+    st.offset = 0.0
+    st.vel = 0.0
+  }
+  // turned past the first or last page since the last frame
+  if st.edge != 0 {
+    let e = st.edge
+    st.edge = 0
+    on_edge(e)
   }
   st.index = imax(0, imin(st.index, count - 1))
   // let go: slide to rest on a spring
   if !st.dragging && (st.offset != 0.0 || st.vel != 0.0) {
-    let k = 0.02 // stiffness per ms²
-    let d = 0.28 // damping per ms
-    let dt = dmin(self.dt, 32.0)
-    st.vel = st.vel + (-k * st.offset - d * st.vel) * dt
-    st.offset = st.offset + st.vel * dt
+    // critically damped, settling in about 200 ms; stepped a millisecond
+    // at a time so a long frame can't make it blow up
+    let k = 0.0004 // stiffness per ms²
+    let d = 0.04 // damping per ms
+    let steps = dmin(self.dt, 64.0).to_int()
+    for _ in 0..<steps {
+      st.vel = st.vel + (-k * st.offset - d * st.vel)
+      st.offset = st.offset + st.vel
+    }
     if st.offset.abs() < 0.3 && st.vel.abs() < 0.01 {
       st.offset = 0.0
       st.vel = 0.0
@@ -433,8 +464,11 @@ pub fn Ctx::pager(
       self.turn(st, -1)
     } else if x > st.width - third {
       self.turn(st, 1)
+    } else {
+      on_middle()
     }
   }
+  st.told = st.index
   st.index
 }
 
@@ -443,6 +477,8 @@ pub fn Ctx::pager(
 fn Ctx::turn(self : Ctx, st : PagerState, dir : Int) -> Unit {
   let next = st.index + dir
   if next < 0 || next >= st.count {
+    st.edge = dir
+    self.wants_frame = true
     return
   }
   st.index = next
@@ -492,9 +528,10 @@ fn Ctx::pager_release(self : Ctx, id : Int, vel : Double) -> Unit {
     Some(st) => {
       st.dragging = false
       let w = dmax(st.width, 1.0)
-      if (st.offset < -w / 3.0 || vel < -0.4) && st.index + 1 < st.count {
+      // past the last or first page, turn() hands it to the app
+      if st.offset < -w / 3.0 || vel < -0.4 {
         self.turn(st, 1)
-      } else if (st.offset > w / 3.0 || vel > 0.4) && st.index > 0 {
+      } else if st.offset > w / 3.0 || vel > 0.4 {
         self.turn(st, -1)
       }
       st.vel = vel

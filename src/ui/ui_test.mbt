@@ -230,3 +230,20 @@ test "the caret, backspace and delete move over whole grapheme clusters" {
   let (_, text2, _, _) = t.ime()
   assert_eq(text2, "a🇯🇵x")
 }
+
+///|
+test "one-line text too wide for its box ends in an ellipsis" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Px(80.0), fn() {
+        c.text("a title far too long to fit", wrap=false) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+  // the fake host's Latin and the dots are 7.5 wide: nine and the dots
+  // fit in 80
+  assert_eq(t.lines_of("a title far"), ["a title f…"])
+}

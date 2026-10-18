@@ -19,6 +19,7 @@ struct Shaped {
 
 ///|
 pub struct TextLayout {
+  text : String
   shaped : Shaped
   line_start : Array[Int]
   line_end : Array[Int]
@@ -238,6 +239,7 @@ fn layout_text(
   }
   let lines = line_start.length()
   {
+    text,
     shaped: s,
     line_start,
     line_end,

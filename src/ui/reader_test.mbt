@@ -48,6 +48,20 @@ test "a chapter cut into pages: every position on exactly one page, in order" {
     assert_eq(pages.page_of(p.end - 1), k)
   }
   assert_true(pages.text_of(0).has_prefix("第一章 测试\n第0段"))
+  // every page shows something, and the pages hold all the text once
+  let all = StringBuilder()
+  for k in 0..<n {
+    let t = pages.text_of(k)
+    all.write_string(t)
+  }
+  let plain = StringBuilder()
+  for b in blocks {
+    match b {
+      Para(s) | Heading(s) => plain.write_string(s)
+      _ => ()
+    }
+  }
+  assert_eq(all.to_string().replace_all(old="\n", new=""), plain.to_string())
 }
 
 ///|
@@ -70,10 +84,19 @@ test "pages fit: smaller pages make more of them, the same text in the same orde
 
 ///|
 test "the pager turns on a tap at either side, a drag, and the arrow keys" {
-  let pages = @ui.paginate(chapter(), 300.0, 500.0)
+  // paginated in the first frame, once the tester's host is in place
+  let cut : Ref[@ui.Pages?] = { val: None }
   let index = [0]
   let t = @ui.Tester::new(
     fn(c) {
+      let pages = match cut.val {
+        Some(p) => p
+        None => {
+          let p = @ui.paginate(chapter(), 300.0, 500.0)
+          cut.val = Some(p)
+          p
+        }
+      }
       index[0] = c.pager("book", pages.count(), index[0], fn(i) {
         c.page(pages, i) |> ignore
       })
@@ -83,6 +106,22 @@ test "the pager turns on a tap at either side, a drag, and the arrow keys" {
   )
   t.tap(280.0, 250.0)
   assert_eq(index[0], 1)
+  // the turned-to page slid into place, its neighbours beside it
+  t.settle() |> ignore
+  inspect(
+    t.dump(),
+    content=(
+      #|col 0,0 300x500
+      #|  row 0,0 300x500
+      #|    col -300,0 300x500 item=0
+      #|      col -300,0 300x500
+      #|    col 0,0 300x500 item=1
+      #|      col 0,0 300x500
+      #|    col 300,0 300x500 item=2
+      #|      col 300,0 300x500
+      #|
+    ),
+  )
   t.tap(20.0, 250.0)
   assert_eq(index[0], 0)
   // a tap in the middle does nothing

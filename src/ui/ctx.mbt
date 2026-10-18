@@ -347,6 +347,21 @@ pub fn Ctx::column(
 }
 
 ///|
+/// A column laid over its parent, the whole of it, in front of what the
+/// parent holds before it: for bars and menus over a page. Taps go through
+/// to what is under it except on what it holds that takes them.
+pub fn Ctx::layer(
+  self : Ctx,
+  pad? : Double = 0.0,
+  align? : Align = AStretch,
+  body : () -> Unit,
+) -> Int {
+  let i = self.box(pad~, align~, body)
+  self.nodes[i].layer = true
+  i
+}
+
+///|
 pub fn Ctx::spacer(self : Ctx) -> Unit {
   let i = self.alloc(kind_box)
   self.nodes[i].w = Fill(1.0)

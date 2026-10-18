@@ -281,6 +281,21 @@ static void run_script_step(int step) {
       case 141: exit(0);
     }
     [v requestFrame];
+  } else if (strcmp(script, "books") == 0) {
+    // the shelf, a book opened, the next page, the menu, the next chapter
+    switch (step) {
+      case 30: shot("books-1-shelf"); break;
+      case 31: mb_cb.pointer(0, 80, 150, 0); mb_cb.pointer(2, 80, 150, 0); break;
+      case 50: shot("books-2-page"); break;
+      case 51: mb_cb.pointer(0, s.width - 40, 300, 0); mb_cb.pointer(2, s.width - 40, 300, 0); break;
+      case 90: shot("books-3-next"); break;
+      case 91: mb_cb.pointer(0, s.width / 2, 300, 0); mb_cb.pointer(2, s.width / 2, 300, 0); break;
+      case 110: shot("books-4-menu"); break;
+      case 111: mb_cb.pointer(0, s.width - 60, 28, 0); mb_cb.pointer(2, s.width - 60, 28, 0); break;
+      case 150: shot("books-5-chapter"); break;
+      case 151: exit(0);
+    }
+    [v requestFrame];
   } else if (strcmp(script, "photos") == 0) {
     // decodes take a while: shots once they have had time, then far down
     if (step == 120) shot("photos-1");

@@ -335,7 +335,7 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
         Some(tl) =>
           return Array::makei(tl.line_start.length(), fn(l) {
             let (a, b) = tl.line_range(l)
-            n.text.unsafe_substring(start=a, end=b)
+            tl.text.unsafe_substring(start=a, end=b)
           })
         None => ()
       }
