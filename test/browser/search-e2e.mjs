@@ -99,9 +99,12 @@ async function main() {
     await page.goto(`${ORIGIN}/w/${workspace}/new`);
     const box = page.locator("textarea").first();
     await box.waitFor({ timeout: 60_000 });
-    await box.fill(`${text} post:${answer}`);
-    await box.press("Enter");
-    await page.getByText(answer, { exact: false }).last().waitFor({ timeout: 60_000 });
+    await box.click();
+    await page.keyboard.insertText(`${text} post:${answer}`);
+    await page.keyboard.press("Enter");
+    // Its chat made, and the agent's post in it (the composer empty by then).
+    await page.waitForURL(/\/chats\//, { timeout: 60_000 });
+    await page.waitForFunction((a) => document.body.innerText.includes(a) && !Array.from(document.querySelectorAll("textarea")).some((t) => t.value.includes(a)), answer, { timeout: 90_000 });
   };
   await say("帮我看看本地分析用什么", "结论：用 DuckDB 直接查 Parquet，不用导数据");
   await say("把预览部署到 studio", "已部署，预览在 5173 端口");
