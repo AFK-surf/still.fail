@@ -2,7 +2,7 @@
 // accounts, still.fail cloud, the links to stations, the device's databases, calls and topics. An app gives its
 // modules to `Core.create(host, { modules })`; each is installed once the platform is up and owns the calls and topics
 // named `<module>.…`, and reaches its own part on a station (`/admin/api/m/<module>/…`, docs/station-modules.md).
-import { Effect, type Scope } from "effect";
+import { Effect, type Fiber, type Scope } from "effect";
 import { type Spec, addSpec } from "./collections.ts";
 import type { Inner, Progress } from "./core.ts";
 import type { Owner } from "./core/routing.ts";
@@ -33,8 +33,8 @@ export type ModuleEnv = {
   /// Its own name (its calls, topics and station part are under it).
   readonly name: string;
   nowMs(): number;
-  /// Work that goes on by itself (a topic's sync), ended as the core closes.
-  fork(effect: Effect.Effect<unknown, never>): void;
+  /// Work that goes on by itself (a topic's sync), ended as the core closes or by what it gives back.
+  fork(effect: Effect.Effect<unknown, never>): () => void;
   /// A JSON request to the module's part on a station (`path` under `/admin/api/m/<module>`); a non-2xx answer is an
   /// error. `quiet`: in the background, not said to be waited on.
   request(station: string, method: string, path: string, body: unknown, options?: { quiet?: boolean; trace?: SpanContext | null }): Effect.Effect<unknown, CoreError>;
@@ -111,7 +111,10 @@ function envOf(inner: Inner, name: string): ModuleEnv {
   return {
     name,
     nowMs: () => inner.host.nowMs(),
-    fork: (effect) => void inner.runner.fork(effect),
+    fork: (effect) => {
+      const fiber = inner.runner.fork(effect);
+      return () => inner.runner.interrupt(fiber as Fiber.Fiber<unknown, unknown>);
+    },
     request: (station, method, path, body, options = {}) =>
       Effect.flatMap(addr(station), (a) => inner.stations.requests.call(a, method, under(path), body, { quiet: options.quiet, ctx: options.trace ?? null })),
     exchange: (station, method, path, headers, body, options = {}) =>

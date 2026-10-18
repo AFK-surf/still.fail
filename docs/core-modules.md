@@ -26,13 +26,13 @@ still.fail 自己现在不传模块（`hosts/hermes.ts`、web、桌面照旧）�
 
 - `request` / `exchange` / `stream`：请求这个模块在 station 上的部分，路径都在 `/admin/api/m/<模块>/…` 下（station 那边见 docs/station-modules.md）。走的是平台的连接、凭证、压缩和状态，和 drive 的请求一样。
 - `kept` / `keep`：模块在本机按 station 存的值，放在能到达这台 station 的那个账号的库里（`station` 表，kind 是 `/m/<模块>/<名字>`）。`keep` 会让对应的 topic 重新计算。
-- `changed`：让一个 topic 重新计算；`fork`：后台跑的活，core 关闭时停掉；`nowMs`。
+- `changed`：让一个 topic 重新计算；`fork`：后台跑的活，core 关闭时停掉，也可以用它返回的函数提前停；`nowMs`。
 
 ## 规则
 
 - 名字：小写字母开头，只有小写字母和数字，最长 32 位，不能和别的模块重名（重名或不合规，`Core.create` 失败）。
 - core 自己的 call 先匹配：模块里和平台同名的 call 永远不会被调到。topic 用 `<模块>.` 开头，平台的 topic 名里不带点，所以不会撞。
 - 模块不 import 聊天的代码（views、attention、composer……）：它只经 `env` 和平台打交道，这样以后聊天搬出去，模块不受影响。
-- 原生宿主的 bundle：app 自己写一个入口，调用 `startHermes([模块…])`（`hosts/hermes-start.ts`），然后用 `node scripts/hermes-bundle.ts --entry <入口> <out.js> [<out.hbc>]` 打包。引擎这一侧不变（`__stillfail.start(cloudOrigin, beta[, os])`，多了一个可选的 `os`，默认是 `android`）。
+- 原生宿主：`hosts/engine.ts` 的 `startEngine(modules, os)` 和引擎无关。引擎先把 `__native` 和 JS 缺的东西放好，再跑它。Hermes 用 `hosts/hermes-start.ts` 的 `startHermes(modules)`（先装 hermes-globals，os 默认 `android`）；JavaScriptCore 由 app 自己的入口补上它缺的，再调 `startEngine(modules, "ios")`。app 的 Hermes bundle 用 `node scripts/hermes-bundle.ts --entry <入口> <out.js> [<out.hbc>]` 打。引擎这一侧不变，只是 `__stillfail.start(cloudOrigin, beta[, os])` 多了一个可选的 `os`。
 
 测试：`client/core-ts/test/modules.test.ts`。
