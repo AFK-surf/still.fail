@@ -26,6 +26,8 @@
 
 ## Account providers and embedding
 
+An app's own calls and topics come in as modules given to the core as it starts (`modules`): docs/core-modules.md.
+
 The core reaches its accounts' control plane through an `AccountProvider` (`client/core-ts/src/account-provider.ts`): the accounts on this device, `/v1/me`, a workspace's stations, member credentials, account events, push and the workspace operations. Whatever the provider is, the core keeps everything in still.fail cloud's shapes, so topics, UIs and the mesh do not change.
 
 - **still.fail cloud** (`stillfailAccountProvider`, the default): what the core always did — Google PKCE sign-in, rotating refresh tokens, `/v1/me`, `/v1/workspaces/:ws/credential`, the `/v1/events` WebSocket, Web Push, invitations, login sessions and operator lists.

@@ -34,6 +34,7 @@
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go).
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
+import type { CoreModule } from "../module.ts";
 import { HostError } from "../error.ts";
 import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohPath, IrohStream } from "../iroh.ts";
 import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type LoopbackRequest, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, sqlError } from "../host.ts";
@@ -355,8 +356,9 @@ export function bridgeIroh(bridge: Bridge): Iroh {
 }
 
 /// A core on a shell: the API the Rust core's Node addon had (connect / receive(json) / disconnect). A bug that ends a fiber ends it as a
-/// panic ended the Rust core: `onFatal` (each UI is told `{"fatal": …}` by the shell, which starts another).
-export function startBridged(native: Native, cloudOrigin: string, beta: boolean, os: string, onFatal: (reason: string) => void) {
+/// panic ended the Rust core: `onFatal` (each UI is told `{"fatal": …}` by the shell, which starts another). `modules`:
+/// what the app adds to the core (module.ts).
+export function startBridged(native: Native, cloudOrigin: string, beta: boolean, os: string, onFatal: (reason: string) => void, extra: { modules?: readonly CoreModule[] } = {}) {
   service.name = "stillfail-native";
   service.os = os;
   const bridge = new Bridge(native);
@@ -367,7 +369,7 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
     dead = true;
     onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }));
   };
-  const ready = Core.create(host, { iroh: bridgeIroh(bridge) }).then((core) => {
+  const ready = Core.create(host, { iroh: bridgeIroh(bridge), modules: extra.modules }).then((core) => {
     core.inner.runner.onDefect = fatal;
     core.keepTime();
     return core;

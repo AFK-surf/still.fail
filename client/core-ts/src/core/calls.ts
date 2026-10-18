@@ -5,6 +5,7 @@ import { parseAttend, type AttendCall } from "../attend-parse.ts";
 import { parseScreen, type ScreenCall } from "../screens.ts";
 import { parseComposer, type ComposerAct } from "../composer.ts";
 import { conform } from "../conform.ts";
+import { type HeldCall, type ModuleCall, parseModuleCall } from "../module.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import * as ops from "../ops.ts";
@@ -103,10 +104,13 @@ export type Call =
   /// The workspace lock (views/lock.ts): `lock.<name>` on a workspace, with what it takes.
   | { kind: "lock"; name: string; workspace: string; params: Record<string, unknown> }
   /// The vault (views/vault.ts): `vault.<name>` on a workspace, with what it takes.
-  | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> };
+  | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> }
+  /// An app's module's call (module.ts): `<module>.<name>`, its params as the module checked them.
+  | { kind: "module"; name: string; call: HeldCall };
 
 /// Whether a UI can cancel it (`{id, cancel}`), and one gone does: the calls that hold something open for a page.
 export function cancellable(call: Call): boolean {
+  if (call.kind === "module") return call.call.def.cancellable === true;
   return (call.kind === "stationPreview" && call.stream) || call.kind === "previewSocket" || (call.kind === "screen" && call.call.kind === "view");
 }
 
@@ -137,6 +141,8 @@ export function callStation(call: Call): string | null {
     case "connectFlow":
     case "slackTokens":
       return call.topic.station as string;
+    case "module":
+      return call.call.def.station?.(call.call.params) ?? null;
     default:
       return "station" in call && typeof call.station === "string" ? call.station : null;
   }
@@ -145,6 +151,8 @@ export function callStation(call: Call): string | null {
 /// Whether a call is one a person does and waits on (doing.rs `counts`).
 export function counts(call: Call, name: string): boolean {
   switch (call.kind) {
+    case "module":
+      return call.call.def.counts === true;
     case "decisionForm":
     case "policyForm":
     case "agentEnvForm":
@@ -234,8 +242,9 @@ function beside(bytes: Uint8Array | undefined): Uint8Array {
   return bytes;
 }
 
-/// `bytes`: what the call carries beside its JSON, if anything.
-export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Call {
+/// `bytes`: what the call carries beside its JSON, if anything; `modules`: the calls of the app's modules (module.ts),
+/// asked after the core's own.
+export function parseCall(name: string, params: unknown, bytes?: Uint8Array, modules?: Map<string, ModuleCall<any>>): Call {
   const flows: [string, string[], "decisionForm" | "policyForm" | "agentEnvForm" | "profileFlow" | "connectFlow" | "slackTokens", string][] = [
     ["automaticDecisions.form.", ["open", "edit", "save", "drop"], "decisionForm", "decisionForm"],
     ["automaticDecisions.policy.", ["open", "edit", "save", "drop"], "policyForm", "policyForm"],
@@ -848,5 +857,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
   if (ask) return { kind: "ask", ask };
   const op = ops.request(name, p);
   if (op) return { kind: "op", op };
+  const held = modules ? parseModuleCall(modules, name, params, bytes) : null;
+  if (held) return { kind: "module", name, call: held };
   throw new CoreError("unknown_call", t("core-misc.call.unknown", { name }));
 }

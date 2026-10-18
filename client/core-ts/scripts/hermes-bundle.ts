@@ -2,17 +2,21 @@
 // and private members lowered), its classes then made functions by Babel (Hermes 0.81 has none: its experimental
 // ES6 classes crash), block scoping left to Hermes (`-block-scoping`, and the engine's runtime config); then, given
 // HERMESC, compiled to bytecode as React Native ships its scripts.
-//   node scripts/hermes-bundle.ts <out.js> [<out.hbc>]      (HERMESC: the hermesc of the engine's Hermes)
+//   node scripts/hermes-bundle.ts [--entry <file>] <out.js> [<out.hbc>]      (HERMESC: the hermesc of the engine's Hermes)
+// `--entry`: an app's own entry, giving its modules to the core (hosts/hermes-start.ts); still.fail's is hosts/hermes.ts.
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { transformSync } from "@babel/core";
 import { build } from "esbuild";
 
-const [out, hbc] = process.argv.slice(2);
-if (!out) throw new Error("usage: hermes-bundle.ts <out.js> [<out.hbc>]");
+const args = process.argv.slice(2);
+const flag = args.indexOf("--entry");
+const entry = flag >= 0 ? resolve(args.splice(flag, 2)[1] ?? "") : new URL("../src/hosts/hermes.ts", import.meta.url).pathname;
+const [out, hbc] = args;
+if (!out) throw new Error("usage: hermes-bundle.ts [--entry <file>] <out.js> [<out.hbc>]");
 const built = await build({
-  entryPoints: [new URL("../src/hosts/hermes.ts", import.meta.url).pathname],
+  entryPoints: [entry],
   bundle: true,
   format: "iife",
   platform: "neutral",
@@ -25,7 +29,7 @@ const built = await build({
   metafile: true,
 });
 // What the app does not carry (apps/android/not-carried.txt: a change to only that runs no Android check) must not be
-// in it: a file that is would go unchecked.
+// in it: a file that is would go unchecked. (Said of still.fail's app; another app's entry is checked the same.)
 const root = new URL("../../../", import.meta.url).pathname;
 const notCarried = readFileSync(`${root}apps/android/not-carried.txt`, "utf8").split("\n").filter((line) => line && !line.startsWith("#")).map((line) => new RegExp(line));
 const carried = Object.keys(built.metafile.inputs).map((input) => relative(root, resolve(input)));
