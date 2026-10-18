@@ -386,8 +386,8 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       ];
-      // What a search finds here: the index kept as the store is (docs/search.md), started once the hub is.
-      const search = new Search({ data, store });
+      // What a search finds here, looked for as it is asked (docs/search.md).
+      const search = new Search({ data });
       const tools = [
         ...chatTools(hub),
         ...archiveTools(hub),
