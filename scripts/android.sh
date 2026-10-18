@@ -9,9 +9,11 @@ set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
-SDK=$HOME/Library/Android/sdk
-NDK=$SDK/ndk/28.2.13676358
-TC=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin
+# Studio's SDK, or the one the machine says (CI: ANDROID_HOME, ANDROID_NDK_LATEST_HOME)
+SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
+NDK=${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-$SDK/ndk/28.2.13676358}}
+HOST_TAG=$([ "$(uname)" = Darwin ] && echo darwin-x86_64 || echo linux-x86_64)
+TC=$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin
 CC="$TC/aarch64-linux-android29-clang"
 ADB=$SDK/platform-tools/adb
 AVD=mbui-avd
@@ -20,8 +22,9 @@ SERIAL=emulator-$PORT
 OUT=out/android
 PKG=${APP:-demo}
 M=$OUT/mod
-export JAVA_HOME=$(/usr/libexec/java_home -v 20 2>/dev/null || /usr/libexec/java_home)
+[ -x /usr/libexec/java_home ] && export JAVA_HOME=$(/usr/libexec/java_home -v 20 2>/dev/null || /usr/libexec/java_home)
 export ANDROID_HOME=$SDK
+size() { wc -c < "$1" | tr -d ' '; }
 CFLAGS="-I$MOON_HOME/include -Isrc/host -fPIC -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM"
 
 sync() {
@@ -73,7 +76,7 @@ case "${1:-build}" in
     $CC -shared -o android/app/src/main/jniLibs/arm64-v8a/libmbui.so $OUT/obj/*.o \
       -lGLESv3 -llog -lm -Wl,--no-undefined
     T1=$(python3 -c 'import time;print(time.time())')
-    echo "libmbui.so $(stat -f %z android/app/src/main/jniLibs/arm64-v8a/libmbui.so) bytes in $(python3 -c "print(round($T1-$T0,2))") s"
+    echo "libmbui.so $(size android/app/src/main/jniLibs/arm64-v8a/libmbui.so) bytes in $(python3 -c "print(round($T1-$T0,2))") s"
     (cd android && ./gradlew --no-daemon -q assembleDebug 2>&1 | grep -v '^$' | tail -20)
     ls -la android/app/build/outputs/apk/debug/*.apk
     ;;

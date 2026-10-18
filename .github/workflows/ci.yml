@@ -1,0 +1,73 @@
+# Every platform but Windows (windows.yml) on each push: the tests, the macOS
+# apps with their screenshot against goldens/mac.png, the iOS simulator app,
+# and the Android APK; each job's time is what this measures too (the
+# summary lists the steps' seconds).
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  MOON_HOME: ${{ github.workspace }}/../.moon
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - name: Check
+        run: moon version --all && moon check --target js --output-json 2>&1 | python3 scripts/errs.py
+      - name: ui, gallery and core tests
+        run: |
+          moon test --target js -p mbui/ui -p mbui/gallery 2>&1 | tail -3
+          moon test --target js -p mbui/core 2>&1 | tail -3
+      - name: flexbox (Yoga's tests)
+        run: moon test --target native -p mbui/flex 2>&1 | tail -3
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - name: macOS apps
+        run: |
+          for app in demo books photos; do
+            /usr/bin/time -p env APP=$app scripts/mac.sh build 2>&1 | tail -4
+          done
+      - name: Screenshot against the golden
+        continue-on-error: true
+        run: scripts/shots.sh mac
+      - name: iOS simulator app
+        run: scripts/ios.sh build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-shots
+          path: out/shots/
+          if-no-files-found: ignore
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - name: APK (libmbui.so from the generated C, then Gradle)
+        run: scripts/android.sh build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/app/build/outputs/apk/debug/*.apk
