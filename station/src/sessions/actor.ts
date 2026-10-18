@@ -62,6 +62,7 @@ export type SessionStore = {
   stopWait(key: string): void;
   listJobs(session: string | null): any[];
   latestThread(key: string): any | null;
+  entriesBefore(thread: number, n: number | null, limit: number): any[];
   insertMessage(message: any): unknown;
   notify(key: string): void;
 };
@@ -713,12 +714,12 @@ export class SessionActor {
       // It was said to be starting: no turn runs.
       this.deps.live?.turnEnded(this.key);
       this.doneWorking();
-      if (error instanceof CommandMissing && error.command === this.runtime) {
-        // Not installed here: said so, about the runtime (the pages offer to install it; once installed, what waits
-        // goes on).
-        this.deps.runtimeMissing?.(this.runtime);
-        await this.notice(`⚠️ ${t("station.notice.runtimeMissing", { name: runtimeLabel(this.runtime) })}`, null, this.runtime);
-      } else await this.notice(`⚠️ ${t("station.notice.cannotStart", { error: message })}`);
+      // Not installed here: said so, about the runtime (the pages offer to install it; once installed, what waits goes
+      // on). Tried again (each restart gives it what waits) and failing the same, it is not said again.
+      const missing = error instanceof CommandMissing && error.command === this.runtime;
+      if (missing) this.deps.runtimeMissing?.(this.runtime);
+      const said = missing ? `⚠️ ${t("station.notice.runtimeMissing", { name: runtimeLabel(this.runtime) })}` : `⚠️ ${t("station.notice.cannotStart", { error: message })}`;
+      if (!this.saidLast(said)) await this.notice(said, null, missing ? this.runtime : null);
       throw error;
     }
   }
@@ -1058,6 +1059,13 @@ export class SessionActor {
         ),
       ),
     ).catch(() => undefined);
+  }
+
+  /// Whether the thread people spoke in last ends with these very words of the station's: nothing said since.
+  private saidLast(text: string): boolean {
+    const latest = this.deps.store.latestThread(this.key);
+    const last = latest ? this.deps.store.entriesBefore(latest.thread.id, null, 1).at(-1) : undefined;
+    return last !== undefined && last.authorKind === "ember" && last.text === text;
   }
 
   /// The station's own words (not the agent's) go to the thread people spoke in last, and are recorded there; one about

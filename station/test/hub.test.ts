@@ -400,6 +400,10 @@ test("a runtime not installed is said about it, and what waited goes on once it 
   const last = r.store.entriesBefore(thread.id, null, 1).pop()!;
   assert.deepEqual([last.authorKind, last.runtime, last.profile], ["ember", "claude", null]);
   assert.equal(r.claude.count(), 0);
+  // Tried again with nothing said since (a restart gives it what waits): not said again.
+  r.hub.installed("claude");
+  await settle();
+  assert.equal(r.store.entriesAfter(thread.id, last.n).length, 0, "the same notice is not said twice in a row");
   // Another runtime installed: nothing of this session's goes on.
   r.claude.missing = false;
   r.hub.installed("codex");
