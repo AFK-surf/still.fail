@@ -1,13 +1,13 @@
 // Thumbnails and posters of the drive's files, for the modules (modules/local.ts): made by the same code as a chat's
-// (sessions/thumbs.ts: the native image codecs; sessions/posters.ts: QuickLook or ffmpeg), kept in <data>/thumbs/drive by
+// (drive/thumbs.ts: the native image codecs; drive/posters.ts: QuickLook or ffmpeg), kept in <data>/thumbs/drive by
 // the file's path and made again once the file is newer. A file reached through still.fail Helper (a folder macOS
 // protects) is never opened by the station itself: the helper copies it into a folder of the station's own first, and
 // the copy goes once what was made of it is kept.
 import { mkdir, mkdtemp, readFile, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { type Drive, MAX_READ, typeOf } from "../drive/drive.ts";
-import { type Codecs, type Thumbnail, hashOf, idOf, kept, thumbnail, wanted as wantedThumb } from "../sessions/thumbs.ts";
-import { poster, posterPath, wanted as wantedPoster } from "../sessions/posters.ts";
+import { type Codecs, type Thumbnail, hashOf, idOf, kept, thumbnail, wanted as wantedThumb } from "../drive/thumbs.ts";
+import { poster, posterPath, wanted as wantedPoster } from "../drive/posters.ts";
 
 /// Where the drive's thumbnails and posters are kept.
 export const driveThumbs = (thumbs: string) => join(thumbs, "drive");

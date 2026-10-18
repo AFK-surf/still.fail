@@ -31,7 +31,7 @@ import {
 import { callApi } from "./chat.ts";
 import type { Hub } from "./hub.ts";
 import { imageSize } from "./image-size.ts";
-import { dir as thumbsDir, keep } from "./thumbs.ts";
+import { dir as thumbsDir, keep } from "../drive/thumbs.ts";
 import { INTERNAL_CONNECT } from "./internal.ts";
 import { namedLocalPaths, prepare } from "./local-links.ts";
 import { suggestArchive } from "./review.ts";

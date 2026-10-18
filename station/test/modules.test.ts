@@ -20,7 +20,7 @@ import { follow, type Life } from "../src/modules/live.ts";
 import { listen, localApi } from "../src/modules/local.ts";
 import { ModuleSet, isModulePath, moduleOf, modulesOf, viewerHeader, viewerOfHeader } from "../src/modules/modules.ts";
 import { ConfigFile } from "../src/ops/config.ts";
-import { type Codecs, idOf } from "../src/sessions/thumbs.ts";
+import { type Codecs, idOf } from "../src/drive/thumbs.ts";
 import { randomBytes } from "node:crypto";
 import { Cloud, writeState } from "../src/cloud/state.ts";
 import type { Stream as MeshStream } from "../src/mesh/native.ts";

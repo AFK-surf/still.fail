@@ -26,6 +26,12 @@ import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
 import { ModuleSet } from "./modules/modules.ts";
 import { HelperApp, helperApp } from "./helper/app.ts";
 import { HelperGrants } from "./helper/grants.ts";
+import { HelperFiles } from "./helper/files.ts";
+import { ConfigFile } from "./ops/config.ts";
+import { Own as OwnPaths } from "./ops/own.ts";
+import { previousGone } from "./ops/previous.ts";
+import { PeerBus } from "./mesh/bus.ts";
+import { wall } from "./ops/fibers.ts";
 
 /// Where the station keeps its data, and the release it runs from.
 export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string }>()("stillfail/Paths") {}
@@ -208,15 +214,66 @@ export class Modules extends Context.Service<Modules, ModuleSet>()("stillfail/Mo
   );
 }
 
+/// config.json (ops/config.ts): one for the whole station. What an edit must pass is said by the parts that read it
+/// (the agents' side: accounts/check.ts).
+export class StationConfig extends Context.Service<StationConfig, ConfigFile>()("stillfail/Config") {
+  static readonly layer = Layer.effect(
+    StationConfig,
+    Effect.gen(function* () {
+      return new ConfigFile((yield* Paths).data);
+    }),
+  );
+}
+
+/// What is the station's own on this machine (ops/own.ts): its data and config, and what its parts add as they are made.
+export class Own extends Context.Service<Own, OwnPaths>()("stillfail/Own") {
+  static readonly layer = Layer.effect(
+    Own,
+    Effect.gen(function* () {
+      return new OwnPaths((yield* Paths).data, (yield* StationConfig).path);
+    }),
+  );
+}
+
+/// The station process before this one, gone (ops/previous.ts): what only one process may have waits on it. Looked for
+/// as this process starts, before it writes its own run/hub.json.
+export class Previous extends Context.Service<Previous, { readonly gone: Promise<void> }>()("stillfail/Previous") {
+  static readonly layer = Layer.effect(
+    Previous,
+    Effect.gen(function* () {
+      return { gone: previousGone(join((yield* Paths).data, "run")) };
+    }),
+  );
+}
+
+/// The station's requests to and from the other stations of its workspace (mesh/bus.ts): the mesh attaches the
+/// transport, the parts say what they answer.
+export class Peers extends Context.Service<Peers, PeerBus>()("stillfail/Peers") {
+  static readonly layer = Layer.sync(Peers, () => new PeerBus({ sleep: (ms) => wall.sleep(ms) }));
+}
+
+/// The folders macOS protects (Documents, Desktop, Downloads, disks) through still.fail Helper (helper/files.ts): the
+/// drive's, a search's and the directories people and agents name; none where there is no helper for them. Their
+/// grants' changes are the overview's.
+export class HelperFolders extends Context.Service<HelperFolders, HelperFiles | null>()("stillfail/HelperFolders") {
+  static readonly layer = Layer.effect(
+    HelperFolders,
+    Effect.gen(function* () {
+      const grants = yield* Grants;
+      const events = yield* Events;
+      return grants && platform.hasFolderPermissions ? new HelperFiles({ helper: grants.helper, grants, changed: () => events.overviewChanged() }) : null;
+    }),
+  );
+}
+
 /// The station's drive (drive/drive.ts, docs/drive.md): one, for the admin API's routes and the modules' local API.
-/// Made after the agents' side (the config, the profiles' homes it keeps out, still.fail Helper's way to the folders macOS
-/// protects).
+/// config.json's roots; what is the station's own never reached; the folders macOS protects through still.fail Helper.
 export class StationDrive extends Context.Service<StationDrive, Drive>()("stillfail/Drive") {
   static readonly layer = Layer.effect(
     StationDrive,
     Effect.gen(function* () {
-      const agents = yield* Agents;
-      return stationDrive(agents.config, () => agents.hub.config().profiles.map((p) => p.home), agents.helperFiles ?? null);
+      const own = yield* Own;
+      return stationDrive(yield* StationConfig, () => own.more(), yield* HelperFolders);
     }),
   );
 }

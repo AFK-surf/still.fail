@@ -59,7 +59,7 @@ export type Platform = {
   /// POSIX shell, or doing nothing when `noop`. The name a program is to be given for it (the .cmd on Windows).
   makeCommand(path: string, script: string, noop?: boolean): string;
 
-  // Process groups (jobs/group.ts).
+  // Process groups (ops/group.ts).
   /// Signals a whole group; one already gone is no error. On Windows any signal ends it.
   signalGroup(pgid: number, signal: NodeJS.Signals): void;
   /// Signals a child that leads a group (spawned detached, or `grouped`), and what it started.

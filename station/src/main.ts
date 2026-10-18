@@ -28,7 +28,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, Key, MeshNative, Modules, Paths, Readers, ScreenRegistry, StationDrive, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, Modules, Own, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
 import { ModulesLive } from "./modules/live.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
@@ -128,9 +128,10 @@ function run() {
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
   const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive).pipe(
     Layer.provideMerge(AdminApi.layer),
-    // The drive, the admin API's and the modules' local API's (modules/local.ts).
-    Layer.provideMerge(StationDrive.layer),
     Layer.provideMerge(AgentsLive(control)),
+    // The drive, the admin API's and the modules' local API's (modules/local.ts): the platform's, before the agents.
+    Layer.provideMerge(StationDrive.layer),
+    Layer.provideMerge(HelperFolders.layer),
     // The modules beside the station (docs/station-modules.md), started by ModulesLive.
     Layer.provideMerge(Modules.layer),
     Layer.provideMerge(Events.layer),
@@ -138,6 +139,12 @@ function run() {
     Layer.provideMerge(AdbShares.layer),
     // The station's browser, its tabs screens (docs/remote-screens.md).
     Layer.provideMerge(Browser.layer),
+    // config.json, what is the station's own, and the process before this one: the platform's, for every part.
+    Layer.provideMerge(Own.layer),
+    Layer.provideMerge(StationConfig.layer),
+    Layer.provideMerge(Previous.layer),
+    // The requests between the stations of the workspace (mesh/bus.ts): the mesh attaches them, the parts answer.
+    Layer.provideMerge(Peers.layer),
     Layer.provideMerge(parts),
   );
   const main = Effect.gen(function* () {

@@ -5,7 +5,7 @@
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import type { Cloud } from "../cloud/state.ts";
-import { type PeerCall, Refused, type Remote } from "../jobs/remote.ts";
+import { type PeerBus, type PeerCall, Refused } from "./bus.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
 import { answerLock } from "./lock-sync.ts";
 
@@ -97,7 +97,7 @@ export function peerCall(endpoint: Endpoint, cloud: Cloud, addr: (id: string) =>
 /// was not current yet (this station just started) was taken for an outsider's for its whole life, every request of
 /// the workspace's own stations refused as sharing no chat until it idled out (2026-10-17). While the roster is not
 /// current a request is refused as that, and the caller asks again.
-export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) {
+export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<PeerBus, "handle" | "handleOutside" | "hearsOutside">) {
   const peer = conn.remoteId();
   const outsider = (error: unknown) =>
     cloud.peersCurrent && remote.hearsOutside?.() === true && cloud.state !== null && cloud.home() !== null && peer !== cloud.state.station ? false : error;
@@ -142,19 +142,4 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) 
     await stream.finish();
     void within(10_000, stream.stopped(), "").catch(() => {});
   }
-}
-
-/// Tasks of peers no longer in the workspace, or no longer allowed, stop: looked at whenever the roster or the config
-/// changes.
-export function followRoster(cloud: Cloud, remote: Remote, config: { listen(f: () => void): () => void }): () => void {
-  const look = () => {
-    const rosters = cloud.memberships().map((m) => ({ workspace: m.workspace, peers: m.peers.flatMap((p) => (typeof p?.id === "string" ? [p.id as string] : [])) }));
-    void remote
-      .revoke(rosters, cloud.peersCurrent)
-      .catch((error) => log.warn("peer", "revoking tasks failed", { error: (error as Error).message }));
-  };
-  look();
-  const unlisten = cloud.listen(look);
-  const unconfig = config.listen(look);
-  return () => (unlisten(), unconfig());
 }

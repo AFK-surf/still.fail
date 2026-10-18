@@ -13,12 +13,13 @@ import { ClaudeDriver } from "../agents/claude.ts";
 import { CodexDriver } from "../agents/codex.ts";
 import { DshDriver } from "../agents/dsh.ts";
 import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
-import { Remote } from "../jobs/remote.ts";
+import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdbShares, AdminHost, ControlPlane, Events, Grants, Key, Modules, Paths, Readers, ScreenRegistry, Store } from "../services.ts";
+import { AdbShares, AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, Modules, Own, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store } from "../services.ts";
+import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { permissionsView } from "../api/routes/permissions.ts";
 import { Gpus } from "../jobs/gpu.ts";
 import { Net, measure } from "../jobs/load.ts";
@@ -52,7 +53,6 @@ import { UsageCounter } from "../usage/counter.ts";
 import { Search } from "../search/search.ts";
 import { FileSearch } from "../search/files.ts";
 import { rootsOf } from "../drive/drive.ts";
-import { ownPaths } from "../ops/own.ts";
 import { SEARCH, searchForPeer, searchTools } from "../tools/search.ts";
 import { sessionUsage } from "../read/usage.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
@@ -83,9 +83,6 @@ import { readAgentEnvFrom } from "../ops/agent-env.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
-
-/// How long the previous station process is waited for before its sessions are taken up all the same.
-const PREVIOUS_LIMIT_MS = 40_000;
 
 export type AgentsParts = {
   /// The agents' predecessor-exit wait, also used before binding the mesh socket.
@@ -129,33 +126,6 @@ export type AgentsParts = {
 
 export class Agents extends Context.Service<Agents, AgentsParts>()("stillfail/Agents") {}
 
-/// Whether a process is alive (signal 0).
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
-
-/// Waits for the station process that held the sessions before (run/hub.json) to be gone.
-async function previousGone(run: string) {
-  let pid = 0;
-  try {
-    pid = JSON.parse(readFileSync(join(run, "hub.json"), "utf8")).pid;
-  } catch {
-    return;
-  }
-  if (typeof pid !== "number" || pid === process.pid || !alive(pid)) return;
-  log.info("hub", "waiting for the previous station process to hand over", { pid });
-  const until = wall.now() + PREVIOUS_LIMIT_MS;
-  // A process's end can only be looked for (another program's: the machine's time): every 100 ms, for the seconds a
-  // handover takes.
-  while (alive(pid) && wall.now() < until) await wall.sleep(100);
-  if (alive(pid)) log.warn("hub", "the previous station process is still there; taking up its sessions all the same", { pid });
-}
-
 export const AgentsLive = (control: Control) =>
   Layer.effect(
     Agents,
@@ -173,8 +143,10 @@ export const AgentsLive = (control: Control) =>
       const browser = yield* Browser;
       const host = yield* AdminHost;
       const modules = yield* Modules;
+      const own = yield* Own;
+      const previous = (yield* Previous).gone;
       const run = join(data, "run");
-      const config = new ConfigFile(data);
+      const config = yield* StationConfig;
       // An edit is taken only if it checks out as config.rs `parse_config` would have it.
       config.check = checkConfig;
       // What it starts for its agents runs with the variables set in it (ops/agent-env.ts).
@@ -195,7 +167,7 @@ export const AgentsLive = (control: Control) =>
       const settings = () => hubConfig(config.raw(), data);
       // The folders macOS protects (Documents, Desktop, Downloads, disks) through still.fail Helper: the drive's and
       // the directories people and agents name (ops/places.ts), never touched on the station's thread.
-      const helperFiles = grants && platform.hasFolderPermissions ? new HelperFiles({ helper: grants.helper, grants, changed: () => events.overviewChanged() }) : null;
+      const helperFiles = yield* HelperFolders;
       const places = new Places({ helper: helperFiles });
       // What other stations of the workspace share with this one, and what it shares (made below, once the accounts are).
       let sharing: Sharing | null = null;
@@ -239,7 +211,12 @@ export const AgentsLive = (control: Control) =>
           return page ? `${page}?service=${encode(job)}` : null;
         },
       });
-      const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places });
+      const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places, bus: yield* Peers });
+      // Tasks of stations no longer in the workspace, or no longer allowed, stop: once the mesh is up, and as the roster
+      // or the config changes.
+      let roster: (() => void) | null = null;
+      remote.bus.whenAttached(() => void (roster = followRoster(cloud, remote, config)));
+      yield* Effect.addFinalizer(() => Effect.sync(() => roster?.()));
       hub.setJobs(jobs);
       // Ports of other stations forwarded here (mesh/peer-forward.ts), each its session's: through the mesh's way, once
       // it is up (`peers`, below).
@@ -390,11 +367,14 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       ];
+      // The profiles' homes elsewhere and the machine's runtime logins are the station's own too (ops/own.ts): never
+      // reached through the drive, the device tools or a search.
+      own.add(() => [...hub.config().profiles.map((p) => p.home), claudeCredentialsFile(process.env), codexAuthFile(process.env)]);
       // What a search finds here, looked for as it is asked (docs/search.md): the machine's files too.
       const search = new Search({
         data,
         files: new FileSearch({
-          protect: () => ownPaths(data, config.path, hub.config().profiles.map((p) => p.home)),
+          protect: () => own.paths(),
           roots: (ws) => rootsOf(config.raw(), ws),
           personal: () => config.raw()?.search?.personal === true,
           // Documents, Desktop and Downloads through still.fail Helper, where it holds their grant (looked at in the
@@ -668,7 +648,6 @@ export const AgentsLive = (control: Control) =>
       const peerRoute = () => peers.route;
       let handing = false;
       // Taken up once the previous process is gone; then the door opens, and what was cut off resumes.
-      const previous = previousGone(run);
       const start = async () => {
         await previous;
         mkdirSync(run, { recursive: true });

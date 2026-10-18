@@ -11,7 +11,7 @@ import { after, describe, test } from "node:test";
 import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { Cloud } from "../src/cloud/state.ts";
-import { signalGroup } from "../src/jobs/group.ts";
+import { signalGroup } from "../src/ops/group.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
 import { blobId, listLocal } from "../src/jobs/dirsync.ts";
 import { type PeerCall, Refused, Remote } from "../src/jobs/remote.ts";

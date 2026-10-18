@@ -3,12 +3,11 @@
 // the endpoint and every connection and loop it started.
 import { Cause, Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, ScreenRegistry, Store, Up } from "../services.ts";
+import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Own, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
-import { ownPaths } from "../ops/own.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { Agents } from "../sessions/agents.ts";
-import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
+import { PEER_ALPN, peerCall, servePeer } from "./peer.ts";
 import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
 import { followLock } from "./lock-sync.ts";
 import { Traces } from "./traces.ts";
@@ -30,6 +29,10 @@ export const MeshLive = Layer.effectDiscard(
     const admin = yield* AdminApi;
     const up = yield* Up;
     const agents = yield* Agents;
+    const own = yield* Own;
+    const previous = yield* Previous;
+    const peers = yield* Peers;
+    const config = yield* StationConfig;
     const shares = yield* AdbShares;
     const screens = yield* ScreenRegistry;
     const run = Effect.gen(function* () {
@@ -39,7 +42,7 @@ export const MeshLive = Layer.effectDiscard(
       // wait in this background fiber (not layer construction, which must signal ready to start the handover).
       // An unset address or port 0 gets a fresh port and can bind alongside the old process.
       if (Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0) {
-        yield* Effect.promise(() => agents.previousGone);
+        yield* Effect.promise(() => previous.gone);
       }
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
       // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
@@ -61,7 +64,7 @@ export const MeshLive = Layer.effectDiscard(
       // The workspace's other stations: asked through this endpoint, their tasks stopped once they are not in it.
       // And the stations of other workspaces chats are shared with or from (xshare/index.ts).
       const call = peerCall(endpoint, cloud.state, undefined, agents.xshare);
-      agents.remote.attach(call);
+      peers.attach(call);
       // The agents' door's way to the other stations' web services (peer-http.ts).
       yield* Effect.acquireRelease(
         Effect.sync(() => {
@@ -79,14 +82,10 @@ export const MeshLive = Layer.effectDiscard(
         Effect.sync(() => followLock(cloud.state, call)),
         (stop) => Effect.sync(stop),
       );
-      yield* Effect.acquireRelease(
-        Effect.sync(() => followRoster(cloud.state, agents.remote, agents.config)),
-        (stop) => Effect.sync(stop),
-      );
       const connections = yield* FiberSet.make();
       // The mesh's spans, when the config turns traces on (read at start, as the Rust does).
       const traces = yield* Effect.acquireRelease(
-        Effect.sync(() => new Traces(agents.config.raw()?.telemetry?.traces === true)),
+        Effect.sync(() => new Traces(config.raw()?.telemetry?.traces === true)),
         (traces) => Effect.promise(() => traces.close()),
       );
       if (traces.enabled) traces.exportTo((spans) => Effect.runPromise(plane.traces(spans)));
@@ -97,7 +96,7 @@ export const MeshLive = Layer.effectDiscard(
           new DeviceTools({
             // Never reachable: the station's data (its key, cloud.json, the profiles' homes), its config, the machine's
             // runtime logins.
-            protect: () => ownPaths(cloud.state.data, agents.config.path, agents.hub.config().profiles.map((p) => p.home)),
+            protect: () => own.paths(),
             sessions: adminSessions(
               () => admin,
               () => store,
@@ -109,7 +108,7 @@ export const MeshLive = Layer.effectDiscard(
         ),
         (tools) => Effect.sync(() => tools.close()),
       );
-      const gateways = { cloud: cloud.state, tools: device, access: () => accessOf(agents.config.raw()), enabled: () => plane.spec().tools };
+      const gateways = { cloud: cloud.state, tools: device, access: () => accessOf(config.raw()), enabled: () => plane.spec().tools };
       // The same tools for requests Comma pushes on the presence socket.
       cloud.state.toolCalls = presenceTools(gateways);
       yield* Effect.addFinalizer(() => Effect.sync(() => (cloud.state.toolCalls = null)));
@@ -124,7 +123,7 @@ export const MeshLive = Layer.effectDiscard(
         yield* FiberSet.run(
           connections,
           Effect.tryPromise(() =>
-            conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, agents.remote)
+            conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
             : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => agents.forwards?.forwarded(port) === true })
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
             : conn.alpn().equals(GUEST_ALPN) ? guests.serve(conn)

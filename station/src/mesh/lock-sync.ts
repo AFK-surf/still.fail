@@ -6,7 +6,7 @@
 import { log } from "../ops/log.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { asEntry, type Entry } from "../cloud/lock.ts";
-import type { PeerCall } from "../jobs/remote.ts";
+import type { PeerCall } from "./bus.ts";
 
 /// A lock request of another station of the workspace (the transport checked it is in the roster, so in the lock), of
 /// the lock of the workspace it was asked in (`workspace`).

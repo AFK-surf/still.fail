@@ -10,9 +10,8 @@ import { randomBytes } from "node:crypto";
 import { closeSync, mkdirSync, openSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { Cause, Clock, Effect, FiberMap, Layer, Option, Queue, Schedule, Stream } from "effect";
-import { Agents } from "../sessions/agents.ts";
-import { Modules, Paths, StationDrive } from "../services.ts";
-import { dir as thumbsDir } from "../sessions/thumbs.ts";
+import { Modules, Paths, Previous, StationConfig, StationDrive } from "../services.ts";
+import { dir as thumbsDir } from "../drive/thumbs.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
@@ -188,12 +187,12 @@ export const ModulesLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const { data } = yield* Paths;
     const modules = yield* Modules;
-    const agents = yield* Agents;
+    const config = yield* StationConfig;
     const drive = yield* StationDrive;
-    const life: Life = { data, modules, drive, config: agents.config, previousGone: agents.previousGone };
+    const life: Life = { data, modules, drive, config, previousGone: (yield* Previous).gone };
     // Sockets (unix domain) are how a module and the station talk: macOS and Linux.
     if (!platform.hasUnixSockets) {
-      if (modulesOf(agents.config.raw()).specs.length > 0) log.warn("modules", "modules run on macOS and Linux only; none is started here");
+      if (modulesOf(config.raw()).specs.length > 0) log.warn("modules", "modules run on macOS and Linux only; none is started here");
       return;
     }
     const again = yield* follow(life);
@@ -201,7 +200,7 @@ export const ModulesLive = Layer.effectDiscard(
     // config.json as it changes (an edit here, or the file's read again).
     const changes = Stream.callback<void>((queue) =>
       Effect.acquireRelease(
-        Effect.sync(() => agents.config.listen(() => void Queue.offerUnsafe(queue, undefined))),
+        Effect.sync(() => config.listen(() => void Queue.offerUnsafe(queue, undefined))),
         (unlisten) => Effect.sync(unlisten),
       ),
     );

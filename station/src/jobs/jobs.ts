@@ -23,7 +23,7 @@ import { platform } from "../platform/index.ts";
 import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
-import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "./group.ts";
+import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 
 export { outputAt, tail };
 

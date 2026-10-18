@@ -4,7 +4,7 @@
 // - a command (startCommand): the station's while it runs (a device command, a runtime's update), its output read; on
 //   a timeout or a cancel it is ended whole (endCommand);
 // - a lasting one (startLasting): a job, which lives on past the station, recorded by its pgid (its pid), and taken up
-//   or ended by the station that runs later (jobs/group.ts).
+//   or ended by the station that runs later (ops/group.ts).
 import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process";
 import { platform } from "../platform/index.ts";
 

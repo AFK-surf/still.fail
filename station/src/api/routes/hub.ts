@@ -30,7 +30,7 @@ import {
 import { shown } from "../../jobs/jobs.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOf } from "../../sessions/footprint.ts";
-import { dir as thumbsDir, keep } from "../../sessions/thumbs.ts";
+import { dir as thumbsDir, keep } from "../../drive/thumbs.ts";
 import { imageSize } from "../../sessions/image-size.ts";
 import { wall } from "../../ops/fibers.ts";
 import { sessionSeen } from "../seen.ts";

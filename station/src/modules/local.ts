@@ -20,7 +20,7 @@ import { driveOf, refused, routes as driveRoutes } from "../api/routes/drive.ts"
 import type { Drive } from "../drive/drive.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { readOnly } from "../mesh/credential.ts";
-import type { Codecs } from "../sessions/thumbs.ts";
+import type { Codecs } from "../drive/thumbs.ts";
 import { log } from "../ops/log.ts";
 import { VIEWER_HEADER, viewerOfHeader } from "./modules.ts";
 import { posterOf, thumbOf } from "./media.ts";
