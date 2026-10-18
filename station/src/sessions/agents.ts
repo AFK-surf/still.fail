@@ -38,17 +38,8 @@ import { jobTools } from "../tools/jobs.ts";
 import { forwardTools } from "../tools/forward.ts";
 import { Forwards } from "../mesh/peer-forward.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
-import { endedNotice, loginTools, promptNotice } from "../tools/login.ts";
-import { Logins } from "../logins/index.ts";
-import { readOnly } from "../mesh/credential.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
-import { UsageCounter } from "../usage/counter.ts";
-import { Search } from "../search/search.ts";
-import { FileSearch } from "../search/files.ts";
-import { rootsOf } from "../drive/drive.ts";
-import { SEARCH, searchForPeer, searchTools } from "../tools/search.ts";
-import { sessionUsage } from "../read/usage.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
@@ -82,9 +73,6 @@ export type AgentsParts = {
   remote: Remote;
   mcp: McpEndpoint;
   config: ConfigFile;
-  usage: UsageCounter;
-  /// What a search finds on this station (docs/search.md).
-  search: Search;
   updates: Updates;
   accounts: Accounts;
   /// What this station shares with the workspace's other stations, and uses of theirs.
@@ -96,8 +84,6 @@ export type AgentsParts = {
   peers: { route: PeerRoute | null };
   /// Ports of other stations forwarded here (mesh/peer-forward.ts).
   forwards: Forwards;
-  /// The station's logins to command-line tools (docs/remote-login.md).
-  logins: Logins;
   slack: SlackParts;
   /// A session's page in the app (`<origin>/o/…`), in still.fail cloud only.
   pageOf(key: string): string | undefined;
@@ -262,8 +248,6 @@ export const AgentsLive = (control: Control) =>
             return createForPeer(hub, peer, request, ws);
           case NOTICE:
             return noticeForPeer(hub, peer, request, ws);
-          case SEARCH:
-            return searchForPeer({ search, link: (session) => hub.link(session) }, request, ws, cloud.home());
           default:
             return fromPeer(hub, peer, request, ws);
         }
@@ -311,75 +295,9 @@ export const AgentsLive = (control: Control) =>
           return `agent: ${title}`;
         },
       });
-      // The station's logins to command-line tools (docs/remote-login.md): each told on the event streams as it changes;
-      // one an agent started tells that agent as it ends, its cards closed.
-      const logins = new Logins({ data, clock: hub.clock });
-      const loginLink = (session: string | null, id: string) => {
-        const s = place();
-        if (!s || !plane.spec().pages) return null;
-        const ws = (session ? store.getSession(session)?.ws : null) ?? s.workspace;
-        return `${s.origin}/w/${ws}/s/${s.station}/login/${encode(id)}`;
-      };
-      /// The logins whose agent was told they ask something (once a time they do).
-      const asking = new Set<string>();
-      const unlistenLogins = [
-        logins.changes((change) => {
-          const login = logins.get(change.login);
-          if (!login) return;
-          events.machineLogins({ login }, { login: Logins.limited(login) }, readOnly, `login\0${login.id}`);
-          // Asking something again after its person's browser step (az picking a subscription, say): its agent answers.
-          const asks = login.waiting && login.endedAt === undefined && logins.hadBrowserStep(login.id);
-          if (asks && !asking.has(login.id) && login.chat) {
-            try {
-              hub.notify(login.chat, promptNotice(logins, login, loginLink(login.chat, login.id)));
-            } catch (error) {
-              log.warn("logins", "an agent was not told its login asks something", { login: login.id, error: (error as Error).message });
-            }
-          }
-          if (asks) asking.add(login.id);
-          else asking.delete(login.id);
-        }),
-        // Told: the agent that started it, and each that posted its card (one may post a card for a login under way).
-        logins.onEnded((login, starter) => {
-          let carded: string[] = [];
-          try {
-            carded = store.closeLoginCards(login.id);
-          } catch (error) {
-            log.warn("logins", "a login's cards were not closed", { login: login.id, error: (error as Error).message });
-          }
-          for (const session of new Set([...(starter.chat ? [starter.chat] : []), ...carded])) {
-            try {
-              hub.notify(session, endedNotice(login, loginLink(session, login.id)));
-            } catch (error) {
-              log.warn("logins", "an agent was not told a login ended", { login: login.id, session, error: (error as Error).message });
-            }
-          }
-        }),
-      ];
       // The profiles' homes elsewhere and the machine's runtime logins are the station's own too (ops/own.ts): never
       // reached through the drive, the device tools or a search.
       own.add(() => [...hub.config().profiles.map((p) => p.home), claudeCredentialsFile(process.env), codexAuthFile(process.env)]);
-      // What a search finds here, looked for as it is asked (docs/search.md): the machine's files too.
-      const search = new Search({
-        data,
-        files: new FileSearch({
-          protect: () => own.paths(),
-          roots: (ws) => rootsOf(config.raw(), ws),
-          personal: () => config.raw()?.search?.personal === true,
-          // Documents, Desktop and Downloads through still.fail Helper, where it holds their grant (looked at in the
-          // background where not known yet; nothing asks for one on a search's behalf).
-          helper: helperFiles
-            ? {
-                granted: (tops) => {
-                  const unknown = tops.filter((t) => helperFiles.known(t) === undefined);
-                  if (unknown.length > 0) helperFiles.check(unknown);
-                  return tops.filter((t) => helperFiles.known(t)?.state === "granted");
-                },
-                search: (top, query, most, protect) => helperFiles.search(top, query, most, protect),
-              }
-            : null,
-        }),
-      });
       const tools = [
         ...chatTools(hub),
         ...archiveTools(hub),
@@ -396,44 +314,7 @@ export const AgentsLive = (control: Control) =>
         }),
         ...computerTools(computer),
         ...forwardTools(forwards),
-        ...loginTools({
-          logins: () => logins,
-          // The chat's starter: whom the agent works for.
-          starter: (session) => {
-            const row = store.getSession(session);
-            const email = row?.createdBy ?? "";
-            // Its chat's name; one not named yet, by what was first said in it (as a shared chat is titled).
-            let chatTitle: string | null = null;
-            try {
-              chatTitle = sender(hub, session)[0];
-            } catch {}
-            if (chatTitle === null || chatTitle === session) {
-              const first = store.listThreads("", session, null)[0]?.firstText?.trim() ?? "";
-              chatTitle = first !== "" ? Array.from(first.split(/\s+/u).join(" ")).slice(0, 80).join("") : null;
-            }
-            return { by: { email, name: readers.names.get(email) ?? "" }, workspace: row?.ws ?? place()?.workspace ?? null, chat: session, chatTitle };
-          },
-          link: (session, id) => loginLink(session, id),
-        }),
       ];
-      tools.push(...searchTools({
-        search,
-        workspaceOf: (session) => {
-          const row = store.getSession(session);
-          if (!row) return null;
-          const home = cloud.home();
-          return { workspace: row.ws ?? home ?? "", home: row.ws === null || row.ws === home };
-        },
-        link: (session) => hub.link(session),
-        stations: async (workspace) => {
-          const roster = await remote.ask("", { method: "peers", workspace });
-          const own = place()?.station ?? "";
-          return (Array.isArray(roster?.stations) ? roster.stations : [])
-            .filter((e: any) => typeof e?.id === "string" && e.id !== "")
-            .map((e: any) => ({ id: e.id, name: typeof e.name === "string" ? e.name : e.id, here: e.id === own }));
-        },
-        ask: (station, request) => remote.ask(station, request),
-      }));
       // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
       // itself while nothing runs and nothing is asked of it (auto update), watched or not.
       const updates = makeUpdates({
@@ -541,7 +422,6 @@ export const AgentsLive = (control: Control) =>
         overview: view,
         processState: (key) => hub.processState(key),
         followed: () => accounts.followed(),
-        loginScreen: (id, send) => logins.follow(id, send),
       });
       // A runtime installed or updated from the pages: the machine's logins read again.
       updates.onRuntimeChanged(() => {
@@ -666,15 +546,6 @@ export const AgentsLive = (control: Control) =>
         control.failed(`the agents' side did not start: ${(e as Error).message}`);
       })));
 
-      // What the agents spent, read from their transcripts: now, and after each turn ends.
-      const usage = new UsageCounter({ store, config: () => ({ dataDir: data, profiles: settings().profiles }), clock: hub.clock });
-      usage.start();
-      // An execution's details show its calls as counted here, as the usage page does, and are told when more are.
-      hub.live.countWith({ of: (key) => sessionUsage(store.usageOfSession(key)), ask: () => usage.soon() });
-      search.start();
-      const unsubscribeCounted = store.subscribe((change) => {
-        if (change.type === "usage") hub.live.usageCounted();
-      });
 
       // What the chats' people hear about while no client of theirs runs: pushed by the control plane.
       const notifier = new Notifier(store, readers, cloud, (notices, ws) => Effect.runPromise(plane.notify(notices, ws)));
@@ -723,8 +594,6 @@ export const AgentsLive = (control: Control) =>
           if (handing) return;
           handing = true;
           await time.close();
-          for (const stop of unlistenLogins) stop();
-          await logins.close();
           await sharing?.close();
           await xshare.close();
           unlistenRule();
@@ -742,9 +611,6 @@ export const AgentsLive = (control: Control) =>
             await hub.shutdown();
           }
           await jobs.shutdown();
-          unsubscribeCounted();
-          await usage.stop();
-          await search.stop();
           await updates.close();
           await accounts.close();
           for (const stop of unlistenOverview) stop();
@@ -755,6 +621,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, usage, search, updates, accounts, sharing: sharing!, xshare, peers, forwards, logins, slack, overview: view, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, slack, overview: view, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

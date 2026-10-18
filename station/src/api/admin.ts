@@ -8,7 +8,6 @@ import { HttpError } from "../read/views.ts";
 import { type Answer, type Request, error, json, queryPairs } from "./request.ts";
 import { routes as chats } from "./routes/chats.ts";
 import { routes as usage } from "./routes/usage.ts";
-import { routes as search } from "./routes/search.ts";
 import { routes as sessions } from "./routes/sessions.ts";
 import { routes as events } from "./routes/events.ts";
 import { routes as marks } from "./routes/marks.ts";
@@ -21,7 +20,6 @@ import { routes as deviceTools } from "./routes/tools.ts";
 import { routes as agentEnv } from "./routes/agent-env.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
-import { routes as machineLogins } from "./routes/logins.ts";
 import { type Drive, stationDrive } from "../drive/drive.ts";
 import { type ModuleSet, moduleOf } from "../modules/modules.ts";
 import type { StationParts } from "../parts.ts";
@@ -129,7 +127,7 @@ export class Admin {
       agents: deps.agents,
     };
     this.tools = tools;
-    this.routes = [...chats(tools), ...usage(tools), ...search(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
+    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
       ...(deps.agents?.slack && deps.store
         ? slack({
             slack: deps.agents.slack,
@@ -168,7 +166,6 @@ export class Admin {
           })
         : []),
       ...(deps.agents?.xshare ? xshare({ xshare: deps.agents.xshare, store: deps.store }) : []),
-      ...(deps.agents ? machineLogins(() => deps.agents?.logins) : []),
       ...(deps.agents?.accounts
         ? accounts({
             accounts: deps.agents.accounts,
