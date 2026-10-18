@@ -236,12 +236,30 @@ fn dump(accounts : @core.Sub) -> Unit {
   dump_one("workspaces", ws)
   // each workspace's stations
   match ws.value {
-    Some(Array(list)) =>
-      for w in list {
-        let id = str(Some(w), "id")
-        if id.length() > 0 {
-          let s = @core.subscribe("stations", params={ "scope": Json::string(id) })
-          dump_one("stations " + id, s)
+    Some(Array(accounts)) =>
+      for a in accounts {
+        match a {
+          Object(am) =>
+            match am.get("workspaces") {
+              Some(Array(list)) =>
+                for w in list {
+                  let id = str(Some(w), "id")
+                  if id.length() > 0 {
+                    let s = @core.subscribe("stations", params={
+                      "scope": Json::string(id),
+                    })
+                    dump_one("stations " + id, s)
+                    // reading it makes this device ask to be let in, when the
+                    // workspace's security mode doesn't have it yet
+                    let l = @core.subscribe("lock", params={
+                      "workspace": Json::string(id),
+                    })
+                    dump_one("lock " + id, l)
+                  }
+                }
+              _ => ()
+            }
+          _ => ()
         }
       }
     _ => ()

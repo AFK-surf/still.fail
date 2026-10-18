@@ -112,6 +112,7 @@ fn block_of(station : String, book : String, b : Json) -> @ui.Block? {
 ///|
 fn core_books() -> Result[Array[@shelf.BookInfo], String]? {
   guard media_station() is Some(station) else { return None }
+  import_books()
   let s = @core.subscribe("media.shelf", params={ "station": Json::string(station) })
   match (s.value, s.error) {
     (Some(Object(m)), _) =>
@@ -154,6 +155,9 @@ fn core_books() -> Result[Array[@shelf.BookInfo], String]? {
           )
         _ => Some(Ok([]))
       }
+    // the station installs the media service on the first request: the
+    // shelf comes once it is up (the module's events read it again)
+    (_, Some(e)) if str(Some(e), "code") == "module_starting" => None
     (_, Some(e)) => Some(Err(str(Some(e), "message")))
     _ => None
   }
@@ -231,6 +235,37 @@ fn core_save_place(book : String, chapter : Int, offset : Int) -> Unit {
     "place": Json::object(place),
   }
   @core.call("media.place.set", params=Json::object(params))
+}
+
+///|
+/// MBUI_MEDIA_IMPORT="<drive root>|<path>": puts the books there on the
+/// shelf once (media.import), printing IMPORT … with the answer.
+let import_done : Ref[Bool] = { val: false }
+
+///|
+fn import_books() -> Unit {
+  let spec = env("MBUI_MEDIA_IMPORT")
+  if import_done.val || spec.length() == 0 {
+    return
+  }
+  guard media_station() is Some(station) else { return }
+  import_done.val = true
+  let (root, path) = match spec.find("|") {
+    Some(i) => (spec.view(end_offset=i).to_owned(), spec.view(start_offset=i + 1).to_owned())
+    None => (spec, "")
+  }
+  let params : Map[String, Json] = {
+    "station": Json::string(station),
+    "root": Json::string(root),
+    "path": Json::string(path),
+  }
+  @host.log("IMPORT station \{station}")
+  @core.call("media.import", params=Json::object(params), on_done=fn(r) {
+    match r {
+      Ok(v) => @host.log("IMPORT ok " + v.stringify())
+      Err(e) => @host.log("IMPORT failed " + e.stringify())
+    }
+  })
 }
 
 ///|

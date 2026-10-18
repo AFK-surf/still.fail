@@ -10,10 +10,11 @@
 // `__native` is ember's HermesNative (hosts/hermes-globals.ts; bytes as ArrayBuffers both ways) plus `os`, so the
 // script starts the core as on Android, through hosts/engine.ts (core/jsc-start.ts).
 // What only an app can do is not the shell's: `listen.*` (a login's loopback listener) is answered here, on
-// apple_listen.m; `secure.*` (the Keychain) is answered "unsupported" for now. A JS error that escapes, or a bug the
+// apple_listen.m; `secure.*` here too (the Keychain, or files for a build that can't use it). A JS error that escapes, or a bug the
 // core reports, ends the core as on Android: `{"fatal": …}` to the UI, and the host starts another.
 #import <Foundation/Foundation.h>
 #import <JavaScriptCore/JavaScriptCore.h>
+#import <Security/Security.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -207,7 +208,95 @@ static void set_timer(double id, double ms) {
 
 // ── __native ──
 
-static int app_only(NSString *op) { return [op hasPrefix:@"secure."]; }
+// ── secure.* (ember hosts/bridge.ts; Android's Keystore) ──
+//   secure.get {key, user, reason} → {} + the bytes, or {none: true}; secure.set {key, user} + the bytes → {};
+//   secure.delete {key} → {}; secure.ask {reason}: unsupported.
+// What the core keeps out of the files it syncs (the lock's signing seed, a vault's key): in the Keychain, as a
+// generic password per data directory and key, readable once the Mac is unlocked after a restart and never with a
+// dialog (none can be answered on a station's locked screen: it fails instead). `user` (asking the person, Touch ID)
+// is not offered yet. MBUI_KEYS_IN_FILES=1 keeps them as files of `<data>/secure` instead (0600), for unsigned
+// development builds, which a Keychain item made by one build would ask about when the next build reads it.
+
+static NSString *secure_dir;
+static void answer_later(double id, NSData *json, NSString *error, NSData *bytes);
+static NSData *const_json(const char *s);
+
+static NSString *secure_path(NSString *key) {
+  NSMutableString *hex = [NSMutableString string];
+  NSData *k = [key dataUsingEncoding:NSUTF8StringEncoding];
+  const uint8_t *b = k.bytes;
+  for (NSUInteger i = 0; i < k.length; i++) [hex appendFormat:@"%02x", b[i]];
+  return [secure_dir stringByAppendingPathComponent:hex];
+}
+
+static BOOL keys_in_files(void) { return getenv("MBUI_KEYS_IN_FILES") != NULL; }
+
+static NSMutableDictionary *keychain_query(NSString *key) {
+  return [@{
+    (id)kSecClass : (id)kSecClassGenericPassword,
+    (id)kSecAttrService : @"fail.still.mbui.core",
+    (id)kSecAttrAccount : [NSString stringWithFormat:@"%@\n%@", secure_dir, key],
+    (id)kSecUseAuthenticationUI : (id)kSecUseAuthenticationUIFail,
+  } mutableCopy];
+}
+
+// (`cid`, not `id`: the call's id would hide Objective-C's `id` in the casts below)
+static void core_secure(double cid, NSString *op, NSData *json, const uint8_t *bytes, size_t blen) {
+  NSDictionary *a = [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
+  NSString *key = [a isKindOfClass:[NSDictionary class]] ? a[@"key"] : nil;
+  if ([op isEqualToString:@"secure.ask"] || [a[@"user"] boolValue]) {
+    answer_later(cid, nil, @"unsupported", nil);
+    return;
+  }
+  if (![key isKindOfClass:[NSString class]] || key.length == 0) {
+    answer_later(cid, nil, [op stringByAppendingString:@": no key"], nil);
+    return;
+  }
+  if (keys_in_files()) {
+    NSString *path = secure_path(key);
+    if ([op isEqualToString:@"secure.get"]) {
+      NSData *d = [NSData dataWithContentsOfFile:path];
+      if (d) answer_later(cid, const_json("{}"), nil, d);
+      else answer_later(cid, const_json("{\"none\":true}"), nil, nil);
+    } else if ([op isEqualToString:@"secure.set"]) {
+      [[NSFileManager defaultManager] createDirectoryAtPath:secure_dir withIntermediateDirectories:YES
+                                                 attributes:@{NSFilePosixPermissions : @0700} error:nil];
+      NSData *d = [NSData dataWithBytes:bytes length:blen];
+      BOOL ok = [d writeToFile:path options:NSDataWritingAtomic error:nil];
+      if (ok) [[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions : @0600} ofItemAtPath:path error:nil];
+      answer_later(cid, ok ? const_json("{}") : nil, ok ? nil : @"secure.set: not written", nil);
+    } else if ([op isEqualToString:@"secure.delete"]) {
+      [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+      answer_later(cid, const_json("{}"), nil, nil);
+    } else {
+      answer_later(cid, nil, @"unsupported", nil);
+    }
+    return;
+  }
+  NSMutableDictionary *q = keychain_query(key);
+  if ([op isEqualToString:@"secure.get"]) {
+    q[(id)kSecReturnData] = @YES;
+    q[(id)kSecMatchLimit] = (id)kSecMatchLimitOne;
+    CFTypeRef out = NULL;
+    OSStatus st = SecItemCopyMatching((__bridge CFDictionaryRef)q, &out);
+    if (st == errSecSuccess) answer_later(cid, const_json("{}"), nil, (__bridge_transfer NSData *)out);
+    else if (st == errSecItemNotFound) answer_later(cid, const_json("{\"none\":true}"), nil, nil);
+    else answer_later(cid, nil, [NSString stringWithFormat:@"secure.get: Keychain %d", (int)st], nil);
+  } else if ([op isEqualToString:@"secure.set"]) {
+    NSData *d = [NSData dataWithBytes:bytes length:blen];
+    SecItemDelete((__bridge CFDictionaryRef)keychain_query(key));
+    q[(id)kSecValueData] = d;
+    q[(id)kSecAttrAccessible] = (id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
+    OSStatus st = SecItemAdd((__bridge CFDictionaryRef)q, NULL);
+    if (st == errSecSuccess) answer_later(cid, const_json("{}"), nil, nil);
+    else answer_later(cid, nil, [NSString stringWithFormat:@"secure.set: Keychain %d", (int)st], nil);
+  } else if ([op isEqualToString:@"secure.delete"]) {
+    SecItemDelete((__bridge CFDictionaryRef)q);
+    answer_later(cid, const_json("{}"), nil, nil);
+  } else {
+    answer_later(cid, nil, @"unsupported", nil);
+  }
+}
 
 // ── listen.* (ember client/core-ts hosts/bridge.ts; Android's Loopback.kt) ──
 //   listen.open {port, host} → {id, port}, or the error (the port taken: "Address already in use")
@@ -343,18 +432,15 @@ static void core_listen_close_all(void) {
 static void install(JSContext *js) {
   JSValue *native = [JSValue valueWithNewObjectInContext:js];
   native[@"call"] = ^(double id, NSString *op, JSValue *json, JSValue *bytes) {
-    if (app_only(op)) {
-      if (tracing()) fprintf(stderr, "[core trace] -> %llu %s (unsupported here)\n", (unsigned long long)id, op.UTF8String);
-      // Not the shell's (core/README.md, Login): answered as a failure, later, as the shell would.
-      post(^{
-        complete((uint64_t)id, [JSValue valueWithNullInContext:C.js], [JSValue valueWithObject:@"unsupported" inContext:C.js], [JSValue valueWithUndefinedInContext:C.js]);
-      });
-      return;
-    }
     NSData *j = utf8(json);
     const uint8_t *p = NULL;
     size_t n = 0;
     int has = bytes_of(bytes, &p, &n);
+    if ([op hasPrefix:@"secure."]) {
+      if (tracing()) fprintf(stderr, "[core trace] -> %llu %s (here)\n", (unsigned long long)id, op.UTF8String);
+      core_secure(id, op, j, has ? p : NULL, has ? n : 0);
+      return;
+    }
     if ([op hasPrefix:@"listen."]) {
       if (tracing()) fprintf(stderr, "[core trace] -> %llu %s %.*s (here)\n", (unsigned long long)id, op.UTF8String, (int)MIN(j.length, 120), (const char *)j.bytes);
       core_listen(id, op, j, has ? p : NULL, has ? n : 0);
@@ -414,6 +500,7 @@ static NSString *script_path(void) {
 
 // The core's thread: the shell, the context, the script, then the loop until stopped.
 static void run(NSString *dataDir, NSString *cloud, int beta) {
+  secure_dir = [dataDir stringByAppendingPathComponent:@"secure"];
   C.loop = CFRunLoopGetCurrent();
   CFRetain(C.loop);
   // A source that never fires keeps the loop running while nothing else is in it.
