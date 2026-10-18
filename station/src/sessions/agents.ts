@@ -49,6 +49,8 @@ import { readOnly } from "../mesh/credential.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { UsageCounter } from "../usage/counter.ts";
+import { Search } from "../search/search.ts";
+import { SEARCH, searchForPeer, searchTools } from "../tools/search.ts";
 import { sessionUsage } from "../read/usage.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
@@ -91,6 +93,8 @@ export type AgentsParts = {
   mcp: McpEndpoint;
   config: ConfigFile;
   usage: UsageCounter;
+  /// What a search finds on this station (docs/search.md).
+  search: Search;
   updates: Updates;
   accounts: Accounts;
   /// What this station shares with the workspace's other stations, and uses of theirs.
@@ -288,6 +292,8 @@ export const AgentsLive = (control: Control) =>
             return createForPeer(hub, peer, request, ws);
           case NOTICE:
             return noticeForPeer(hub, peer, request, ws);
+          case SEARCH:
+            return searchForPeer({ search, link: (session) => hub.link(session) }, request, ws, cloud.home());
           default:
             return fromPeer(hub, peer, request, ws);
         }
@@ -380,6 +386,8 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       ];
+      // What a search finds here: the index kept as the store is (docs/search.md), started once the hub is.
+      const search = new Search({ data, store });
       const tools = [
         ...chatTools(hub),
         ...archiveTools(hub),
@@ -429,6 +437,24 @@ export const AgentsLive = (control: Control) =>
         title: (session) => sender(hub, session)[0] ?? null,
       });
       secrets.listen((r) => events.tell("vault-request", r, `vault-request\0${r.id}`, (viewer) => secrets.tells(r, viewer)));
+      tools.push(...searchTools({
+        search,
+        workspaceOf: (session) => {
+          const row = store.getSession(session);
+          if (!row) return null;
+          const home = cloud.home();
+          return { workspace: row.ws ?? home ?? "", home: row.ws === null || row.ws === home };
+        },
+        link: (session) => hub.link(session),
+        stations: async (workspace) => {
+          const roster = await remote.ask("", { method: "peers", workspace });
+          const own = place()?.station ?? "";
+          return (Array.isArray(roster?.stations) ? roster.stations : [])
+            .filter((e: any) => typeof e?.id === "string" && e.id !== "")
+            .map((e: any) => ({ id: e.id, name: typeof e.name === "string" ? e.name : e.id, here: e.id === own }));
+        },
+        ask: (station, request) => remote.ask(station, request),
+      }));
       tools.push(...vaultTools(secrets, (k) => store.getSession(k)?.workspace ?? null));
       // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
       // itself while nothing runs and nothing is asked of it (auto update), watched or not.
@@ -676,6 +702,7 @@ export const AgentsLive = (control: Control) =>
       usage.start();
       // An execution's details show its calls as counted here, as the usage page does, and are told when more are.
       hub.live.countWith({ of: (key) => sessionUsage(store.usageOfSession(key)), ask: () => usage.soon() });
+      search.start();
       const unsubscribeCounted = store.subscribe((change) => {
         if (change.type === "usage") hub.live.usageCounted();
       });
@@ -756,6 +783,7 @@ export const AgentsLive = (control: Control) =>
           await jobs.shutdown();
           unsubscribeCounted();
           await usage.stop();
+          await search.stop();
           await updates.close();
           await accounts.close();
           for (const stop of unlistenOverview) stop();
@@ -766,6 +794,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, peers, forwards, logins, slack, overview: view, cloud, net, secrets, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, search, updates, accounts, sharing: sharing!, xshare, peers, forwards, logins, slack, overview: view, cloud, net, secrets, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

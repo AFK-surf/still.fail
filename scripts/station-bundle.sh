@@ -10,7 +10,7 @@
 #   stillfail/mesh/target/release/stillfail-station       (the launcher, with the Rust station's command line and path,
 #                                                          ember-station beside it: what the installer, bin/stillfail,
 #                                                          the desktop app and services written by older releases run)
-#   stillfail/station/{main.js, read/worker.js, skills/, mesh.node, stillfail-runner, package.json}
+#   stillfail/station/{main.js, read/worker.js, search/worker.js, skills/, mesh.node, stillfail-runner, package.json}
 #                                                         (and on darwin-arm64 "still.fail Helper.app": the station's
 #                                                          macOS app for what macOS grants, docs/station-ts-native.md §4)
 #   stillfail/NODE_VERSION                                (the version of the Node it runs on: .node-version's)
@@ -42,7 +42,7 @@ helper=; [ "$platform" = darwin-arm64 ] && helper="$(native helper)"
 (cd "$root/station" && pnpm run build >&2)
 app="$out/stillfail"
 rm -rf "$app"
-mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station/read"
+mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station/read" "$app/station/search"
 if [ "$platform" = win32-x64 ]; then
   cp "$root/bin/stillfail.cmd" "$root/bin/stillfail.ps1" "$app/bin/"
 else
@@ -72,6 +72,7 @@ fi
 [ "$platform" = win32-x64 ] || ln -s stillfail-station "$app/mesh/target/release/ember-station"
 cp "$root/station/dist/main.js" "$app/station/"
 cp "$root/station/dist/read/worker.js" "$app/station/read/"
+cp "$root/station/dist/search/worker.js" "$app/station/search/"
 cp -R "$root/station/dist/skills" "$app/station/skills"
 # DeepSeek Harness loads the station's driver from here (agents/dsh.ts).
 cp "$root/station/dist/dsh-bridge.mjs" "$app/station/"

@@ -1,0 +1,281 @@
+// What the station's search index holds of the station's own data (docs/search.md), read from its store as the readers
+// read it (read/store.ts, a read-only connection) and from the files beside it: each source's documents and the version
+// they are of, for the index to tell what changed.
+//
+// - a thread (`t:<id>`): its chat (`c:<id>`) and each message as it reads now (`m:<id>:<n>`), an archived one's from its
+//   file; indexed again from the last message indexed, an archived one whole once its file changes.
+// - a session's transcript (`h:<key>`): its execution history (`h:<key>:<i>`, `i` as GET /sessions/:key/timeline numbers
+//   them): what the agent said and thought, the calls it made (as a history names them) and the start of what they gave.
+// - a session's jobs (`j:<key>`), each job (`j:<id>`).
+// - a workspace's memory and skills (`k:<ws>`), the profiles (`p`).
+import { readdirSync, statSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
+import * as store from "../read/store.ts";
+import type { MessageRow, SessionRow, Store } from "../read/store.ts";
+import { brief, readTimeline, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
+import { memory } from "../read/memory.ts";
+import { runtimeKind } from "../agents/runtime.ts";
+import { STILLFAIL_SURFACE } from "../read/store.ts";
+import type { Doc } from "./index.ts";
+
+/// The workspace documents of nothing in particular are in (`ws` null: the station's home one).
+type Ws = string | null;
+
+/// How much of what a call gave, and of a thought, the index keeps.
+const RESULT_CHARS = 600;
+const THOUGHT_CHARS = 2000;
+
+const one = (s: Store, sql: string, ...args: any[]): any => s.db.prepare(sql).get(...args);
+const all = (s: Store, sql: string, ...args: any[]): any[] => s.db.prepare(sql).all(...args);
+
+const stamp = (path: string): string => {
+  try {
+    const st = statSync(path);
+    return `${st.size}:${st.mtimeMs}`;
+  } catch {
+    return "none";
+  }
+};
+
+const firstChars = (text: string, n: number) => (text.length <= n ? text : Array.from(text).slice(0, n).join(""));
+
+// ── threads ──
+
+/// A thread's chat: the workspace it is in (its home session's, else its first one's; none: the home one) and its key in
+/// the station's list (as /chats has it: its first agent's session key).
+export function chatOf(s: Store, thread: number): { ws: Ws; chat: string | null; sessions: SessionRow[] } {
+  const members = store.threadSessions(s, thread);
+  const row = store.getThread(s, thread);
+  const sessions = members.map((m) => store.getSession(s, m.session)).filter((x): x is SessionRow => x !== null);
+  const home = sessions.find((x) => x.key === row?.home) ?? sessions[0] ?? null;
+  return { ws: home?.ws ?? null, chat: sessions[0]?.key ?? null, sessions };
+}
+
+/// The words a chat is called by, as lists name it: its title, else what its agent called it, else the first thing said.
+function titleOf(row: store.ThreadRow, first: string | null): string {
+  const named = row.title?.trim() || row.autoTitle?.trim();
+  if (named) return named;
+  return first ? firstChars(first.replace(/\s+/gu, " ").trim(), 80) : "";
+}
+
+export type Indexed = { version: string; docs: Doc[]; whole: boolean; removed?: string[] };
+
+/**
+ * A thread's documents since `had` (the version indexed before; null: none): its chat, and its messages, all of them
+ * (`whole`) when it is archived or was not indexed as it is now, else those said or edited since.
+ */
+export function threadDocs(s: Store, id: number, had: string | null): Indexed | null {
+  const row = store.getThread(s, id);
+  if (row === null) return null;
+  const { ws, chat, sessions } = chatOf(s, id);
+  const archived = store.isArchived(s, id);
+  const surface = row.surface === STILLFAIL_SURFACE ? "stillfail" : "slack";
+  let messages: MessageRow[];
+  let version: string;
+  let whole = true;
+  if (archived) {
+    version = `a:${stamp(join(s.archiveDir, "threads", `${id}.jsonl.zst`))}`;
+    if (had === version) return { version, docs: [], whole: false };
+    messages = store.messagesBefore(s, id, null, 1_000_000);
+  } else {
+    const last = store.lastEntry(s, id);
+    version = `n:${last}`;
+    const since = had?.startsWith("n:") ? Number(had.slice(2)) : null;
+    if (since !== null && Number.isFinite(since) && since <= last) {
+      whole = false;
+      // Those said since, and those an edit since changed.
+      const edited = all(s, "SELECT DISTINCT target FROM entries WHERE thread = ? AND n > ? AND kind = 'edit' AND target IS NOT NULL", id, since).map((r) => r.target as number);
+      const ns = new Set(edited);
+      messages = all(s, "SELECT * FROM merged WHERE thread = ? AND n > ? ORDER BY n", id, since).map(toMessage);
+      for (const n of ns) {
+        if (messages.some((m) => m.n === n)) continue;
+        const m = one(s, "SELECT * FROM merged WHERE thread = ? AND n = ?", id, n);
+        if (m) messages.push(toMessage(m));
+      }
+    } else {
+      messages = all(s, "SELECT * FROM merged WHERE thread = ? ORDER BY n", id).map(toMessage);
+    }
+  }
+  const first = whole ? (messages.find((m) => m.authorKind === "person")?.text ?? messages[0]?.text ?? null) : null;
+  const title = titleOf(row, first ?? (one(s, "SELECT text FROM merged WHERE thread = ? AND author_kind = 'person' ORDER BY n LIMIT 1", id)?.text ?? null));
+  const lastAt = messages.length > 0 ? Math.max(...messages.map((m) => m.createdAt ?? 0)) : null;
+  const ref = { thread: id, chat, surface, archived, ...(row.channel ? { channel: row.channel } : {}) };
+  const docs: Doc[] = [];
+  docs.push({
+    key: `c:${id}`, kind: "chat", source: `t:${id}`, ws, title,
+    body: [...sessions.map((x) => x.title ?? ""), ...sessions.map((x) => x.model ?? "")].filter((w) => w !== "").join("\n"),
+    at: lastAt ?? row.createdAt ?? null, ref,
+  });
+  for (const m of messages) {
+    const text = m.text ?? "";
+    const files = m.attachments.map((a: any) => (typeof a?.name === "string" ? a.name : "")).filter((n: string) => n !== "");
+    if (text.trim() === "" && files.length === 0) continue;
+    docs.push({
+      key: `m:${id}:${m.n}`, kind: "message", source: `t:${id}`, ws, title: "",
+      body: files.length > 0 ? `${text}\n${files.join("\n")}` : text,
+      at: m.createdAt ?? null,
+      ref: { thread: id, seq: m.n, chat, chatTitle: title, surface, archived, authorKind: m.authorKind, author: m.author, ...(m.agentIdentity ? { agentIdentity: m.agentIdentity } : {}) },
+    });
+  }
+  return { version, docs, whole };
+}
+
+/// A row of `merged` as the readers read it.
+function toMessage(r: any): MessageRow {
+  let attachments: unknown[] = [];
+  try {
+    attachments = r.attachments ? JSON.parse(r.attachments) : [];
+  } catch {}
+  let agentIdentity: unknown = null;
+  try {
+    agentIdentity = r.agent_identity ? JSON.parse(r.agent_identity) : null;
+  } catch {}
+  return {
+    agentIdentity, thread: r.thread, n: r.n, ts: r.ts ?? "", authorKind: r.author_kind, author: r.author, text: r.text ?? "",
+    attachments: Array.isArray(attachments) ? attachments : [], quotes: [], declared: r.declared ?? null, client: r.client ?? null,
+    createdAt: r.created_at, editedAt: r.edited_at ?? null,
+  } as MessageRow;
+}
+
+/// Every thread's id.
+export const threadIds = (s: Store): number[] => all(s, "SELECT id FROM threads").map((r) => r.id as number);
+
+// ── transcripts ──
+
+type Profiles = { id: string; home: string; runtime: string; model?: string; access?: any; name?: string }[];
+
+/// The profiles config.json names, their homes under the data directory when relative (config.rs `under`).
+export function profilesOf(raw: any, dataDir: string): Profiles {
+  const out: Profiles = [];
+  for (const p of Array.isArray(raw?.profiles) ? raw.profiles : []) {
+    if (typeof p?.id !== "string" || typeof p?.home !== "string") continue;
+    out.push({ id: p.id, home: isAbsolute(p.home) ? p.home : join(dataDir, p.home), runtime: typeof p.runtime === "string" ? p.runtime : "", model: typeof p.model === "string" ? p.model : undefined, access: p.access, name: typeof p.name === "string" ? p.name : undefined });
+  }
+  return out;
+}
+
+/// What of a history entry is found: what was said, thought or done; null for what is not worth finding (a person's
+/// message, which the chat has; the agent's posts, which are its messages).
+function historyText(e: TimelineEntry): string | null {
+  switch (e.kind) {
+    case "assistant":
+      return e.text;
+    case "thinking":
+      return firstChars(e.text, THOUGHT_CHARS);
+    case "tool_call": {
+      const tool = (e.tool ?? "").replace(/^(mcp__stillfail__|mcp__ember__)/, "");
+      if (tool === "chat_post" || tool === "chat_state") return null;
+      return `${tool}\n${brief(e).text}`;
+    }
+    case "tool_result":
+      return e.text.trim() === "" ? null : firstChars(e.text, RESULT_CHARS);
+    default:
+      return null;
+  }
+}
+
+/// A session's transcript files and the version of them all.
+export function transcriptFiles(s: Store, session: SessionRow, profiles: Profiles): { paths: string[]; version: string; runtime: ReturnType<typeof runtimeKind> } | null {
+  const profile = profiles.find((p) => p.id === session.profile);
+  const runtime = runtimeKind(session.runtime) ?? null;
+  if (!profile || runtime === null || session.runtimeSessionId === null) return null;
+  const homes = [profile.home, ...profiles.map((p) => p.home).filter((h) => h !== profile.home)];
+  const { paths } = transcriptPaths(runtime, homes, store.runtimeSessions(s, session.key));
+  return { paths, runtime, version: paths.map((p) => `${p}=${stamp(p)}`).join("|") };
+}
+
+/// A session's execution history as documents (null: nothing to index; none when as indexed: `had`). A transcript only
+/// grows: what was indexed of it stays, and only the entries after those are added, unless it is another now (a new
+/// runtime session, a file put away).
+export function historyDocs(s: Store, key: string, profiles: Profiles, had: string | null): Indexed | null {
+  const session = store.getSession(s, key);
+  if (session === null) return null;
+  const files = transcriptFiles(s, session, profiles);
+  if (files === null) return { version: "none", docs: [], whole: true };
+  let before: { files: string; n: number } | null = null;
+  try {
+    before = had === null ? null : JSON.parse(had);
+  } catch {}
+  if (before?.files === files.version) return { version: had!, docs: [], whole: false };
+  const entries = files.paths.flatMap((p) => readTimeline(files.runtime!, p));
+  const thread = store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
+  const chatTitle = session.title ?? thread?.title ?? thread?.autoTitle ?? "";
+  const grown = before !== null && typeof before.n === "number" && entries.length >= before.n && samePaths(before.files, files.version);
+  const from = grown ? before!.n : 0;
+  const docs: Doc[] = [];
+  for (let i = from; i < entries.length; i++) {
+    const e = entries[i]!;
+    const text = historyText(e);
+    if (text === null || text.trim() === "") continue;
+    const at = e.at === null ? null : Date.parse(e.at);
+    docs.push({
+      key: `h:${key}:${i}`, kind: "history", source: `h:${key}`, ws: session.ws, title: "", body: text,
+      at: at !== null && Number.isFinite(at) ? at : null,
+      ref: { session: key, index: i, entry: e.kind, ...(e.tool ? { tool: e.tool } : {}), chat: key, chatTitle, ...(thread ? { thread: thread.id } : {}) },
+    });
+  }
+  return { version: JSON.stringify({ files: files.version, n: entries.length }), docs, whole: !grown };
+}
+
+/// Whether two versions of a session's transcripts are of the same files (grown or not).
+const samePaths = (a: string, b: string) => a.split("|").map((p) => p.slice(0, p.lastIndexOf("="))).join("|") === b.split("|").map((p) => p.slice(0, p.lastIndexOf("="))).join("|");
+
+export const sessionKeys = (s: Store): string[] => all(s, "SELECT key FROM sessions").map((r) => r.key as string);
+
+// ── jobs ──
+
+/// A session's jobs (its services and tasks) as documents.
+export function jobDocs(s: Store, key: string): Indexed {
+  const session = store.getSession(s, key);
+  const jobs = store.listJobs(s, key);
+  const version = jobs.map((j) => `${j.id}:${j.state}:${j.name}:${j.port ?? ""}`).join("|");
+  const thread = session ? (store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null) : null;
+  return {
+    version, whole: true,
+    docs: jobs.map((j) => ({
+      key: `j:${j.id}`, kind: "job", source: `j:${key}`, ws: session?.ws ?? null, title: j.name,
+      body: [j.command, j.cwd ?? "", j.port !== null && j.port !== undefined ? `:${j.port}` : ""].filter((w) => w !== "").join("\n"),
+      at: j.startedAt ?? null,
+      ref: { job: j.id, session: key, chat: key, state: j.state, ...(j.port !== null && j.port !== undefined ? { port: j.port } : {}), ...(thread ? { thread: thread.id } : {}) },
+    })),
+  };
+}
+
+// ── memory, skills, profiles ──
+
+/// The workspaces the station joined that have memory of their own (<agent home>/workspaces/<ws>).
+export function memoryWorkspaces(agentHome: string): string[] {
+  try {
+    return readdirSync(join(agentHome, "workspaces")).filter((n) => /^[0-9A-Za-z_-]{1,128}$/.test(n));
+  } catch {
+    return [];
+  }
+}
+
+/// A workspace's memory and skills as documents (`ws` null: the home workspace's).
+export function memoryDocs(dataDir: string, ws: Ws): Indexed {
+  const m = memory(dataDir, ws ?? undefined) as any;
+  const docs: Doc[] = [];
+  const source = `k:${ws ?? ""}`;
+  const text = typeof m?.global?.text === "string" ? m.global.text : "";
+  if (text.trim() !== "") docs.push({ key: `k:${ws ?? ""}:`, kind: "memory", source, ws, title: "MEMORY.md", body: text, at: null, ref: { path: m.global.path } });
+  for (const k of Array.isArray(m?.skills) ? m.skills : []) {
+    const files = Array.isArray(k.files) ? k.files : [];
+    docs.push({
+      key: `k:${ws ?? ""}:${k.name}`, kind: "skill", source, ws, title: k.name,
+      body: [k.description ?? "", k.text ?? "", ...files.map((f: any) => `${f.name}\n${f.text}`)].join("\n"),
+      at: null, ref: { skill: k.name, description: k.description ?? "", builtin: k.builtin === true, project: k.project === true },
+    });
+  }
+  return { version: JSON.stringify(docs.map((d) => [d.key, d.body.length, d.body.slice(0, 64)])), docs, whole: true };
+}
+
+/// The profiles as documents: every workspace's members see them (`*`).
+export function profileDocs(profiles: Profiles): Indexed {
+  const docs: Doc[] = profiles.map((p) => ({
+    key: `p:${p.id}`, kind: "profile", source: "p", ws: "*", title: p.name ?? p.id,
+    body: [p.id, p.runtime, p.model ?? "", typeof p.access?.kind === "string" ? p.access.kind : "", typeof p.access?.provider === "string" ? p.access.provider : ""].filter((w) => w !== "").join("\n"),
+    at: null, ref: { profile: p.id, runtime: p.runtime },
+  }));
+  return { version: JSON.stringify(docs.map((d) => [d.key, d.title, d.body])), docs, whole: true };
+}
