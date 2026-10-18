@@ -1,16 +1,20 @@
 # station 的模块：旁边的独立进程
 
-2026-10-19。模块是跑在 station 旁边的独立程序（第一个是媒体库：照片、视频、电子书），给成员多一块能用的东西，但不进 station 的代码。station 只多一层通用的：启动和看着它们、把 admin API 的一段路径转给它们、给它们一个本机接口读 drive。代码在 `station/src/modules/`，组合根（`main.ts`）里是 `Modules`（有哪些模块、各自现在怎样）、`StationDrive`（drive，admin API 和本机接口共用一个）和 `ModulesLive`（生命周期）。
+2026-10-19。模块是跑在 station 旁边的独立程序（第一个是媒体库：照片、视频、电子书），给成员多一块能用的东西，但不进 station 的代码。station 只多一层通用的：启动和看着它们、把 admin API 的一段路径转给它们、给它们一个本机接口读 drive。代码在 `station/src/modules/`，组合根（`main.ts`）里是 `Modules`（有哪些模块、各自现在怎样）、`StationDrive`（drive，admin API 和本机接口共用一个）、`ModulePackages`（station 自己装的模块包，`modules/packages.ts`：agents 那边把它加进自己的 updates，一起读、一起显示）和 `ModulesLive`（生命周期）。
 
 ## 配置与生命周期（modules/live.ts）
 
 config.json：
 
 ```json
-"modules": [{ "id": "media", "command": "/path/to/media", "args": [], "env": {}, "enabled": true }]
+"modules": [
+  { "id": "media", "package": "media" },
+  { "id": "mine", "command": "/path/to/mine", "args": [], "env": {}, "enabled": true }
+]
 ```
 
-- `id`：`^[a-z][a-z0-9-]{0,31}$`，不能重复。不合规的那一条记一行日志、跳过，其余照常。`enabled: false` 的不启动。
+- `id`：`^[a-z][a-z0-9]{0,31}$`（和客户端 core 的模块名一样，没有连字符），不能重复。不合规的那一条记一行日志、跳过，其余照常。`enabled: false` 的不启动。
+- `command` 和 `package` 必须有且只有一个：`command` 是已经装在机器上的程序；`package` 是 station 自己去下载、校验、安装、更新的模块包（下面「包」），名字的规则同 `id`。`args`、`env` 两种都可以有（包的 `args` 跟在入口文件后面）。
 - 启动时机：上一个 station 进程已经退出之后（交接时两份同时跑会抢模块的数据）。config.json 改了（页面上改、或文件被别人改后读到）会重新对一遍：不再列出的停掉，改了的按新的重启，新加的启动。
 - 每个模块是一个独立进程组（它启动的东西随它一起结束），工作目录和自己的目录都是 `<data>/modules/<id>`（0700）。它拿到的环境变量（在 station 自己的环境和 `env` 之上）：
 
@@ -27,7 +31,19 @@ config.json：
 - 退出了就重启：1 秒、2 秒、4 秒……最多隔 1 分钟（`Schedule`）。
 - 启动后 station 反复 `GET /manifest`（先密后疏，最多 2 秒一次），答了（200，或 404 = 没有 manifest）才算在跑；在跑之前转发一律 503。
 - 只在 macOS 和 Linux 上跑（靠 unix socket）；Windows 上配了也不启动，记一行日志。
-- 这一版不管下载和签名校验：`command` 指向已经装好的程序。
+
+## 包（modules/packages.ts）
+
+`package: "<p>"` 的模块由 station 自己装：和 station 自更新同一个发布地址（控制面的 release base：still.fail cloud 的 origin，Comma 的 `<origin>/stations`）、同一个渠道、同一把签名 key（[release-signing.md](release-signing.md)）。
+
+- **打包**（`scripts/module-bundle.ts`）：模块的目录里放一个 `module.json`：`{id, entry, files, needsStation}`，媒体服务的是 `media/service/module.json`：`{"id": "media", "entry": "src/main.ts", "files": [], "needsStation": …}`。打包时用 esbuild（station 自己构建用的那个，`station/package.json`）把 `entry` 和它 import 的一切打成一个普通的 ES module `main.mjs`（`platform: "node"`、`format: "esm"`、`target: "node22"`，Node 自带的模块留给运行时，`legalComments: "none"`，没有时间戳，路径都是相对的）：运行时不需要会去掉 TypeScript 类型（桌面版的 Electron、老一点的 Node 都能跑），也不带 node_modules。`files`（文件，或整个目录，隐藏文件除外，不能叫 `main.mjs`、`module.json`）原样放在旁边。包里的 `module.json` 形状不变，写成 `{id, entry: "main.mjs", files: ["main.mjs", …files], needsStation}`。这些打成一个只含普通文件的 tar.gz（`station/src/updates/archive.ts`，和桌面版的网页包同一个格式：按路径排序，同样的文件得到同样的字节），不分平台。版本是 `0.1.<build>`，build 取最近一次改动了打进去的东西（`module.json`、entry 所在的目录、`files`）或打包方式（`module-bundle.ts`、`archive.ts`、`station/pnpm-lock.yaml` 里的 esbuild）的提交，所以之后的提交、正式渠道再打一次，都是同一个版本、同样的字节。
+- **发布**：`modules/<p>/<p>-0.1.<build>.tar.gz`（按版本命名，cloud 永久缓存）和 feed `modules/<p>/<p>.json`（正式）、`<p>-beta.json`（测试），都在 `/releases/` 下。CI：main 上改了某个模块打进去的东西（`module-bundle.ts plan`）时 `pipeline.yml` 的 `modules` job 打包、签 beta feed（包先传，feed 由 `put` 在检查通过后传）；「Publish stable」的 `modules` job 在 station 之后签正式 feed。已经发过的版本（另一个渠道的）只核对字节相同，不覆盖。
+- **安装**：config 里出现一个还没装的包，station（上一个 station 进程退出后）马上去取；之后每次 station 读自己的更新时（`updates.ts`，每几个小时，页面上「检查更新」时）一起读。读 feed → `verifyModule` 验签（kind `stillfail-module-release`、id 是这个包、版本一致）→ 比已装的新才装，`needsStation` 比这台 station 的 build 新就不装（overview 上的 note 说要先更新 station，这一行这时不算可更新，免得客户端的「全部更新」在 station 之前卡在它上面；不是正式发布的 station，比如源码目录跑的，不查这一条）→ 下载 `builds[本机平台] ?? builds.any`，边下边核大小，下完核 sha256 → 解到 `<data>/modules/<id>/app/.<build>-<随机>`（只接受普通文件、不越出目录，`module.json` 要指明一个包里有的 `entry`）再整个改名成 `app/<build>` → 整个写 `app/state.json`（`{package, current, previous, ran, failed}`）切过去 → 模块按新的重启。新版自动装，不看 `autoUpdate`（模块重启不打断 agent）。
+- **运行**：命令是 station 自己的 Node（`process.execPath`；桌面版里是 Electron，带 `ELECTRON_RUN_AS_NODE=1`），参数是 `[<app>/<build>/main.mjs, ...args]`（包里 `module.json` 的 `entry`），其余同上。`app/` 是 station 的，模块自己的数据别放那里。
+- **回退**：保留上一个 build。新 build 连续 3 次在答 manifest 之前就退出（从没起来过），退回上一个（记进 `failed`，这个 build 以后不再装；目录删掉），页面上显示「没能启动，已退回」。
+- **数据比代码新的不跑**：`ran` 记着起来过（答了 manifest）的最新 build。比 `ran` 旧的 build 永远不会再跑，不管是 feed 给的（比如从 beta 切回正式渠道，正式的更旧：不装，和 station 自己不同）还是回退：模块可能已经把数据迁到了新版（媒体库 `media.db` 的 `user_version`），旧代码读不了。所以只能往前；要旧代码就得发一个更新的 build。
+- **概览**：每个用包的模块在 overview 的 `updates` 里一行 `module:<id>`（`SoftwareVersion`：已装的版本、最新、是否在装、失败的原因），客户端照通用的一行显示；`POST /updates {id: "module:<id>"}` 立刻读一次并安装更新的。
+- 只读 `releases/modules/…`：Comma 那边要在 `<origin>/stations/releases/modules/…` 原样提供同样的文件，station 才能从 Comma 装包。
 
 ## 转发（modules/forward.ts）
 
@@ -76,7 +92,7 @@ station 按这个成员套用 drive 的规则（docs/drive.md）：viewer 只能
 
 ## 还没做的
 
-- 模块包的下载、签名校验、更新（同 station 自更新）。
+- 旧的模块包不会从发布桶里清掉（`release-prune.ts` 不碰 `modules/`）。
 - 缩略图只有一个尺寸（原生件里写死的 720×600），要别的尺寸得改 thumbs.rs、重新发原生件。HEIC 不在原生支持的格式里。
 - `<data>/thumbs/drive` 不会自动清理。
 

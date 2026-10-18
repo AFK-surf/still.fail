@@ -28,7 +28,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
 import { ModulesLive } from "./modules/live.ts";
 import { VaultLive } from "./vault/module.ts";
 import { AdbLive } from "./adb/module.ts";
@@ -142,6 +142,8 @@ function run() {
     Layer.provideMerge(HelperFolders.layer),
     // The modules beside the station (docs/station-modules.md), started by ModulesLive.
     Layer.provideMerge(Modules.layer),
+    // The packages of those the station installs itself (modules/packages.ts), read with its updates.
+    Layer.provideMerge(ModulePackages.layer),
     Layer.provideMerge(Events.layer),
     Layer.provideMerge(AdminHost.layer),
     Layer.provideMerge(AdbShares.layer),

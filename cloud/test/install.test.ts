@@ -67,6 +67,14 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   assert.equal(releaseType("desktop/latest-mac.yml"), null);
   assert.equal(releaseType("desktop/ember-0.1.1092-arm64-mac.zip"), null);
   assert.equal(releaseType("desktop/other-mac.yml"), null);
+  // The modules' packages: each one's feeds and its archives, one for every machine or a platform's.
+  assert.equal(releaseType("modules/media/media.json"), "application/json");
+  assert.equal(releaseType("modules/media/media-beta.json"), "application/json");
+  assert.equal(releaseType("modules/media/media-0.1.3600.tar.gz"), "application/gzip");
+  assert.equal(releaseType("modules/media/media-0.1.3600-linux-x64.tar.gz"), "application/gzip");
+  for (const file of ["modules/media/books.json", "modules/media/books-0.1.3600.tar.gz", "modules/media/media-0.1.3600-other.tar.gz", "modules/media/media-1.tar.gz", "modules/my-mod/my-mod.json", "modules/media/x/media.json", "modules/media.json"]) {
+    assert.equal(releaseType(file), null, file);
+  }
   assert.equal(releaseType("android/latest.json"), "application/json");
   assert.equal(releaseType("station.json"), "application/json");
   assert.equal(releaseType("android/stillfail-1124.apk"), "application/vnd.android.package-archive");

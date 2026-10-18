@@ -1,7 +1,7 @@
 // The web app the beta desktop app takes without a new app (docs/desktop-web-updates.md). What the app carries is two
 // things: the web app (dist/cloud-web) and the rest, its shell (SHELL: its own code, the core, the station, what its
 // bundles take from web/ and cloud/). A change to the shell is a new app (CI's desktop job); a change to the web app
-// alone is a web release: its files packed (apps/desktop/src/web-archive.mts) and a feed signed saying the oldest app it
+// alone is a web release: its files packed (station/src/updates/archive.ts) and a feed signed saying the oldest app it
 // works in, the build of the last commit that changed the shell, as only apps from then carry the shell it was made for.
 //   node scripts/desktop-web.ts plan              which of the two the files on stdin change: desktop=…, desktop_web=…
 //   node scripts/desktop-web.ts needs [rev]       the oldest app the web app at rev works in (its build)
@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, relative, sep } from "node:path";
-import { writeArchive, type ArchivedFile } from "../apps/desktop/src/web-archive.mts";
+import { writeArchive, type ArchivedFile } from "../station/src/updates/archive.ts";
 
 const root = join(import.meta.dirname, "..");
 

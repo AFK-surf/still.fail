@@ -6,7 +6,8 @@
 // beta excepted, which a person asks for). The installer it runs is the one in its own release, which got here verified
 // (cloud/src/install.ts, bin/install.<lang>.sh), told what the archive and Node must hash to. The Windows desktop app's
 // installer is signed the same way (its .sig beside it: verifyDesktop), and so is the web app the beta desktop app takes
-// without a new app (desktop/web/stillfail-beta-web.json: verifyDesktopWeb).
+// without a new app (desktop/web/stillfail-beta-web.json: verifyDesktopWeb), and the packages of the modules a station
+// installs itself (releases/modules/<id>/: verifyModule).
 import { createHash, createPublicKey, verify } from "node:crypto";
 
 /// The keys releases are signed with, raw Ed25519 public keys in base64: the release key (CI's `production`
@@ -48,6 +49,18 @@ export type DesktopRelease = { kind: "stillfail-desktop-win"; version: string; b
 /// oldest app it works in (`needs`: the build of the last commit that changed what the app carries besides the web).
 export type DesktopWebRelease = { kind: "stillfail-desktop-web"; version: string; build: number; needs: number; file: string; sha256: string; size: number };
 
+/// A module's package (docs/station-modules.md): what its feed (releases/modules/<id>/<id>[-beta].json) signs. The archive
+/// of each platform it is built for (`any`: one for every machine, as a module in TypeScript is), and the oldest
+/// station it runs beside (`needsStation`: that station's build).
+export type ModuleRelease = {
+  kind: "stillfail-module-release";
+  id: string;
+  version: string;
+  build: number;
+  needsStation: number;
+  builds: Record<string, { sha256: string; size: number }>;
+};
+
 export class Unverified extends Error {}
 
 const SHA = /^[0-9a-f]{64}$/;
@@ -84,6 +97,22 @@ export function verifyFeed(feed: any, trusted: Map<string, string> = trustedKeys
     if (!SHA.test(b?.sha256 ?? "") || !SHA.test(b?.nodeSha256 ?? "") || !Number.isSafeInteger(b?.size)) throw new Unverified(`the release's ${p} build is not well formed`);
   }
   return r as Release;
+}
+
+/// The release of module `id` a feed says, verified: its signature by one of the keys, its words a release of that
+/// module, well formed, the version they say the one the feed says. Throws Unverified otherwise. Whether the station
+/// takes it (newer, for this station) is the caller's (modules/packages.ts).
+export function verifyModule(feed: any, id: string, trusted: Map<string, string> = trustedKeys()): ModuleRelease {
+  const r = verifySigned(feed, trusted);
+  if (r?.kind !== "stillfail-module-release" || typeof r.id !== "string" || !Number.isSafeInteger(r.build) || !Number.isSafeInteger(r.needsStation) || typeof r.builds !== "object" || r.builds === null)
+    throw new Unverified("the release's words are not a module release");
+  if (r.id !== id) throw new Unverified(`the release is of the module ${r.id}, not ${id}`);
+  if (r.version !== `0.1.${r.build}` || (feed.version !== undefined && feed.version !== r.version)) throw new Unverified("the feed's version is not the signed one");
+  if (Object.keys(r.builds).length === 0) throw new Unverified("the release has no build");
+  for (const [p, b] of Object.entries<any>(r.builds)) {
+    if (!/^[a-z0-9-]+$/.test(p) || !SHA.test(b?.sha256 ?? "") || !Number.isSafeInteger(b?.size) || b.size <= 0) throw new Unverified(`the release's ${p} build is not well formed`);
+  }
+  return r as ModuleRelease;
 }
 
 /// Whether going from the release built `current` (from `installed`'s channel) to `release` on `channel` is allowed: a

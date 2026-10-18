@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { describe, test } from "node:test";
-import { readArchive, writeArchive } from "../apps/desktop/src/web-archive.mts";
+import { readArchive, writeArchive } from "../station/src/updates/archive.ts";
 import { WebUpdates } from "../apps/desktop/src/web-update.mts";
 import { Unverified, keyId, verifyDesktopWeb } from "../station/src/updates/signed.ts";
 import { SHELL, plan } from "../scripts/desktop-web.ts";

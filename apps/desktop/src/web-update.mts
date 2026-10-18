@@ -9,7 +9,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { type DesktopWebRelease, Unverified, trustedKeys, verifyDesktopWeb } from "../../../station/src/updates/signed.ts";
-import { readArchive } from "./web-archive.mts";
+import { readArchive } from "../../../station/src/updates/archive.ts";
 
 /** A web app this app may serve: its build, the oldest app it works in, and where its files are. */
 export interface WebBuild { build: number; needs: number; dir: string }

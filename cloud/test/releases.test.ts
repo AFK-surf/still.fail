@@ -84,6 +84,38 @@ test("a release is served whole or by ranges, the versioned builds cached for go
   }
 });
 
+test("a module's package: its feeds as they change, its archive (named by its version) cached for good", async () => {
+  const h = await harness();
+  try {
+    const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: Uint8Array | string): Promise<unknown> };
+    const archive = new Uint8Array(70_000).map((_, i) => (i * 13) & 255);
+    await bucket.put("modules/media/media-0.1.3600.tar.gz", archive);
+    await bucket.put("modules/media/media.json", '{"version":"0.1.3590"}');
+    await bucket.put("modules/media/media-beta.json", '{"version":"0.1.3600"}');
+
+    const whole = await h.fetch("/releases/modules/media/media-0.1.3600.tar.gz");
+    assert.equal(whole.status, 200);
+    assert.equal(whole.headers.get("content-type"), "application/gzip");
+    assert.equal(whole.headers.get("cache-control"), "public, max-age=31536000, immutable");
+    assert.deepEqual(new Uint8Array(await whole.arrayBuffer()), archive);
+    for (const [feed, version] of [["media.json", "0.1.3590"], ["media-beta.json", "0.1.3600"]]) {
+      const got = await h.fetch(`/releases/modules/media/${feed}`);
+      assert.equal(got.headers.get("content-type"), "application/json");
+      assert.equal(got.headers.get("cache-control"), "no-store");
+      assert.equal(((await got.json()) as { version: string }).version, version);
+    }
+    // Another module's feed is not this one's; nothing else under modules/ is served.
+    for (const path of ["modules/media/books.json", "modules/media/media-0.1.3600.zip", "modules/Media/Media.json", "modules/media/../station.json", "modules/media.json"]) {
+      const got = await h.fetch(`/releases/${path}`);
+      assert.equal(got.status, 404, path);
+      await got.arrayBuffer();
+    }
+    assert.equal((await h.fetch("/releases/modules/media/media-0.1.3599.tar.gz")).status, 404, "not put");
+  } finally {
+    await h.close();
+  }
+});
+
 test("ranges are read from the bucket in a few reads", () => {
   assert.deepEqual(parseRanges("bytes=0-9, 20-, -5", 100), [{ start: 0, end: 10 }, { start: 20, end: 100 }, { start: 95, end: 100 }]);
   assert.deepEqual(parseRanges("bytes=200-300", 100), []);
