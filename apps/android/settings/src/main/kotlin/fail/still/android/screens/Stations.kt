@@ -451,7 +451,7 @@ private fun ColumnScope.AgentEnvSheet(station: String) {
     if (typed != null && d?.text == typed) typed = null
     val text = typed ?: d?.text ?: ""
     val read = d?.takeIf { it.text == text }
-    val palette = listOf(C.accent, C.ink, C.subtle, C.muted, C.red)
+    val palette = listOf(C.blue, C.ink, C.subtle, C.muted, C.red)
     val colours = remember(read, palette) { read?.let { r -> EnvColours(r, palette) } ?: VisualTransformation.None }
     SheetGrab()
     SheetHead(t("android-settings.agentEnv.title"))

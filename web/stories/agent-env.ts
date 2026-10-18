@@ -10,10 +10,10 @@ const SET: EnvVar[] = [
   { key: "NO_PROXY", value: "corp.example,10.0.0.0/8", secret: false },
 ];
 
-const pair = (name: string, value: string, problem: string | null = null): AgentEnvLine =>
-  ({ parts: [{ kind: "name", text: name }, { kind: "other", text: "=" }, { kind: "value", text: value }], problem, error: false });
-const line = (text: string, kind: "comment" | "other", problem: string | null = null): AgentEnvLine =>
-  ({ parts: text ? [{ kind, text }] : [], problem, error: problem !== null && kind === "other" });
+const pair = (name: string, value: string, problem?: string): AgentEnvLine =>
+  ({ parts: [{ kind: "name", text: name }, { kind: "other", text: "=" }, { kind: "value", text: value }], ...(problem ? { problem } : {}), error: false });
+const line = (text: string, kind: "comment" | "other", problem?: string): AgentEnvLine =>
+  ({ parts: text ? [{ kind, text }] : [], ...(problem ? { problem } : {}), error: problem !== undefined && kind === "other" });
 
 const draftOf = (lines: AgentEnvLine[], dirty: boolean): AgentEnvDraft => ({
   text: lines.map((l) => l.parts.map((p) => p.text).join("")).join("\n"),

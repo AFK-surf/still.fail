@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { CARD_BUTTON, CARD_PAD } from "../styles/pages.css.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 
@@ -33,3 +34,5 @@ export const note = style({ margin: "10px 0 0", fontSize: vars.textUi, color: va
 export const folder = style({ minHeight: 44 });
 export const folderName = style({ flex: "none", fontWeight: "500", maxWidth: "50%", ...ellipsis });
 export const folderPath = style({ flex: 1, ...ellipsis, color: vars.muted });
+/** The station's variables' field, at the top of a card with a button at its foot: its corners concentric with the card's. */
+export const envField = style({ selectors: { "&&": { borderRadius: `calc(${CARD_PAD + CARD_BUTTON / 2}px * ${vars.cornerScale} - ${CARD_PAD}px)` } } });

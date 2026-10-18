@@ -304,7 +304,7 @@ function AgentEnvEditor({ station }: { station: string }) {
   return (
     <Section title={t("web-pages.stations.agentEnv")} description={t("web-pages.stations.agentEnvLead")}>
       <div className={pagesCss.card}>
-        <AgentEnvText form={form} fieldClass={controlsCss.input} label={t("web-pages.stations.agentEnv")} />
+        <AgentEnvText form={form} fieldClass={`${controlsCss.input} ${css.envField}`} label={t("web-pages.stations.agentEnv")} />
         <div className={pagesCss.cardActions}>
           {form.d?.dirty && <Button variant="ghost" onClick={form.reset}>{t("common.cancel")}</Button>}
           <Button variant="primary" busy={form.saving} disabled={!form.canSave} onClick={form.save}>{t("common.save")}</Button>

@@ -10,7 +10,7 @@ const layer = {
 } as const;
 export const field = style({ ...layer, resize: "none", background: "transparent", color: "transparent", caretColor: vars.text, position: "relative" });
 export const colours = style({ ...layer, borderColor: "transparent", color: vars.text, pointerEvents: "none" });
-export const name = style({ color: vars.accentText });
+export const name = style({ color: vars.blue });
 export const value = style({ color: vars.text });
 export const comment = style({ color: vars.subtle });
 export const other = style({ color: vars.muted });
