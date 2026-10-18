@@ -46,3 +46,24 @@ test("still.fail's modules listed whether on or not; one turned on is its packag
   assert.equal((await r.ask(owner, "PUT", "/modules/nothing", { enabled: true }))[0], 404);
   assert.equal((await r.ask(owner, "PUT", "/modules/media", { enabled: "yes" }))[0], 400);
 });
+
+test("a module still.fail makes is set up as it is first asked for, unless it was turned off", async (t) => {
+  const r = rig(t);
+  const set = new ModuleSet(mkdtempSync(join(tmpdir(), "modw-")));
+  // As modules/live.ts says it: offered and not named, named then.
+  set.wanted = (id) => {
+    if (id !== "media") return false;
+    const entry = (r.config.raw().modules ?? []).find((m: any) => m.id === id);
+    if (entry) return entry.enabled !== false;
+    r.config.update((raw) => void (raw.modules ??= []).push({ id, package: id }));
+    return true;
+  };
+  const ask = (id: string) => set.forward({ method: "GET", path: `/m/${id}/books`, query: [], headers: {}, body: Buffer.alloc(0), viewer: member, lang: "en" } as Request, { id, path: "/books" });
+  const first = await ask("media");
+  assert.equal(first.status, 503);
+  assert.equal(JSON.parse(String(first.body)).code, "module_starting");
+  assert.deepEqual(r.config.raw().modules, [{ id: "media", package: "media" }]);
+  assert.equal((await ask("other")).status, 404);
+  await r.ask(owner, "PUT", "/modules/media", { enabled: false });
+  assert.equal((await ask("media")).status, 404, "turned off, it stays off");
+});

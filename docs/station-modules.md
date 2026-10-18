@@ -109,7 +109,9 @@ station 按这个成员套用 drive 的规则（docs/drive.md）：viewer 只能
 
 第一个搬过来的是 vault（`vault/module.ts`）：自带的表、两组路由、agent 的 secret 工具、`vault-request` 事件都由它自己挂上，agents 和管理 API 里不再有 vault 的代码。
 
-## 在 app 里启用（api/routes/modules.ts）
+## 用到就装上，也能在 app 里开关（api/routes/modules.ts）
 
-不用人去改 config.json：`GET /modules` 列出 still.fail 做的模块（`modules/catalog.ts`，目前只有 media）和 config.json 里配了的，每个带 `{id, offered, enabled, installed, running, version}`；`PUT /modules/<id> {enabled}`（只有 owner 和 admin）由 station 自己改 config.json：清单里的模块第一次打开就写成 `{id, package: id}`，关掉就是 `enabled: false`，再打开去掉它。之后照常按 config 的变化下载、验签、启动或停止。core 的 op 是 `station.modules` 和 `station.module.set {id, enabled}`。
+still.fail 做的模块（`modules/catalog.ts`）不用任何人去开：`/m/<id>/…` 第一次被请求而 config.json 里还没有它时，station 自己写上 `{id, package: id}`，照常下载、验签、启动，这期间请求答 503 `{code: "module_starting"}`，客户端过一会儿再问（媒体模块的事件流本来就每 5 秒重连，连上就把显示着的 topic 重读一遍）。owner 和 admin 关掉过的（`enabled: false`）不会这样被装回来。
+
+开关也不用人去改 config.json：`GET /modules` 列出 still.fail 做的模块（`modules/catalog.ts`，目前只有 media）和 config.json 里配了的，每个带 `{id, offered, enabled, installed, running, version}`；`PUT /modules/<id> {enabled}`（只有 owner 和 admin）由 station 自己改 config.json：清单里的模块第一次打开就写成 `{id, package: id}`，关掉就是 `enabled: false`，再打开去掉它。之后照常按 config 的变化下载、验签、启动或停止。core 的 op 是 `station.modules` 和 `station.module.set {id, enabled}`。
 
