@@ -16,15 +16,22 @@ export function diff(old: unknown, next: unknown): Op[] {
 function diffAt(path: Segment[], old: unknown, next: unknown, ops: Op[]): void {
   if (old === next) return;
   if (isObject(old) && isObject(next)) {
-    for (const key of Object.keys(next).sort(compareKeys)) {
+    // Only the keys that may differ are put in order (serde's): the rest are the same value, no ops; sorting every
+    // object's keys on every change was much of what the core did on a phone (2026-10-19).
+    const has = Object.prototype.hasOwnProperty;
+    const changed: string[] = [];
+    for (const key of Object.keys(next)) if (!has.call(old, key) || old[key] !== next[key]) changed.push(key);
+    if (changed.length > 1) changed.sort(compareKeys);
+    for (const key of changed) {
       path.push(key);
-      if (Object.prototype.hasOwnProperty.call(old, key)) diffAt(path, old[key], next[key], ops);
+      if (has.call(old, key)) diffAt(path, old[key], next[key], ops);
       else ops.push({ path: [...path], set: next[key] });
       path.pop();
     }
-    for (const key of Object.keys(old).sort(compareKeys)) {
-      if (!Object.prototype.hasOwnProperty.call(next, key)) ops.push({ path: [...path, key], remove: true });
-    }
+    const gone: string[] = [];
+    for (const key of Object.keys(old)) if (!has.call(next, key)) gone.push(key);
+    if (gone.length > 1) gone.sort(compareKeys);
+    for (const key of gone) ops.push({ path: [...path, key], remove: true });
     return;
   }
   if (Array.isArray(old) && Array.isArray(next)) {

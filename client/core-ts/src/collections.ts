@@ -73,13 +73,19 @@ function at(path: Segment[], old: unknown, next: unknown, spec: Spec | null, ops
   if (old === next) return;
   if (spec?.key && Array.isArray(old) && Array.isArray(next) && list(path, old, next, spec, ops)) return;
   if (isObject(old) && isObject(next)) {
-    for (const key of Object.keys(next).sort(compareKeys)) {
-      if (Object.prototype.hasOwnProperty.call(old, key)) at([...path, key], old[key], next[key], spec?.fields?.[key] ?? null, ops);
+    // Only the keys that may differ are put in order, as delta.ts diffAt.
+    const has = Object.prototype.hasOwnProperty;
+    const changed: string[] = [];
+    for (const key of Object.keys(next)) if (!has.call(old, key) || old[key] !== next[key]) changed.push(key);
+    if (changed.length > 1) changed.sort(compareKeys);
+    for (const key of changed) {
+      if (has.call(old, key)) at([...path, key], old[key], next[key], spec?.fields?.[key] ?? null, ops);
       else ops.push({ path: [...path, key], set: next[key] });
     }
-    for (const key of Object.keys(old).sort(compareKeys)) {
-      if (!Object.prototype.hasOwnProperty.call(next, key)) ops.push({ path: [...path, key], remove: true });
-    }
+    const gone: string[] = [];
+    for (const key of Object.keys(old)) if (!has.call(next, key)) gone.push(key);
+    if (gone.length > 1) gone.sort(compareKeys);
+    for (const key of gone) ops.push({ path: [...path, key], remove: true });
     return;
   }
   if (Array.isArray(old) && Array.isArray(next)) {
