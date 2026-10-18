@@ -187,7 +187,7 @@ export function transcriptFiles(s: Store, session: SessionRow, profiles: Profile
 /// A session's execution history as documents (null: nothing to index; none when as indexed: `had`). A transcript only
 /// grows: what was indexed of it stays, and only the entries after those are added, unless it is another now (a new
 /// runtime session, a file put away).
-export function historyDocs(s: Store, key: string, profiles: Profiles, had: string | null): Indexed | null {
+export function historyDocs(s: Store, key: string, profiles: Profiles, had: string | null, reading?: () => void): Indexed | null {
   const session = store.getSession(s, key);
   if (session === null) return null;
   const files = transcriptFiles(s, session, profiles);
@@ -197,6 +197,9 @@ export function historyDocs(s: Store, key: string, profiles: Profiles, had: stri
     before = had === null ? null : JSON.parse(had);
   } catch {}
   if (before?.files === files.version) return { version: had!, docs: [], whole: false };
+  // One whose reading stopped the index's thread before (too large for it): not read again until it changes.
+  if (had === READING || had === `${FAILED}${files.version}`) return { version: `${FAILED}${files.version}`, docs: [], whole: true };
+  reading?.();
   const entries = files.paths.flatMap((p) => readTimeline(files.runtime!, p));
   const thread = store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
   const chatTitle = session.title ?? thread?.title ?? thread?.autoTitle ?? "";
@@ -216,6 +219,10 @@ export function historyDocs(s: Store, key: string, profiles: Profiles, had: stri
   }
   return { version: JSON.stringify({ files: files.version, n: entries.length }), docs, whole: !grown };
 }
+
+/// A transcript's mark while it is read, and once its reading stopped the index's thread (with the version it was of).
+export const READING = "reading";
+export const FAILED = "failed:";
 
 /// Whether two versions of a session's transcripts are of the same files (grown or not).
 const samePaths = (a: string, b: string) => a.split("|").map((p) => p.slice(0, p.lastIndexOf("="))).join("|") === b.split("|").map((p) => p.slice(0, p.lastIndexOf("="))).join("|");

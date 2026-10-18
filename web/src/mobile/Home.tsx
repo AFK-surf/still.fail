@@ -5,12 +5,12 @@ import { StationMark } from "../StationMark.tsx";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
 import { animate, MOVE, play, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
-import { stationApi, useChats, useChatSearch, useStationCall, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
-import type { FoundMessage } from "../core/shapes.ts";
+import { stationApi, useChats, useSearch, useStationCall, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
+import type { FoundMessage, SearchItem } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
 import { Marked } from "../Marked.tsx";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Copy, ChevronDown, ChevronRight, Edit, Ling, Pin, Refresh, Search, Settings, Unplug } from "@stillfail/ui/icons.tsx";
+import { Archive, Copy, ChevronDown, ChevronLeft, ChevronRight, Edit, Ling, Pin, Refresh, Search, Settings, Unplug } from "@stillfail/ui/icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
 import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
@@ -23,6 +23,7 @@ import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
+import { openHistory } from "./History.tsx";
 import { ChangelogNews } from "./Changelog.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
@@ -101,9 +102,6 @@ const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering,
   );
 });
 
-/** How many of the messages that have the words the search lists, under the chats. */
-const FOUND_MESSAGES = 50;
-
 /**
  * At the top of each list (scrolled to its top to be seen, as a phone's mail): tapped, the search opens from it
  * (`onOpen`, with where it is).
@@ -117,20 +115,24 @@ function SearchField({ onOpen }: { onOpen: (at: DOMRect) => void }) {
 }
 
 /**
- * The search, over the lists (the core's `chatSearch`, as ⌘K's on the wide screen): its field comes up from where it
- * was in the list to the top as the list goes up and away, narrowing as 取消 comes in (its place taken at once, the
- * move drawn back to it: FLIP);
- * under it the chats the words find, then the messages, newest first, each opening its chat at it. 取消 puts the field
- * back in the list.
+ * The search, over the lists (the core's `search`, as ⌘K's on the wide screen, docs/search.md): its field comes up from
+ * where it was in the list to the top as the list goes up and away, narrowing as 取消 comes in (its place taken at
+ * once, the move drawn back to it: FLIP);
+ * under it the chats the words find, the messages, newest first, each opening its chat at it, then what the stations
+ * find besides, each kind under its heading; 查看更多 lists that kind alone (全部结果 back). 取消 puts the field back in
+ * the list.
  */
 function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => void; onClose: () => void }) {
   const app = useApp();
   const [query, setQuery] = useState("");
-  const search = useChatSearch({ scope: app.entry.id, query, messages: FOUND_MESSAGES });
+  const [kind, setKind] = useState<string | null>(null);
+  const search = useSearch({ scope: app.entry.id, query, kind });
   const view = search.value;
   const words = query.trim() !== "";
   const chats = words ? view?.items ?? [] : [];
   const messages = words ? view?.messages ?? [] : [];
+  const groups = words ? view?.groups ?? [] : [];
+  const note = words ? [view?.wait?.text, view?.note].filter((w): w is string => !!w).join(" · ") : "";
   const field = useRef<HTMLDivElement>(null);
   const page = useRef<HTMLDivElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
@@ -156,34 +158,92 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
     page.current?.setAttribute("data-leaving", "");
     play(field.current, frames().reverse(), { duration: 240, easing: "cubic-bezier(.4, 0, .2, 1)", fill: "forwards" })?.finished.then(onClose, onClose);
   };
+  const more = (k: string) => <button type="button" className={css.mFoundMore} onClick={() => setKind(k)}>{t("web-mobile.home.searchMore")}<ChevronRight size={16} /></button>;
   return (
     <div ref={page} className={css.mSearchPage}>
       <div className={css.mSearchBar}>
         <div ref={field} className={css.mSearchInput}>
           <Search size={17} />
           <input autoFocus type="search" enterKeyHint="search" value={query} spellCheck={false} placeholder={t("web-mobile.home.search")} aria-label={t("web-mobile.home.search")}
-            onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") close(); }} />
+            onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { if (kind) setKind(null); else close(); } }} />
         </div>
         <button ref={cancel} type="button" className={css.mSearchCancel} onClick={close}>{t("web-mobile.home.searchCancel")}</button>
       </div>
       <div className={css.mSearchResults}>
+        {kind && <button type="button" className={css.mFoundMore} onClick={() => setKind(null)}><ChevronLeft size={16} />{t("web-mobile.home.searchAll")}</button>}
         {words && search.error && !view && <Note text={t("web-mobile.home.searchUpdate")} error />}
         {words && !search.error && !view && <WaitLine className={homeCss.mNote} text={t("web-mobile.home.searching")} />}
-        {words && view && !chats.length && !messages.length && <Note text={t("web-mobile.home.searchNone")} />}
+        {words && view && !chats.length && !messages.length && !groups.length && !view.wait?.reading && <Note text={t("web-mobile.home.searchNone")} />}
         {chats.length > 0 && (
           <section>
             <SectionHeader title={t("web-mobile.home.searchChats")} />
             {chats.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead="agents" />)}
+            {!kind && view?.chatsMore && more("chat")}
           </section>
         )}
         {messages.length > 0 && (
           <section>
             <SectionHeader title={t("web-mobile.home.searchMessages")} />
             {messages.map((m) => <FoundRow key={`${m.station}/${m.thread}/${m.seq}`} found={m} words={view?.words} />)}
+            {!kind && view?.messagesMore && more("message")}
           </section>
         )}
+        {groups.map((group) => (
+          <section key={group.kind}>
+            <SectionHeader title={group.title} />
+            {group.items.map((item) => <FoundItemRow key={item.key} item={item} />)}
+            {!kind && group.more && more(group.kind)}
+          </section>
+        ))}
+        {note && <p className={css.mFoundNote}>{note}</p>}
       </div>
     </div>
+  );
+}
+
+/** Where something a search found opens on the phone: its chat (a step of its history, a service), a station's memory or
+ *  page, the profiles. */
+function openFound(app: ReturnType<typeof useApp>, item: SearchItem): void {
+  const at = item.station.indexOf("/");
+  const id = encodeURIComponent(at < 0 ? item.station : item.station.slice(at + 1));
+  const chat = item.chat ? `${stationBase(item.station)}/chats/${encodeURIComponent(item.chat)}` : null;
+  switch (item.kind) {
+    case "history":
+      if (item.chat && item.session) return openHistory(app, item.station, item.chat, item.session, item.index ?? undefined);
+      break;
+    case "job":
+      if (chat && item.job && item.port != null) return app.open(`${chat}/services/${encodeURIComponent(item.job)}`);
+      break;
+    case "skill":
+      return app.push(app.at(item.skill ? `/s/${id}/memory/skill/${encodeURIComponent(item.skill)}` : `/s/${id}/memory`));
+    case "memory":
+      return app.push(app.at(`/s/${id}/memory/global`));
+    case "profile":
+      return app.push(app.at("/settings/profiles"));
+    case "station":
+      return app.push(app.at(`/s/${id}/overview`));
+  }
+  if (chat) app.open(chat);
+}
+
+/** Something found besides a chat or a message: what it is and where (its station, when), over its line that has the
+ *  words; tapped, it opens where it is. */
+function FoundItemRow({ item }: { item: SearchItem }) {
+  const app = useApp();
+  return (
+    <button type="button" className={css.mChatRow} onClick={() => openFound(app, item)}>
+      <span className={css.mChatText}>
+        <span className={css.mChatLine1}>
+          <span className={css.mFoundChat}>{item.title}</span>
+          <span className={css.mFoundMeta}>{[item.kind === "station" ? null : item.stationName, item.time?.createdAt?.ago].filter(Boolean).join(" · ")}</span>
+        </span>
+        {item.text && (
+          <span className={css.mChatLine2}>
+            <span className={css.mLastText}><Marked text={item.text} marks={item.marks} className={css.mFoundHit} /></span>
+          </span>
+        )}
+      </span>
+    </button>
   );
 }
 

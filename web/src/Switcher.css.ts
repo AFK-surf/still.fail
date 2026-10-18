@@ -61,3 +61,7 @@ export const saidHead = style({ display: "flex", alignItems: "center", gap: 10, 
 export const saidChat = style({ flex: 1, ...ellipsis });
 export const saidText = style({ ...ellipsis, color: vars.muted });
 export const hit = style({ background: "none", color: vars.text, fontWeight: 600 });
+// 查看更多: a quieter row under its kind, that kind alone once picked.
+export const more = style({ color: vars.muted });
+// What the list says under it: the stations not answered yet, those offline or too old to search.
+export const note = style({ margin: 0, padding: "8px 12px 10px", fontSize: vars.textMeta, color: vars.muted });

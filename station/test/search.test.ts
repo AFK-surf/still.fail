@@ -174,3 +174,33 @@ test("the station's index thread keeps up with its store, and answers as it does
     await search.stop();
   }
 });
+
+test("an execution history is found, grown from where it was, and one that stopped the index's thread is passed over until it changes", async () => {
+  const { historyDocs, READING, FAILED } = await import("../src/search/sources.ts");
+  const { appendFileSync } = await import("node:fs");
+  const s = station();
+  const key = "k1";
+  chat(s.store, key, null);
+  s.store.setRuntimeSessionId(key, "rs1");
+  const home = join(s.data, "p");
+  mkdirSync(join(home, "projects", "w"), { recursive: true });
+  const file = join(home, "projects", "w", "rs1.jsonl");
+  const said = (text: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-18T08:00:00Z", message: { content: [{ type: "text", text }] } })}\n`;
+  writeFileSync(file, said("先跑 pnpm run deploy"));
+  const profiles = [{ id: "cc", home, runtime: "claude" }];
+  const read = s.read();
+  const first = historyDocs(read, key, profiles, null)!;
+  assert.deepEqual(first.docs.map((d) => [d.key, d.body]), [[`h:${key}:0`, "先跑 pnpm run deploy"]]);
+  appendFileSync(file, said("deploy 完了"));
+  const grown = historyDocs(read, key, profiles, first.version)!;
+  assert.equal(grown.whole, false);
+  assert.deepEqual(grown.docs.map((d) => d.key), [`h:${key}:1`]);
+  // Its reading stopped the thread: passed over, until the file changes.
+  const failed = historyDocs(read, key, profiles, READING)!;
+  assert.ok(failed.version.startsWith(FAILED));
+  assert.deepEqual(failed.docs, []);
+  assert.deepEqual(historyDocs(read, key, profiles, failed.version)!.docs, []);
+  appendFileSync(file, said("again"));
+  assert.equal(historyDocs(read, key, profiles, failed.version)!.docs.length, 3);
+  read.db.close();
+});

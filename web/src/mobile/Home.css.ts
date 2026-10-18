@@ -233,6 +233,13 @@ export const mFoundChat = style({
   flex: "1", minWidth: "0", fontSize: vars.textBody, lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const mFoundMeta = style({ flex: "none", fontSize: vars.textCaption, color: "var(--m-muted)", whiteSpace: "nowrap" });
+/** 查看更多 under a kind found, and 全部结果 over one kind alone: a quiet row, as a list's own link. */
+export const mFoundMore = style({
+  display: "flex", alignItems: "center", gap: "4px", width: "100%", height: "44px", padding: "0 22px", border: "0",
+  background: "transparent", color: "var(--m-accent)", fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
+});
+/** What the list says under it: stations not answered yet, offline, too old to search. */
+export const mFoundNote = style({ margin: 0, padding: "12px 22px", fontSize: vars.textCaption, color: "var(--m-muted)" });
 /** The words found, in a found message's line: in ink, bold (the rest of the line muted). */
 export const mFoundHit = style({ background: "none", color: "var(--m-ink)", fontWeight: "600" });
 // Over the page's own buttons' ink.

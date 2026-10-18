@@ -71,6 +71,9 @@ export type Topic =
   // The chats of a scope a few words find, titles first (only `station`'s, not `exclude`, `limit` at most): the
   // composer's `@` menu and the switcher. A core from before it answers an error.
   | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number; messages?: number }
+  // What a few words find in a workspace, on the device and on every station (docs/search.md, views/search.ts): ⌘K and
+  // the phone's search. With `kind`, that kind alone, more of it.
+  | { topic: "search"; scope: string; query: string; kind?: string; limit?: number }
   // The archived chats of a scope's stations online, newest first by day (client/core-ts/src/views/archive.ts).
   | { topic: "archive"; scope: string; q?: string; limit?: number }
   // A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here.

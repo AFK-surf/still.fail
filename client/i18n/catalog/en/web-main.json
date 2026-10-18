@@ -569,9 +569,9 @@
   "web-main.switcher.group.global": "General",
   "web-main.switcher.group.settings": "Settings",
   "web-main.switcher.messages": "Messages",
-  "web-main.switcher.noMatch": "No chats or messages found",
+  "web-main.switcher.noMatch": "No results",
   "web-main.switcher.none": "No chats yet",
-  "web-main.switcher.search": "Search chats, messages and actions",
+  "web-main.switcher.search": "Search everything and actions",
   "web-main.switcher.title": "Switch chat",
   "web-main.switcher.update": "Update {app} to search chats",
   "web-main.tool.exitCode": "Exit code {code}",
@@ -779,5 +779,8 @@
   "web-main.logins.codeCopied": "Code copied",
   "web-main.logins.startedIn": "started by the agent of “{chat}”",
   "web-main.logins.aChat": "a chat",
-  "web-main.logins.signIn": "Sign in in the browser"
+  "web-main.logins.signIn": "Sign in in the browser",
+  "web-main.switcher.more": "Show more",
+  "web-main.switcher.back": "All results",
+  "web-main.switcher.archived": "Archived"
 }

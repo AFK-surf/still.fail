@@ -177,6 +177,14 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     setSearch((now) => { now.delete("service"); return now; }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
+  // A task of the chat's (`?job=<id>`, a search's find): its services and tasks, at it.
+  const askedJob = search.get("job");
+  useEffect(() => {
+    if (!askedJob) return;
+    openJobs(askedJob);
+    setSearch((now) => { now.delete("job"); return now; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedJob]);
   // A link to one of its agents' execution history (`?history=<session>&entry=<n>`, copied from it): opened there.
   const askedHistory = search.get("history");
   useEffect(() => {

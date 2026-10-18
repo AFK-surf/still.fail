@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useMemo, useRef } from "react";
 import { useCall, useTopic, useTopicSelect, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, SearchView, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { ChatPublished, PublishPreview } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
@@ -95,6 +95,18 @@ export function useChats(scope: string, mine: boolean, watching = false): TopicS
 export function useChatSearch({ scope, query, station, exclude, limit, messages, elsewhere }: { scope: string; query: string; station?: string; exclude?: string | null; limit?: number; messages?: number; elsewhere?: boolean }): TopicState<ChatSearchView> {
   const state = useTopic<ChatSearchView>({ topic: "chatSearch", scope, query, ...(station ? { station } : {}), ...(exclude ? { exclude } : {}), ...(limit ? { limit } : {}), ...(messages ? { messages } : {}), ...(elsewhere ? { elsewhere } : {}) });
   const last = useRef<ChatSearchView | undefined>(undefined);
+  if (state.value) last.current = state.value;
+  return state.value || !last.current || state.error ? state : { ...state, value: last.current };
+}
+
+/**
+ * What a few words find in a workspace (the `search` topic, docs/search.md): the chats and messages the device holds and
+ * what every station finds, by kind; with `kind`, that kind alone. While the next words are looked up, what the last
+ * ones found stays.
+ */
+export function useSearch({ scope, query, kind }: { scope: string; query: string; kind?: string | null }): TopicState<SearchView> {
+  const state = useTopic<SearchView>({ topic: "search", scope, query, ...(kind ? { kind } : {}) });
+  const last = useRef<SearchView | undefined>(undefined);
   if (state.value) last.current = state.value;
   return state.value || !last.current || state.error ? state : { ...state, value: last.current };
 }

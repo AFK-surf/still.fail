@@ -211,26 +211,30 @@ export class SearchIndex {
     if (words.length === 0) return [];
     const limit = Math.max(1, Math.min(options.limit ?? 8, 200));
     const offset = Math.max(0, options.offset ?? 0);
-    const kinds = options.kinds && options.kinds.length > 0 ? options.kinds : (this.#stmt("SELECT DISTINCT kind FROM docs").all() as { kind: string }[]).map((r) => r.kind);
     const long = this.fts ? words.filter((w) => chars(w) >= 3) : [];
     const short = words.filter((w) => !long.includes(w));
     const scopes = asker.scopes.map(() => "?").join(", ");
     const seen = `(d.ws = '*' OR d.ws = ? OR (d.ws IS NULL AND ? = 1)) AND (d.scope IS NULL${scopes ? ` OR d.scope IN (${scopes})` : ""})`;
-    const within = short.map(() => "instr(lower(d.title || char(10) || d.body), ?) > 0").join(" AND ");
-    const sql =
-      long.length > 0
-        ? `SELECT d.* FROM docs_fts JOIN docs d ON d.id = docs_fts.rowid WHERE docs_fts MATCH ? AND d.kind = ? AND ${seen}${within ? ` AND ${within}` : ""}
-           ORDER BY instr(lower(d.title), ?) > 0 DESC, d.at IS NULL, d.at DESC LIMIT ? OFFSET ?`
-        : `SELECT d.* FROM docs d WHERE d.kind = ? AND ${seen} AND ${within}
-           ORDER BY instr(lower(d.title), ?) > 0 DESC, d.at IS NULL, d.at DESC LIMIT ? OFFSET ?`;
-    const stmt = this.#stmt(sql);
+    const within = short.map(() => " AND instr(lower(d.title || char(10) || d.body), ?) > 0").join("");
+    const only = options.kinds && options.kinds.length > 0 ? ` AND d.kind IN (${options.kinds.map(() => "?").join(", ")})` : "";
+    // The index first (CROSS JOIN keeps the planner from reading every document of a kind and asking the index of each),
+    // then each kind's first ones in one pass.
+    const from = long.length > 0 ? "docs_fts CROSS JOIN docs d ON d.id = docs_fts.rowid WHERE docs_fts MATCH ? AND" : "docs d WHERE";
+    const sql = `SELECT * FROM (
+        SELECT d.*, row_number() OVER (PARTITION BY d.kind ORDER BY instr(lower(d.title), ?) > 0 DESC, d.at IS NULL, d.at DESC, d.id DESC) AS rank
+        FROM ${from} ${seen}${within}${only}
+      ) WHERE rank > ? AND rank <= ? ORDER BY kind, rank`;
+    const args: (string | number)[] = [words[0]!];
+    if (long.length > 0) args.push(long.map(phrase).join(" "));
+    args.push(asker.workspace, asker.home ? 1 : 0, ...asker.scopes, ...short, ...(options.kinds ?? []), offset, offset + limit + 1);
+    const byKind = new Map<string, Record<string, any>[]>();
+    for (const r of this.#stmt(sql).all(...args) as Record<string, any>[]) {
+      const list = byKind.get(r.kind) ?? [];
+      list.push(r);
+      byKind.set(r.kind, list);
+    }
     const out: Group[] = [];
-    for (const kind of kinds) {
-      const args: (string | number)[] = [];
-      if (long.length > 0) args.push(long.map(phrase).join(" "));
-      args.push(kind, asker.workspace, asker.home ? 1 : 0, ...asker.scopes, ...short, words[0]!, limit + 1, offset);
-      const rows = stmt.all(...args) as Record<string, any>[];
-      if (rows.length === 0) continue;
+    for (const [kind, rows] of byKind) {
       out.push({
         kind,
         more: rows.length > limit,

@@ -16,7 +16,7 @@ import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
-import type { ChatItem, ChatMessage, ComposerLink, ShareInView } from "../core/shapes.ts";
+import type { ChatItem, ChatMessage, ComposerLink, SearchView, ShareInView } from "../core/shapes.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY, STATION } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
@@ -95,6 +95,7 @@ function demoValueOf(topic: Topic): unknown {
     case "newChat": return newChatView();
     case "pick": return pickView(topic.of);
     case "shareIn": return shareInView(String(topic.source ?? ""), String(topic.query ?? ""));
+    case "search": return searchView(String(topic.query ?? ""), typeof topic.kind === "string" ? topic.kind : null);
     // still.fail cloud's, for the phone's workspace pages (mobile/).
     case "accounts": return [station.ACCOUNT];
     case "workspaces": return station.workspaces();
@@ -159,6 +160,45 @@ function shareInView(source: string, query = ""): ShareInView {
     ...(site ? { site } : {}), items: (kept ? [kept, ...rows.filter((r) => r !== kept)] : rows).slice(0, 30),
     ...(kept ? { kept: { station: kept.station, id: kept.id, text: site ? `${site} 的链接上次发到这里` : "上次分享的文字发到这里" } } : {}),
     stations: [{ station: STATION, name: "Studio" }], newOn: STATION, loading: false,
+  };
+}
+
+/** Where the first of the words is in a line found, as the core marks it. */
+function marks(text: string, q: string): { from: number; to: number }[] {
+  const at = text.toLowerCase().indexOf(q);
+  return at < 0 ? [] : [{ from: at, to: at + q.length }];
+}
+
+/**
+ * ⌘K's and the phone's search (the core's `search`, docs/search.md): the chats whose title has the words, and what the
+ * station finds besides, made up from them (a step of a history, a service, a skill) so every kind shows.
+ */
+function searchView(query: string, kind: string | null): SearchView {
+  const all = chatsView(chats).days.flatMap((d) => d.items);
+  const q = query.trim().toLowerCase();
+  const wait = { reading: false, failing: [], empty: false };
+  if (!q) return { items: all.slice(0, 30), wait };
+  const items = all.filter((i) => i.title.toLowerCase().includes(q));
+  const first = items[0] ?? all[0];
+  const where = { station: first?.station ?? STATION, stationName: first?.stationName ?? "Studio" };
+  const said = (text: string) => ({ text, marks: marks(text, q) });
+  const of = (c: ChatItem | undefined) => (c ? { chat: c.id, chatTitle: c.title, session: c.session } : {});
+  const groups: NonNullable<SearchView["groups"]> = [
+    { kind: "history", title: "执行历史", more: true, items: [
+      { kind: "history", key: "h1", ...where, title: first?.title ?? "", ...said(`bash · pnpm run ${q} --filter web`), ...of(first), index: 12, createdAt: Date.now() - 3_600_000 },
+      { kind: "history", key: "h2", ...where, title: all[1]?.title ?? "", ...said(`先确认 ${q} 的配置再改`), ...of(all[1]), index: 4, createdAt: Date.now() - 86_400_000 },
+    ] },
+    { kind: "job", title: "服务和任务", more: false, items: [
+      { kind: "job", key: "j1", ...where, title: `${q} 预览`, ...said(`pnpm dev --port 5173 · ${q}`), ...of(first), job: "j1", port: 5173 },
+    ] },
+    { kind: "skill", title: "Skill", more: false, items: [
+      { kind: "skill", key: "k1", ...where, title: "release", ...said(`项目记忆：${q} 之前先跑完整检查`), skill: "release" },
+    ] },
+  ];
+  const shown = kind ? groups.filter((g) => g.kind === kind) : groups;
+  return {
+    items: kind && kind !== "chat" ? [] : items.slice(0, kind ? 50 : 8), chatsMore: !kind && items.length > 8, words: [q],
+    groups: kind === "chat" ? [] : shown.map((g) => ({ ...g, more: !kind && g.more })), wait, note: "MacBook Air 离线，其上的内容未搜索",
   };
 }
 

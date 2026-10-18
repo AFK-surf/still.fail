@@ -641,6 +641,8 @@ export const stories: Story[] = [
   { id: "panel-file-card-missing", group: "小面板", title: "消息里的文件卡片 · 找不到", app: true, peek: "missing", steps: [{ move: [1, 1] }, { hover: 'button[class*="fileChip"]' }] },
   { id: "panel-station-card", group: "小面板", title: "station 卡片", app: true, steps: [{ move: [1, 1] }, { hover: "header >> text=/Studio|这台机器/" }] },
   { id: "panel-switcher", group: "小面板", title: "⌘K", app: true, steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }] },
+  { id: "panel-switcher-search", group: "小面板", title: "⌘K · 搜索", app: true, steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }, { key: "c" }, { key: "s" }, { key: "v" }] },
+  { id: "panel-switcher-kind", group: "小面板", title: "⌘K · 一类结果", app: true, steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }, { key: "c" }, { key: "s" }, { key: "v" }, { click: "text=查看更多" }] },
   {
     id: "panel-station-update", group: "小面板", title: "station 更新",
     render: () => stage(<div style={{ padding: 24 }}><StationUpdate station="local" notice={{
@@ -755,6 +757,7 @@ export const stories: Story[] = [
   { id: "phone-share-none", group: "手机", title: "分享进来 · 没有 chat 也没有 station", app: true, phone: true, ...sharing("none") },
   { id: "phone-share-loading", group: "手机", title: "分享进来 · 正在读取", app: true, phone: true, ...sharing("loading") },
   { id: "phone-share-search", group: "手机", title: "分享进来 · 搜索 chat", app: true, phone: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "N" }, { key: "A" }, { key: "S" }] },
+  { id: "phone-search", group: "手机", title: "搜索全部内容", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { text: "搜索全部内容" }, { key: "c" }, { key: "s" }, { key: "v" }] },
   { id: "phone-share-search-none", group: "手机", title: "分享进来 · 搜索没找到", app: true, phone: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "z" }, { key: "z" }] },
   { id: "phone-agent", group: "手机", title: "agent 名片", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }] },
   { id: "phone-chat-history-turns", group: "手机", title: "执行历史 · 一轮一轮", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "历史" }], demo: historyTurns },

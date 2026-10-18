@@ -633,12 +633,12 @@
     "other": "{n} stations"
   },
   "web-mobile.workspaces.title": "Switch workspace",
-  "web-mobile.home.search": "Search chats and messages",
+  "web-mobile.home.search": "Search everything",
   "web-mobile.home.searching": "Searching",
   "web-mobile.home.searchCancel": "Cancel",
   "web-mobile.home.searchChats": "Chats",
   "web-mobile.home.searchMessages": "Messages",
-  "web-mobile.home.searchNone": "No chats or messages found",
+  "web-mobile.home.searchNone": "No results",
   "web-mobile.home.searchUpdate": "Update to search",
   "web-mobile.history.stepUnread": "Couldn't load: {error}",
   "web-mobile.agent.card": "About {agent}",
@@ -677,5 +677,7 @@
   "web-mobile.files.addCount": "Add {n}",
   "web-mobile.history.jobMessage": "Message from job {name}",
   "web-mobile.borrow.title": "Borrow account",
-  "web-mobile.borrow.done": "Borrowed; usable here once it reaches this station"
+  "web-mobile.borrow.done": "Borrowed; usable here once it reaches this station",
+  "web-mobile.home.searchMore": "Show more",
+  "web-mobile.home.searchAll": "All results"
 }
