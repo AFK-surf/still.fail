@@ -104,7 +104,13 @@ async function main() {
     await box.waitFor({ timeout: 60_000 });
     await box.click();
     await page.keyboard.insertText(`${text} post:${answer}`);
-    await page.keyboard.press("Enter");
+    // Sent once the page can (the station's models read): its button, until the page leaves the new chat.
+    await until(async () => {
+      if (!page.url().endsWith("/new")) return true;
+      await page.getByRole("button", { name: "发送" }).click({ timeout: 2000 }).catch(() => {});
+      await sleep(1000);
+      return !page.url().endsWith("/new");
+    }, "the message sent", 60);
     // The agent's post in its chat (the composer empty by then).
     // Said twice: in the person's message (after post:) and as the agent's.
     await page.waitForFunction((a) => document.body.innerText.split(a).length > 2, answer, { timeout: 90_000 });
