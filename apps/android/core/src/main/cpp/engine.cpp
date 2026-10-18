@@ -22,6 +22,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 #include <hermes/hermes.h>
@@ -360,7 +361,7 @@ class Engine {
       fatal("the core's files cannot be kept: " + dataDir_);
       return;
     }
-    auto config = ::hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withEnableBlockScoping(true).withIntl(true).build();
+    auto config = ::hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withEnableBlockScoping(true).withIntl(true).withEnableSampleProfiling(true).build();
     std::unique_ptr<facebook::hermes::HermesRuntime> rt = facebook::hermes::makeHermesRuntime(config);
     try {
       install(*rt);
@@ -500,4 +501,19 @@ extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_close(JNIEnv
   auto* engine = reinterpret_cast<Engine*>(handle);
   engine->stop();
   delete engine;
+}
+
+/// The core's JS sampled for `seconds`, its trace (Chrome's format) written to `path` (CoreProfile.kt): what the core
+/// spends its time on, in a build as it is shipped. The runtime is registered for it as it starts; nothing is sampled
+/// until this is asked.
+extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_profile(JNIEnv* env, jobject, jint seconds, jstring path) {
+  auto* root = jsi::castInterface<facebook::hermes::IHermesRootAPI>(facebook::hermes::makeHermesRootAPI());
+  if (!root) return;
+  root->enableSamplingProfiler();
+  std::thread([root, seconds, out = utf8(env, path)] {
+    std::this_thread::sleep_for(std::chrono::seconds(seconds));
+    root->dumpSampledTraceToFile(out);
+    root->disableSamplingProfiler();
+    __android_log_print(ANDROID_LOG_INFO, TAG, "profile written: %s", out.c_str());
+  }).detach();
 }

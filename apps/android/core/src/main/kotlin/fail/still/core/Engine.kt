@@ -57,6 +57,16 @@ internal object HermesNative {
     external fun close(handle: Long)
     /** The answer to a call the engine handed to Kotlin ([HermesListener.onApp]): `error` null when it succeeded. */
     external fun complete(handle: Long, id: Long, json: String?, error: String?, bytes: ByteArray?)
+    /** The core's JS sampled for `seconds`, its trace written to `path` then (CoreProfile). */
+    external fun profile(seconds: Int, path: String)
+}
+
+/**
+ * What the core spends its time on, in the app as shipped: its JS sampled for a while, the trace (Chrome's format, for
+ * DevTools' Performance panel) written to a file. Asked from adb (the app's CoreProfileReceiver).
+ */
+object CoreProfile {
+    fun sample(seconds: Int, path: String) = HermesNative.profile(seconds, path)
 }
 
 /** The core's script as the app carries it (apps/android/build.py: client/core-ts as Hermes bytecode). */

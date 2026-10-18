@@ -22,7 +22,10 @@ const built = await build({
   platform: "neutral",
   mainFields: ["module", "main"],
   target: "es2020",
-  minify: true,
+  // STILLFAIL_CORE_NAMES keeps the core's own names (a profile of it read as written: CoreProfileReceiver.kt).
+  minifyWhitespace: true,
+  minifySyntax: true,
+  minifyIdentifiers: !process.env.STILLFAIL_CORE_NAMES,
   legalComments: "none",
   outfile: out,
   logLevel: "warning",
