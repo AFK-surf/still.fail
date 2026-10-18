@@ -368,13 +368,12 @@ fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
 
 /**
  * A decision's options (web Decisions.tsx DecisionOptions): one card, full width, a row each — its number in a circle,
- * the label (medium) and its detail under it, small and quiet, a hairline between two. The recommended one (last, as
+ * the label (medium) and its detail under it, small and quiet, nothing drawn between two. The recommended one (last, as
  * the core orders them) is told by its number in the accent alone (said to a screen reader). `busy`: the label of the one being sent
  * (a spinner on it, none pressed meanwhile). `chosen`: the label of the one picked, as it was while the rest step back.
  */
 @Composable
 fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, chosen: String? = null, onPick: (DecisionOption) -> Unit) {
-    val hairline = C.ink.copy(alpha = 0.07f)
     // A card of rows to be pressed (web pages.css.ts listCard, docs/ui-panels.md 页面卡片): each row's ground under the
     // finger OPTION_PAD from the card's edge, rounded OPTION_CORNER, the card's corner theirs and that together; its
     // number in its row's corner, concentric with it; its words OPTION_WORDS from the card's edge, as a card of words'.
@@ -383,7 +382,6 @@ fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier
             val strong = o.recommended == true
             val said = if (strong) t("common.recommended") else null
             val free = enabled && busy == null
-            if (i > 0) Box(Modifier.padding(start = NUMBER_IN + NUMBER + 12.dp, end = OPTION_WORDS - OPTION_PAD).fillMaxWidth().height(1.dp).background(hairline))
             Row(
                 Modifier.fillMaxWidth().clip(Smooth(OPTION_CORNER)).alpha(if (enabled || o.label == chosen) 1f else 0.5f)
                     .clickable(enabled = free, interactionSource = remember(o.label) { MutableInteractionSource() }, indication = ripple(color = C.ink)) { onPick(o) }

@@ -33,13 +33,6 @@ export const choice = style({
   transition: `background-color ${vars.dur}, opacity ${vars.dur}`,
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover },
-    // A hairline between two, from the labels' edge.
-    "& + &::before": {
-      content: '""', position: "absolute", top: "0", left: `${NUMBER_IN + NUMBER + 12}px`, right: `${CARD_PAD - LIST_PAD}px`, height: "1px",
-      background: `color-mix(in srgb, ${vars.text} 7%, transparent)`,
-    },
-    // Not over the one under the pointer, nor under it.
-    "&:hover:not(:disabled)::before, &:hover:not(:disabled) + &::before": { opacity: "0" },
     "&:disabled": { cursor: "default" },
     // Another one of them is being sent, or was picked: the rest step back.
     "&:disabled:not([data-busy]):not([data-chosen])": { opacity: ".5" },
