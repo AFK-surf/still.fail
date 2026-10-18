@@ -120,6 +120,15 @@ struct Node {
   mut tl : TextLayout?
   // the width tl was laid out in
   mut tl_max : Double
+  // the last text laid out in this slot of the pool (kept by reset, for
+  // the frames that build the same text in the same place) and what it
+  // was laid out with: max width, size, weight, line height, wrapping
+  mut kept_tl : TextLayout?
+  mut kept_max : Double
+  mut kept_size : Double
+  mut kept_weight : Int
+  mut kept_line : Double
+  mut kept_wrap : Bool
   // rich text: its runs, and as laid out (in rl_max)
   mut rich : Rich?
   mut rl : RichLayout?
@@ -189,6 +198,12 @@ fn Node::new() -> Node {
     fh: 0.0,
     tl: None,
     tl_max: 0.0,
+    kept_tl: None,
+    kept_max: 0.0,
+    kept_size: 0.0,
+    kept_weight: 0,
+    kept_line: 0.0,
+    kept_wrap: false,
     rich: None,
     rl: None,
     rl_max: 0.0,

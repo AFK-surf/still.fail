@@ -52,7 +52,8 @@ fn reset_globals() -> Unit {
   c.ninst = 0
   c.ime_sig = ""
   c.bench_list = 0
-  text_cache.shapes.clear()
+  clear_shapes()
+  text_cache.fonts.clear()
   text_cache.metrics.clear()
   text_cache.glyphs.clear()
   text_cache.generation = -1

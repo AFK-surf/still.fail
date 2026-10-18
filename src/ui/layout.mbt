@@ -21,6 +21,20 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
       return tl
     _ => ()
   }
+  // the same text as this slot laid out last frame: no lookup by string
+  match self.kept_tl {
+    Some(tl) if self.kept_size == self.font_size &&
+      self.kept_weight == self.weight &&
+      self.kept_line == self.line_h &&
+      self.kept_wrap == self.wrap &&
+      (!self.wrap || (tl.w <= max_w + 0.01 && max_w <= self.kept_max)) &&
+      tl.text == self.text => {
+      self.tl = Some(tl)
+      self.tl_max = self.kept_max
+      return tl
+    }
+    _ => ()
+  }
   let tl = layout_text(
     self.text,
     self.font_size,
@@ -31,6 +45,12 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
   )
   self.tl = Some(tl)
   self.tl_max = max_w
+  self.kept_tl = Some(tl)
+  self.kept_max = max_w
+  self.kept_size = self.font_size
+  self.kept_weight = self.weight
+  self.kept_line = self.line_h
+  self.kept_wrap = self.wrap
   tl
 }
 
@@ -85,6 +105,16 @@ fn leaf_size(
 }
 
 ///|
+/// A length for the flex engine; zero, the most common, is not made anew.
+fn pt(v : Double) -> @flex.Dim {
+  if v == 0.0 {
+    @flex.pt_zero
+  } else {
+    Pt(v)
+  }
+}
+
+///|
 /// The flex node for node `i` and its subtree, styled from the builder's
 /// sizes: Fill along the parent's direction grows from nothing, across it
 /// stretches; content-sized children of a row may shrink (and wrap), except
@@ -97,12 +127,12 @@ fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
   f.children.clear()
   f.measure = None
   s.direction = if n.dir == Row { Row } else { Column }
-  s.padding.left = Pt(n.pad_l)
-  s.padding.top = Pt(n.pad_t)
-  s.padding.right = Pt(n.pad_r)
-  s.padding.bottom = Pt(n.pad_b)
-  s.gap_row = Pt(n.gap)
-  s.gap_col = Pt(n.gap)
+  s.padding.left = pt(n.pad_l)
+  s.padding.top = pt(n.pad_t)
+  s.padding.right = pt(n.pad_r)
+  s.padding.bottom = pt(n.pad_b)
+  s.gap_row = pt(n.gap)
+  s.gap_col = pt(n.gap)
   s.align_items = match n.align {
     AStart => FlexStart
     ACenter => Center
@@ -135,7 +165,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
       if in_row {
         s.grow = k
         s.shrink = 1.0
-        s.basis = Pt(0.0)
+        s.basis = @flex.pt_zero
       } else if in_col {
         s.align_self = Stretch
       }
@@ -147,8 +177,8 @@ fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
   if n.pager != 0 || n.layer {
     // a pager's pages lie over each other, moved sideways as they turn
     s.position = Absolute
-    s.inset.left = Pt(0.0)
-    s.inset.top = Pt(0.0)
+    s.inset.left = @flex.pt_zero
+    s.inset.top = @flex.pt_zero
     s.width = Pct(100.0)
     s.height = Pct(100.0)
   }
@@ -158,7 +188,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
       if in_col {
         s.grow = k
         s.shrink = 1.0
-        s.basis = Pt(0.0)
+        s.basis = @flex.pt_zero
       } else if in_row {
         s.align_self = Stretch
       }

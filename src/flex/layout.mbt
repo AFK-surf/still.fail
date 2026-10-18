@@ -83,7 +83,7 @@ fn is_reverse(d : FlexDirection) -> Bool {
 ///|
 /// What a node's own style says about its box, against its containing
 /// block (cb_w, cb_h: the parent's content box).
-priv struct Box {
+struct Box {
   pad_l : Double
   pad_t : Double
   pad_r : Double
@@ -149,6 +149,27 @@ fn box_of(s : Style, cb_w : Double, cb_h : Double) -> Box {
     max_w: resolve(s.max_width, cb_w) + adj_w,
     max_h: resolve(s.max_height, cb_h) + adj_h,
   }
+}
+
+///|
+/// box_of for a node, kept on it for the rest of the compute(): a node is
+/// sized several times (its basis, its cross size, for real), each time
+/// against the same containing block.
+fn box_for(node : Node, cb_w : Double, cb_h : Double) -> Box {
+  if node.box_gen == generation.val &&
+    same(node.box_cbw, cb_w) &&
+    same(node.box_cbh, cb_h) {
+    match node.box_memo {
+      Some(b) => return b
+      None => ()
+    }
+  }
+  let b = box_of(node.style, cb_w, cb_h)
+  node.box_gen = generation.val
+  node.box_cbw = cb_w
+  node.box_cbh = cb_h
+  node.box_memo = Some(b)
+  b
 }
 
 ///|
@@ -345,7 +366,7 @@ fn size_uncached(
   perform : Bool,
 ) -> (Double, Double) {
   let s = node.style
-  let b = box_of(s, cb_w, cb_h)
+  let b = box_for(node, cb_w, cb_h)
   let mut w = if known(kw) { kw } else { b.w }
   let mut h = if known(kh) { kh } else { b.h }
   // a min equal to the max is a size (Chrome resolves percentages of it)
@@ -449,6 +470,8 @@ priv struct Item {
   align : Align
   row : Bool
   mut ascent : Double
+  // how far resolve_flexible's clamping moved it this round
+  mut clamped : Double
 }
 
 ///|
@@ -518,7 +541,7 @@ fn layout_flex(
     if cs.position == Absolute {
       continue
     }
-    let cb = box_of(cs, cb_w, cb_h)
+    let cb = box_for(c, cb_w, cb_h)
     let al = item_align(s, cs)
     let margin_main = if row { cb.mar_l + cb.mar_r } else { cb.mar_t + cb.mar_b }
     let margin_cross = if row { cb.mar_t + cb.mar_b } else { cb.mar_l + cb.mar_r }
@@ -554,6 +577,7 @@ fn layout_flex(
       align: al,
       row,
       ascent: 0.0,
+      clamped: 0.0,
     }
     // flex base size
     let basis_style = resolve(cs.basis, inner_main)
@@ -1051,7 +1075,6 @@ fn resolve_flexible(items : Array[Item], a : Int, b : Int, space : Double) -> Un
     }
     // clamp and freeze violators
     let mut total = 0.0
-    let clamped = Array::make(b - a, 0.0)
     for k in a..<b {
       let it = items[k]
       if it.frozen {
@@ -1060,7 +1083,7 @@ fn resolve_flexible(items : Array[Item], a : Int, b : Int, space : Double) -> Un
       let pb = if it.row { it.b.pbw() } else { it.b.pbh() }
       let lo = fmax(or_else(it.min_main, 0.0), pb)
       let c = clamp_size(it.target, lo, it.max_main)
-      clamped[k - a] = c - it.target
+      it.clamped = c - it.target
       total = total + (c - it.target)
       it.target = c
     }
@@ -1069,7 +1092,7 @@ fn resolve_flexible(items : Array[Item], a : Int, b : Int, space : Double) -> Un
       if it.frozen {
         continue
       }
-      let v = clamped[k - a]
+      let v = it.clamped
       if total == 0.0 ||
         (total > 0.0 && v > 0.0) ||
         (total < 0.0 && v < 0.0) {

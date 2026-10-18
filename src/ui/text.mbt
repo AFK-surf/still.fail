@@ -15,6 +15,12 @@ struct Shaped {
   // line break (UAX #14)
   brk : Array[Int]
   len : Int
+  // the last layout made of it (with no indent), for the next one asked
+  // for with the same line height and wrapping, in a width it fits
+  mut lay : TextLayout?
+  mut lay_max : Double
+  mut lay_line : Double
+  mut lay_wrap : Bool
 }
 
 ///|
@@ -44,8 +50,19 @@ struct Glyph {
 }
 
 ///|
+/// The strings shaped in one font (size, weight, style).
+struct FontShapes {
+  size : Double
+  weight : Int
+  style : Int
+  map : Map[String, Shaped]
+}
+
+///|
 struct TextCache {
-  shapes : Map[String, Shaped]
+  fonts : Array[FontShapes]
+  // strings shaped, in all fonts
+  mut shaped : Int
   metrics : Map[Int, (Double, Double, Double)]
   glyphs : Map[Int, Glyph]
   mut generation : Int
@@ -55,7 +72,8 @@ struct TextCache {
 
 ///|
 let text_cache : TextCache = {
-  shapes: Map::new(),
+  fonts: [],
+  shaped: 0,
   metrics: Map::new(),
   glyphs: Map::new(),
   generation: -1,
@@ -94,13 +112,39 @@ fn font_metrics(
 }
 
 ///|
+/// The shapes of one font: looked up by the string alone, no key to build.
+fn font_shapes(size : Double, weight : Int, style : Int) -> Map[String, Shaped] {
+  for f in text_cache.fonts {
+    if f.size == size && f.weight == weight && f.style == style {
+      return f.map
+    }
+  }
+  let map = Map::new()
+  text_cache.fonts.push({ size, weight, style, map })
+  map
+}
+
+///|
+fn clear_shapes() -> Unit {
+  for f in text_cache.fonts {
+    // a shape and its last layout refer to each other (reference counts
+    // never free a cycle): let go of the layout first
+    for _, s in f.map {
+      s.lay = None
+    }
+    f.map.clear()
+  }
+  text_cache.shaped = 0
+}
+
+///|
 fn shape(text : String, size : Double, weight : Int, style? : Int = 0) -> Shaped {
-  let key = "\{text}\u{1}\{size}\u{1}\{weight}\u{1}\{style}"
-  match text_cache.shapes.get(key) {
+  let shapes = font_shapes(size, weight, style)
+  match shapes.get(text) {
     Some(s) => s
     None => {
-      if text_cache.shapes.length() > 6000 {
-        text_cache.shapes.clear()
+      if text_cache.shaped > 6000 {
+        clear_shapes()
       }
       let out = text_cache.buf
       let n = if text.length() == 0 {
@@ -128,8 +172,21 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0) -> Shaped
           brk[i] = b[starts[i]]
         }
       }
-      let s = { starts, lens, adv, keys, cu, brk, len: text.length() }
-      text_cache.shapes[key] = s
+      let s = {
+        starts,
+        lens,
+        adv,
+        keys,
+        cu,
+        brk,
+        len: text.length(),
+        lay: None,
+        lay_max: 0.0,
+        lay_line: 0.0,
+        lay_wrap: false,
+      }
+      shapes[text] = s
+      text_cache.shaped = text_cache.shaped + 1
       s
     }
   }
@@ -181,6 +238,16 @@ fn layout_text(
   line? : Double = 0.0,
 ) -> TextLayout {
   let s = shape(text, size, weight)
+  // greedy wrapping gives the same lines in any width from the widest
+  // line up to the one they were made in (as Node::text_layout)
+  if indent == 0.0 {
+    match s.lay {
+      Some(tl) if s.lay_line == line &&
+        s.lay_wrap == wrap &&
+        (!wrap || (tl.w <= max_w + 0.01 && max_w <= s.lay_max)) => return tl
+      _ => ()
+    }
+  }
   let (asc, desc, own_h) = font_metrics(size, weight)
   // a line as high as asked, the glyphs in its middle
   let line_h = if line > 0.0 { line } else { own_h }
@@ -246,7 +313,7 @@ fn layout_text(
     finish(ls, n)
   }
   let lines = line_start.length()
-  {
+  let tl = {
     text,
     shaped: s,
     line_start,
@@ -259,6 +326,13 @@ fn layout_text(
     ascent,
     line_h,
   }
+  if indent == 0.0 {
+    s.lay = Some(tl)
+    s.lay_max = max_w
+    s.lay_line = line
+    s.lay_wrap = wrap
+  }
+  tl
 }
 
 ///|

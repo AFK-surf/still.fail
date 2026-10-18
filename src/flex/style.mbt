@@ -147,6 +147,10 @@ pub fn Style::new() -> Style {
 }
 
 ///|
+/// Pt(0.0), made once: what styles reset to, without a new one each time.
+pub let pt_zero : Dim = Pt(0.0)
+
+///|
 /// Back to the defaults, for nodes reused from a pool.
 pub fn Style::reset(self : Style) -> Unit {
   self.display = Flex
@@ -166,12 +170,12 @@ pub fn Style::reset(self : Style) -> Unit {
   self.min_height = Auto
   self.max_width = Auto
   self.max_height = Auto
-  self.margin.set(Pt(0.0))
-  self.padding.set(Pt(0.0))
-  self.border.set(Pt(0.0))
+  self.margin.set(pt_zero)
+  self.padding.set(pt_zero)
+  self.border.set(pt_zero)
   self.inset.set(Auto)
-  self.gap_row = Pt(0.0)
-  self.gap_col = Pt(0.0)
+  self.gap_row = pt_zero
+  self.gap_col = pt_zero
   self.aspect = 0.0
   self.box_sizing = BorderBox
   self.overflow = Visible
@@ -205,6 +209,12 @@ pub(all) struct Node {
   // sizes found during the current compute(), 8 numbers each
   cache : Array[Double]
   mut cache_gen : Int
+  // what its style says about its box, within the current compute(), and
+  // the containing block that was for (box_for)
+  mut box_gen : Int
+  mut box_cbw : Double
+  mut box_cbh : Double
+  mut box_memo : Box?
 }
 
 ///|
@@ -220,6 +230,10 @@ pub fn Node::new() -> Node {
     line: 0,
     cache: [],
     cache_gen: -1,
+    box_gen: -1,
+    box_cbw: 0.0,
+    box_cbh: 0.0,
+    box_memo: None,
   }
 }
 

@@ -2,6 +2,7 @@
 // and rasterizing each cluster into the RGBA atlas when it is first drawn.
 #import "apple.h"
 #import <CoreGraphics/CoreGraphics.h>
+#include <math.h>
 
 double mb_text_scale = 2.0;
 
@@ -37,7 +38,13 @@ NSString *mb_ns_from_string(moonbit_string_t s) {
 // style & 1 its italic. A face without one (and what the cascade draws a
 // cluster in, PingFang's Han) is slanted 12° as it is rasterized, as
 // browsers synthesize an oblique.
+static double last_size = -1;
+static int last_weight = -1, last_style = -1;
+static CTFontRef last_font;
+
 static CTFontRef font_for(double size, int weight, int style) {
+  // the font asked for last, without building its key (most calls)
+  if (size == last_size && weight == last_weight && style == last_style) return last_font;
   if (!fonts) fonts = [NSMutableDictionary new];
   NSString *k = [NSString stringWithFormat:@"%g/%d/%d", size, weight, style];
   id f = fonts[k];
@@ -53,7 +60,12 @@ static CTFontRef font_for(double size, int weight, int style) {
     f = (__bridge_transfer id)base;
     fonts[k] = f;
   }
-  return (__bridge CTFontRef)f;
+  // kept alive by `fonts`
+  last_size = size;
+  last_weight = weight;
+  last_style = style;
+  last_font = (__bridge CTFontRef)f;
+  return last_font;
 }
 
 void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *out) {
@@ -91,39 +103,204 @@ static int intern(NSString *cluster, double size, int weight, int style) {
   return id_;
 }
 
+// The keys of ASCII clusters, per font, found without building a string
+// for the cluster and its key.
+typedef struct {
+  double size;
+  int weight, style;
+  int ids[128];
+} ascii_keys;
+static ascii_keys *ascii;
+static int n_ascii, last_ascii = -1;
+
+static int *ascii_for(double size, int weight, int style) {
+  if (last_ascii >= 0) {
+    ascii_keys *a = &ascii[last_ascii];
+    if (a->size == size && a->weight == weight && a->style == style) return a->ids;
+  }
+  for (int i = 0; i < n_ascii; i++) {
+    if (ascii[i].size == size && ascii[i].weight == weight && ascii[i].style == style) {
+      last_ascii = i;
+      return ascii[i].ids;
+    }
+  }
+  ascii = realloc(ascii, sizeof(ascii_keys) * (n_ascii + 1));
+  ascii_keys *a = &ascii[n_ascii];
+  a->size = size;
+  a->weight = weight;
+  a->style = style;
+  for (int i = 0; i < 128; i++) a->ids[i] = -1;
+  last_ascii = n_ascii++;
+  return a->ids;
+}
+
+// The key of an ASCII cluster (not a space) in this font.
+static int ascii_key(unichar c, double size, int weight, int style) {
+  int *ids = ascii_for(size, weight, style);
+  if (ids[c] < 0) ids[c] = intern([NSString stringWithCharacters:&c length:1], size, weight, style);
+  return ids[c];
+}
+
+// The fast path for printable ASCII (after nanoui's shaper.zig): each
+// character's advance and each pair's kerning learned once from Core Text,
+// so a string of them is laid out with lookups instead of a CTLine. A pair
+// Core Text makes something else of (a ligature, an alternate that changes
+// an advance) sends the string down the slow path. MBUI_SHAPE_CHECK=1
+// compares the two on every string and reports where they differ.
+enum { ascii_first = 0x20, ascii_n = 0x7f - 0x20 };
+typedef struct {
+  double size;
+  int weight, style;
+  double adv[ascii_n];
+  unsigned char adv_known[ascii_n];
+  // per pair: 0 not asked yet, 1 kerned by kern[], 2 Core Text's own
+  unsigned char pair[ascii_n * ascii_n];
+  double kern[ascii_n * ascii_n];
+} ascii_metrics;
+static ascii_metrics **metrics;
+static int n_metrics, last_metrics = -1;
+
+static ascii_metrics *metrics_for(double size, int weight, int style) {
+  if (last_metrics >= 0) {
+    ascii_metrics *m = metrics[last_metrics];
+    if (m->size == size && m->weight == weight && m->style == style) return m;
+  }
+  for (int i = 0; i < n_metrics; i++) {
+    ascii_metrics *m = metrics[i];
+    if (m->size == size && m->weight == weight && m->style == style) {
+      last_metrics = i;
+      return m;
+    }
+  }
+  ascii_metrics *m = calloc(1, sizeof(ascii_metrics));
+  m->size = size;
+  m->weight = weight;
+  m->style = style;
+  metrics = realloc(metrics, sizeof(ascii_metrics *) * (n_metrics + 1));
+  metrics[n_metrics] = m;
+  last_metrics = n_metrics++;
+  return m;
+}
+
+static CFIndex glyph_count(CTLineRef line) {
+  CFArrayRef runs = CTLineGetGlyphRuns(line);
+  CFIndex n = 0, k = CFArrayGetCount(runs);
+  for (CFIndex i = 0; i < k; i++) n += CTRunGetGlyphCount(CFArrayGetValueAtIndex(runs, i));
+  return k == 1 ? n : -1;
+}
+
+static double ascii_adv(ascii_metrics *m, CTFontRef f, unichar c) {
+  int a = c - ascii_first;
+  if (!m->adv_known[a]) {
+    CTLineRef line = make_line([NSString stringWithCharacters:&c length:1], f);
+    m->adv[a] = CTLineGetOffsetForStringIndex(line, 1, NULL);
+    m->adv_known[a] = 1;
+    CFRelease(line);
+  }
+  return m->adv[a];
+}
+
+// What a pair adds to its first character's advance; 0 for a pair Core
+// Text has to lay out itself (*ok cleared).
+static double ascii_kern(ascii_metrics *m, CTFontRef f, unichar c1, unichar c2, int *ok) {
+  int k = (c1 - ascii_first) * ascii_n + (c2 - ascii_first);
+  if (!m->pair[k]) {
+    double a1 = ascii_adv(m, f, c1), a2 = ascii_adv(m, f, c2);
+    unichar both[2] = {c1, c2};
+    CTLineRef line = make_line([NSString stringWithCharacters:both length:2], f);
+    double o1 = CTLineGetOffsetForStringIndex(line, 1, NULL);
+    double o2 = CTLineGetOffsetForStringIndex(line, 2, NULL);
+    m->pair[k] = glyph_count(line) == 2 && fabs(o2 - o1 - a2) < 1e-9 ? 1 : 2;
+    m->kern[k] = o1 - a1;
+    CFRelease(line);
+  }
+  if (m->pair[k] != 1) *ok = 0;
+  return m->kern[k];
+}
+
+static int32_t shape_ascii(const unichar *t, int32_t len, double size, int weight, int style, double *out) {
+  CTFontRef f = font_for(size, weight, style);
+  ascii_metrics *m = metrics_for(size, weight, style);
+  int ok = 1;
+  for (int32_t i = 0; i < len && ok; i++) {
+    double adv = ascii_adv(m, f, t[i]);
+    if (i + 1 < len) adv += ascii_kern(m, f, t[i], t[i + 1], &ok);
+    out[i * 4] = i;
+    out[i * 4 + 1] = 1;
+    out[i * 4 + 2] = adv < 0 ? 0 : adv;
+    out[i * 4 + 3] = t[i] == ' ' ? -1 : ascii_key(t[i], size, weight, style);
+  }
+  return ok ? len : -1;
+}
+
+static int32_t shape_slow(moonbit_string_t text, int32_t len, double size, int32_t weight, int32_t style,
+                          double *out, int32_t cap) {
+  NSString *s = [[NSString alloc] initWithCharacters:(const unichar *)text length:len];
+  CTFontRef f = font_for(size, weight, style);
+  CTLineRef line = make_line(s, f);
+  int32_t k = 0;
+  NSUInteger i = 0;
+  // a cluster starts where the one before it ended
+  double x0 = CTLineGetOffsetForStringIndex(line, 0, NULL);
+  while (i < (NSUInteger)len && k < cap) {
+    NSRange r = [s rangeOfComposedCharacterSequenceAtIndex:i];
+    unichar c = [s characterAtIndex:r.location];
+    if (r.location != i) x0 = CTLineGetOffsetForStringIndex(line, r.location, NULL);
+    double x1 = CTLineGetOffsetForStringIndex(line, r.location + r.length, NULL);
+    double adv = x1 - x0;
+    x0 = x1;
+    int key;
+    if (c == '\n') {
+      adv = 0;
+      key = -1;
+    } else if (c == ' ' || c == '\t') {
+      key = -1;
+    } else if (r.length == 1 && c < 128) {
+      key = ascii_key(c, size, weight, style);
+    } else {
+      key = intern([s substringWithRange:r], size, weight, style);
+    }
+    out[k * 4] = r.location;
+    out[k * 4 + 1] = r.length;
+    out[k * 4 + 2] = adv < 0 ? 0 : adv;
+    out[k * 4 + 3] = key;
+    k++;
+    i = r.location + r.length;
+  }
+  CFRelease(line);
+  return k;
+}
+
+static int shape_check = -1;
+
 int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, int32_t style, double *out) {
   @autoreleasepool {
     int32_t len = Moonbit_array_length(text);
     int32_t cap = Moonbit_array_length(out) / 4;
-    NSString *s = [[NSString alloc] initWithCharacters:(const unichar *)text length:len];
-    CTFontRef f = font_for(size, weight, style);
-    CTLineRef line = make_line(s, f);
-    int32_t k = 0;
-    NSUInteger i = 0;
-    while (i < (NSUInteger)len && k < cap) {
-      NSRange r = [s rangeOfComposedCharacterSequenceAtIndex:i];
-      unichar c = [s characterAtIndex:r.location];
-      double x0 = CTLineGetOffsetForStringIndex(line, r.location, NULL);
-      double x1 = CTLineGetOffsetForStringIndex(line, r.location + r.length, NULL);
-      double adv = x1 - x0;
-      int key;
-      if (c == '\n') {
-        adv = 0;
-        key = -1;
-      } else if (c == ' ' || c == '\t') {
-        key = -1;
-      } else {
-        key = intern([s substringWithRange:r], size, weight, style);
+    const unichar *t = (const unichar *)text;
+    int ascii = len > 0 && len <= cap;
+    for (int32_t i = 0; i < len && ascii; i++) ascii = t[i] >= ascii_first && t[i] < 0x7f;
+    if (ascii) {
+      int32_t n = shape_ascii(t, len, size, weight, style, out);
+      if (n >= 0) {
+        if (shape_check < 0) shape_check = getenv("MBUI_SHAPE_CHECK") != NULL;
+        if (shape_check) {
+          double *ref = malloc(sizeof(double) * 4 * len);
+          shape_slow(text, len, size, weight, style, ref, len);
+          for (int32_t i = 0; i < len; i++) {
+            if (fabs(ref[i * 4 + 2] - out[i * 4 + 2]) > 1e-9 || ref[i * 4 + 3] != out[i * 4 + 3]) {
+              NSLog(@"shape check: \"%@\" at %g/%d/%d: cluster %d %.6f, Core Text %.6f",
+                    [NSString stringWithCharacters:t length:len], size, weight, style, i,
+                    out[i * 4 + 2], ref[i * 4 + 2]);
+              break;
+            }
+          }
+          free(ref);
+        }
+        return n;
       }
-      out[k * 4] = r.location;
-      out[k * 4 + 1] = r.length;
-      out[k * 4 + 2] = adv < 0 ? 0 : adv;
-      out[k * 4 + 3] = key;
-      k++;
-      i = r.location + r.length;
     }
-    CFRelease(line);
-    return k;
+    return shape_slow(text, len, size, weight, style, out, cap);
   }
 }
 
