@@ -83,15 +83,22 @@ export const msgSystemBox = style({
  */
 export const blocked = style({
   display: "inline-flex", alignItems: "center", gap: "4px", maxWidth: "100%", flexWrap: "wrap", justifyContent: "flex-end",
-  selectors: { "&[data-stuck]": { color: vars.red } },
+  padding: "0", border: "0", background: "none", font: "inherit", textAlign: "right",
+  selectors: {
+    "&[data-stuck]": { color: vars.red },
+    "button&": { cursor: "pointer" },
+    "button&:disabled": { cursor: "default", opacity: ".6" },
+  },
 });
 export const blockedWords = style({ overflowWrap: "anywhere" });
-export const blockedDot = style({ color: vars.muted, "@media": { "(hover: none)": { display: "none" } } });
-/** Installing: a word on a pointer; under a finger, a capsule big enough to press (no dot before it). */
+export const blockedDot = style({ color: vars.muted });
+/** Installing: a word in the text's colour, underlined under the pointer (the line it ends is what installs). */
 export const blockedAction = style({
   padding: "0", border: "0", background: "none", color: vars.text, font: "inherit", fontWeight: "600", cursor: "pointer",
-  selectors: { "&:hover:not(:disabled)": { textDecoration: "underline", textUnderlineOffset: "3px" }, "&:disabled": { opacity: ".5", cursor: "default" } },
-  "@media": { "(hover: none)": { marginLeft: "4px", padding: "4px 12px", borderRadius: "999px", background: vars.hover, fontSize: vars.textUi, lineHeight: "20px" } },
+  selectors: {
+    [`button:hover:not(:disabled) > &, button&:hover:not(:disabled)`]: { textDecoration: "underline", textUnderlineOffset: "3px" },
+    "&:disabled": { opacity: ".5", cursor: "default" },
+  },
 });
 // In a notice (one with none of the viewer's messages waiting for it): apart from its words, in the pill's colour.
 globalStyle(`${msgSystemBox} ${blockedDot}`, { margin: "0 6px", color: "inherit", opacity: ".6" });

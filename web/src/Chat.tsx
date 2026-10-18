@@ -1158,29 +1158,41 @@ function SystemNotice({ text, profile, install, time, ts, enter, caught, vk }: {
 
 /**
  * Under the viewer's message that waits for a runtime the station does not have (core `blocked`), in place of its
- * waiting: how that stands, in red while nothing is under way, and installing it. Once installed it waits again.
+ * waiting: how that stands, in red while nothing is under way, and installing it. The whole line is what installs it
+ * (as a message not delivered is sent again from its line), so it is as big to press as it is wide. Once installed it
+ * waits again.
  */
 function BlockedLine({ install }: { install: RuntimeInstall }) {
   const stuck = install.state === "missing" || install.state === "failed";
-  return (
-    <span className={`${conversationCss.msgTime} ${css.blocked}`} data-stuck={stuck || undefined} title={install.detail ?? install.note}>
+  const { busy, run } = useInstall(install);
+  const words = (
+    <>
       {install.state === "installing" ? <Spinner inline /> : stuck && <span className={partsCss.failedMark} style={{ width: 12, height: 12, fontSize: 8 }} aria-hidden>!</span>}
       <span className={css.blockedWords}>{install.title}{install.state === "installing" && install.percent != null && ` ${install.percent}%`}</span>
       {install.note && !install.action && <><span className={css.blockedDot} aria-hidden>·</span><span className={css.blockedWords}>{install.note}</span></>}
-      <InstallAction install={install} />
-    </span>
+      {install.action && <><span className={css.blockedDot} aria-hidden>·</span><span className={css.blockedAction}>{install.action}</span></>}
+    </>
   );
+  const className = `${conversationCss.msgTime} ${css.blocked}`;
+  return install.action
+    ? <button type="button" className={className} data-stuck={stuck || undefined} title={install.detail} disabled={busy} aria-busy={busy || undefined} onClick={run}>{words}</button>
+    : <span className={className} data-stuck={stuck || undefined} title={install.detail ?? install.note}>{words}</span>;
 }
 
-/** Installing a runtime the station does not have, a word after what says so (a manager's: core `action`). */
-function InstallAction({ install }: { install: RuntimeInstall }) {
+/** Installing a notice's runtime: whether it is under way here, and doing it (software.update; a manager's: `action`). */
+function useInstall(install: RuntimeInstall) {
   const station = useStation().address;
   const busy = useDoing("software.update", { station, id: install.runtime });
   const api = useApi();
   const act = useAct();
-  const action = install.action;
-  if (!action) return null;
-  return <><span className={css.blockedDot} aria-hidden>·</span><button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} onClick={() => act(api.updateSoftware(install.runtime), action)}>{action}</button></>;
+  return { busy, run: () => { if (install.action) act(api.updateSoftware(install.runtime), install.action); } };
+}
+
+/** Installing a runtime the station does not have, a word at the end of a notice that says so. */
+function InstallAction({ install }: { install: RuntimeInstall }) {
+  const { busy, run } = useInstall(install);
+  if (!install.action) return null;
+  return <><span className={css.blockedDot} aria-hidden>·</span><button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} onClick={run}>{install.action}</button></>;
 }
 
 /** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says; `route` (where it
