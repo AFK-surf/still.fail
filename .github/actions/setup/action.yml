@@ -7,6 +7,9 @@ inputs:
   android:
     description: Install the Android SDK and NDK
     default: 'false'
+  ndk:
+    description: With android, the NDK too (what packs the app strips its native parts with; lint does without it)
+    default: 'true'
   cross:
     description: Install Linux station cross compilers
     default: 'false'
@@ -86,7 +89,8 @@ runs:
         cache-read-only: ${{ github.ref != 'refs/heads/main' }}
     - if: inputs.android == 'true'
       shell: bash
-      run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+      # The NDK is a gigabyte from Google's servers each run; a download cut short failed a lint job on main (2026-10-19).
+      run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' ${{ inputs.ndk == 'true' && '''ndk;28.2.13676358''' || '' }}
     - if: inputs.cross == 'true'
       shell: bash
       run: |

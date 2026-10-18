@@ -336,6 +336,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           android: 'true'
+          ndk: 'false'
       - uses: ./.github/actions/natives
       - uses: actions/cache@v4
         with:
