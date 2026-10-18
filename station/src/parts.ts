@@ -4,20 +4,31 @@
 // the overview and its tools for the agents. Nothing registers itself: a part is in the station because main.ts names
 // it, and says what it adds as it is made. What is said here is read as it is asked for (a request, an agent's tool
 // list), so the admin API and the agents, made before the parts, take what they add.
-import type { Route } from "./api/admin.ts";
+import type { Route, Tools } from "./api/admin.ts";
+import type { Connection } from "./mesh/native.ts";
 import type { Lang } from "./ops/i18n.ts";
 import type { Viewer } from "./mesh/credential.ts";
 import type { Tool } from "./tools/mcp.ts";
 
 export class StationParts {
-  readonly #routes: Route[] = [];
+  readonly #routes: (Route[] | ((tools: Tools) => Route[]))[] = [];
+  /// The routes as made for an admin API's tools, and how many parts' routes they were made of.
+  readonly #made = new WeakMap<Tools, { of: number; routes: Route[] }>();
+  readonly #alpns: { alpn: Buffer; serve: (conn: Connection) => Promise<void> }[] = [];
   readonly #viewerMay: ((r: { method: string; path: string }) => boolean)[] = [];
   readonly #overview = new Map<string, (viewer: Viewer, lang: Lang) => unknown>();
   readonly #tools: Tool[] = [];
 
-  /// A part's routes of the admin API (after the platform's own).
-  routes(routes: Route[]): void {
-    this.#routes.push(...routes);
+  /// A part's routes of the admin API (after the platform's own); made with what the admin API's routes are given
+  /// (its readers, the store, the events), where they need it.
+  routes(routes: Route[] | ((tools: Tools) => Route[])): void {
+    this.#routes.push(routes);
+  }
+
+  /// A protocol of the station's mesh endpoint a part answers itself (a published chat's visitors, say): its
+  /// connections, whoever makes them; it checks what it lets them have.
+  alpn(alpn: Buffer, serve: (conn: Connection) => Promise<void>): void {
+    this.#alpns.push({ alpn, serve });
   }
 
   /// Which of a part's requests besides reads a read-only member may make (their own marks, say).
@@ -38,8 +49,17 @@ export class StationParts {
 
   // ── what is asked of them ──
 
-  allRoutes(): readonly Route[] {
-    return this.#routes;
+  allRoutes(tools: Tools): readonly Route[] {
+    let made = this.#made.get(tools);
+    if (!made || made.of !== this.#routes.length) {
+      made = { of: this.#routes.length, routes: this.#routes.flatMap((r) => (typeof r === "function" ? r(tools) : r)) };
+      this.#made.set(tools, made);
+    }
+    return made.routes;
+  }
+
+  allAlpns(): readonly { alpn: Buffer; serve: (conn: Connection) => Promise<void> }[] {
+    return this.#alpns;
   }
 
   mayView(r: { method: string; path: string }): boolean {
