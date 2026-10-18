@@ -10,6 +10,7 @@ import { LargeTitle, SectionHeader, Seg, TopBack } from "./parts.tsx";
 import { Waiting } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Settings.css.ts";
+import * as chatCss from "../styles/chat.css.ts";
 
 export function ArchivingScreen() {
   const app = useApp();
@@ -57,7 +58,7 @@ function StationArchivingForm({ s, view }: { s: StationView; view: ArchivingView
     <SectionHeader title={s.name} start={24} />
     <div className={css.mSegNote}>
       {review.text}{" · "}
-      <a href={app.at("/settings/automatic-decisions/completion")} onClick={(e) => { e.preventDefault(); app.push(app.at("/settings/automatic-decisions/completion")); }}>{t("web-pages.archiving.reviewGo")}</a>
+      <a className={chatCss.inlineLink} href={app.at("/settings/automatic-decisions/completion")} onClick={(e) => { e.preventDefault(); app.push(app.at("/settings/automatic-decisions/completion")); }}>{t("web-pages.archiving.reviewGo")}</a>
     </div>
     <div style={{ padding: "8px 12px 0" }}>
       <Seg options={MODES.map(modeLabel)} selected={MODES.indexOf(mode)} onSelect={(i) => { if (!locked) save(view, modePatch(view, MODES[i]!)); }} height={34} fill />

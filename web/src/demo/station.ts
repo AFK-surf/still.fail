@@ -37,6 +37,8 @@ export const overview = () => {
     // Its Codex login, not a profile yet: offered (the profiles' last section).
     machineLogins: base.machineLogins.filter((l) => l.runtime !== "claude").map((l) => ({ ...l, offered: true })),
     profiles: [subscription(base.profiles[0]!)],
+    // As a station sets it out of the box (设置 › 归档).
+    archiving: { days: 1, slackDays: 3, reviewed: false, canEdit: true },
   };
 };
 export const host = () => withMeters(now(data.host));

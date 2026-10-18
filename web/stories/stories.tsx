@@ -612,6 +612,7 @@ export const stories: Story[] = [
     </div>),
   },
   { id: "settings-changelog", group: "设置", title: "更新日志", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "更新日志" }] },
+  { id: "settings-archive", group: "设置", title: "归档", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "归档" }] },
   { id: "settings-decisions", group: "设置", title: "自动决策", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "自动决策" }] },
   { id: "settings-memory", group: "设置", title: "记忆", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }] },
   { id: "settings-memory-skill", group: "设置", title: "记忆 · 项目", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "acme-web" }] },

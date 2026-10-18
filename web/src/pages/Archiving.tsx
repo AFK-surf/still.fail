@@ -50,7 +50,7 @@ function StationArchivingForm({ workspace, s, view, review }: { workspace: strin
   const mode = modeOf(view);
   const locked = !view.canEdit || busy;
   return (
-    <Section title={s.name} description={<>{review.text}{" · "}<Link to={`/w/${workspace}/settings/automatic-decisions/completion`}>{t("web-pages.archiving.reviewGo")}</Link></>}>
+    <Section title={s.name} description={<>{review.text}{" · "}<Link className={chatCss.inlineLink} to={`/w/${workspace}/settings/automatic-decisions/completion`}>{t("web-pages.archiving.reviewGo")}</Link></>}>
       <div className={chatCss.appearanceSetting}>
         <Segmented label={t("web-pages.archiving.auto.title")} value={mode} onChange={(m) => save(view, modePatch(view, m))}
           options={MODES.map((m) => ({ value: m, label: modeLabel(m), disabled: locked }))} />
