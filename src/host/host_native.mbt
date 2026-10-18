@@ -13,6 +13,10 @@ extern "C" fn ffi_run(
 
 extern "C" fn ffi_now() -> Double = "mb_host_now"
 
+extern "C" fn ffi_event_time() -> Double = "mb_host_event_time"
+
+extern "C" fn ffi_platform() -> Int = "mb_host_platform"
+
 extern "C" fn ffi_request_frame() -> Unit = "mb_host_request_frame"
 
 extern "C" fn ffi_wake_after(ms : Double) -> Unit = "mb_host_wake_after"
@@ -96,6 +100,20 @@ pub fn run(
 ///|
 pub fn now() -> Double {
   ffi_now()
+}
+
+///|
+/// When the input event being delivered happened, on now()'s clock (ms):
+/// a touch's own time, which comes before it is handled (a frame's touches
+/// are handled together); negative when the host doesn't say.
+pub fn event_time() -> Double {
+  ffi_event_time()
+}
+
+///|
+/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser.
+pub fn platform() -> Int {
+  ffi_platform()
 }
 
 ///|

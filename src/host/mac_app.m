@@ -123,22 +123,26 @@ static int frames_drawn;
 - (NSPoint)pt:(NSEvent *)e {
   return [self convertPoint:e.locationInWindow fromView:nil];
 }
+// the event's own time (seconds since startup, CACurrentMediaTime's clock) while MoonBit handles it
+static double event_time = -1;
+static void mouse(int kind, NSPoint p, NSEvent *e) {
+  event_time = e.timestamp * 1000.0;
+  mb_cb.pointer(kind, p.x, p.y, 0);
+  event_time = -1;
+}
 - (void)mouseDown:(NSEvent *)e {
   NSPoint p = [self pt:e];
   [self.window makeFirstResponder:self];
-  mb_cb.pointer(0, p.x, p.y, 0);
+  mouse(0, p, e);
 }
 - (void)mouseDragged:(NSEvent *)e {
-  NSPoint p = [self pt:e];
-  mb_cb.pointer(1, p.x, p.y, 0);
+  mouse(1, [self pt:e], e);
 }
 - (void)mouseMoved:(NSEvent *)e {
-  NSPoint p = [self pt:e];
-  mb_cb.pointer(1, p.x, p.y, 0);
+  mouse(1, [self pt:e], e);
 }
 - (void)mouseUp:(NSEvent *)e {
-  NSPoint p = [self pt:e];
-  mb_cb.pointer(2, p.x, p.y, 0);
+  mouse(2, [self pt:e], e);
 }
 - (void)otherMouseUp:(NSEvent *)e {
   if (e.buttonNumber == 3) go_back();
@@ -443,6 +447,10 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
 }
 
 double mb_host_now(void) { return mb_now_ms(); }
+
+double mb_host_event_time(void) { return event_time; }
+
+int32_t mb_host_platform(void) { return 0; }
 
 void mb_host_request_frame(void) { [the_view requestFrame]; }
 

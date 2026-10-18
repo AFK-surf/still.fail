@@ -3,7 +3,8 @@
 //
 // `mode`: "home" (signed in, the chats), "signin" (signed out), "loading" (the list being read), "empty" (a
 // workspace with nothing in it yet); "chat" (the first row's chat open: chat_fixture.mbt), "chat-loading" (it being
-// read), "chat-long" (thousands of messages in it).
+// read), "chat-long" (thousands of messages in it); "long" (the chats and many weeks more of them: for flinging,
+// scripts/android.sh fling-test).
 
 ///|
 priv struct Fixture {
@@ -158,11 +159,26 @@ fn fixture_days(f : Fixture) -> Array[Json] {
   let keep = fn(items : Array[Json]) -> Json {
     Json::array(items.filter(fn(r) { !f.archived.contains(text(Some(r), "id")) }))
   }
-  [
+  let days : Array[Json] = [
     { "daysAgo": 0, "at": 0, "label": "今天", "items": keep(today) },
     { "daysAgo": 1, "at": 0, "label": "昨天", "items": keep(yesterday) },
     { "daysAgo": 4, "at": 0, "label": "星期三", "items": keep(earlier) },
   ]
+  if f.mode == "long" {
+    // weeks more, six chats a day, every word made up
+    let topics = ["例会的记录", "接口的命名", "图标的尺寸", "崩溃的日志", "发布的说明", "测试的清单"]
+    let states = ["做完了", "等你回复", "监控中：每小时看一次", "写到一半", "要你帮忙看一眼", "已经交给评审"]
+    for d in 0..<40 {
+      let items = Array::makei(6, fn(k) {
+        let n = d * 6 + k + 11
+        row("c\{n}", "第 \{n} 个：" + topics[k], if k % 2 == 0 { "ws1/st1" } else { "ws1/st2" }, "\{d + 5} 天前", {
+          "stateText": Json::string(states[(d + k) % 6]),
+        })
+      })
+      days.push({ "daysAgo": Json::number((d + 5).to_double()), "at": 0, "label": Json::string("\{d + 5} 天前"), "items": keep(items) })
+    }
+  }
+  days
 }
 
 ///|

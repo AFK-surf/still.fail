@@ -432,6 +432,10 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
 
 double mb_host_now(void) { return mb_now_ms(); }
 
+double mb_host_event_time(void) { return -1; }
+
+int32_t mb_host_platform(void) { return 3; }
+
 void mb_host_request_frame(void) { want_frame = 1; }
 
 void mb_app_wake(void) { PostMessageW(hwnd, WM_APP, 0, 0); }

@@ -116,21 +116,29 @@ static void run_script_step(int step);
 
 // ---- touch ----
 
+// Each touch at its own time (UITouch.timestamp: seconds since startup, CACurrentMediaTime's clock), which MoonBit
+// asks for while handling it; a move with the samples coalesced into it (120 Hz digitizers), each at its time.
+static double event_time = -1;
+static void touch(int kind, UITouch *t, UIView *v) {
+  CGPoint p = [t locationInView:v];
+  event_time = t.timestamp * 1000.0;
+  mb_cb.pointer(kind, p.x, p.y, 0);
+  event_time = -1;
+}
 - (void)touchesBegan:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  CGPoint p = [t.anyObject locationInView:self];
-  mb_cb.pointer(0, p.x, p.y, 0);
+  touch(0, t.anyObject, self);
 }
 - (void)touchesMoved:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  CGPoint p = [t.anyObject locationInView:self];
-  mb_cb.pointer(1, p.x, p.y, 0);
+  UITouch *u = t.anyObject;
+  NSArray<UITouch *> *all = [e coalescedTouchesForTouch:u];
+  if (all.count == 0) all = @[ u ];
+  for (UITouch *c in all) touch(1, c, self);
 }
 - (void)touchesEnded:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  CGPoint p = [t.anyObject locationInView:self];
-  mb_cb.pointer(2, p.x, p.y, 0);
+  touch(2, t.anyObject, self);
 }
 - (void)touchesCancelled:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  CGPoint p = [t.anyObject locationInView:self];
-  mb_cb.pointer(3, p.x, p.y, 0);
+  touch(3, t.anyObject, self);
 }
 
 // ---- hardware keys ----
@@ -376,6 +384,10 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
 }
 
 double mb_host_now(void) { return mb_now_ms(); }
+
+double mb_host_event_time(void) { return event_time; }
+
+int32_t mb_host_platform(void) { return 1; }
 
 void mb_host_request_frame(void) { [the_view requestFrame]; }
 

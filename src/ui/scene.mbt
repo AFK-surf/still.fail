@@ -260,10 +260,28 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     clip_stack.push(dmin(n.x + n.fw, cx1))
     clip_stack.push(dmin(n.y + n.fh, cy1))
   }
+  let first_inst = self.ninst
   let mut c = n.first
   while c >= 0 {
     self.paint(c, alpha)
     c = self.nodes[c].next
+  }
+  if n.kind == kind_list {
+    // Android's stretch past an end (scroll.mbt)
+    match self.lists.get(n.id) {
+      Some(st) if st.over > 0.0 => {
+        let k = clip_stack.length() - 4
+        self.stretch_rows(
+          st,
+          first_inst,
+          n.y,
+          n.fh,
+          clip_stack[k + 1],
+          clip_stack[k + 3],
+        )
+      }
+      _ => ()
+    }
   }
   if clipped {
     for _ in 0..<4 {

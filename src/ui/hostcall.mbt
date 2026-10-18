@@ -15,6 +15,8 @@ struct FakeHost {
   mut clipboard : String
   // whether the app takes back (a page to go back to), as last told
   mut back_on : Bool
+  // the system it plays (as @host.platform: 0 macOS, 1 iOS, 2 Android)
+  platform : Int
   logs : Array[String]
   // images: sources the test made up, with their size in pixels; loads
   // asked for (source, max_px); decodes, ready from the next frame on
@@ -59,6 +61,39 @@ fn h_now() -> Double {
     None => @host.now()
   }
 }
+
+///|
+/// When the input event being handled happened (the host's, else now).
+fn h_event_time() -> Double {
+  match fake.val {
+    Some(f) => f.time
+    None => {
+      let t = @host.event_time()
+      if t >= 0.0 {
+        t
+      } else {
+        @host.now()
+      }
+    }
+  }
+}
+
+///|
+fn h_platform() -> Int {
+  match fake.val {
+    Some(f) => f.platform
+    None => {
+      if host_platform.val < 0 {
+        host_platform.val = @host.platform()
+      }
+      host_platform.val
+    }
+  }
+}
+
+///|
+/// The host's system, asked once.
+let host_platform : Ref[Int] = { val: -1 }
 
 ///|
 fn h_request_frame() -> Unit {

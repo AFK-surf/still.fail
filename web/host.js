@@ -366,18 +366,25 @@
     return [e.clientX - r.left, e.clientY - r.top];
   }
 
+  // a pointer event, with its own time (performance.now's clock) while MoonBit handles it
+  let evT = -1;
+  function ptr(kind, e, button) {
+    const [x, y] = pos(e);
+    evT = e.timeStamp;
+    try { cb.pointer(kind, x, y, button); } finally { evT = -1; }
+  }
+
   function setupInput() {
     canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       canvas.setPointerCapture(e.pointerId);
-      const [x, y] = pos(e);
-      cb.pointer(0, x, y, e.button);
+      ptr(0, e, e.button);
       // keep the keyboard on the textarea while an editor has focus
       if (imeActive) ta.focus({ preventScroll: true });
     });
-    canvas.addEventListener('pointermove', (e) => { const [x, y] = pos(e); cb.pointer(1, x, y, 0); });
-    canvas.addEventListener('pointerup', (e) => { const [x, y] = pos(e); cb.pointer(2, x, y, 0); });
-    canvas.addEventListener('pointercancel', (e) => { const [x, y] = pos(e); cb.pointer(3, x, y, 0); });
+    canvas.addEventListener('pointermove', (e) => ptr(1, e, 0));
+    canvas.addEventListener('pointerup', (e) => ptr(2, e, 0));
+    canvas.addEventListener('pointercancel', (e) => ptr(3, e, 0));
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1;
@@ -423,6 +430,7 @@
   H.log = (s) => { console.log(s); window.__logs.push(s); };
   H.benchMode = () => Number(params.get('bench') || 0);
   H.exit = (code) => { window.__done = code; document.title = 'DONE ' + code; };
+  H.eventTime = () => evT;
   H.memBytes = () => (performance.memory ? performance.memory.usedJSHeapSize : 0);
 
   // ---- back ----

@@ -17,8 +17,17 @@ fn ListState::scroll_to(self : ListState, item : Int) -> Unit {
   self.anchor = item
   self.anchor_off = 0.0
   self.pending = 0.0
-  self.vel = 0.0
+  self.stop()
+  self.unstretch()
   self.at_end = false
+}
+
+///|
+fn ListState::unstretch(self : ListState) -> Unit {
+  self.over = 0.0
+  self.over_edge = 0
+  self.over_state = 0
+  self.over_v = 0.0
 }
 
 ///|
@@ -28,7 +37,8 @@ fn ListState::scroll_to_end(self : ListState) -> Unit {
   self.anchor = 1 << 30
   self.anchor_off = 1.0e9
   self.pending = 0.0
-  self.vel = 0.0
+  self.stop()
+  self.unstretch()
   self.at_end = true
 }
 
@@ -112,6 +122,19 @@ pub fn Ctx::list(
         owner: self.owner,
         below: 1.0e9,
         glide: false,
+        fling: 0,
+        fling_v: 0.0,
+        fling_t0: -1.0,
+        fling_dist: 0.0,
+        fling_dur: 0.0,
+        fling_done: 0.0,
+        drag_pending: 0.0,
+        held: false,
+        over: 0.0,
+        over_edge: 0,
+        over_state: 0,
+        over_v: 0.0,
+        over_t: -1.0,
       }
       self.lists[id] = s
       self.own(id)
@@ -128,16 +151,7 @@ pub fn Ctx::list(
   st.row = row
   st.seed = self.id_seed
   st.owner = self.owner
-  if st.vel != 0.0 {
-    st.pending = st.pending + st.vel * self.dt
-    st.vel = st.vel * 0.997.pow(self.dt)
-    st.last_scroll = self.now
-    if st.vel.abs() < 0.02 {
-      st.vel = 0.0
-    } else {
-      self.wants_frame = true
-    }
-  }
+  self.step_scroll(st)
   let i = self.alloc(kind_list)
   let n = self.nodes[i]
   n.id = id
@@ -218,6 +232,7 @@ fn Ctx::place_list(
     st.at_end = true
     st.vis_first = -1
     st.vis_last = -1
+    st.drag_pending = 0.0
     return
   }
   let nan = 0.0 / 0.0
@@ -234,7 +249,15 @@ fn Ctx::place_list(
   let mut bottom = 0.0
   let mut first = 0
   let mut last = 0
+  // how far what was scrolled went past the end and the start, and whether
+  // it did (a finger pulls with it, a fling stops there)
+  let mut blocked_end = 0.0
+  let mut blocked_top = 0.0
+  let mut hit_end = false
+  let mut hit_top = false
   if st.stick_end && st.at_end && st.pending >= 0.0 {
+    blocked_end = st.pending
+    hit_end = st.pending > 0.0
     // the last row's bottom on the view's
     let (r, h) = lay(st.count - 1, 0.0)
     self.shift(r, bottom_edge - h)
@@ -275,9 +298,8 @@ fn Ctx::place_list(
       top = top + d
       bottom = bottom_edge
       pinned_end = true
-      if st.vel > 0.0 {
-        st.vel = 0.0
-      }
+      blocked_end = blocked_end + d
+      hit_end = true
     }
     while top > iy && first > 0 {
       first = first - 1
@@ -295,12 +317,11 @@ fn Ctx::place_list(
       for r in top_rows {
         self.shift(r, d)
       }
+      blocked_top = blocked_top - d
+      hit_top = true
       top = iy
       bottom = bottom + d
       pinned_end = false
-      if st.vel < 0.0 {
-        st.vel = 0.0
-      }
     } else {
       break
     }
@@ -360,6 +381,27 @@ fn Ctx::place_list(
     } else {
       st.pending = ih
       self.wants_frame = true
+    }
+  }
+  // a finger pulls past the end it reached; a fling stops there
+  let drag = st.drag_pending
+  st.drag_pending = 0.0
+  if st.held {
+    if drag > 0.0 && blocked_end > 0.0 {
+      self.pull(st, -1, dmin(blocked_end, drag))
+    } else if drag < 0.0 && blocked_top > 0.0 {
+      self.pull(st, 1, dmin(blocked_top, -drag))
+    }
+  } else if st.vel > 0.0 && hit_end {
+    self.absorb(st, -1, st.vel)
+  } else if st.vel < 0.0 && hit_top {
+    self.absorb(st, 1, st.vel)
+  }
+  // iOS's rubber band moves the rows past the end
+  let off = st.over_offset()
+  if off != 0.0 {
+    for r in order {
+      self.shift(r, off)
     }
   }
 }
@@ -433,7 +475,7 @@ pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit 
   match self.lists.get(self.id(key)) {
     Some(st) => {
       if glide {
-        st.vel = 0.0
+        st.stop()
         st.glide = true
       } else {
         st.scroll_to_end()

@@ -28,6 +28,29 @@ struct ListState {
   mut below : Double
   // gliding to its end (Ctx::list_to_end), until there or scrolled
   mut glide : Bool
+  // a fling (scroll.mbt): its kind (0 the desktop's, coasting on `vel`; 1
+  // Android's spline; 2 iOS's deceleration), its velocity at the start (px
+  // per ms, positive down the list), when it started (-1: at the next
+  // frame), the spline's distance and duration, how far it has gone
+  mut fling : Int
+  mut fling_v : Double
+  mut fling_t0 : Double
+  mut fling_dist : Double
+  mut fling_dur : Double
+  mut fling_done : Double
+  // what a finger scrolled since the last layout, and whether one drags it
+  mut drag_pending : Double
+  mut held : Bool
+  // past an end: how far (Android: in the view's heights; iOS: points,
+  // pulled while held, shown while springing back), at which end (1 the
+  // top, -1 the bottom, 0 none), held (1) or springing back (2), its
+  // velocity outward (Android: pixels per second; iOS: points per ms), the
+  // spring's last step
+  mut over : Double
+  mut over_edge : Int
+  mut over_state : Int
+  mut over_v : Double
+  mut over_t : Double
 }
 
 ///|

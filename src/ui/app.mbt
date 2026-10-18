@@ -110,6 +110,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // lists build their rows while laid out, and those see clicks too
   c.layout(root, 0.0, 0.0, w, h) |> ignore
   c.clicked.clear()
+  if scroll_logging() {
+    c.log_scroll()
+  }
   let t2 = h_now()
   c.ninst = 0
   c.next_hit_ids.clear()
@@ -214,11 +217,22 @@ fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
 }
 
 ///|
+/// The pointer's track, for its velocity when let go (scroll.mbt).
+let track_x : Tracker = Tracker::new()
+
+///|
+let track_y : Tracker = Tracker::new()
+
+///|
 fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
   let c = g
   c.px = x
   c.py = y
-  let t = h_now()
+  // the event's own time: events handled together happened apart
+  let t = h_event_time()
+  if scroll_logging() {
+    h_log("TOUCH \{kind} \{t} \{x} \{y} \{h_now()}")
+  }
   if kind == 0 {
     c.down = true
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
@@ -231,13 +245,28 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
     c.last_t = t
     c.vel = 0.0
     c.dragging = false
+    track_x.reset()
+    track_y.reset()
+    track_x.add(t, x)
+    track_y.add(t, y)
     c.drag_scroll = hit_in(c.scroll_ids, c.scroll_rects, x, y)
-    match c.lists.get(c.drag_scroll) {
-      Some(st) => st.vel = 0.0
-      None => ()
-    }
     c.editor_drag = false
     c.edge = if c.on_edge(x, y) { 1 } else { 0 }
+    match c.lists.get(c.drag_scroll) {
+      // a list moving on its own (flung, springing back from an end) is
+      // caught: the finger drags it from there, and presses nothing in it
+      Some(st) if st.moving() => {
+        st.catch_up()
+        st.held = true
+        c.dragging = true
+        c.active = 0
+        c.edge = 0
+        h_request_frame()
+        return
+      }
+      Some(st) => st.stop()
+      None => ()
+    }
     match c.editors.get(target) {
       Some(st) => {
         c.focus = target
@@ -260,6 +289,8 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
   } else if kind == 1 {
     c.hover = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.down {
+      track_x.add(t, x)
+      track_y.add(t, y)
       if c.edge > 0 && c.edge_move(x, y, t) {
         ()
       } else if c.editor_drag {
@@ -275,27 +306,25 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
       } else if c.drag_scroll != 0 {
         // a pager follows the finger sideways, a list up and down
         let pager = pagers.contains(c.drag_scroll)
-        let moved = if pager { x - c.press_x } else { y - c.press_y }
-        if !c.dragging && moved.abs() > 6.0 {
-          c.dragging = true
-          c.active = 0
-        }
-        if c.dragging {
-          let dt = t - c.last_t
-          if pager {
-            let dx = x - c.last_x
-            c.pager_drag(c.drag_scroll, dx) |> ignore
-            if dt > 0.0 {
-              c.vel_x = c.vel_x * 0.4 + dx / dt * 0.6
-            }
-          } else {
-            let dy = y - c.last_y
-            c.scroll_list(c.drag_scroll, -dy)
-            if dt > 0.0 {
-              let v = -dy / dt
-              c.vel = c.vel * 0.4 + v * 0.6
+        if !c.dragging {
+          let moved = if pager { x - c.press_x } else { y - c.press_y }
+          let slop = touch_slop()
+          if moved.abs() > slop {
+            c.dragging = true
+            c.active = 0
+            // from where the slop ends, as Compose starts a drag: nothing
+            // jumps, and what moved past the slop is not lost
+            let past = if moved > 0.0 { moved - slop } else { moved + slop }
+            if pager {
+              c.pager_drag(c.drag_scroll, past) |> ignore
+            } else {
+              c.list_drag(c.drag_scroll, -past)
             }
           }
+        } else if pager {
+          c.pager_drag(c.drag_scroll, x - c.last_x) |> ignore
+        } else {
+          c.list_drag(c.drag_scroll, -(y - c.last_y))
         }
       }
       c.last_y = y
@@ -303,6 +332,10 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
       c.last_t = t
     }
   } else if kind == 2 {
+    if c.down {
+      track_x.add(t, x)
+      track_y.add(t, y)
+    }
     if c.edge == 2 {
       c.back_gesture(2, x, t)
     }
@@ -313,13 +346,14 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
     }
     if c.dragging {
       match c.lists.get(c.drag_scroll) {
-        Some(st) => if t - c.last_t < 80.0 { st.vel = dclamp(c.vel, -8.0, 8.0) }
+        Some(st) =>
+          c.release(st, dclamp(-track_y.velocity(), -max_fling, max_fling))
         None => ()
       }
       if pagers.contains(c.drag_scroll) {
         c.pager_release(
           c.drag_scroll,
-          if t - c.last_t < 80.0 { c.vel_x } else { 0.0 },
+          dclamp(track_x.velocity(), -max_fling, max_fling),
         )
       }
     }
@@ -332,11 +366,32 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
       c.back_gesture(3, x, t)
     }
     c.edge = 0
+    if c.dragging {
+      match c.lists.get(c.drag_scroll) {
+        Some(st) => c.release(st, 0.0)
+        None => ()
+      }
+      if pagers.contains(c.drag_scroll) {
+        c.pager_release(c.drag_scroll, 0.0)
+      }
+    }
     c.down = false
     c.dragging = false
     c.active = 0
   }
   h_request_frame()
+}
+
+///|
+/// A finger dragging list `id` by `d` (positive down the list).
+fn Ctx::list_drag(self : Ctx, id : Int, d : Double) -> Unit {
+  match self.lists.get(id) {
+    Some(st) => {
+      st.held = true
+      self.feed(st, d, 1)
+    }
+    None => ()
+  }
 }
 
 ///|
@@ -423,7 +478,7 @@ fn on_wheel(x : Double, y : Double, _dx : Double, dy : Double, _phase : Int) -> 
   let target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
   if target != 0 {
     match c.lists.get(target) {
-      Some(st) => st.vel = 0.0
+      Some(st) => st.stop()
       None => ()
     }
     c.scroll_list(target, dy)

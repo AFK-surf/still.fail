@@ -37,6 +37,8 @@ fn reset_globals() -> Unit {
   c.drag_scroll = 0
   c.dragging = false
   c.vel = 0.0
+  track_x.reset()
+  track_y.reset()
   c.editor_drag = false
   c.lists.clear()
   c.editors.clear()
@@ -67,11 +69,14 @@ fn reset_globals() -> Unit {
 /// A tester showing `view` in a window of w × h logical pixels; it has
 /// already drawn the first frame. `images`: sources views may load, with
 /// their size in pixels (others fail to load).
+/// `platform`: the system it plays, as @host.platform has them (0 macOS,
+/// 1 iOS, 2 Android: how lists scroll).
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
   h? : Double = 844.0,
   images? : Array[(String, Int, Int)] = [],
+  platform? : Int = 0,
 ) -> Tester {
   let f = {
     time: 1000.0,
@@ -84,6 +89,7 @@ pub fn Tester::new(
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
     back_on: false,
+    platform,
     logs: [],
     image_sizes: {},
     image_loads: [],
@@ -527,6 +533,49 @@ pub fn Tester::back_gesture(
   }
   on_back(if commit { 2 } else { 3 }, x, 1.0, 0)
   self.frame()
+}
+
+///|
+/// A finger event now on the tester's clock (kind 0 down, 1 moved, 2 up, 3
+/// called off), handled at once, no frame drawn: for touches between
+/// frames, at the times a host gives them.
+pub fn Tester::touch(self : Tester, kind : Int, x : Double, y : Double) -> Unit {
+  ignore(self)
+  on_pointer(kind, x, y, 0)
+}
+
+///|
+/// The clock moves on `ms`, no frame drawn.
+pub fn Tester::advance(self : Tester, ms : Double) -> Unit {
+  self.fake.time = self.fake.time + ms
+}
+
+///|
+/// The tester's clock (ms).
+pub fn Tester::time(self : Tester) -> Double {
+  self.fake.time
+}
+
+///|
+/// The (first) list's scroll position: how far its top is from its first
+/// row's.
+pub fn Tester::list_offset(self : Tester) -> Double {
+  self.list_state().offset()
+}
+
+///|
+/// How far the (first) list is pulled past an end: positive at the top,
+/// negative at the bottom (Android: in the list's heights; iOS: points).
+pub fn Tester::list_overscroll(self : Tester) -> Double {
+  let st = self.list_state()
+  st.over * st.over_edge.to_double()
+}
+
+///|
+/// Whether the (first) list moves on its own (a fling, an overscroll going
+/// back).
+pub fn Tester::list_moving(self : Tester) -> Bool {
+  self.list_state().moving()
 }
 
 ///|

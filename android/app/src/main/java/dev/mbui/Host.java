@@ -22,7 +22,7 @@ final class Host {
     static volatile int selStart, selEnd;
 
     static void requestFrame() {
-        if (view != null) view.requestRender();
+        if (view != null) view.wantFrame();
     }
 
     static void wakeAfter(double ms) {

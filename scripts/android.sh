@@ -206,6 +206,31 @@ case "${1:-build}" in
     echo "$log" | grep "core says\|core app call" | sed 's/^/  /' | tail -20
     exit $code
     ;;
+  fling-test)
+    # Flings the app's first list (the app built already; APP=sffix ENV=MBUI_FIXTURE=long shows a long Home) and
+    # records it: out/android/fling/fling.mp4, the app's log of touches and positions frame by frame (MBUI_SCROLL_LOG),
+    # and scripts/scrollplot.py's comparison with Compose's fling at the same velocities (fling.txt, fling.png when
+    # matplotlib is there: out/venv).
+    F=$OUT/fling
+    rm -rf $F && mkdir -p $F
+    $ADB -s $SERIAL logcat -c
+    $ADB -s $SERIAL shell screenrecord --time-limit 40 /sdcard/fling.mp4 &
+    REC=$!
+    # the flings are Script.java's (--es script fling): swipes at set speeds, as the system delivers a finger's
+    ENV="MBUI_SCROLL_LOG=1${ENV:+;$ENV}" "$0" run fling
+    for i in $(seq 1 60); do
+      $ADB -s $SERIAL logcat -d -s mbui:I | grep -q "script fling: done" && break
+      sleep 1
+    done
+    $ADB -s $SERIAL shell pkill -INT screenrecord || true
+    wait $REC || true
+    $ADB -s $SERIAL pull /sdcard/fling.mp4 $F/fling.mp4 >/dev/null
+    $ADB -s $SERIAL logcat -d -s mbui:I > $F/log.txt
+    PY=python3
+    [ -x out/venv/bin/python3 ] && PY=out/venv/bin/python3
+    $PY "$D/scrollplot.py" $F/log.txt $F/fling.png | tee $F/fling.txt
+    ls -la $F
+    ;;
   shot)
     mkdir -p $OUT/shots
     $ADB -s $SERIAL exec-out screencap -p > $OUT/shots/$2.png && echo "shot $OUT/shots/$2.png"

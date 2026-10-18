@@ -319,10 +319,20 @@ JNIEXPORT jboolean JNICALL Java_dev_mbui_Native_frame(JNIEnv *env, jclass c, jfl
   return want_frame ? JNI_TRUE : JNI_FALSE;
 }
 
+// A touch at its own time (MotionEvent.getEventTime, or a historical sample's: uptime ms, CLOCK_MONOTONIC as
+// mb_host_now), which MoonBit asks for while handling it (mb_host_event_time).
+static double event_time = -1;
+
 JNIEXPORT void JNICALL Java_dev_mbui_Native_pointer(JNIEnv *env, jclass c, jint kind, jfloat x,
-                                                   jfloat y) {
+                                                   jfloat y, jdouble t) {
+  event_time = t;
   if (cb.pointer) cb.pointer(kind, x, y, 0);
+  event_time = -1;
 }
+
+double mb_host_event_time(void) { return event_time; }
+
+int32_t mb_host_platform(void) { return 2; }
 
 JNIEXPORT void JNICALL Java_dev_mbui_Native_key(JNIEnv *env, jclass c, jint code, jint mods) {
   if (cb.key) cb.key(code, mods);

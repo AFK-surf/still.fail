@@ -14,6 +14,9 @@ extern "js" fn js_run(
 extern "js" fn js_now() -> Double =
   #|() => performance.now()
 
+extern "js" fn js_event_time() -> Double =
+  #|() => (globalThis.__mbhost && globalThis.__mbhost.eventTime) ? globalThis.__mbhost.eventTime() : -1
+
 extern "js" fn js_request_frame() -> Unit =
   #|() => globalThis.__mbhost.requestFrame()
 
@@ -105,6 +108,19 @@ pub fn run(
 ///|
 pub fn now() -> Double {
   js_now()
+}
+
+///|
+/// When the input event being delivered happened, on now()'s clock (ms);
+/// negative when the host doesn't say.
+pub fn event_time() -> Double {
+  js_event_time()
+}
+
+///|
+/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser.
+pub fn platform() -> Int {
+  4
 }
 
 ///|

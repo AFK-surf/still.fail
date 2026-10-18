@@ -2,19 +2,27 @@ package dev.mbui;
 
 import android.content.Context;
 import android.opengl.GLSurfaceView;
+import android.os.Looper;
 import android.text.InputType;
+import android.view.Choreographer;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 /**
  * The surface the MoonBit app draws on. Everything MoonBit runs on the GL
- * thread: frames there, and input is queued onto it.
+ * thread: frames there, and input is queued onto it. Frames are paced by the
+ * display's vsync (Choreographer), one per vsync at most, each told that
+ * vsync's time, as Compose's frames are: a frame asked for while touches are
+ * handled (the input phase of a vsync) is drawn at that vsync, one asked for
+ * by a frame (an animation) at the next.
  */
 public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private static boolean started;  // MoonBit's main runs once per process
@@ -49,18 +57,43 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         Native.resize(w, h);
     }
 
+    private double lastFrame;
+
     @Override
     public void onDrawFrame(GL10 gl) {
         float w = getWidth() / density, h = getHeight() / density;
-        boolean more = Native.frame(w, h, density, System.nanoTime() / 1e6);
-        if (more) requestRender();
+        // the vsync's time; a frame the system asked for (a resize) has none, and time never goes back
+        long v = vsyncNanos;
+        double now = v != 0 ? v / 1e6 : System.nanoTime() / 1e6;
+        if (now < lastFrame) now = lastFrame;
+        lastFrame = now;
+        boolean more = Native.frame(w, h, density, now);
+        if (more) wantFrame();
         Script.frameDrawn();
+    }
+
+    // ---- vsync ----
+
+    private volatile long vsyncNanos;
+    private final AtomicBoolean wanted = new AtomicBoolean();
+    private final Choreographer.FrameCallback vsync = t -> {
+        vsyncNanos = t;
+        wanted.set(false);
+        requestRender();
+    };
+    private final Runnable postVsync = () -> Choreographer.getInstance().postFrameCallback(vsync);
+
+    /** A frame at the next vsync (from any thread). */
+    void wantFrame() {
+        if (!wanted.compareAndSet(false, true)) return;
+        if (Looper.myLooper() == Looper.getMainLooper()) postVsync.run();
+        else Host.main.post(postVsync);
     }
 
     /** Runs r on the GL thread and asks for a frame. */
     void toGL(Runnable r) {
         queueEvent(r);
-        requestRender();
+        wantFrame();
     }
 
     // ---- input ----
@@ -75,10 +108,24 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             case MotionEvent.ACTION_CANCEL: kind = 3; break;
             default: return true;
         }
-        final float x = e.getX() / density, y = e.getY() / density;
+        // the samples batched into a move (MotionEvent's history) and the event itself, each at its own time
+        // (uptime ms, as Compose's PointerInputChange has them)
+        final int n = e.getHistorySize();
+        final float[] xs = new float[n + 1], ys = new float[n + 1];
+        final double[] ts = new double[n + 1];
+        for (int i = 0; i < n; i++) {
+            xs[i] = e.getHistoricalX(i) / density;
+            ys[i] = e.getHistoricalY(i) / density;
+            ts[i] = e.getHistoricalEventTime(i);
+        }
+        xs[n] = e.getX() / density;
+        ys[n] = e.getY() / density;
+        ts[n] = e.getEventTime();
         final int k = kind;
         if (kind == 0) requestFocus();
-        toGL(() -> Native.pointer(k, x, y));
+        toGL(() -> {
+            for (int i = 0; i <= n; i++) Native.pointer(i < n ? 1 : k, xs[i], ys[i], ts[i]);
+        });
         return true;
     }
 

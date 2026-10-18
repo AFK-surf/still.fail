@@ -51,11 +51,11 @@ struct Nav[P] {
   mut t0 : Double
   mut dur : Double
   mut curve : Curve
-  // a finger's: where it started, where it was last, how fast (px per ms)
+  // a finger's: where it started, how fast it went (px per ms), its track
+  // (for how fast, scroll.mbt)
   mut x0 : Double
-  mut last_x : Double
-  mut last_t : Double
   mut vel : Double
+  track : Tracker
   on_leave : (P) -> Unit
 }
 
@@ -75,9 +75,8 @@ pub fn[P] Nav::new(root : P, on_leave? : (P) -> Unit = fn(_) {  }) -> Nav[P] {
     dur: 0.0,
     curve: Standard,
     x0: 0.0,
-    last_x: 0.0,
-    last_t: 0.0,
     vel: 0.0,
+    track: Tracker::new(),
     on_leave,
   }
 }
@@ -197,24 +196,22 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
         self.mode = 3
         self.p = 0.0
         self.x0 = x
-        self.last_x = x
-        self.last_t = t
         self.vel = 0.0
+        self.track.reset()
+        self.track.add(t, x)
       }
     1 =>
       if self.mode == 3 {
         self.p = dclamp((x - self.x0) / w, 0.0, 1.0)
-        let dt = t - self.last_t
-        if dt > 0.0 {
-          self.vel = self.vel * 0.4 + (x - self.last_x) / dt * 0.6
-        }
-        self.last_x = x
-        self.last_t = t
+        self.track.add(t, x)
       }
     2 =>
       if self.mode == 3 {
         let dx = self.p * w
-        let flung = dx > 40.0 && self.vel > 0.6 && t - self.last_t < 80.0
+        // where it was let go counts too: held still first, it was not flung
+        self.track.add(t, x)
+        self.vel = self.track.velocity()
+        let flung = dx > 40.0 && self.vel > 0.6
         if self.p > 1.0 / 3.0 || flung {
           self.let_go()
         } else {

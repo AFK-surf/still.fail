@@ -2,4 +2,5 @@ import {
   "mbui/host",
   "mbui/text",
   "mbui/flex",
+  "moonbitlang/core/math",
 }
