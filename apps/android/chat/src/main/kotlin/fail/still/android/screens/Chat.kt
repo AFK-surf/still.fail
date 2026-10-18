@@ -1113,6 +1113,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             // Not taken by its agents yet: after a second it says it waits. Your next message soon after: under that one
             // instead, close under this.
             if (m.followed == true) {}
+            else if (m.blocked != null && m.blocked?.state != "installed") BlockedLine(m.blocked!!, ctx.station)
             else if (waitingNow) UnderWay(t("android-chat.chat.waitingAgent"))
             // Coming in with the words, when they fly here from the composer.
             else LocalFlight.current.let { f -> MessageTime(m.time?.get("createdAt"), if (f == null) Modifier else Modifier.graphicsLayer { alpha = f.e() }) }
@@ -1215,73 +1216,86 @@ private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
 /**
  * What still.fail itself says (web Chat.tsx → SystemNotice): a pill across the chat, in one line and no time, cut short
  * where it does not fit. A tap opens it: all its words, wrapped, and its time under it. The station begins its failures
- * with ⚠️; here a failure is a card instead (FailureNotice). A notice is a line of the UI, not prose: no 。 at its end.
+ * with ⚠️; here a failure is the pill in red instead. A notice is a line of the UI, not prose: no 。 at its end. One
+ * saying the station does not have the chat's runtime, with none of your messages waiting for it (those say it under
+ * them: BlockedLine), ends in installing it.
  */
 @Composable
 private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toProfile: (() -> Unit)?, install: fail.still.android.data.RuntimeInstall? = null, station: String = "") {
     val failed = remember(text) { Regex("^⚠️\\s*").find(text) }
     val said = remember(text) { (failed?.let { text.substring(it.range.last + 1) } ?: text).replace(Regex("。\\s*$"), "") }
     var open by remember { mutableStateOf(false) }
+    val dark = C.dark
+    // The web's --hover (the offline notice's grey), --red-bg and --red.
+    val ground = if (failed != null) (if (dark) Color(0xFF442322) else Color(0xFFFFF0EF)) else if (dark) Color.White.copy(alpha = 0.05f) else Color(0xFF262117).copy(alpha = 0.065f)
+    val ink = if (failed != null) (if (dark) Color(0xFFF68482) else Color(0xFFA12F35)) else chatInk().text
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (failed != null) FailureNotice(said, toProfile, install, station, open) { open = !open }
-        else {
-            // The web's --hover (the offline notice's grey).
-            val ground = if (C.dark) Color.White.copy(alpha = 0.05f) else Color(0xFF262117).copy(alpha = 0.065f)
-            val ink = chatInk().text
-            Box(
-                Modifier.clip(if (open) Smooth(16.dp) else RoundedCornerShape(50)).background(ground)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = !open }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-            ) {
-                if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
-                else Text(
-                    plain(said.lineSequence().firstOrNull { it.isNotBlank() } ?: said), fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+        val shape = if (open) Smooth(16.dp) else RoundedCornerShape(50)
+        Box(
+            Modifier.clip(shape).background(ground)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = !open }
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+        ) {
+            // In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page.
+            val colon = if (toProfile != null) said.indexOf('：').let { if (it >= 0) it else said.indexOf(':') } else -1
+            if (toProfile != null && colon >= 0) {
+                val linked = remember(said) {
+                    androidx.compose.ui.text.buildAnnotatedString {
+                        append(said.substring(0, colon + 1))
+                        withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("profile", androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(textDecoration = TextDecoration.Underline))) { toProfile() }) {
+                            append(said.substring(colon + 1))
+                        }
+                    }
+                }
+                Text(
+                    linked, fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
+                    maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis,
                 )
-            }
+            } else if (install != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(said, fontSize = 15.sp, lineHeight = 24.75.sp, color = ink, maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                InstallAction(install, station, 15.sp)
+            } else if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
+            else Text(
+                plain(said.lineSequence().firstOrNull { it.isNotBlank() } ?: said), fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
         }
         if (open) MessageTime(time)
     }
 }
 
 /**
- * A failure still.fail tells of (web Chat.tsx FailureNotice): a card of the chat's grey, its first words (to its colon) a
- * title in red over the rest, quiet, cut to two lines until it is opened. One about a profile (its sign-in failed) links
- * what went wrong to that profile's page. One saying the station does not have the chat's runtime ends in installing it
- * (a manager's button) and says how that goes in place of its own words (RuntimeInstall); once installed, the station
- * gives the agent what waits.
+ * Under your message that waits for a runtime the station does not have (web Chat.tsx BlockedLine, core `blocked`), in
+ * place of its waiting: how that stands, in red with a "!" while nothing is under way, and installing it. Once
+ * installed it waits again.
  */
 @Composable
-private fun FailureNotice(said: String, toProfile: (() -> Unit)?, install: fail.still.android.data.RuntimeInstall?, station: String, open: Boolean, toggle: () -> Unit) {
-    val app = LocalApp.current
-    val busy = install != null && app.isDoing("software.update", "station" to station, "id" to install.runtime)
-    val colon = remember(said) { Regex("[：:]\\s*").find(said) }
-    val title = install?.title ?: colon?.let { said.substring(0, it.range.first) } ?: said
-    val rest = colon?.let { said.substring(it.range.last + 1) } ?: ""
-    val detail = if (install?.title != null) install.detail else rest.ifEmpty { null }
-    val settled = install?.state == "installing" || install?.state == "installed"
-    val action = install?.action
-    Row(
-        Modifier.widthIn(max = 520.dp).clip(Smooth(if (action != null) 38.dp else 22.dp)).background(C.chip)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { toggle() }
-            .padding(20.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Column(Modifier.weight(1f, fill = false)) {
-            Text(title, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, color = if (settled) C.ink else C.red)
-            if (detail != null) {
-                val shown = if (toProfile != null && install == null) remember(detail) {
-                    androidx.compose.ui.text.buildAnnotatedString {
-                        withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("profile", androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(textDecoration = TextDecoration.Underline))) { toProfile() }) { append(detail) }
-                    }
-                } else androidx.compose.ui.text.AnnotatedString(detail)
-                Text(shown, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
-            }
-            install?.note?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted) }
+private fun BlockedLine(install: fail.still.android.data.RuntimeInstall, station: String) {
+    val stuck = install.state == "missing" || install.state == "failed"
+    val ink = if (stuck) C.red else chatMuted()
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (install.state == "installing") Spinner(inline = true)
+        else if (stuck) Box(Modifier.size(12.dp).clip(CircleShape).background(C.red), contentAlignment = Alignment.Center) {
+            Text("!", fontSize = 8.sp, lineHeight = 8.sp, fontWeight = FontWeight.Bold, color = C.bg)
         }
-        if (install?.state == "installing") Box(Modifier.align(Alignment.CenterVertically)) { Spinner(inline = true) }
-        if (install != null && action != null) OptionButton(action, strong = true, enabled = !busy, busy = busy) { app.act(action) { app.api(station).updateSoftware(install.runtime) } }
+        val words = install.title + (if (install.state == "installing" && install.percent != null) " ${install.percent}%" else "") +
+            (install.note?.takeIf { install.action == null }?.let { " · $it" } ?: "")
+        Text(words, fontSize = 10.sp, lineHeight = 16.sp, color = ink, modifier = Modifier.weight(1f, fill = false))
+        InstallAction(install, station, 10.sp)
     }
+}
+
+/** Installing a runtime the station does not have, a word after what says so (a manager's: core `action`). */
+@Composable
+private fun InstallAction(install: fail.still.android.data.RuntimeInstall, station: String, size: androidx.compose.ui.unit.TextUnit) {
+    val app = LocalApp.current
+    val action = install.action ?: return
+    val busy = app.isDoing("software.update", "station" to station, "id" to install.runtime)
+    Text(" · ", fontSize = size, color = chatMuted())
+    Text(
+        action, fontSize = size, fontWeight = FontWeight.SemiBold, color = if (busy) chatMuted() else chatInk().text,
+        modifier = Modifier.clickable(enabled = !busy) { app.act(action) { app.api(station).updateSoftware(install.runtime) } },
+    )
 }
 
 /** A spinner and a word, small, under a message of yours: waiting for its agents, or on its way (the chat's own size, not WaitLine's). */

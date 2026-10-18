@@ -72,29 +72,28 @@ export const msgSystemBox = style({
   minWidth: "0", maxWidth: "100%", padding: "6px 14px", borderRadius: "999px", background: vars.hover, color: vars.text,
   fontSize: vars.textUi, cursor: "pointer",
   selectors: {
+    "&[data-failed]": { background: vars.redBg, color: vars.red },
     "&[data-open]": { borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape },
   },
 });
 /**
- * A failure still.fail tells of (Chat.tsx FailureNotice): a settings card (pages.css.ts card, its corner from its
- * button when one is in it) as wide as its words, centred in the chat as a notice is; no red ground, its title in red.
+ * Under the viewer's message that waits for a runtime the station does not have (Chat.tsx BlockedLine), where its
+ * waiting is said: a red mark and words while nothing is under way (as a message not delivered is told), then installing
+ * it, a word in the text's colour.
  */
-export const failure = style({ width: "fit-content", minWidth: "min(100%, 320px)", maxWidth: "min(100%, 520px)", boxSizing: "border-box", cursor: "pointer", textAlign: "left" });
-/** Its words as tall as a button (title 20, then 16 a line): a button at its end stands CARD_PAD from the card's corner. */
-export const failureText = style({});
-export const failureAction = style({});
-export const failureTitle = style({
-  fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500", color: vars.red, overflowWrap: "anywhere",
-  selectors: { "&[data-settled]": { color: vars.text } },
+export const blocked = style({
+  display: "inline-flex", alignItems: "center", gap: "4px", maxWidth: "100%", flexWrap: "wrap", justifyContent: "flex-end",
+  selectors: { "&[data-stuck]": { color: vars.red } },
 });
-globalStyle(`${failure} ${failureText}`, { gap: "0" });
-globalStyle(`${failure} ${failureAction}`, { alignSelf: "flex-start" });
-/** What went wrong, quiet: two lines until the card is opened. */
-export const failureDetail = style({
-  fontSize: vars.textMeta, lineHeight: "16px", color: vars.muted, overflowWrap: "anywhere",
-  display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden",
-  selectors: { [`${failure}[data-open] &`]: { display: "block", WebkitLineClamp: "unset" } },
+export const blockedWords = style({ overflowWrap: "anywhere" });
+export const blockedDot = style({ color: vars.muted });
+export const blockedAction = style({
+  padding: "0", border: "0", background: "none", color: vars.text, font: "inherit", fontWeight: "600", cursor: "pointer",
+  selectors: { "&:hover:not(:disabled)": { textDecoration: "underline", textUnderlineOffset: "3px" }, "&:disabled": { opacity: ".5", cursor: "default" } },
 });
+// In a notice (one with none of the viewer's messages waiting for it): apart from its words, in the pill's colour.
+globalStyle(`${msgSystemBox} ${blockedDot}`, { margin: "0 6px", color: "inherit", opacity: ".6" });
+globalStyle(`${msgSystemBox} ${blockedAction}`, { color: "inherit", textDecoration: "underline", textUnderlineOffset: "3px" });
 /** What went wrong in a notice about a profile: a link to that profile's page, in the pill's own colour, underlined. */
 export const msgSystemLink = style({ textDecoration: "underline", textUnderlineOffset: "3px" });
 globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit" });

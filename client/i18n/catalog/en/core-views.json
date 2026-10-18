@@ -194,6 +194,7 @@
   "core-views.install.installed": "{name} installed",
   "core-views.install.installing": "Installing {name}",
   "core-views.install.managers_only": "A workspace owner or admin needs to install it",
+  "core-views.install.missing": "{name} isn't installed on this station",
   "core-views.install.retry": "Retry",
   "core-views.joinable.offline": "offline",
   "core-views.joinable.needsLock": "{workspace} is in security mode. Turn on security mode in this workspace to add it.",

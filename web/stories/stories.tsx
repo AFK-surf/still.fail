@@ -476,14 +476,12 @@ export const stories: Story[] = [
 
   { id: "composer-cards", group: "对话", title: "输入框里的附件", render: () => stage(<ComposerCards />) },
   { id: "outbox-upload", group: "对话", title: "发出后还在上传的附件", render: () => stage(<OutboxUpload />) },
-  { id: "failure-turn", group: "对话", title: "出错", app: true, demo: installDemo("turn") },
   { id: "runtime-missing", group: "对话", title: "缺少运行时 · 安装", app: true, demo: installDemo("missing") },
   { id: "runtime-installing", group: "对话", title: "缺少运行时 · 正在安装", app: true, demo: installDemo("installing") },
   { id: "runtime-install-failed", group: "对话", title: "缺少运行时 · 安装失败", app: true, demo: installDemo("failed") },
-  { id: "runtime-installed", group: "对话", title: "缺少运行时 · 已安装", app: true, demo: installDemo("installed") },
   { id: "runtime-missing-member", group: "对话", title: "缺少运行时 · 成员", app: true, demo: installDemo("member") },
+  { id: "runtime-missing-notice", group: "对话", title: "缺少运行时 · 别人的消息", app: true, demo: installDemo("notice") },
   { id: "phone-runtime-missing", group: "对话", title: "手机 · 缺少运行时 · 安装", app: true, phone: true, demo: installDemo("missing") },
-  { id: "phone-failure-turn", group: "对话", title: "手机 · 出错", app: true, phone: true, demo: installDemo("turn") },
 
   // ── dialogs and toasts ──
   { id: "dialog", group: "弹窗", title: "弹窗", render: () => stage(<Dialog open title="添加 station" description="在要接入的机器上运行这条命令。" onClose={noop} footer={<><Button variant="ghost">取消</Button><Button variant="primary">完成</Button></>}><CopyCommand text="curl -fsSL https://still.fail/install.sh | sh" /></Dialog>) },

@@ -14,7 +14,7 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, chatDerive, down, installView, shownMessage } from "../src/views/views.ts";
+import { Views, betaOffered, blockedUnder, chatDerive, down, installView, shownMessage } from "../src/views/views.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -219,15 +219,26 @@ function plain(v: J): J {
 test("a notice that a runtime is not installed offers installing it as the station's updates have it", () => {
   const dsh = (over: J): J => ({ id: "dsh", name: "DeepSeek Harness", installed: false, updatable: true, state: "idle", ...over });
   // A manager can install it; a member is told who can; a station that cannot (no npm) says why.
-  assert.deepEqual(installView("dsh", [dsh({})], true), { runtime: "dsh", state: "missing", action: "安装" });
-  assert.deepEqual(installView("dsh", [dsh({})], false), { runtime: "dsh", state: "missing", note: "需由 workspace 的 owner 或管理员安装" });
-  assert.deepEqual(installView("dsh", [dsh({ updatable: false, note: "未找到 npm" })], true), { runtime: "dsh", state: "missing", note: "未找到 npm" });
+  assert.deepEqual(installView("dsh", [dsh({})], true), { runtime: "dsh", state: "missing", title: "此 station 尚未安装 DeepSeek Harness", action: "安装" });
+  assert.deepEqual(installView("dsh", [dsh({})], false), { runtime: "dsh", state: "missing", title: "此 station 尚未安装 DeepSeek Harness", note: "需由 workspace 的 owner 或管理员安装" });
+  assert.deepEqual(installView("dsh", [dsh({ updatable: false, note: "未找到 npm" })], true), { runtime: "dsh", state: "missing", title: "此 station 尚未安装 DeepSeek Harness", note: "未找到 npm" });
   // Installing, how far; failed, why, with trying again; then installed: each said in place of the notice's words.
   assert.deepEqual(installView("dsh", [dsh({ state: "updating", percent: 42 })], true), { runtime: "dsh", state: "installing", title: "正在安装 DeepSeek Harness", percent: 42 });
   assert.deepEqual(installView("dsh", [dsh({ state: "failed", message: "EACCES" })], true), { runtime: "dsh", state: "failed", title: "无法安装 DeepSeek Harness", detail: "EACCES", action: "重试" });
   assert.deepEqual(installView("dsh", [dsh({ installed: true, version: "0.2.0" })], true), { runtime: "dsh", state: "installed", title: "已安装 DeepSeek Harness" });
   // A station older than its updates: nothing offered.
   assert.equal(installView("dsh", [], true), null);
+});
+
+test("a notice that a runtime is not installed is said under the viewer's message that waits for it", () => {
+  const install = { runtime: "dsh", state: "missing", title: "此 station 尚未安装 DeepSeek Harness", action: "安装" };
+  const said = (over: J): J => ({ seq: 1, mine: false, waiting: false, ...over });
+  // Folded into the last of the viewer's waiting before it (each notice of the runs that failed), gone from the chat.
+  const folded = blockedUnder([said({ seq: 1, mine: true }), said({ seq: 2, mine: true, waiting: true }), said({ seq: 3, system: true, install }), said({ seq: 4, system: true, install })]);
+  assert.deepEqual(folded.map((m) => [m.seq, m.blocked?.state ?? null]), [[1, null], [2, "missing"]]);
+  // None of the viewer's waits (someone else's in Slack): it stays a notice; installed and nothing waits, it is gone.
+  assert.deepEqual(blockedUnder([said({ seq: 1, waiting: true }), said({ seq: 2, system: true, install })]).map((m) => m.seq), [1, 2]);
+  assert.deepEqual(blockedUnder([said({ seq: 1, mine: true }), said({ seq: 2, system: true, install: { ...install, state: "installed" } })]).map((m) => m.seq), [1]);
 });
 
 test("canonical_and_legacy_station_notices_have_the_same_presentation", () => {

@@ -13,7 +13,7 @@ import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, Button, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
@@ -37,8 +37,7 @@ import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import type { ArchiveCheck, ChatAsk, ChatSentElsewhere, RuntimeInstall } from "./core/shapes.ts";
-import { DownloadChip } from "./Versions.tsx";
-import * as pagesCss from "./styles/pages.css.ts";
+import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
@@ -989,7 +988,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         <MineWords message={m} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). Their next
             message soon after: under that one instead, close under this. */}
-        {m.followed ? null : m.waiting
+        {m.followed ? null : m.blocked && m.blocked.state !== "installed" ? <BlockedLine install={m.blocked} /> : m.waiting
           ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><Spinner inline />{t("web-main.chat.waitingAgent")}</span>
           : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}
       </MineMessage>
@@ -1126,72 +1125,62 @@ export function PersonWords({ text }: { text: string }) {
 
 /**
  * What still.fail itself says: a pill across the chat, in one line and no time. A click opens it: all its words, wrapped,
- * and its time under it. The station begins its failures with ⚠️ (Slack shows it so); here a failure is a card instead
- * (FailureNotice).
+ * and its time under it. The station begins its failures with ⚠️ (Slack shows it so); here a failure is the pill in
+ * red instead. In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page.
+ * One saying the station does not have the chat's runtime, with none of the viewer's messages waiting for it (those say
+ * it under them: BlockedLine), ends in installing it.
  */
 function SystemNotice({ text, profile, install, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; install: RuntimeInstall | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
+  const station = useStation();
   const failed = /^⚠️\s*/u.exec(text);
   const words = failed ? text.slice(failed[0].length) : text;
   // A notice is a line of the UI, not prose: no 。 at its end (stations before 2026-09-30 wrote them as sentences).
   const said = words.replace(/。\s*$/u, "");
+  const colon = profile ? said.indexOf("：") : -1;
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((o) => !o);
   return (
     <div className={`${conversationCss.msg} ${css.msgSystem}`} data-vk={vk} data-ts={ts} data-role="system" data-enter={enter} data-caught={caught} role="note">
-      {failed
-        ? <FailureNotice said={said} profile={profile} install={install} open={open} toggle={toggle} />
-        : (
-          <div className={css.msgSystemBox} data-open={open || undefined} role="button" tabIndex={0} aria-expanded={open}
-            onClick={toggle} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
-            <div className={conversationCss.markdown}><Prose>{said}</Prose></div>
-          </div>
-        )}
+      <div className={css.msgSystemBox} data-failed={failed ? "" : undefined} data-open={open || undefined}
+        role="button" tabIndex={0} aria-expanded={open}
+        onClick={(e) => { if (!(e.target as Element).closest("a, button")) toggle(); }}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
+        <div className={conversationCss.markdown}>
+          {profile && colon >= 0
+            ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
+            : install ? <p>{said}<InstallAction install={install} /></p> : <Prose>{said}</Prose>}
+        </div>
+      </div>
       {open && <Time className={conversationCss.msgTime} stamp={time} />}
     </div>
   );
 }
 
 /**
- * A failure still.fail tells of: a card of the settings pages' (pages.css.ts), its first words (to its colon) a title in
- * red over the rest, quiet, cut to two lines until it is opened. One about a profile (its sign-in failed) links what went
- * wrong to that profile's page. One saying the station does not have the chat's runtime ends in installing it (a
- * manager's button) and says how that goes in place of its own words (RuntimeInstall); once installed, the station gives
- * the agent what waits.
+ * Under the viewer's message that waits for a runtime the station does not have (core `blocked`), in place of its
+ * waiting: how that stands, in red while nothing is under way, and installing it. Once installed it waits again.
  */
-function FailureNotice({ said, profile, install, open, toggle }: { said: string; profile: string | undefined; install: RuntimeInstall | undefined; open: boolean; toggle(): void }) {
+function BlockedLine({ install }: { install: RuntimeInstall }) {
+  const stuck = install.state === "missing" || install.state === "failed";
+  return (
+    <span className={`${conversationCss.msgTime} ${css.blocked}`} data-stuck={stuck || undefined} title={install.detail ?? install.note}>
+      {install.state === "installing" ? <Spinner inline /> : stuck && <span className={partsCss.failedMark} style={{ width: 12, height: 12, fontSize: 8 }} aria-hidden>!</span>}
+      <span className={css.blockedWords}>{install.title}{install.state === "installing" && install.percent != null && ` ${install.percent}%`}</span>
+      {install.note && !install.action && <><span className={css.blockedDot} aria-hidden>·</span><span className={css.blockedWords}>{install.note}</span></>}
+      <InstallAction install={install} />
+    </span>
+  );
+}
+
+/** Installing a runtime the station does not have, a word after what says so (a manager's: core `action`). */
+function InstallAction({ install }: { install: RuntimeInstall }) {
   const station = useStation().address;
-  const busy = useDoing("software.update", { station, id: install?.runtime ?? "" });
+  const busy = useDoing("software.update", { station, id: install.runtime });
   const api = useApi();
   const act = useAct();
-  const colon = /[：:]\s*/u.exec(said);
-  const title = install?.title ?? (colon ? said.slice(0, colon.index) : said);
-  const rest = colon ? said.slice(colon.index + colon[0].length) : "";
-  const detail = install?.title ? install.detail : rest;
-  // Under way or done, it is no failure any more.
-  const settled = install?.state === "installing" || install?.state === "installed";
-  return (
-    <div className={`${pagesCss.card} ${css.failure}`} data-open={open || undefined} role="button" tabIndex={0} aria-expanded={open}
-      onClick={(e) => { if (!(e.target as Element).closest("a, button")) toggle(); }}
-      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle(); } }}>
-      <div className={pagesCss.cardRow}>
-        <div className={`${pagesCss.cardRowText} ${css.failureText}`}>
-          <span className={css.failureTitle} data-settled={settled || undefined}>{title}</span>
-          {detail && (
-            <span className={css.failureDetail}>
-              {profile && !install
-                ? <Link className={css.msgSystemLink} to={`${stationBase(station)}/settings/accounts/${encodeURIComponent(profile)}`}>{detail}</Link>
-                : detail}
-            </span>
-          )}
-          {install?.note && <span className={css.failureDetail}>{install.note}</span>}
-        </div>
-        {install?.state === "installing" && (install.percent != null ? <DownloadChip percent={install.percent} /> : <Spinner inline />)}
-        {install?.action && (
-          <Button className={css.failureAction} variant="primary" busy={busy} disabled={busy} onClick={() => act(api.updateSoftware(install.runtime), install.action!)}>{install.action}</Button>
-        )}
-      </div>
-    </div>
-  );
+  const action = install.action;
+  if (!action) return null;
+  return <><span className={css.blockedDot} aria-hidden>·</span><button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} onClick={() => act(api.updateSoftware(install.runtime), action)}>{action}</button></>;
 }
 
 /** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says; `route` (where it

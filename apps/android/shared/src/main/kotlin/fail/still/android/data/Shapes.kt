@@ -1616,12 +1616,11 @@ data class RuntimeInstall (
 	val runtime: String,
 	/// missing | installing | failed | installed
 	val state: String,
-	/// Said in place of the notice's own first words while it installs, once it has, and when that failed (正在安装 X,
-	/// 已安装 X, 无法安装 X). Absent: the notice's own.
-	val title: String? = null,
-	/// With `title`: how far it is, or why it failed. Absent when nothing to say.
+	/// How it stands, in a line: 此 station 尚未安装 X, 正在安装 X, 无法安装 X, 已安装 X.
+	val title: String,
+	/// Why the install failed. Absent otherwise.
 	val detail: String? = null,
-	/// Not installable by the viewer from here: who can, or why the station cannot. Under the notice's words.
+	/// Not installable by the viewer from here: who can, or why the station cannot.
 	val note: String? = null,
 	/// The button's label (安装, 重试) when the viewer can install it now. Absent otherwise.
 	val action: String? = null,
@@ -1722,6 +1721,9 @@ data class ChatMessage (
 	/// With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older
 	/// than it.
 	val install: RuntimeInstall? = null,
+	/// In a chat's page: the viewer's message waiting for a runtime the station does not have (the notices saying so,
+	/// folded into it): said under it in place of its waiting, with installing it. Absent otherwise.
+	val blocked: RuntimeInstall? = null,
 	val by: MessageBy,
 	val waiting: Boolean,
 	/// In a chat's page: the viewer's, their next message sent soon after it (within 5 minutes of the time shown under a

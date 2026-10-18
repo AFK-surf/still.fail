@@ -158,6 +158,7 @@
   "core-views.install.installed": "已安装 {name}",
   "core-views.install.installing": "正在安装 {name}",
   "core-views.install.managers_only": "需由 workspace 的 owner 或管理员安装",
+  "core-views.install.missing": "此 station 尚未安装 {name}",
   "core-views.install.retry": "重试",
   "core-views.joinable.offline": "离线",
   "core-views.joinable.needsLock": "{workspace} 已开启安全模式，需在此 workspace 也开启安全模式后才能添加",

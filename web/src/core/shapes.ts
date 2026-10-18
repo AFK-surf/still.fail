@@ -1622,14 +1622,11 @@ export interface RuntimeInstall {
 	runtime: string;
 	/** missing | installing | failed | installed */
 	state: string;
-	/**
-	 * Said in place of the notice's own first words while it installs, once it has, and when that failed (正在安装 X,
-	 * 已安装 X, 无法安装 X). Absent: the notice's own.
-	 */
-	title?: string;
-	/** With `title`: how far it is, or why it failed. Absent when nothing to say. */
+	/** How it stands, in a line: 此 station 尚未安装 X, 正在安装 X, 无法安装 X, 已安装 X. */
+	title: string;
+	/** Why the install failed. Absent otherwise. */
 	detail?: string;
-	/** Not installable by the viewer from here: who can, or why the station cannot. Under the notice's words. */
+	/** Not installable by the viewer from here: who can, or why the station cannot. */
 	note?: string;
 	/** The button's label (安装, 重试) when the viewer can install it now. Absent otherwise. */
 	action?: string;
@@ -1735,6 +1732,11 @@ export interface ChatMessage {
 	 * than it.
 	 */
 	install?: RuntimeInstall;
+	/**
+	 * In a chat's page: the viewer's message waiting for a runtime the station does not have (the notices saying so,
+	 * folded into it): said under it in place of its waiting, with installing it. Absent otherwise.
+	 */
+	blocked?: RuntimeInstall;
 	by: MessageBy;
 	waiting: boolean;
 	/**
