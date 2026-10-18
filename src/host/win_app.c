@@ -465,3 +465,10 @@ double mb_host_mem_bytes(void) {
   if (!K32GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS *)&pmc, sizeof pmc)) return 0;
   return (double)pmc.PrivateUsage;
 }
+
+// ---- images: not decoded on this platform yet; every load fails ----
+
+int32_t mb_host_image_load(moonbit_string_t src, int32_t max_px) { (void)src; (void)max_px; return 0; }
+int32_t mb_host_image_load_bytes(moonbit_bytes_t data, int32_t max_px) { (void)data; (void)max_px; return 0; }
+int32_t mb_host_image_info(int32_t id, double *out) { (void)id; (void)out; return -1; }
+void mb_host_image_free(int32_t id) { (void)id; }

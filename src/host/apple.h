@@ -34,6 +34,9 @@ int mb_render_snapshot(const char *path);
 void mb_atlas_upload(int x, int y, int w, int h, const void *rgba);
 extern int mb_atlas_size;
 
+// images (apple_image.m): the texture of a decoded image, nil if not ready
+id<MTLTexture> mb_image_texture(int iid);
+
 // text (apple_text.m)
 extern double mb_text_scale;
 CTFontRef mb_platform_font(double size, int weight); // per platform

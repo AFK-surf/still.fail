@@ -178,3 +178,39 @@ pub fn exit(code : Int) -> Unit {
 pub fn mem_bytes() -> Double {
   js_mem_bytes()
 }
+
+///|
+extern "js" fn js_image_load(src : String, max_px : Int) -> Int =
+  #|(s, m) => globalThis.__mbhost.imageLoad(s, m)
+
+///|
+extern "js" fn js_image_load_bytes(data : Bytes, max_px : Int) -> Int =
+  #|(d, m) => globalThis.__mbhost.imageLoadBytes(d, m)
+
+///|
+extern "js" fn js_image_info(id : Int, out : FixedArray[Double]) -> Int =
+  #|(i, o) => globalThis.__mbhost.imageInfo(i, o)
+
+///|
+extern "js" fn js_image_free(id : Int) -> Unit =
+  #|(i) => globalThis.__mbhost.imageFree(i)
+
+///|
+pub fn image_load(src : String, max_px : Int) -> Int {
+  js_image_load(src, max_px)
+}
+
+///|
+pub fn image_load_bytes(data : Bytes, max_px : Int) -> Int {
+  js_image_load_bytes(data, max_px)
+}
+
+///|
+pub fn image_info(id : Int, out : FixedArray[Double]) -> Int {
+  js_image_info(id, out)
+}
+
+///|
+pub fn image_free(id : Int) -> Unit {
+  js_image_free(id)
+}

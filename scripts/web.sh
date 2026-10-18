@@ -1,16 +1,26 @@
 #!/bin/bash
-# Build the browser version: scripts/web.sh build | test
+# Build the browser version (APP=demo|photos): scripts/web.sh build | test
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 OUT=out/web
+APP=${APP:-demo}
 case "${1:-build}" in
   build)
     T0=$(python3 -c 'import time;print(time.time())')
     moon build --target js --release 2>&1 | python3 "$D/errs.py"
     mkdir -p $OUT
-    cp _build/js/release/build/demo/demo.js $OUT/demo.js
+    cp _build/js/release/build/$APP/$APP.js $OUT/demo.js
+    if [ $APP = photos ] && [ ! -f $OUT/photos/11.jpg ]; then
+      # JPEGs from macOS's desktop picture thumbnails
+      mkdir -p $OUT/photos
+      i=0
+      for f in "/System/Library/Desktop Pictures/.thumbnails/"*.heic; do
+        [ $i -lt 12 ] || break
+        sips -s format jpeg "$f" --out $OUT/photos/$i.jpg >/dev/null && i=$((i + 1))
+      done
+    fi
     cp web/index.html web/host.js $OUT/
     T1=$(python3 -c 'import time;print(time.time())')
     echo "built in $(python3 -c "print(round($T1-$T0,2))") s"

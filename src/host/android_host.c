@@ -350,3 +350,10 @@ double mb_host_mem_bytes(void) {
 JNIEXPORT jboolean JNICALL Java_dev_mbui_Native_snapshot(JNIEnv *env, jclass c, jstring path) {
   return JNI_FALSE;  // screenshots come from `adb exec-out screencap`
 }
+
+// ---- images: not decoded on this platform yet; every load fails ----
+
+int32_t mb_host_image_load(moonbit_string_t src, int32_t max_px) { (void)src; (void)max_px; return 0; }
+int32_t mb_host_image_load_bytes(moonbit_bytes_t data, int32_t max_px) { (void)data; (void)max_px; return 0; }
+int32_t mb_host_image_info(int32_t id, double *out) { (void)id; (void)out; return -1; }
+void mb_host_image_free(int32_t id) { (void)id; }

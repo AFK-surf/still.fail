@@ -34,7 +34,7 @@ static NSString *shader_src = @
 "  float2 corner = float2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0,\n"
 "                         (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);\n"
 "  int kind = int(I.p.y + 0.5);\n"
-"  float grow = kind == 2 ? I.p.w * 2.0 + 2.0 : (kind == 0 ? 1.0 : 0.0);\n"
+"  float grow = kind == 2 ? I.p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4) ? 1.0 : 0.0);\n"
 "  float2 pos = I.rect.xy - grow + corner * (I.rect.zw + 2.0 * grow);\n"
 "  VOut o;\n"
 "  o.pos = float4(pos.x / u.vp.x * 2.0 - 1.0, 1.0 - pos.y / u.vp.y * 2.0, 0.0, 1.0);\n"
@@ -42,7 +42,8 @@ static NSString *shader_src = @
 "  return o;\n"
 "}\n"
 "fragment float4 fmain(VOut in [[stage_in]], const device Inst* inst [[buffer(0)]],\n"
-"    constant U& u [[buffer(1)]], texture2d<float> atlas [[texture(0)]]) {\n"
+"    constant U& u [[buffer(1)]], texture2d<float> atlas [[texture(0)]],\n"
+"    texture2d<float> img [[texture(1)]]) {\n"
 "  Inst I = inst[in.iid];\n"
 "  float2 p = in.p;\n"
 "  if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard_fragment();\n"
@@ -60,6 +61,11 @@ static NSString *shader_src = @
 "  float r = min(I.p.x, min(hs.x, hs.y));\n"
 "  float2 q = abs(p - c) - hs + r;\n"
 "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n"
+"  if (kind == 4) {\n"
+"    constexpr sampler si(filter::linear, address::clamp_to_edge);\n"
+"    float2 uv = I.c2.xy + clamp((p - I.rect.xy) / I.rect.zw, 0.0, 1.0) * I.c2.zw;\n"
+"    return img.sample(si, uv) * (col.a * clamp(0.5 - d * u.scale, 0.0, 1.0));\n"
+"  }\n"
 "  if (kind == 2) {\n"
 "    float b = max(I.p.w, 0.5);\n"
 "    float a = 1.0 - smoothstep(-b, b, d);\n"
@@ -144,7 +150,20 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
     [enc setFragmentBuffer:buf offset:0 atIndex:0];
     [enc setFragmentBytes:&u length:sizeof(u) atIndex:1];
     [enc setFragmentTexture:atlas atIndex:0];
-    [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:count];
+    // one draw per run of instances showing the same image (slot 20; 0:
+    // none, the atlas stands in)
+    const float *f = (const float *)buf.contents;
+    int32_t start = 0;
+    while (start < count) {
+      int tid = (int)f[start * 24 + 20];
+      int32_t end = start + 1;
+      while (end < count && (int)f[end * 24 + 20] == tid) end++;
+      id<MTLTexture> t = tid ? mb_image_texture(tid) : nil;
+      [enc setFragmentTexture:(t ?: atlas) atIndex:1];
+      [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
+              instanceCount:end - start baseInstance:start];
+      start = end;
+    }
   }
   [enc endEncoding];
 }

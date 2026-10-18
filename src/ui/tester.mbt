@@ -48,16 +48,20 @@ fn reset_globals() -> Unit {
   text_cache.metrics.clear()
   text_cache.glyphs.clear()
   text_cache.generation = -1
+  image_cache.clear()
+  image_data.clear()
   bench.mode = 0
 }
 
 ///|
 /// A tester showing `view` in a window of w × h logical pixels; it has
-/// already drawn the first frame.
+/// already drawn the first frame. `images`: sources views may load, with
+/// their size in pixels (others fail to load).
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
   h? : Double = 844.0,
+  images? : Array[(String, Int, Int)] = [],
 ) -> Tester {
   let f = {
     time: 1000.0,
@@ -70,6 +74,12 @@ pub fn Tester::new(
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
     logs: [],
+    image_sizes: {},
+    image_loads: [],
+    images: {},
+  }
+  for im in images {
+    f.image_sizes[im.0] = (im.1, im.2)
   }
   fake.val = Some(f)
   reset_globals()
@@ -83,6 +93,13 @@ pub fn Tester::new(
 /// Draws one frame, `ms` after the previous one.
 pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
   self.fake.time = self.fake.time + ms
+  // decodes started last frame are done
+  for _, im in self.fake.images {
+    if im.state == 0 {
+      im.state = 1
+      self.fake.wants = true
+    }
+  }
   self.fake.wants = false
   on_frame(self.w, self.h, 2.0, self.fake.time)
   self.frames = self.frames + 1
@@ -443,4 +460,48 @@ pub fn Tester::press(self : Tester, name : String) -> Unit {
     _ => abort("no key \{name}")
   }
   self.key(code)
+}
+
+///|
+/// Makes up an image at `src`, `w` × `h` pixels, for views to load.
+pub fn Tester::add_image(self : Tester, src : String, w : Int, h : Int) -> Unit {
+  self.fake.image_sizes[src] = (w, h)
+}
+
+///|
+/// The images loaded so far: source and the size asked for.
+pub fn Tester::image_loads(self : Tester) -> Array[(String, Int)] {
+  self.fake.image_loads
+}
+
+///|
+/// How many decoded images are kept.
+pub fn Tester::images_kept(self : Tester) -> Int {
+  self.fake.images.length()
+}
+
+///|
+/// The image instances drawn in the last frame: (x, y, w, h, u0, v0, du,
+/// dv, opacity).
+pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
+  ignore(self)
+  let c = g
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if c.inst[b + 5] == 4.0 {
+      out.push([
+        c.inst[b],
+        c.inst[b + 1],
+        c.inst[b + 2],
+        c.inst[b + 3],
+        c.inst[b + 12],
+        c.inst[b + 13],
+        c.inst[b + 14],
+        c.inst[b + 15],
+        c.inst[b + 11],
+      ])
+    }
+  }
+  out
 }

@@ -14,6 +14,37 @@ struct FakeHost {
   mut ime_rect : (Double, Double, Double, Double)
   mut clipboard : String
   logs : Array[String]
+  // images: sources the test made up, with their size in pixels; loads
+  // asked for (source, max_px); decodes, ready from the next frame on
+  image_sizes : Map[String, (Int, Int)]
+  image_loads : Array[(String, Int)]
+  images : Map[Int, FakeImage]
+}
+
+///|
+priv struct FakeImage {
+  mut state : Int
+  w : Double
+  h : Double
+  ow : Double
+  oh : Double
+}
+
+///|
+fn fake_image(f : FakeHost, ow : Int, oh : Int, max_px : Int) -> Int {
+  let k = if ow > oh { max_px.to_double() / ow.to_double() } else { max_px.to_double() / oh.to_double() }
+  let k = if k > 1.0 { 1.0 } else { k }
+  let id = f.images.length() + 1
+  // the decode will be done by the next frame, which it asks for
+  f.wants = true
+  f.images[id] = {
+    state: if ow > 0 { 0 } else { -1 },
+    w: (ow.to_double() * k).round(),
+    h: (oh.to_double() * k).round(),
+    ow: ow.to_double(),
+    oh: oh.to_double(),
+  }
+  id
 }
 
 ///|
@@ -164,5 +195,56 @@ fn h_log(s : String) -> Unit {
   match fake.val {
     Some(f) => f.logs.push(s)
     None => @host.log(s)
+  }
+}
+
+///|
+fn h_image_load(src : String, max_px : Int) -> Int {
+  match fake.val {
+    Some(f) => {
+      f.image_loads.push((src, max_px))
+      let (w, h) = f.image_sizes.get(src).unwrap_or((0, 0))
+      fake_image(f, w, h, max_px)
+    }
+    None => @host.image_load(src, max_px)
+  }
+}
+
+///|
+fn h_image_load_bytes(data : Bytes, max_px : Int) -> Int {
+  match fake.val {
+    Some(f) => {
+      f.image_loads.push(("bytes:\{data.length()}", max_px))
+      fake_image(f, 400, 300, max_px)
+    }
+    None => @host.image_load_bytes(data, max_px)
+  }
+}
+
+///|
+fn h_image_info(id : Int, out : FixedArray[Double]) -> Int {
+  match fake.val {
+    Some(f) =>
+      match f.images.get(id) {
+        Some(im) => {
+          if im.state == 1 {
+            out[0] = im.w
+            out[1] = im.h
+            out[2] = im.ow
+            out[3] = im.oh
+          }
+          im.state
+        }
+        None => -1
+      }
+    None => @host.image_info(id, out)
+  }
+}
+
+///|
+fn h_image_free(id : Int) -> Unit {
+  match fake.val {
+    Some(f) => f.images.remove(id)
+    None => @host.image_free(id)
   }
 }

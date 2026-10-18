@@ -171,3 +171,43 @@ pub fn exit(code : Int) -> Unit {
 pub fn mem_bytes() -> Double {
   ffi_mem_bytes()
 }
+
+// Images: decoded off the UI thread to at most max_px on the long side,
+// kept as textures the renderer draws (instances of kind 4 name theirs in
+// slot 20). A decode that finishes requests a frame.
+
+#borrow(src)
+extern "C" fn ffi_image_load(src : String, max_px : Int) -> Int = "mb_host_image_load"
+
+#borrow(data)
+extern "C" fn ffi_image_load_bytes(data : Bytes, max_px : Int) -> Int = "mb_host_image_load_bytes"
+
+#borrow(out)
+extern "C" fn ffi_image_info(id : Int, out : FixedArray[Double]) -> Int = "mb_host_image_info"
+
+extern "C" fn ffi_image_free(id : Int) -> Unit = "mb_host_image_free"
+
+///|
+/// Starts decoding the image at `src` (a file path or an http(s) URL);
+/// returns its id.
+pub fn image_load(src : String, max_px : Int) -> Int {
+  ffi_image_load(src, max_px)
+}
+
+///|
+/// Starts decoding an encoded image (JPEG, PNG, HEIC, WebP…) in memory.
+pub fn image_load_bytes(data : Bytes, max_px : Int) -> Int {
+  ffi_image_load_bytes(data, max_px)
+}
+
+///|
+/// 0 while decoding, 1 when ready, -1 if it failed. Ready, `out` gets the
+/// decoded width and height and the original's, in pixels.
+pub fn image_info(id : Int, out : FixedArray[Double]) -> Int {
+  ffi_image_info(id, out)
+}
+
+///|
+pub fn image_free(id : Int) -> Unit {
+  ffi_image_free(id)
+}

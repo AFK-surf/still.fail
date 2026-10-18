@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the macOS app and run it. MODE=release|debug, then:
+# Build the macOS app and run it. MODE=release|debug, APP=demo|photos, then:
 #   scripts/mac.sh build | run [env...] | script ime | bench | shot
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
@@ -7,7 +7,8 @@ D="$(cd "$(dirname "$0")" && pwd)"
 cd "$D/.."
 MODE=${MODE:-release}
 FLAG=""; [ "$MODE" = release ] && FLAG=--release
-EXE=_build/native/$MODE/build/demo/demo.exe
+APP=${APP:-demo}
+EXE=_build/native/$MODE/build/$APP/$APP.exe
 case "${1:-build}" in
   build)
     /usr/bin/time -p moon build --target native $FLAG 2>&1 | python3 "$D/errs.py"

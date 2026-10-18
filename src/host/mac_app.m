@@ -281,6 +281,13 @@ static void run_script_step(int step) {
       case 141: exit(0);
     }
     [v requestFrame];
+  } else if (strcmp(script, "photos") == 0) {
+    // decodes take a while: shots once they have had time, then far down
+    if (step == 120) shot("photos-1");
+    if (step == 121) for (int i = 0; i < 30; i++) mb_cb.wheel(300, 300, 0, 200, 0);
+    if (step == 240) shot("photos-2");
+    if (step == 241) exit(0);
+    [v requestFrame];
   } else if (strcmp(script, "shot") == 0) {
     if (step == 30) shot("main");
     if (step == 31) exit(0);

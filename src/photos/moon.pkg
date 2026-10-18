@@ -1,0 +1,15 @@
+import {
+  "mbui/host",
+  "mbui/ui",
+}
+
+options(
+  "is-main": true,
+  targets: { "pictures_native.mbt": [ "native" ], "pictures_js.mbt": [ "js" ] },
+  link: {
+    "js": { "format": "iife" },
+    "native": {
+      "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO",
+    },
+  },
+)

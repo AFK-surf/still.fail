@@ -20,9 +20,12 @@ sync() {
   cp -rp src/. $M/src/
   sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp" ]/' \
       -e 's/-fobjc-arc *//' src/host/moon.pkg > $M/src/host/moon.pkg
-  sed -e '/"cc-link-flags"/d' src/demo/moon.pkg > $M/src/demo/moon.pkg
-  if ! grep -q win_app.c $M/src/host/moon.pkg || grep -q -e -framework -e '\.m"' $M/src/host/moon.pkg $M/src/demo/moon.pkg; then
-    echo "win.sh: src/host/moon.pkg or src/demo/moon.pkg no longer has the expected shape" >&2
+  # every app (demo, photos…) links no Apple frameworks
+  for p in src/*/moon.pkg; do
+    grep -q '"is-main"' $p && sed -e '/"cc-link-flags"/d' $p > $M/$p
+  done
+  if ! grep -q win_app.c $M/src/host/moon.pkg || grep -q -e -framework -e '\.m"' $M/src/*/moon.pkg; then
+    echo "win.sh: src/host/moon.pkg or an app's moon.pkg no longer has the expected shape" >&2
     exit 1
   fi
 }

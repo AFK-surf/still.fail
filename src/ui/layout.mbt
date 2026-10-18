@@ -45,6 +45,8 @@ fn leaf_size(
     let s = g.editor_display(n)
     let tl = layout_text(s, n.font_size, n.weight, max_w, true)
     (if wm == Undefined { tl.w } else { w }, tl.h)
+  } else if n.kind == kind_image {
+    image_leaf_size(n, w, wm, h, hm)
   } else {
     // a list fills what it is given, and has no height of its own
     (if wm == Undefined { 0.0 } else { w }, if hm == Exactly { h } else { 0.0 })
@@ -117,7 +119,10 @@ fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
       }
     Auto => ()
   }
-  if n.kind == kind_text || n.kind == kind_editor || n.kind == kind_list {
+  if n.kind == kind_text ||
+    n.kind == kind_editor ||
+    n.kind == kind_list ||
+    n.kind == kind_image {
     f.measure = n.leaf
   } else {
     let mut c = n.first

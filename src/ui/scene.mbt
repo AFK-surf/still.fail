@@ -2,8 +2,9 @@
 // each) that every renderer draws with one shader:
 //   0-3 rect x y w h · 4 radius · 5 kind · 6 border width · 7 blur
 //   8-11 color rgba · 12-15 border color, or the glyph's atlas rect
-//   16-19 clip x0 y0 x1 y1 · 20-23 unused
-// kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow, 3 color glyph.
+//   16-19 clip x0 y0 x1 y1 · 20 image id · 21-23 unused
+// kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow, 3 color glyph,
+// 4 image (12-15 its uv rect, 0-1).
 
 ///|
 let inst_size = 24
@@ -63,6 +64,7 @@ fn Ctx::push_inst(
   a[b + 17] = clip_stack[k + 1]
   a[b + 18] = clip_stack[k + 2]
   a[b + 19] = clip_stack[k + 3]
+  a[b + 20] = 0.0 // the image it shows, if any
   self.ninst = self.ninst + 1
 }
 
@@ -211,6 +213,10 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   if n.kind == kind_editor {
     self.paint_editor(n, alpha)
+    return
+  }
+  if n.kind == kind_image {
+    self.paint_image(n, alpha)
     return
   }
   if n.kind == kind_list {

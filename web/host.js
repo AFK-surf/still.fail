@@ -52,7 +52,7 @@
     int vid = gl_VertexID;
     vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);
     int kind = int(a_p.y + 0.5);
-    float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : (kind == 0 ? 1.0 : 0.0);
+    float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4) ? 1.0 : 0.0);
     vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);
     gl_Position = vec4(pos.x / u_vp.x * 2.0 - 1.0, 1.0 - pos.y / u_vp.y * 2.0, 0.0, 1.0);
     v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip;
@@ -63,6 +63,7 @@
   flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip;
   uniform float u_scale;
   uniform sampler2D u_atlas;
+  uniform sampler2D u_img;
   out vec4 o;
   void main() {
     vec2 p = v_pos;
@@ -80,6 +81,11 @@
     float r = min(v_p.x, min(hs.x, hs.y));
     vec2 q = abs(p - c) - hs + r;
     float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+    if (kind == 4) {
+      vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;
+      o = texture(u_img, uv) * (col.a * clamp(0.5 - d * u_scale, 0.0, 1.0));
+      return;
+    }
     if (kind == 2) {
       float b = max(v_p.w, 0.5);
       float a = 1.0 - smoothstep(-b, b, d);
@@ -150,7 +156,87 @@
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, atlasTex);
     gl.uniform1i(gl.getUniformLocation(prog, 'u_atlas'), 0);
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, n);
+    gl.uniform1i(gl.getUniformLocation(prog, 'u_img'), 1);
+    // one draw per run of instances showing the same image (slot 20); WebGL
+    // has no base instance, so the attributes start at the run instead
+    let start = 0;
+    while (start < n) {
+      const tid = f32[start * 24 + 20] | 0;
+      let end = start + 1;
+      while (end < n && (f32[end * 24 + 20] | 0) === tid) end++;
+      const im = tid ? images.get(tid) : null;
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
+      for (let i = 0; i < 5; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 96, start * 96 + i * 16);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - start);
+      start = end;
+    }
+  };
+
+  // ---- images ----
+  // Decoded by the browser off the main thread (createImageBitmap, which
+  // also applies the EXIF orientation), scaled to the size asked for, kept
+  // as premultiplied textures.
+  const images = new Map();
+  let nextImage = 0;
+  async function decodeImage(id, blob, maxPx) {
+    const im = images.get(id);
+    try {
+      let bmp = await createImageBitmap(blob);
+      const ow = bmp.width, oh = bmp.height;
+      const k = Math.min(1, maxPx / Math.max(ow, oh));
+      if (k < 1) {
+        const small = await createImageBitmap(bmp, {
+          resizeWidth: Math.max(1, Math.round(ow * k)),
+          resizeHeight: Math.max(1, Math.round(oh * k)),
+          resizeQuality: 'high',
+        });
+        bmp.close();
+        bmp = small;
+      }
+      if (!images.has(id)) return bmp.close();
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      Object.assign(im, { state: 1, tex, w: bmp.width, h: bmp.height, ow, oh });
+      bmp.close();
+    } catch (e) {
+      im.state = -1;
+    }
+    H.requestFrame();
+  }
+  H.imageLoad = (src, maxPx) => {
+    const id = ++nextImage;
+    images.set(id, { state: 0 });
+    fetch(src).then((r) => (r.ok ? r.blob() : Promise.reject(r.status)))
+      .then((b) => decodeImage(id, b, maxPx))
+      .catch(() => { const im = images.get(id); if (im) im.state = -1; H.requestFrame(); });
+    return id;
+  };
+  H.imageLoadBytes = (bytes, maxPx) => {
+    const id = ++nextImage;
+    images.set(id, { state: 0 });
+    decodeImage(id, new Blob([bytes]), maxPx);
+    return id;
+  };
+  H.imageInfo = (id, out) => {
+    const im = images.get(id);
+    if (!im) return -1;
+    if (im.state === 1) {
+      out[0] = im.w; out[1] = im.h; out[2] = im.ow; out[3] = im.oh;
+    }
+    return im.state;
+  };
+  H.imageFree = (id) => {
+    const im = images.get(id);
+    if (im && im.tex) gl.deleteTexture(im.tex);
+    images.delete(id);
   };
 
   // ---- text ----

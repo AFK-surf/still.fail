@@ -1,5 +1,5 @@
 options(
   targets: { "host_native.mbt": [ "native" ], "host_js.mbt": [ "js" ] },
-  "native-stub": [ "apple_render.m", "apple_text.m", "mac_app.m" ],
+  "native-stub": [ "apple_render.m", "apple_text.m", "apple_image.m", "mac_app.m" ],
   link: { "native": { "stub-cc-flags": "-fobjc-arc -O2" } },
 )

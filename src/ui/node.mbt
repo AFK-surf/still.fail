@@ -47,6 +47,9 @@ let kind_editor = 3
 let kind_scroll = 4
 
 ///|
+let kind_image = 5
+
+///|
 struct Node {
   mut kind : Int
   mut id : Int
@@ -82,6 +85,7 @@ struct Node {
   mut weight : Int
   mut color : Int64
   mut wrap : Bool
+  mut fit : Fit
   // layout results, absolute, in logical pixels
   mut x : Double
   mut y : Double
@@ -136,6 +140,7 @@ fn Node::new() -> Node {
     weight: 400,
     color: 0x000000FFL,
     wrap: true,
+    fit: FitCover,
     x: 0.0,
     y: 0.0,
     fw: 0.0,
@@ -185,6 +190,7 @@ fn Node::reset(self : Node) -> Unit {
   self.weight = 400
   self.color = 0x000000FFL
   self.wrap = true
+  self.fit = FitCover
   self.x = 0.0
   self.y = 0.0
   self.fw = 0.0

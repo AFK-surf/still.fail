@@ -93,6 +93,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   c.sync_ime()
   let t3 = h_now()
   h_present(c.inst, c.ninst)
+  c.trim_images()
   let t4 = h_now()
   c.t_build = t1 - t0
   c.t_layout = t2 - t1
