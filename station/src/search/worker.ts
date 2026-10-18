@@ -75,10 +75,10 @@ const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 /// A session's execution history indexed: marked as being read first, so one whose reading stops this thread (too
 /// large for its heap) is found so when it starts again, and passed over until it changes (sources.ts `historyDocs`).
-function history(key: string, profiles: ReturnType<typeof profilesOf>): void {
+async function history(key: string, profiles: ReturnType<typeof profilesOf>): Promise<void> {
   const source = `h:${key}`;
   const had = index.mark(source);
-  apply(source, historyDocs(s, key, profiles, had, () => index.setMark(source, READING), readings));
+  apply(source, await historyDocs(s, key, profiles, had, () => index.setMark(source, READING), readings));
 }
 
 /// Everything looked over: each thread, session and workspace indexed where it is not as it is now, and what is gone
@@ -108,7 +108,7 @@ async function sweep(): Promise<void> {
   for (const source of [...index.marked("h:"), ...index.marked("j:")]) if (!sessions.has(source.slice(2))) index.drop(source);
   for (const key of keys) {
     apply(`j:${key}`, jobDocs(s, key));
-    history(key, profiles);
+    await history(key, profiles);
     await tick();
   }
 }
@@ -150,7 +150,7 @@ async function pump(): Promise<void> {
       if (due) {
         histories.delete(due[0]);
         const profiles = profilesOf(config(), data);
-        history(due[0], profiles);
+        await history(due[0], profiles);
         await tick();
         continue;
       }

@@ -33,7 +33,7 @@ at = performance.now();
 const keys = sessionKeys(s);
 for (const key of keys) {
   index.replace(`j:${key}`, "1", jobDocs(s, key).docs);
-  const found = historyDocs(s, key, profiles, null);
+  const found = await historyDocs(s, key, profiles, null);
   if (found) index.replace(`h:${key}`, found.version, found.docs);
 }
 console.log(`sessions: ${keys.length} in ${took(at)}`);

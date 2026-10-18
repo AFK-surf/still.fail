@@ -743,20 +743,10 @@ function readFileOf(path: string): Buffer {
 /// TranscriptTail::read from the start: the timeline entries of every whole line (one still being written waits). Read
 /// a piece at a time, so a long transcript is never one string.
 export function readTimeline(runtime: RuntimeKind, path: string): TimelineEntry[] {
-  return readTimelineFrom(runtime, path, null);
-}
-
-/// Where a transcript was read to (its complete lines), and the reading's state there: read on from it as the file grows
-/// (`readTimelineFrom`). `offset` -1: a packed one (`.zst`), read whole once.
-export type ReadAt = { offset: number; state: ReadState };
-
-/// A transcript's entries from where `at` says it was read to (null: the whole of it), `at` moved to its last complete
-/// line: what a file that only grows added since.
-export function readTimelineFrom(runtime: RuntimeKind, path: string, at: ReadAt | null): TimelineEntry[] {
   const source = transcriptBytes(path);
   if (source === null) return [];
   const out: TimelineEntry[] = [];
-  const state: ReadState = at?.state ?? { inner: new Map() };
+  const state: ReadState = { inner: new Map() };
   const line = (bytes: Buffer) => {
     // str::lines: a line's \r before its \n goes; from_utf8_lossy.
     const text = new TextDecoder("utf-8").decode(bytes.at(-1) === 0x0d ? bytes.subarray(0, -1) : bytes);
@@ -778,23 +768,16 @@ export function readTimelineFrom(runtime: RuntimeKind, path: string, at: ReadAt 
     return Buffer.from(data);
   };
   if ("bytes" in source) {
-    // Read before (as it was, or as a file before it was put away: putting it away adds nothing).
-    if (at !== null && at.offset !== 0) {
-      at.offset = -1;
-      return [];
-    }
     lines(source.bytes, Buffer.alloc(0));
-    if (at !== null) at.offset = -1;
     return out;
   }
-  let carry: Buffer = Buffer.alloc(0);
-  const start = at !== null && at.offset > 0 && at.offset <= source.size ? at.offset : 0;
   try {
     const piece = Buffer.alloc(4 << 20);
-    for (let from = start; from < source.size; ) {
-      const n = readSync(source.file, piece, 0, Math.min(piece.length, source.size - from), from);
+    let carry: Buffer = Buffer.alloc(0);
+    for (let at = 0; at < source.size; ) {
+      const n = readSync(source.file, piece, 0, Math.min(piece.length, source.size - at), at);
       if (n === 0) break;
-      from += n;
+      at += n;
       carry = lines(piece.subarray(0, n), carry);
     }
   } catch {
@@ -803,6 +786,5 @@ export function readTimelineFrom(runtime: RuntimeKind, path: string, at: ReadAt 
   } finally {
     closeSync(source.file);
   }
-  if (at !== null) at.offset = source.size - carry.length;
   return out;
 }

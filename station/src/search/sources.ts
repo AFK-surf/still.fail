@@ -12,7 +12,8 @@ import { readdirSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import * as store from "../read/store.ts";
 import type { MessageRow, SessionRow, Store } from "../read/store.ts";
-import { type ReadAt, brief, readTimelineFrom, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
+import { type ReadState, brief, timelineOf, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
+import { readFrom } from "../usage/counter.ts";
 import { memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
 import { STILLFAIL_SURFACE } from "../read/store.ts";
@@ -184,6 +185,30 @@ export function transcriptFiles(s: Store, session: SessionRow, profiles: Profile
   return { paths, runtime, version: paths.map((p) => `${p}=${stamp(p)}`).join("|") };
 }
 
+/// Where a transcript was read to (its whole lines), and the reading's state there.
+type ReadAt = { offset: number; state: ReadState };
+
+/// A transcript's entries past where `at` says it was read to, `at` moved on to its last whole line: read in parts (a
+/// file put away decompressed as a stream), never the whole of it at once.
+async function readOn(runtime: NonNullable<ReturnType<typeof runtimeKind>>, path: string, at: ReadAt): Promise<TimelineEntry[]> {
+  const out: TimelineEntry[] = [];
+  for await (const part of readFrom(path, at.offset)) {
+    for (let line of part.text.split("\n")) {
+      if (line.endsWith("\r")) line = line.slice(0, -1);
+      if (line === "") continue;
+      let record: unknown;
+      try {
+        record = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      timelineOf(runtime, record, at.state, out);
+    }
+    at.offset = part.offset;
+  }
+  return out;
+}
+
 /// Where the transcripts of the sessions read lately were read to, to read on from there as they grow (a long one is
 /// not read whole at each turn's end): the most recently read few.
 export class Readings {
@@ -214,7 +239,7 @@ export class Readings {
 /// grows: what was indexed of it stays, and only the entries after those are added, read on from where it was read to
 /// when `readings` has it, else read whole; unless it is another now (a new runtime session, a file put away).
 /// `reading`: told before a transcript is read whole.
-export function historyDocs(s: Store, key: string, profiles: Profiles, had: string | null, reading?: () => void, readings?: Readings): Indexed | null {
+export async function historyDocs(s: Store, key: string, profiles: Profiles, had: string | null, reading?: () => void, readings?: Readings): Promise<Indexed | null> {
   const session = store.getSession(s, key);
   if (session === null) return null;
   const files = transcriptFiles(s, session, profiles);
@@ -234,14 +259,16 @@ export function historyDocs(s: Store, key: string, profiles: Profiles, had: stri
   let entries: TimelineEntry[];
   let count: number;
   if (kept && same && kept.paths === paths && kept.count === before!.n) {
-    entries = files.paths.flatMap((p, i) => readTimelineFrom(runtime, p, kept.at[i]!));
+    entries = [];
+    for (const [i, p] of files.paths.entries()) entries.push(...(await readOn(runtime, p, kept.at[i]!)));
     from = kept.count;
     count = kept.count + entries.length;
     kept.count = count;
   } else {
     reading?.();
     const at: ReadAt[] = files.paths.map(() => ({ offset: 0, state: { inner: new Map() } }));
-    const all = files.paths.flatMap((p, i) => readTimelineFrom(runtime, p, at[i]!));
+    const all: TimelineEntry[] = [];
+    for (const [i, p] of files.paths.entries()) all.push(...(await readOn(runtime, p, at[i]!)));
     from = same && all.length >= before!.n ? before!.n : 0;
     entries = all.slice(from);
     count = all.length;

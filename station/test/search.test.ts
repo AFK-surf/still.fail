@@ -189,26 +189,29 @@ test("an execution history is found, grown from where it was, and one that stopp
   writeFileSync(file, said("先跑 pnpm run deploy"));
   const profiles = [{ id: "cc", home, runtime: "claude" }];
   const read = s.read();
-  const first = historyDocs(read, key, profiles, null)!;
+  const first = (await historyDocs(read, key, profiles, null))!;
   assert.deepEqual(first.docs.map((d) => [d.key, d.body]), [[`h:${key}:0`, "先跑 pnpm run deploy"]]);
   appendFileSync(file, said("deploy 完了"));
-  const grown = historyDocs(read, key, profiles, first.version)!;
+  const grown = (await historyDocs(read, key, profiles, first.version))!;
   assert.equal(grown.whole, false);
   assert.deepEqual(grown.docs.map((d) => d.key), [`h:${key}:1`]);
   // Its reading stopped the thread: passed over, until the file changes.
-  const failed = historyDocs(read, key, profiles, READING)!;
+  const failed = (await historyDocs(read, key, profiles, READING))!;
   assert.ok(failed.version.startsWith(FAILED));
   assert.deepEqual(failed.docs, []);
-  assert.deepEqual(historyDocs(read, key, profiles, failed.version)!.docs, []);
+  assert.deepEqual((await historyDocs(read, key, profiles, failed.version))!.docs, []);
   appendFileSync(file, said("again"));
-  assert.equal(historyDocs(read, key, profiles, failed.version)!.docs.length, 3);
+  assert.equal((await historyDocs(read, key, profiles, failed.version))!.docs.length, 3);
   // Read on from where it was read to: only what was added is read, at the index it has in the whole.
   const readings = new Readings();
   let whole = 0;
-  const all = historyDocs(read, key, profiles, null, () => whole++, readings)!;
+  const all = (await historyDocs(read, key, profiles, null, () => whole++, readings))!;
   appendFileSync(file, said("one more deploy"));
-  const more = historyDocs(read, key, profiles, all.version, () => whole++, readings)!;
+  const more = (await historyDocs(read, key, profiles, all.version, () => whole++, readings))!;
   assert.equal(whole, 1);
   assert.deepEqual(more.docs.map((d) => [d.key, d.body]), [[`h:${key}:3`, "one more deploy"]]);
+  // Numbered as the history page numbers them (GET /sessions/:key/timeline).
+  const { readTimeline } = await import("../src/read/transcript.ts");
+  assert.equal(JSON.parse(more.version).n, readTimeline("claude", file).length);
   read.db.close();
 });
