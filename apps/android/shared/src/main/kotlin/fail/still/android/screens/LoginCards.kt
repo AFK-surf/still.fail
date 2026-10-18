@@ -33,12 +33,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -86,6 +95,9 @@ private val PILL = 28.dp
 /** The card's corner as Smooth takes it: a pill's half and the padding, drawn (a quarter larger) round the pills. */
 private val CARD_CORNER: Dp = (CARD_PAD + PILL / 2) / SMOOTH_SCALE
 
+/** How long a marked card follows the page moving it, once shown (ns). */
+private const val MARKED_FOLLOW_NS = 2_000_000_000L
+
 /** Where a login card's login is: the chat's station, or another of its workspace (the card's `station`, its key). */
 fun loginStation(chatStation: String, cardStation: String?): String =
     if (cardStation.isNullOrEmpty()) chatStation else "${chatStation.substringBefore('/')}/$cardStation"
@@ -123,14 +135,23 @@ fun LoginCard(station: String, id: String, modifier: Modifier = Modifier, marked
     val all by rememberTopic<MachineLoginsView>(app.core, Topics.machineLogins(station))
     val login = topic.value ?: return
     val into = remember { BringIntoViewRequester() }
-    // Once the page under it is laid out (the rows after it too), whole.
-    LaunchedEffect(marked) { if (marked) { withFrameNanos {}; withFrameNanos {}; into.bringIntoView() } }
+    val scope = rememberCoroutineScope()
+    // Brought into view whole, and again as what is above it on the page comes in and moves it (the station's figures,
+    // its screens), for a moment after it is shown (not after: the person scrolls on their own then).
+    val shownAt = remember { System.nanoTime() }
+    // With room under it for the system's navigation bar (the page scrolls on under it) and a little more.
+    val density = LocalDensity.current
+    val below = WindowInsets.navigationBars.getBottom(density) + with(density) { 16.dp.toPx() }
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    fun bring() = scope.launch { into.bringIntoView(Rect(0f, 0f, size.width.toFloat(), size.height + below)) }
+    LaunchedEffect(marked) { if (marked) { withFrameNanos {}; bring() } }
+    val follow = if (marked) Modifier.onGloballyPositioned { size = it.size; if (System.nanoTime() - shownAt < MARKED_FOLLOW_NS) bring() } else Modifier
     // Ended: one quiet line, as an answered decision's (已在 studio 上登录 gh), failed in red; no card.
     if (!login.active) {
         Text(
             login.endedText ?: "${login.title} · ${login.statusText}", fontSize = 13.sp, lineHeight = 19.sp,
             color = if (login.state == "failed") C.red else chatSubtle(),
-            modifier = modifier.padding(top = 2.dp).bringIntoViewRequester(into).testTag("login-ended"),
+            modifier = modifier.padding(top = 2.dp).bringIntoViewRequester(into).then(follow).testTag("login-ended"),
         )
         return
     }
@@ -138,7 +159,7 @@ fun LoginCard(station: String, id: String, modifier: Modifier = Modifier, marked
     Column(
         modifier.padding(top = 6.dp).widthIn(min = 280.dp).clip(Smooth(CARD_CORNER))
             .background(if (marked) C.accent.copy(alpha = 0.12f) else C.chip).padding(CARD_PAD)
-            .bringIntoViewRequester(into).testTag("login-card"),
+            .bringIntoViewRequester(into).then(follow).testTag("login-card"),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(login.title, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.ink, modifier = Modifier.padding(start = TEXT_IN, end = TEXT_IN, top = TEXT_IN))
