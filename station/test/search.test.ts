@@ -102,6 +102,11 @@ test("a thread is indexed again from where it was: what was said since, and what
   assert.deepEqual(kinds(s.index.search("first words", home)), {});
   // Nothing new: nothing written.
   assert.deepEqual(index(s, t).docs.filter((d) => d.kind === "message"), []);
+  // Archived by hand: found as archived, every message too.
+  s.store.setArchived("k1", true, "a@x");
+  const archived = index(s, t);
+  assert.equal(archived.whole, true);
+  assert.ok(archived.docs.every((d) => d.ref.archived === true));
 });
 
 test("those whose title has the words come first, then the newest", () => {

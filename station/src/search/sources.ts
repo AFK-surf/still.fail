@@ -69,19 +69,23 @@ export function threadDocs(s: Store, id: number, had: string | null): Indexed | 
   const row = store.getThread(s, id);
   if (row === null) return null;
   const { ws, chat, sessions } = chatOf(s, id);
-  const archived = store.isArchived(s, id);
+  // Filed away (its entries in its archive file), or archived as people see it (by hand, or idle): out of the lists.
+  const filed = store.isArchived(s, id);
+  const archived = filed || row.hiddenAt !== null || (sessions.length > 0 && sessions.every((x) => x.archivedAt !== null));
   const surface = row.surface === STILLFAIL_SURFACE ? "stillfail" : "slack";
   let messages: MessageRow[];
   let version: string;
   let whole = true;
-  if (archived) {
+  if (filed) {
     version = `a:${stamp(join(s.archiveDir, "threads", `${id}.jsonl.zst`))}`;
     if (had === version) return { version, docs: [], whole: false };
     messages = store.messagesBefore(s, id, null, 1_000_000);
   } else {
     const last = store.lastEntry(s, id);
-    version = `n:${last}`;
-    const since = had?.startsWith("n:") ? Number(had.slice(2)) : null;
+    // Archived or brought back: every message says so again.
+    version = `n:${last}${archived ? ":x" : ""}`;
+    const was = /^n:(\d+)(:x)?$/.exec(had ?? "");
+    const since = was && (was[2] !== undefined) === archived ? Number(was[1]) : null;
     if (since !== null && Number.isFinite(since) && since <= last) {
       whole = false;
       // Those said since, and those an edit since changed.
