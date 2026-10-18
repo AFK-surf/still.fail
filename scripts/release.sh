@@ -138,19 +138,23 @@ for platform in $platforms; do
       # Each module's package (scripts/module-bundle.ts, docs/station-modules.md): its archive, named by its version, and
       # its feed on this channel, signed as the station's is. The archive is the same bytes whenever its version is packed
       # (the other channel's, a later commit's): one already out is checked to be these, never put over (it is kept for
-      # good where it is served: cloud/src/releases.ts).
+      # good where it is served: cloud/src/releases.ts). A module with native parts (the media service's ffmpeg) has an
+      # archive per platform, each carrying the parts the release native-artifacts has (the natives job published them).
       ids=$(node "$root/scripts/module-bundle.ts" list)
       for id in $ids; do
         node "$root/scripts/module-bundle.ts" pack "$id" "$out/module" ${beta:+--beta} ${RELEASE_DIR:+--unsigned-ok} > "$out/module.names"
-        read -r archive feed < "$out/module.names"
-        if released "$archive"; then
-          { { [ -n "${RELEASE_DIR:-}" ] && [ -f "$RELEASE_DIR/$archive" ] && cp "$RELEASE_DIR/$archive" "$out/module.was"; } || curl -fsS -o "$out/module.was" "$releases/$archive"; } &&
-            cmp -s "$out/module.was" "$out/module/$archive" ||
-            { echo "$archive is out already, with other bytes than packed here: not put over (a change to how modules are packed is a new version)" >&2; exit 1; }
-          echo "$archive is out already, the same"
-        else
-          put "$out/module/$archive" "$archive" application/gzip
-        fi
+        names=$(cat "$out/module.names")
+        feed=${names##* }
+        for archive in ${names% *}; do
+          if released "$archive"; then
+            { { [ -n "${RELEASE_DIR:-}" ] && [ -f "$RELEASE_DIR/$archive" ] && cp "$RELEASE_DIR/$archive" "$out/module.was"; } || curl -fsS -o "$out/module.was" "$releases/$archive"; } &&
+              cmp -s "$out/module.was" "$out/module/$archive" ||
+              { echo "$archive is out already, with other bytes than packed here: not put over (a change to how modules are packed, or to a native part they carry, is a new version)" >&2; exit 1; }
+            echo "$archive is out already, the same"
+          else
+            put "$out/module/$archive" "$archive" application/gzip
+          fi
+        done
         put "$out/module/$feed" "$feed" application/json
       done
       ;;
