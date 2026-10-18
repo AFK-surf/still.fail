@@ -70,7 +70,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - `lock.request`：设备把基础公钥（app 还有签名公钥）交给 cloud（`/v1/workspaces/:ws/lock/requests`），显示 6 位短码（由基础公钥算出，两边各自算）。app 先要生成并存下签名钥匙（`Signer.make`）；存不下（宿主没有可用的 `secure.*`、钥匙串拒绝）就不发申请、不重试，等待页写明「此设备无法提交批准请求：……」（`lock` topic 的 `me.failed`），可以手动重发。cloud 上的申请 7 天后作废（重新申请就重新计时）；同一个人、同一类（app/web）、同一个名字的设备只留最新的一条（同一个浏览器清了存储、app 重装后会换一把钥匙）。
 - `lock.confirm {device, code}`：这个人自己另一台锁里的 app 设备、或 owner/admin，核对短码后签 `device` 条目；网页版的设备 30 天到期。
 - 批准、拒绝、续期、移除设备在 cloud 收下条目时就算完成（申请随即撤掉），再在后台把整条链送给锁里的各台 station；cloud 同时通知在线的 station，离线的上线后自己拉。以前要等每台都回话，一台离线的 station 能把一次批准拖上十几秒到几分钟（2026-10-19）。只有 `joinStation`、`addStation` 等那一台 station 的回答。
-- 批准由被批准的设备自己带到 station（2026-10-19 用户定：「只要对方设备收到了就行」）：设备连 station 时，hello 的 `lock` 里多带 `entries`，即锁里把它加进来的那条起到链头的条目（加进来 7 天内，first line 最多 12 KiB）。station 按这台锁拒绝它时，先把带来的条目当普通条目逐条校验、接到自己钉住的链上（不钉新锁，最多 64 条），再判断一次放不放行。所以 station 没从 cloud 或批准方收到批准，也不影响新设备进来。
+- 批准由被批准的设备自己带到 station（2026-10-19 用户定：「只要对方设备收到了就行」）：设备连 station 时，hello 的 `lock` 里多带 `entries`，即锁里把它加进来的那条起到链头的条目（加进来 7 天内，first line 最多 12 KiB）。station 按这台锁拒绝它时，先把带来的条目当普通条目逐条校验、接到自己钉住的链上（不钉新锁，最多 64 条），再判断一次放不放行。所以 station 没从 cloud 或批准方收到批准，也不影响新设备进来。带来的条目里没有一条是加这台设备（hello 里证明过的基础公钥）的、或序号接不上 station 的链头时，station 直接不看，一条签名都不验：拿着成员凭证反复连，只能让 station 多读一行 JSON。
 - 带来的条目接不上（station 落后不止这几条）时 station 照样拒绝；锁里已有自己时，core 把它当作 station 落后，`BEHIND_MS`（3 秒）后再连，不再等锁下次变化。
 - 老客户端的新设备只看到 station 的拒绝文字。
 

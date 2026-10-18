@@ -426,6 +426,11 @@ test("a device brings what put it in the lock to a station that has not heard of
   const forAlice = signed(after(cloud.locked()!.state!, "device", { id: phone.base.hex, sub: "alice", kind: "app", label: "phone" }), w.carol.signer);
   assert.throws(() => inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [forAlice] } }), LockRefusal);
   assert.equal(cloud.locked()?.state?.seq, 0);
+  // An approval of another device, or entries out of order: not even checked, nothing taken.
+  const someoneElse = signed(after(cloud.locked()!.state!, "device", { id: ed().hex, sub: "carol", kind: "app", label: "tablet" }), w.alice.signer);
+  assert.throws(() => inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [someoneElse] } }), LockRefusal);
+  assert.throws(() => inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [{ ...approval, seq: 5 }] } }), LockRefusal);
+  assert.equal(cloud.locked()?.state?.seq, 0);
   // The approval: taken, and the phone let in on it.
   assert.equal(inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [approval] } }).viewer.role, "member");
   assert.equal(cloud.locked()?.state?.seq, 1);

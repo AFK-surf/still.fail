@@ -102,16 +102,22 @@ const BROUGHT_MOST = 64;
 
 /// The entries a device brings with its hello (`lock.entries`, docs/workspace-lock.md): what put it in the lock, which
 /// this station has not heard of yet (the cloud, or the device that signed them, has not reached it). Taken as any
-/// are, entry by entry, only onto a lock this station has pinned (they never pin one); whether any was.
-function brought(hello: any, cloud: Cloud, workspace: string): boolean {
+/// are, entry by entry, only onto a lock this station has pinned (they never pin one); whether any was. Nothing is
+/// checked (no signature) unless they could let this very device in: one of them names its base key, and they go on
+/// from what the station has, in order. A connection bringing anything else costs the station no more than reading it.
+function brought(hello: any, cloud: Cloud, workspace: string, base: string | undefined): boolean {
   const raw = hello?.lock?.entries;
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > BROUGHT_MOST) return false;
+  if (base === undefined || !Array.isArray(raw) || raw.length === 0 || raw.length > BROUGHT_MOST) return false;
   const entries = raw.map(asEntry);
   if (entries.some((e) => e === null)) return false;
   const ws = joinedOf(cloud, workspace);
-  if (!cloud.locked(ws)?.state) return false;
+  const state = cloud.locked(ws)?.state;
+  if (!state) return false;
+  const all = entries as Entry[];
+  if (all[0]!.seq > state.seq + 1 || all.some((e, i) => i > 0 && e.seq !== all[i - 1]!.seq + 1)) return false;
+  if (!all.some((e) => e.seq > state.seq && e.kind === "device" && (e.body as { id?: unknown } | null)?.id === base)) return false;
   try {
-    return cloud.takeLock(entries as Entry[], ws) > 0;
+    return cloud.takeLock(all, ws) > 0;
   } catch (e) {
     log.info("lock", "a device brought lock entries this station does not take", { error: (e as Error).message });
     return false;
@@ -191,7 +197,7 @@ export function inLockBringing(cloud: Cloud, admitted: Admitted, named: string, 
   try {
     return inLock(cloud, admitted, named, endpoint);
   } catch (e) {
-    if (!(e instanceof LockRefusal) || !brought(hello, cloud, admitted.viewer.workspace)) throw e;
+    if (!(e instanceof LockRefusal) || !brought(hello, cloud, admitted.viewer.workspace, admitted.viewer.lockDevice?.base)) throw e;
     return inLock(cloud, admitted, named, endpoint);
   }
 }
