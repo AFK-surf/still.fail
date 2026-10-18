@@ -6,7 +6,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import { core, topicNow, useTopic, type TopicState } from "../core/react.ts";
 import { CoreError } from "../core/client.ts";
 import type { DriveEntry, DriveFolder, DriveKind, DrivePlace, DriveRoot } from "../core/shapes.ts";
-import { fromBase64, toBase64 } from "../api.ts";
+import { bytesOf } from "../api.ts";
 import { t } from "../i18n.ts";
 
 /** A place in a station's drive: one of its roots (by its path on the station) and a path under it ("" the root). */
@@ -49,9 +49,10 @@ export interface Part { type: string; total: number; bytes: Uint8Array<ArrayBuff
 
 /** `length` bytes of a file from `offset` (fewer at its end); `heard`: how many of them have come, as they come. */
 export async function readPart(at: At, offset: number, length: number, signal?: AbortSignal, heard?: (loaded: number) => void): Promise<Part> {
-  const got = await core().call("drive.read", { station: at.station, root: at.root, path: at.path, offset, length, ...(heard ? { progress: true } : {}) },
-    heard && ((p) => heard((p as { loaded: number }).loaded)), signal) as { type: string; total: number; bytes: string };
-  return { type: got.type, total: got.total, bytes: fromBase64(got.bytes) };
+  const got = await core().callBytes("drive.read", { station: at.station, root: at.root, path: at.path, offset, length, ...(heard ? { progress: true } : {}) }, undefined,
+    heard && ((p) => heard((p as { loaded: number }).loaded)), signal);
+  const said = got.value as { type: string; total: number };
+  return { type: said.type, total: said.total, bytes: (got.bytes ?? new Uint8Array()) as Uint8Array<ArrayBuffer> };
 }
 
 /** How much of a whole file has come. */
@@ -243,8 +244,8 @@ async function send(key: string, replace: boolean): Promise<void> {
     for (;;) {
       if (stopped.has(key)) return;
       const name = uploads.find((x) => x.key === key)?.name ?? first.name;
-      const bytes = await toBase64(file.slice(have, have + UPLOAD_PART));
-      const told = await core().call("drive.upload.part", { station, root, path: joinPath(folder, name), id, offset: have, total: file.size, replace, bytes }) as { have: number; entry: unknown };
+      const bytes = await bytesOf(file.slice(have, have + UPLOAD_PART));
+      const told = (await core().callBytes("drive.upload.part", { station, root, path: joinPath(folder, name), id, offset: have, total: file.size, replace }, bytes)).value as { have: number; entry: unknown };
       if (told.entry) {
         // The folder has it now (the core read it again before answering): its row goes.
         change(key, () => null);

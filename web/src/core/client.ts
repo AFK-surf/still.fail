@@ -188,7 +188,8 @@ export interface Channel {
 export type Opener = (onMessage: (data: unknown) => void, onFail: (reason: string) => void) => Channel;
 
 interface Pending {
-  resolve: (value: unknown) => void;
+  /** Its answer, with the bytes beside it when it carries some (a file read). */
+  resolve: (value: unknown, bytes?: Uint8Array) => void;
   reject: (error: Error) => void;
   /** How far the call has got, for one that says so (a file asked for with `progress`); `bytes` beside a value that carries some (a screen view's frame). */
   onProgress?: ((value: unknown, bytes?: Uint8Array) => void) | undefined;
@@ -270,12 +271,24 @@ export class CoreClient {
 
   /** `signal` stops the call while it is under way; it then fails with `cancelled`. */
   call(name: string, params: unknown = {}, onProgress?: (value: unknown, bytes?: Uint8Array) => void, signal?: AbortSignal): Promise<unknown> {
+    return this.#ask(name, params, undefined, onProgress, signal, (resolve) => (value) => resolve(value));
+  }
+
+  /**
+   * A call with bytes: `bytes` go beside its params (a file's part going up), and it answers with the bytes beside its
+   * answer, if any (a file read), never as base64 in either. Otherwise as [call].
+   */
+  callBytes(name: string, params: unknown, bytes?: Uint8Array, onProgress?: (value: unknown, bytes?: Uint8Array) => void, signal?: AbortSignal): Promise<{ value: unknown; bytes?: Uint8Array }> {
+    return this.#ask(name, params, bytes, onProgress, signal, (resolve) => (value, got) => resolve(got === undefined ? { value } : { value, bytes: got }));
+  }
+
+  #ask<T>(name: string, params: unknown, bytes: Uint8Array | undefined, onProgress: Pending["onProgress"], signal: AbortSignal | undefined, answered: (resolve: (v: T) => void) => Pending["resolve"]): Promise<T> {
     if (this.#closed) return Promise.reject(new CoreError({ code: "closed", message: t("web-main.core.closed") }));
     if (signal?.aborted) return Promise.reject(new CoreError({ code: "cancelled", message: t("web-main.core.cancelled") }));
     const id = this.#nextId++;
-    const promise = new Promise<unknown>((resolve, reject) => {
-      this.#calls.set(id, { resolve, reject, onProgress });
-      this.#send({ id, call: name, params });
+    const promise = new Promise<T>((resolve, reject) => {
+      this.#calls.set(id, { resolve: answered(resolve), reject, onProgress });
+      this.#send(bytes === undefined ? { id, call: name, params } : { id, call: name, params, bytes });
       signal?.addEventListener("abort", () => {
         if (!this.#calls.has(id)) return;
         // The core answers `cancelled`; with no worker to tell, it is so here and now.
@@ -507,7 +520,7 @@ export class CoreClient {
       }
       this.#calls.delete(message.id);
       if (message.error) call.reject(new CoreError(message.error));
-      else call.resolve(message.ok);
+      else call.resolve(message.ok, message.bytes);
       return;
     }
     const sub = this.#subs.get(message.id);

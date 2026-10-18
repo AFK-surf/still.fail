@@ -275,7 +275,10 @@ test("a_streamed_preview_hands_its_answer_on_as_it_comes_until_cancelled_or_its_
   assert.equal((core.inner.status.value() as J).state ?? null, null);
   Queue.offerUnsafe(bodies[0].queue, new TextEncoder().encode("data: 1\n\n"));
   await host.settle();
-  assert.deepEqual(said(), [{ id: 1, value: { chunk: base64(new TextEncoder().encode("data: 1\n\n")) } }]);
+  // Each piece beside its value, not in it.
+  const piece = host.takeEmitted().map(([, m]) => m as J);
+  assert.deepEqual(piece.map((m) => ({ id: m.id, value: m.value })), [{ id: 1, value: { chunk: true } }]);
+  assert.equal(new TextDecoder().decode(piece[0].bytes), "data: 1\n\n");
   // Cancelled: it answers so, and the body is let go (the station stops asking the service).
   core.receive(ui, { kind: "cancel", id: 1, cancel: true });
   await host.settle();
@@ -309,7 +312,8 @@ test("a_preview_socket_is_only_carried_by_the_mesh_and_its_messages_are_checked"
   assert.equal(said.get(2).error.code, "not_found", "no socket open by that name");
   assert.throws(() => parseCall("preview.socket.send", { socket: "s1", text: "a", close: [1000, ""] }));
   assert.deepEqual(parseCall("preview.socket.send", { socket: "s1", close: [4001, "done"] }), { kind: "previewSocketSend", socket: "s1", frame: { close: [4001, "done"] } });
-  assert.deepEqual(parseCall("preview.socket.send", { socket: "s1", binary: base64(new Uint8Array([0, 1])) }), { kind: "previewSocketSend", socket: "s1", frame: { binary: new Uint8Array([0, 1]) } });
+  assert.deepEqual(parseCall("preview.socket.send", { socket: "s1", binary: true }, new Uint8Array([0, 1])), { kind: "previewSocketSend", socket: "s1", frame: { binary: new Uint8Array([0, 1]) } });
+  assert.throws(() => parseCall("preview.socket.send", { socket: "s1", binary: true }), "a binary frame's bytes come beside the call");
   core.close();
 });
 

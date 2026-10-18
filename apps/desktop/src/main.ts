@@ -270,7 +270,8 @@ ipcMain.on("app:language", (event, lang: unknown) => {
 interface OwnLink {
   port: MessagePortMain;
   next: number;
-  waiting: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; onProgress?: ((value: unknown) => void) | undefined }>;
+  /** Calls under way: their answers and values, with the bytes beside them when they carry some. */
+  waiting: Map<number, { resolve: (value: unknown, bytes?: Uint8Array) => void; reject: (error: Error) => void; onProgress?: ((value: unknown, bytes?: Uint8Array) => void) | undefined }>;
   /** Topics it holds: each value as it is now, deltas applied. */
   topics: Map<number, { value: unknown; onValue: (value: unknown) => void }>;
 }
@@ -292,7 +293,10 @@ function ownLink(): OwnLink {
     coreProcess().postMessage(null, [port1]);
     const link: OwnLink = { port: port2, next: 1, waiting: new Map(), topics: new Map() };
     port2.on("message", ({ data }) => {
-      const message = JSON.parse(String(data)) as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: { message?: string } };
+      // JSON, or JSON with bytes beside it (core.ts).
+      const said = data as string | { json: string; bytes: Uint8Array };
+      const bytes = typeof said === "string" ? undefined : said.bytes;
+      const message = JSON.parse(typeof said === "string" ? said : said.json) as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: { message?: string } };
       const topic = message.id === undefined ? undefined : link.topics.get(message.id);
       if (topic) {
         if ("value" in message) topic.value = message.value;
@@ -304,12 +308,12 @@ function ownLink(): OwnLink {
       const waiting = message.id === undefined ? undefined : link.waiting.get(message.id);
       if (!waiting) return;
       if ("value" in message && !message.error) {
-        waiting.onProgress?.(message.value);
+        waiting.onProgress?.(message.value, bytes);
         return;
       }
       link.waiting.delete(message.id!);
       if (message.error) waiting.reject(new Error(message.error.message ?? t("desktop.core.callFailed")));
-      else waiting.resolve(message.ok);
+      else waiting.resolve(message.ok, bytes);
     });
     port2.start();
     own = link;
@@ -319,11 +323,16 @@ function ownLink(): OwnLink {
 
 /** A call of the core's; `onProgress` hears the values it sends before its answer, `signal` cancels it. */
 function coreCall(name: string, params: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal): Promise<unknown> {
+  return coreBytes(name, params, undefined, onProgress, signal).then((got) => got.value);
+}
+
+/** A call with bytes beside it (`bytes`) and beside its answer and values, never base64; otherwise as coreCall. */
+function coreBytes(name: string, params: unknown, bytes?: Uint8Array, onProgress?: (value: unknown, bytes?: Uint8Array) => void, signal?: AbortSignal): Promise<{ value: unknown; bytes?: Uint8Array }> {
   const link = ownLink();
   const id = link.next++;
   return new Promise((resolve, reject) => {
-    link.waiting.set(id, { resolve, reject, onProgress });
-    link.port.postMessage({ id, call: name, params });
+    link.waiting.set(id, { resolve: (value, got) => resolve(got === undefined ? { value } : { value, bytes: got }), reject, onProgress });
+    link.port.postMessage(bytes === undefined ? { id, call: name, params } : { id, call: name, params, bytes });
     signal?.addEventListener("abort", () => { if (link.waiting.has(id)) link.port.postMessage({ id, cancel: true }); }, { once: true });
   });
 }
@@ -493,20 +502,20 @@ function plain(status: number, text: string): Response {
  * A request to the service as its answer comes (station.preview with `stream`): its status and headers, then its body,
  * which stops the request at the station when it is cancelled (its page gave it up) or `signal` aborts.
  */
-function previewStream(params: Record<string, unknown>, signal: AbortSignal): Promise<{ status: number; headers: [string, string][]; body: ReadableStream<Uint8Array> }> {
+function previewStream(params: Record<string, unknown>, sent: Uint8Array | undefined, signal: AbortSignal): Promise<{ status: number; headers: [string, string][]; body: ReadableStream<Uint8Array> }> {
   const stop = new AbortController();
   signal.addEventListener("abort", () => stop.abort(), { once: true });
   return new Promise((resolve, reject) => {
     let body!: ReadableStreamDefaultController<Uint8Array>;
     const stream = new ReadableStream<Uint8Array>({ start(c) { body = c; }, cancel() { stop.abort(); } });
     let headed = false;
-    coreCall("station.preview", { ...params, stream: true }, (value) => {
-      const v = value as { head?: { status: number; headers: [string, string][] }; chunk?: string };
+    coreBytes("station.preview", { ...params, stream: true }, sent, (value, bytes) => {
+      const v = value as { head?: { status: number; headers: [string, string][] }; chunk?: boolean };
       if (v.head && !headed) {
         headed = true;
         resolve({ status: v.head.status, headers: v.head.headers, body: stream });
-      } else if (typeof v.chunk === "string") {
-        try { body.enqueue(new Uint8Array(Buffer.from(v.chunk, "base64"))); } catch { /* cancelled */ }
+      } else if (v.chunk === true && bytes) {
+        try { body.enqueue(bytes); } catch { /* cancelled */ }
       }
     }, stop.signal).then(
       () => { try { body.close(); } catch { /* cancelled */ } },
@@ -536,13 +545,14 @@ async function previewSocket(request: Request, url: URL, station: string, port: 
     const bytes = new Uint8Array(await request.arrayBuffer());
     const kind = bytes[0];
     const payload = Buffer.from(bytes.subarray(5));
+    // A binary frame's bytes beside the call (`binary: true`).
     const message = kind === 1 ? { text: payload.toString("utf8") }
-      : kind === 2 ? { binary: payload.toString("base64") }
+      : kind === 2 ? { binary: true }
       : kind === 8 ? { close: [payload.length >= 2 ? payload.readUInt16BE(0) : 1000, payload.subarray(2).toString("utf8")] }
       : null;
     if (!message) return plain(400, t("desktop.preview.badMessage"));
     try {
-      await coreCall("preview.socket.send", { socket: sid, ...message });
+      await coreBytes("preview.socket.send", { socket: sid, ...message }, kind === 2 ? new Uint8Array(payload) : undefined);
       return new Response(null, { status: 204 });
     } catch (error) {
       return plain(410, error instanceof Error ? error.message : String(error));
@@ -559,16 +569,16 @@ async function previewSocket(request: Request, url: URL, station: string, port: 
         put(socketFrame(8, new Uint8Array([code >> 8, code & 255, ...utf8.encode(reason)])));
         try { out.close(); } catch { /* cancelled */ }
       };
-      coreCall("preview.socket", {
+      coreBytes("preview.socket", {
         station, port, path: url.searchParams.get("path") ?? "/", socket: sid,
         headers: protocols.length ? [["sec-websocket-protocol", protocols.join(", ")]] : [],
-      }, (value) => {
-        const v = value as { open?: { protocol: string }; text?: string; binary?: string };
+      }, undefined, (value, bytes) => {
+        const v = value as { open?: { protocol: string }; text?: string; binary?: boolean };
         if (v.open) put(socketFrame(0, utf8.encode(v.open.protocol)));
         else if (typeof v.text === "string") put(socketFrame(1, utf8.encode(v.text)));
-        else if (typeof v.binary === "string") put(socketFrame(2, new Uint8Array(Buffer.from(v.binary, "base64"))));
+        else if (v.binary === true) put(socketFrame(2, bytes ?? new Uint8Array()));
       }, stop.signal).then(
-        (closed) => { const { code, reason } = closed as { code: number; reason: string }; close(code, reason); },
+        (closed) => { const { code, reason } = closed.value as { code: number; reason: string }; close(code, reason); },
         () => close(1006, ""),
       );
     },
@@ -587,7 +597,7 @@ async function preview(request: Request): Promise<Response> {
   if (url.pathname === "/_ember/socket.js") return new Response(SOCKET, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });
   const socket = /^\/_ember\/socket\/([0-9a-f-]{36})$/.exec(url.pathname);
   if (socket) return previewSocket(request, url, station, Number(host[1]), socket[1]!);
-  const body = request.method === "GET" || request.method === "HEAD" ? "" : Buffer.from(await request.arrayBuffer()).toString("base64");
+  const body = request.method === "GET" || request.method === "HEAD" ? undefined : new Uint8Array(await request.arrayBuffer());
   const headers: [string, string][] = [];
   request.headers.forEach((value, name) => headers.push([name, value]));
   try {
@@ -602,7 +612,7 @@ async function preview(request: Request): Promise<Response> {
     let path = url.pathname + url.search;
     let answer: { status: number; headers: [string, string][]; body: ReadableStream<Uint8Array> } | null = null;
     for (let hops = 0; hops < 5 && !answer; hops++) {
-      const got = await previewStream({ station, port: Number(host[1]), method: request.method, path, headers, body }, signal);
+      const got = await previewStream({ station, port: Number(host[1]), method: request.method, path, headers }, body, signal);
       const location = got.status >= 300 && got.status < 400 ? got.headers.find(([k]) => k.toLowerCase() === "location")?.[1] : undefined;
       if (!location) { answer = got; break; }
       void got.body.cancel();
@@ -666,8 +676,8 @@ function drive(request: Request): Response {
     async pull(controller) {
       if (at > end) { controller.close(); return; }
       try {
-        const got = await coreCall("drive.read", { station: file.station, root: file.root, path: file.path, offset: at, length: Math.min(DRIVE_PART, end - at + 1) }, undefined, stop.signal) as { bytes: string };
-        const bytes = new Uint8Array(Buffer.from(got.bytes, "base64"));
+        const got = await coreBytes("drive.read", { station: file.station, root: file.root, path: file.path, offset: at, length: Math.min(DRIVE_PART, end - at + 1) }, undefined, undefined, stop.signal);
+        const bytes = got.bytes ?? new Uint8Array();
         if (bytes.length === 0) throw new Error("nothing read");
         controller.enqueue(bytes);
         at += bytes.length;

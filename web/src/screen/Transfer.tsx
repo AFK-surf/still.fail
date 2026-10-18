@@ -9,7 +9,7 @@ import type { ScreenDrop } from "../core/shapes.ts";
 import { Close, File as FileIcon, Retry, Upload } from "@stillfail/ui/icons.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { PanelButton, PanelIconButton } from "../ui.tsx";
-import { toBase64 } from "../api.ts";
+import { bytesOf } from "../api.ts";
 import { cancel, retry, sizeOf, upload, useUploads, type Upload as Up } from "../drive/model.ts";
 import { t } from "../i18n.ts";
 import * as css from "./Transfer.css.ts";
@@ -31,9 +31,9 @@ export function clipOf(value: { type?: string; text?: string } | undefined, byte
 }
 
 /** What a paste here sets on the screen's clipboard, of the types it carries (a PNG first, else text); null: none. */
-export async function pasted(data: Pick<DataTransfer, "files" | "getData">, types: readonly string[]): Promise<{ text: string } | { png: string } | null> {
+export async function pasted(data: Pick<DataTransfer, "files" | "getData">, types: readonly string[]): Promise<{ text: string } | { png: Uint8Array } | null> {
   const png = types.includes("png") ? [...data.files].find((f) => f.type === "image/png") : undefined;
-  if (png) return { png: await toBase64(png) };
+  if (png) return { png: await bytesOf(png) };
   const text = data.getData("text/plain");
   return text && types.includes("text") ? { text } : null;
 }

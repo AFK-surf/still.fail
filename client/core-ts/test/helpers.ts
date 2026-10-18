@@ -90,8 +90,9 @@ export function subscribe(core: Core, ui: number, id: number, topic: Topic): voi
   core.receive(ui, { kind: "subscribe", id, subscribe: topic });
 }
 
-export function call(core: Core, ui: number, id: number, name: string, params: unknown): void {
-  core.receive(ui, { kind: "call", id, call: name, params });
+/// `bytes`: what the call carries beside its params (a file's part going up).
+export function call(core: Core, ui: number, id: number, name: string, params: unknown, bytes?: Uint8Array): void {
+  core.receive(ui, bytes === undefined ? { kind: "call", id, call: name, params } : { kind: "call", id, call: name, params, bytes });
 }
 
 export function answers(emitted: [number, CoreMessage][], id: number): Record<string, unknown> | undefined {

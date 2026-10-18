@@ -1,6 +1,7 @@
 // The core in the Android app's Hermes (apps/android/core: the engine in C++, its IO in the Rust shell, client/shell):
 // bundled into one script (scripts/hermes-bundle.ts) the engine runs, then `__stillfail.start(cloudOrigin, beta)`.
-// The engine calls `__stillfail.connect()`, `.receive(client, json)`, `.disconnect(client)` for the app, and
+// The engine calls `__stillfail.connect()`, `.receive(client, json)` (`.receiveBytes(client, json, bytes)` for a call
+// with bytes beside it), `.disconnect(client)` for the app, and
 // `.complete(id, json, error, bytes)` with the shell's answers; what the core says goes out through `__native.emit`.
 import type { HermesNative } from "./hermes-globals.ts";
 import "./hermes-globals.ts";
@@ -30,6 +31,7 @@ g.__stillfail = {
   },
   connect: (): number => core!.connect(),
   receive: (client: number, json: string) => core!.receive(client, json),
+  receiveBytes: (client: number, json: string, bytes: ArrayBuffer) => core!.receive(client, json, new Uint8Array(bytes)),
   disconnect: (client: number) => core!.disconnect(client),
   complete: (id: number, json: string | null, error: string | null, bytes: ArrayBuffer | undefined) =>
     core!.bridge.complete(id, json, error, bytes === undefined ? null : new Uint8Array(bytes)),

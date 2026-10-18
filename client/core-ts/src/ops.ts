@@ -74,7 +74,6 @@ export const PARAMS: Record<string, string> = {
   "chat.forSession": "session?:string",
   "widget.state": "key:string path:string",
   "file.peek": "key:string path:string line?:number",
-  "file.open": "key:string path:string",
   "link.preview": "url:string",
   "widget.setState": "key:string path?:string state?:json",
   "machineSessions.list": "",
@@ -309,11 +308,9 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => "/chats?archived=1", null, NONE);
     case "chat.forSession":
       return op("POST", () => "/threads", p.pick(["session"]), { kind: "thread", archived: false });
-    // A file a message names by its path: what it is (a few lines, a thumbnail), or all of it for the preview.
+    // A file a message names by its path: what it is (a few lines, a thumbnail); all of it is `file.open` (core/calls.ts).
     case "file.peek":
       return op("GET", () => `/sessions/${p.at("key")}/peek?path=${p.at("path")}${optU64("line") !== null ? `&line=${optU64("line")}` : ""}`, null, NONE);
-    case "file.open":
-      return op("GET", () => `/sessions/${p.at("key")}/open?path=${p.at("path")}`, null, NONE);
     // A web link in a message: what the station finds it is (its title, a pull request's state).
     case "link.preview":
       return op("GET", () => `/link-preview?url=${p.at("url")}`, null, NONE);

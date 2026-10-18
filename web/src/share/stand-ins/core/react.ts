@@ -15,6 +15,7 @@ export function useTopicSelect<T, S>(_topic: unknown, select: (state: TopicState
 }
 
 /** The core: none here, so nothing asks it (with no topic's value, a screen link's card never shows its screen live). */
-export function core(): { call(...args: unknown[]): Promise<never> } {
-  return { call: () => Promise.reject(new Error("no core on the share page")) };
+export function core(): { call(...args: unknown[]): Promise<never>; callBytes(...args: unknown[]): Promise<never> } {
+  const none = () => Promise.reject(new Error("no core on the share page"));
+  return { call: none, callBytes: none };
 }

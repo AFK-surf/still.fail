@@ -23,6 +23,13 @@ export class Status {
   }
 }
 export const status = (code: number, body: unknown) => new Status(code, body);
+/// An answer as it is, not JSON (a file's bytes, with headers of its own).
+export class Raw {
+  readonly response: HttpResponse;
+  constructor(response: HttpResponse) {
+    this.response = response;
+  }
+}
 
 /// Station answers a test gives by code, before the table (`undefined`: the table's; a `Status`: that status).
 const replies = new WeakMap<FakeHost, (req: HttpRequest) => unknown>();
@@ -81,6 +88,7 @@ export function stationHost(answers: Answers) {
     if (path === "/v1/workspaces/ws") return jsonResponse(200, { id: "ws", ...(cloud.role ? { role: cloud.role } : {}), stations: [{ id: "st", name: "studio", online: cloud.online, last_seen: null }] });
     const said = replies.get(host)?.(req);
     if (said instanceof Status) return jsonResponse(said.code, said.body);
+    if (said instanceof Raw) return said.response;
     if (said !== undefined) return jsonResponse(200, said);
     if (req.method === "POST" && path === "/admin/api/batch") {
       if (!batches.on) return jsonResponse(404, { error: "no route POST /batch" });

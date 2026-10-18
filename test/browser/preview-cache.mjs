@@ -42,10 +42,11 @@ const parent = await listen(async (req, res) => {
     addEventListener('message', e => {
       if(e.data?.type !== 'ember-preview-ready') return;
       const c = new MessageChannel();
-      window.stopBridge = preview.bridge(c.port1, { station:'fixture', service:1, streams:true, call: async (_, p, progress, signal) => {
+      window.stopBridge = preview.bridge(c.port1, { station:'fixture', service:1, streams:true, call: async (_, p, _bytes, progress, signal) => {
         const r = await (await fetch('/rpc' + p.path, {headers:p.headers, signal})).json();
         progress({head:{status:r.status,headers:r.headers}});
-        if(r.body) progress({chunk:r.body});
+        if(r.body) progress({chunk:true}, Uint8Array.from(atob(r.body), c => c.charCodeAt(0)));
+        return {value:null};
       }});
       e.source.postMessage({type:'ember-preview-port',streams:true}, e.origin, [c.port2]);
     });

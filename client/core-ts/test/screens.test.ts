@@ -569,14 +569,15 @@ test("a_paste_is_checked_its_size_bounded_and_a_reveal_is_an_input", () => {
   const text = parseCall("screen.clipboard", { view: "v", text: "hi" }) as J;
   assert.deepEqual([text.call.type, text.call.paste, [...text.call.data]], ["text", true, [104, 105]], "pasted unless asked not to");
   assert.equal((parseCall("screen.clipboard", { view: "v", text: "hi", paste: false }) as J).call.paste, false);
-  assert.equal((parseCall("screen.clipboard", { view: "v", png: base64(PNG) }) as J).call.type, "png");
+  // A picture's bytes beside the call (`png: true`); base64 in it is not taken.
+  assert.equal((parseCall("screen.clipboard", { view: "v", png: true }, PNG) as J).call.type, "png");
   assert.ok(parseCall("screen.clipboard", { view: "v", text: "a".repeat(CLIP_TEXT_MAX) }));
-  for (const bad of [{ view: "v" }, { view: "v", text: "" }, { view: "v", text: "a".repeat(CLIP_TEXT_MAX - 1) + "é" }, { view: "v", png: base64(new Uint8Array([1, 2, 3])) }, { view: "v", png: "!!" }]) {
-    assert.throws(() => parseCall("screen.clipboard", bad), (e: J) => e.code === "invalid_params", JSON.stringify(bad).slice(0, 80));
+  for (const [bad, bytes] of [[{ view: "v" }], [{ view: "v", text: "" }], [{ view: "v", text: "a".repeat(CLIP_TEXT_MAX - 1) + "é" }], [{ view: "v", png: true }, new Uint8Array([1, 2, 3])], [{ view: "v", png: true }], [{ view: "v", png: base64(PNG) }, PNG]] as [J, Uint8Array?][]) {
+    assert.throws(() => parseCall("screen.clipboard", bad, bytes), (e: J) => e.code === "invalid_params", JSON.stringify(bad).slice(0, 80));
   }
   const tooBig = new Uint8Array(CLIP_PNG_MAX + 1);
   tooBig.set(PNG);
-  assert.throws(() => parseCall("screen.clipboard", { view: "v", png: base64(tooBig) }), (e: J) => e.code === "invalid_params");
+  assert.throws(() => parseCall("screen.clipboard", { view: "v", png: true }, tooBig), (e: J) => e.code === "invalid_params");
   assert.deepEqual(checkInput({ t: "reveal", path: "/Users/bob/Downloads/a.pdf" }), { t: "reveal", path: "/Users/bob/Downloads/a.pdf" });
   assert.throws(() => checkInput({ t: "reveal", path: "" }));
 });
@@ -607,7 +608,7 @@ each("while_driving_the_clipboard_goes_both_ways_and_where_files_go_is_said", as
   // A paste here, after the key before it; a reveal as input.
   call(core, ui, 2, "screen.input", { view: "v", input: { t: "key", kind: "down", key: "Meta", code: "MetaLeft", mods: 4 } });
   call(core, ui, 3, "screen.clipboard", { view: "v", text: "粘贴" });
-  call(core, ui, 4, "screen.clipboard", { view: "v", png: base64(PNG), paste: false });
+  call(core, ui, 4, "screen.clipboard", { view: "v", png: true, paste: false }, PNG);
   call(core, ui, 5, "screen.input", { view: "v", input: { t: "reveal", path: "/Users/bob/Downloads/a.pdf" } });
   await host.settle();
   said(host, log);

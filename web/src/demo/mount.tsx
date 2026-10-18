@@ -382,7 +382,11 @@ setCore(new CoreClient((onMessage) => {
         void Promise.resolve()
           .then(() => answer(message.call!, message.params ?? {}, emit, abort.signal))
           .then(
-            (ok) => post({ id: message.id, ok }),
+            // Bytes an answer gives (`bytes`, a file read) beside it, as the core gives them.
+            (ok) => {
+              const { bytes, ...rest } = (ok ?? {}) as { bytes?: unknown };
+              post(bytes instanceof Uint8Array ? { id: message.id, ok: rest, bytes } : { id: message.id, ok });
+            },
             (e: Error & { code?: string }) => post({ id: message.id, error: { code: e instanceof station.NeedsReal ? "demo" : e.code ?? "internal", message: e.message } }),
           )
           .finally(() => under.delete(message.id));

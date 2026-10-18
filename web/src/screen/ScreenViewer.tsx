@@ -261,8 +261,10 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   const actRef = useRef(act);
   actRef.current = act;
   /** The screen's clipboard set and pasted there (a paste here, a phone's paste, a file's path). */
-  const setClipboard = (clip: { text: string } | { png: string }) => {
-    actRef.current(core().call("screen.clipboard", { view: view.current, ...clip, paste: true }), t("web-pages.screen.pasteWhat"));
+  const setClipboard = (clip: { text: string } | { png: Uint8Array }) => {
+    // A picture's bytes beside the call (`png: true`).
+    const set = "png" in clip ? core().callBytes("screen.clipboard", { view: view.current, png: true, paste: true }, clip.png) : core().call("screen.clipboard", { view: view.current, ...clip, paste: true });
+    actRef.current(set, t("web-pages.screen.pasteWhat"));
   };
   // A phone's paste: what this device's clipboard holds, read within the tap.
   const pasteHere = () => {

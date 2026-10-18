@@ -63,6 +63,7 @@ export type Call =
   | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean }
   | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean }
   | { kind: "stationPoster"; station: string; key: string; name: string }
+  | { kind: "fileOpen"; station: string; key: string; path: string }
   | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean }
   | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
   | { kind: "driveRefresh"; station: string; root: string; path: string }
@@ -227,7 +228,14 @@ function b64(text: string, what: string): Uint8Array {
   return bytes;
 }
 
-export function parseCall(name: string, params: unknown): Call {
+/// The bytes a call carries beside its JSON (a file's part going up), which it must.
+function beside(bytes: Uint8Array | undefined): Uint8Array {
+  if (bytes === undefined) throw CoreError.invalid(t("core-misc.params.missing", { field: "bytes" }));
+  return bytes;
+}
+
+/// `bytes`: what the call carries beside its JSON, if anything.
+export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Call {
   const flows: [string, string[], "decisionForm" | "policyForm" | "agentEnvForm" | "profileFlow" | "connectFlow" | "slackTokens", string][] = [
     ["automaticDecisions.form.", ["open", "edit", "save", "drop"], "decisionForm", "decisionForm"],
     ["automaticDecisions.policy.", ["open", "edit", "save", "drop"], "policyForm", "policyForm"],
@@ -621,13 +629,13 @@ export function parseCall(name: string, params: unknown): Call {
       return { kind: "clientDevice", facts: orEmpty(params) };
     case "changelog.seen":
       return { kind: "changelogSeen" };
+    // A file going up comes beside the call, not in it.
     case "station.upload": {
       const p = read(params, [
         ["station", S, "req"],
         ["name", S, "req"],
-        ["bytes", S, "req"],
       ]);
-      return { kind: "stationUpload", bytes: b64(p.bytes as string, "core-misc.call.base64.file"), station: p.station as string, name: p.name as string };
+      return { kind: "stationUpload", bytes: beside(bytes), station: p.station as string, name: p.name as string };
     }
     case "station.upload.part": {
       const p = read(params, [
@@ -636,10 +644,9 @@ export function parseCall(name: string, params: unknown): Call {
         ["name", S, "req"],
         ["size", "u64", "req"],
         ["offset", "u64", "req"],
-        ["bytes", S, "req"],
         ["progress", "bool", "default"],
       ]);
-      return { kind: "stationUploadPart", station: p.station as string, id: p.id as string, name: p.name as string, size: p.size as number, offset: p.offset as number, bytes: b64(p.bytes as string, "core-misc.call.base64.file"), progress: p.progress as boolean };
+      return { kind: "stationUploadPart", station: p.station as string, id: p.id as string, name: p.name as string, size: p.size as number, offset: p.offset as number, bytes: beside(bytes), progress: p.progress as boolean };
     }
     case "station.file": {
       const p = read(params, [
@@ -685,11 +692,10 @@ export function parseCall(name: string, params: unknown): Call {
         ["offset", "u64", "req"],
         ["total", "u64", "req"],
         ["replace", "bool", "default"],
-        ["bytes", S, "req"],
       ]);
       return {
         kind: "driveUploadPart", station: p.station as string, root: p.root as string, path: p.path as string, id: p.id as string, offset: p.offset as number, total: p.total as number,
-        replace: p.replace as boolean, bytes: b64(p.bytes as string, "core-misc.call.base64.file"),
+        replace: p.replace as boolean, bytes: beside(bytes),
       };
     }
     // Where a file of a drive was left (a book's place, a video's time): kept on this device, its `drivePlace`.
@@ -719,6 +725,15 @@ export function parseCall(name: string, params: unknown): Call {
       ]);
       return { kind: "driveRefresh", station: p.station as string, root: p.root as string, path: p.path as string };
     }
+    // A file a message names, whole, its bytes beside the answer (as the station's op, from before, put them in it).
+    case "file.open": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["key", S, "req"],
+        ["path", S, "req"],
+      ]);
+      return { kind: "fileOpen", station: p.station as string, key: p.key as string, path: p.path as string };
+    }
     case "station.poster": {
       const p = read(params, [
         ["station", S, "req"],
@@ -743,12 +758,12 @@ export function parseCall(name: string, params: unknown): Call {
         ["method", S, "req"],
         ["path", S, "req"],
         ["headers", "pairs", "default"],
-        ["body", S, "default"],
         ["stream", "bool", "default"],
       ]);
+      // Its body, if it has one, beside the call.
       return {
         kind: "stationPreview",
-        body: b64(p.body as string, "core-misc.call.base64.body"),
+        body: bytes ?? new Uint8Array(),
         station: p.station as string,
         port: p.port as number,
         method: p.method as string,
@@ -771,12 +786,13 @@ export function parseCall(name: string, params: unknown): Call {
       const p = read(params, [
         ["socket", S, "req"],
         ["text", S, "opt"],
-        ["binary", S, "opt"],
+        ["binary", "bool", "default"],
         ["close", "close", "opt"],
       ]);
-      const given = [p.text, p.binary, p.close].filter((v) => v !== null).length;
+      // A binary frame's bytes beside the call (`binary: true`).
+      const given = [p.text !== null, p.binary === true, p.close !== null].filter(Boolean).length;
       if (given !== 1) throw CoreError.invalid(t("core-misc.params.one_frame"));
-      const frame: SocketFrame = p.text !== null ? { text: p.text as string } : p.binary !== null ? { binary: b64(p.binary as string, "core-misc.call.base64.message") } : { close: p.close as [number, string] };
+      const frame: SocketFrame = p.text !== null ? { text: p.text as string } : p.binary === true ? { binary: beside(bytes) } : { close: p.close as [number, string] };
       return { kind: "previewSocketSend", socket: p.socket as string, frame };
     }
     case "migrate": {
@@ -826,7 +842,7 @@ export function parseCall(name: string, params: unknown): Call {
   const p = orEmpty(params);
   const adb = parseAdb(name, p);
   if (adb) return { kind: "adb", call: adb };
-  const screen = parseScreen(name, p);
+  const screen = parseScreen(name, p, bytes);
   if (screen) return { kind: "screen", call: screen };
   const ask = parseAsk(name, p);
   if (ask) return { kind: "ask", ask };
