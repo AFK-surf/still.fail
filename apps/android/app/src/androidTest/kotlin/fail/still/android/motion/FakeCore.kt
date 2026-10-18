@@ -1,9 +1,11 @@
 // The core for the motion tests: topics answered from values the test sets (and set again mid-motion: a message
 // arriving, the station taking one), calls answered by the test's `answer`; what the app called is kept in `calls`.
 // Calls named in `streams` (`screen.view`) are held open: the test says their values (with bytes beside them, as a
-// screen's frames come) and ends them.
+// screen's frames come) and ends them. A part read with `stream` (`drive.read`, `station.file.part`) has the `bytes` its
+// answer gives said beside a value before it, as the core says them, and none in the answer.
 package fail.still.android.motion
 
+import android.util.Base64
 import fail.still.android.data.StillFailJson
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
@@ -14,6 +16,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
@@ -43,9 +46,10 @@ class FakeCore {
     /** The streamed calls the app cancelled, by name. */
     val cancelled = CopyOnWriteArrayList<String>()
 
-    val core: StillFailCore = StillFailCore.scriptedBytes { json, reply -> this.reply = reply; handle(json) { text -> reply(text, null) } }
+    val core: StillFailCore = StillFailCore.scriptedBytes { json, reply -> this.reply = reply; handle(json, reply) }
 
-    private fun handle(json: String, reply: (String) -> Unit) {
+    private fun handle(json: String, replyBytes: (String, ByteArray?) -> Unit) {
+        val reply = { text: String -> replyBytes(text, null) }
         val m = Json.parseToJsonElement(json).jsonObject
         val id = m["id"]!!.jsonPrimitive.long
         m["subscribe"]?.let { topic ->
@@ -66,7 +70,14 @@ class FakeCore {
         calls += name to params
         if (name in streams) { open[name] = id; return }
         val out = try {
-            buildJsonObject { put("id", id); put("ok", answer(name, params)) }
+            var ok = answer(name, params)
+            val bytes = (ok as? JsonObject)?.get("bytes")?.jsonPrimitive?.contentOrNull
+            if (params["stream"]?.jsonPrimitive?.booleanOrNull == true && bytes != null) {
+                val raw = Base64.decode(bytes, Base64.DEFAULT)
+                if (raw.isNotEmpty()) replyBytes(valueOf(id, buildJsonObject { put("loaded", raw.size) }), raw)
+                ok = JsonObject((ok as JsonObject) - "bytes")
+            }
+            buildJsonObject { put("id", id); put("ok", ok) }
         } catch (e: CoreException) {
             buildJsonObject { put("id", id); put("error", buildJsonObject { put("code", e.code); put("message", e.message) }) }
         }

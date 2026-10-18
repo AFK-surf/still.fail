@@ -127,8 +127,9 @@ export class Requests {
 
   /// One whole request: its status, its reply's head, its body. `quiet`: in the background, not said to be waited on.
   /// `heard`: how much of the body has come, now and then as it comes (every PART_STEP); `wrote`: how much of what is
-  /// sent has gone, as it goes (a wire that sends it whole says nothing).
-  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array }, CoreError> {
+  /// sent has gone, as it goes (a wire that sends it whole says nothing); `sink`: a 2xx answer's body handed over as it
+  /// comes, in pieces of PART_STEP (the last smaller), not kept (the body given is empty).
+  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array }, CoreError> {
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const status = this.#status(station);
@@ -143,12 +144,26 @@ export class Requests {
             const counted = { ...reply, body: { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && ((came += chunk.length), waiting ? waiting.received(chunk.length) : status.received(null, chunk.length)))) } };
             let loaded = 0;
             let told = 0;
-            const bytes = yield* readAll(plain(counted), heard && ((chunk) => {
+            // An error's body is read as any other's: what it says is the error.
+            const give = reply.status >= 200 && reply.status < 300 ? sink : undefined;
+            const held: Uint8Array[] = [];
+            let heldBytes = 0;
+            const hand = () => {
+              if (heldBytes > 0) give?.(held.length === 1 ? held.pop()! : concat(held.splice(0)));
+              held.length = 0;
+              heldBytes = 0;
+            };
+            const bytes = yield* readAll(plain(counted), (chunk) => {
               loaded += chunk.length;
-              if (loaded - told >= PART_STEP) heard((told = loaded));
-            }));
+              if (heard && loaded - told >= PART_STEP) heard((told = loaded));
+              if (give) {
+                held.push(chunk);
+                if ((heldBytes += chunk.length) >= PART_STEP) hand();
+              }
+            }, give === undefined);
+            hand();
             span.set("http.response.body.size", came);
-            if (came !== bytes.length) span.set("stillfail.body.decompressed", bytes.length);
+            if (came !== loaded) span.set("stillfail.body.decompressed", loaded);
             if (reply.status >= 200 && reply.status < 300) this.onAnswered(station);
             return { status: reply.status, headers: reply.headers, body: bytes };
           }).pipe(Effect.ensuring(Effect.sync(() => waiting?.end()))),
@@ -307,10 +322,10 @@ export class Requests {
 
   /// GET /sessions/:key/parts?name=&offset=&length=: a part of a file and its whole size, for a big one fetched a part at
   /// a time (onto the disk) rather than whole. `unsupported` from a station from before parts (it has no such route).
-  /// `heard`: the part's bytes so far, as they come.
-  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
+  /// `heard`: the part's bytes so far, as they come; `sink`: its bytes handed over as they come, not kept (`bytes` empty).
+  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
     const path = `/sessions/${encode(key)}/parts?name=${encode(name)}&offset=${offset}&length=${length}`;
-    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, false, ctx, heard), (r) => {
+    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, false, ctx, heard, undefined, sink), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.fileOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);
@@ -323,9 +338,10 @@ export class Requests {
   }
 
   /// GET /drive/read?root=&path=&offset=&length=: a part of a file of the station's drive, its whole size and time.
-  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
+  /// `heard`, `sink`: as filePart's.
+  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
     const asked = `/drive/read?root=${encode(root)}&path=${encode(path)}&offset=${offset}&length=${length}`;
-    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, false, ctx, heard), (r) => {
+    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, false, ctx, heard, undefined, sink), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.driveOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);

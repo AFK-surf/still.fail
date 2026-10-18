@@ -60,9 +60,9 @@ export type Call =
   | { kind: "stationUpload"; station: string; name: string; bytes: Uint8Array }
   | { kind: "stationUploadPart"; station: string; id: string; name: string; size: number; offset: number; bytes: Uint8Array; progress: boolean }
   | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean }
-  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean }
+  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean }
   | { kind: "stationPoster"; station: string; key: string; name: string }
-  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean }
+  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean }
   | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
   | { kind: "driveRefresh"; station: string; root: string; path: string }
   /// A login's page to open (docs/remote-login.md): a loopback login's callback listened for here first, unless the
@@ -655,8 +655,9 @@ export function parseCall(name: string, params: unknown): Call {
         ["offset", "u64", "req"],
         ["length", "u64", "req"],
         ["progress", "bool", "default"],
+        ["stream", "bool", "default"],
       ]);
-      return { kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean };
+      return { kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean };
     }
     // The station's drive (docs/drive.md): a part of a file read, a part of one written, a folder read again.
     case "drive.read": {
@@ -667,8 +668,9 @@ export function parseCall(name: string, params: unknown): Call {
         ["offset", "u64", "req"],
         ["length", "u64", "req"],
         ["progress", "bool", "default"],
+        ["stream", "bool", "default"],
       ]);
-      return { kind: "driveRead", station: p.station as string, root: p.root as string, path: p.path as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean };
+      return { kind: "driveRead", station: p.station as string, root: p.root as string, path: p.path as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean };
     }
     case "drive.upload.part": {
       const p = read(params, [

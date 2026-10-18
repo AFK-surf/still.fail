@@ -41,6 +41,10 @@ const val DRIVE_PART = 4 * 1024 * 1024
  * station does not say), the bytes. */
 class DriveRead(val type: String, val total: Long, val bytes: ByteArray, val mtime: Long? = null)
 
+/** A part of a file written where it goes as it came (`stream`): its type, the whole file's size and when it last
+ * changed (null when the station does not say), how many bytes came. */
+class PartRead(val type: String, val total: Long, val mtime: Long?, val count: Long)
+
 /**
  * The folders in one on the station (`drive.folders`), to pick one to lend: where, its parent (none at the top), the home,
  * the folders in it (`entries`; `folders`, their names alone, is all a station from before gives), the way there from the
@@ -281,14 +285,12 @@ class StationApi(private val core: StillFailCore, val station: String) {
                 while (at < total) {
                     val from = at
                     val of = if (total == Long.MAX_VALUE) size else total
-                    val got = core.call("station.file.part", buildJsonObject {
-                        put("station", station); put("key", key); put("name", name); put("offset", at); put("length", FILE_PART); put("progress", true)
-                    }) { heard -> partLoaded(heard)?.let { onProgress(from + it, of) } }.jsonObject
-                    total = got["total"]?.jsonPrimitive?.long ?: total
-                    val bytes = Base64.decode(got["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT)
-                    if (bytes.isEmpty()) break
-                    out.write(bytes)
-                    at += bytes.size
+                    val got = partTo("station.file.part", buildJsonObject {
+                        put("station", station); put("key", key); put("name", name); put("offset", at); put("length", FILE_PART)
+                    }, out) { onProgress(from + it, of) }
+                    total = if (got.total >= 0) got.total else total
+                    if (got.count == 0L) break
+                    at += got.count
                     onProgress(at, total)
                 }
             }
@@ -508,6 +510,34 @@ class StationApi(private val core: StillFailCore, val station: String) {
         core.call("drive.place", buildJsonObject { put("station", station); put("root", root); put("path", path); put("at", at); if (of != null) put("of", of) })
     }
 
+    /**
+     * A part read with `stream` (`station.file.part`, `drive.read`): its bytes written onto `out` as they come, beside the
+     * core's values, never base64 in its answer (on a phone, a 4 MB part made base64, sent in JSON and read back took
+     * longer than it took to come, and nothing came meanwhile: a bar that stood still between parts); `heard`: its bytes
+     * so far. A total the station does not say is -1.
+     */
+    private suspend fun partTo(call: String, params: JsonObject, out: java.io.OutputStream, heard: ((Long) -> Unit)? = null): PartRead {
+        var count = 0L
+        var failed: java.io.IOException? = null
+        val got = core.stream(call, buildJsonObject { params.forEach { (k, v) -> put(k, v) }; put("stream", true) }) { _, bytes ->
+            if (bytes != null && failed == null) {
+                try { out.write(bytes) } catch (e: java.io.IOException) { failed = e; return@stream }
+                count += bytes.size
+                heard?.invoke(count)
+            }
+        }.jsonObject
+        failed?.let { throw it }
+        val total = got["total"]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: -1
+        val mtime = (got["mtime"] as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()
+        return PartRead((got["type"] as? JsonPrimitive)?.content ?: "", total, mtime, count)
+    }
+
+    /** A part of a file of the drive (at most DRIVE_PART) written onto `out` as it comes, as [partTo] does. */
+    suspend fun driveReadTo(root: String, path: String, offset: Long, length: Int, out: java.io.OutputStream, heard: ((Long) -> Unit)? = null): PartRead =
+        partTo("drive.read", buildJsonObject {
+            put("station", station); put("root", root); put("path", path); put("offset", offset); put("length", length.coerceAtMost(DRIVE_PART))
+        }, out, heard).let { if (it.total >= 0) it else PartRead(it.type, offset + it.count, it.mtime, it.count) }
+
     /** A part of a file of the drive (at most DRIVE_PART), with the file's whole size as the station has it now; `heard`: its bytes so far, as they come. */
     suspend fun driveRead(root: String, path: String, offset: Long, length: Int, heard: ((Long) -> Unit)? = null): DriveRead {
         val params = buildJsonObject {
@@ -532,11 +562,10 @@ class StationApi(private val core: StillFailCore, val station: String) {
         while (at < minOf(total, limit)) {
             val from = at
             val of = minOf(if (total == Long.MAX_VALUE) size else total, limit)
-            val got = driveRead(root, path, at, minOf(DRIVE_PART.toLong(), minOf(total, limit) - at).toInt(), if (of == Long.MAX_VALUE) null else { n -> onProgress(from + n, of) })
+            val got = driveReadTo(root, path, at, minOf(DRIVE_PART.toLong(), minOf(total, limit) - at).toInt(), out, if (of == Long.MAX_VALUE) null else { n -> onProgress(from + n, of) })
             total = got.total
-            if (got.bytes.isEmpty()) break
-            out.write(got.bytes)
-            at += got.bytes.size
+            if (got.count == 0L) break
+            at += got.count
             onProgress(at, total)
         }
         return out.toByteArray()
@@ -547,17 +576,16 @@ class StationApi(private val core: StillFailCore, val station: String) {
      * already is gone on from. `onProgress` as driveBytes's.
      */
     suspend fun driveToDisk(root: String, path: String, into: java.io.File, size: Long = Long.MAX_VALUE, onProgress: (Long, Long) -> Unit = { _, _ -> }) {
-        java.io.FileOutputStream(into, true).use { out ->
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { java.io.FileOutputStream(into, true) }.use { out ->
             var at = into.length()
             var total = Long.MAX_VALUE
             while (at < total) {
                 val from = at
                 val of = if (total == Long.MAX_VALUE) size else total
-                val got = driveRead(root, path, at, DRIVE_PART, if (of == Long.MAX_VALUE) null else { n -> onProgress(from + n, of) })
+                val got = driveReadTo(root, path, at, DRIVE_PART, out, if (of == Long.MAX_VALUE) null else { n -> onProgress(from + n, of) })
                 total = got.total
-                if (got.bytes.isEmpty()) break
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { out.write(got.bytes) }
-                at += got.bytes.size
+                if (got.count == 0L) break
+                at += got.count
                 onProgress(at, total)
             }
         }
