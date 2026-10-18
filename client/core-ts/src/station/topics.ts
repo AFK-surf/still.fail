@@ -648,8 +648,11 @@ export class StationTopics implements Owner {
         core.store.invalidate(topic);
       }
     });
-    // A measurement shown on screen: sampled while it is shown, never kept.
-    this.#samplers.set(key, core.runner.fork(Effect.forever(Effect.andThen(sample, Effect.sleep(NET_EVERY_MS)))));
+    // A measurement shown on screen: sampled while it is shown, never kept. Not while the app is out of view: the
+    // stations' list holds this topic for as long as it is open, and each reading put the whole list out again, every
+    // NET_EVERY_MS for each station, on a phone in a pocket too (most of what the core did there, 2026-10-19).
+    const inView = Effect.suspend(() => core.attention?.attend.untilShown() ?? Effect.void);
+    this.#samplers.set(key, core.runner.fork(Effect.forever(Effect.andThen(inView, Effect.andThen(sample, Effect.sleep(NET_EVERY_MS))))));
   }
 
   /// Told entries (an event) of a thread: they come in with a motion.

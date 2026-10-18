@@ -1,6 +1,7 @@
 // The Rust core's attend.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Effect } from "effect";
 import { Attend } from "../src/attend.ts";
 import { parseAttend, type FocusCall } from "../src/attend-parse.ts";
 import { FakeHost } from "../src/testing.ts";
@@ -268,4 +269,23 @@ test("only_the_workspace_the_viewer_is_in_is_heard_of", async () => {
   attend.gone(1);
   attend.gone(2);
   assert.ok(attend.pushed("w3"));
+});
+
+test("what_is_measured_only_to_be_shown_waits_for_a_page_in_view", async () => {
+  const host = new FakeHost();
+  const attend = await run(Attend.load(host));
+  // No UI said where it is: taken as looking.
+  assert.equal(attend.shown(), true);
+  attend.focus(1, focus({ visible: false }));
+  assert.equal(attend.shown(), false);
+  let back = false;
+  const waiting = run(Effect.map(attend.untilShown(), () => (back = true)));
+  await host.time.pass(60_000);
+  assert.equal(back, false);
+  attend.focus(1, focus({ visible: true }));
+  await waiting;
+  assert.equal(back, true);
+  attend.focus(1, focus({ visible: false }));
+  attend.gone(1);
+  assert.equal(attend.shown(), true);
 });

@@ -2,7 +2,7 @@
 // chat's unread line, what is read, what comes in with a motion while a chat shows, which notices a page shows now,
 // and the workspace the viewer is in. Whether notifications are on, and whether the system was asked, are kept on the
 // device.
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import type { ChatOf, FocusCall, Permission } from "./attend-parse.ts";
 import type { Host } from "./host.ts";
 import type { ClientId } from "./protocol.ts";
@@ -72,6 +72,8 @@ export class Attend {
   /// What the system lets this device do, as its app last said (`notify.permission`); not kept: said again each start.
   #permission: Permission = "unknown";
   readonly #focus = new Map<ClientId, Focus>();
+  /// Done when a page comes into view again (`untilShown`).
+  #shownAgain = Deferred.makeUnsafe<void>();
   readonly visits = new Map<string, Visit>();
   readonly #reads = new Map<string, number>();
   #show: [J, number][] = [];
@@ -124,6 +126,23 @@ export class Attend {
     return [...this.#focus.values()].some((f) => f.visible);
   }
 
+  /// Any page in view, or none said where it is (a UI that never says is taken as looking): what is measured only to
+  /// be shown (a station's connection) is measured only then.
+  shown(): boolean {
+    return this.#focus.size === 0 || this.seen();
+  }
+
+  /// Returns once a page is in view (at once if one is).
+  untilShown(): Effect.Effect<void> {
+    return this.shown() ? Effect.void : Deferred.await(this.#shownAgain);
+  }
+
+  #told(): void {
+    if (!this.shown()) return;
+    Deferred.doneUnsafe(this.#shownAgain, Effect.void);
+    this.#shownAgain = Deferred.makeUnsafe<void>();
+  }
+
   /// Whether a notice of this kind is shown at all; `inFront`: a page of the app is in front (a turn done is shown
   /// then only with `done: always`).
   wants(kind: unknown, inFront: boolean): boolean {
@@ -165,12 +184,14 @@ export class Attend {
     if (call.chat !== undefined) f.chat = call.chat;
     if (call.workspace !== null) f.workspace = call.workspace;
     this.#endVisits();
+    this.#told();
   }
 
   /// A UI went away.
   gone(client: ClientId): void {
     this.#focus.delete(client);
     this.#endVisits();
+    this.#told();
   }
 
   #endVisits(): void {
