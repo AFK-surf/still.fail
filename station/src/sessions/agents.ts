@@ -27,6 +27,9 @@ import type { Cloud as CloudState } from "../cloud/state.ts";
 import { adbTools } from "../tools/adb.ts";
 import { screenTools } from "../tools/screen.ts";
 import { permissionTools } from "../tools/permissions.ts";
+import { HelperFiles } from "../helper/files.ts";
+import { Places } from "../ops/places.ts";
+import { platform } from "../platform/index.ts";
 import { Browser } from "../browser/service.ts";
 import { browserTools } from "../tools/browser.ts";
 import { Computer, computerTools } from "../tools/computer.ts";
@@ -51,6 +54,7 @@ import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
 import { overview } from "../api/overview.ts";
+import { rootViewThrough } from "../drive/drive.ts";
 import { type SlackParts, makeConnections } from "../slack/index.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
@@ -110,6 +114,9 @@ export type AgentsParts = {
   overview(viewer: Viewer, lang: Lang): Promise<unknown>;
   /// The agents' requests for the vault's secrets, and the grants they hold (docs/vault.md).
   secrets: Secrets;
+  /// The folders macOS protects, through still.fail Helper (helper/files.ts), shared by the drive and the directories
+  /// people and agents name (ops/places.ts); null where there is no helper for them.
+  helperFiles?: HelperFiles | null;
 };
 
 export class Agents extends Context.Service<Agents, AgentsParts>()("stillfail/Agents") {}
@@ -175,6 +182,10 @@ export const AgentsLive = (control: Control) =>
       };
 
       const settings = () => hubConfig(config.raw(), data);
+      // The folders macOS protects (Documents, Desktop, Downloads, disks) through still.fail Helper: the drive's and
+      // the directories people and agents name (ops/places.ts), never touched on the station's thread.
+      const helperFiles = grants && platform.hasFolderPermissions ? new HelperFiles({ helper: grants.helper, grants, changed: () => events.overviewChanged() }) : null;
+      const places = new Places({ helper: helperFiles });
       // What other stations of the workspace share with this one, and what it shares (made below, once the accounts are).
       let sharing: Sharing | null = null;
       const borrowed = (p: unknown) => sharing?.borrowedSubscription(p) === true;
@@ -198,6 +209,7 @@ export const AgentsLive = (control: Control) =>
         link: pageOf,
         workspaces: () => cloud.memberships().map((m) => m.workspace),
         cold: new ColdRooms(() => hub),
+        places,
       });
       // Background jobs and web services: their agents told through the hub; a service's link is its session's page
       // with its port.
@@ -216,7 +228,7 @@ export const AgentsLive = (control: Control) =>
           return page ? `${page}?service=${encode(job)}` : null;
         },
       });
-      const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text) });
+      const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places });
       hub.setJobs(jobs);
       // Ports of other stations forwarded here (mesh/peer-forward.ts), each its session's: through the mesh's way, once
       // it is up (`peers`, below).
@@ -373,7 +385,7 @@ export const AgentsLive = (control: Control) =>
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}/adb` : null;
         }),
-        ...jobTools(jobs, (key) => store.getSession(key)?.workspace ?? null),
+        ...jobTools(jobs, (key) => store.getSession(key)?.workspace ?? null, hub.places),
         ...screenTools(screens, () => {
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
@@ -517,7 +529,7 @@ export const AgentsLive = (control: Control) =>
         teams: (viewer: Viewer) => slack.overview(viewer.email).slackTeams,
         apps: (viewer: Viewer) => slack.overview(viewer.email).slackApps,
       };
-      const view = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, slack: slackView, ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
+      const view = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, slack: slackView, rootView: (p) => rootViewThrough(p, helperFiles), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
 
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
@@ -751,6 +763,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, peers, forwards, logins, slack, overview: view, cloud, net, secrets, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, peers, forwards, logins, slack, overview: view, cloud, net, secrets, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

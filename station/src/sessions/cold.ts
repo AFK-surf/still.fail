@@ -7,19 +7,15 @@ import { existsSync, realpathSync } from "node:fs";
 import { rm, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { log } from "../ops/log.ts";
+import { realOutside } from "../ops/places.ts";
 import { transcriptPath } from "../read/transcript.ts";
 import * as archive from "./archive.ts";
 import { runtimeNamed } from "./config.ts";
 import { measureRoom, roomOf, safeToRemove, within } from "./footprint.ts";
 import type { ColdStorage, Hub } from "./hub.ts";
 
-const canonical = (path: string): string | null => {
-  try {
-    return realpathSync(path);
-  } catch {
-    return null;
-  }
-};
+/// Links followed, never into a folder macOS protects (a session continued there, a job's directory: ops/places.ts).
+const canonical = (path: string): string | null => realOutside(path);
 
 export class ColdRooms implements ColdStorage {
   /// The hub it works for (made after it).

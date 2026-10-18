@@ -12,6 +12,7 @@ import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUM
 import { chars } from "../agents/live.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
 import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
+import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
@@ -111,6 +112,8 @@ export type SessionDeps = {
   /// Archived: ends every job and service of the session.
   endJobs(key: string): Promise<void>;
   toolStatus(tool: string): string;
+  /// How a directory it is to run in is looked at (ops/places.ts); default: without still.fail Helper.
+  places?: Places;
   nextTs(): string;
   /// Its time (the hub's).
   clock: Clock.Clock;
@@ -139,6 +142,9 @@ export type Snapshot = {
 };
 
 const t = (key: string, args?: Record<string, unknown>) => tr(stationLang(), key, args);
+
+let places: Places | null = null;
+const defaultPlaces = () => (places ??= new Places());
 
 /// Times a process that lost the station's tools is started again before the turn is given up on.
 const MAX_TOOLS_RESTARTS = 1;
@@ -758,8 +764,11 @@ export class SessionActor {
     const profile = this.deps.runOn(this.key);
     const base = openOptions(row, profile, this.deps);
     // A runtime started where the station may not read exits at once with nothing to say why (macOS privacy protection
-    // on a session continued in ~/Documents): told as it is instead.
-    if (unreadableDir(base.cwd)) throw new Error(unreadableDirMessage(stationLang(), base.cwd));
+    // on a session continued in ~/Documents): told as it is instead. A directory someone named (one continued from a
+    // terminal) is looked at as ops/places.ts does, never on this thread in a folder macOS protects (still.fail Helper
+    // asked for it, its window put up for a grant it lacks); the session's own workspace is the station's.
+    if (row.cwd) await (this.deps.places ?? defaultPlaces()).directory(row.cwd, { lang: stationLang() });
+    else if (unreadableDir(base.cwd)) throw new Error(unreadableDirMessage(stationLang(), base.cwd));
     const generation = this.nextGeneration();
     let agent: AgentSession;
     // Recorded before it may be left, so the history reads on from it.

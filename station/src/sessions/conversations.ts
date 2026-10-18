@@ -1,8 +1,9 @@
 // What agents do in their own conversations (the Rust station's hub.rs: chat_post, chat_state, chat_history, slack_api and
 // what they rest on): post (with files and a card, ending the turn or not), record how the turn ends, read a thread,
 // and call Slack as their bot. What a tool says of the turn reaches its session's actor, in turn with the rest.
-import { copyFileSync, mkdirSync, statSync } from "node:fs";
-import { basename, isAbsolute, join } from "node:path";
+import { copyFileSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { basename, dirname, isAbsolute, join } from "node:path";
+import { PlaceRefused } from "../ops/places.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
 import { iso } from "../read/transcript.ts";
@@ -32,7 +33,7 @@ import type { Hub } from "./hub.ts";
 import { imageSize } from "./image-size.ts";
 import { dir as thumbsDir, keep } from "./thumbs.ts";
 import { INTERNAL_CONNECT } from "./internal.ts";
-import { prepare } from "./local-links.ts";
+import { namedLocalPaths, prepare } from "./local-links.ts";
 import { suggestArchive } from "./review.ts";
 import { nameChat } from "./titles.ts";
 
@@ -54,6 +55,74 @@ export function target(hub: Hub, key: string, to: Json): SessionThread {
   const thread = hub.store.sessionThread(key, address[0], address[1]);
   if (!thread) throw new Error(`${to} is not a conversation of this session. Its threads: ${known()}`);
   return thread;
+}
+
+/// The most a file an agent attaches is (attach, peer-files.ts MAX_SENT).
+const MOST_ATTACHED = 50 * 1024 * 1024;
+
+/// Whether `staged` may have something to copy: files named, or (with `links`) a local link into a folder macOS
+/// protects, on a Mac.
+export function mayStage(hub: Hub, args: Args, links: boolean): boolean {
+  if (!hub.places.mac) return false;
+  if (Array.isArray(args.files) && args.files.length > 0) return true;
+  return links && typeof args.text === "string" && namedLocalPaths(args.text).some(({ path }) => hub.places.protects(path));
+}
+
+/// Files an agent names for a message (`files`, and with `links` the local links in `text`) that are in a folder macOS
+/// protects, copied into the session's uploads first (through still.fail Helper, else off the station's thread:
+/// ops/places.ts), so that what reads them next (attach, prepare, sendable) never touches such a folder on the
+/// station's thread. The arguments to go on with, and what removes the copies once the message is sent. A grant the
+/// helper lacks refuses it, its window put up on the Mac, telling the agent to ask with the permissions tool.
+export async function staged(hub: Hub, key: string, args: Args, links: boolean): Promise<{ args: Args; done: () => void }> {
+  const row = hub.store.getSession(key);
+  const places = hub.places;
+  const copies: string[] = [];
+  const done = () => {
+    for (const c of copies) rmSync(dirname(c), { recursive: true, force: true });
+  };
+  if (!row || (!Array.isArray(args.files) && !(links && typeof args.text === "string"))) return { args, done };
+  const into = join(row.workspace, "uploads");
+  const asker = { lang: "en" as const, agent: true };
+  const take = async (path: string): Promise<string> => {
+    const copy = await places.file(path, into, asker, MOST_ATTACHED);
+    if (copy !== path) copies.push(copy);
+    return copy;
+  };
+  try {
+    let next: Args = args;
+    if (Array.isArray(args.files)) {
+      const files: Json[] = [];
+      for (const f of args.files) {
+        const given = jsString(f);
+        const full = isAbsolute(given) ? given : join(row.workspace, given);
+        const copy = await take(full);
+        files.push(copy === full ? given : copy);
+      }
+      next = { ...next, files };
+    }
+    if (links && typeof args.text === "string") {
+      let text = args.text;
+      for (const { destination, path } of namedLocalPaths(text)) {
+        if (!places.protects(path)) continue;
+        // Codex's /path/file.rs:12 names the file without its line.
+        const line = /:[0-9]+(:[0-9]+)?$/.exec(path);
+        let copy: string;
+        try {
+          copy = await take(path);
+        } catch (e) {
+          if (line === null || !(e instanceof PlaceRefused) || e.code !== "gone") throw e;
+          copy = await take(path.slice(0, line.index));
+        }
+        const as = copy.includes(" ") ? `<${copy}>` : copy;
+        text = text.split(`](<${destination}>`).join(`](${as}`).split(`](${destination}`).join(`](${as}`);
+      }
+      next = { ...next, text };
+    }
+    return { args: next, done };
+  } catch (e) {
+    done();
+    throw e;
+  }
 }
 
 /// Copies files the agent attaches into the session's uploads (`into`'s, when it sends them to that session), so the

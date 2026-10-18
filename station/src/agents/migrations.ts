@@ -50,6 +50,7 @@ export const NOTES: [number, string][] = [
   [43, "secret_list/secret_use/secret_run also work without security mode: then the secrets are the person's on this station (kept in plain text), and the card is decided by the item's owner in any still.fail client. The same flow otherwise; you still never see the value."],
   [44, "A screen's link (screen, computer, permissions tools) posted on a line of its own shows as the screen's card in still.fail; within a sentence, as the screen's title. Post it bare on its own line rather than as [words](link)."],
   [45, "The 共享调试 link (adb_devices) posted bare on a line of its own shows as a card saying how the person's phone sharing stands; within a sentence, as 共享调试."],
+  [46, "A job_start cwd, station_task dir, or a file you attach in a folder macOS protects (Documents, Desktop, Downloads, disks, iCloud Drive) may now be refused, saying the station needs that folder's permission: call permissions with the grant it names (request), post its answer with chat_post kind=need_human, end your turn, and try again once it is granted."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

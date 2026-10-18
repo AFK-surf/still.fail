@@ -2,13 +2,14 @@
 // chat_list, chat_read, session_send, session_history, and chat_create (sessions/opened.ts), which came after the Rust.
 // Names, descriptions and input schemas are the Rust station's, byte for byte (test/hub-tools.test.ts reads them from
 // hub.rs and compares); what they do is src/sessions/.
-import { chatHistory, chatPost, chatState } from "../sessions/conversations.ts";
+import { chatHistory, chatPost, chatState, mayStage, staged, target } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
 import { chatCreate } from "../sessions/opened.ts";
 import type { Args } from "../sessions/args.ts";
 import { chatList, chatRead, elsewhere, readAfar, scopeOf, sessionHistory } from "../sessions/others.ts";
 import { suggestArchive } from "../sessions/review.ts";
+import { STILLFAIL_SURFACE } from "../store/store.ts";
 import type { Tool } from "./mcp.ts";
 import { slackTools } from "./slack.ts";
 
@@ -432,13 +433,34 @@ function afar(hub: Hub, key: string, tool: "chat_read" | "session_history", args
   return station !== null ? readAfar(hub, key, station, tool, args) : null;
 }
 
+/// `run` with `args`' files (and with `links` its text's local links) in folders macOS protects copied first
+/// (conversations.ts `staged`), the copies removed after.
+function withStaged(hub: Hub, key: string, args: Args, links: boolean, run: (args: Args) => Promise<string>): Promise<string> {
+  // Nothing that could be in such a folder: as it was, not a moment later.
+  if (!mayStage(hub, args, links)) return run(args);
+  return (async () => {
+    const { args: given, done } = await staged(hub, key, args, links);
+    try {
+      return await run(given);
+    } finally {
+      done();
+    }
+  })();
+}
+
 /// The hub's tools, in the Rust station's order (slack_api, second, is slack.ts's).
 export function chatTools(hub: Hub): Tool[] {
   return [
     {
       ...CHAT_POST,
       run: async (key, args) => {
-        const said = await chatPost(hub, key, args);
+        // Its files and local links in a folder macOS protects copied first, never touched on the station's thread
+        // (conversations.ts `staged`); links only where they become attachments (still.fail chats).
+        let stillfail = false;
+        try {
+          stillfail = target(hub, key, args.to).thread.surface === STILLFAIL_SURFACE;
+        } catch {}
+        const said = await withStaged(hub, key, args, stillfail, (a) => chatPost(hub, key, a));
         // A turn ended all_done (or final from before): whether the chat is finished is asked in the background.
         if (args.kind === "all_done" || args.kind === "final") suggestArchive(hub, key);
         return said;
@@ -449,8 +471,8 @@ export function chatTools(hub: Hub): Tool[] {
     { ...CHAT_HISTORY, run: (key, args) => chatHistory(hub, key, args) },
     { ...CHAT_LIST, run: async (key, args) => chatList(hub, key, args) },
     { ...CHAT_READ, run: (key, args) => afar(hub, key, "chat_read", args) ?? chatRead(hub, key, args, undefined, scopeOf(hub, key)) },
-    { ...SESSION_SEND, run: (key, args) => sessionSend(hub, key, args) },
-    { ...CHAT_CREATE, run: (key, args) => chatCreate(hub, key, args) },
+    { ...SESSION_SEND, run: (key, args) => withStaged(hub, key, args, false, (a) => sessionSend(hub, key, a)) },
+    { ...CHAT_CREATE, run: (key, args) => withStaged(hub, key, args, false, (a) => chatCreate(hub, key, a)) },
     { ...SESSION_HISTORY, run: async (key, args) => afar(hub, key, "session_history", args) ?? sessionHistory(hub, args, scopeOf(hub, key)) },
   ];
 }

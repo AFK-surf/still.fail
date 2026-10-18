@@ -16,6 +16,7 @@ import {
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { relativeParts } from "../ops/paths.ts";
+import { PlaceRefused, Places } from "../ops/places.ts";
 import { platform } from "../platform/index.ts";
 import { isDeepStrictEqual } from "node:util";
 import { Clock, Duration, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
@@ -64,6 +65,9 @@ export type RemoteOptions = {
   clock?: Clock.Clock;
   /// How long a request made before the mesh is up waits for it (MESH_WAIT_MS; tests shorten it).
   meshWaitMs?: number;
+  /// How a task's `dir` is looked at (ops/places.ts): the station syncs it itself, so in a folder macOS protects it
+  /// must reach it itself, looked at off its thread. Default: without still.fail Helper.
+  places?: Places;
 };
 
 /// A request asked before the transport is attached (a chat taken up as the station starts, its subscription borrowed
@@ -167,6 +171,7 @@ export class Remote {
   private attached: Promise<void>;
   private markAttached!: () => void;
   private meshWaitMs: number;
+  private places: Places;
   private inbox: Inbox | null = null;
   private shares: Inbox | null = null;
   private xshare: { inside: Inbox; outside: Inbox } | null = null;
@@ -185,6 +190,7 @@ export class Remote {
     this.jobs = options.jobs;
     this.notify = options.notify;
     this.meshWaitMs = options.meshWaitMs ?? MESH_WAIT_MS;
+    this.places = options.places ?? new Places();
     this.attached = new Promise((resolve) => (this.markAttached = resolve));
     this.root = join(options.data, "remote");
     for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
@@ -1121,11 +1127,14 @@ export class Remote {
         const back = field(args, "back");
         if (dir !== null) {
           if (typeof dir !== "string" || !isAbsolute(dir)) throw new Error("dir must be an absolute path on this machine");
-          let isDir = false;
+          // The station reads it itself as it syncs: in a folder macOS protects, only when it may (looked at off its
+          // thread, ops/places.ts), never held on a prompt.
           try {
-            isDir = statSync(dir).isDirectory();
-          } catch {}
-          if (!isDir) throw new Error(`${dir} is not a directory`);
+            await this.places.directory(dir, { lang: "en", agent: true, self: true });
+          } catch (e) {
+            if (e instanceof PlaceRefused && (e.code === "gone" || e.code === "not_a_directory")) throw new Error(`${dir} is not a directory`);
+            throw e;
+          }
           // A station from before would take the task and run it without the files.
           const described = await this.ask(station, { method: "describe", workspace });
           if (field(described, "sync") === null) {

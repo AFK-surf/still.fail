@@ -227,21 +227,23 @@ export class Jobs {
     }
   }
 
-  /// Starts a job for `session`: `command` run by sh in `cwd`; a web service when it has a port.
-  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean): JobRow {
-    return this.startId(session, name, command, cwd, port, watch, null);
+  /// Starts a job for `session`: `command` run by sh in `cwd`; a web service when it has a port. `checked`: its caller
+  /// looked at `cwd` already (ops/places.ts), which is not looked at again here (in a folder macOS protects, that would
+  /// hold the station's thread).
+  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, checked = false): JobRow {
+    return this.startId(session, name, command, cwd, port, watch, null, checked);
   }
 
   /// A remote task supplies a stable id. Its caller serializes starts; an existing record is never spawned again.
-  startId(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, id: string | null): JobRow {
+  startId(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, id: string | null, checked = false): JobRow {
     if (id !== null) {
       const job = this.store.getJob(id);
       if (job) return job;
     }
     if (command.trim() === "") throw new Error("command is empty");
-    let isDir = false;
+    let isDir = checked;
     try {
-      isDir = statSync(cwd).isDirectory();
+      isDir ||= statSync(cwd).isDirectory();
     } catch {}
     if (!isDir) throw new Error(`no such directory: ${cwd}`);
     if (port !== null && port < 1024) throw new Error("a service's port is 1024 or above");

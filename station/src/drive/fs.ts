@@ -134,17 +134,31 @@ export const direct: Fs = {
 /// Documents, Desktop and Downloads, and the disks mounted in /Volumes other than the system's own (a link to / there).
 /// The one `path` is (or is under), by name, case aside as macOS's disks have it; null for any other path.
 export function protectedTop(path: string, home = homedir()): string | null {
+  const place = protectedPlace(path, home);
+  return place?.helper ? place.top : null;
+}
+
+/// The folders macOS protects, by name (nothing under them touched): those still.fail Helper opens (`helper`, as
+/// `protectedTop`), and iCloud Drive and the other file providers' folders (~/Library/Mobile Documents,
+/// ~/Library/CloudStorage), which macOS protects too but the helper has no grant for. The one `path` is (or is under);
+/// null for any other path. The drive reaches the first through the helper; a directory the station is to work in
+/// (ops/places.ts) is never looked at by the station's own thread in any of them.
+export function protectedPlace(path: string, home = homedir()): { top: string; helper: boolean } | null {
   const lower = path.toLowerCase();
   const under = (top: string) => lower === top.toLowerCase() || lower.startsWith(`${top.toLowerCase()}/`);
   for (const name of ["Documents", "Desktop", "Downloads"]) {
     const top = join(home, name);
-    if (under(top)) return top;
+    if (under(top)) return { top, helper: true };
+  }
+  for (const name of ["Library/Mobile Documents", "Library/CloudStorage"]) {
+    const top = join(home, name);
+    if (under(top)) return { top, helper: false };
   }
   const disk = /^\/volumes\/([^/]+)/.exec(lower);
   if (disk === null) return null;
   const top = `/Volumes/${path.split("/")[2]}`;
   try {
-    return lstatSync(top).isSymbolicLink() ? null : top;
+    return lstatSync(top).isSymbolicLink() ? null : { top, helper: true };
   } catch {
     return null;
   }

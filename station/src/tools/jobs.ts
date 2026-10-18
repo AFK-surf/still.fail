@@ -3,6 +3,7 @@
 // word (test/jobs-tools.test.ts reads them from it).
 import { type Jobs, LOG_LINES, named, tail } from "../jobs/jobs.ts";
 import { joinPath } from "../ops/paths.ts";
+import type { Places } from "../ops/places.ts";
 import type { JobRow } from "../store/store.ts";
 import type { Tool } from "./mcp.ts";
 
@@ -25,8 +26,9 @@ function owned(jobs: Jobs, key: string, args: Record<string, unknown>): JobRow {
 }
 
 
-/// `workspace`: a session's workspace directory (its record's), null for a session there is not.
-export function jobTools(jobs: Jobs, workspace: (session: string) => string | null): Tool[] {
+/// `workspace`: a session's workspace directory (its record's), null for a session there is not. `places`: how a cwd
+/// given is looked at (ops/places.ts: never on the station's thread in a folder macOS protects).
+export function jobTools(jobs: Jobs, workspace: (session: string) => string | null, places?: Places): Tool[] {
   return [
     {
       name: "job_start",
@@ -55,7 +57,10 @@ export function jobTools(jobs: Jobs, workspace: (session: string) => string | nu
           port = p;
         }
         const watch = args.watch === true;
-        const job = jobs.start(key, text(args, "name"), text(args, "command"), cwd, port, watch);
+        // A directory given is looked at first, as ops/places.ts does; the job itself runs there as the station's
+        // launcher does (macOS may keep it out of a protected folder, as any of the agent's commands).
+        if (places && given !== "") await places.directory(cwd, { lang: "en", agent: true });
+        const job = jobs.start(key, text(args, "name"), text(args, "command"), cwd, port, watch, places !== undefined && given !== "");
         return pretty(jobs.view(job));
       },
     },

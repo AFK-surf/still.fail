@@ -159,7 +159,13 @@ export class Admin {
               config: () => deps.agents!.config.raw(),
               protect: () => ownPaths(deps.agents!.config.data, deps.agents!.config.path, deps.agents!.hub.config().profiles.map((p) => p.home)),
               // The folders macOS keeps from the station, through still.fail Helper; their roots told again as its grants change.
-              files: deps.helper && platform.hasFolderPermissions ? new HelperFiles({ helper: deps.helper, ...(deps.grants ? { grants: deps.grants } : {}), changed: () => deps.events?.overviewChanged() }) : null,
+              // One with the agents' side (the directories people and agents name), where it made one.
+              files:
+                deps.agents.helperFiles !== undefined
+                  ? deps.agents.helperFiles
+                  : deps.helper && platform.hasFolderPermissions
+                    ? new HelperFiles({ helper: deps.helper, ...(deps.grants ? { grants: deps.grants } : {}), changed: () => deps.events?.overviewChanged() })
+                    : null,
             }),
             changed: () => deps.events?.overviewChanged(),
             // Beside the files uploaded for a message (routes/hub.ts), swept as they are.

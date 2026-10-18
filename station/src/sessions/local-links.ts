@@ -245,6 +245,25 @@ function links(text: string): Found[] {
   return found.sort((a, b) => a.start - b.start);
 }
 
+/// The local paths `text`'s links name (file URLs, absolute paths), read by name only: nothing on disk is looked at.
+/// Each with its destination as the link has it (escapes resolved).
+export function namedLocalPaths(text: string): { destination: string; path: string }[] {
+  const named: { destination: string; path: string }[] = [];
+  for (const link of links(text)) {
+    let path: string | null = null;
+    if (link.destination.startsWith("file:")) {
+      try {
+        path = fileURLToPath(new URL(link.destination));
+      } catch {}
+    } else {
+      const decoded = percentDecode(link.destination);
+      if (decoded.startsWith("/") && !decoded.startsWith("//")) path = decoded;
+    }
+    if (path !== null) named.push({ destination: link.destination, path });
+  }
+  return named;
+}
+
 const canonical = (path: string) => {
   try {
     return realpathSync(path);

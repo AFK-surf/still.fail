@@ -2,10 +2,10 @@
 // add_to_thread, say, bind_single, configure, archive, archive_chat, auto_archive, delete_session,
 // continue_machine_session). Archiving here is the record (archived, hidden) and what goes with it (the process ends,
 // other stations are told); packing an archived session's files is the hub's ColdStorage.
-import { copyFileSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
-import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
+import { PlaceRefused } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
@@ -333,7 +333,7 @@ function copyTranscript(roots: Roots, session: MachineSession, shared: string): 
 /// linking to the session's execution history, which shows what was said before (it is not copied into the chat). A
 /// session already going on with it is that one's chat, brought back if archived. `ws`: the workspace the new chat is in
 /// (null: the home one's).
-export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSession, createdBy: string, lang: Lang = stationLang(), ws: string | null = null): [string, ThreadRow] {
+export async function continueMachineSession(hub: Hub, roots: Roots, found: MachineSession, createdBy: string, lang: Lang = stationLang(), ws: string | null = null): Promise<[string, ThreadRow]> {
   const { store } = hub;
   const runtime = found.runtime;
   // One it went on in (a runtime session left for a new one included).
@@ -350,8 +350,19 @@ export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSes
       return [going.key, thread];
     }
   }
-  if (!(statSync(found.cwd, { throwIfNoEntry: false })?.isDirectory() ?? false)) throw new Error(tr(lang, "station.session.cwdGone", { cwd: found.cwd }));
-  if (unreadableDir(found.cwd)) throw new Error(unreadableDirMessage(lang, found.cwd));
+  // Looked at as ops/places.ts does: never on this thread in a folder macOS protects (still.fail Helper asked instead).
+  try {
+    await hub.places.directory(found.cwd, { lang });
+  } catch (e) {
+    if (e instanceof PlaceRefused && (e.code === "gone" || e.code === "not_a_directory")) throw new Error(tr(lang, "station.session.cwdGone", { cwd: found.cwd }));
+    throw e;
+  }
+  // Looked at again, in case it was continued meanwhile.
+  const already = store.listSessions().find((r) => r.runtime === runtime && store.runtimeSessions(r.key).includes(found.id));
+  if (already) {
+    const thread = store.homeChat(already.key);
+    if (thread) return [already.key, thread];
+  }
   const config = hub.config();
   // On the profiles the chat's workspace runs on.
   const profiles = hub.profilesIn(ws).filter((p) => p.runtimes.includes(runtime));

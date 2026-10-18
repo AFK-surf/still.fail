@@ -33,6 +33,7 @@ import { iso, transcriptPaths } from "../read/transcript.ts";
 import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, slackSurface, type ThreadRow } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
+import { Places } from "../ops/places.ts";
 import { isStopCommand } from "./args.ts";
 import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
@@ -98,6 +99,9 @@ export type HubOptions = {
   mcpUrl: string | (() => string);
   /// The station's own chat on its pages; sessions can be talked to there too.
   internal?: InternalChat | null;
+  /// How the directories and files people and agents name are looked at (ops/places.ts: never on this thread in a
+  /// folder macOS protects); default: without still.fail Helper.
+  places?: Places;
   /// A session's page in still.fail (its /o/ link), when the station is in a workspace.
   link?: (key: string) => string | undefined;
   /// The workspaces the station is in now, its home one first (docs/multi-workspace.md); none outside any.
@@ -122,6 +126,7 @@ export class Hub {
   readonly cold: ColdStorage;
   readonly accounts: Accounts;
   readonly clock: Clock.Clock;
+  readonly places: Places;
   /// What running turns are doing, for the pages' live view.
   readonly live: LiveHub;
   readonly actors = new Map<string, SessionActor>();
@@ -156,6 +161,7 @@ export class Hub {
     this.link = options.link ?? (() => undefined);
     this.workspaces = options.workspaces ?? (() => []);
     this.cold = options.cold ?? NOTHING_COLD;
+    this.places = options.places ?? new Places();
     this.accounts = new Accounts({
       config: () => this.config(),
       store: this.store,
@@ -923,6 +929,7 @@ export class Hub {
       },
       settled: (key, state, words) => settled(this, key, state, words),
       toolStatus,
+      places: this.places,
       nextTs: () => this.nextTs(),
       clock: this.clock,
     };

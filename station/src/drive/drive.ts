@@ -104,6 +104,22 @@ export function rootView(path: string): RootView {
   return { path, name, state: unreadableDir(path) ? "unreadable" : "ok" };
 }
 
+/// A root as the drive and the overview show it: in a folder macOS protects, with still.fail Helper there for it
+/// (`files`), by what is known of the helper's grant, never looked at by the station itself (listing it could hold the
+/// station's thread on a prompt); elsewhere as `rootView` finds it.
+export function rootViewThrough(path: string, files: Protected | null, home = homedir()): RootView {
+  const top = files ? protectedTop(path, home) : null;
+  if (top === null) return rootView(path);
+  return { path, name: rootName(path), state: granted(files!, top) ? "ok" : "unreadable" };
+}
+
+/// Whether still.fail Helper may open the protected folder `top`, as last known (looked at when not known yet).
+function granted(files: Protected, top: string): boolean {
+  const known = files.known(top);
+  if (known === undefined) files.check([top]);
+  return known?.state === "granted";
+}
+
 /// Where a file a person drops into one of the station's screens is put (docs/remote-screens.md `drop`): the machine's
 /// Downloads, where files from elsewhere land (a browser's, AirDrop's) and where its file dialogs look first; the home
 /// where it has none. Only the folder's own entry is looked at, never what is in it: on macOS listing a protected
@@ -228,16 +244,12 @@ export class Drive {
   /// A root's state, as the station may reach it: one macOS keeps from the station is `ok` once still.fail Helper has
   /// the grant for it (looked at in the background the first time, the root told again when it is known).
   rootView(path: string): RootView {
-    const top = this.#locked(path);
-    if (top === null) return rootView(path);
-    return { path, name: rootName(path), state: this.#granted(top) ? "ok" : "unreadable" };
+    return rootViewThrough(path, this.deps.files ?? null, this.deps.home ?? homedir());
   }
 
   /// Whether still.fail Helper may open the protected folder `top`, as last known (looked at when not known yet).
   #granted(top: string): boolean {
-    const known = this.deps.files!.known(top);
-    if (known === undefined) this.deps.files!.check([top]);
-    return known?.state === "granted";
+    return granted(this.deps.files!, top);
   }
 
   /// The protected folder `path` is in (by its name) when still.fail Helper is there for it; null when the station

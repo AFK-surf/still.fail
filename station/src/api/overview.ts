@@ -12,7 +12,7 @@ import type { Lang } from "../ops/i18n.ts";
 import type { Hub } from "../sessions/hub.ts";
 import type { Store } from "../store/store.ts";
 import type { Updates } from "../updates/updates.ts";
-import { rootView, rootsOf } from "../drive/drive.ts";
+import { type RootView, rootView, rootsOf } from "../drive/drive.ts";
 import { sees } from "../store/rows.ts";
 import { titleOf } from "../read/views.ts";
 import { policyView } from "../sessions/archive-policy.ts";
@@ -36,6 +36,9 @@ export type OverviewDeps = {
   /// What macOS lets still.fail Helper do here, as the viewer is told it (routes/permissions.ts); none where there is no
   /// helper (not a Mac), or before the first look.
   permissions?: (viewer: Viewer) => unknown;
+  /// A pinned root as the drive shows it (drive.ts `rootViewThrough`: one in a folder macOS protects by what still.fail
+  /// Helper's grant is known to be, never listed by the station); default `rootView`.
+  rootView?: (path: string) => RootView;
 };
 
 /// This station's link to still.fail cloud, as the pages show it (server.rs MeshFile::status): in the viewer's workspace
@@ -130,7 +133,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // The folders pinned in its drive (drive/drive.ts), each with whether it can be browsed now; a member who may write
     // browses every folder from the home (`anywhere`).
     // Those of a joined workspace browse only its pinned folders, never the whole machine.
-    drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map(rootView), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
+    drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map((p) => (d.rootView ?? rootView)(p)), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
     // macOS's grants to still.fail Helper (a Mac's station only; a station from before them says none: not shown).
     ...withPermissions(d, viewer),
   };

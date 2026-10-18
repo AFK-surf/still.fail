@@ -68,8 +68,47 @@ about and which holds the grants, so they open without the station restarting:
   again (`unreadable` becomes `ok`). A pinned root in such a folder is
   `unreadable` until the helper has the grant.
 - Agents are not affected: their commands still run under the station's
-  launcher, which macOS keeps out of these folders as before (an agent whose
-  chat starts there is told so, `station.session.cwdDeniedMac`).
+  launcher, which macOS keeps out of these folders as before, or prompts for
+  them (that prompt holds the agent's own process, not the station).
+
+## Directories and files the station is given (ops/places.ts)
+
+Besides the drive, people and agents name folders and files for the station to
+use: a chat continued from a terminal session runs in that session's directory,
+`job_start` takes a `cwd`, `station_task` a `dir` it syncs, `chat_post`,
+`session_send` and `chat_create` take `files` (and a still.fail chat's local
+links become attachments). On macOS the station never looks at one in a
+protected folder on its own thread (the same classification as the drive,
+`protectedPlace`, plus iCloud Drive's ~/Library/Mobile Documents and the file
+providers' ~/Library/CloudStorage, which macOS protects too but still.fail
+Helper has no grant for):
+
+- The path is walked link by link with lstat, never stepping into such a
+  folder; outside them it is looked at as before. In one (by its name or
+  through a link), still.fail Helper is asked (`files.stat`; an attachment is
+  copied into the session's uploads with `files.read`); without a helper for
+  it, a child process looks (or copies), killed after 5 seconds, so a prompt
+  macOS shows holds that process, not the station, and the request is refused
+  saying the folder may be asking for permission on that Mac.
+- A grant the helper lacks is refused naming the folder
+  (`station.place.grant`) and puts the helper's window up for it, as the drive
+  does (once while it is up and for three minutes after, whoever asks); an
+  agent is told to call `permissions` with that grant and post its answer with
+  need_human.
+- `station_task`'s `dir` is read by the station itself as it syncs, so the
+  helper's grant is no use there: only the station's own access counts, looked
+  at by the child process.
+- The pages' previews of a file a message names (`/sessions/:key/peek`) do not
+  reach into these folders (`station.files.protected`); the drive opens them.
+  The overview's pinned roots in them say what the helper's grant is known to
+  be, never listed by the station.
+- Left as they were: without still.fail Helper the drive itself still reads
+  these folders directly; `secret_run`'s `cwd` is only where its command runs
+  (nothing looked at); the device tools (off by default) read what they are
+  asked directly; a mount point in /Volumes is looked at itself (lstat) to tell
+  the system's own disk.
+- Once the helper has the grant the station goes on (an agent starts in such a
+  directory); the agent's commands then run as the launcher does (above).
 
 ## Station (station/src/drive/drive.ts, api/routes/drive.ts)
 

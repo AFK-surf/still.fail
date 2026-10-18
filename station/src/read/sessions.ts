@@ -27,6 +27,9 @@ import { parseUsize } from "./jobs.ts";
 import { agentHomeOf } from "./memory.ts";
 import { shown } from "./jobs.ts";
 import { runtimeKind } from "../agents/runtime.ts";
+import { protectedPlace } from "../drive/fs.ts";
+import { realOutside } from "../ops/places.ts";
+import { platform } from "../platform/index.ts";
 
 /// The connect of the station's own chats (chat/internal.rs).
 const INTERNAL_CONNECT = "ember";
@@ -396,9 +399,13 @@ export function sessionPlace(s: Store, key: string, given: string, lang: Lang): 
   const tilde = asked.startsWith("~/") && home !== "";
   const relative = !tilde && !isAbsolute(asked);
   const full = tilde ? join(home, asked.slice(2)) : relative ? join(base, asked) : asked;
-  const path = canonical(clean(full)) ?? (relative ? inRepositories([row.workspace, row.cwd], asked) ?? inRepositories([join(s.dataDir, "repos")], asked, true) : null);
+  // Nothing in a folder macOS protects is looked at here (its links followed up to one, ops/places.ts): that would hold
+  // this reader on a prompt for the station's launcher, and the pages with it.
+  const outside = realOutside(clean(full));
+  if (outside !== null && protectedPlace(outside) !== null && platform.hasFolderPermissions) throw new HttpError(403, tr("station.files.protected"));
+  const path = outside ?? (relative ? inRepositories([row.workspace, row.cwd], asked) ?? inRepositories([join(s.dataDir, "repos")], asked, true) : null);
   if (path === null) throw notFound();
-  const roots = [row.workspace, row.cwd, join(s.dataDir, "repos"), agentHomeOf(s.dataDir)].flatMap((r) => (r ? [canonical(r)] : [])).filter((r): r is string => r !== null);
+  const roots = [row.workspace, row.cwd, join(s.dataDir, "repos"), agentHomeOf(s.dataDir)].flatMap((r) => (r ? [realOutside(r)] : [])).filter((r): r is string => r !== null);
   if (!roots.some((r) => within(path, r))) throw new HttpError(403, tr("station.files.outside"));
   let st;
   try {
@@ -433,7 +440,7 @@ function inRepositories(dirs: (string | null)[], given: string, latest = false):
     }
     for (const e of entries) if (e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules") look(join(dir, e.name), depth - 1);
   };
-  for (const dir of dirs) if (dir) look(dir, 2);
+  for (const dir of dirs) if (dir && !(platform.hasFolderPermissions && protectedPlace(realOutside(dir) ?? dir) !== null)) look(dir, 2);
   let best: string | null = null;
   let bestAt = -1;
   for (const repo of repos) {
