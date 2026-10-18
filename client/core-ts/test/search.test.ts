@@ -24,7 +24,7 @@ const found = {
         { kind: "message", key: "m:9:3", title: "", text: "部署完了", at: 3000, thread: 9, seq: 3, chat: "old", chatTitle: "旧的部署", authorKind: "agent", author: "old", archived: true },
       ],
     },
-    { kind: "job", more: true, hits: [{ kind: "job", key: "j:j1", title: "部署预览", text: "pnpm dev", at: 10, job: "j1", port: 5173, session: "a", chat: "a", thread: 7 }] },
+    { kind: "job", more: true, hits: [{ kind: "job", key: "j:j1", title: "部署预览", text: "pnpm dev --filter 部署", at: 10, job: "j1", port: 5173, session: "a", chat: "a", thread: 7 }] },
   ],
 };
 
