@@ -188,7 +188,10 @@ export function transcriptFiles(s: Store, session: SessionRow, profiles: Profile
 /// not read whole at each turn's end): the most recently read few.
 export class Readings {
   #kept = new Map<string, { paths: string; at: ReadAt[]; count: number }>();
-  constructor(readonly most = 16) {}
+  readonly most: number;
+  constructor(most = 16) {
+    this.most = most;
+  }
   get(key: string) {
     const v = this.#kept.get(key);
     if (v) {
