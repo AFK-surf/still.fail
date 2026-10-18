@@ -2,5 +2,6 @@
   "id": "media",
   "entry": "src/main.ts",
   "files": [],
+  "native": ["ffmpeg"],
   "needsStation": 3530
 }

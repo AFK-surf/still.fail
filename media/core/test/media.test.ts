@@ -125,3 +125,47 @@ test("the photos' timeline, a window of it read as it is shown and again when th
   assert.equal((answers(emitted, 3)?.error as { code: string }).code, "invalid_params");
   core.close();
 });
+
+test("films and shows: the library and a place in one read as shown and as the service says they changed; a player's parts fetched", async () => {
+  let progress: unknown = null;
+  const s = await started(undefined, 0, undefined, undefined, [media]);
+  const { host, core } = s;
+  const segment = new Uint8Array([71, 1, 2, 3]);
+  stationReplies(host, (req) => {
+    if (req.url.endsWith(`${M}/videos/library`)) return { movies: [{ id: "m1", title: "活着", year: 1994 }], shows: [], recent: progress ? [{ id: "m1" }] : [] };
+    if (req.url.endsWith(`${M}/videos/m1/progress`) && req.method === "GET") return { progress };
+    if (req.url.endsWith(`${M}/videos/m1/progress`) && req.method === "PUT") return { ok: true };
+    if (req.url.endsWith(`${M}/videos/m1/hls/0.ts`)) return new Raw({ status: 200, headers: [["content-type", "video/mp2t"]], body: segment });
+    return undefined;
+  });
+  const ui = core.connect();
+  core.receiveJson(ui, JSON.stringify({ id: 1, subscribe: { topic: "media.videos", station: ST } }));
+  core.receiveJson(ui, JSON.stringify({ id: 2, subscribe: { topic: "media.progress", station: ST, id: "m1" } }));
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).movies.map((m: { title: string }) => m.title), ["活着"]);
+  assert.deepEqual(v(values, 2), { progress: null });
+  // Watched here: shown at once.
+  call(core, ui, 3, "media.video.progress.set", { station: ST, id: "m1", position: 600, at: 1000 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 2), { progress: { position: 600, at: 1000 } });
+  // Watched on another device: the service says so.
+  progress = { position: 1200, at: 2000 };
+  const events = s.streams.find((x) => x.path === "/m/media/events" && !x.closed)!;
+  Queue.offerUnsafe(events.queue, new TextEncoder().encode('event: progress\ndata: {"id":"m1"}\n\n'));
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 2), { progress: { position: 1200, at: 2000 } });
+  assert.deepEqual(v(values, 1).recent, [{ id: "m1" }]);
+  call(core, ui, 4, "media.video.fetch", { station: ST, path: "/videos/m1/hls/0.ts" });
+  call(core, ui, 5, "media.video.fetch", { station: ST, path: "/books/b1" });
+  await host.settle();
+  const emitted = host.takeEmitted();
+  const got = answers(emitted, 4) as { ok: { type: string }; bytes: Uint8Array };
+  assert.equal(got.ok.type, "video/mp2t");
+  assert.deepEqual([...got.bytes], [...segment]);
+  assert.equal((answers(emitted, 5)?.error as { code: string }).code, "invalid_params");
+  core.close();
+});

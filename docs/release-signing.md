@@ -30,7 +30,7 @@ station 自己装的模块包（[station-modules.md](station-modules.md)「包�
 {"id": "media", "version": "0.1.N", "build": N, "needsStation": M, "release": "…", "signature": "…", "key": "…"}
 ```
 
-签名内容是 `{kind: "stillfail-module-release", id, version, build, needsStation, builds: {"any": {sha256, size}}}`：`any` 是不分平台的包（以后有分平台的就是 `darwin-arm64` 这些，文件名后面加平台），`needsStation` 是它要求的最旧 station 的 build。key 和流程与 station 完全一样（同一个 `RELEASE_SIGNING_KEY`，CI 里没有就失败）。
+签名内容是 `{kind: "stillfail-module-release", id, version, build, needsStation, builds: {"any": {sha256, size}}}`：`any` 是不分平台的包；带原生件的模块（媒体服务带 ffmpeg）分平台打，`builds` 的键是 `darwin-arm64`、`linux-x64`、`linux-arm64`，各对应 `<id>-0.1.N-<平台>.tar.gz`，station 取自己平台的那个。`needsStation` 是它要求的最旧 station 的 build。key 和流程与 station 完全一样（同一个 `RELEASE_SIGNING_KEY`，CI 里没有就失败）。
 
 ## 谁验、怎么验
 
