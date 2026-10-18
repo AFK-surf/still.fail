@@ -1,0 +1,303 @@
+// Tests drive a view without a window: a fake host with fixed text metrics,
+// a clock the test advances, input sent the way a host sends it, and a text
+// dump of the laid-out tree to compare against.
+
+///|
+pub struct Tester {
+  fake : FakeHost
+  mut w : Double
+  mut h : Double
+  mut frames : Int
+}
+
+///|
+fn reset_globals() -> Unit {
+  let c = g
+  c.count = 0
+  c.cur = -1
+  c.id_seed = 17
+  c.id_stack.clear()
+  c.now = 0.0
+  c.dt = 16.0
+  c.last_now = -1.0
+  c.frame_no = 0
+  c.wants_frame = false
+  c.wake_at = -1.0
+  c.hit_ids.clear()
+  c.hit_rects.clear()
+  c.scroll_ids.clear()
+  c.scroll_rects.clear()
+  c.px = -1.0
+  c.py = -1.0
+  c.down = false
+  c.hover = 0
+  c.active = 0
+  c.focus = 0
+  c.clicked.clear()
+  c.drag_scroll = 0
+  c.dragging = false
+  c.vel = 0.0
+  c.editor_drag = false
+  c.lists.clear()
+  c.editors.clear()
+  c.springs.clear()
+  c.ninst = 0
+  c.ime_sig = ""
+  c.bench_list = 0
+  text_cache.shapes.clear()
+  text_cache.metrics.clear()
+  text_cache.glyphs.clear()
+  text_cache.generation = -1
+  bench.mode = 0
+}
+
+///|
+/// A tester showing `view` in a window of w × h logical pixels; it has
+/// already drawn the first frame.
+pub fn Tester::new(
+  view : (Ctx) -> Unit,
+  w? : Double = 390.0,
+  h? : Double = 844.0,
+) -> Tester {
+  let f = {
+    time: 1000.0,
+    wants: false,
+    wake: -1.0,
+    instances: 0,
+    ime_active: false,
+    ime_text: "",
+    ime_sel: (0, 0),
+    ime_rect: (0.0, 0.0, 0.0, 0.0),
+    clipboard: "",
+    logs: [],
+  }
+  fake.val = Some(f)
+  reset_globals()
+  g_view.val = view
+  let t = { fake: f, w, h, frames: 0 }
+  t.frame()
+  t
+}
+
+///|
+/// Draws one frame, `ms` after the previous one.
+pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
+  self.fake.time = self.fake.time + ms
+  self.fake.wants = false
+  on_frame(self.w, self.h, 2.0, self.fake.time)
+  self.frames = self.frames + 1
+}
+
+///|
+/// Draws frames until nothing asks for another (animations, scrolling and
+/// re-layouts have finished); returns how many it took.
+pub fn Tester::settle(self : Tester, max? : Int = 600) -> Int {
+  let mut n = 0
+  while n < max && (g.wants_frame || self.fake.wants) {
+    self.frame()
+    n = n + 1
+  }
+  n
+}
+
+///|
+pub fn Tester::resize(self : Tester, w : Double, h : Double) -> Unit {
+  self.w = w
+  self.h = h
+  self.frame()
+  self.settle() |> ignore
+}
+
+///|
+pub fn Tester::tap(self : Tester, x : Double, y : Double) -> Unit {
+  on_pointer(0, x, y, 0)
+  on_pointer(2, x, y, 0)
+  self.frame()
+  self.settle() |> ignore
+}
+
+///|
+/// A finger or mouse drag from one point to another in `steps` moves, one
+/// frame apart, then released.
+pub fn Tester::drag(
+  self : Tester,
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  steps? : Int = 10,
+) -> Unit {
+  on_pointer(0, x0, y0, 0)
+  for i in 1..=steps {
+    let t = i.to_double() / steps.to_double()
+    self.fake.time = self.fake.time + 16.0
+    on_pointer(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0)
+    self.frame(ms=0.0)
+  }
+  on_pointer(2, x1, y1, 0)
+  self.frame()
+}
+
+///|
+pub fn Tester::wheel(self : Tester, x : Double, y : Double, dy : Double) -> Unit {
+  on_wheel(x, y, 0.0, dy, 0)
+  self.frame()
+  self.settle() |> ignore
+}
+
+///|
+/// Text committed by the input method (or typed on a hardware keyboard).
+pub fn Tester::type_text(self : Tester, s : String) -> Unit {
+  on_text(0, s, 0, 0)
+  self.frame()
+}
+
+///|
+/// The input method's composition, with the caret at its end.
+pub fn Tester::compose(self : Tester, s : String) -> Unit {
+  on_text(1, s, s.length(), 0)
+  self.frame()
+}
+
+///|
+pub fn Tester::key(self : Tester, code : Int, mods? : Int = 0) -> Unit {
+  on_key(code, mods)
+  self.frame()
+  self.settle() |> ignore
+}
+
+///|
+pub fn Tester::enter(self : Tester) -> Unit {
+  self.key(key_enter)
+}
+
+///|
+pub fn Tester::backspace(self : Tester) -> Unit {
+  self.key(key_backspace)
+}
+
+///|
+/// The centre of the first text node (or editor placeholder) containing `s`.
+pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
+  let c = g
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if (n.kind == kind_text || n.kind == kind_editor) && n.text.contains(s) {
+      return Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
+    }
+  }
+  None
+}
+
+///|
+pub fn Tester::tap_text(self : Tester, s : String) -> Unit {
+  match self.find(s) {
+    Some((x, y)) => self.tap(x, y)
+    None => abort("no text \"\{s}\" on screen")
+  }
+}
+
+///|
+/// What the host was last told about the focused field: active, text,
+/// selection start and end.
+pub fn Tester::ime(self : Tester) -> (Bool, String, Int, Int) {
+  let (a, b) = self.fake.ime_sel
+  (self.fake.ime_active, self.fake.ime_text, a, b)
+}
+
+///|
+pub fn Tester::clipboard(self : Tester) -> String {
+  self.fake.clipboard
+}
+
+///|
+pub fn Tester::instances(self : Tester) -> Int {
+  self.fake.instances
+}
+
+///|
+fn r(x : Double) -> Int {
+  x.round().to_int()
+}
+
+///|
+/// The laid-out tree as text: one node per line, indented by depth, with its
+/// rectangle; text nodes with their text and line count.
+pub fn Tester::dump(self : Tester) -> String {
+  let sb = StringBuilder()
+  dump_node(sb, 0, 0)
+  sb.to_string()
+}
+
+///|
+fn dump_node(sb : StringBuilder, i : Int, depth : Int) -> Unit {
+  let c = g
+  if i >= c.count {
+    return
+  }
+  let n = c.nodes[i]
+  for _ in 0..<depth {
+    sb.write_string("  ")
+  }
+  let kind = if n.kind == kind_text {
+    "text"
+  } else if n.kind == kind_list {
+    "list"
+  } else if n.kind == kind_editor {
+    "editor"
+  } else if n.dir == Row {
+    "row"
+  } else {
+    "col"
+  }
+  sb.write_string("\{kind} \{r(n.x)},\{r(n.y)} \{r(n.fw)}x\{r(n.fh)}")
+  if n.kind == kind_text {
+    let lines = match n.tl {
+      Some(tl) => tl.line_start.length()
+      None => 0
+    }
+    sb.write_string(" \{n.text.escape()} lines=\{lines}")
+  }
+  if n.kind == kind_editor {
+    match c.editors.get(n.id) {
+      Some(st) => sb.write_string(" \{st.display().escape()} caret=\{st.caret}")
+      None => ()
+    }
+  }
+  if n.item >= 0 {
+    sb.write_string(" item=\{n.item}")
+  }
+  sb.write_char('\n')
+  let mut ch = n.first
+  while ch >= 0 {
+    dump_node(sb, ch, depth + 1)
+    ch = c.nodes[ch].next
+  }
+}
+
+///|
+/// The rectangle of the first node whose text contains `s` (x, y, w, h).
+pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Double)? {
+  let c = g
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.kind == kind_text && n.text.contains(s) {
+      return Some((n.x, n.y, n.fw, n.fh))
+    }
+  }
+  None
+}
+
+///|
+/// Visible list rows: (item, y, height), top to bottom.
+pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
+  let c = g
+  let out = []
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.item >= 0 && n.parent >= 0 && c.nodes[n.parent].kind == kind_list {
+      out.push((n.item, n.y, n.fh))
+    }
+  }
+  out
+}

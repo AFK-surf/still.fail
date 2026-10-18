@@ -60,7 +60,7 @@ let text_cache : TextCache = {
 
 ///|
 fn check_atlas() -> Unit {
-  let g = @host.atlas_generation()
+  let g = h_atlas_generation()
   if g != text_cache.generation {
     text_cache.generation = g
     text_cache.glyphs.clear()
@@ -75,7 +75,7 @@ fn font_metrics(size : Double, weight : Int) -> (Double, Double, Double) {
     Some(m) => m
     None => {
       let o = FixedArray::make(3, 0.0)
-      @host.font_metrics(size, weight, o)
+      h_font_metrics(size, weight, o)
       let m = (o[0], o[1], o[2])
       text_cache.metrics[key] = m
       m
@@ -96,7 +96,7 @@ fn shape(text : String, size : Double, weight : Int) -> Shaped {
       let n = if text.length() == 0 {
         0
       } else {
-        @host.shape(text, size, weight, out)
+        h_shape(text, size, weight, out)
       }
       let starts = Array::new(capacity=n)
       let lens = Array::new(capacity=n)
@@ -124,7 +124,7 @@ fn glyph(key : Int) -> Glyph {
     Some(g) => g
     None => {
       let o = text_cache.gbuf
-      @host.glyph(key, o)
+      h_glyph(key, o)
       let g = {
         u: o[0],
         v: o[1],

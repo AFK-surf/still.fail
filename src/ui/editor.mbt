@@ -256,7 +256,7 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
   } else if code == key_copy || code == key_cut {
     let (a, b) = self.sel()
     if a != b {
-      @host.clipboard_set(sub(t, a, b))
+      h_clipboard_set(sub(t, a, b))
       if code == key_cut {
         self.delete_selection() |> ignore
       }
@@ -466,7 +466,7 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
           let sig = "\{x.to_int()},\{y.to_int()},\{a},\{b},\{st.text.length()},\{st.text.hash()}"
           if sig != self.ime_sig {
             self.ime_sig = sig
-            @host.set_ime(true, x, y, 2.0, tl.line_h, st.text, a, b)
+            h_set_ime(true, x, y, 2.0, tl.line_h, st.text, a, b)
           }
         }
         None => ()
@@ -474,7 +474,7 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
     None =>
       if self.ime_sig != "" {
         self.ime_sig = ""
-        @host.set_ime(false, 0.0, 0.0, 0.0, 0.0, "", 0, 0)
+        h_set_ime(false, 0.0, 0.0, 0.0, 0.0, "", 0, 0)
       }
   }
 }
