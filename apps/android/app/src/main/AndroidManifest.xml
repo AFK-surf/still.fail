@@ -106,6 +106,20 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <!-- The share list's second entry, for a person's plugins (docs/client-plugins.md): what is shared runs the plugin
+             that takes it, at once. Off until the app sees the person has a plugin with a share entry (share/Quick.kt). -->
+        <activity-alias
+            android:name=".share.Quick"
+            android:targetActivity=".share.ShareActivity"
+            android:label="@string/share_quick"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
         <!-- What the installer says of an update (Updates.kt). -->
         <receiver android:name=".InstallResult" android:exported="false" />
         <service android:name=".AdbShareService" android:exported="false" android:foregroundServiceType="specialUse">

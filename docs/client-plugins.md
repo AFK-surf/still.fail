@@ -55,9 +55,9 @@ station 上的 agent（或以后的 station 模块）。所以 agent 写好插�
 ## 安卓
 
 - 普通的「still.fail」分享入口不变（docs/share-in.md：只放进输入框，不放快捷操作）。
-- 另一个入口「still.fail 快捷」（manifest 里 `ShareActivity` 的 `activity-alias`，默认关）：app 看到当前 workspace 有带
+- 另一个入口「快捷分享」（manifest 里 `ShareActivity` 的 `activity-alias`，默认关）：app 看到当前 workspace 有带
   `share` 入口的插件就打开它（`setComponentEnabledSetting`），一个都没有就关掉。没有插件的人在分享列表里看不到它。
-- 从「still.fail 快捷」进来：只有一个插件匹配就直接 `plugins.run`，面板显示「已发到 <对话>」和「打开对话」，几秒后自己关；
+- 从「快捷分享」进来：只有一个插件匹配就直接 `plugins.run`，面板显示「已发到 <对话>」和「打开对话」，几秒后自己关；
   几个匹配就列出来挑；一个都不匹配就回到普通的分享面板。
 - 以后再加：把每个插件发布成系统的「分享直达」（sharing shortcuts）。有的国产系统不显示那一排，所以固定入口是主路。
 

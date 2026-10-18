@@ -1,7 +1,8 @@
 // What another app shares into still.fail (docs/share-in.md): the system's share sheet hands this activity a link or
 // some text (ACTION_SEND, text/plain), and it shows over that app, not over still.fail: one sheet of the chats it can
 // go to. A tap puts what is shared in that chat's composer and opens still.fail at the chat (MainActivity, by
-// `OPEN_STATION` / `OPEN_SESSION`), where it is added to and sent; this activity ends.
+// `OPEN_STATION` / `OPEN_SESSION`), where it is added to and sent; this activity ends. Through the share list's second
+// entry (Quick.kt), the person's plugins that take what is shared come first (QuickSheet.kt).
 package fail.still.android.share
 
 import android.content.Intent
@@ -67,7 +68,7 @@ class ShareActivity : ComponentActivity() {
         setContent {
             val dark = when (appearance) { "light" -> false; "dark" -> true; else -> isSystemInDarkTheme() }
             StillFailTheme(dark) {
-                ShareScreen(shared, target, onOpen = { openApp(it) }, onOpenApp = { openApp(null) }, onClose = ::finish)
+                ShareScreen(shared, target, onOpen = { openApp(it) }, onOpenApp = { openApp(null) }, onClose = ::finish, quick = Quick.isIt(intent))
             }
         }
     }

@@ -16,7 +16,7 @@ export type PluginToolsDeps = {
 };
 
 export const PLUGIN_SAVE_DESCRIPTION =
-  "Save a plugin for the person who started this chat: an entry their still.fail apps grow and what it does, made and changed by you, seen by nobody else. A share entry shows when they share something from another app (Android: the share list's \"still.fail 快捷\" entry; one plugin matching what is shared runs at once). Its action sends the whole shared text into a chat of this station as their message (send \"auto\", default) or puts it in that chat's composer (\"composer\"); that chat's agent then does the work (e.g. downloads the video with a skill). The chat is this one unless you name another session this person started here. Saving an existing id changes it. It reaches their devices within seconds; no app update is needed.";
+  "Save a plugin for the person who started this chat: an entry their still.fail apps grow and what it does, made and changed by you, seen by nobody else. A share entry shows when they share something from another app (Android: the share list's \"快捷分享\" (Quick share) entry; one plugin matching what is shared runs at once). Its action sends the whole shared text into a chat of this station as their message (send \"auto\", default) or puts it in that chat's composer (\"composer\"); that chat's agent then does the work (e.g. downloads the video with a skill). The chat is this one unless you name another session this person started here. Saving an existing id changes it. It reaches their devices within seconds; no app update is needed.";
 
 export function pluginTools(d: PluginToolsDeps): Tool[] {
   const whose = (key: string) => {

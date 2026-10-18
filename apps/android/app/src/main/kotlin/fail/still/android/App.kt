@@ -312,6 +312,9 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     val followed = remember { HashMap<String, fail.still.android.data.PageTopics>() }
     val workspace = current.workspace.id
     fun keyOf(screen: Screen) = "$workspace|${app.pageOf(screen)}"
+    // The share list's entry for the person's plugins: on while they have one here (share/Quick.kt).
+    val appContext = LocalContext.current.applicationContext
+    LaunchedEffect(workspace) { fail.still.android.share.Quick.follow(appContext, app.core, workspace) }
     // A place's top page of this workspace, switched away from on the bar, keeps its state (PLACE_PAGES, below), and
     // its topics: still followed while its place is in one of the bars (coming back, what it shows is there and up to
     // date at once); paused otherwise, what they showed kept, so it comes back drawn as it was left and followed again
