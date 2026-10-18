@@ -20,6 +20,7 @@ import { StationAddr } from "./station/addr.ts";
 import { isObject } from "./util.ts";
 import { FileSource } from "./file-source.ts";
 import { headerSize } from "./imageSize.ts";
+import { localId } from "./ids.ts";
 
 type J = any;
 
@@ -88,7 +89,6 @@ export class Composers {
   #inner: Inner;
   #all = new Map<string, State>();
   #edits = 0;
-  #keptId = 0;
   #uploads = new Map<string, { station: string; file: FileIn | null; done: Deferred.Deferred<J, CoreError>; error: boolean }>();
   /// Files named by their path, kept to send up should they be switched to files (`mode`), by id.
   #held = new Map<string, { station: string; file: FileIn }>();
@@ -192,10 +192,10 @@ export class Composers {
     if (!isObject(kept)) return s;
     s.text = typeof kept.text === "string" ? kept.text : "";
     if (s.text) s.rev = 1;
-    s.quotes = (Array.isArray(kept.quotes) ? kept.quotes : []).filter(isObject).map((q: J) => ({ ...q, id: `kept-${this.#keptId++}` }) as ComposerQuote);
-    s.files = (Array.isArray(kept.files) ? kept.files : []).filter(isObject).map((f: J) => ({ id: `kept-${this.#keptId++}`, name: String(f.name ?? ""), size: Number(f.size ?? 0), done: f, error: null }));
+    s.quotes = (Array.isArray(kept.quotes) ? kept.quotes : []).filter(isObject).map((q: J) => ({ ...q, id: localId("kept") }) as ComposerQuote);
+    s.files = (Array.isArray(kept.files) ? kept.files : []).filter(isObject).map((f: J) => ({ id: localId("kept"), name: String(f.name ?? ""), size: Number(f.size ?? 0), done: f, error: null }));
     for (const l of Array.isArray(kept.links) ? kept.links : []) {
-      if (isObject(l) && typeof l.url === "string") s.files.push(linkFile(`kept-${this.#keptId++}`, l as ComposerLink));
+      if (isObject(l) && typeof l.url === "string") s.files.push(linkFile(localId("kept"), l as ComposerLink));
     }
     return s;
   }
@@ -289,7 +289,7 @@ export class Composers {
   link(key: string, link: ComposerLink): number {
     const s = this.#state(key);
     if (s.files.some((f) => f.link?.url === link.url)) return s.version;
-    s.files = [...s.files, linkFile(`link-${this.#keptId++}`, link)];
+    s.files = [...s.files, linkFile(localId("link"), link)];
     return this.#changed(key, s);
   }
 

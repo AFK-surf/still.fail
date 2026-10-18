@@ -35,6 +35,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import fail.still.android.ui.ListKeys
 import fail.still.android.ui.LocalUi
 
 class MainActivity : ComponentActivity() {
@@ -135,6 +136,7 @@ class MainActivity : ComponentActivity() {
         Crashes.install(applicationContext)
         BarTiming.start(applicationContext)
         StillFailCore.onFailed = { reason -> Crashes.coreFailed(applicationContext, reason) }
+        ListKeys.onDuplicate = { list, key -> Crashes.duplicateKey(applicationContext, list, key) }
         StillFailCore.restartedText = { t("android-misc.core.restarted") }
         fail.still.android.data.I18n.load(applicationContext)
         lifecycleScope.launch {

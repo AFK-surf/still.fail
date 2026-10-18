@@ -65,7 +65,6 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape

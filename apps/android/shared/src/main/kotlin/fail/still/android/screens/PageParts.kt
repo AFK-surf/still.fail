@@ -148,7 +148,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.lazy.LazyColumn
+import fail.still.android.ui.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.layout.fillMaxHeight
