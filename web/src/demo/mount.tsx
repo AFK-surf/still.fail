@@ -184,6 +184,10 @@ function searchView(query: string, kind: string | null): SearchView {
   const said = (text: string) => ({ text, marks: marks(text, q) });
   const of = (c: ChatItem | undefined) => (c ? { chat: c.id, chatTitle: c.title, session: c.session } : {});
   const groups: NonNullable<SearchView["groups"]> = [
+    { kind: "file", title: "文件", more: true, items: [
+      { kind: "file", key: "f1", ...where, title: `${q}-notes.md`, ...said(`~/Documents/${q}`), path: `/Users/me/Documents/${q}/${q}-notes.md`, dir: false, fileKind: "markdown", size: 2048, sizeText: "2 KB", createdAt: Date.now() - 7_200_000 },
+      { kind: "file", key: "f2", ...where, title: q, ...said("~/WebstormProjects"), path: `/Users/me/WebstormProjects/${q}`, dir: true, fileKind: "folder", createdAt: Date.now() - 172_800_000 },
+    ] },
     { kind: "history", title: "执行历史", more: true, items: [
       { kind: "history", key: "h1", ...where, title: first?.title ?? "", ...said(`bash · pnpm run ${q} --filter web`), ...of(first), index: 12, createdAt: Date.now() - 3_600_000 },
       { kind: "history", key: "h2", ...where, title: all[1]?.title ?? "", ...said(`先确认 ${q} 的配置再改`), ...of(all[1]), index: 4, createdAt: Date.now() - 86_400_000 },

@@ -160,6 +160,18 @@ async function main() {
   await switcher("部署", "desktop-deploy-dark");
   await page.emulateMedia({ colorScheme: "light" });
 
+  // The machine's files (Spotlight on this Mac, as the station's user): a word its home surely has.
+  const files = await switcher("readme", "desktop-files");
+  check("⌘K finds the machine's files", files.replace(/\s+/g, " ").slice(0, 300), /文件/.test(files) && /README/i.test(files));
+  // The station's page: what its search finds of the machine, the person's own data off.
+  await page.keyboard.press("Escape");
+  const stationId = JSON.parse(readFileSync(join(data, "mesh/cloud.json"), "utf8")).station;
+  await page.goto(`${ORIGIN}/w/${workspace}/settings/stations/${stationId}`);
+  await page.getByText("搜索个人数据").first().waitFor({ timeout: 30_000 });
+  await page.getByText("搜索个人数据").first().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: join(SHOTS, "desktop-station-search.png") });
+  check("the station's page says whether personal data is searched", "搜索个人数据", true);
+
   // The phone's search.
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: "zh-CN" });
   await phone.addInitScript((a) => {
