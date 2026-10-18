@@ -347,11 +347,15 @@ fn view(c : @ui.Ctx) -> Unit {
     by_hand(step)
   }
   c.box(w=Fill(1.0), h=Fill(1.0), bg=0xF5F5F7FFL, padx=28.0, pady=24.0, gap=18.0, fn() {
+    // The title on a line of its own, the buttons under it: on a phone the five did not fit on one line (登录 went
+    // off the screen's edge).
     c.row(gap=12.0, fn() {
       c.text("still.fail", size=22.0, weight=700, wrap=false) |> ignore
       c.text("内核 · " + engine_name(), size=13.0, color=grey, wrap=false)
       |> ignore
-      c.spacer()
+    })
+    |> ignore
+    c.row(gap=10.0, fn() {
       if c.button("书架", key="shelf", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
         app.shelf = true
       }
@@ -383,6 +387,9 @@ fn view(c : @ui.Ctx) -> Unit {
         (Some(Array(list)), _) =>
           if list.length() == 0 {
             c.text("还没有登录的账号", size=15.0) |> ignore
+            if !app.signing_in && c.button("登录 still.fail", key="sign-in-card") {
+              sign_in()
+            }
           } else {
             for a in list {
               account_row(c, a)
