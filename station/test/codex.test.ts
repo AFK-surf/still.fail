@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
 import { existingRunners } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
+import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
 process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
@@ -279,6 +280,28 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(starts(p.dump).length, 2);
     assert.equal(starts(p.dump)[1].env.EXTRA, "1");
     await three.prompt("say:x");
+    await until(ended(1));
+  });
+
+  test("the station's variables for its agents: an app-server starts with them, again once idle when they change; a profile's own win", async (t) => {
+    t.after(() => readAgentEnvFrom(() => null));
+    let raw: any = {};
+    readAgentEnvFrom(() => raw);
+    const d = driver();
+    const p = profile({ env: { FAKE_DUMP: "", MINE: "profile's" } });
+    (p.env as Record<string, string>).FAKE_DUMP = p.dump;
+    const one = await d.open(options(p), () => {});
+    await one.dispose();
+    assert.equal(starts(p.dump)[0].env.HTTPS_PROXY, undefined);
+    raw = { agentEnv: { HTTPS_PROXY: "http://127.0.0.1:7890", MINE: "station's" } };
+    const { push, until } = listen();
+    const two = await d.open(options(p), push);
+    assert.equal(starts(p.dump).length, 2);
+    const env = starts(p.dump)[1].env;
+    assert.equal(env.HTTPS_PROXY, "http://127.0.0.1:7890");
+    assert.match(env.NO_PROXY, /(^|,)127\.0\.0\.1(,|$)/);
+    assert.equal(env.MINE, "profile's");
+    await two.prompt("say:x");
     await until(ended(1));
   });
 

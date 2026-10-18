@@ -7,10 +7,10 @@ export const envTable = style({ display: "grid", gap: "8px" });
 /** Over the rows, what each column is (the rows' words stand under them); none where the rows are one column. */
 export const envHead = style({
   fontSize: vars.textMeta, color: vars.muted,
-  // Where the fields' words start (their padding and line).
-  selectors: { "& > span:not(:last-child)": { paddingInline: "13px" } },
   "@media": { "(max-width: 700px)": { display: "none" } },
 });
+// Where the fields' words start (their padding and line).
+globalStyle(`${envHead} > span:not(:last-child)`, { paddingInline: "13px" });
 /** The head's last column, as wide as a row's button and not seen. */
 export const envHeadEnd = style({ visibility: "hidden" });
 export const envRow = style({
