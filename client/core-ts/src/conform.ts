@@ -177,12 +177,88 @@ export function conform(ty: Ty, value: unknown): { ok: unknown } | { error: stri
   return conformTy(ty, value);
 }
 
-/// `conform` of a value found at `at` (its errors say where in the whole it is).
+/// `conform` of a value found at `at` (its errors say where in the whole it is). Most values fit: they go through
+/// `fit`, which keeps no path and sorts no keys; only one that does not is walked again to say where and why.
 export function conformTy(ty: Ty, value: unknown, at = ""): { ok: unknown } | { error: string } {
+  try {
+    return { ok: fit(value, ty) };
+  } catch (e) {
+    if (e !== MISFIT) throw e;
+  }
   try {
     return { ok: walk(value, ty, at) };
   } catch (e) {
     if (e instanceof Wrong) return { error: `${e.path === "" ? "." : e.path}: ${e.inner}` };
     throw e;
   }
+}
+
+const MISFIT = Symbol("misfit");
+const has = Object.prototype.hasOwnProperty;
+
+/// `walk` for a value that fits, making the same value: every topic's every change goes through it whole, and walking
+/// it (a path written for every field, every object's keys sorted) was much of what the core did on a phone
+/// (2026-10-19). Anything that does not fit is MISFIT, for `walk` to say.
+function fit(v: unknown, ty: Ty): unknown {
+  if (v !== null && typeof v === "object" && shaped.has(v)) return v;
+  if (typeof ty === "object") {
+    if ("opt" in ty) return v === null || v === undefined ? null : fit(v, ty.opt);
+    if ("vec" in ty) {
+      if (!Array.isArray(v)) throw MISFIT;
+      const out = new Array(v.length);
+      for (let i = 0; i < v.length; i++) out[i] = fit(v[i], ty.vec);
+      return out;
+    }
+    if ("tuple" in ty) {
+      if (!Array.isArray(v) || v.length !== ty.tuple.length) throw MISFIT;
+      return ty.tuple.map((t, i) => fit(v[i], t));
+    }
+    if (v === null || typeof v !== "object" || Array.isArray(v)) throw MISFIT;
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(v)) out[k] = fit((v as Record<string, unknown>)[k], ty.map);
+    return out;
+  }
+  switch (ty) {
+    case "Value":
+      return v === undefined ? null : v;
+    case "String":
+      if (typeof v !== "string") throw MISFIT;
+      return v;
+    case "bool":
+      if (typeof v !== "boolean") throw MISFIT;
+      return v;
+    case "f64":
+    case "f32":
+      if (typeof v !== "number") throw MISFIT;
+      return v;
+  }
+  const ints = INTS[ty];
+  if (ints) {
+    if (typeof v !== "number" || !Number.isInteger(v) || v < ints[0] || v > ints[1]) throw MISFIT;
+    return v;
+  }
+  const shape = SHAPES[ty];
+  if (!shape) throw new Error(`no shape ${ty}`);
+  if (shape.kind === "enum") {
+    if (typeof v !== "string" || !shape.values.includes(v)) throw MISFIT;
+    return v;
+  }
+  if (v === null || typeof v !== "object" || Array.isArray(v)) throw MISFIT;
+  const obj = v as Record<string, unknown>;
+  if (shape.kind === "tagged") {
+    const tag = obj[shape.tag];
+    if (typeof tag !== "string" || !has.call(shape.variants, tag) || !(shape.content in obj)) throw MISFIT;
+    return { [shape.tag]: tag, [shape.content]: fit(obj[shape.content], shape.variants[tag]) };
+  }
+  const out: Record<string, unknown> = {};
+  for (const f of shape.fields) {
+    let value: unknown;
+    if (has.call(obj, f.name)) value = fit(obj[f.name], f.ty);
+    else if (f.default || shape.default) value = defaultOf(f.ty);
+    else if (typeof f.ty === "object" && "opt" in f.ty) value = null;
+    else throw MISFIT;
+    if (value === null && f.skipNone) continue;
+    out[f.name] = value;
+  }
+  return out;
 }
