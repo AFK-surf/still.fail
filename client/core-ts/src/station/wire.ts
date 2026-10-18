@@ -28,15 +28,15 @@ export function concat(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-/// The whole body; `each` hears each piece as it comes.
-export function readAll(body: Pull<Uint8Array>, each?: (chunk: Uint8Array) => void): Effect.Effect<Uint8Array, CoreError> {
+/// The whole body; `each` hears each piece as it comes. Not `keep`: each piece goes to `each` alone (the body given is empty).
+export function readAll(body: Pull<Uint8Array>, each?: (chunk: Uint8Array) => void, keep = true): Effect.Effect<Uint8Array, CoreError> {
   return Effect.gen(function* () {
     const parts: Uint8Array[] = [];
     for (;;) {
       const chunk = yield* Effect.mapError(body.take, asCoreError);
       if (chunk === null) break;
       each?.(chunk);
-      parts.push(chunk);
+      if (keep) parts.push(chunk);
     }
     return concat(parts);
   });

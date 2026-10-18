@@ -1,7 +1,7 @@
 // The station calls (core/execute.rs, the station's part): operations, a chat's pages and place, what is read,
 // files, uploads and previews.
 import { Deferred, Effect, Scope } from "effect";
-import type { Inner } from "../core.ts";
+import type { Inner, Progress } from "../core.ts";
 import { handlers } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
 import { CoreError, asCoreError } from "../error.ts";
@@ -15,6 +15,16 @@ import { readAll, replyHeader, takeFrames, encodeFrame, type Frame } from "./wir
 import * as logins from "./machine-logins.ts";
 
 const parse = (station: string) => Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
+
+/// What a part read says as it comes: with `stream`, each piece of its bytes beside `{ loaded }`; else with `progress`,
+/// `{ loaded }` alone now and then.
+function partProgress(c: { progress: boolean; stream: boolean }, progress: Progress): [((loaded: number) => void) | undefined, ((piece: Uint8Array) => void) | undefined] {
+  if (c.stream) {
+    let loaded = 0;
+    return [undefined, (piece) => progress({ loaded: (loaded += piece.length) }, piece)];
+  }
+  return [c.progress ? (loaded) => progress({ loaded }) : undefined, undefined];
+}
 
 /// Preview sockets open, by client and the name its UI gave each: where `preview.socket.send` puts the page's messages.
 const sockets = new Map<string, (frame: Frame) => void>();
@@ -106,10 +116,13 @@ export function install(): void {
     );
   };
   // `progress`: the bytes of the part so far, as they come (a part is megabytes: its end alone is too seldom to show).
+  // `stream`: its bytes go as they come, beside values `{ loaded }`, not in its answer as base64 (on a phone, 4 MB made
+  // base64, sent in its JSON and read back took longer than it took to come).
   handlers.stationFilePart = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFilePart" }>;
+    const [heard, sink] = partProgress(c, progress);
     return Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx, c.progress ? (loaded) => progress({ loaded }) : undefined), (got) => ({ type: got.type, total: got.total, bytes: base64(got.bytes) })),
+      Effect.map(inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx, heard, sink), (got) => ({ type: got.type, total: got.total, ...(c.stream ? {} : { bytes: base64(got.bytes) }) })),
     );
   };
   handlers.stationPoster = (inner, call, _p, _a, ctx) => {
@@ -128,8 +141,9 @@ export function install(): void {
   };
   handlers.driveRead = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "driveRead" }>;
+    const [heard, sink] = partProgress(c, progress);
     return Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(inner.stations.requests.driveRead(addr, c.root, c.path, c.offset, c.length, ctx, c.progress ? (loaded) => progress({ loaded }) : undefined), (got) => ({ type: got.type, total: got.total, mtime: got.mtime, bytes: base64(got.bytes) })),
+      Effect.map(inner.stations.requests.driveRead(addr, c.root, c.path, c.offset, c.length, ctx, heard, sink), (got) => ({ type: got.type, total: got.total, mtime: got.mtime, ...(c.stream ? {} : { bytes: base64(got.bytes) }) })),
     );
   };
   handlers.driveUploadPart = (inner, call, _p, _a, ctx) => {

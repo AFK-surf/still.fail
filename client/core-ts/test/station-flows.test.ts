@@ -19,7 +19,7 @@ import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RE
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
 import { SOCKET_OPEN_MS } from "../src/station/requests.ts";
-import { HostWire, encodeFrame, takeFrames } from "../src/station/wire.ts";
+import { HostWire, concat, encodeFrame, takeFrames } from "../src/station/wire.ts";
 import type { FakeHost } from "../src/testing.ts";
 
 const gets = (host: FakeHost, path: string) => host.requests.flatMap(readsOf).filter((url) => url.endsWith(path)).length;
@@ -153,6 +153,32 @@ test("tells_how_far_a_part_has_come", async () => {
   const got = await run(core.inner.stations.requests.filePart(remote(), "k", "big", 0, 4194304, null, (loaded) => heard.push(loaded)));
   // Past 64 KB (it comes in one chunk here); nothing heard without asking.
   assert.deepEqual(heard, [got.bytes.length]);
+  core.close();
+});
+
+test("hands_a_part_over_as_it_comes", async () => {
+  const big = "x".repeat(300 * 1024);
+  const { host, core } = await started({
+    ...base(),
+    "GET /sessions/k/parts?name=big&offset=0&length=4194304": big,
+    "GET /sessions/k/parts?name=gone&offset=0&length=4194304": status(404, { error: "文件不存在" }),
+  });
+  const ui = core.connect();
+  const said = (id: number) => host.takeEmitted().map(([, m]) => m as J).filter((m) => m.id === id);
+  call(core, ui, 1, "station.file.part", { station: ST, key: "k", name: "big", offset: 0, length: 4194304, stream: true });
+  await host.settle();
+  const one = said(1);
+  const pieces = one.filter((m) => m.bytes !== undefined);
+  // Its bytes beside values saying how far it has come, none in its answer.
+  assert.equal(text(concat(pieces.map((m) => m.bytes))), JSON.stringify(big));
+  assert.deepEqual(pieces.at(-1)?.value, { loaded: JSON.stringify(big).length });
+  assert.equal(one.find((m) => "ok" in m)?.ok.bytes, undefined);
+  // An error's body is not handed over as the file's.
+  call(core, ui, 2, "station.file.part", { station: ST, key: "k", name: "gone", offset: 0, length: 4194304, stream: true });
+  await host.settle();
+  const two = said(2);
+  assert.equal(two.filter((m) => m.bytes !== undefined).length, 0);
+  assert.equal(two.find((m) => "error" in m)?.error.code, "http_404");
   core.close();
 });
 

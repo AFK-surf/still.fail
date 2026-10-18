@@ -85,15 +85,16 @@ object DriveCache {
                     onProgress(have, total)
                     while (have < want) {
                         val from = have
-                        val got = api.driveRead(root, path, have, minOf(DRIVE_PART.toLong(), want - have).toInt()) { n -> onProgress(from + n, total) }
+                        val got = api.driveReadTo(root, path, have, minOf(DRIVE_PART.toLong(), want - have).toInt(), out) { n -> onProgress(from + n, total) }
                         if (got.total != total || (got.mtime != null && got.mtime != m)) {
                             Log.i(TAG, "$path changed: $total B at $m, now ${got.total} B at ${got.mtime}")
+                            // What came of it as it is now is not kept with what came before.
+                            withContext(Dispatchers.IO) { out.channel.truncate(have) }
                             total = got.total; m = got.mtime ?: m; changed = true
                             break
                         }
-                        if (got.bytes.isEmpty()) break
-                        withContext(Dispatchers.IO) { out.write(got.bytes) }
-                        have += got.bytes.size
+                        if (got.count == 0L) break
+                        have += got.count
                         onProgress(have, total)
                     }
                 }

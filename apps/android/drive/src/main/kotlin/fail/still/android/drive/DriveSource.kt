@@ -123,20 +123,22 @@ class DriveSource(private val api: StationApi, private val root: String, private
         val want = if (fileSize >= 0) (fileSize - position).coerceAtMost(planned.toLong()).toInt() else planned
         if (want <= 0) return false
         val began = SystemClock.elapsedRealtime()
+        val into = java.io.ByteArrayOutputStream(want)
         val got = try {
-            runBlocking { api.driveRead(root, path, position, want) }
+            runBlocking { api.driveReadTo(root, path, position, want, into) }
         } catch (e: CoreException) {
             throw IOException("reading $path at $position ($want bytes): ${e.message}", e)
         }
         val ms = SystemClock.elapsedRealtime() - began
         fileSize = got.total
-        if (got.bytes.isEmpty()) return false
-        window = got.bytes
+        if (got.count == 0L) return false
+        val bytes = into.toByteArray()
+        window = bytes
         windowStart = position
-        windowValid = got.bytes.size
+        windowValid = bytes.size
         cursor = 0
-        stats.record(got.bytes.size, want, ms)
-        Log.i(TAG, "read $path @$position ${got.bytes.size}B in ${ms}ms (${"%.1f".format(if (ms > 0) got.bytes.size / 1048.576 / ms else 0.0)} MB/s) total ${stats.bytesRead}B of $fileSize")
+        stats.record(bytes.size, want, ms)
+        Log.i(TAG, "read $path @$position ${bytes.size}B in ${ms}ms (${"%.1f".format(if (ms > 0) bytes.size / 1048.576 / ms else 0.0)} MB/s) total ${stats.bytesRead}B of $fileSize")
         return true
     }
 
