@@ -33,7 +33,8 @@ const RETIRED = JSON.stringify({
   processes: [],
 });
 
-export const routes = ({ read, host, agents }: Tools): Route[] => {
+export const routes = (tools: Tools): Route[] => {
+  const { read, host } = tools;
   return [
     // Sessions this machine's own Claude Code and Codex kept (in a terminal), to go on with one in a chat.
     { method: "GET", pattern: /^\/machine-sessions$/, handle: async (r: Request) => read(r, "machineSessions", {}) },
@@ -52,6 +53,7 @@ export const routes = ({ read, host, agents }: Tools): Route[] => {
       pattern: /^\/memory$/,
       handle: async (r: Request): Promise<Answer> => {
         if (r.viewer.home !== false) return read(r, "memory", {});
+        const agents = tools.agents;
         if (!agents) return error(503, "station starting");
         try {
           return json(200, JSON.stringify(memory(agents.config.data, r.viewer.workspace)));

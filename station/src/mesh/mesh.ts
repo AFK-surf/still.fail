@@ -3,10 +3,9 @@
 // the endpoint and every connection and loop it started.
 import { Cause, Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
+import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
-import { Agents } from "../sessions/agents.ts";
 import { PEER_ALPN, peerCall, servePeer } from "./peer.ts";
 import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
 import { followLock } from "./lock-sync.ts";
@@ -27,7 +26,8 @@ export const MeshLive = Layer.effectDiscard(
     const native = yield* MeshNative;
     const admin = yield* AdminApi;
     const up = yield* Up;
-    const agents = yield* Agents;
+    // What it shares with the agents' side (services.ts MeshSide), filled by the one that has it.
+    const side = yield* MeshSide;
     const own = yield* Own;
     const previous = yield* Previous;
     const peers = yield* Peers;
@@ -55,8 +55,8 @@ export const MeshLive = Layer.effectDiscard(
       );
       log.info("mesh", "mesh listening", { station: endpoint.id(), workspace: cloud.state.state!.workspace_name, sockets: endpoint.sockets() });
       // What other stations are told of this one's relay (jobs/load.ts), while it is on the mesh.
-      yield* Effect.acquireRelease(Effect.sync(() => agents.net.attach(() => endpoint.home())), (off) => Effect.sync(off));
-      yield* Effect.forkScoped(keepRelays(endpoint, agents.net));
+      yield* Effect.acquireRelease(Effect.sync(() => side.net.attach(() => endpoint.home())), (off) => Effect.sync(off));
+      yield* Effect.forkScoped(keepRelays(endpoint, side.net));
       // Online at the cloud only once a relay can reach the station: a device that saw "online" and connected before
       // the relay link was up had its first packets dropped (~3 s of retransmits).
       const online = yield* Effect.timeoutOption(Effect.promise(() => endpoint.online()), "15 seconds");
@@ -64,17 +64,17 @@ export const MeshLive = Layer.effectDiscard(
       yield* Effect.forkScoped(plane.presence);
       // The workspace's other stations: asked through this endpoint, their tasks stopped once they are not in it.
       // And the stations of other workspaces chats are shared with or from (xshare/index.ts).
-      const call = peerCall(endpoint, cloud.state, undefined, agents.xshare);
+      const call = peerCall(endpoint, cloud.state, undefined, { reaches: (target, workspace) => side.outside?.reaches(target, workspace) === true });
       peers.attach(call);
       // The agents' door's way to the other stations' web services (peer-http.ts).
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           const http = new PeerHttp(endpoint, cloud.state);
-          agents.peers.route = http;
+          side.peers.route = http;
           return http;
         }),
         (http) => Effect.sync(() => {
-          if (agents.peers.route === http) agents.peers.route = null;
+          if (side.peers.route === http) side.peers.route = null;
           http.close();
         }),
       );
@@ -101,7 +101,7 @@ export const MeshLive = Layer.effectDiscard(
             sessions: adminSessions(
               () => admin,
               () => store,
-              () => agents.hub.config().profiles.flatMap((p) => p.runtimes),
+              () => side.runtimes(),
               () => cloud.state.state?.workspace ?? "",
               endpoint.id(),
             ),
@@ -123,7 +123,7 @@ export const MeshLive = Layer.effectDiscard(
           connections,
           Effect.tryPromise(() =>
             conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
-            : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => agents.forwards?.forwarded(port) === true })
+            : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => side.forwarded(port) })
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
             : (parts.allAlpns().find((p) => conn.alpn().equals(p.alpn))?.serve(conn) ?? serve(members, conn)),
           ).pipe(

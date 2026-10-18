@@ -186,9 +186,12 @@ export function quotesOf(given: unknown): Quote[] {
 /// A whole dimension (`as_f64`, no fraction, 0 < v < 100000).
 const dimension = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v > 0 && v < 100_000 ? v : undefined);
 
-export const routes = ({ read, store, agents }: Tools): Route[] => {
-  /// Answered with the hub, its refusals as `{error}`; 503 while there is none (a station starting).
+export const routes = (tools: Tools): Route[] => {
+  const { read, store } = tools;
+  /// Answered with the hub, its refusals as `{error}`; 503 while there is none (a station starting). The agents' side as it
+  /// is when asked (made after the admin API: services.ts AgentsSide).
   const write = async (f: (s: Store, a: AgentsParts) => Promise<Answer> | Answer): Promise<Answer> => {
+    const agents = tools.agents;
     if (store === undefined || agents === undefined) return error(503, "station starting");
     try {
       return await f(store, agents);

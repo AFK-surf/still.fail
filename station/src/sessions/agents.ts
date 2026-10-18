@@ -18,7 +18,7 @@ import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
+import { AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store, Up, AgentsSide, MeshSide } from "../services.ts";
 import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { permissionsView } from "../api/routes/permissions.ts";
 import { Gpus } from "../jobs/gpu.ts";
@@ -44,6 +44,7 @@ import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
 import { type SlackView, overview } from "../api/overview.ts";
+import { agentsRoutes } from "../api/admin.ts";
 import type { ChatSurface } from "./chat.ts";
 import { rootViewThrough } from "../drive/drive.ts";
 import type { Viewer } from "../mesh/credential.ts";
@@ -215,7 +216,8 @@ export const AgentsLive = (control: Control) =>
       hub.setJobs(jobs);
       // Ports of other stations forwarded here (mesh/peer-forward.ts), each its session's: through the mesh's way, once
       // it is up (`peers`, below).
-      const peers: { route: PeerRoute | null } = { route: null };
+      const meshSide = yield* MeshSide;
+      const peers = meshSide.peers;
       const forwards = new Forwards({
         route: () => peers.route,
         resolve: (station) => {
@@ -242,7 +244,7 @@ export const AgentsLive = (control: Control) =>
       // GPUs (looked at once now, so the first to ask need not wait), what runs here and the relay.
       const gpus = new Gpus();
       void gpus.read().catch(() => null);
-      const net = new Net();
+      const net = meshSide.net;
       remote.setLoad(() =>
         measure({
           host,
@@ -606,6 +608,14 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void (surfaceChats = chats), slackView: (view) => void (slackView = view), along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      const self = Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void (surfaceChats = chats), slackView: (view) => void (slackView = view), along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      // The admin API asks for the agents' side as a request comes (services.ts AgentsSide); its routes are a part.
+      (yield* AgentsSide).current = self;
+      // And what the mesh asks of it (services.ts MeshSide).
+      meshSide.outside = xshare;
+      meshSide.forwarded = (port) => forwards.forwarded(port);
+      meshSide.runtimes = () => hub.config().profiles.flatMap((p) => p.runtimes);
+      parts.routes(agentsRoutes(self, { store, events }));
+      return self;
     }),
   );

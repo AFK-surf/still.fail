@@ -218,51 +218,55 @@ async function openFile(read: Tools["read"], r: Request, key: string): Promise<A
 const sessionsOf = (r: Request) => ({ connect: param(r, "connect") ?? null, archived: param(r, "archived") === "1", lang: r.lang, viewer: r.viewer });
 const threadsOf = (r: Request) => ({ viewer: r.viewer, session: param(r, "session") ?? null, lang: r.lang });
 
-export const routes = ({ read, agents }: Tools): Route[] => [
-  { method: "GET", pattern: /^\/sessions$/, handle: (r) => read(r, "sessions", sessionsOf(r)) },
-  { method: "POST", pattern: /^\/changed\/sessions$/, handle: (r) => changed(read, r, "sessions", sessionsOf(r), "key") },
-  { method: "POST", pattern: /^\/changed\/threads$/, handle: (r) => changed(read, r, "threads", threadsOf(r), "id") },
-  {
-    method: "GET",
-    pattern: /^\/*sessions\/+([^/]+)(?:\/+([^/]+))?(?:\/.*)?$/,
-    handle: async (r, [rawKey, rawAction]) => {
-      const key = segment(rawKey!);
-      const action = rawAction === undefined ? undefined : segment(rawAction);
-      if (action === undefined) return read(r, "session", { key, viewer: r.viewer, lang: r.lang });
-      // `brief=1`: in brief (what a history shows unopened); `from`, `to`: those entries whole, as one is opened.
-      if (action === "timeline") return read(r, "timeline", { key, before: param(r, "before"), limit: param(r, "limit"), lang: r.lang, from: param(r, "from"), to: param(r, "to"), brief: param(r, "brief") });
-      if (action === "files") return file(read, r, { key, name: param(r, "name") ?? "", thumb: param(r, "thumb") === "1", lang: r.lang });
-      if (action === "parts") return part(read, r, key);
-      if (action === "poster") return posterOf(read, r, key, agents?.hub.config().dataDir);
-      if (action === "widget-state") return read(r, "widgetState", { key, path: param(r, "path"), lang: r.lang });
-      if (action === "peek") return peek(read, r, key, agents?.hub.config().dataDir);
-      if (action === "open") return openFile(read, r, key);
-      return noRoute(r);
+export const routes = (tools: Tools): Route[] => {
+  // The agents' side as it is when asked (made after the admin API: services.ts AgentsSide).
+  const { read } = tools;
+  return [
+    { method: "GET", pattern: /^\/sessions$/, handle: (r) => read(r, "sessions", sessionsOf(r)) },
+    { method: "POST", pattern: /^\/changed\/sessions$/, handle: (r) => changed(read, r, "sessions", sessionsOf(r), "key") },
+    { method: "POST", pattern: /^\/changed\/threads$/, handle: (r) => changed(read, r, "threads", threadsOf(r), "id") },
+    {
+      method: "GET",
+      pattern: /^\/*sessions\/+([^/]+)(?:\/+([^/]+))?(?:\/.*)?$/,
+      handle: async (r, [rawKey, rawAction]) => {
+        const key = segment(rawKey!);
+        const action = rawAction === undefined ? undefined : segment(rawAction);
+        if (action === undefined) return read(r, "session", { key, viewer: r.viewer, lang: r.lang });
+        // `brief=1`: in brief (what a history shows unopened); `from`, `to`: those entries whole, as one is opened.
+        if (action === "timeline") return read(r, "timeline", { key, before: param(r, "before"), limit: param(r, "limit"), lang: r.lang, from: param(r, "from"), to: param(r, "to"), brief: param(r, "brief") });
+        if (action === "files") return file(read, r, { key, name: param(r, "name") ?? "", thumb: param(r, "thumb") === "1", lang: r.lang });
+        if (action === "parts") return part(read, r, key);
+        if (action === "poster") return posterOf(tools.read, r, key, tools.agents?.hub.config().dataDir);
+        if (action === "widget-state") return read(r, "widgetState", { key, path: param(r, "path"), lang: r.lang });
+        if (action === "peek") return peek(tools.read, r, key, tools.agents?.hub.config().dataDir);
+        if (action === "open") return openFile(read, r, key);
+        return noRoute(r);
+      },
     },
-  },
-  { method: "GET", pattern: /^\/threads$/, handle: (r) => read(r, "threads", threadsOf(r)) },
-  {
-    // GET /threads/:id/entries is the chats' (routes/chats.ts); any other action is none, once the thread is there.
-    method: "GET",
-    pattern: /^\/*threads\/+([^/]+)(?:\/+(?!entries(?:\/|$))([^/]+)(?:\/.*)?|\/*)$/,
-    handle: async (r, [rawId, rawAction]) => {
-      const id = segment(rawId!);
-      const answer = await read(r, "thread", { id, viewer: r.viewer, lang: r.lang });
-      if (rawAction === undefined || answer.status !== 200) return answer;
-      if (segment(rawAction) === "entries") return read(r, "entries", { viewer: r.viewer, thread: Number(id), params: r.query });
-      return noRoute(r);
+    { method: "GET", pattern: /^\/threads$/, handle: (r) => read(r, "threads", threadsOf(r)) },
+    {
+      // GET /threads/:id/entries is the chats' (routes/chats.ts); any other action is none, once the thread is there.
+      method: "GET",
+      pattern: /^\/*threads\/+([^/]+)(?:\/+(?!entries(?:\/|$))([^/]+)(?:\/.*)?|\/*)$/,
+      handle: async (r, [rawId, rawAction]) => {
+        const id = segment(rawId!);
+        const answer = await read(r, "thread", { id, viewer: r.viewer, lang: r.lang });
+        if (rawAction === undefined || answer.status !== 200) return answer;
+        if (segment(rawAction) === "entries") return read(r, "entries", { viewer: r.viewer, thread: Number(id), params: r.query });
+        return noRoute(r);
+      },
     },
-  },
-  { method: "GET", pattern: /^\/jobs$/, handle: (r) => read(r, "openJobs", { viewer: r.viewer, lang: r.lang }) },
-  {
-    method: "GET",
-    pattern: /^\/*jobs\/+([^/]+)(?:\/+([^/]+))?(?:\/.*)?$/,
-    handle: async (r, [rawId, rawAction]) => {
-      const id = segment(rawId!);
-      const action = rawAction === undefined ? undefined : segment(rawAction);
-      if (action === undefined) return read(r, "job", { id });
-      if (action === "log") return read(r, "jobLog", { id, lines: param(r, "lines") });
-      return noRoute(r);
+    { method: "GET", pattern: /^\/jobs$/, handle: (r) => read(r, "openJobs", { viewer: r.viewer, lang: r.lang }) },
+    {
+      method: "GET",
+      pattern: /^\/*jobs\/+([^/]+)(?:\/+([^/]+))?(?:\/.*)?$/,
+      handle: async (r, [rawId, rawAction]) => {
+        const id = segment(rawId!);
+        const action = rawAction === undefined ? undefined : segment(rawAction);
+        if (action === undefined) return read(r, "job", { id });
+        if (action === "log") return read(r, "jobLog", { id, lines: param(r, "lines") });
+        return noRoute(r);
+      },
     },
-  },
-];
+  ];
+};
