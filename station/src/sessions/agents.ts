@@ -396,6 +396,18 @@ export const AgentsLive = (control: Control) =>
           protect: () => ownPaths(data, config.path, hub.config().profiles.map((p) => p.home)),
           roots: (ws) => rootsOf(config.raw(), ws),
           personal: () => config.raw()?.search?.personal === true,
+          // Documents, Desktop and Downloads through still.fail Helper, where it holds their grant (looked at in the
+          // background where not known yet; nothing asks for one on a search's behalf).
+          helper: helperFiles
+            ? {
+                granted: (tops) => {
+                  const unknown = tops.filter((t) => helperFiles.known(t) === undefined);
+                  if (unknown.length > 0) helperFiles.check(unknown);
+                  return tops.filter((t) => helperFiles.known(t)?.state === "granted");
+                },
+                search: (top, query, most, protect) => helperFiles.search(top, query, most, protect),
+              }
+            : null,
         }),
       });
       const tools = [

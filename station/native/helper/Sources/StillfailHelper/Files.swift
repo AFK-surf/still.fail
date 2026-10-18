@@ -19,6 +19,9 @@
 //                  as a link), files.unlink {path}                → {}
 //   files.trash    {path}                                      → {to}: in the trash as Finder puts it there (the home's,
 //                  a disk's own; null where none takes it)
+//   files.search   {path, query, most}                         → {paths}: what Spotlight finds under `path` for `query`
+//                  (its query language), at most `most`, within 3 s; asked as this app (its grants), never of a protected
+//                  folder it has no grant for (refused `grant`: the station only asks of one it knows is granted)
 // A refusal is {error, code}: an errno's name (ENOENT, EACCES, …), `outside`/`protected` (the roots, what is
 // protected), `grant` with {grant, state} (macOS has not let this app open that folder: state `unknown`, never asked,
 // or `denied`), `restart` (granted since this process started: it starts again, and the station asks once more).
@@ -241,6 +244,38 @@ enum Files {
     }
   }
 
+  // MARK: Spotlight
+
+  /// What Spotlight finds under `dir` for `query`, as this app asks it (mdfind, its child: the folders' grants this app
+  /// holds are its own): at most `most`, whatever it has found by 3 s.
+  static func spotlight(_ query: String, within dir: String, most: Int) -> [String] {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
+    process.arguments = ["-0", "-onlyin", dir, query]
+    let out = Pipe()
+    process.standardOutput = out
+    process.standardError = FileHandle.nullDevice
+    do { try process.run() } catch { return [] }
+    let stop = DispatchWorkItem { if process.isRunning { process.terminate() } }
+    DispatchQueue.global().asyncAfter(deadline: .now() + 3, execute: stop)
+    var paths: [String] = []
+    var carry = Data()
+    let handle = out.fileHandleForReading
+    while paths.count < most {
+      let chunk = handle.availableData
+      if chunk.isEmpty { break }
+      carry.append(chunk)
+      while let zero = carry.firstIndex(of: 0) {
+        if let path = String(data: carry[carry.startIndex..<zero], encoding: .utf8), !path.isEmpty { paths.append(path) }
+        carry.removeSubrange(carry.startIndex...zero)
+        if paths.count >= most { break }
+      }
+    }
+    stop.cancel()
+    if process.isRunning { process.terminate() }
+    return paths
+  }
+
   // MARK: the ops
 
   /// Answers `op` on `channel`; true when it was one of these.
@@ -333,6 +368,12 @@ enum Files {
       let at = try scope.place(request["path"], entry: true)
       if unlink(at.found) != 0 { throw FileRefusal.errno() }
       channel.line([:])
+    case "files.search":
+      let at = try scope.place(request["path"])
+      guard let query = request["query"] as? String, !query.isEmpty else { throw FileRefusal(code: "EINVAL", message: "a query") }
+      let most = max(1, min(request["most"] as? Int ?? 500, 5_000))
+      let paths = spotlight(query, within: at.found, most: most).filter { path in (try? scope.check(path)) != nil }
+      channel.line(["paths": paths])
     case "files.trash":
       let at = try scope.place(request["path"], entry: true)
       var out: NSURL?

@@ -11,8 +11,11 @@ import { homedir } from "node:os";
 import { basename, dirname, join, sep } from "node:path";
 import { wall } from "../ops/fibers.ts";
 import { platform } from "../platform/index.ts";
+import { protectedTop } from "../drive/fs.ts";
 import type { Asker, Group, Hit } from "./match.ts";
 
+/// The home's folders macOS keeps from the station (drive/fs.ts `protectedTop`).
+const PROTECTED = ["Documents", "Desktop", "Downloads"];
 /// Where a Mac keeps its apps.
 const APPS = ["/Applications", "/System/Applications"];
 /// How long Spotlight has to answer, and how many paths it is let give before it is stopped.
@@ -39,6 +42,9 @@ export type FileSearchDeps = {
   spotlight?: ((query: string, within: string[], most: number) => Promise<string[]>) | null;
   /// The time, as the walk's end is told by (a test's own).
   now?: () => number;
+  /// The folders macOS keeps from the station (Documents, Desktop, Downloads), asked through still.fail Helper where it
+  /// holds their grant: those it may search now (`tops`, of the folders asked), and its Spotlight there.
+  helper?: { granted(tops: string[]): string[]; search(top: string, query: string, most: number, protect: string[]): Promise<string[]> } | null;
 };
 
 const under = (path: string, dir: string) => path === dir || path.startsWith(dir.endsWith(sep) ? dir : dir + sep);
@@ -166,16 +172,24 @@ export class FileSearch {
     if (!writer && pinned.length === 0) return null;
     const home = this.#home;
     const spotlight = this.#deps.spotlight === undefined ? (platform.hasSpotlight ? mdfind : null) : this.#deps.spotlight;
+    const protect = this.#deps.protect();
     let asks: Promise<string[]>[];
     let left = false;
     if (spotlight !== null) {
       // Names under the home, what files there say, and the machine's apps by name; a read-only member's in what is
-      // pinned.
+      // pinned. The folders macOS keeps from the station are asked of still.fail Helper instead, where it holds their
+      // grant.
+      const kept = (dirs: string[]) => dirs.filter((d) => protectedTop(d, home) !== null);
+      const open = (dirs: string[]) => dirs.filter((d) => protectedTop(d, home) === null);
+      const helper = this.#deps.helper ?? null;
+      const guarded = writer ? PROTECTED.map((n) => join(home, n)) : kept(pinned);
+      const viaHelper = helper ? helper.granted(guarded) : [];
       asks = writer
         ? [spotlight(spotlightQuery(words, false), [home], MOST), spotlight(spotlightQuery(words), [home], MOST / 2), spotlight(spotlightQuery(words, false), APPS, 50)]
-        : [spotlight(spotlightQuery(words), pinned, MOST)];
+        : open(pinned).length > 0 ? [spotlight(spotlightQuery(words), open(pinned), MOST)] : [];
+      for (const top of viaHelper) asks.push(helper!.search(top, spotlightQuery(words), MOST / 2, protect).catch(() => []));
     } else {
-      const walked = await walk(writer ? [home] : pinned, words, { skip: this.#deps.protect(), most: MOST, ms: WALK_MS, now: this.#deps.now ?? (() => wall.now()) });
+      const walked = await walk(writer ? [home] : pinned, words, { skip: protect, most: MOST, ms: WALK_MS, now: this.#deps.now ?? (() => wall.now()) });
       left = walked.left;
       asks = [Promise.resolve(walked.paths)];
     }
@@ -183,13 +197,12 @@ export class FileSearch {
     const personalOn = this.#deps.personal();
     // The person's own (under the home's Library) only where the station says so; the rest of that Library never.
     const found = [...new Set((await Promise.all(asks)).flat())].filter((p) => (personalOn && own.some((d) => under(p, d))) || !noisy(p, home));
-    const protect = this.#deps.protect();
     const personal = personalOn ? [] : own;
-    const kept = found.filter((p) => !protect.some((d) => under(p, d)) && !personal.some((d) => under(p, d)) && (writer || pinned.some((r) => under(p, r))));
+    const listed = found.filter((p) => !protect.some((d) => under(p, d)) && !personal.some((d) => under(p, d)) && (writer || pinned.some((r) => under(p, r))));
     const first = words[0]!;
     const named = (p: string) => basename(p).toLowerCase().includes(first);
     const known = await Promise.all(
-      kept.map(async (path) => {
+      listed.map(async (path) => {
         try {
           const st = await stat(path);
           return { path, dir: st.isDirectory(), size: st.size, at: st.mtimeMs };
