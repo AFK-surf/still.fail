@@ -138,6 +138,14 @@ export class HelperFiles {
     return this.#grants.show(grant, filesWords(this.#lang()), { [grant]: top });
   }
 
+  /// What Spotlight finds under the protected folder `top` for `query` (its query language), asked as still.fail Helper
+  /// (which holds the folder's grant): at most `most`. Only of a folder known to be granted (`known`): one not would be
+  /// refused, and nothing asks for a grant on a search's behalf.
+  async search(top: string, query: string, most: number, protect: string[]): Promise<string[]> {
+    const answer = await this.request({ op: "files.search", path: top, query, most, roots: [top], protect });
+    return Array.isArray(answer?.paths) ? answer.paths.filter((p: unknown): p is string => typeof p === "string") : [];
+  }
+
   fs(scope: { roots: string[]; protect: string[] }): Fs {
     return new HelperFs(this, scope);
   }

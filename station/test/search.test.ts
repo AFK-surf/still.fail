@@ -255,3 +255,35 @@ test("where there is no Spotlight, the home is walked as a search comes: names a
   const late = await walk([top], ["plan"], { skip: [], most: 10, ms: -1, now: () => 0 });
   assert.deepEqual(late, { paths: [], left: true });
 });
+
+test("Documents, Desktop and Downloads are searched through still.fail Helper, only where it holds their grant", async () => {
+  const { FileSearch } = await import("../src/search/files.ts");
+  const home = mkdtempSync(join(tmpdir(), "search-kept-"));
+  dirs.push(home);
+  const made = (rel: string) => {
+    const path = join(home, rel);
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, "x");
+    return path;
+  };
+  const doc = made("Documents/plan.pages");
+  const desk = made("Desktop/plan.png");
+  const asked: string[] = [];
+  const files = new FileSearch({
+    home, protect: () => [], roots: () => [join(home, "Documents")], personal: () => false,
+    spotlight: async () => [],
+    helper: {
+      granted: (tops) => tops.filter((t) => t.endsWith("Documents")),
+      search: async (top) => {
+        asked.push(top);
+        return top.endsWith("Documents") ? [doc] : [desk];
+      },
+    },
+  });
+  const writer = { workspace: "W1", home: true, scopes: ["write"] };
+  assert.deepEqual((await files.query(["plan"], writer, 10))!.hits.map((h) => h.path), [doc]);
+  assert.deepEqual(asked, [join(home, "Documents")]);
+  // A read-only member whose workspace pinned Documents: through the helper too, under that folder.
+  const reader = (await files.query(["plan"], { ...writer, scopes: [] }, 10))!;
+  assert.deepEqual(reader.hits.map((h) => [h.path, h.rel]), [[doc, "plan.pages"]]);
+});
