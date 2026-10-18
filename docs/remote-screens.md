@@ -140,6 +140,14 @@ and a script that calls it with what the page copies (a copy or cut, as the page
 `navigator.clipboard.writeText`), both taken away as the view ends (Chrome then stops telling of the binding; a page
 open then keeps the function until it loads again); a paste is `Input.insertText` where the focus is.
 
+The clients carry the types the view's state names (`clipboard`; none from a station or helper before them, so nothing
+of another type is offered or sent): a copy made on the screen goes onto the device's clipboard, and their paste sets
+the screen's and pastes it there. The web: as the browser lets it (web/src/screen/Transfer.tsx). Android
+(remote/ScreenClips.kt): text, or a picture as a PNG file in its cache the clip points at (`image/png`, through its
+FileProvider; the newest three kept); Android 13 and later show their own preview of it, before that the viewer says
+so. Its 粘贴 sends the phone's picture where the screen carries pictures (a PNG as it is, another kind converted; past
+8 MB it says so and sends nothing), else its text.
+
 A file dropped into the view (the web) or picked (Android) goes up with the drive's upload (`drive.upload.part`, root
 the screen's `drop.folder`, a free name beside one already there) while its progress shows; once there the page says
 where it is, offers to show it in the machine's file manager (`reveal`) and to paste its path (`clipboard` with paste).

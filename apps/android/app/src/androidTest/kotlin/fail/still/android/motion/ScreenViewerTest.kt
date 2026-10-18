@@ -645,18 +645,133 @@ class ScreenViewerTest {
         assertEquals(2, v.told("screen.clipboard").size)
     }
 
-    /** A copy made on the screen lands on the phone's clipboard; a picture is only said (the phone takes text). */
+    /** The phone's clipboard's picture now: its type and its bytes (read through its URI); null when it holds none. */
+    private fun phoneImage(): Pair<String, ByteArray>? {
+        var got: Pair<String, android.net.Uri>? = null
+        rule.runOnUiThread {
+            val clip = clipboard.primaryClip?.takeIf { it.itemCount > 0 }
+            val uri = clip?.getItemAt(0)?.uri
+            if (clip != null && uri != null) got = clip.description.getMimeType(0) to uri
+        }
+        val (type, uri) = got ?: return null
+        return type to rule.activity.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+    }
+
+    /** A picture as a PNG (or `format`): the frame's picture, scaled. */
+    private fun image(format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG, w: Int = 320, h: Int = 180): ByteArray {
+        val jpeg = picture(0)
+        val b = Bitmap.createScaledBitmap(android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size), w, h, true)
+        return ByteArrayOutputStream().also { b.compress(format, 90, it) }.toByteArray()
+    }
+
+    /**
+     * A copy made on the screen lands on the phone's clipboard: text as it is, a picture as the app's own content URI
+     * (image/png, its bytes as they came, kept in the cache). From a screen that does not say it carries pictures, a
+     * picture is not put there.
+     */
     @Test fun aCopyOnTheScreenLandsOnThePhone() {
+        clips()
         val v = Viewer()
         driven(v)
         rule.runOnUiThread { clipboard.setPrimaryClip(ClipData.newPlainText("test", "before")) }
         v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "text"); put("text", "copied on the Mac 复制的") }) })
         rule.waitUntil(5_000) { phoneClip() == "copied on the Mac 复制的" }
 
-        v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "png"); put("size", 8) }) }, byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10))
-        rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("远端复制了图片，手机上暂不支持") == 1 }
+        val png = image()
+        v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "png"); put("size", png.size) }) }, png)
+        rule.waitUntil(5_000) { phoneImage() != null }
+        val (type, bytes) = phoneImage()!!
+        assertEquals("image/png", type)
+        assertTrue(bytes.contentEquals(png))
+        val kept = File(rule.activity.cacheDir, "screen-clips").listFiles()!!.toList()
+        assertTrue(kept.any { it.readBytes().contentEquals(png) })
         v.shot("screen-clipboard-image")
-        assertEquals("copied on the Mac 复制的", phoneClip())
+
+        // More than are kept: only the newest few stay in the cache, the newest on the clipboard.
+        val more = (1..4).map { image(w = 100 + it * 10) }
+        for (m in more) v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "png"); put("size", m.size) }) }, m)
+        rule.waitUntil(5_000) { phoneImage()?.second?.contentEquals(more.last()) == true }
+        assertEquals(3, File(rule.activity.cacheDir, "screen-clips").listFiles()!!.size)
+
+        // Not a PNG: not put there.
+        v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "png"); put("size", 6) }) }, byteArrayOf(-1, -40, -1, -32, 0, 16))
+        v.h.settle(500)
+        assertTrue(phoneImage()!!.second.contentEquals(more.last()))
+
+        // A screen that carries text only (a station or helper from before pictures): a picture is not put there.
+        rule.runOnUiThread { clipboard.setPrimaryClip(ClipData.newPlainText("test", "text only")) }
+        v.state("live", others = emptyList(), clipboard = listOf("text"), drop = DROP)
+        v.h.settle()
+        v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "png"); put("size", png.size) }) }, png)
+        v.h.settle(500)
+        assertEquals("text only", phoneClip())
+        assertEquals(null, phoneImage())
+    }
+
+    @Test fun pastesThePhonesImage() = pastesThePhonesImage(dark = false)
+
+    @Test fun pastesThePhonesImageInTheDark() = pastesThePhonesImage(dark = true)
+
+    /** The phone's clipboard holding `bytes` (a file of the app's cache, through its FileProvider) as `type`. */
+    private fun onPhone(name: String, bytes: ByteArray, type: String) {
+        val dir = File(rule.activity.cacheDir, "screen-clips").apply { mkdirs() }
+        val file = File(dir, name).apply { writeBytes(bytes) }
+        val uri = androidx.core.content.FileProvider.getUriForFile(rule.activity, rule.activity.packageName + ".files", file)
+        rule.runOnUiThread { clipboard.setPrimaryClip(ClipData("test", arrayOf(type), ClipData.Item(uri))) }
+    }
+
+    /** The PNG of the `i`th `screen.clipboard` asked. */
+    private fun pngSent(v: Viewer, i: Int): ByteArray =
+        android.util.Base64.decode(v.told("screen.clipboard")[i]["png"]!!.jsonPrimitive.contentOrNull!!, android.util.Base64.NO_WRAP)
+
+    /** The copies kept, none to begin with. */
+    private fun clips() = File(rule.activity.cacheDir, "screen-clips").apply { deleteRecursively() }
+
+    /**
+     * 粘贴 with a picture on the phone's clipboard sends it as PNG (`screen.clipboard` `png`, pasted): a PNG as it is, a
+     * JPEG converted; past 8 MB it is said and not sent; a screen that carries text only is never sent one.
+     */
+    private fun pastesThePhonesImage(dark: Boolean) {
+        clips()
+        val v = Viewer(dark = dark)
+        val s = driven(v)
+        val png = image()
+        onPhone("phone.png", png, "image/png")
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { v.told("screen.clipboard").isNotEmpty() }
+        val asked = v.told("screen.clipboard").single()
+        assertEquals(s.view, asked["view"]!!.jsonPrimitive.contentOrNull)
+        assertEquals(true, asked["paste"]!!.jsonPrimitive.boolean)
+        assertEquals(null, asked["text"])
+        assertTrue(pngSent(v, 0).contentEquals(png))
+
+        // Too large: said, not sent.
+        onPhone("huge.png", ByteArray(8 * 1024 * 1024 + 1).also { png.copyInto(it, 0, 0, 8) }, "image/png")
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("图片过大，上限 8 MB") == 1 }
+        v.shot(if (dark) "screen-clipboard-image-too-large-dark" else "screen-clipboard-image-too-large")
+        assertEquals(1, v.told("screen.clipboard").size)
+        if (dark) return
+        v.h.settle(3000)
+
+        // A JPEG: converted to PNG, the same picture.
+        onPhone("photo.jpg", image(Bitmap.CompressFormat.JPEG, 400, 300), "image/jpeg")
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { v.told("screen.clipboard").size == 2 }
+        val converted = pngSent(v, 1)
+        assertTrue(fail.still.android.remote.isPng(converted))
+        val decoded = android.graphics.BitmapFactory.decodeByteArray(converted, 0, converted.size)
+        assertEquals(400, decoded.width)
+        assertEquals(300, decoded.height)
+
+        // A screen that carries text only: the picture is not sent, and that is said.
+        v.state("live", others = emptyList(), clipboard = listOf("text"), drop = DROP)
+        v.h.settle()
+        onPhone("phone.png", png, "image/png")
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("此屏幕不支持粘贴图片") == 1 }
+        assertEquals(2, v.told("screen.clipboard").size)
+        clips()
     }
 
     /** A station from before the clipboard and files, or only looking: neither offered (the keyboard types, as before). */

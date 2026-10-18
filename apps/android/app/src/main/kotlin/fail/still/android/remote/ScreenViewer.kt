@@ -2,8 +2,8 @@
 // two fingers; while driving it, a tap clicks, a long press right-clicks, a drag drags, two fingers moving together
 // scroll, and the keyboard types into it. Upright, the bar is above the frame (close, the title and who is on it,
 // 只看/控制, sending a file, pasting, the keyboard); sideways, a rail beside it. While driving it, a copy made on the
-// screen lands on the phone's clipboard, the phone's text is pasted into it, and files picked go onto its machine (how
-// far they have got, then where they are, over the frame's foot). How the view is (connecting, reconnecting, ended…) is
+// screen (text or a picture) lands on the phone's clipboard, the phone's clipboard is pasted into it (ScreenClips.kt),
+// and files picked go onto its machine (how far they have got, then where they are, over the frame's foot). How the view is (connecting, reconnecting, ended…) is
 // the core's, said over the frame, which stays as it was last shown.
 package fail.still.android.remote
 
@@ -115,7 +115,10 @@ import fail.still.android.ui.Seg
 import fail.still.android.ui.ToastHost
 import fail.still.android.ui.floatingStill
 import fail.still.core.CoreException
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -257,13 +260,33 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
     var note by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val clipboard = remember(context) { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
-    // A copy made on the screen: onto the phone's clipboard. Android 13 and later say so themselves; before, it is said here.
+    // A copy made on the screen: onto the phone's clipboard, text as it is, a picture as a file of the cache the clip
+    // points at (image/png). Android 13 and later say so themselves, with a preview; before, it is said here.
+    val copies = remember { java.util.concurrent.atomic.AtomicInteger() }
     DisposableEffect(session, clipboard) {
-        session.copied = { text ->
-            if (text == null) note = t("android-misc.screen.copiedImage")
-            else {
-                clipboard.setPrimaryClip(ClipData.newPlainText(session.state?.title ?: "still.fail", text))
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) note = t("android-misc.screen.copied")
+        val said = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        session.copied = { got ->
+            val label = session.state?.title?.takeIf { it.isNotEmpty() } ?: "still.fail"
+            // The latest copy wins: a picture still being kept is not put there once another came after it.
+            val n = copies.incrementAndGet()
+            when (got) {
+                is Copied.Text -> {
+                    clipboard.setPrimaryClip(ClipData.newPlainText(label, got.text))
+                    if (!said) note = t("android-misc.screen.copied")
+                }
+                // Only from a screen that says it carries pictures (a station from before them sends none).
+                is Copied.Png -> if (takesCopied(session.clipTypes, got.bytes)) scope.launch {
+                    try {
+                        val file = withContext(Dispatchers.IO) { ScreenClips.keep(ScreenClips.dir(context.cacheDir), got.bytes) }
+                        if (n != copies.get()) return@launch
+                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+                        clipboard.setPrimaryClip(ClipData(label, arrayOf("image/png"), ClipData.Item(uri)))
+                        if (!said) note = t("android-misc.screen.copiedImage")
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        note = t("android-misc.act.failed", "what" to t("android-misc.screen.copyImageWhat"), "error" to (e.message ?: e.javaClass.simpleName))
+                    }
+                }
             }
         }
         onDispose { session.copied = null }
@@ -275,13 +298,39 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
         }
     }
     var pasting by remember { mutableStateOf(false) }
-    // The phone's clipboard, pasted into the screen where its focus is.
+    // The phone's clipboard, pasted into the screen where its focus is: its picture as PNG where the screen carries
+    // pictures, else its text (read within the tap, as the app in front).
     fun paste() {
         if (pasting) return
-        val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
-        if (text.isEmpty()) { note = t("android-misc.screen.clipboardEmpty"); return }
+        val clip = clipboard.primaryClip?.takeIf { it.itemCount > 0 }
+        val item = clip?.getItemAt(0)
+        val described = clip?.description?.let { d -> (0 until d.mimeTypeCount).any { isImageType(d.getMimeType(it)) } } == true
+        val types = session.clipTypes
         pasting = true
-        act(t("android-misc.screen.pasteWhat")) { try { session.paste(text) } finally { pasting = false } }
+        act(t("android-misc.screen.pasteWhat")) {
+            try {
+                val resolver = context.contentResolver
+                val (image, text) = withContext(Dispatchers.IO) {
+                    val uri = item?.uri
+                    val image = uri?.takeIf { described || isImageType(runCatching { resolver.getType(it) }.getOrNull()) }
+                    // A picture's URI is not its text (a link, a file of text is).
+                    image to (item?.text?.toString() ?: if (image == null) item?.coerceToText(context)?.toString() else null)
+                }
+                when (pasteKind(types, image != null, !text.isNullOrEmpty())) {
+                    PasteKind.IMAGE -> when (val got = withContext(Dispatchers.IO) { readyImage(resolver, image!!) }) {
+                        is Readied.Png -> session.pastePng(got.bytes)
+                        Readied.TooLarge -> note = t("android-misc.screen.imageTooLarge")
+                        Readied.Unreadable -> note = t("android-misc.screen.imageUnread")
+                    }
+                    PasteKind.TEXT -> session.paste(text!!)
+                    PasteKind.NO_IMAGES -> note = t("android-misc.screen.noImages")
+                    PasteKind.NO_TEXT -> note = t("android-misc.screen.noText")
+                    PasteKind.EMPTY -> note = t("android-misc.screen.clipboardEmpty")
+                }
+            } finally {
+                pasting = false
+            }
+        }
     }
     // Where the files picked go: as the state said when the picker was asked for (the view opens again meanwhile, the
     // activity out of sight under the picker).
@@ -347,7 +396,7 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
 }
 
 /**
- * The clipboard and files, from the bar: pasting the phone's text (under way: `pasting`), picking files to send; and
+ * The clipboard and files, from the bar: pasting the phone's clipboard (under way: `pasting`), picking files to send; and
  * trackpad or direct, chosen.
  */
 private class Tools(
@@ -359,7 +408,7 @@ private class Tools(
 /** What can be done with a file once it is on the machine: its path pasted, shown in the machine's file manager. */
 private class DropActs(val pastePath: (Drop) -> Unit, val reveal: (Drop) -> Unit)
 
-/** Sending a file (where the station takes them) and pasting (where it carries text), while driving it. */
+/** Sending a file (where the station takes them) and pasting (where it carries text or pictures), while driving it. */
 @Composable
 private fun ClipButtons(session: ScreenSession, tools: Tools) {
     if (session.dropsTo != null) RoundButton(Icons.Upload, t("android-misc.screen.sendFile"), onClick = tools.send)
