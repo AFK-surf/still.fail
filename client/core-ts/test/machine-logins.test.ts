@@ -208,7 +208,7 @@ test("a loopback login's callback: listened for here once opened, the one it wai
   core.close();
 });
 
-test("a loopback login's port taken on this device says so; a page that cannot listen cannot relay", async () => {
+test("a loopback login's port taken on this device says so, on its card until opened again; a page that cannot listen cannot relay", async () => {
   const { host, core } = await started(listed());
   const ui = core.connect();
   const values = new Map();
@@ -216,12 +216,17 @@ test("a loopback login's port taken on this device says so; a page that cannot l
   await host.settle();
   call(core, ui, 2, "machineLogin.open", { station: ST, id: "l2" });
   await host.settle();
-  assert.match(String((answers(drain(host, values), 2)?.error as any)?.message), /桌面 app/);
+  assert.match(String((answers(drain(host, values), 2)?.error as any)?.message), /桌面或安卓 app/);
   const l = listeners(["127.0.0.1"]);
   host.listen = l.listen;
   call(core, ui, 3, "machineLogin.open", { station: ST, id: "l2" });
   await host.settle();
   assert.equal((answers(drain(host, values), 3)?.error as any)?.message, "本机 8085 端口被占用");
+  // Said on its card too, until it is opened again.
+  const l2 = () => (v(values, 1) as any).logins.find((x: any) => x.id === "l2");
+  await host.settle();
+  drain(host, values);
+  assert.deepEqual([l2().relayText, l2().listening], ["本机 8085 端口被占用", false]);
   // Only ::1 refused (a machine without IPv6): 127.0.0.1 alone.
   const v6 = listeners(["::1"]);
   host.listen = v6.listen;
@@ -229,6 +234,9 @@ test("a loopback login's port taken on this device says so; a page that cannot l
   await host.settle();
   assert.ok(answers(drain(host, values), 4)?.ok);
   assert.deepEqual(v6.opened.map((o) => o.host), ["127.0.0.1"]);
+  await host.settle();
+  drain(host, values);
+  assert.deepEqual([l2().relayText, l2().listening], [undefined, true]);
   call(core, ui, 5, "machineLogin.open", { station: ST, id: "gone" });
   await host.settle();
   assert.equal((answers(drain(host, values), 5)?.error as any)?.status, 404);

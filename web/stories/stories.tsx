@@ -523,6 +523,7 @@ export const stories: Story[] = [
   { id: "login-card-loopback", group: "登录", title: "卡片 · 回环（桌面）", render: loginCard("loopback"), demo: logins() },
   { id: "login-card-loopback-web", group: "登录", title: "卡片 · 回环（网页）", render: loginCard("loopback"), demo: logins({ canRelay: false }) },
   { id: "login-card-loopback-listening", group: "登录", title: "卡片 · 回环 · 等浏览器回来", render: loginCard("listening"), demo: logins() },
+  { id: "login-card-loopback-taken", group: "登录", title: "卡片 · 回环 · 本机端口被占用", render: loginCard("taken"), demo: logins() },
   { id: "login-card-device", group: "登录", title: "卡片 · 设备码", render: loginCard("device"), demo: logins() },
   { id: "login-card-question", group: "登录", title: "卡片 · agent 在回答命令的问题", render: loginCard("question"), demo: logins() },
   { id: "logins-section-past", group: "登录", title: "station 页 · 登录（只有做过的）", render: loginsSection, demo: logins({ listed: ["done", "failed", "cancelled"] }) },

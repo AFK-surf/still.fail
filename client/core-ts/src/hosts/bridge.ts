@@ -16,6 +16,10 @@
 //     shell (docs/vault.md, "设备上的钥匙")
 //   db.read {table, from, to} → {keys, sizes} + the values one after another (the former records store, read once)
 //   tcp.open {port} → {id}; tcp.read {id} → bytes or {end}; tcp.write {id} + bytes; tcp.end {id}; tcp.close {id}
+//   listen.open {port, host} → {id} (fails when the port is taken there); listen.next {id} → {request, method, path,
+//     headers: [[name, value]]} + the body, or {end}; listen.respond {id, request, status, headers} + body;
+//     listen.close {id} — a login's loopback listener (docs/remote-login.md), answered by the app (Kotlin:
+//     Loopback.kt, where the app keeps itself running while it listens), not the shell
 //   reset {} — the connections kept for requests are taken for gone
 //   iroh.bind {relayUrls, lookup, relayOnly} + key → {id}; iroh.connect {id, addr, additional: [hex]} + alpn → {id};
 //     iroh.networkChange {id}; iroh.close {id}
@@ -32,7 +36,7 @@ import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { HostError } from "../error.ts";
 import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohPath, IrohStream } from "../iroh.ts";
-import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, sqlError } from "../host.ts";
+import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type LoopbackRequest, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, sqlError } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { t } from "../i18n.ts";
 import { service } from "../trace.ts";
@@ -178,6 +182,34 @@ export class BridgeHost implements Host {
         write: (bytes: Uint8Array) => Effect.asVoid(bridge.call("tcp.write", { id }, bytes)),
         end: () => void Effect.runFork(Effect.ignore(bridge.call("tcp.end", { id }))),
       };
+    });
+  }
+
+  /// A loopback listener (a login's browser coming back, docs/remote-login.md), the app's: a request at a time, each
+  /// answered once (the app closes its connection then).
+  listen(port: number, host: string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope> {
+    const bridge = this.#bridge;
+    return Effect.gen(function* () {
+      if (host !== "127.0.0.1" && host !== "::1") return yield* Effect.fail(new HostError(`not a loopback address: ${host}`));
+      const opened = yield* Effect.acquireRelease(bridge.call("listen.open", { port, host }), (a) => Effect.ignore(bridge.call("listen.close", { id: (a.json as J).id })));
+      const id = (opened.json as J).id as number;
+      const request = (a: { json: unknown; bytes: Uint8Array | null }): LoopbackRequest | null => {
+        const r = a.json as J;
+        if (r?.end === true) return null;
+        let answered = false;
+        return {
+          method: String(r.method),
+          path: String(r.path),
+          headers: Array.isArray(r.headers) ? (r.headers as unknown[]).filter((h): h is [string, string] => Array.isArray(h) && typeof h[0] === "string" && typeof h[1] === "string") : [],
+          body: a.bytes ?? new Uint8Array(0),
+          respond: (status, headers, body) => {
+            if (answered) return;
+            answered = true;
+            Effect.runFork(Effect.ignore(bridge.call("listen.respond", { id, request: r.request, status, headers }, body)));
+          },
+        };
+      };
+      return { take: Effect.map(bridge.call("listen.next", { id }), request) };
     });
   }
 

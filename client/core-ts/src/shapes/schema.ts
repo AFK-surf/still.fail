@@ -903,7 +903,8 @@ export const SHAPES: Record<string, Shape> = {
     ["history", opt("String")],
     ["entry", opt("i64"), { client: opt("I54") }],
     ["screen", opt("String"), { doc: "For `screen`: the screen's id on the station (`/w/<workspace>/s/<station>/screen/<id>`)." }],
-  ], { doc: "What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an\nitem (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution\nhistory (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in; `screen`, one of a\nstation's screens (docs/remote-screens.md). The call answers null for any other link." }),
+    ["login", opt("String"), { doc: "For `login`: the login's id on the station (`/w/<workspace>/s/<station>/login/<id>`), its card on the station's page." }],
+  ], { doc: "What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an\nitem (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution\nhistory (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in; `screen`, one of a\nstation's screens (docs/remote-screens.md); `login`, a login an agent started (docs/remote-login.md). The call answers\nnull for any other link." }),
   AppRelease: struct([
     ["versionCode", "i64", { client: "I54" }],
     ["versionName", "String"],
@@ -2010,7 +2011,7 @@ export const SHAPES: Record<string, Shape> = {
     ["supported", "bool", { doc: "False for a station from before remote login (it answers 404): the page offers none, or says to update it." }],
     ["loaded", "bool", { doc: "What the station has was read (or told) at least once." }],
     ["canLogin", "bool", { doc: "The viewer may start, cancel and complete logins here (a read-only member only sees how they stand)." }],
-    ["canRelay", "bool", { doc: "This device can take a login's loopback callback for its station (the desktop app): web pages cannot listen." }],
+    ["canRelay", "bool", { doc: "This device can take a login's loopback callback for its station (the desktop and Android apps): web pages\ncannot listen." }],
     ["logins", vec("MachineLoginShown"), { doc: "The logins done through still.fail on this station: under way first, then those ended, newest first." }],
   ], { doc: "A station's logins to the command-line tools its agents use (the `machineLogins` topic; docs/remote-login.md): any\nlogin command, run one way; those under way and those done here." }),
   MachineLoginShown: struct([
@@ -2029,7 +2030,8 @@ export const SHAPES: Record<string, Shape> = {
     ["codeUrl", opt("String"), { doc: "The page with the code already in it, where the service gives one." }],
     ["port", opt("u32"), { doc: "Loopback: the port its callback comes to." }],
     ["waiting", "bool", { doc: "The command waits on a prompt: its agent answers it (等 agent 回答命令的问题)." }],
-    ["listening", "bool", { doc: "This device listens for its loopback callback now (opened here, in the desktop app): 等浏览器回来." }],
+    ["listening", "bool", { doc: "This device listens for its loopback callback now (opened here, in the desktop or Android app): 等浏览器回来." }],
+    ["relayText", opt("String"), { doc: "Loopback: why this device could not listen for its callback when it was last opened here (本机 8085 端口被占用),\nsaid on its card until it is opened again." }],
     ["statusText", "String", { doc: "How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 登录完成, 超时了…" }],
     ["error", opt("String"), { doc: "Failed: why (the command's last lines)." }],
     ["byText", opt("String"), { doc: "Whose chat it was started for (the chat's starter)." }],

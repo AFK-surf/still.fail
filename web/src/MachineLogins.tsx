@@ -6,8 +6,9 @@
 //
 // The browser's step is opened by the person's press: a device code's page (the code copied as it opens) or a page to
 // open goes straight to the browser (in the press, so a web page's browser lets it open); a loopback login's needs this
-// device to take the browser's callback back to the station, which only the desktop app can (`canRelay`): the core
-// listens, then answers what to open. A step this client cannot do is said in the card.
+// device to take the browser's callback back to the station, which only an app can (`canRelay`: the desktop app; the
+// Android app's card is its own, LoginCards.kt): the core listens, then answers what to open; this device's port taken,
+// the card says so. A step this client cannot do is said in the card.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MachineLoginShown, MachineLoginsView } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
@@ -61,10 +62,11 @@ function useRelay(station: string, login: MachineLoginShown): { open(): void; bu
   const [openedHere, setOpenedHere] = useState(false);
   return {
     busy, opened: login.listening || openedHere,
+    // This device's port taken: said on the card (the core's `relayText`), nothing opened.
     open: () => act(call("machineLogin.open", { station, id: login.id, here }).then((answer) => {
       if (here) setOpenedHere(true);
       openPage((answer as { url?: string }).url);
-    }), t("web-main.logins.openWhat")),
+    }, (e) => { if ((e as { code?: string }).code !== "port_taken") throw e; }), t("web-main.logins.openWhat")),
   };
 }
 
@@ -124,7 +126,8 @@ function ActiveCard({ station, login, canRelay }: { station: string; login: Mach
     // A web page cannot take the browser's callback: said here, the page's host all the same.
     if (!canRelay) said = <><span className={css.cardStatus}>{t("web-main.logins.needsDesktop")}</span>{domain}</>;
     else {
-      said = relay.opened ? waiting(t("web-main.logins.waitingBrowser")) : domain;
+      said = relay.opened ? waiting(t("web-main.logins.waitingBrowser"))
+        : login.relayText ? <><span className={css.cardStatusFailed}>{login.relayText}</span>{domain}</> : domain;
       main = <CardButton label={relay.opened ? t("web-main.logins.openAgain") : t("web-main.logins.signIn")} busy={relay.busy} onClick={relay.open} />;
     }
   } else if (step === "open" && login.url) {

@@ -483,7 +483,7 @@
   "core-logic.machineLogin.finishInBrowser": "在浏览器里完成登录",
   "core-logic.machineLogin.starting": "正在启动登录命令",
   "core-logic.machineLogin.title": "在 {station} 上登录 {name}",
-  "core-logic.machineLogin.cannotRelay": "这个页面接不住登录回调：在 still.fail 桌面 app 里打开这个登录",
+  "core-logic.machineLogin.cannotRelay": "此页面无法接收登录回调：在 still.fail 桌面或安卓 app 里打开此登录",
   "core-logic.machineLogin.portTaken": "本机 {port} 端口被占用",
   "core-logic.machineLogin.pageDoneTitle": "登录已完成",
   "core-logic.machineLogin.pageDone": "可以关掉这页了",

@@ -2919,7 +2919,8 @@ data class KeptTabs (
 /// What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
 /// item (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution
 /// history (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in; `screen`, one of a
-/// station's screens (docs/remote-screens.md). The call answers null for any other link.
+/// station's screens (docs/remote-screens.md); `login`, a login an agent started (docs/remote-login.md). The call answers
+/// null for any other link.
 @Serializable
 data class LinkTarget (
 	val opens: String,
@@ -2932,7 +2933,9 @@ data class LinkTarget (
 	val history: String? = null,
 	val entry: Long? = null,
 	/// For `screen`: the screen's id on the station (`/w/<workspace>/s/<station>/screen/<id>`).
-	val screen: String? = null
+	val screen: String? = null,
+	/// For `login`: the login's id on the station (`/w/<workspace>/s/<station>/login/<id>`), its card on the station's page.
+	val login: String? = null
 )
 
 @Serializable
@@ -3230,8 +3233,11 @@ data class MachineLoginShown (
 	val port: UInt? = null,
 	/// The command waits on a prompt: its agent answers it (等 agent 回答命令的问题).
 	val waiting: Boolean,
-	/// This device listens for its loopback callback now (opened here, in the desktop app): 等浏览器回来.
+	/// This device listens for its loopback callback now (opened here, in the desktop or Android app): 等浏览器回来.
 	val listening: Boolean,
+	/// Loopback: why this device could not listen for its callback when it was last opened here (本机 8085 端口被占用),
+	/// said on its card until it is opened again.
+	val relayText: String? = null,
 	/// How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 登录完成, 超时了…
 	val statusText: String,
 	/// Failed: why (the command's last lines).
@@ -3265,7 +3271,8 @@ data class MachineLoginsView (
 	val loaded: Boolean,
 	/// The viewer may start, cancel and complete logins here (a read-only member only sees how they stand).
 	val canLogin: Boolean,
-	/// This device can take a login's loopback callback for its station (the desktop app): web pages cannot listen.
+	/// This device can take a login's loopback callback for its station (the desktop and Android apps): web pages
+	/// cannot listen.
 	val canRelay: Boolean,
 	/// The logins done through still.fail on this station: under way first, then those ended, newest first.
 	val logins: List<MachineLoginShown>

@@ -588,7 +588,7 @@
   "core-logic.machineLogin.finishInBrowser": "Finish logging in in the browser",
   "core-logic.machineLogin.starting": "Starting the login command",
   "core-logic.machineLogin.title": "Log in with {name} on {station}",
-  "core-logic.machineLogin.cannotRelay": "This page can't take the login's callback: open this login in the still.fail desktop app",
+  "core-logic.machineLogin.cannotRelay": "This page can't take the login's callback: open this login in the still.fail desktop or Android app",
   "core-logic.machineLogin.portTaken": "Port {port} is in use on this device",
   "core-logic.machineLogin.pageDoneTitle": "Login done",
   "core-logic.machineLogin.pageDone": "You can close this page",

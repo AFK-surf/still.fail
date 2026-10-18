@@ -97,8 +97,9 @@ const person = (by: J) => str(get(by, "name")) || str(get(by, "email")) || "";
 /// Only an https page is opened.
 const https = (url: unknown) => (typeof url === "string" && url.startsWith("https://") ? url : null);
 
-/// A login as the panel and the card show it. `listening`: this device takes its callback now.
-export function loginShown(l: J, station: string, stationName: string, now: number, offsetMin: number, listening: boolean): J {
+/// A login as the panel and the card show it. `listening`: this device takes its callback now; `refused`: why it could
+/// not, the last time it was opened here.
+export function loginShown(l: J, station: string, stationName: string, now: number, offsetMin: number, listening: boolean, refused: string | null = null): J {
   const state = str(l.state) ?? "starting";
   const step = str(l.step);
   const active = l.endedAt === undefined || l.endedAt === null;
@@ -141,6 +142,7 @@ export function loginShown(l: J, station: string, stationName: string, now: numb
     ...(typeof get(l.callback, "port") === "number" ? { port: get(l.callback, "port") } : {}),
     waiting,
     listening: listening && active,
+    ...(refused !== null && active && !listening && step === "loopback" ? { relayText: refused } : {}),
     statusText,
     ...(str(l.error) !== null && !active ? { error: l.error } : {}),
     ...(person(l.by) !== "" ? { byText: person(l.by) } : {}),
@@ -213,7 +215,10 @@ const HTML: [string, string][] = [["content-type", "text/html; charset=utf-8"], 
 export class Relays {
   readonly #core: Inner;
   readonly #open = new Map<string, { fiber: Fiber.Fiber<void, never> | null; relayed: boolean }>();
-  /// Told as a relay starts and stops (the login's `listening`).
+  /// Why this device could not listen for a login's callback when it was last opened here (the port taken: 本机 8085
+  /// 端口被占用), said on its card until it is opened again.
+  readonly #refused = new Map<string, string>();
+  /// Told as a relay starts and stops (the login's `listening`), and as one is refused.
   onChange: (station: string, id: string) => void = () => {};
 
   constructor(core: Inner) {
@@ -222,6 +227,12 @@ export class Relays {
 
   listening(station: string, id: string): boolean {
     return this.#open.has(`${station}\n${id}`);
+  }
+
+  /// Why a login's callback could not be listened for here, the last time it was opened (null: it was, or it was not
+  /// opened here).
+  refused(station: string, id: string): string | null {
+    return this.#refused.get(`${station}\n${id}`) ?? null;
   }
 
   /// Listens for a login's callback, until it is relayed (and AFTER_MS after), the login ends, or RELAY_MOST_MS. Fails
@@ -244,9 +255,13 @@ export class Relays {
         // localhost) may be a machine without IPv6.
         else if (i === 0) {
           yield* Scope.close(scope, Exit.void);
-          return yield* Effect.fail(new CoreError("port_taken", t("core-logic.machineLogin.portTaken", { port: expect.port })));
+          const why = t("core-logic.machineLogin.portTaken", { port: expect.port });
+          self.#refused.set(key, why);
+          self.onChange(station, id);
+          return yield* Effect.fail(new CoreError("port_taken", why));
         }
       }
+      self.#refused.delete(key);
       const entry: { fiber: Fiber.Fiber<void, never> | null; relayed: boolean } = { fiber: null, relayed: false };
       const answer = (r: LoopbackRequest) =>
         Effect.gen(function* () {
@@ -304,6 +319,7 @@ export class Relays {
 
   /// Lets go of every relay (the core closes).
   close(): void {
+    this.#refused.clear();
     for (const [key, entry] of [...this.#open]) {
       this.#open.delete(key);
       if (entry.fiber) this.#core.runner.interrupt(entry.fiber as Fiber.Fiber<unknown, unknown>);

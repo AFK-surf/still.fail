@@ -770,7 +770,7 @@
   "web-main.logins.openWhat": "open the browser",
   "web-main.logins.openAgain": "Open again",
   "web-main.logins.waitingBrowser": "Waiting for the browser",
-  "web-main.logins.needsDesktop": "This step needs the desktop app",
+  "web-main.logins.needsDesktop": "This step needs the desktop or Android app",
   "web-main.logins.domain": "The login page is on {domain}",
   "web-main.logins.device": "Open {domain} and enter",
   "web-main.logins.copyOpen": "Copy & open",
