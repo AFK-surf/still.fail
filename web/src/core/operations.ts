@@ -4,6 +4,7 @@ export interface OperationParams {
   "tools.access": {  };
   "tools.setAccess": { access: string };
   "agentEnv.set": { env?: unknown; text?: string | null | undefined };
+  "search.setPersonal": { personal: boolean };
   "session.warm": { key: string };
   "session.evict": { key: string };
   "session.delete": { key: string };
@@ -123,6 +124,7 @@ export function bindStationOperations(call: Call) {
     toolsAccess: <T = unknown>(params: OperationParams["tools.access"] = {}) => call("tools.access", params) as Promise<T>,
     toolsSetAccess: <T = unknown>(params: OperationParams["tools.setAccess"]) => call("tools.setAccess", params) as Promise<T>,
     agentEnvSet: <T = unknown>(params: OperationParams["agentEnv.set"] = {}) => call("agentEnv.set", params) as Promise<T>,
+    searchSetPersonal: <T = unknown>(params: OperationParams["search.setPersonal"]) => call("search.setPersonal", params) as Promise<T>,
     sessionWarm: <T = unknown>(params: OperationParams["session.warm"]) => call("session.warm", params) as Promise<T>,
     sessionEvict: <T = unknown>(params: OperationParams["session.evict"]) => call("session.evict", params) as Promise<T>,
     sessionDelete: <T = unknown>(params: OperationParams["session.delete"]) => call("session.delete", params) as Promise<T>,

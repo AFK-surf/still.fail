@@ -42,6 +42,11 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         val values = AgentEnvSetFields().apply(fill).fields
         return call("agentEnv.set", JsonObject(values))
     }
+    suspend fun searchSetPersonal(personal: Boolean): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["personal"] = JsonPrimitive(personal)
+        return call("search.setPersonal", JsonObject(values))
+    }
     suspend fun sessionWarm(key: String): JsonElement {
         val values = mutableMapOf<String, JsonElement>()
         values["key"] = JsonPrimitive(key)
