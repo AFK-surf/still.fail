@@ -3,6 +3,8 @@ export interface OperationParams {
   "session.stop": { key: string };
   "tools.access": {  };
   "tools.setAccess": { access: string };
+  "station.modules": {  };
+  "station.module.set": { id: string; enabled: boolean };
   "agentEnv.set": { env?: unknown; text?: string | null | undefined };
   "search.setPersonal": { personal: boolean };
   "session.warm": { key: string };
@@ -114,7 +116,7 @@ export interface OperationParams {
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -123,6 +125,8 @@ export function bindStationOperations(call: Call) {
     sessionStop: <T = unknown>(params: OperationParams["session.stop"]) => call("session.stop", params) as Promise<T>,
     toolsAccess: <T = unknown>(params: OperationParams["tools.access"] = {}) => call("tools.access", params) as Promise<T>,
     toolsSetAccess: <T = unknown>(params: OperationParams["tools.setAccess"]) => call("tools.setAccess", params) as Promise<T>,
+    stationModules: <T = unknown>(params: OperationParams["station.modules"] = {}) => call("station.modules", params) as Promise<T>,
+    stationModule: <T = unknown>(params: OperationParams["station.module.set"]) => call("station.module.set", params) as Promise<T>,
     agentEnvSet: <T = unknown>(params: OperationParams["agentEnv.set"] = {}) => call("agentEnv.set", params) as Promise<T>,
     searchSetPersonal: <T = unknown>(params: OperationParams["search.setPersonal"]) => call("search.setPersonal", params) as Promise<T>,
     sessionWarm: <T = unknown>(params: OperationParams["session.warm"]) => call("session.warm", params) as Promise<T>,

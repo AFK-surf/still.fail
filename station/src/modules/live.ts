@@ -12,10 +12,12 @@ import { randomBytes } from "node:crypto";
 import { closeSync, mkdirSync, openSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { Cause, Clock, Effect, FiberMap, Layer, Option, Queue, Schedule, Stream } from "effect";
-import { ModulePackages, Modules, Paths, Previous, StationConfig, StationDrive } from "../services.ts";
+import { Events, ModulePackages, Modules, Parts, Paths, Previous, StationConfig, StationDrive } from "../services.ts";
 import { dir as thumbsDir } from "../drive/thumbs.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { log } from "../ops/log.ts";
+import { routes as modulesRoutes } from "../api/routes/modules.ts";
+import { CATALOG } from "./catalog.ts";
 import { platform } from "../platform/index.ts";
 import { type Module, type ModuleSet, type ModuleSpec, isPackage, modulesOf } from "./modules.ts";
 import type { Packages } from "./packages.ts";
@@ -231,11 +233,25 @@ export const ModulesLive = Layer.effectDiscard(
     const drive = yield* StationDrive;
     // Those named by their package: installed and updated with the station's own updates (modules/packages.ts).
     const packages = yield* ModulePackages;
+    // Members see them, and owners and admins turn them on or off (api/routes/modules.ts).
+    const events = yield* Events;
+    (yield* Parts).routes(modulesRoutes({ config, modules, changed: () => events.overviewChanged() }));
     // Sockets (unix domain) are how a module and the station talk: macOS and Linux.
     if (!platform.hasUnixSockets) {
       if (modulesOf(config.raw()).specs.length > 0) log.warn("modules", "modules run on macOS and Linux only; none is started here");
       return;
     }
+    // A module still.fail makes is set up as it is first asked for (the media app on this station): no one turns it on,
+    // unless its owners or admins turned it off (api/routes/modules.ts).
+    modules.wanted = (id) => {
+      const offered = CATALOG.find((o) => o.id === id);
+      if (!offered) return false;
+      const entry = (Array.isArray(config.raw()?.modules) ? config.raw().modules : []).find((m: any) => m?.id === id);
+      if (entry !== undefined) return entry.enabled !== false;
+      log.info("modules", "set up as it is asked for", { module: id });
+      config.update((raw) => void (Array.isArray(raw.modules) ? raw.modules : (raw.modules = [])).push({ id, package: offered.package }));
+      return true;
+    };
     yield* keep({ data, modules, drive, config, previousGone: (yield* Previous).gone, packages });
   }),
 );

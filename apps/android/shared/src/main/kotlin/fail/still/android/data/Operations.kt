@@ -6,7 +6,7 @@ import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 /** A field is absent until assigned; assigning null sends JSON null (reset to default). */
-val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state")
+val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state")
 
 open class OperationFields {
     internal val fields = mutableMapOf<String, JsonElement>()
@@ -33,6 +33,16 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         val values = mutableMapOf<String, JsonElement>()
         values["access"] = JsonPrimitive(access)
         return call("tools.setAccess", JsonObject(values))
+    }
+    suspend fun stationModules(): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        return call("station.modules", JsonObject(values))
+    }
+    suspend fun stationModule(id: String, enabled: Boolean): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["id"] = JsonPrimitive(id)
+        values["enabled"] = JsonPrimitive(enabled)
+        return call("station.module.set", JsonObject(values))
     }
     class AgentEnvSetFields : OperationFields() {
         var env: JsonElement? by field<JsonElement>("env") { it }

@@ -6,7 +6,7 @@
 // modules there are, each as it is now, and what the admin API asks of them.
 import { join } from "node:path";
 import type { Answer, Request } from "../api/request.ts";
-import { error } from "../api/request.ts";
+import { error, json } from "../api/request.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import { forward } from "./forward.ts";
 
@@ -163,9 +163,15 @@ export class ModuleSet {
 
   /// `r` passed on to its module, its answer as it comes: 404 for a module not named, 503 for one not running or not
   /// answering.
+  /// One not named yet but wanted as it is asked for (a module still.fail makes: modules/live.ts turns it on), whether
+  /// it is being set up now.
+  wanted: (id: string) => boolean = () => false;
+
   async forward(r: Request, at: { id: string; path: string }): Promise<Answer> {
     const module = this.#by.get(at.id);
-    if (module === undefined) return error(404, `no module ${at.id}`);
+    // Asked for and not there yet: one still.fail makes is set up now (installed as its package, started); asked again,
+    // it answers once it runs (the media app's core asks again as it does).
+    if (module === undefined) return this.wanted(at.id) ? json(503, JSON.stringify({ error: `module ${at.id} is being set up`, code: "module_starting" })) : error(404, `no module ${at.id}`);
     if (!module.running) return error(503, `module ${at.id} is not running`);
     try {
       return await forward(module.socket, { method: r.method, path: at.path + (r.search ?? ""), headers: r.headers, body: r.upload ?? r.body }, viewerHeader(r.viewer));
