@@ -53,13 +53,16 @@ static void send_text(int kind, const WCHAR *s, int n, int a, int b) {
 }
 
 static void run_script_step(int step);
+static void ime_place(void);
 
 static void draw_frame(void) {
   RECT rc;
   GetClientRect(hwnd, &rc);
   want_frame = 0;
   if (rc.right <= 0 || rc.bottom <= 0) return;  // minimized; WM_SIZE asks again
+  double was = scale;
   scale = GetDpiForWindow(hwnd) / 96.0;
+  if (scale != was) ime_place();  // the candidate window is placed in pixels
   frame_w = rc.right / scale;
   frame_h = rc.bottom / scale;
   mb_text_set_scale(scale);

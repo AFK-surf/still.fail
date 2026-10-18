@@ -25,6 +25,9 @@ src/host    the platform boundary
   apple_text.m    Core Text shaping and glyph atlas (macOS and iOS)
   mac_app.m       AppKit window, NSTextInputClient
   ios_app.m       UIKit view, UITextInput (built by scripts/ios.sh)
+  win_render.cpp  Direct3D 11 renderer (WARP without a GPU)
+  win_text.cpp    DirectWrite shaping, Direct2D glyphs into the same atlas
+  win_app.c       Win32 window, per-monitor DPI, IMM32 input method
 web/        browser host: WebGL2, canvas-2D text, hidden textarea for IME
 src/demo    the demo: a chat screen with 10,000 messages
 ```
@@ -41,3 +44,14 @@ MBUI_BENCH=1 _build/native/release/build/demo/demo.exe   # scroll bench
 scripts/web.sh build && scripts/web.sh test     # browser build + Playwright run
 scripts/ios.sh build && scripts/ios.sh run      # iOS simulator
 ```
+
+On Windows (Git Bash, MoonBit, MSVC from a Developer Command Prompt):
+
+```sh
+scripts/win.sh build && scripts/win.sh run      # Win32 window
+scripts/win.sh script ime                       # scripted IME run, snapshots in out/ime
+scripts/shots.sh windows                        # screenshot compared with goldens/windows.png
+```
+
+CI (`.github/workflows/windows.yml`) builds it on `windows-latest`, runs the
+`shot` and `ime` scripts and compares the screenshot with the golden.
