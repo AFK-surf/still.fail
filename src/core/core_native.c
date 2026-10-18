@@ -1,6 +1,7 @@
 // mbui/core's native side: the engine's messages, which come on the core's own thread, copied into a queue that the
 // UI thread drains (core.mbt `pump`). On Apple's systems the main queue is woken to drain it, once per run of messages
-// (`scheduled`); elsewhere the host pumps each frame. The engine itself is the app's (core_client.h, mbc_use).
+// (`scheduled`); elsewhere the engine asks the host for a frame and the host calls mbc_frame as each begins (Android's
+// GL thread: android_host.c), which drains it when something came. The engine itself is the app's (core_client.h, mbc_use).
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -56,8 +57,17 @@ static void push_with(const char *json, size_t len, const uint8_t *bytes, size_t
   pthread_mutex_unlock(&lock);
 #ifdef __APPLE__
   if (!atomic_exchange(&scheduled, 1)) dispatch_async_f(dispatch_get_main_queue(), NULL, on_main);
+#else
+  atomic_store(&scheduled, 1);
 #endif
 }
+
+#ifndef __APPLE__
+// As a frame begins, on the UI thread: what the core said since the last one (core.mbt `pump`, through `wake`).
+void mbc_frame(void) {
+  if (wake && atomic_exchange(&scheduled, 0)) wake();
+}
+#endif
 
 static void push(const char *json, size_t len) { push_with(json, len, NULL, 0); }
 

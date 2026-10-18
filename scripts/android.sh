@@ -1,7 +1,8 @@
 #!/bin/bash
 # Android: build libmbui.so from the C that moon generates plus the runtime
 # and src/host/android_host.c, package it with Gradle, and run it on an
-# emulator of our own (AVD mbui-avd, port 5580). APP=demo|photos picks the app.
+# emulator of our own (AVD mbui-avd, port 5580). APP=demo|photos|coredemo picks the app;
+# ENV="K=V;K2=V2" gives `run` the app's environment variables (MainActivity sets them before the app starts).
 #   scripts/android.sh build | emu | run [script] | shot NAME | log | stop | delete
 # moon.pkg cannot choose files per OS, so the build runs on a copy of the
 # module in out/android/mod, where photos shows src/photos/pictures/android.mbt.
@@ -32,6 +33,14 @@ sync() {
   cp -p moon.mod $M/
   cp -rp src/. $M/src/
   cp -p src/photos/pictures/android.mbt $M/src/photos/pictures_native.mbt
+  # moon still links a (macOS) program of the copy, which nothing runs: only its C is taken. The core demo's needs
+  # the Apple shell (scripts/core.sh shell), which an Android build has no use for; its symbols are left unresolved.
+  sed -e 's|out/core/aarch64-apple-darwin/libstillfail_shell.a|-Wl,-undefined,dynamic_lookup|' \
+    src/coredemo/moon.pkg > $M/src/coredemo/moon.pkg
+  if ! grep -q dynamic_lookup $M/src/coredemo/moon.pkg; then
+    echo "android.sh: src/coredemo/moon.pkg no longer links the shell as expected" >&2
+    exit 1
+  fi
 }
 
 # the photos app's pictures (see pictures/android.mbt): copied into the
@@ -60,10 +69,48 @@ photos() {
   fi
 }
 
+# A .so of an AAR on Maven Central (GROUP/ARTIFACT VERSION FILE LIB), from Gradle's cache when it has it, into $jni.
+aar_lib() {
+  local aar=$(ls $HOME/.gradle/caches/modules-2/files-2.1/$1/$2/*/$3 2>/dev/null | head -1)
+  if [ -z "$aar" ]; then
+    aar=$OUT/$3
+    [ -f $aar ] || curl -sSfL -o $aar https://repo1.maven.org/maven2/$(echo ${1%/*} | tr . /)/${1#*/}/$2/$3
+  fi
+  unzip -o -q -j $aar jni/arm64-v8a/$4 -d $jni
+}
+
+# APP=coredemo: the still.fail core, as still.fail's own app runs it (src/host/android_core.c). Into out/android/apk,
+# which Gradle packs: ember's prebuilt engine and shell (EMBER: the checkout, as scripts/core.sh has it; `node
+# scripts/native.ts path engine|shell android-arm64` there, prebuilt or built by it), libhermes.so from React Native's
+# hermes-android (the Hermes the engine is built against: Gradle's cache, else Maven Central), and the core as Hermes
+# bytecode (scripts/core.sh hermes; ENTRY picks the core's entry, by default the one with the media module). For the other apps it stays empty.
+core_parts() {
+  local apk=$OUT/apk
+  jni=$OUT/apk/jniLibs/arm64-v8a
+  rm -rf $apk
+  mkdir -p $jni $apk/assets
+  [ $PKG = coredemo ] || return 0
+  EMBER=${EMBER:-$(cd "$TOOLS/.." 2>/dev/null && pwd)/ember-src}
+  local engine shell
+  engine=$(cd "$EMBER" && node scripts/native.ts path engine android-arm64)
+  shell=$(cd "$EMBER" && node scripts/native.ts path shell android-arm64)
+  cp -p $engine/libstillfail_hermes.so $engine/libjsi.so $engine/libc++_shared.so $shell/libstillfail_shell.so $jni/
+  # Hermes as React Native 0.81.4 has it, and the fbjni it needs (libc++_shared.so is the engine's, the NDK's, which
+  # fbjni's AAR carries an older copy of)
+  aar_lib com.facebook.react/hermes-android 0.81.4 hermes-android-0.81.4-release.aar libhermes.so
+  aar_lib com.facebook.fbjni/fbjni 0.7.0 fbjni-0.7.0.aar libfbjni.so
+  EMBER=$EMBER ENTRY=${ENTRY:-$PWD/core/media-hermes.ts} "$D/core.sh" hermes \
+    || { echo "android.sh: no core for the app (scripts/core.sh hermes failed)" >&2; exit 1; }  # with media, as on macOS
+  cp -p out/core/core.hbc $apk/assets/
+  echo "core parts: $(cd $jni && for f in *.so; do printf '%s %s, ' $f $(size $f); done)core.hbc $(size $apk/assets/core.hbc)"
+}
+
 case "${1:-build}" in
   build)
     T0=$(python3 -c 'import time;print(time.time())')
     sync
+    core_parts
+    rm -f $M/_build/native/release/build/$PKG/$PKG.c  # never an old one's
     (cd $M && moon build --target native --release src/$PKG 2>&1) | python3 "$D/errs.py" | grep -v '^errors: 0' || true
     mkdir -p $OUT/obj android/app/src/main/jniLibs/arm64-v8a
     rm -f $OUT/obj/*.o
@@ -73,8 +120,15 @@ case "${1:-build}" in
         || { echo "skip runtime/$f.c: $(grep error $OUT/rt_$f.err | head -1)"; rm -f $OUT/obj/rt_$f.o; }
     done
     $CC $CFLAGS -c src/host/android_host.c -o $OUT/obj/android_host.o
+    CORE_LIBS=
+    if [ $PKG = coredemo ]; then
+      # mbui/core's queue and the app's engine (src/coredemo/android_engine.c, which includes android_core.c)
+      $CC $CFLAGS -c src/core/core_native.c -o $OUT/obj/core_native.o
+      $CC $CFLAGS -c src/coredemo/android_engine.c -o $OUT/obj/android_engine.o
+      CORE_LIBS="-L$OUT/apk/jniLibs/arm64-v8a -lstillfail_hermes"
+    fi
     $CC -shared -o android/app/src/main/jniLibs/arm64-v8a/libmbui.so $OUT/obj/*.o \
-      -lGLESv3 -llog -lm -Wl,--no-undefined
+      $CORE_LIBS -lGLESv3 -llog -lm -Wl,--no-undefined
     T1=$(python3 -c 'import time;print(time.time())')
     echo "libmbui.so $(size android/app/src/main/jniLibs/arm64-v8a/libmbui.so) bytes in $(python3 -c "print(round($T1-$T0,2))") s"
     (cd android && ./gradlew --no-daemon -q assembleDebug 2>&1 | grep -v '^$' | tail -20)
@@ -100,9 +154,9 @@ case "${1:-build}" in
     $ADB -s $SERIAL shell am force-stop dev.mbui.demo
     if [ $PKG = photos ]; then photos; fi
     if [ -n "${2:-}" ]; then
-      $ADB -s $SERIAL shell am start -n dev.mbui.demo/dev.mbui.MainActivity --es script "$2" >/dev/null
+      $ADB -s $SERIAL shell am start -n dev.mbui.demo/dev.mbui.MainActivity --es script "$2" ${ENV:+--es env "'$ENV'"} >/dev/null
     else
-      $ADB -s $SERIAL shell am start -n dev.mbui.demo/dev.mbui.MainActivity ${BENCH:+--ei bench $BENCH} >/dev/null
+      $ADB -s $SERIAL shell am start -n dev.mbui.demo/dev.mbui.MainActivity ${BENCH:+--ei bench $BENCH} ${ENV:+--es env "'$ENV'"} >/dev/null
     fi
     ;;
   shot)
@@ -110,7 +164,7 @@ case "${1:-build}" in
     $ADB -s $SERIAL exec-out screencap -p > $OUT/shots/$2.png && echo "shot $OUT/shots/$2.png"
     ;;
   log)
-    $ADB -s $SERIAL logcat -d -s mbui:I AndroidRuntime:E DEBUG:* libc:* | tail -${2:-40}
+    $ADB -s $SERIAL logcat -d -s mbui:I StillFailCore:* AndroidRuntime:E DEBUG:* libc:* | tail -${2:-40}
     ;;
   stop)
     $ADB -s $SERIAL emu kill 2>/dev/null || true

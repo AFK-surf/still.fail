@@ -32,3 +32,6 @@ moonbit_string_t mb_coredemo_env(moonbit_string_t name) {
   const char *v = getenv(mb_ns_from_string(name).UTF8String);
   return mb_string_from_ns(v ? @(v) : @"");
 }
+
+// The engine's name, for the header.
+moonbit_string_t mb_coredemo_engine(void) { return mb_string_from_ns(@"JavaScriptCore"); }

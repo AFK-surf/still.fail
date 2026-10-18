@@ -36,6 +36,12 @@ static int want_frame;
 
 int mbui_main(int argc, char **argv);  // the MoonBit program's main (renamed)
 
+// The process's VM, for the still.fail core's engine (android_core.c).
+JavaVM *mb_android_vm(void) { return vm; }
+
+// The core's queue, drained as each frame begins (src/core/core_native.c), in apps that link mbui/core's engine.
+extern void mbc_frame(void) __attribute__((weak));
+
 static JNIEnv *env_(void) {
   JNIEnv *env = NULL;
   (*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6);
@@ -298,6 +304,7 @@ JNIEXPORT jboolean JNICALL Java_dev_mbui_Native_frame(JNIEnv *env, jclass c, jfl
   cur_h = h;
   cur_scale = scale;
   want_frame = 0;
+  if (mbc_frame) mbc_frame();
   if (cb.frame) cb.frame(w, h, scale, now);
   return want_frame ? JNI_TRUE : JNI_FALSE;
 }

@@ -150,24 +150,30 @@ What differs from macOS:
 
 ## Android
 
-mbui's Android host is C on a GL thread (`src/host/android_host.c`); JavaScriptCore is not on Android. Two ways:
+Built (`APP=coredemo scripts/android.sh build`): the core runs in ember's own engine, as still.fail's Android app runs
+it, not in one of ours.
 
-1. **Hermes, ember's engine (recommended).** ember's `rn-trial` branch has `apps/android/core/src/main/cpp/engine.cpp`
-   made platform-neutral: the engine (thread, task deque, timers, microtask drain, `__native`, the shell, the Gate)
-   is one class, and the app's side is an `Edge` interface (`enter`, `leave`, `say`, `sayBytes`, `secure`) — JNI on
-   Android, Objective-C++ in the RN iOS module. For mbui, write a C `Edge` that calls an `mb_core_message_fn` and
-   answers `secure.*`/`listen.*` "unsupported", and export the same `mb_core_start/send/stop` (core_api.h) from it.
-   Needs Hermes (`libhermes.so` + headers from React Native's `hermes-android` prefab, as ember's Gradle build gets
-   them), the shell for `aarch64-linux-android` (rustup has the target; build with the NDK's clang as linker, as
-   ember's Gradle task does), and ember's bundle (`client/core-ts/scripts/hermes-bundle.ts`: esbuild + Babel class
-   transform, then `hermesc` to bytecode) — Hermes needs the class lowering and the case-conversion override that
-   JSC does not. This is the path ember's Android app runs today.
-2. **Without Hermes**: QuickJS-ng (small, plain C, no JNI) could run `core.js` as built here with the same
-   `__native`, but it is an interpreter without bytecode precompilation in the build; expect a slower start than
-   Hermes bytecode. Only worth it if the Hermes prefab is a problem.
-
-On Android `secure.*` is the Keystore and `listen.*` a loopback listener, both in Kotlin in ember's app
-(`SecureStore.kt`, `Loopback.kt`); a C-only host needs JNI calls for them, or leaves them unsupported as here.
+- **Engine**: ember's `apps/android/core/src/main/cpp/engine.cpp`, prebuilt (`node scripts/native.ts path engine
+  android-arm64` in the ember checkout: `libstillfail_hermes.so`, `libjsi.so`, `libc++_shared.so`), on the shell
+  `libstillfail_shell.so` (`... path shell android-arm64`). Hermes itself (`libhermes.so`) and `libfbjni.so` come
+  from React Native 0.81.4's `hermes-android` and fbjni 0.7.0's AARs (Gradle's cache, else Maven Central). All go
+  into `out/android/apk/jniLibs`, which Gradle packs; nothing is committed.
+- **Script**: `scripts/core.sh hermes` makes `out/core/core.hbc` as ember's `hermes-bundle.ts` does (esbuild, Babel's
+  class transform, hermesc 0.81.4 to bytecode) from `core/hermes.ts` (still.fail alone) or, for coredemo by default,
+  `core/media-hermes.ts` (with the media module). It goes into the APK's assets.
+- **Host** (`src/host/android_core.c`, included by `src/coredemo/android_engine.c`): calls the engine's
+  `Java_fail_still_core_HermesNative_*` entry points as C functions (none looks at its `this`), with a
+  `dev.mbui.CoreHost` (android/) as the listener the engine calls back on its thread: `onBytes`/`onFrame` (a message,
+  or one with bytes) go straight into core_native.c's queue and ask for a frame; android_host.c drains the queue as
+  each frame begins (`mbc_frame`). Timers are the engine's (CLOCK_BOOTTIME).
+- **`secure.*`**: CoreHost seals each value with AES-GCM under one Android Keystore key (alias
+  `dev.mbui.core.secure`), a file per value in `<files>/core/secure`, the value's name as associated data.
+  `secure.ask` and `user: true` (biometrics) answer `"unsupported"`, as does `listen.*` (no loopback listener yet).
+- **Data**: `<the app's files>/core` (`/data/user/0/dev.mbui.demo/files/core`).
+- **Environment**: `ENV="MBUI_AUTH_BEGIN=1;K=V" APP=coredemo scripts/android.sh run` passes the intent's `env` extra,
+  which MainActivity sets with `Os.setenv` before the app's MoonBit starts.
+- The moon build of the Android copy still links a macOS program, which nothing runs: android.sh links the copy's
+  coredemo with `-undefined dynamic_lookup` instead of the Apple shell, so it needs no `scripts/core.sh shell`.
 
 ## Login
 

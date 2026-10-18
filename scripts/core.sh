@@ -1,7 +1,7 @@
 #!/bin/bash
 # The still.fail client core (client/core-ts of github.com/zzj3720/ember) in JavaScriptCore, on its Rust shell
 # (client/shell): builds the pieces from an ember checkout and runs a headless smoke test. See core/README.md.
-#   scripts/core.sh deps | shell [TARGET] | bundle | smoke [build|run] | listen | login-test | vectors | sizes | clean | all
+#   scripts/core.sh deps | shell [TARGET] | bundle | hermes | smoke [build|run] | listen | login-test | vectors | sizes | clean | all
 # EMBER: the ember checkout (default: ember-src beside this session's tools); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -55,6 +55,47 @@ bundle() {
     --alias:@core=$CORE_TS/src --alias:@ember=$EMBER --resolve-extensions=.ts,.js,.mjs \
     --outfile=$OUT/core.js --metafile=$OUT/core.meta.json --log-level=warning || { echo "bundle failed"; return 1; }
   echo "bundle in $(since $t0) s: $(stat -f %z $OUT/core.js) bytes ($(gzip -9c $OUT/core.js | wc -c | tr -d ' ') gzipped)"
+}
+
+# The core for Hermes (the Android host, src/host/android_core.c): out/core/core.hbc. Made as ember's
+# client/core-ts/scripts/hermes-bundle.ts makes it (esbuild to ES2020; Babel's class transform, as Hermes 0.81 has no
+# classes; then React Native 0.81.4's hermesc, the engine's Hermes, to bytecode), but from an entry of ours (ENTRY,
+# default core/hermes.ts: still.fail's alone; core/media-hermes.ts with the media module), `@core/` and `@ember/`
+# aliased as in bundle(). hermesc: $HERMESC, else the one ember's apps/android/build.py keeps in its cache, else
+# fetched (npm pack react-native@0.81.4) into out/core/hermesc.
+HERMES_RN=0.81.4
+hermesc() {
+  if [ -n "${HERMESC:-}" ]; then echo "$HERMESC"; return; fi
+  local bin=sdks/hermesc/$([ "$(uname)" = Darwin ] && echo osx-bin || echo linux64-bin)/hermesc
+  for c in "$HOME/Library/Caches/stillfail-build/hermesc-$HERMES_RN/package" "$OUT/hermesc/package"; do
+    if [ -x "$c/$bin" ]; then echo "$c/$bin"; return; fi
+  done
+  mkdir -p $OUT/hermesc
+  (cd $OUT/hermesc && npm pack react-native@$HERMES_RN --silent > /dev/null \
+    && tar -xzf react-native-$HERMES_RN.tgz package/sdks/hermesc && rm react-native-$HERMES_RN.tgz)
+  echo "$OUT/hermesc/package/$bin"
+}
+
+hermes() {
+  local t0=$(now)
+  # never an old core.hbc after a failed step (it would hide a module gone missing)
+  rm -f $OUT/core-hermes.js $OUT/core.hbc
+  # npm imports of an app's modules from the core's node_modules, as in bundle()
+  NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild ${ENTRY:-$ROOT/core/hermes.ts} --bundle \
+    --format=iife --platform=neutral --main-fields=module,main --target=es2020 --minify --legal-comments=none \
+    --alias:@core=$CORE_TS/src --alias:@ember=$EMBER --resolve-extensions=.ts,.js,.mjs \
+    --outfile=$OUT/core-hermes.js --log-level=warning || { echo "hermes: bundle failed"; return 1; }
+  # Classes as functions (and `extends Error` as Babel's wrapped native super), with ember's Babel.
+  (cd $CORE_TS && node --input-type=module -e "
+import { readFileSync, writeFileSync } from 'node:fs';
+import { transformSync } from '@babel/core';
+const f = process.argv[1];
+const out = transformSync(readFileSync(f, 'utf8'), { babelrc: false, configFile: false, compact: true, plugins: ['@babel/plugin-transform-classes'] });
+if (!out || !out.code) throw new Error('babel made nothing');
+writeFileSync(f, out.code);" $OUT/core-hermes.js) || { echo "hermes: class transform failed"; return 1; }
+  "$(hermesc)" -emit-binary -O -block-scoping -out $OUT/core.hbc $OUT/core-hermes.js \
+    || { echo "hermes: hermesc failed"; rm -f $OUT/core.hbc; return 1; }
+  echo "hermes in $(since $t0) s: $(wc -c < $OUT/core-hermes.js | tr -d ' ') bytes of script, $(wc -c < $OUT/core.hbc | tr -d ' ') of bytecode"
 }
 
 # The shell's link line for TARGET, each library once (-framework X, -lY; clang adds -lSystem and -lobjc itself).
@@ -170,6 +211,7 @@ case "${1:-all}" in
   deps) deps ;;
   shell) shell "$2" ;;
   bundle) bundle ;;
+  hermes) hermes ;;
   listen) listen_test ;;
   login-test) login_test ;;
   smoke)
@@ -182,5 +224,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; bundle; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | bundle | smoke [build|run] | listen | login-test | vectors | sizes | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | bundle | hermes | smoke [build|run] | listen | login-test | vectors | sizes | clean | all"; exit 2 ;;
 esac

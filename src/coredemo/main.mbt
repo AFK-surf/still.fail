@@ -306,7 +306,7 @@ fn view(c : @ui.Ctx) -> Unit {
   c.box(w=Fill(1.0), h=Fill(1.0), bg=0xF5F5F7FFL, padx=28.0, pady=24.0, gap=18.0, fn() {
     c.row(gap=12.0, fn() {
       c.text("still.fail", size=22.0, weight=700, wrap=false) |> ignore
-      c.text("内核 · JavaScriptCore", size=13.0, color=grey, wrap=false)
+      c.text("内核 · " + engine_name(), size=13.0, color=grey, wrap=false)
       |> ignore
       c.spacer()
       if c.button("书架", key="shelf", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
