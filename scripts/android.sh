@@ -23,7 +23,7 @@ CFLAGS="-I$MOON_HOME/include -Isrc/host -fPIC -fwrapv -fno-strict-aliasing -Wno-
 case "${1:-build}" in
   build)
     T0=$(python3 -c 'import time;print(time.time())')
-    moon build --target native --release 2>&1 | python3 "$D/errs.py" | grep -v '^errors: 0' || true
+    moon build --target native --release src/demo 2>&1 | python3 "$D/errs.py" | grep -v '^errors: 0' || true
     mkdir -p $OUT/obj android/app/src/main/jniLibs/arm64-v8a
     $CC $CFLAGS -Dmain=mbui_main -c _build/native/release/build/demo/demo.c -o $OUT/obj/demo.o
     for f in runtime env utf sync_io backtrace; do

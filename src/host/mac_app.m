@@ -289,8 +289,11 @@ static void run_script_step(int step) {
     if (step == 241) exit(0);
     [v requestFrame];
   } else if (strcmp(script, "shot") == 0) {
-    if (step == 30) shot("main");
-    if (step == 31) exit(0);
+    // MBUI_SHOT_AT: the frame to take it at (later for what waits on something, as the core's first answers)
+    static int at;
+    if (!at) at = getenv("MBUI_SHOT_AT") ? atoi(getenv("MBUI_SHOT_AT")) : 30;
+    if (step == at) shot(getenv("MBUI_SHOT_NAME") ?: "main");
+    if (step == at + 1) exit(0);
     [v requestFrame];
   }
 }

@@ -9,7 +9,7 @@ APP=${APP:-demo}
 case "${1:-build}" in
   build)
     T0=$(python3 -c 'import time;print(time.time())')
-    moon build --target js --release 2>&1 | python3 "$D/errs.py"
+    moon build --target js --release src/$APP 2>&1 | python3 "$D/errs.py"
     mkdir -p $OUT
     cp _build/js/release/build/$APP/$APP.js $OUT/demo.js
     if [ $APP = photos ] && [ ! -f $OUT/photos/11.jpg ]; then

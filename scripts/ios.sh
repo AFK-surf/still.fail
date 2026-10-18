@@ -36,7 +36,7 @@ for rt,ds in d.items():
 case "${1:-build}" in
   build)
     T0=$(python3 -c 'import time;print(time.time())')
-    moon build --target native --release 2>&1 | python3 "$D/errs.py" | grep -v '_main' || true
+    moon build --target native --release src/demo 2>&1 | python3 "$D/errs.py" | grep -v '_main' || true
     C=_build/native/release/build/demo/demo.c
     mkdir -p $OUT/obj $APP
     $CC $CFLAGS -c $C -o $OUT/obj/demo.o

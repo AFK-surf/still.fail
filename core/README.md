@@ -6,14 +6,19 @@ shell (`client/shell`) the Android app uses, behind a three-function C API the M
 ```
 src/host/core_api.h    mb_core_start / mb_core_send / mb_core_stop, the on_message callback
 src/host/apple_core.m  the engine (ObjC, ARC; macOS and iOS): JSContext, __native, timers, the shell
-core/jsc.ts            the script's entry (bundled with ember's core): hermes-globals' polyfills + bridge.ts
+src/host/apple_auth.m  a sign-in's browser page: ASWebAuthenticationSession (macOS and iOS)
+core/jsc-start.ts      hermes-globals' polyfills, JSC's case conversion, then ember's hosts/engine.ts startEngine
+core/jsc.ts            still.fail's entry: startJsc([]) (an app's own entry passes its modules)
 core/jsc-pre.ts        keeps JSC's own toLowerCase/toUpperCase (hermes-globals replaces them for Hermes)
 core/smoke.m           headless smoke test: accounts, auth.begin, stop
-scripts/core.sh        deps | shell [TARGET] | bundle | smoke [build|run] | sizes | clean | all
+core/delta-vectors.ts  test vectors from core-ts's diff and apply -> src/core/vectors_test.mbt
+src/core               mbui/core: the MoonBit client (subscriptions, deltas, calls, sign-in) and its C queue
+src/coredemo           the macOS app with the core linked in (MBUI_CORE=1 scripts/mac.sh)
+scripts/core.sh        deps | shell [TARGET] | bundle | smoke [build|run] | vectors | sizes | clean | all
 ```
 
-Nothing here is built by `moon` (`apple_core.m` is not in `src/host/moon.pkg`'s `native-stub`); wiring it into the
-app is the next step (below).
+The default `moon` build does not link the engine: only `src/coredemo` (its `core_engine.m` includes `apple_core.m`
+and `apple_auth.m`, its `moon.pkg` links the shell's `.a`), built by `MBUI_CORE=1 scripts/mac.sh build`.
 
 ## Building and the smoke test (on Studio)
 
@@ -50,11 +55,12 @@ stops the core and prints timings and the process's memory footprint.
   its workers have 512 KB stacks and the core parses (markdown, JSON) recursively; React Native's JSC thread and the
   Android engine (Hermes, 8 MB) make the same choice. JavaScriptCore drains promise jobs itself when each call into it
   returns, so there is no explicit microtask step.
-- `__native` is hermes-globals' `HermesNative` with typed arrays: `call(id, op, json, Uint8Array?)`,
-  `callSync`, `emit`, `emitBytes(client, json, Uint8Array)`, `fatal`, `now`, `monotonic`, `utcOffset`, `fill(buf)`
-  (random bytes in place) and `random(n)` (an ArrayBuffer, for hermes-globals' `crypto`), `setTimer`, `clearTimer`,
-  `log`. Bytes from the JS are read in place (typed array → its ArrayBuffer's pointer + offset); bytes into the JS are
-  one malloc'd copy handed over with `JSObjectMakeTypedArrayWithBytesNoCopy` (freed by the GC). No number arrays.
+- `__native` is ember's `HermesNative` (hosts/hermes-globals.ts) as it is, plus `os` (`macos`, `ios`), so the script
+  starts the core the way Android's does: `startEngine(modules, os)` (ember hosts/engine.ts, since ember 524baa05).
+  Bytes are ArrayBuffers both ways: `call(id, op, json, ArrayBuffer?)`, `emitBytes(client, json, ArrayBuffer)`,
+  `__stillfail.receiveBytes(client, json, ArrayBuffer)`, `complete(id, json, error, ArrayBuffer?)`, `random(n)`.
+  Bytes from the JS are read in place (the ArrayBuffer's pointer); bytes into the JS are one malloc'd copy handed over
+  with `JSObjectMakeArrayBufferWithBytesNoCopy` (freed by the GC). engine.ts copies what goes out of a view first.
 - The shell's answers come on tokio's threads; they go through a `Gate` (as engine.cpp's) closed by `mb_core_stop`, so
   an answer arriving after a stop is dropped instead of touching a dead core.
 - `secure.*` and `listen.*` are answered `"unsupported"` (they are the app's, not the shell's, on Android too).
@@ -87,16 +93,36 @@ Both directions of bytes are exercised: `storage.set` with 171 and 31,233 bytes 
 31,224 bytes) and `storage.get` (31,233 bytes, the second run) into it. `MB_CORE_TRACE=1` prints every shell
 operation.
 
-## Wiring it into mbui (next)
+## mbui/core (src/core)
 
-- Add `apple_core.m` to the macOS/iOS builds (`native-stub` in `src/host/moon.pkg`, `scripts/ios.sh`), link
-  `libstillfail_shell.a` + its `native-static-libs` + `-framework JavaScriptCore`, and ship `core.js` in the app
-  bundle (`Contents/Resources/core.js` / `MBUI.app/core.js`; `$MB_CORE_BUNDLE` overrides it for development).
-- MoonBit side: `extern "C"` for `mb_core_start/send/stop`; `on_message` in C copies the JSON into a queue and wakes the
-  frame loop (`mb_host_request_frame`), and the MoonBit app drains the queue each frame into its store (`value` replaces,
-  `delta` applies `set/append/remove` at a path).
-- Data directory: `~/Library/Application Support/<app id>/core` on macOS, the app container's Application Support on
-  iOS; never Studio's installed still.fail's directory.
+The MoonBit side, independent of `mbui/ui`:
+
+- `core_native.c`: `on_message` (core thread) copies each message into a queue and wakes the main queue once per run
+  of them (`dispatch_async_f`); there `@core.pump` drains it into the client and calls the app's `on_change` hook once.
+  A host without a main queue (Android's GL thread) calls `@core.pump()` each frame. The engine is handed over by the
+  app that links it (`core_client.h`: `mbc_use`, from a constructor), so `mbui/core` builds and tests without it.
+- `client.mbt`: subscriptions by topic and params (the same `Sub` each time, so a view can ask every frame), each with
+  its current value, error and a `version` bumped per message; calls with an `on_done`; `{fatal}` fails the calls in
+  flight, and the core is started again (at most 3 times a minute) with every subscription asked again.
+- `delta.mbt`: deltas applied as core-ts's `applyKeyed` (collections.ts): `set`/`append`/`remove`, and the keyed
+  `put`/`patch`/`drop`/`move` a `keyed: true` subscription gets; only what is along a path is copied.
+  `vectors_test.mbt` holds it to core-ts's own results (`scripts/core.sh vectors`).
+- `sign_in(on_done)`: `auth.begin`, the browser session (apple_auth.m), `auth.complete {query}`.
+
+```moonbit
+@core.on_change(fn() { @host.request_frame() })   // the redraw hook
+@core.start() |> ignore                            // data: $MBUI_CORE_DATA, else Application Support/<bundle id|mbui>/core
+fn view(c : @ui.Ctx) {
+  let accounts = @core.subscribe("accounts")       // .value : Json?, .error : Json?, .version : Int
+  match accounts.value { Some(Array(list)) => ..., _ => ... }
+  if c.button("登录") { @core.sign_in(fn(r) { ... }) }
+}
+```
+
+Still to do: ship `core.js` in an app bundle (`Contents/Resources/core.js`; today `MB_CORE_BUNDLE`, which
+`scripts/mac.sh` sets), the iOS build (`scripts/ios.sh`: `core_engine.m`'s two includes, the shell for the device and
+simulator, `-framework JavaScriptCore -framework AuthenticationServices`), bytes beside messages (dropped by the queue
+for now), a call's progress values.
 
 ## iOS
 
@@ -157,7 +183,8 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
   callbackURLScheme: "stillfail")` does both (no `CFBundleURLTypes` registration needed, the callback URL comes back
   to its completion handler); otherwise register the scheme (`CFBundleURLTypes`; on macOS handle `kAEGetURL`, on iOS
   `application:openURL:`). Then `mb_core_send({"id":…,"call":"auth.complete","params":{"query":"<query>"}})`.
-  This is the shortest path to a working login and is not built yet. Caveat: another installed still.fail app
+  Built: `src/host/apple_auth.m` and `@core.sign_in`; `MBUI_AUTH_DRY=1` makes the session but does not start it (no one
+  has signed in through it yet: a real sign-in is the person's to do). Caveat: another installed still.fail app
   (Studio has one) also owns `stillfail://`; ASWebAuthenticationSession avoids that clash, a registered scheme does not.
 - **Loopback listener** (`http://127.0.0.1:<port>/oauth/callback`, the desktop app's and the Android app's way for a
   station's login, docs/remote-login.md): the core asks `listen.open/next/respond/close` itself, which apple_core.m

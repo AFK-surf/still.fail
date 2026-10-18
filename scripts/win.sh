@@ -18,6 +18,8 @@ sync() {
   mkdir -p $M/src
   cp -p moon.mod $M/
   cp -rp src/. $M/src/
+  # the core (pthreads, dispatch, JavaScriptCore) isn't built for Windows yet
+  rm -rf $M/src/coredemo
   sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp" ]/' \
       -e 's/-fobjc-arc *//' src/host/moon.pkg > $M/src/host/moon.pkg
   # every app (demo, photos…) links no Apple frameworks
@@ -38,7 +40,7 @@ shot_dir() {
 case "${1:-build}" in
   build)
     sync
-    (cd $M && time moon build --target native $FLAG)
+    (cd $M && time moon build --target native $FLAG src/demo)
     ls -la $EXE ;;
   run)
     ./$EXE ;;
