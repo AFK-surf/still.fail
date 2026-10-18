@@ -17,7 +17,7 @@ import javax.microedition.khronos.opengles.GL10;
  * thread: frames there, and input is queued onto it.
  */
 public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
-    private boolean started;
+    private static boolean started;  // MoonBit's main runs once per process
     final float density;
 
     public MBView(Context c) {

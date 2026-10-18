@@ -13,6 +13,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        Host.log("activity onCreate " + (saved != null ? "(restored)" : ""));
         Host.script = getIntent().getStringExtra("script");
         Host.bench = getIntent().getIntExtra("bench", 0);
         FrameLayout root = new FrameLayout(this);

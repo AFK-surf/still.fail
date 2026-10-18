@@ -48,19 +48,46 @@ fn Ctx::measure(self : Ctx, i : Int, max_w : Double) -> (Double, Double) {
     }
     (w, h)
   } else {
-    let mut w = 0.0
-    let mut h = 0.0
-    let mut c = n.first
+    // fixed and content-sized children first, then fill children share
+    // what is left, as place() does
     let mut k = 0
+    let mut c = n.first
     while c >= 0 {
-      let (a, b) = self.child_size(c, dmax(inner - w, 0.0), Row)
-      w = w + a
-      h = dmax(h, b)
       k = k + 1
       c = self.nodes[c].next
     }
-    if k > 1 {
-      w = w + n.gap * (k - 1).to_double()
+    let gaps = if k > 1 { n.gap * (k - 1).to_double() } else { 0.0 }
+    let mut used = gaps
+    let mut h = 0.0
+    let mut flex = 0.0
+    c = n.first
+    while c >= 0 {
+      let ch = self.nodes[c]
+      match ch.w {
+        Fill(f) => flex = flex + f
+        _ => {
+          let (a, b) = self.child_size(c, dmax(inner - used, 0.0), Row)
+          used = used + a
+          h = dmax(h, b)
+        }
+      }
+      c = ch.next
+    }
+    let rest = dmax(inner - used, 0.0)
+    let mut w = used
+    c = n.first
+    while c >= 0 {
+      let ch = self.nodes[c]
+      match ch.w {
+        Fill(f) => {
+          let share = rest * f / flex
+          let (a, b) = self.measure(c, share)
+          w = w + a
+          h = dmax(h, b)
+        }
+        _ => ()
+      }
+      c = ch.next
     }
     (w, h)
   }
