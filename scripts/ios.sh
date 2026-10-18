@@ -43,6 +43,10 @@ case "${1:-build}" in
     for f in runtime env utf sync_io backtrace; do
       [ -f $MOON_HOME/lib/runtime/$f.c ] && { $CC $CFLAGS -c $MOON_HOME/lib/runtime/$f.c -o $OUT/obj/rt_$f.o 2>$OUT/rt_$f.err || echo "skip runtime/$f.c: $(head -1 $OUT/rt_$f.err)"; }
     done
+    # The runtime's allocator and entry points ship only as a prebuilt macOS
+    # object; it is plain arm64 code, so retag it for the iOS simulator.
+    xcrun vtool -arch arm64 -set-build-version 7 17.0 17.0 -replace \
+      -output $OUT/obj/moonbitrun_sim.o $MOON_HOME/lib/libmoonbitrun.o
     for f in apple_render apple_text ios_app; do
       $CC $CFLAGS -fobjc-arc -c src/host/$f.m -o $OUT/obj/$f.o
     done
