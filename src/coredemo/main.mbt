@@ -24,6 +24,8 @@ struct App {
   mut shelf : Bool
   /// the photos over it (photos.mbt)
   mut photos : Bool
+  /// films and series (videos.mbt)
+  mut videos : Bool
   /// MBUI_AUTH_LOGIN: sign in as a login command
   mut login : Bool
 }
@@ -36,6 +38,7 @@ let app : App = {
   by_hand: "",
   shelf: false,
   photos: false,
+  videos: false,
   login: false,
 }
 
@@ -275,6 +278,10 @@ fn view(c : @ui.Ctx) -> Unit {
     @shelf.view(c, core_source)
     return
   }
+  if app.videos {
+    @videos.view(c, video_source)
+    return
+  }
   if app.photos {
     @gallery.view(c, photo_source)
     flush_thumbs()
@@ -307,6 +314,9 @@ fn view(c : @ui.Ctx) -> Unit {
       }
       if c.button("照片", key="photos", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
         app.photos = true
+      }
+      if c.button("影视", key="videos", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
+        app.videos = true
       }
       if c.button(if app.signing_in { "登录中…" } else { "登录" }, key="sign-in") {
         sign_in()
@@ -364,6 +374,7 @@ fn main {
   app.auto_sign_in = env("MBUI_CORE_SIGNIN") == "1"
   app.shelf = env("MBUI_SHELF") == "1"
   app.photos = env("MBUI_PHOTOS") == "1"
+  app.videos = env("MBUI_VIDEOS") == "1"
   app.login = env("MBUI_AUTH_LOGIN") == "1"
   app.by_hand = if env("MBUI_AUTH_BEGIN") == "1" {
     "begin"

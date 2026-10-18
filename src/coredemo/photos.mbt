@@ -41,11 +41,16 @@ fn time_of(v : Json?) -> String {
 ///|
 fn photo_days_now() -> Result[Array[@gallery.Day], String]? {
   guard media_station() is Some(station) else { return None }
+  add_photo_folder()
   let params : Map[String, Json] = {
     "station": Json::string(station),
     "before": Json::number(photo_days.val.to_double()),
   }
   let s = @core.subscribe("media.timeline", params~)
+  // MBUI_CORE_DUMP=1: what the timeline says, as it changes
+  if env("MBUI_CORE_DUMP") == "1" {
+    dump_one("media.timeline", s)
+  }
   match (s.value, s.error) {
     (Some(Object(m)), _) => {
       match photo_cache.val {
@@ -204,4 +209,52 @@ let photo_source : @gallery.Source = {
   thumb: photo_thumb,
   large: photo_large,
   older: photo_older,
+}
+
+///|
+/// MBUI_PHOTO_FOLDER="<drive root>|<path>": adds that folder to those the
+/// photo library scans (media.photos.folders, then setFolders with it added),
+/// once, printing PHOTOS … with the answer.
+let folder_done : Ref[Bool] = { val: false }
+
+///|
+fn add_photo_folder() -> Unit {
+  let spec = env("MBUI_PHOTO_FOLDER")
+  if folder_done.val || spec.length() == 0 {
+    return
+  }
+  guard media_station() is Some(station) else { return }
+  folder_done.val = true
+  let (root, path) = match spec.find("|") {
+    Some(i) => (spec.view(end_offset=i).to_owned(), spec.view(start_offset=i + 1).to_owned())
+    None => (spec, "")
+  }
+  let ask : Map[String, Json] = { "station": Json::string(station) }
+  @core.call("media.photos.folders", params=Json::object(ask), on_done=fn(r) {
+    let folders : Array[Json] = match r {
+      Ok(Object(m)) =>
+        match m.get("folders") {
+          Some(Array(list)) => list
+          _ => []
+        }
+      Ok(Array(list)) => list
+      _ => []
+    }
+    @host.log("PHOTOS folders before " + Json::array(folders).stringify())
+    let have = folders.iter().any(fn(f) { str(Some(f), "root") == root && str(Some(f), "path") == path })
+    if !have {
+      let one : Map[String, Json] = { "root": Json::string(root), "path": Json::string(path) }
+      folders.push(Json::object(one))
+    }
+    let params : Map[String, Json] = {
+      "station": Json::string(station),
+      "folders": Json::array(folders),
+    }
+    @core.call("media.photos.setFolders", params=Json::object(params), on_done=fn(r) {
+      match r {
+        Ok(v) => @host.log("PHOTOS setFolders ok " + v.stringify())
+        Err(e) => @host.log("PHOTOS setFolders failed " + e.stringify())
+      }
+    })
+  })
 }
