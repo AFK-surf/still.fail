@@ -84,6 +84,17 @@ pub fn call(
 }
 
 ///|
+/// Calls `name` for an answer with bytes beside it (see Client::call_bytes):
+/// `media.image`'s picture, say.
+pub fn call_bytes(
+  name : String,
+  params? : Json = Json::object({}),
+  on_done~ : (Result[(Json, Bytes?), Json]) -> Unit,
+) -> Unit {
+  client.call_bytes(name, params~, on_done~) |> ignore
+}
+
+///|
 /// Ends a subscription.
 pub fn unsubscribe(s : Sub) -> Unit {
   client.unsubscribe(s)
@@ -111,7 +122,12 @@ pub fn pump() -> Unit {
     match msg {
       Object(m) if m.contains("mbui_auth") => web_auth_done(m)
       _ => {
-        client.receive_json(msg)
+        let bytes = ffi_next_bytes()
+        client.receive_json(msg, bytes=if bytes.length() > 0 {
+          Some(bytes)
+        } else {
+          None
+        })
         if client.fatal is Some(_) {
           restart()
         }

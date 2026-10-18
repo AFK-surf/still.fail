@@ -16,3 +16,6 @@ extern "C" fn ffi_set_wake(f : FuncRef[() -> Unit]) -> Unit = "mbc_set_wake"
 extern "C" fn ffi_web_auth(token : Int, url : String, scheme : String) -> Int = "mbc_web_auth"
 
 extern "C" fn ffi_now() -> Double = "mbc_now_ms"
+
+/// The bytes beside the message ffi_next took last (empty when none).
+extern "C" fn ffi_next_bytes() -> Bytes = "mbc_next_bytes"

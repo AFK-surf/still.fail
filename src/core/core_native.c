@@ -17,8 +17,12 @@
 typedef struct msg {
   struct msg *next;
   size_t len;
+  size_t blen; // the bytes beside it, after the JSON
   char json[];
 } msg;
+
+// The bytes beside the message mbc_next took last, for mbc_next_bytes.
+static msg *taken;
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static msg *head, *tail;
@@ -38,11 +42,13 @@ static void on_main(void *ctx) {
 }
 #endif
 
-static void push(const char *json, size_t len) {
-  msg *m = malloc(sizeof(msg) + len);
+static void push_with(const char *json, size_t len, const uint8_t *bytes, size_t blen) {
+  msg *m = malloc(sizeof(msg) + len + blen);
   m->next = NULL;
   m->len = len;
+  m->blen = bytes ? blen : 0;
   memcpy(m->json, json, len);
+  if (m->blen) memcpy(m->json + len, bytes, blen);
   pthread_mutex_lock(&lock);
   if (tail) tail->next = m;
   else head = m;
@@ -53,8 +59,12 @@ static void push(const char *json, size_t len) {
 #endif
 }
 
-// The bytes beside a message (a screen view's frame, a file read) are not taken yet: no topic the UI shows has them.
-static void on_message(const char *json, size_t len, const uint8_t *bytes, size_t blen, void *ctx) { push(json, len); }
+static void push(const char *json, size_t len) { push_with(json, len, NULL, 0); }
+
+// With the bytes beside a message (a picture, a file read), which the UI takes after its JSON (mbc_next_bytes).
+static void on_message(const char *json, size_t len, const uint8_t *bytes, size_t blen, void *ctx) {
+  push_with(json, len, bytes, blen);
+}
 
 static void drop_all(void) {
   pthread_mutex_lock(&lock);
@@ -165,10 +175,17 @@ moonbit_string_t mbc_next(void) {
     if (!head) tail = NULL;
   }
   pthread_mutex_unlock(&lock);
+  free(taken);
+  taken = m;
   if (!m) return moonbit_make_string_raw(0);
-  moonbit_string_t s = string_of(m->json, m->len);
-  free(m);
-  return s;
+  return string_of(m->json, m->len);
+}
+
+moonbit_bytes_t mbc_next_bytes(void) {
+  size_t n = taken ? taken->blen : 0;
+  moonbit_bytes_t b = moonbit_make_bytes((int32_t)n, 0);
+  if (n) memcpy(b, taken->json + taken->len, n);
+  return b;
 }
 
 // A browser session's end, queued as a message of ours: {"mbui_auth": token, "url"|"error": "..."}.

@@ -34,3 +34,8 @@ fn ffi_web_auth(_token : Int, _url : String, _scheme : String) -> Int {
 fn ffi_now() -> Double {
   0.0
 }
+
+///|
+fn ffi_next_bytes() -> Bytes {
+  b""
+}

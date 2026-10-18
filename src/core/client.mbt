@@ -23,6 +23,8 @@ pub struct Client {
   priv by_key : Map[String, Sub]
   priv calls : Map[Int, (Result[Json, Json]) -> Unit]
   priv mut next_id : Int
+  /// the bytes beside the message being taken, if any
+  priv mut beside : Bytes?
   /// Changes with every message that changed something (a sub's value or error, a call's answer).
   mut version : Int
   /// The core's reason, once it has failed (`{fatal}`); cleared by `restarted`.
@@ -38,6 +40,7 @@ pub fn Client::new(send : (String) -> Unit) -> Client {
     by_key: {},
     calls: {},
     next_id: 1,
+    beside: None,
     version: 0,
     fatal: None,
   }
@@ -123,6 +126,23 @@ pub fn Client::call(
 }
 
 ///|
+/// Calls `name` like `call`, for a call whose answer comes with bytes beside
+/// it (a picture, a file's contents): `on_done` gets them with the answer.
+pub fn Client::call_bytes(
+  self : Client,
+  name : String,
+  params? : Json = Json::object({}),
+  on_done~ : (Result[(Json, Bytes?), Json]) -> Unit,
+) -> Int {
+  self.call(name, params~, on_done=fn(r) {
+    match r {
+      Ok(j) => on_done(Ok((j, self.beside)))
+      Err(e) => on_done(Err(e))
+    }
+  })
+}
+
+///|
 /// One message from the core, as its JSON text. False when it is not JSON.
 pub fn Client::receive(self : Client, text : String) -> Bool {
   let msg = @json.parse(text) catch { _ => return false }
@@ -131,8 +151,19 @@ pub fn Client::receive(self : Client, text : String) -> Bool {
 }
 
 ///|
-/// One message from the core.
-pub fn Client::receive_json(self : Client, msg : Json) -> Unit {
+/// One message from the core, and the bytes beside it if it has any.
+pub fn Client::receive_json(
+  self : Client,
+  msg : Json,
+  bytes? : Bytes? = None,
+) -> Unit {
+  self.beside = bytes
+  self.take(msg)
+  self.beside = None
+}
+
+///|
+fn Client::take(self : Client, msg : Json) -> Unit {
   guard msg is Object(m) else { return }
   match m.get("fatal") {
     Some(reason) => {

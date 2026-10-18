@@ -196,3 +196,33 @@ test "query_of: a callback URL's query" {
   assert_eq(@core.query_of("stillfail://auth/callback?code=a"), "code=a")
   assert_eq(@core.query_of("stillfail://auth/callback"), "")
 }
+
+///|
+test "a call whose answer has bytes beside it gets them, a plain call doesn't" {
+  let (c, _) = recorder()
+  let got : Array[(String, Int)] = []
+  c.call_bytes(
+    "media.image",
+    params={ "station": "s", "book": "b", "ref": "r" },
+    on_done=fn(r) {
+      match r {
+        Ok((j, Some(b))) => got.push((j.stringify(), b.length()))
+        _ => got.push(("none", 0))
+      }
+    },
+  )
+  |> ignore
+  c.receive_json(
+    @json.parse("{\"id\":1,\"ok\":{\"type\":\"image/png\",\"size\":4}}"),
+    bytes=Some(b"\x89PNG"),
+  )
+  assert_eq(got, [("{\"type\":\"image/png\",\"size\":4}", 4)])
+  // the bytes are the message's only
+  let plain : Array[Bool] = []
+  c.call_bytes("media.image", on_done=fn(r) {
+    plain.push(r is Ok((_, None)))
+  })
+  |> ignore
+  c.receive_json(@json.parse("{\"id\":2,\"ok\":{}}"))
+  assert_eq(plain, [true])
+}
