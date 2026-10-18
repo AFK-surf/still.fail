@@ -60,16 +60,14 @@ case "${1:-build}" in
     ID=$(device)
     xcrun simctl install "$ID" $APP
     xcrun simctl terminate "$ID" $BID 2>/dev/null || true
-    SIMCTL_CHILD_MBUI_SCRIPT=${2:-} SIMCTL_CHILD_MBUI_BENCH=${BENCH:-} xcrun simctl launch "$ID" $BID
+    mkdir -p $PWD/$OUT/shots
+    SIMCTL_CHILD_MBUI_SCRIPT=${2:-} SIMCTL_CHILD_MBUI_BENCH=${BENCH:-} \
+      SIMCTL_CHILD_MBUI_SHOT_DIR=$PWD/$OUT/shots xcrun simctl launch "$ID" $BID
     ;;
   shot)
     ID=$(device)
     mkdir -p $OUT/shots
     xcrun simctl io "$ID" screenshot $OUT/shots/$2.png >/dev/null 2>&1 && echo "screenshot $OUT/shots/$2.png"
-    ;;
-  container)
-    ID=$(device)
-    xcrun simctl get_app_container "$ID" $BID data
     ;;
   delete)
     ID=$(device)
