@@ -8,7 +8,6 @@ package fail.still.android.remote
 
 import android.graphics.Bitmap
 import android.os.Handler
-import android.util.Base64
 import android.os.Looper
 import android.view.Surface
 import androidx.compose.runtime.getValue
@@ -200,9 +199,9 @@ class ScreenSession(
         core.call("screen.clipboard", buildJsonObject { put("view", view); put("text", text); put("paste", true) })
     }
 
-    /** A PNG onto the screen's clipboard and pasted where its focus is (`screen.clipboard`). Throws [CoreException]. */
+    /** A PNG onto the screen's clipboard and pasted where its focus is (`screen.clipboard`, the picture beside the call). Throws [CoreException]. */
     suspend fun pastePng(png: ByteArray) {
-        core.call("screen.clipboard", buildJsonObject { put("view", view); put("png", Base64.encodeToString(png, Base64.NO_WRAP)); put("paste", true) })
+        core.call("screen.clipboard", buildJsonObject { put("view", view); put("png", true); put("paste", true) }, png)
     }
 
     /** A file dropped onto the machine, shown in its file manager (`screen.input` reveal). Throws [CoreException]. */

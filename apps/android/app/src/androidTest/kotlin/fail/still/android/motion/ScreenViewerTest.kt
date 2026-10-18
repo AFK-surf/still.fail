@@ -68,6 +68,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -720,9 +721,12 @@ class ScreenViewerTest {
         rule.runOnUiThread { clipboard.setPrimaryClip(ClipData("test", arrayOf(type), ClipData.Item(uri))) }
     }
 
-    /** The PNG of the `i`th `screen.clipboard` asked. */
-    private fun pngSent(v: Viewer, i: Int): ByteArray =
-        android.util.Base64.decode(v.told("screen.clipboard")[i]["png"]!!.jsonPrimitive.contentOrNull!!, android.util.Base64.NO_WRAP)
+    /** The PNG of the `i`th `screen.clipboard` asked: `png: true`, the picture beside the call. */
+    private fun pngSent(v: Viewer, i: Int): ByteArray {
+        val at = v.h.fake.calls.withIndex().filter { it.value.first == "screen.clipboard" }[i].index
+        assertEquals(true, v.h.fake.calls[at].second["png"]?.jsonPrimitive?.booleanOrNull)
+        return v.h.fake.carried[at]!!
+    }
 
     /** The copies kept, none to begin with. */
     private fun clips() = File(rule.activity.cacheDir, "screen-clips").apply { deleteRecursively() }
