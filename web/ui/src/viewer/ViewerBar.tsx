@@ -73,6 +73,14 @@ export function useBarOnScroll(): { hidden: boolean; onScroll: (e: UIEvent) => v
   return { hidden, onScroll, onPointerMove };
 }
 
+/**
+ * Whether the pointer, last seen at `e`, is on the bar (or just coming to it): within VIEWER_BAR_REACH of the window's
+ * top. A viewer whose bar fades as the pointer rests keeps it while so. In the desktop app the bar drags the window, and
+ * over it the page hears nothing of the pointer (it seems to rest there, or to have left the page): where it was last
+ * seen tells.
+ */
+export const byBar = (e: { clientY: number }) => e.clientY < VIEWER_BAR_REACH;
+
 /** Read down this far before the bar goes; this much of a scroll at once says which way. */
 const TOP_KEPT = 48;
 const MOVED = 6;

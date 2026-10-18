@@ -21,7 +21,7 @@ import type { Got, ViewerEntry, ViewerFile } from "./file.ts";
 import { compareNatural, sideSubtitle } from "./names.ts";
 import { REST_MS, TAP_REST_MS } from "./rest.ts";
 import * as vvCss from "./media.css.ts";
-import { ViewerBar, ViewerDownload, ViewerTool } from "./ViewerBar.tsx";
+import { byBar, ViewerBar, ViewerDownload, ViewerTool } from "./ViewerBar.tsx";
 import { decodeText } from "./text.ts";
 import { toVtt } from "./subtitles.ts";
 import * as css from "./Player.css.ts";
@@ -149,10 +149,12 @@ export function Player({ file, siblings = [], backLabel, onBack, onGo = () => {}
   const [awake, setAwake] = useState(true);
   const resting = useRef(0);
   const onControls = useRef(false);
+  // The pointer on the bar along the top (with a mouse on a wide screen), which it does not hear where it drags the window.
+  const onBar = useRef(false);
   const wake = useCallback((ms = REST_MS) => {
     setAwake(true);
     clearTimeout(resting.current);
-    resting.current = window.setTimeout(() => { if (!onControls.current && !media.current?.paused) setAwake(false); }, ms);
+    resting.current = window.setTimeout(() => { if (!onControls.current && !onBar.current && !media.current?.paused) setAwake(false); }, ms);
   }, []);
   useEffect(() => { wake(); return () => clearTimeout(resting.current); }, [wake]);
   const keep = {
@@ -301,8 +303,13 @@ export function Player({ file, siblings = [], backLabel, onBack, onGo = () => {}
 
   return (
     <div ref={root} className={`${vvCss.vv} ${css.player}`} data-narrow={narrow || undefined} data-list={(desk && listing && list.length > 1) || undefined}
-      onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
-      onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onControls.current && playing) setAwake(false); }}
+      onPointerMove={(e) => { if (e.pointerType === "mouse") { onBar.current = desk && !full && byBar(e); wake(); } }}
+      onPointerLeave={(e) => {
+        if (e.pointerType !== "mouse") return;
+        clearTimeout(resting.current);
+        onBar.current = desk && !full && byBar(e);
+        if (!onControls.current && !onBar.current && playing) setAwake(false);
+      }}
       onPointerDown={(e) => { tapAt.current = { x: e.clientX, y: e.clientY }; }}
       onPointerUp={(e) => {
         const tap = tapAt.current;

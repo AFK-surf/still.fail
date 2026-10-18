@@ -15,7 +15,7 @@ import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { ViewerBar, ViewerTool, VIEWER_BAR_REACH } from "@stillfail/ui/viewer/ViewerBar.tsx";
+import { byBar, ViewerBar, ViewerTool } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { REST_MS } from "@stillfail/ui/viewer/rest.ts";
 import { Button, PanelButton, Segmented, Tip, WaitPill } from "../ui.tsx";
@@ -315,17 +315,20 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   // anywhere, while only looking). A finger keeps it; so does someone else driving it (who, and 接管, stay in sight).
   const [awake, setAwake] = useState(true);
   const rest = useRef(0);
+  // The pointer on the bar, which it does not hear where it drags the window (ViewerBar.tsx byBar): it stays.
+  const onBar = useRef(false);
   const wake = useCallback(() => {
     setAwake(true);
     clearTimeout(rest.current);
-    rest.current = window.setTimeout(() => setAwake(false), REST_MS);
+    rest.current = window.setTimeout(() => { if (!onBar.current) setAwake(false); }, REST_MS);
   }, []);
   useEffect(() => { wake(); return () => clearTimeout(rest.current); }, [wake]);
   const touched = useRef(false);
   const onPointerMove = (e: React.PointerEvent) => {
     if (e.pointerType !== "mouse") { touched.current = true; clearTimeout(rest.current); setAwake(true); return; }
     touched.current = false;
-    if (!drivingRef.current || e.clientY < VIEWER_BAR_REACH) wake();
+    onBar.current = !phone && byBar(e);
+    if (!drivingRef.current || onBar.current) wake();
   };
 
   const title = shown?.title || t("web-pages.screen.title");
