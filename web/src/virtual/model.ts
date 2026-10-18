@@ -79,8 +79,6 @@ export class Virtual {
   private pins = new Set<string>();
   /** The pane shows a window short of the list's end: its bottom is not followed. */
   private short = false;
-  /** The page takes the pane to where it follows step by step (`place`), not at once. */
-  private gliding = false;
   private velocity = 0;
   /** How much taller the items measured are than they were estimated, in all; and the width it is settled for. */
   private scale = 1;
@@ -91,6 +89,9 @@ export class Virtual {
   private moving = false;
   /** How far the pane is from where it should be by its anchor, held until the scroll rests. */
   private drift = 0;
+  /** How far rows are drawn above and below where they are laid out (virtual/pace.ts), at most: made that much further. */
+  private reachUp = 0;
+  private reachDown = 0;
   private readonly gap: number;
   private readonly overscan: number;
   private readonly boost: number;
@@ -199,19 +200,6 @@ export class Virtual {
     this.moving = false;
     this.drift = 0;
   }
-  /** The page's own step toward where the pane follows (a glide). */
-  place(top: number): void {
-    this.moving = false;
-    this.drift = 0;
-    this.top = Math.min(Math.max(0, top), this.bottom());
-    this.arrived();
-    this.eye = this.anchor.kind === "follow" ? this.see() : null;
-  }
-  /** Whether following goes by the page's steps (`place` toward `target()`) or at once. */
-  glide(on: boolean): void {
-    this.gliding = on;
-    if (!on) this.settle();
-  }
   /** The reader's place is where the pane is, from now on (they opened something in it: what grows or shrinks by it is
    *  theirs, not something new to follow). */
   stay(): void {
@@ -241,6 +229,12 @@ export class Virtual {
     this.still();
     this.settle();
     return this.at.has(key);
+  }
+  /** Rows are drawn as far as `up` below where they are laid out (and `down` above it) on their way back (pace.ts):
+   *  what is drawn into the pane from past its edges is made. */
+  reach(up: number, down: number): void {
+    this.reachUp = up;
+    this.reachDown = down;
   }
   /** An item kept made wherever the pane is (it holds the focus, a selection, something open, or it is moving). */
   pin(key: string, on = true): void {
@@ -272,11 +266,11 @@ export class Virtual {
     const n = this.items.length;
     const ahead = Math.min(this.boost, Math.abs(this.velocity) * 4);
     const past = this.wide ? this.overscan : 0;
-    const from = this.top - past - (this.velocity < 0 ? ahead : 0);
+    const from = this.top - past - (this.velocity < 0 ? ahead : 0) - this.reachUp;
     // Following, everything from the pane down to the list's end is made, however far below the pane it reaches for
     // now (a long message just come, the pane still on its way down): what stands after it (the agent's activity,
     // the next message) is there to be seen coming, and for what moves between them (a reply out of its avatar).
-    const to = this.anchor.kind === "follow" ? Number.POSITIVE_INFINITY : this.top + this.height + past + (this.velocity > 0 ? ahead : 0);
+    const to = this.anchor.kind === "follow" ? Number.POSITIVE_INFINITY : this.top + this.height + past + (this.velocity > 0 ? ahead : 0) + this.reachDown;
     const made = new Set<number>();
     for (let i = this.firstReaching(from); i < n && this.topOf(i) < to; i++) made.add(i);
     for (const key of this.pins) { const i = this.at.get(key); if (i !== undefined) made.add(i); }
@@ -306,8 +300,6 @@ export class Virtual {
   get toStart(): number { return this.top; }
   /** Where the pane is, by the items' own places (what is held under a scroll counted in). */
   get where(): number { return this.top; }
-  /** Whether it goes to where it follows by the page's steps (`glide`), not at once. */
-  get glides(): boolean { return this.gliding; }
   /** How tall the pane is, and whether all there is fits in it (nothing to scroll). */
   get paneHeight(): number { return this.height; }
   get paneWidth(): number { return this.width; }
@@ -454,9 +446,8 @@ export class Virtual {
       const here = i === undefined ? this.top : Math.max(0, this.topOf(i) - this.eye!.offset);
       if (i !== undefined && this.holds) this.held = Math.max(0, here - Math.max(0, this.natural() - this.height));
       const to = this.target();
-      // On from there to where it follows: by the page's steps while it glides, else at once. Back toward it (what is
-      // below closing), by steps as well: still as far as there is to go (`bottom`), it goes down as that closes.
-      this.top = !this.gliding || (to < here && !this.closing()) ? to : Math.min(here, this.bottom());
+      // On from there to where it follows, at once: what shows is drawn going there (pace.ts).
+      this.top = to;
       this.arrived();
     } else {
       this.release();

@@ -25,7 +25,8 @@ import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useVirtualList, useVirtualModel, type VirtualList } from "./virtual/list.tsx";
 import type { Align, Item } from "./virtual/model.ts";
-import { animate, arrive, EASE_OUT, follower, glider, motionMs, moveState, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
+import { animate, arrive, EASE_OUT, follower, motionMs, moveState, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
+import { Pace } from "./virtual/pace.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
@@ -540,7 +541,6 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   useShowing(virtual, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
   const away = useAwayFromBottom(virtual);
   const toEnd = useToEnd(list, virtual, chat, () => (id === null ? Promise.resolve() : sending.latest(id)));
-  useActivityGlide(list, virtual);
   // The list's own way to one of its messages, for what is drawn in it (a quote's card, a file asked for).
   useEffect(() => {
     const el = list.current;
@@ -2135,83 +2135,6 @@ export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { a
   return [...shown.current.values()].map((s) => ({ agent: s.agent, leaving: s.stopped !== null && now - s.stopped >= HOLD_MS }));
 }
 
-/**
- * An activity keeps its place on screen as what is above it changes at once (a message arriving, one coming out of an
- * avatar, an image loading): it glides from where it showed to where it is laid out now, by the pane's own law
- * (motion.ts glider), so that it and the pane gliding to the end move together, one way; a change while it is on its
- * way goes on from where it is. What the pane's width lays out anew is taken at once.
- */
-/** How long after the pane's width last changed its rows may still come to stand as they wrap now. */
-const REWRAP_MS = 200;
-
-function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: VirtualList) {
-  useEffect(() => {
-    const pane = list.current;
-    if (!pane) return;
-    const { model } = virtual;
-    // `at`: where it is laid out in the pane's content; `closed`: how much shorter what is above it has got as things
-    // closed in it (model.ts `closedBefore`), which it simply went along with, as every row below does; `y`: how far
-    // it is drawn from where it is laid out, gliding to nothing after a move at once.
-    const rows = new Map<string, { el: HTMLElement; at: number; closed: number; y: Follower }>();
-    let width = model.paneWidth;
-    let rewrapped = -Infinity;
-    let pending = false;
-    // How far the list has moved the pane at once to keep its place (rows above measured, an older page come in): by
-    // as much, an activity is elsewhere in the pane's content and nowhere else on screen: not a move to glide.
-    let kept = virtual.kept();
-    // Judged as the list says anything changed, from where it says each activity stands: nothing of the page is read.
-    const check = () => {
-      // The pane as wide as it was? While it changes (a side panel sliding), and until its rows are measured as they
-      // wrap now, what moves an activity is the page laid out anew: taken at once.
-      if (model.paneWidth !== width) { width = model.paneWidth; rewrapped = performance.now(); pending = true; }
-      const shift = virtual.kept() - kept;
-      kept += shift;
-      if (shift) for (const row of rows.values()) row.at += shift;
-      const layout = model.layout();
-      // A row just made stands at a guessed height until the page reports it: what moves an activity is taken as the
-      // pane takes it, the guess and then the fact (below).
-      const anew = pending || performance.now() - rewrapped < REWRAP_MS;
-      pending = false;
-      const seen = new Set<string>();
-      for (const { key } of layout.rows) {
-        if (!key.startsWith("a:")) continue;
-        const el = pane.querySelector<HTMLElement>(`:scope > [data-vk="${CSS.escape(key)}"]`);
-        if (!el) continue;
-        seen.add(key);
-        // Where it stands in the pane's content.
-        const at = model.offsetOf(key)! + layout.scrollTop;
-        const closed = model.closedBefore(key);
-        let row = rows.get(key);
-        if (row && row.el !== el) { row.y.stop(); rows.delete(key); row = undefined; }
-        if (!row) {
-          rows.set(key, { el, at, closed, y: glider(0, (v) => { el.style.transform = Math.abs(v) < 0.01 ? "" : `translateY(${v}px)`; }) });
-          continue;
-        }
-        // What closes above it as it closes moves it as it moves every row below: not a move of its own.
-        const moved = at - row.at + (closed - row.closed);
-        row.at = at;
-        row.closed = closed;
-        if (Math.abs(moved) < 0.01) continue;
-        // One folded to its avatar, out flying, shows nothing: it is where it is laid out, for the avatar to fly to.
-        // Moved as the pane is not gliding (it took the change at once, or the reader holds it): where it is laid out.
-        if (anew || !model.glides || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(0);
-        else {
-          // Laid out elsewhere at once as the pane glides, it is drawn where it was, and glides from there with it.
-          row.y.jump(row.y.value - moved);
-          row.y.to(0);
-        }
-      }
-      for (const [key, row] of rows) if (!seen.has(key)) { row.y.stop(); rows.delete(key); }
-    };
-    check();
-    const stop = virtual.watch(check);
-    return () => {
-      stop();
-      for (const row of rows.values()) row.y.stop();
-    };
-  }, [list, virtual.model]); // eslint-disable-line react-hooks/exhaustive-deps
-}
-
 /** Where an element sits in the pane's content, by layout: scrolling does not move it, nor does a transform. */
 function layoutSpot(pane: HTMLElement, el: Element) {
   let x = 0;
@@ -2258,11 +2181,11 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
   const flight = useRef<{ el: HTMLElement; x: Follower; y: Follower; s: MotionValue<number>; sx: MotionValue<number>; sy: MotionValue<number> } | null>(null);
   const [, rerender] = useState(0);
 
-  // Where the avatar of an agent's activity shows: where it is laid out, and how far its row is from there, gliding.
+  // Where the avatar of an agent's activity shows: where it is laid out, and how far its row is drawn from there as
+  // the list moves (virtual/pace.ts).
   const home = (avatar: HTMLElement) => {
     const at = layoutSpot(list.current!, avatar);
-    const row = avatar.closest<HTMLElement>(`.${css.agentActivity}`);
-    return { x: at.x, y: at.y + (row ? new DOMMatrixReadOnly(getComputedStyle(row).transform).m42 : 0) };
+    return { x: at.x, y: at.y + Pace.drawnOff(avatar.closest("[data-vk]")) };
   };
   const launch = (pane: HTMLElement, avatar: HTMLElement) => {
     const el = avatar.cloneNode(true) as HTMLElement;
@@ -2359,7 +2282,8 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
     // Where the message's avatar is once the message is out: waiting, the message takes back the list's gap above it.
     const landed = () => {
       const at = layoutSpot(pane, landing!);
-      return message!.hasAttribute("data-held") ? { x: at.x, y: at.y - parseFloat(getComputedStyle(message!).marginTop) } : at;
+      const y = at.y + Pace.drawnOff(message!.closest("[data-vk]"));
+      return message!.hasAttribute("data-held") ? { x: at.x, y: y - parseFloat(getComputedStyle(message!).marginTop) } : { x: at.x, y };
     };
     // Each frame the avatar is sent on to where it goes, read anew; `arrived`, once it is there (put exactly there).
     const follow = (to: () => { x: number; y: number }, arrived?: () => void) => {
@@ -2470,8 +2394,9 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
 /**
  * An agent at work, in one line: its avatar, ringed while it works, and what it does now (as the core says), with how
  * long its turn has run. No name: the avatar says whose. What it does changes by crossfading, and each thing stays a
- * moment, so a passing 请求中 does not flicker by. The line opens its history. It comes in opening its room as it fades
- * in, the line growing from its avatar; it leaves fading and folding its room away; for a message to come out of its
+ * moment, so a passing 请求中 does not flicker by. The line opens its history. It comes in fading in, the line growing
+ * from its avatar, its room there at once (the list draws it coming up with what is above it: virtual/pace.ts); it
+ * leaves fading and folding its room away; for a message to come out of its
  * avatar the line folds to the avatar. Each of these goes from wherever it shows, cut off by the next or not.
  */
 function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean };
@@ -2492,7 +2417,7 @@ function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtW
     if (caught) return;
     const el = row.current!;
     const move = { duration: FADE_MS / 1000, ease: EASE_OUT };
-    const come = () => arrive([[el, { "grid-template-rows": "0px", opacity: "0" }], [line.current!, { transform: "scale(0.5)" }]], move);
+    const come = () => arrive([[el, { opacity: "0" }], [line.current!, { transform: "scale(0.5)" }]], move);
     let came = false;
     const stop = whenLanded(() => {
       came = true;
@@ -2500,7 +2425,7 @@ function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtW
       el.style.removeProperty("opacity");
       come();
     });
-    // Still on its way: held folded and unseen till it lands.
+    // Still on its way: held folded and unseen till it lands; then its room is there at once.
     if (!came) Object.assign(el.style, { gridTemplateRows: "0px", opacity: "0" });
     return stop;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

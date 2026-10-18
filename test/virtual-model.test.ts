@@ -165,7 +165,6 @@ test("virtual_what_leaves_the_end_as_a_message_comes_leaves_its_room_too", () =>
   v.setItems(items);
   v.measured(v.layout().rows.map((r) => [r.key, r.key === "a:agent" ? 80 : 100] as const));
   const before = v.layout();
-  v.glide(true);
   items = [...list(0, 30), { key: "o:1", estimate: 20 }];
   v.setItems(items);
   v.follow("o:1");
@@ -229,7 +228,7 @@ test("virtual_the_pane_itself_changing_holds_no_room_following_it_stays_at_its_e
   assert.equal(l.scrollTop, l.total - 800);
 });
 
-test("virtual_gliding_to_what_came_the_pane_is_not_carried_by_what_changes_above_it", () => {
+test("virtual_going_to_what_came_the_pane_is_not_carried_by_what_changes_above_it", () => {
   let items = list(0, 100);
   const v = made(new Virtual({ gap: GAP, overscan: 300 }));
   v.setItems(items);
@@ -237,21 +236,15 @@ test("virtual_gliding_to_what_came_the_pane_is_not_carried_by_what_changes_above
   const before = v.layout();
   const eye = before.rows.find((r) => v.offsetOf(r.key)! >= 0)!;
   const offset = v.offsetOf(eye.key)!;
-  // A message comes at the end as rows far above turn out taller: what shows stays put, the pane short of its end by
-  // what came.
-  v.glide(true);
+  // A message comes at the end as rows far above turn out taller: the pane goes to its end at once (what shows is drawn
+  // going there: pace.ts), by what came, and not by what changed above.
   items = [...items, ...list(100, 101)];
   v.setItems(items);
   v.measured([["m:3", 500], ["m:4", 500]]);
-  assert.equal(v.offsetOf(eye.key), offset);
-  const left = v.target() - v.layout().scrollTop;
-  assert.ok(left >= 100 + GAP && left < 300, `short of its end by the message come (${left})`);
-  // Its steps take it there, each from where the last left it.
-  v.place(v.layout().scrollTop + left / 2);
-  v.measured([["m:5", 300]]);
-  assert.ok(Math.abs(v.offsetOf(eye.key)! - (offset - left / 2)) < 1e-6);
-  v.place(v.target());
   assert.equal(v.target(), v.layout().scrollTop);
+  assert.equal(v.offsetOf(eye.key), offset - (100 + GAP));
+  v.measured([["m:5", 300]]);
+  assert.equal(v.offsetOf(eye.key), offset - (100 + GAP));
 });
 
 test("virtual_rows_measured_shorter_than_they_were_guessed_leave_no_room_held_at_the_end", () => {
@@ -285,8 +278,7 @@ test("virtual_following_what_came_below_the_pane_is_made_down_to_the_list_s_end"
   const v = made(new Virtual({ gap: GAP, overscan: 100 }));
   v.setItems(items);
   v.measured(v.layout().rows.map((r) => [r.key, 100] as const));
-  // A long message of the reader's own, its agent's activity after it: the pane not there yet (it glides), both made.
-  v.glide(true);
+  // A long message of the reader's own, its agent's activity after it: both made.
   items = [...items, { key: "o:1", estimate: 2000 }, { key: "a:agent", estimate: 24 }];
   v.setItems(items);
   v.follow("a:agent");
@@ -485,24 +477,22 @@ test("virtual_following_goes_once_to_where_what_closes_leaves_it_and_keeps_follo
   v.setItems(items);
   v.measured(items.map((i) => [i.key, 100] as const));
   const end = v.layout().scrollTop;
-  // The last row is going to be 60 shorter (something in it closing): the pane is sent there at once, gliding down,
-  // still as far as there is to go now; a message come meanwhile, followed from its top, as it closes.
-  v.glide(true);
+  // The last row is going to be 60 shorter (something in it closing): the pane is sent there at once; a message come
+  // meanwhile, followed from its top, as it closes.
   v.measured([["m:29", 100, 40]]);
   assert.equal(v.target(), end - 60);
-  assert.equal(v.where, end, "not ahead of what is there yet");
+  assert.equal(v.where, end - 60);
   const more = [...items, { key: "m:30", estimate: 40 }];
   v.setItems(more);
   v.measured([["m:30", 40]]);
   v.follow("m:30");
   assert.equal(v.target(), end - 60 + 40 + GAP);
-  // Step by step there, as it closes: each row's share closed, the pane placed on toward where it goes.
+  // It closes frame by frame, the pane there all along.
   for (let h = 100; h > 40; h -= 10) {
     v.measured([["m:29", h, 40]]);
-    v.place(v.where + (v.target() - v.where) / 2);
+    assert.equal(v.where, v.target());
   }
   v.measured([["m:29", 40]]);
-  v.place(v.target());
   assert.equal(v.mode.kind, "follow", "the message come is short: the list goes on following its end");
   assert.equal(v.where, v.target());
   // What the activity below went along with: the closing, all of it.

@@ -1,4 +1,5 @@
 import * as css from "./scrollbars.css.ts";
+import { drawnLag, paceFrames } from "./virtual/pace.ts";
 // Scrollbars that float over what scrolls and take no room from it. With a mouse the system's bars are hidden
 // (styles/global.css.ts) and one thin thumb per axis, drawn here, shows on any pane while it scrolls and while the pointer is
 // where the pane's bar runs (along its right edge, or its foot), and can be dragged. Touch screens keep the system's own, which already float.
@@ -90,6 +91,8 @@ export function startScrollbars(): void {
   let frame = 0;
   const under = bar();
   const moving = bar();
+  // A list drawing its rows on their way: its bar, if out, goes with what shows.
+  paceFrames.add((pane) => { if (pane === under.el || pane === moving.el) schedule(); });
 
   function bar(): Bar {
     const b: Bar = { thumbs: { y: make(() => b, "y"), x: make(() => b, "x") }, el: null, resize: new ResizeObserver(() => schedule()) };
@@ -187,7 +190,8 @@ export function startScrollbars(): void {
       const left = box.left + (page ? 0 : el.clientLeft);
       const top = box.top + (page ? 0 : el.clientTop);
       const { start, track, length } = trackOf(el, axis, size, content);
-      const scrolled = axis === "y" ? el.scrollTop : Math.abs(el.scrollLeft);
+      // A list's rows still on their way (virtual/pace.ts): where what shows is drawn, not where it is laid out.
+      const scrolled = axis === "y" ? el.scrollTop - drawnLag(el) : Math.abs(el.scrollLeft);
       // Pulled past either end (an elastic scroll), the thumb stops at the track's end.
       const at = start + INSET + Math.min(1, Math.max(0, scrolled / (content - size))) * (track - INSET * 2 - length);
       place(thumb, el);

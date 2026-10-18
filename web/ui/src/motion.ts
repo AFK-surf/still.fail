@@ -13,7 +13,7 @@ export const EASE_OUT_CSS = "cubic-bezier(0.2, 0.7, 0.2, 1)";
 /**
  * One way in and one way out for what comes and goes in the message list (a message, what settles under it): coming,
  * up from a little below as it fades in (as `[data-enter]` draws a new message); going, a copy where it was shrinking a
- * little as it fades (as a sidebar's row goes, listMotion.ts). Their room opens and closes by the list's law (GLIDE_*),
+ * little as it fades (as a sidebar's row goes, listMotion.ts). Their room opens and closes by the list's law (PACE_*),
  * not by these.
  */
 export const ENTER = { duration: 220, easing: EASE_OUT_CSS } as const;
@@ -26,14 +26,32 @@ export const LEAVE_TO = { opacity: 0, transform: "scale(0.9)" } as const;
 export const MOVE = { type: "spring", visualDuration: 0.28, bounce: 0 } as const;
 
 /**
- * How a message list's pane goes to where it follows (virtual/list.tsx): each frame a share of what is left, at this
- * rate (e^(-t/τ): about 90% in a quarter second). What changes size in its rows moves by the same law (settling.tsx),
- * so the pane and the row go together: one way, never ahead of the other and back.
+ * The message list's one law (web/src/virtual/pace.ts): whatever moves what shows in a list (the pane following its end,
+ * a row coming or closing, what is below it making way) moves by it, from one clock. A change of `by` px is a spring let
+ * go from rest, critically damped: it sets out with no speed, is at its fastest a moment later and slows into place,
+ * there (to 2%) in PACE_MS; a longer way takes longer, so that nothing in the list ever goes faster than PACE_MOST px/ms.
+ * Changes under way at once add up, each going on from where it is: the speed never jumps.
  */
-export const GLIDE_TAU = 100;
-/** That law as a motion of fixed length (to 99.75% of the way at its end), and as its easing. */
-export const GLIDE_MS = 600;
-export const GLIDE_EASE = `linear(${Array.from({ length: 31 }, (_, i) => ((1 - Math.exp(-(i / 30) * GLIDE_MS / GLIDE_TAU)) / (1 - Math.exp(-GLIDE_MS / GLIDE_TAU))).toFixed(4)).join(", ")})`;
+export const PACE_MS = 320;
+export const PACE_MOST = 1.2;
+/** ω·t at which a change is there to 2%. */
+const PACE_THERE = 5.83;
+/** How fast a change of `by` px goes (ω, per ms): fast enough to be there in PACE_MS, slow enough never to pass
+ *  PACE_MOST (a spring from rest is at its fastest, by·ω/e, at t = 1/ω); infinite with motion reduced (there at once). */
+export function paceRate(by: number): number {
+  const ms = motionMs(PACE_MS);
+  if (!ms) return Number.POSITIVE_INFINITY;
+  return Math.min(PACE_THERE / ms, (Math.E * PACE_MOST) / Math.max(1, Math.abs(by)));
+}
+/** The share of a change still to go `t` ms after it set out at rate `w` (1 then, 0 once there). */
+export function paceLeft(w: number, t: number): number {
+  if (!Number.isFinite(w)) return 0;
+  const x = w * Math.max(0, t);
+  return x > 12 ? 0 : (1 + x) * Math.exp(-x);
+}
+/** That law for a change of a usual size (PACE_MOST not reached) as a motion of fixed length, and as its easing: for
+ *  what changes size by the frame of a CSS animation, with what moves by it. */
+export const PACE_EASE = `linear(${Array.from({ length: 31 }, (_, i) => (1 - paceLeft(PACE_THERE, i / 30)) / (1 - paceLeft(PACE_THERE, 1))).map((v) => v.toFixed(4)).join(", ")})`;
 
 /**
  * The most a motion, or a page moved to, waits for what is here already: the core's answer from what it holds, a picture
@@ -45,7 +63,7 @@ export const LOCAL_MS = 100;
 /**
  * Whether motion is reduced on the page now: its root says so (followMotion; styles/still.ts STILL for the styles).
  * Motion reduced is one clock, not a way of its own: everything moves as it does, every motion taking no time (Motion's
- * `instantAnimations`, `play`, `motionMs`, `glideShare`; for the styles, styles/global.css.ts), so what it ends at and
+ * `instantAnimations`, `play`, `motionMs`, `paceRate`; for the styles, styles/global.css.ts), so what it ends at and
  * what is done once it is over are the same. Only what loops (restingLoop; styles/still.ts stillLoop) and what shows
  * for a while and goes (styles/still.ts stillFlash) ask; check.sh keeps it out of the rest.
  */
@@ -60,9 +78,6 @@ export function play(el: Element | null | undefined, frames: Keyframe[] | Proper
 
 /** A wait that a motion takes (a timer waiting it out, a stand-in held while it plays): none with motion reduced. */
 export const motionMs = (ms: number): number => (reducedMotion() ? 0 : ms);
-
-/** The share of what is left that a glide by the message list's law (GLIDE_TAU) goes in `dt` ms: all of it, with motion reduced. */
-export const glideShare = (dt: number): number => (reducedMotion() ? 1 : 1 - Math.exp(-dt / GLIDE_TAU));
 
 /**
  * The page's motion reduced, or not, as `choice` says (a device's setting: `reduce`, `full`, or none to follow the
@@ -135,83 +150,6 @@ export function follower(start: number, draw: (value: number) => void): Follower
       draw(next);
     },
     stop() { run?.stop(); run = null; value.destroy(); },
-  };
-}
-
-/**
- * A value going from `from` to `to` by the message list's law, stepped each frame as the list's pane steps, from this
- * frame (what changes size in a row as the pane goes along with it: settling.tsx). `set` draws it; done once there
- * (`finished`), or stopped where it is (`cancel`, `finished` then never settles).
- */
-export function glideValue(from: number, to: number, set: (value: number) => void): { finished: Promise<void>; cancel(): void } {
-  let value = from;
-  let last = glideClock();
-  let frame = 0;
-  let done: () => void = () => {};
-  const finished = new Promise<void>((resolve) => { done = resolve; });
-  const step = (now: number) => {
-    const dt = Math.max(0, Math.min(64, now - last));
-    last = now;
-    const left = to - value;
-    value = Math.abs(left) < 0.25 ? to : value + left * glideShare(dt);
-    set(value);
-    if (value === to) { frame = 0; done(); }
-    else frame = requestAnimationFrame(step);
-  };
-  set(value);
-  frame = requestAnimationFrame(step);
-  return { finished, cancel() { cancelAnimationFrame(frame); frame = 0; } };
-}
-
-/** The frame the list's pane last stepped in while it glides. */
-let paneStep: number | null = null;
-/** Said by the list (virtual/list.tsx) at each step of a glide, and null once it stops. */
-export function glided(at: number | null): void { paneStep = at; }
-/**
- * The time what goes along with the pane starts its clock at: the pane's last step while it glides, else this frame.
- * Both then take their next step in the same frame, by the same law, from the same time: they go together.
- */
-export function glideClock(): number {
-  const now = (document.timeline.currentTime as number | null) ?? performance.now();
-  // A glide stopped without saying so: not a clock to start on.
-  return paneStep !== null && now - paneStep < 100 ? paneStep : now;
-}
-
-/**
- * A number drawn by `draw` going to its goal by the message list's law (GLIDE_TAU): each frame a share of what is
- * left, from where it is. Never past its goal, nor back: what goes along with the list's pane (an activity keeping its
- * place) moves as the pane does, one way, from the same moment.
- */
-export function glider(start: number, draw: (value: number) => void): Follower {
-  let value = start;
-  let goal = start;
-  let frame = 0;
-  let last = 0;
-  const step = (now: number) => {
-    const dt = Math.max(0, Math.min(64, now - last));
-    last = now;
-    const left = goal - value;
-    value = Math.abs(left) < 0.5 ? goal : value + left * glideShare(dt);
-    draw(value);
-    frame = value === goal ? 0 : requestAnimationFrame(step);
-  };
-  return {
-    get value() { return value; },
-    get moving() { return frame !== 0; },
-    to(next) {
-      goal = next;
-      if (frame || value === next) return;
-      // On the pane's clock: its next step and this one are taken together.
-      last = glideClock();
-      frame = requestAnimationFrame(step);
-    },
-    jump(next) {
-      cancelAnimationFrame(frame);
-      frame = 0;
-      goal = value = next;
-      draw(next);
-    },
-    stop() { cancelAnimationFrame(frame); frame = 0; },
   };
 }
 

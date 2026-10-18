@@ -18,7 +18,7 @@ import { createContext, createElement, useContext, useEffect, useLayoutEffect, u
 import { flushSync } from "react-dom";
 import { sizesOf, Virtual, type Align, type Item, type Layout, type Row } from "./model.ts";
 import * as css from "./list.css.ts";
-import { glideClock, glided, glideShare } from "@stillfail/ui/motion.ts";
+import { Pace, type Take } from "./pace.ts";
 
 export type VirtualList = {
   model: Virtual;
@@ -34,9 +34,6 @@ export type VirtualList = {
   goto(key: string, align?: Align, pad?: number): boolean;
   /** The reader looks for something in it (model.ts `reads`): what comes at its end does not move it meanwhile. */
   reads(on: boolean): void;
-  /** How far the pane was moved at once to keep its place (not by the reader, not gliding), in all: what stands
-   *  below is where it was on screen, though elsewhere in the pane's content. */
-  kept(): number;
 };
 
 /** How far past the pane's edges rows are made at rest, and how much further ahead of a scroll under way. */
@@ -57,14 +54,14 @@ type Made = {
   holds: boolean;
   /** Where the pane was last put, or seen to be. */
   written: number;
-  kept: number;
-  /** A glide's own step is being written: not a move made to keep the pane's place. */
-  stepping: boolean;
   drawn: string;
   born: number;
   watchers: Set<() => void>;
-  frame: number;
-  last: number;
+  /** What draws the list's motion (pace.ts), once its pane is there; how what changes now is taken there, and the
+   *  frame that lets that go (what changed is all drawn by the frame after next). */
+  pace: Pace | null;
+  take: Take;
+  easing: number;
   /** Where the browser itself put the pane (a list shorter at its end for a moment): its scroll event is not a reader's. */
   pulled: number | null;
   /** The rows past the pane's edges are made too: from a moment after its first rows are drawn. */
@@ -93,7 +90,7 @@ export function useVirtualModel(key: string, gap: number, holds = true): Made {
 function fresh(model: Virtual, gap: number, holds: boolean): Made {
   return {
     model, holds,
-    gap, written: Number.NaN, kept: 0, stepping: false, drawn: "", born: performance.now(), watchers: new Set<() => void>(), frame: 0, last: 0, pulled: null, wide: false, shown: new Set<string>(),
+    gap, written: Number.NaN, drawn: "", born: performance.now(), watchers: new Set<() => void>(), pace: null, take: "glide", easing: 0, pulled: null, wide: false, shown: new Set<string>(),
   };
 }
 
@@ -103,7 +100,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
   short?: boolean;
   /** Items left an end as the list's window moved along. */
   trimmed?: boolean;
-  /** Whether what just came at the end is followed gliding (a message said as the reader watches) or at once. */
+  /** Whether what just came is drawn going there (a message said as the reader watches) or there at once. */
   smooth?: boolean;
   /** A message just come at the end: followed from its top (a long one is read from its start). */
   arrived?: string | null;
@@ -114,9 +111,8 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
   const cover = useRef(options.cover);
   cover.current = options.cover;
 
-  // The items as they are now, before the rows are drawn from them.
-  // What comes gliding starts a glide; one under way goes on through what comes at once (list.tsx `step` ends it).
-  if (smooth && performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(true);
+  // The items as they are now, before the rows are drawn from them. What comes at once (caught up on) is not drawn going.
+  if (!smooth) made.take = harder(made.take, "once");
   model.setShort(short);
   model.setItems(items, trimmed);
   if (arrived !== null && model.mode.kind === "follow") model.follow(arrived);
@@ -124,61 +120,29 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
   made.drawn = signature(layout);
 
   const self = useMemo(() => {
-    const tell = () => { for (const told of made.watchers) told(); };
+    /** What is drawn told where everything now stands (pace.ts), then whoever watches. In its first moments, the list
+     *  is where it opens, at once. */
+    const tell = () => {
+      if (made.pace && !Number.isNaN(made.written)) made.pace.seen(made.written, performance.now() - made.born < OPENING_MS ? harder(made.take, "once") : made.take);
+      // Taken at once, so is the rest of what comes before it is drawn (rows measured in the next frame).
+      if (made.take !== "glide" && !made.easing) made.easing = requestAnimationFrame(() => { made.easing = requestAnimationFrame(() => { made.easing = 0; made.take = "glide"; }); });
+      for (const told of made.watchers) told();
+    };
     /** The pane put where the model has it, at once. */
     const put = (el: HTMLElement) => {
       const top = model.layout().scrollTop;
       if (Math.abs(top - made.written) < 0.5) return;
-      const before = made.written;
       el.scrollTop = top;
       // As far as the browser took it: short of it while rows stand shorter than they were taken to be.
       made.written = el.scrollTop;
-      if (!made.stepping && !Number.isNaN(before)) made.kept += made.written - before;
     };
     /** After the model changed outside a render: the rows drawn anew if they are others, the pane put in place. */
     const sync = (el: HTMLElement, moved = true) => {
       if (signature(model.layout()) !== made.drawn) flushSync(redraw);
       else if (moved) put(el);
-      step(el);
       tell();
     };
-    /** Toward where it follows, a share of what is left each frame (about 90% in a quarter second). */
-    const step = (el: HTMLElement) => {
-      if (made.frame) return;
-      // Nothing to glide to: what comes next is taken at once, until something glides again.
-      if (model.mode.kind !== "follow" || !(Math.abs(model.target() - model.where) > 0.5)) { model.glide(false); return; }
-      // On the clock what closes in a row starts on (rowHeights.ts): the two go as one.
-      made.last = glideClock();
-      const glide = (now: number) => {
-        // Keep this frame owned while a synchronous render runs its layout effects.
-        // Those effects call step too: clearing it here starts a second glide, resets
-        // last after this frame's timestamp, and lets the two chains pull backwards.
-        // Down as well as up: back toward it as what is below closes (model.ts `coming`).
-        const left = model.target() - model.where;
-        if (model.mode.kind !== "follow" || Math.abs(left) < 0.5) {
-          // There: what came meanwhile is taken at once.
-          made.frame = 0;
-          glided(null);
-          model.glide(false);
-          if (signature(model.layout()) !== made.drawn) flushSync(redraw);
-          else put(el);
-          tell();
-          return;
-        }
-        const dt = Math.max(0, Math.min(64, now - made.last));
-        glided(now);
-        made.last = now;
-        model.place(Math.abs(left) < 1 ? model.target() : model.where + left * glideShare(dt));
-        made.stepping = true;
-        if (signature(model.layout()) !== made.drawn) flushSync(redraw);
-        else put(el);
-        made.stepping = false;
-        tell();
-        made.frame = requestAnimationFrame(glide);
-      };
-      made.frame = requestAnimationFrame(glide);
-    };
-    return { tell, put, sync, step };
+    return { tell, put, sync };
   }, [made, model]);
 
   // The rows drawn: the pane where the model has it. Not yet while a row just made stands at a guessed height: the
@@ -193,13 +157,11 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     // size comes with the same report). Any other time the pane is put now: no report may be coming.
     const fresh = layout.rows.some((r) => !made.shown.has(r.key));
     made.shown = new Set(layout.rows.map((r) => r.key));
-    // (And not in a glide's own step: each step is where the pane is to be now.)
     // (Nor a pane gone to an item: its rows are made there, and it is put there with them, by what is guessed of the
     // way, then where they turn out to stand. Left where it was a frame, it would show none of them, and the browser,
     // its content replaced, would scroll it: the reader's doing, as far as the list can tell.)
-    if (!made.stepping && !made.frame && ((fresh && model.guessed && model.mode.kind !== "goto") || Number.isNaN(made.written))) later = requestAnimationFrame(() => { self.put(el); self.step(el); self.tell(); });
+    if ((fresh && model.guessed && model.mode.kind !== "goto") || Number.isNaN(made.written)) later = requestAnimationFrame(() => { self.put(el); self.tell(); });
     else self.put(el);
-    self.step(el);
     self.tell();
     return () => cancelAnimationFrame(later);
   });
@@ -219,6 +181,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
   useEffect(() => {
     const el = pane.current;
     if (!el) return;
+    made.pace = new Pace(el, model, () => self.sync(el, false));
     let rest = 0;
     const scrolled = () => {
       const top = el.scrollTop;
@@ -237,12 +200,9 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
         self.sync(el);
         return;
       }
-      // The reader's: a glide stops where it is.
+      // The reader's: what shows moves with their hand.
       if (!made.wide) { made.wide = true; model.widen(); }
-      cancelAnimationFrame(made.frame);
-      made.frame = 0;
-      glided(null);
-      model.glide(false);
+      made.pace?.scrolledBy(top - made.written);
       made.written = top;
       model.scrolled(top);
       // Not moved under the reader's scroll, unless the model has nothing left to hold what it should move by.
@@ -283,9 +243,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       }
       // What a click in the pane just grew or shrank is the reader's doing, nothing new: their place is kept from here.
       if (opening && heights.length) model.stay();
-      // What grows at the end as the reader watches (a reply coming, an image loading) is followed gliding; the pane
-      // itself resized lays everything out anew, taken at once.
-      if (!entries.some((e) => e.target === el) && performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(true);
+      // (The pane itself resized lays everything out anew, taken at once: pace.ts sees its size change.)
       model.measured(heights);
       self.sync(el);
     });
@@ -319,16 +277,6 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
         heights.push(to === undefined ? [key!, size.height] : [key!, size.height, Number(to) - less]);
       }
       if (!heights.length) return;
-      // A glide under way is brought up to this frame first, toward where it was going: what closes starts from this
-      // frame (settling.tsx), and the pane's share of it from here too, not from its last step before.
-      const now = (document.timeline.currentTime as number | null) ?? performance.now();
-      if (made.frame && now > made.last && model.mode.kind === "follow") {
-        const left = model.target() - model.where;
-        model.place(model.where + left * glideShare(Math.min(64, now - made.last)));
-        glided(now);
-        made.last = now;
-      }
-      if (performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(true);
       model.measured(heights);
       self.sync(el);
     });
@@ -366,9 +314,10 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     return () => {
       settling.disconnect();
       clearTimeout(rest);
-      cancelAnimationFrame(made.frame);
-      made.frame = 0;
-      glided(null);
+      made.pace?.stop();
+      made.pace = null;
+      cancelAnimationFrame(made.easing);
+      made.easing = 0;
       el.removeEventListener("scroll", scrolled);
       for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.removeEventListener(type, touched);
       el.removeEventListener("click", clicked, true);
@@ -390,16 +339,13 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     watch: (told) => { made.watchers.add(told); return () => { made.watchers.delete(told); }; },
     toEnd: (atOnce = false) => {
       const el = pane.current;
-      model.glide(!atOnce);
+      if (atOnce) made.take = harder(made.take, "anew");
       model.follow();
       if (el) self.sync(el);
     },
     goto: (key, align = "start", pad = 0) => {
       const el = pane.current;
-      cancelAnimationFrame(made.frame);
-      made.frame = 0;
-      glided(null);
-      model.glide(false);
+      made.take = harder(made.take, "anew");
       const there = model.goto(key, align, pad);
       if (el) self.sync(el);
       return there;
@@ -409,13 +355,16 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       const el = pane.current;
       if (el) self.sync(el);
     },
-    kept: () => made.kept,
   }), [model, layout, made, self, pane, gap]);
 }
 
 function spacer(key: string, height: number, where: "first" | "between" | "last" | "only"): ReactNode {
   return createElement("div", { key, className: css.spacer, "data-where": where, "aria-hidden": true, style: { height: `${height}px` } });
 }
+
+/** How each change is taken, from the most drawn to the least: what is asked of a frame is the least of what it is asked. */
+const TAKES: Take[] = ["glide", "once", "anew"];
+const harder = (a: Take, b: Take): Take => (TAKES.indexOf(a) >= TAKES.indexOf(b) ? a : b);
 
 /** What of a layout the rows drawn depend on. */
 function signature(layout: Layout): string {

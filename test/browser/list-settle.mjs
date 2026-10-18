@@ -55,7 +55,10 @@ function helpers() {
       // An agent's line showing while the reader's message is still on its way to the list (it comes once that lands).
       const act = [...(p?.querySelectorAll(':scope > [data-vk^="a:"]') ?? [])].find((a) => !before.has(a.dataset.vk));
       const early = !!act && !!p.querySelector(':scope > [data-send-covered]') && act.getBoundingClientRect().height > 4 && +getComputedStyle(act).opacity > 0.1;
-      frames.push({ t: Math.round(performance.now() - t0), top: p ? Math.round(p.scrollTop) : null, rows, early });
+      // When the frame is drawn (its animations' time): a callback's own time, under load, falls anywhere in it.
+      const now = document.timeline.currentTime ?? performance.now();
+      if (frames.length && frames.at(-1).at === now) frames.pop();
+      frames.push({ t: Math.round(now - t0), at: now, top: p ? Math.round(p.scrollTop) : null, rows, early });
     });
     seen.observe(beat);
     const tick = () => {
@@ -111,7 +114,59 @@ function jumps(frames, height) {
   return found;
 }
 
+/**
+ * How fast what shows moves (docs/list-motion.md, one clock): each row's speed on screen frame to frame (px/ms), and how
+ * quickly that speed changes (px/ms²): the most of each, and where. By the list's law (motion.ts PACE_*) no row goes
+ * faster than PACE_MOST (1.2px/ms) and none speeds up or slows down faster than a change of 180px sets out (0.06px/ms²);
+ * two changes under way at once may add up a little.
+ */
+const FASTEST = 1.2 * 1.3;
+const SHARPEST = 0.06 * 1.6;
+function pace(frames, height) {
+  let fast = { v: 0, at: '' }, sharp = { dv: 0, at: '' };
+  for (let i = 1; i < frames.length; i++) {
+    const dt = Math.max(8, frames[i].t - frames[i - 1].t);
+    for (const [key, top] of Object.entries(frames[i].rows)) {
+      const b = frames[i - 1].rows[key];
+      if (b === undefined || ((b < -50 || b > height) && (top < -50 || top > height))) continue;
+      const v = (top - b) / dt;
+      if (Math.abs(v) > fast.v) fast = { v: Math.abs(v), at: `${key} at ${frames[i].t}ms` };
+      const a = i > 1 ? frames[i - 2].rows[key] : undefined;
+      if (a === undefined) continue;
+      const du = Math.max(8, frames[i - 1].t - frames[i - 2].t);
+      const u = (b - a) / du;
+      const dv = Math.abs(v - u) / ((dt + du) / 2);
+      if (dv > sharp.dv) sharp = { dv, at: `${key} at ${frames[i].t}ms (${u.toFixed(2)} → ${v.toFixed(2)}px/ms)` };
+    }
+  }
+  return { fast, sharp };
+}
+
 const CASES = {
+  // A whole turn: a message sent, its agent at work at once, then its reply said as it stops (in the same moment, as
+  // an agent's last post and its turn's end come).
+  async turn(page) {
+    await page.evaluate(() => check.set((c) => { c.running = null; }));
+    await page.waitForTimeout(1200);
+    const field = page.locator('textarea:not([aria-hidden])').filter({ visible: true }).last();
+    await field.fill('把登录页按钮改一下');
+    const watching = page.evaluate(() => check.sample(4200));
+    await field.press('Enter');
+    await page.evaluate(() => check.set((c) => { c.running = { activity: '读取 src/auth/LoginForm.tsx', since: Date.now(), started: true }; }));
+    await page.waitForTimeout(1600);
+    await page.evaluate(() => check.set((c) => { c.messages = [...c.messages, check.message(c, 'agent', '改好了：\n\n- 按钮撑满容器\n- 左右各 16px\n- 深色模式下也看得见')]; }));
+    await page.waitForTimeout(60);
+    await page.evaluate(() => check.set((c) => { c.running = null; }));
+    return watching;
+  },
+  // The agent at work says its last and stops at once.
+  async finish(page) {
+    await page.evaluate(() => check.set((c) => { c.running = { activity: '运行 pnpm test', since: Date.now(), started: true }; }));
+    await page.waitForTimeout(1200);
+    const watching = page.evaluate(() => check.sample(2600));
+    await page.evaluate(() => check.set((c) => { c.messages = [...c.messages, check.message(c, 'agent', '测试都过了，18 个用例全绿。')]; c.running = null; }));
+    return watching;
+  },
   // A message written in the composer and sent, nothing asked.
   async send(page) {
     await page.waitForTimeout(300);
@@ -273,7 +328,7 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
       await Promise.all(shots.map((data, i) => writeFile(`${dir}/f${String(i).padStart(3, '0')}.jpg`, Buffer.from(data, 'base64'))));
     }
     if (out) await writeFile(`${out}/${where.replace(' ', '-')}.json`, JSON.stringify(frames));
-    assert.ok(frames.length > 20, `${where}: frames were sampled (${frames.length})`);
+    assert.ok(frames.length > 10, `${where}: frames were sampled (${frames.length})`);
     const found = backAndForth(frames);
     if (found.length) failures.push(`${where}: moved and back\n    ${found.slice(0, 6).join('\n    ')}`);
     const jumped = jumps(frames, phone ? 844 : 800);
@@ -283,7 +338,11 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
     if (jumped.length) (process.env.JUMPS ? failures : notes).push(`${where}: jumped\n    ${jumped.slice(0, 6).join('\n    ')}`);
     // (One taller than the pane is read from its top: not followed to the end.)
     if (end > 1 && name !== 'long') failures.push(`${where}: left ${Math.round(end)}px short of the list's end`);
-    console.log(found.length || (process.env.JUMPS && jumped.length) || early.length ? 'FAIL' : 'ok  ', where, `(${frames.length} frames)`);
+    const { fast, sharp } = pace(frames, phone ? 844 : 800);
+    console.log(`  pace ${where}: fastest ${fast.v.toFixed(2)}px/ms (${fast.at}); sharpest ${sharp.dv.toFixed(3)}px/ms² (${sharp.at})`);
+    if (fast.v > FASTEST) failures.push(`${where}: moved at ${fast.v.toFixed(2)}px/ms, faster than the list's law allows (${fast.at})`);
+    if (sharp.dv > SHARPEST) failures.push(`${where}: its speed changed by ${sharp.dv.toFixed(3)}px/ms², more sharply than the list's law allows (${sharp.at})`);
+    console.log(found.length || (process.env.JUMPS && jumped.length) || early.length || fast.v > FASTEST || sharp.dv > SHARPEST ? 'FAIL' : 'ok  ', where, `(${frames.length} frames)`);
     await context.close();
   }
   if (notes.length) console.log(notes.join('\n'));

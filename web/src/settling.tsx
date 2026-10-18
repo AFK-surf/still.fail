@@ -5,15 +5,16 @@
 // box is never laid out shorter than it is drawn, not even for a moment to be measured (a pane at its end would be
 // pulled up, and put back a frame later). And what it takes in its parent's grid is all taken as it goes, the gap before
 // it too (a grid row can't be pulled up into the gap: the item before gives it up instead). The list is told where its
-// row is going as it starts (rowHeights.ts), and its pane goes there along with it, by the same law (motion.ts GLIDE_*)
-// from the same frame: what is above and what is below move one way each, never there and back.
+// row is going as it starts (rowHeights.ts), and the box closes by the list's law with what that moves, on the list's
+// one clock (virtual/pace.ts): what is above and what is below move one way each, together, never there and back.
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ENTER, ENTER_FROM, GLIDE_EASE, GLIDE_MS, glideValue, LEAVE, LEAVE_TO, play } from "@stillfail/ui/motion.ts";
+import { ENTER, ENTER_FROM, LEAVE, LEAVE_TO, PACE_EASE, PACE_MS, play } from "@stillfail/ui/motion.ts";
+import { paceWith } from "./virtual/pace.ts";
 import * as css from "./Chat.css.ts";
 import { closing as rowClosing } from "./rowHeights.ts";
 
-/** Its room opening, by the list's law (motion.ts GLIDE_*), as its pane goes along with it. */
-const CLOSE = { duration: GLIDE_MS, easing: GLIDE_EASE };
+/** Its room opening, by the list's law (motion.ts PACE_*), as its pane goes along with it. */
+const CLOSE = { duration: PACE_MS, easing: PACE_EASE };
 
 const moving = () => document.visibilityState === "visible";
 
@@ -84,9 +85,9 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
     const gap = gone ? gapBefore(el) : 0;
     const before = gap && el.previousElementSibling instanceof HTMLElement ? el.previousElementSibling : null;
     taken.current = before;
-    // The list told where its row is going, as it starts; its pane goes there by the same steps (motion.ts glideValue).
+    // The list told where its row is going, as it starts; the box goes there with what that moves (virtual/pace.ts).
     const told = rowClosing(el, was.height - end + (before ? gap : 0));
-    const run = glideValue(was.height, end, (h) => {
+    const run = paceWith(el, was.height, end, (h) => {
       el.style.height = `${h}px`;
       if (before) before.style.marginBottom = `${-gap * (was.height - h) / Math.max(1, was.height - end)}px`;
     });
