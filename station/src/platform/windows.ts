@@ -464,6 +464,7 @@ export const windows: Platform = {
   hasQuickLook: false,
   hasFolderPermissions: false,
   hasSpotlight: false,
+  hasUnixSockets: false,
   hasDesktopScreen: false,
 
   // No `script`: a login's command runs on pipes (most say their link and code then). No process tree is read: only

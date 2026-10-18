@@ -15,7 +15,7 @@ import { Modules, Paths, StationDrive } from "../services.ts";
 import { dir as thumbsDir } from "../sessions/thumbs.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { log } from "../ops/log.ts";
-import { WINDOWS } from "../platform/index.ts";
+import { platform } from "../platform/index.ts";
 import { type Module, type ModuleSet, modulesOf } from "./modules.ts";
 import { ask } from "./forward.ts";
 import { listen, localApi } from "./local.ts";
@@ -192,7 +192,7 @@ export const ModulesLive = Layer.effectDiscard(
     const drive = yield* StationDrive;
     const life: Life = { data, modules, drive, config: agents.config, previousGone: agents.previousGone };
     // Sockets (unix domain) are how a module and the station talk: macOS and Linux.
-    if (WINDOWS) {
+    if (!platform.hasUnixSockets) {
       if (modulesOf(agents.config.raw()).specs.length > 0) log.warn("modules", "modules run on macOS and Linux only; none is started here");
       return;
     }
