@@ -1,10 +1,10 @@
 ///|
 fn chapter() -> Array[@ui.Block] {
-  let out : Array[@ui.Block] = [Heading("第一章 山雨")]
+  let out : Array[@ui.Block] = [Heading("第一章 测试")]
   for i in 0..<40 {
     out.push(
       Para(
-        "第\{i}段：山雨欲来风满楼，城上高楼接大荒。The quick brown fox jumps over the lazy dog, again and again. 海天愁思正茫茫。",
+        "第\{i}段：这一段是排版测试用的文字，中文和 English words 混在一起，用来检查换行、缩进和两端对齐是否正确。",
       ),
     )
     if i == 10 {
@@ -47,7 +47,7 @@ test "a chapter cut into pages: every position on exactly one page, in order" {
     assert_eq(pages.page_of(p.start), k)
     assert_eq(pages.page_of(p.end - 1), k)
   }
-  assert_true(pages.text_of(0).has_prefix("第一章 山雨\n第0段"))
+  assert_true(pages.text_of(0).has_prefix("第一章 测试\n第0段"))
 }
 
 ///|
