@@ -598,13 +598,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             }
                         }
                     }
-                    ListRow(onClick = {
-                        app.sheet = SheetSpec(0.8f, draggable = true) {
-                            EnvSheet(t("android-settings.env.title"), t("android-settings.env.note"), p.env, app.isDoing("profile.put", "station" to address, "id" to p.id)) { env ->
-                                app.api(address).putProfile(p.id, buildJsonObject { put("env", env) })
-                            }
-                        }
-                    }) {
+                    ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { ProfileEnvSheet(address, p) } }) {
                         Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
                         // Saved (the sheet gone): a spinner until the station has them.
                         DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
@@ -637,7 +631,7 @@ private fun ProfileRecovery(station: StationView, p: Profile) {
                     "key" -> ask(app, t("android-settings.profile.newKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHintShort"), what = t("android-settings.profile.keyWhat")) { key ->
                         api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", p.access.kind); put("key", key) } })
                     }
-                    "env" -> app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) }
+                    "env" -> app.sheet = SheetSpec(0.8f, draggable = true) { ProfileEnvSheet(address, p) }
                     "quota" -> app.act(t("android-settings.quota.checkWhat"), t("android-settings.quota.updated")) { api.refreshQuota(p.id) }
                     else -> app.act(t("android-settings.profile.checkWhat"), t("android-settings.profile.checked")) { api.checkProfile(p.id) }
                 }
@@ -914,6 +908,15 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
 private class EnvRow(val row: Int, key: String, value: String, val masked: String?, val original: String?) {
     var key by mutableStateOf(key)
     var value by mutableStateOf(value)
+}
+
+/** The variables a custom profile runs with: what reaches its runtime's model service, set by hand. */
+@Composable
+private fun ColumnScope.ProfileEnvSheet(station: String, p: Profile) {
+    val app = LocalApp.current
+    EnvSheet(t("android-settings.env.title"), t("android-settings.env.note"), p.env, app.isDoing("profile.put", "station" to station, "id" to p.id)) { env ->
+        app.api(station).putProfile(p.id, buildJsonObject { put("env", env) })
+    }
 }
 
 /**

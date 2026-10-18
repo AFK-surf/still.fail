@@ -406,15 +406,14 @@ private fun StationAgentEnv(address: String, env: List<EnvVar>, manager: Boolean
             }
         }
         if (manager) {
-            val doing = app.isDoing("agentEnv.set", "station" to address)
             ListRow(onClick = {
                 app.sheet = SheetSpec(0.8f, draggable = true) {
-                    EnvSheet(t("android-settings.agentEnv.title"), t("android-settings.agentEnv.note"), env, doing) { changed -> app.api(address).setAgentEnv(changed) }
+                    EnvSheet(t("android-settings.agentEnv.title"), t("android-settings.agentEnv.note"), env, app.isDoing("agentEnv.set", "station" to address)) { changed -> app.api(address).setAgentEnv(changed) }
                 }
             }) {
                 Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
                 // Saved (the sheet gone): a spinner until the station has them.
-                DoingMark(doing, app.failedOf("agentEnv.set", "station" to address))
+                DoingMark(app.isDoing("agentEnv.set", "station" to address), app.failedOf("agentEnv.set", "station" to address))
             }
         }
     }

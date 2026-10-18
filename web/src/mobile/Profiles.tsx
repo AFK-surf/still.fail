@@ -451,8 +451,7 @@ function ProfilePage({ p }: { p: Profile }) {
             <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
             <ListCard>
               {p.env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${css.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{e.value}</span></span></ListRow>)}
-              <ListRow onClick={() => sheet({ height: 0.8, draggable: true, content: () => <EnvSheet env={p.env} title={t("web-mobile.profiles.env")} note={t("web-mobile.profiles.envNote", { route: "{route}" })}
-                doing={["profile.put", { station: station.address, id: p.id }]} save={(env) => api.putProfile(p.id, { env })} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
+              <ListRow onClick={() => sheet({ height: 0.8, draggable: true, content: () => <ProfileEnvSheet station={station.address} p={p} save={(env) => api.putProfile(p.id, { env })} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
             </ListCard>
           </>
         )}
@@ -477,7 +476,7 @@ function ProfileRecovery({ p }: { p: Profile }) {
   const run = () => {
     if (issue.action === "key") ask(app, { title: t("web-mobile.profiles.newKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true, atOnce: "web-mobile.profiles.saveFailed",
       hint: t("web-mobile.profiles.recheckHint"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }) });
-    else if (issue.action === "env") sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> });
+    else if (issue.action === "env") sheet({ height: 0.8, draggable: true, content: () => <ProfileEnvSheet station={station.address} p={p} save={(env) => api.putProfile(p.id, { env })} /> });
     else if (issue.action === "quota") act(api.refreshQuota(p.id), t("web-mobile.profiles.what.quota"), t("web-mobile.profiles.quotaUpdated"));
     else act(api.checkProfile(p.id), t("web-mobile.profiles.what.check"), t("web-mobile.profiles.checked"));
   };
@@ -819,6 +818,11 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
 }
 
 interface EnvRow { row: number; key: string; value: string; masked: string | null; original: string | null }
+
+/** The variables a custom profile runs with: what reaches its runtime's model service, set by hand. */
+function ProfileEnvSheet({ station, p, save }: { station: string; p: Profile; save(env: Record<string, string | null>): Promise<unknown> }) {
+  return <EnvSheet env={p.env} title={t("web-mobile.profiles.env")} note={t("web-mobile.profiles.envNote", { route: "{route}" })} doing={["profile.put", { station, id: p.id }]} save={save} />;
+}
 
 /**
  * Variables set by hand: a custom profile's (what reaches its runtime's model service), or a station's for what it starts
