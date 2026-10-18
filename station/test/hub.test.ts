@@ -1664,7 +1664,7 @@ test("a session the machine kept goes on in a chat, run in its own directory, wi
   writeFileSync(join(project, "main.rs"), "fn main() {}");
   const roots = machine(root, project);
   const found = find(roots, "claude", "11111111-aaaa-bbbb-cccc-000000000001")!;
-  const [key, thread] = continueMachineSession(r.hub, roots, found, "local");
+  const [key, thread] = await continueMachineSession(r.hub, roots, found, "local");
   const row = r.session(key);
   assert.equal(row.cwd, project);
   assert.equal(row.runtimeSessionId, found.id);
@@ -1701,7 +1701,7 @@ test("a session the machine kept goes on in a chat, run in its own directory, wi
 
   // Going on with it again is the same chat.
   const again = find(roots, "claude", found.id)!;
-  assert.equal(continueMachineSession(r.hub, roots, again, "local")[0], key);
+  assert.equal((await continueMachineSession(r.hub, roots, again, "local"))[0], key);
 
   // Deleting the chat leaves the project and the machine's transcript alone.
   r.claude.last().complete();
@@ -1726,11 +1726,11 @@ test("a directory the station may not read is told as that, not left to the agen
   // As macOS privacy protection answers a station nobody gave access to: it may stat the directory, not list it.
   chmodSync(project, 0o000);
   try {
-    assert.throws(() => continueMachineSession(r.hub, roots, found, "local"), /无权读取目录/);
+    await assert.rejects(continueMachineSession(r.hub, roots, found, "local"), /无权读取目录/);
     assert.equal(r.store.listSessions().length, 0);
     // One continued while it could be read, and read no more later: its turn says why, and no agent is started.
     chmodSync(project, 0o755);
-    const [, thread] = continueMachineSession(r.hub, roots, found, "local");
+    const [, thread] = await continueMachineSession(r.hub, roots, found, "local");
     chmodSync(project, 0o000);
     sayIn(r.hub, thread.id, "local", "go on");
     await settle();
@@ -1751,7 +1751,7 @@ test("a session whose directory is gone is not continued", async () => {
   const root = join(r.dir, "machine");
   const roots = machine(root, join(root, "gone"));
   const found = find(roots, "codex", "22222222-aaaa-bbbb-cccc-000000000001")!;
-  assert.throws(() => continueMachineSession(r.hub, roots, found, "local"), /已不存在/);
+  await assert.rejects(continueMachineSession(r.hub, roots, found, "local"), /已不存在/);
   assert.equal(r.store.listSessions().length, 0);
   await r.close();
 });
