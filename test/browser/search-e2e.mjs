@@ -179,6 +179,9 @@ async function main() {
   await mobile.waitForTimeout(2500);
   const found = await mobile.locator("body").innerText();
   await mobile.screenshot({ path: join(SHOTS, "phone-duckdb.png") });
+  await mobile.locator('input[type="search"]').fill("火烈鸟");
+  await mobile.waitForTimeout(2500);
+  await mobile.screenshot({ path: join(SHOTS, "phone-late-title.png") });
   check("the phone's search finds the archived chat's message", found.replace(/\s+/g, " ").slice(0, 300), /DuckDB/.test(found));
   await mobile.locator('input[type="search"]').fill("alice");
   await mobile.waitForTimeout(2500);
