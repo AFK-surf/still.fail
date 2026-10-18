@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { busyRing } from "@stillfail/ui/styles/busyRing.ts";
-import { leadBeatKeyframes, leadBreatheKeyframes, leadLitKeyframes, spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { spokesBox } from "@stillfail/ui/styles/spokes.ts";
+import { leadBeatKeyframes, leadBreatheKeyframes, leadLitKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 /**
@@ -31,11 +31,10 @@ export const chatMark = style({
     '&[data-tone="alert"]::after': {
       content: "\"\"", position: "absolute", inset: -5, borderRadius: "50%", background: "#e5484d", opacity: 0.25,
     },
-    // At work: a turning ring with a gap.
-    '&[data-tone="busy"]::after': {
-      content: "\"\"", position: "absolute", inset: 0, background: `${busyRing(10)} center / 100% no-repeat`,
-      animation: `${spinKeyframes} 1.2s linear infinite`,
-    },
+    // At work: yellow spokes stepping round (spokes.ts), with no gap of the ground round them (it showed as a dark rim,
+    // 2026-10-19): they fill the box.
+    '&[data-tone="busy"]': { border: 0, backgroundImage: "none", backgroundColor: "transparent" },
+    '&[data-tone="busy"]::after': { content: "\"\"", position: "absolute", inset: 2, ...spokesBox("#f2b01e") },
     [`${STILL} &[data-tone="busy"]::after`]: stillLoop(),
   },
 });
@@ -52,10 +51,7 @@ export const chatMarkInline = style({
     '&[data-tone="alert"]::after': {
       content: "\"\"", position: "absolute", inset: -3, borderRadius: "50%", background: "#e5484d", opacity: 0.25,
     },
-    '&[data-tone="busy"]': {
-      width: 10, height: 10, background: `${busyRing(10)} center / 100% no-repeat`,
-      animation: `${spinKeyframes} 1.2s linear infinite`,
-    },
+    '&[data-tone="busy"]': { width: 10, height: 10, ...spokesBox("#f2b01e") },
     [`${STILL} &[data-tone="busy"]`]: stillLoop(),
   },
 });

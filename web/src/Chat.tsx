@@ -2335,7 +2335,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
     el.classList.add(css.avatarFlying);
     Object.assign(el.style, { left: "0", top: "0", width: `${avatar.offsetWidth}px`, height: `${avatar.offsetHeight}px` });
     pane.append(el);
-    // Its ring turning and stretching as the real one does (the copy's would start over): they hand over to each other unmoved.
+    // Its ring stepping as the real one does (the copy's would start over): they hand over to each other unmoved.
     const ring = (n: Element) => n.getAnimations({ subtree: true }).filter((x): x is CSSAnimation => x instanceof CSSAnimation);
     const turning = ring(avatar);
     for (const copied of ring(el)) {
@@ -2602,7 +2602,7 @@ function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtW
     <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-vk={`a:${agent.key}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
       <div className={css.activityRow}>
       <button ref={line} type="button" className={css.activityLine} onClick={() => { if (chat) chatPage.history(chat, agent.key); }} aria-label={`${agent.who}：${now.current.text}`}>
-        <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span><svg className={css.activityRing} viewBox="0 0 24 24"><circle cx="12" cy="12" r="11.25" pathLength={360} /></svg></span>
+        <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span><span className={css.activityRing} /></span>
         <span ref={tail} className={css.activityTail}>
           <span className={css.activityNow}>
             {now.previous && <span key={`was-${now.n - 1}`} className={css.activityNowText} data-out="">{now.previous.text}</span>}

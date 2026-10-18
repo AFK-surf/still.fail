@@ -351,7 +351,7 @@ private fun IdleTitle(text: String) {
     Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = C.subtle, modifier = Modifier.padding(start = 10.dp, top = 28.dp, bottom = 4.dp))
 }
 
-/** A chat at work (the turning yellow ring) or a card answered (a quiet dot): its words over where it is, when at its end. */
+/** A chat at work (the yellow spokes stepping round) or a card answered (a quiet dot): its words over where it is, when at its end. */
 @Composable
 private fun IdleRow(main: String, meta: String, at: String, busy: Boolean, onOpen: () -> Unit) {
     Row(

@@ -67,7 +67,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -138,27 +137,18 @@ fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier: Modifie
 
 /**
  * An agent's state at its mark's corner in the chat list's colours (web ui.css.ts agentMark, ChatMark.css.ts): a 12dp
- * disc of the ground, red in it when it wants someone (blocked, failed), at work a turning yellow 8dp ring with a faint
- * quarter; nothing when done. No halo: the mark is small.
+ * disc of the ground with red in it when it wants someone (blocked, failed); at work yellow spokes 10dp across stepping
+ * round (Spokes.kt), with no disc round them (it showed as a dark rim, 2026-10-19); nothing when done. No halo: the mark
+ * is small.
  */
 @Composable
 fun AgentStateMark(state: ChatState, around: Color, modifier: Modifier = Modifier) {
     if (state == ChatState.Done) return
-    val turn = if (state == ChatState.Running) rememberLoop(0f, 360f, infiniteRepeatable(tween(1200, easing = androidx.compose.animation.core.LinearEasing)), "turn", still = 0f).value else 0f
+    val step = if (state == ChatState.Running) rememberSpokeStep() else null
     Canvas(modifier.size(12.dp)) {
         val r = size.minDimension / 2
-        val ring = 2.dp.toPx()
-        drawCircle(around, r)
-        if (state == ChatState.Running) {
-            // The web's 8px box with a 2px border: the stroke's middle 3px from the centre.
-            val rr = r - ring - ring / 2
-            val at = androidx.compose.ui.geometry.Offset(center.x - rr, center.y - rr)
-            val box = androidx.compose.ui.geometry.Size(rr * 2, rr * 2)
-            drawArc(AGENT_YELLOW.copy(alpha = 0.25f), 0f, 360f, false, at, box, style = Stroke(ring))
-            // Round ends (web: styles/busyRing.ts), the arc shortened by the half stroke they add so the gap stays a quarter.
-            val cap = Math.toDegrees((ring / box.width).toDouble()).toFloat()
-            drawArc(AGENT_YELLOW, turn + 45f + cap, 270f - 2 * cap, false, at, box, style = Stroke(ring, cap = StrokeCap.Round))
-        } else drawCircle(AGENT_RED, r - ring)
+        if (step != null) drawSpokes(step.value, AGENT_YELLOW, 10.dp.toPx())
+        else { drawCircle(around, r); drawCircle(AGENT_RED, r - 2.dp.toPx()) }
     }
 }
 

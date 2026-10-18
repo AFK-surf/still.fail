@@ -34,10 +34,9 @@ import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import fail.still.android.ui.rememberLoop
+import fail.still.android.ui.rememberSpokeStep
+import fail.still.android.ui.drawSpokes
 import fail.still.android.ui.Waiting
 import fail.still.android.ui.StationGlyph
 import fail.still.android.ui.glyphCounts
@@ -645,7 +644,7 @@ private val MarkYellow = Color(0xFFF2B01E)
 
 /**
  * A chat's state, a dot before its title (web: ChatMark.css.ts chatMarkInline): a blue dot done and unread, a red one
- * with a soft halo to be seen now, a turning yellow ring with a gap at work. Nothing otherwise.
+ * with a soft halo to be seen now, yellow spokes stepping round at work (Spokes.kt). Nothing otherwise.
  */
 @Composable
 private fun ChatMark(item: ChatItem, modifier: Modifier) {
@@ -659,7 +658,7 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
     val pop = remember(tone) { if (MarksSeen.fresh(rowKey(item))) Animatable(0f) else null }
     if (pop != null) LaunchedEffect(pop) { pop.animateTo(1f, tween(320, easing = CssEaseOut)) }
     val subtle = C.subtle
-    val turn = if (tone == RowTone.Busy) rememberLoop(0f, 360f, infiniteRepeatable(tween(1200, easing = LinearEasing)), "turn", still = 0f).value else 0f
+    val step = if (tone == RowTone.Busy) rememberSpokeStep() else null
     Canvas(modifier.size(10.dp).graphicsLayer {
         pop?.value?.let { p -> val k = if (p < 0.6f) 1.3f * p / 0.6f else 1.3f - 0.3f * (p - 0.6f) / 0.4f; scaleX = k; scaleY = k }
     }.semantics { contentDescription = label }) {
@@ -671,16 +670,8 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
             RowTone.Alert -> drawCircle(MarkRed, r - 1.dp.toPx())
             // A hollow ring, 2dp, 9dp across: blue when it waits on the viewer, grey when only on others.
             RowTone.Wait, RowTone.Other -> drawCircle(if (tone == RowTone.Wait) MarkBlue else subtle, 4.5.dp.toPx() - ring / 2, style = Stroke(ring))
-            RowTone.Busy -> {
-                val inset = ring / 2
-                val box = androidx.compose.ui.geometry.Size(size.width - ring, size.height - ring)
-                val at = androidx.compose.ui.geometry.Offset(inset, inset)
-                // A faint track, a solid three-quarter arc on it; turning.
-                drawArc(MarkYellow.copy(alpha = 0.25f), 0f, 360f, false, at, box, style = Stroke(ring))
-                // Round ends (web: styles/busyRing.ts), the arc shortened by the half stroke they add so the gap stays a quarter.
-                val cap = Math.toDegrees((ring / box.width).toDouble()).toFloat()
-                drawArc(MarkYellow, turn + 45f + cap, 270f - 2 * cap, false, at, box, style = Stroke(ring, cap = StrokeCap.Round))
-            }
+            // Yellow spokes stepping round (Spokes.kt; web ChatMark.css.ts).
+            RowTone.Busy -> drawSpokes(step?.value ?: 0, MarkYellow, size.minDimension)
         }
     }
 }

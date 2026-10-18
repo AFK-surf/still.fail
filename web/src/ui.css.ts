@@ -1,9 +1,9 @@
 // The app's own marks and links among the shared parts (ui.tsx): what made an agent's model, a connect's kind, a time,
 // the way back; and where the app's pages put @stillfail/ui's parts (its parts.css.ts, just before this in the cascade).
 import { globalStyle, style } from "@vanilla-extract/css";
-import { busyRing } from "@stillfail/ui/styles/busyRing.ts";
+import { spokesBox } from "@stillfail/ui/styles/spokes.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { appearKeyframes, spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { appearKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { outsetStart } from "@stillfail/ui/styles/align.ts";
 import { DIALOG_INNER, DIALOG_PAD, dialogBody } from "@stillfail/ui/parts.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
@@ -18,7 +18,7 @@ export const kindMark = style({ color: vars.text });
 /** Centred on the line: aligned by baseline, the letter inside a small avatar would pull it down. */
 /**
  * An agent: its model's maker on a tile; where it stands is a mark at the corner in the chat list's colours
- * (ChatMark.css.ts): a turning yellow ring at work, red when it wants someone (blocked, failed); no halo, the tile is
+ * (ChatMark.css.ts): yellow spokes stepping round at work, red when it wants someone (blocked, failed); no halo, the tile is
  * small. A gap of the ground (`--ring`) round it.
  */
 export const agentMark = style({
@@ -32,10 +32,12 @@ export const agentMark = style({
       boxSizing: "border-box", borderRadius: "50%", border: "2px solid var(--ring)", background: "var(--ring)",
     },
     "&[data-badge=\"block\"]::after, &[data-badge=\"failed\"]::after": { background: "#e5484d" },
-    // At work: a turning ring with a gap, over the ground's disc.
+    // At work: yellow spokes stepping round (spokes.ts), 10px, with no disc of the ground round them (it showed as a
+    // dark rim, 2026-10-19).
+    "&[data-badge=\"run\"]::after": { display: "none" },
     "&[data-badge=\"run\"]::before": {
-      content: "\"\"", position: "absolute", right: "-1px", bottom: "-1px", width: "8px", height: "8px", zIndex: 1,
-      background: `${busyRing(8)} center / 100% no-repeat`, animation: `${spinKeyframes} 1.2s linear infinite`,
+      content: "\"\"", position: "absolute", right: "-2px", bottom: "-2px", width: "10px", height: "10px", zIndex: 1,
+      ...spokesBox("#f2b01e"),
     },
     [`${STILL} &[data-badge="run"]::before`]: stillLoop(),
   },
@@ -48,7 +50,7 @@ export const agentMarkJoined = style({
   display: "inline-flex", width: "auto", gap: "0", color: vars.muted, fontSize: vars.textMeta, lineHeight: "1", whiteSpace: "nowrap",
   selectors: {
     "&[data-badge]::after": { right: "auto", left: "calc(var(--mark) - 9px)" },
-    "&[data-badge=\"run\"]::before": { right: "auto", left: "calc(var(--mark) - 7px)" },
+    "&[data-badge=\"run\"]::before": { right: "auto", left: "calc(var(--mark) - 8px)" },
   },
 });
 // Hover tints meet at straight edges inside the tile; only its two outside ends are rounded.

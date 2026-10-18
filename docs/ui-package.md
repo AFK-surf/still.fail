@@ -17,7 +17,7 @@ web 的设计系统单独成包，在 `web/ui`（`web/ui/package.json`）。app�
 |---|---|
 | `styles/tokens.css.ts` | 颜色、字号、圆角、时长等 tokens（`vars`） |
 | `styles/align.ts` | 对齐和同心圆角的算法（`surface`、`inner`、`bleedX`…） |
-| `styles/glass.ts`、`styles/keyframes.css.ts`、`styles/busyRing.ts` | 毛玻璃底、关键帧、转圈环 |
+| `styles/glass.ts`、`styles/keyframes.css.ts`、`styles/spokes.ts` | 毛玻璃底、关键帧、工作中的辐条 |
 | `styles/controls.css.ts` | 按钮、输入框、小面板底（`popover`）、菜单、`Chooser` |
 | `styles/page.css.ts`、`styles/spinner.css.ts` | 图标按钮和 section；spinner |
 | `parts.tsx`、`parts.css.ts` | 共用部件：Button、IconButton、Tip、Field、Segmented、Choices、Switch、Select、Dialog、Confirm、Menu、Panel*、Chooser、Loading、FirstOne、ResizeHandle… |

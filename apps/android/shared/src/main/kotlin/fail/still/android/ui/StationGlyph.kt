@@ -8,10 +8,16 @@ package fail.still.android.ui
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -84,10 +90,19 @@ fun StationGlyph(counts: GlyphCounts, size: Dp = 24.dp, tint: androidx.compose.u
     val ink = tint
     val red = C.red
     val blinking = if (counts.asleep) 0 else counts.working
-    // A blink: open most of the time, shut for a moment (the web's 2.6s, shut at 93%); open with motion reduced.
-    val eye = if (blinking > 0) rememberLoop(
-        1f, 1f, infiniteRepeatable(keyframes { durationMillis = 2600; 1f at 2288; 0.1f at 2418; 1f at 2600 }), "eye", still = 1f,
-    ).value else 1f
+    // A blink: open most of the time, shut for a moment (the web's 2.6s, shut at 93%); open with motion reduced. Drawn
+    // only while it blinks: open, nothing changes, so no frame (a loop over the whole 2.6s drew every frame of it).
+    val lid = remember { Animatable(1f) }
+    if (blinking > 0 && !Motion.reduced) LaunchedEffect(Unit) {
+        try {
+            while (true) {
+                delay(2288)
+                lid.animateTo(0.1f, tween(130, easing = LinearEasing))
+                lid.animateTo(1f, tween(182, easing = LinearEasing))
+            }
+        } finally { withContext(NonCancellable) { lid.snapTo(1f) } }
+    }
+    val eye = if (blinking > 0) lid.value else 1f
     // A link on its way: its arc breathes between the track and ink (the web's 1.4s); held halfway with motion reduced.
     val pulse = if (arcs.any { it.pulse }) rememberLoop(
         TRACK, 0.85f, infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse), "pulse", still = 0.5f,

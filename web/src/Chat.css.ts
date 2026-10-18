@@ -11,6 +11,7 @@ import { glass } from "@stillfail/ui/styles/glass.ts";
 import { columns, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 import { STILL, stillAtOnce, stillLoop } from "@stillfail/ui/styles/still.ts";
+import { segments, spokesStep, wholeRing } from "@stillfail/ui/styles/spokes.ts";
 
 export const msgName = style({ fontWeight: "600" });
 /** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */
@@ -399,12 +400,6 @@ export const composerQuote = style({
   animation: `${enterUpKeyframes} 180ms ${vars.easeOut} both`, padding: "0", border: "0",
 });
 export const fileCardOpen = style({});
-const ringTurnKeyframes = keyframes({ to: { transform: "rotate(360deg)" } });
-const ringStretchKeyframes = keyframes({
-  "0%": { strokeDasharray: "5 360", transform: "rotate(0deg)" },
-  "50%": { strokeDasharray: "235 360", transform: "rotate(60deg)" },
-  "100%": { strokeDasharray: "5 360", transform: "rotate(360deg)" },
-});
 export const agentActivity = style({
   selectors: {
     "&[data-leaving]": { gridTemplateRows: "0fr", opacity: "0" },
@@ -417,27 +412,20 @@ export const activityAvatar = style({
   },
 });
 /**
- * The ring round an agent at work, 3px round its avatar: an arc in the accent that stretches and shrinks as it turns
- * (Android's Chat.kt WorkRing draws the same). Its length is in degrees (the circle's pathLength is 360): each 1.5s it
- * grows from 5° to 235° and back while its tail runs a full round, ahead of a steady turn every 2s.
+ * The ring round an agent at work, 3px round its avatar (Android's Chat.kt WorkRing draws the same): eight arcs in the
+ * accent, the brightest a step further round each step and the others fading behind it (spokes.ts segments). It
+ * steps, it does not turn: a frame for each step, none between (2026-10-19). Waiting on work it started, a still, quiet
+ * whole ring.
  */
 export const activityRing = style({
-  position: "absolute", inset: "-3px", width: "calc(100% + 6px)", height: "calc(100% + 6px)", overflow: "visible", pointerEvents: "none",
-  animation: `${ringTurnKeyframes} 2s linear infinite`,
+  position: "absolute", inset: "-3px", pointerEvents: "none",
+  background: vars.accent, mask: `${segments} center / 100% no-repeat`, animation: spokesStep,
   selectors: {
-    [`${agentActivity}[data-waiting] &`]: { animation: "none" },
+    [`${agentActivity}[data-waiting] &`]: { background: vars.line, maskImage: wholeRing, animation: "none" },
     [`${agentActivity}[data-leaving] &`]: { opacity: "0", transition: "opacity 160ms" },
     [`${STILL} &`]: stillLoop(),
   },
 });
-globalStyle(`${activityRing} circle`, {
-  fill: "none", stroke: vars.accent, strokeWidth: "1.5px", strokeLinecap: "round", vectorEffect: "non-scaling-stroke",
-  strokeDasharray: "180 360", transform: "rotate(-135deg)", transformOrigin: "center",
-  animation: `${ringStretchKeyframes} 1.5s ease-in-out infinite`,
-});
-// Waiting on work it started: a still, quiet ring.
-globalStyle(`${agentActivity}[data-waiting] ${activityRing} circle`, { stroke: vars.line, strokeDasharray: "none", animation: "none" });
-globalStyle(`${STILL} ${activityRing} circle`, stillLoop());
 export const activityTail = style({
   display: "flex", alignItems: "center", gap: "8px", minWidth: "0", maxWidth: "100%",
   selectors: {
