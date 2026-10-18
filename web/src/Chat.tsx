@@ -26,7 +26,6 @@ import { OpenFile, VizFile } from "./Viz.tsx";
 import { useVirtualList, useVirtualModel, type VirtualList } from "./virtual/list.tsx";
 import type { Align, Item } from "./virtual/model.ts";
 import { animate, arrive, EASE_OUT, follower, motionMs, moveState, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
-import { Pace } from "./virtual/pace.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
@@ -2135,7 +2134,8 @@ export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { a
   return [...shown.current.values()].map((s) => ({ agent: s.agent, leaving: s.stopped !== null && now - s.stopped >= HOLD_MS }));
 }
 
-/** Where an element sits in the pane's content, by layout: scrolling does not move it, nor does a transform. */
+/** Where an element sits in the pane's content, by layout (a row drawn off its place by the list, virtual/pace.ts, where
+ *  it is drawn): scrolling does not move it, nor does a transform. */
 function layoutSpot(pane: HTMLElement, el: Element) {
   let x = 0;
   let y = 0;
@@ -2181,12 +2181,9 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
   const flight = useRef<{ el: HTMLElement; x: Follower; y: Follower; s: MotionValue<number>; sx: MotionValue<number>; sy: MotionValue<number> } | null>(null);
   const [, rerender] = useState(0);
 
-  // Where the avatar of an agent's activity shows: where it is laid out, and how far its row is drawn from there as
-  // the list moves (virtual/pace.ts).
-  const home = (avatar: HTMLElement) => {
-    const at = layoutSpot(list.current!, avatar);
-    return { x: at.x, y: at.y + Pace.drawnOff(avatar.closest("[data-vk]")) };
-  };
+  // Where the avatar of an agent's activity shows: where it is laid out, its row where the list draws it as it moves
+  // (virtual/pace.ts, by relative position, which layout counts).
+  const home = (avatar: HTMLElement) => layoutSpot(list.current!, avatar);
   const launch = (pane: HTMLElement, avatar: HTMLElement) => {
     const el = avatar.cloneNode(true) as HTMLElement;
     el.classList.add(css.avatarFlying);
@@ -2282,8 +2279,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
     // Where the message's avatar is once the message is out: waiting, the message takes back the list's gap above it.
     const landed = () => {
       const at = layoutSpot(pane, landing!);
-      const y = at.y + Pace.drawnOff(message!.closest("[data-vk]"));
-      return message!.hasAttribute("data-held") ? { x: at.x, y: y - parseFloat(getComputedStyle(message!).marginTop) } : { x: at.x, y };
+      return message!.hasAttribute("data-held") ? { x: at.x, y: at.y - parseFloat(getComputedStyle(message!).marginTop) } : at;
     };
     // Each frame the avatar is sent on to where it goes, read anew; `arrived`, once it is there (put exactly there).
     const follow = (to: () => { x: number; y: number }, arrived?: () => void) => {

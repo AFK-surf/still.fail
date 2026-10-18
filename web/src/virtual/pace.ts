@@ -6,7 +6,8 @@
 // where they are laid out. What is drawn is kept from jumping here: in each frame, how far each row has moved on screen
 // for any reason but the reader's own scroll (a message come at the end and the pane gone down to it, the agent's
 // activity making way, something closing above) is taken back by drawing the row that far from where it is laid out
-// (its CSS `translate`, apart from the `transform` its own motions use), and that distance goes to nothing by the law.
+// (relatively positioned that far, `top`: not a transform, which would make each row moving a layer of its own and the
+// frosted composer over the list lose what is behind it for a frame as it does), and that distance goes to nothing by the law.
 // Every row moved in the same frame goes by the same change (`Wave`: one rate, one start), so rows moved together stay
 // together; changes under way add up, each going on from where it is.
 //
@@ -159,12 +160,6 @@ export class Pace {
     return { finished, cancel: () => { this.movers.delete(mover); } };
   }
 
-  /** How far `row` is drawn from where it is laid out (what of a move it is still taking back). */
-  static drawnOff(row: Element | null | undefined): number {
-    const t = row instanceof HTMLElement ? row.style.translate : "";
-    return t ? parseFloat(t.split(" ")[1] ?? "0") || 0 : 0;
-  }
-
   /** The list is gone: nothing drawn off any longer. */
   stop(): void {
     cancelAnimationFrame(this.frame);
@@ -206,7 +201,8 @@ export class Pace {
       if (row.shares.length) busy = true;
       if (Math.abs(off) < 0.05) off = 0;
       if (off !== row.drawn) {
-        row.el.style.translate = off ? `0 ${off}px` : "";
+        if (off) Object.assign(row.el.style, { position: "relative", top: `${off}px` });
+        else { row.el.style.removeProperty("top"); row.el.style.removeProperty("position"); }
         row.drawn = off;
       }
       if (row.y + (this.model.sizes.get(key)?.height ?? 0) > 0 && row.y < top) { top = row.y; this.lag = off; }
