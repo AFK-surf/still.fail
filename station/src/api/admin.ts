@@ -2,6 +2,8 @@
 // it, gathered from src/api/routes (one module a part of the API). Reads go to the readers (off the main thread); what
 // is not here answers 404 as an unknown route does.
 import { join } from "node:path";
+import type { ConfigFile } from "../ops/config.ts";
+import type { Cloud } from "../cloud/state.ts";
 import type { ScreenHub } from "../screens/hub.ts";
 import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
@@ -75,7 +77,15 @@ export type Tools = {
 
 /// What the admin API answers with besides the readers: the write side, once there.
 export type AdminDeps = {
-  events?: Events; store?: Store; host?: Host; agents?: AgentsParts; clock?: Clock.Clock; screens?: ScreenHub;
+  events?: Events; store?: Store; host?: Host; clock?: Clock.Clock; screens?: ScreenHub;
+  /// The agents' side: made after the admin API in the station (services.ts AgentsSide), so asked for as a request comes;
+  /// given whole in tests, its routes then made here too (`agentsRoutes`).
+  agents?: AgentsParts | (() => AgentsParts | undefined);
+  /// config.json, the data directory and where the station stands with its control plane, for the platform's routes
+  /// (the drive, the device tools, the workspaces); the agents' when not given (tests).
+  config?: ConfigFile;
+  data?: string;
+  cloud?: Cloud;
   /// still.fail Helper (macOS): the drive's protected folders go through it.
   helper?: HelperApp | null;
   /// What macOS lets it do: one look at its grants and its window asking for them (the drive's, the page's).
@@ -111,6 +121,11 @@ export class Admin {
     this.deps = deps;
     this.readers = readers;
     this.host = deps.host ?? new Host(readers);
+    const agentsNow = () => (typeof deps.agents === "function" ? deps.agents() : deps.agents);
+    const given = typeof deps.agents === "function" ? undefined : deps.agents;
+    const config = deps.config ?? given?.config;
+    const data = deps.data ?? config?.data;
+    const cloud = deps.cloud ?? given?.cloud;
     const tools: Tools = {
       read: async (r, op, args) => {
         try {
@@ -123,42 +138,33 @@ export class Admin {
       events: deps.events,
       sessionExists: (key) => deps.store?.getSession(key) != null,
       store: deps.store,
-      agents: deps.agents,
+      get agents() {
+        return agentsNow();
+      },
     };
     this.tools = tools;
-    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
-      ...(deps.agents?.config ? deviceTools({ config: deps.agents.config, changed: () => deps.events?.overviewChanged() }) : []),
-      ...(deps.agents?.config ? agentEnv({ config: deps.agents.config, changed: () => deps.events?.overviewChanged(), restart: () => deps.agents!.hub.everyChanged() }) : []),
-      ...(deps.agents?.cloud ? workspaces({ cloud: deps.agents.cloud, data: deps.agents.config.data, changed: () => deps.events?.overviewChanged() }) : []),
-      ...(deps.agents?.config
+    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools),
+      ...(config ? deviceTools({ config, changed: () => deps.events?.overviewChanged() }) : []),
+      ...(cloud && data !== undefined ? workspaces({ cloud, data, changed: () => deps.events?.overviewChanged() }) : []),
+      ...(config && data !== undefined
         ? drive({
-            config: deps.agents.config,
+            config,
             // The station's, shared with the modules' local API (services.ts StationDrive); made here when not given (tests).
             drive:
               deps.drive ??
               stationDrive(
-                deps.agents.config,
-                () => deps.agents!.hub.config().profiles.map((p) => p.home),
+                config,
+                () => agentsNow()?.hub.config().profiles.map((p) => p.home) ?? [],
                 // The folders macOS keeps from the station, through still.fail Helper; their roots told again as its grants change.
-                // One with the agents' side (the directories people and agents name), where it made one.
-                deps.agents.helperFiles !== undefined
-                  ? deps.agents.helperFiles
+                given?.helperFiles !== undefined
+                  ? given.helperFiles
                   : deps.helper && platform.hasFolderPermissions
                     ? new HelperFiles({ helper: deps.helper, ...(deps.grants ? { grants: deps.grants } : {}), changed: () => deps.events?.overviewChanged() })
                     : null,
               ),
             changed: () => deps.events?.overviewChanged(),
             // Beside the files uploaded for a message (routes/hub.ts), swept as they are.
-            stage: (name) => uploadPath(join(deps.agents!.hub.config().dataDir, "uploads"), name),
-          })
-        : []),
-      ...(deps.agents?.xshare ? xshare({ xshare: deps.agents.xshare, store: deps.store }) : []),
-      ...(deps.agents?.accounts
-        ? accounts({
-            accounts: deps.agents.accounts,
-            sharing: deps.agents.sharing,
-            overview: (r) => deps.agents!.overview(r.viewer, r.lang),
-            ...(deps.store ? { policies: { store: deps.store, review: () => void reviewUndecided(deps.agents!.hub).catch(() => {}) } } : {}),
+            stage: (name) => uploadPath(join(data, "uploads"), name),
           })
         : []),
       // What macOS lets still.fail Helper do here, a grant asked for from a member's app (docs/remote-screens.md "Grants").
@@ -167,8 +173,8 @@ export class Admin {
       ...(deps.screens
         ? [{ method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) }]
         : []),
-      // The station as its settings pages show it.
-      ...(deps.agents?.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await deps.agents!.overview(r.viewer, r.lang))) }] : []),
+      // The agents' side's own (sessions/agents.ts says them as a part in the station; given whole, a test's).
+      ...(given ? agentsRoutes(given, { store: deps.store, events: deps.events }) : []),
     ];
   }
 
@@ -281,4 +287,24 @@ export class Admin {
     await Promise.all(Array.from({ length: Math.min(BATCH_AT_ONCE, paths.length) }, work));
     return json(200, `{"answers":[${answers.join(",")}]}`);
   }
+}
+
+/// The agents' side's routes (sessions/agents.ts says them as a part of the station): the station's and runtimes'
+/// updates, the variables its agents run with, chats shared with other workspaces, the profiles and accounts, and the
+/// overview as the settings pages show it.
+export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?: Events }): Route[] {
+  return [
+    ...(agents.updates ? updates({ updates: agents.updates }) : []),
+    ...(agents.config ? agentEnv({ config: agents.config, changed: () => deps.events?.overviewChanged(), restart: () => agents.hub.everyChanged() }) : []),
+    ...(agents.xshare ? xshare({ xshare: agents.xshare, store: deps.store }) : []),
+    ...(agents.accounts
+      ? accounts({
+          accounts: agents.accounts,
+          sharing: agents.sharing,
+          overview: (r) => agents.overview(r.viewer, r.lang),
+          ...(deps.store ? { policies: { store: deps.store, review: () => void reviewUndecided(agents.hub).catch(() => {}) } } : {}),
+        })
+      : []),
+    ...(agents.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await agents.overview(r.viewer, r.lang))) }] : []),
+  ];
 }

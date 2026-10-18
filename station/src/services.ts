@@ -17,7 +17,7 @@ import { type ControlPlaneShape, makeControlPlane } from "./cloud/plane.ts";
 import type { Provider } from "./cloud/provider.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
-import { Agents } from "./sessions/agents.ts";
+import type { AgentsParts } from "./sessions/agents.ts";
 import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
@@ -34,6 +34,9 @@ import { ConfigFile } from "./ops/config.ts";
 import { Own as OwnPaths } from "./ops/own.ts";
 import { previousGone } from "./ops/previous.ts";
 import { PeerBus } from "./mesh/bus.ts";
+import type { Outside } from "./mesh/peer.ts";
+import { Net } from "./jobs/load.ts";
+import type { PeerRoute } from "./tools/http.ts";
 import { StationParts } from "./parts.ts";
 import { wall } from "./ops/fibers.ts";
 
@@ -284,6 +287,22 @@ export class Peers extends Context.Service<Peers, PeerBus>()("stillfail/Peers") 
   static readonly layer = Layer.sync(Peers, () => new PeerBus({ sleep: (ms) => wall.sleep(ms) }));
 }
 
+/// What the mesh (mesh/mesh.ts) shares with the agents' side, each filled by the one that has it: the relay link as the
+/// mesh sees it (`net`, told to other stations with this one's load), the mesh's way to other stations' web services
+/// (`peers`, the agents' door's /peer requests), and what the agents say: the stations of other workspaces this one
+/// shares chats with (`outside`), a port of another station forwarded here (`forwarded`), the runtimes its device tools
+/// see (`runtimes`). The mesh no longer reaches into the agents' side.
+export type MeshSideShape = {
+  readonly net: Net;
+  readonly peers: { route: PeerRoute | null };
+  outside: Outside | null;
+  forwarded: (port: number) => boolean;
+  runtimes: () => string[];
+};
+export class MeshSide extends Context.Service<MeshSide, MeshSideShape>()("stillfail/MeshSide") {
+  static readonly layer = Layer.sync(MeshSide, (): MeshSideShape => ({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [] }));
+}
+
 /// The station's parts in its own process (parts.ts): what each adds to the admin API, the overview and the agents'
 /// tools, said as it is made.
 export class Parts extends Context.Service<Parts, StationParts>()("stillfail/Parts") {
@@ -316,14 +335,22 @@ export class StationDrive extends Context.Service<StationDrive, Drive>()("stillf
   );
 }
 
-/// The admin API. Made after the agents' side (it runs sessions and jobs for the pages); the agents do not need it.
+/// The agents' side once it is made (sessions/agents.ts sets it): the admin API is made before it and asks for it as a
+/// request comes; nothing of the platform waits on it.
+export class AgentsSide extends Context.Service<AgentsSide, { current: AgentsParts | null }>()("stillfail/AgentsSide") {
+  static readonly layer = Layer.sync(AgentsSide, () => ({ current: null }));
+}
+
+/// The admin API: the platform's routes, the agents' side's as a request comes (AgentsSide), the parts' (parts.ts).
 export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/AdminApi") {
   static readonly layer = Layer.effect(
     AdminApi,
     Effect.gen(function* () {
+      const side = yield* AgentsSide;
+      const config = yield* StationConfig;
       return new Admin(yield* Readers, {
-        store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents, screens: yield* ScreenRegistry, helper: yield* Helper, grants: yield* Grants,
-        drive: yield* StationDrive, modules: yield* Modules, parts: yield* Parts,
+        store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: () => side.current ?? undefined, screens: yield* ScreenRegistry, helper: yield* Helper, grants: yield* Grants,
+        drive: yield* StationDrive, modules: yield* Modules, parts: yield* Parts, config, data: (yield* Paths).data, cloud: (yield* ControlPlane).state,
       });
     }),
   );

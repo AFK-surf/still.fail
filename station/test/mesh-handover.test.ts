@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import { Effect, Fiber, Layer } from "effect";
 import { MeshLive } from "../src/mesh/mesh.ts";
-import { Agents, type AgentsParts } from "../src/sessions/agents.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../src/services.ts";
+import { Net } from "../src/jobs/load.ts";
+import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../src/services.ts";
 import type { Mesh } from "../src/mesh/native.ts";
 import { memoryMesh } from "./memory-mesh.ts";
 import { StationParts } from "../src/parts.ts";
@@ -22,7 +22,7 @@ function startup(t: TestContext, bindAddr: string | undefined) {
   const binding = Promise.withResolvers<void>();
   let calls = 0;
   const inputs = Layer.mergeAll(
-    Layer.succeed(Agents)({} as AgentsParts),
+    Layer.succeed(MeshSide)({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [] }),
     Layer.succeed(Previous)({ gone: previous.promise }),
     Layer.succeed(Own)(null!),
     Layer.succeed(Peers)(null!),

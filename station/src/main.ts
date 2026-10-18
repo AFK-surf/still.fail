@@ -28,7 +28,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AgentsSide, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
 import { ModulesLive } from "./modules/live.ts";
 import { VaultLive } from "./vault/module.ts";
 import { AdbLive } from "./adb/module.ts";
@@ -159,7 +159,11 @@ function run() {
     Layer.provideMerge(Previous.layer),
     // The requests between the stations of the workspace (mesh/bus.ts): the mesh attaches them, the parts answer.
     Layer.provideMerge(Peers.layer),
+    // What the mesh and the agents' side share, each filling in its own (services.ts MeshSide).
+    Layer.provideMerge(MeshSide.layer),
     Layer.provideMerge(Parts.layer),
+    // The agents' side, once made (the admin API asks for it as a request comes).
+    Layer.provideMerge(AgentsSide.layer),
     Layer.provideMerge(parts),
   );
   const main = Effect.gen(function* () {

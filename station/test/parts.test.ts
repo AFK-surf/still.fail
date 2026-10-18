@@ -3,7 +3,7 @@
 // through the agents' door as they are added.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Admin } from "../src/api/admin.ts";
+import { Admin, agentsRoutes } from "../src/api/admin.ts";
 import type { Request } from "../src/api/request.ts";
 import { StationParts } from "../src/parts.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
@@ -51,4 +51,16 @@ test("a part's tools reach the agents' door as they are added", async () => {
   parts.tools([{ name: "secret_list", description: "", inputSchema: {}, run: async (session) => `listed for ${session}` }]);
   assert.deepEqual((await call("tools/list", {})).result.tools.map((t: any) => t.name), ["chat_post", "secret_list"]);
   assert.equal((await call("tools/call", { name: "secret_list", arguments: {} })).result.content[0].text, "listed for s1");
+});
+
+test("the agents' side, made after the admin API: asked for as a request comes, its routes a part", async () => {
+  const parts = new StationParts();
+  let side: any = undefined;
+  const admin = new Admin(readers, { parts, agents: () => side });
+  // Before it is made: the sessions' writes wait for it, its own routes are not there yet.
+  assert.deepEqual(await ask(admin, member, "POST", "/sessions"), [503, { error: "station starting" }]);
+  assert.equal((await ask(admin, member, "GET", "/overview"))[0], 404);
+  side = { overview: async (v: { sub: string }) => ({ viewer: v.sub }) };
+  parts.routes(agentsRoutes(side, {}));
+  assert.deepEqual(await ask(admin, member, "GET", "/overview"), [200, { viewer: "u" }]);
 });

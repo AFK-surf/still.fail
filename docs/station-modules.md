@@ -111,6 +111,8 @@ station 按这个成员套用 drive 的规则（docs/drive.md）：viewer 只能
 
 agents 那一侧的部分（slack）还要跟着 agents 的节奏：`Agents` 给它们几个钩子。`surfaces` 说 connect 的聊天在哪里，hub 从那里收、往那里发；`slackView` 提供 overview 里 connect 的状态；`along` 注册几件事，agents 会按自己需要的顺序 await 它们：会话接管之后、恢复之前（`taken`），station 进入 workspace 时（`joined`），离开时、会话挂起之后（`left`），某个加入的 workspace 进出时（`changed`）。agents 要等 station 整个装好（所有部分都挂上了，`Up`）才接管会话。部分比 agents 后构造、先关闭，所以 Slack 会在会话交接之前断开，事件从这时起交给下一个进程。
 
+聊天和 agent 的核心（hub、会话、jobs、远程任务、账号、共享）本身也是这样一个部分：平台（mesh、drive、进程外模块、services、管理 API）不 import 它，只经平台的服务和它打交道：`AgentsSide`（agents 构造好后放在这里，管理 API 的会话和聊天路由在请求进来时才去问）、`MeshSide`（mesh 和 agents 各自往里填：relay 状态、站间网页转发、端口转发、跨 workspace 的请求、设备工具看到的 runtime）、`Parts`（agents 自己的路由：更新、环境变量、跨 workspace 共享、账号、overview）。`station/test/platform-apart.test.ts` 守着这条：平台的文件只能 import agents 的类型。
+
 ## 用到就装上，也能在 app 里开关（api/routes/modules.ts）
 
 still.fail 做的模块（`modules/catalog.ts`）不用任何人去开：`/m/<id>/…` 第一次被请求而 config.json 里还没有它时，station 自己写上 `{id, package: id}`，照常下载、验签、启动，这期间请求答 503 `{code: "module_starting"}`，客户端过一会儿再问（媒体模块的事件流本来就每 5 秒重连，连上就把显示着的 topic 重读一遍）。owner 和 admin 关掉过的（`enabled: false`）不会这样被装回来。
