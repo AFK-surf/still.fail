@@ -15,8 +15,8 @@ import { Icon, Icons } from "../ui/Icon";
 import { Ease } from "../ui/Motion";
 import { SectionHeader, reducedMotion } from "../ui/Parts";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
-import { useC, withAlpha } from "../ui/Theme";
+import { sp, T } from "../ui/Text";
+import { dp, useC, withAlpha } from "../ui/Theme";
 import { ChatRowBody } from "./Home";
 import { keyboard } from "../ui/Keyboard";
 
@@ -144,8 +144,10 @@ export function SearchPage({ scope, from, wide, onLeave = () => {}, onClose }: {
                   cursorColor={C.accent}
                   selectionColor={withAlpha(C.accent, 0.4)}
                   returnKeyType="search"
+                  // The keyboard's search key leaves it up, the field focused (Kotlin's ImeAction.Search, no action of its own).
+                  submitBehavior="submit"
                   accessibilityLabel={t("android-chat.search.field")}
-                  style={{ fontSize: 16, color: C.ink, padding: 0, margin: 0, includeFontPadding: false }}
+                  style={{ fontSize: sp(16), color: C.ink, padding: 0, margin: 0, includeFontPadding: false }}
                 />
               </View>
             </Smooth>
@@ -205,7 +207,7 @@ function FoundRow({ found, words }: { found: FoundMessage; words: string[] | und
     <Pressable
       onPress={() => app.push({ kind: "Chat", station: found.station, of: page(found.chat), at: found.seq, words })}
       android_ripple={{ color: withAlpha(C.ink, 0.1) }}
-      style={{ height: 66, paddingLeft: 22, paddingRight: 16, justifyContent: "center" }}
+      style={{ height: dp(66), paddingLeft: 22, paddingRight: 16, justifyContent: "center" }}
     >
       <View style={{ height: 22, flexDirection: "row", alignItems: "center", gap: 8 }}>
         <T size={15} line={22} color={C.ink} numberOfLines={1} ellipsizeMode="tail" style={{ flex: 1, minWidth: 0 }}>{found.chat.title}</T>

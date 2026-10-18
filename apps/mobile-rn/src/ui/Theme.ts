@@ -1,7 +1,7 @@
 // The mobile concept's look (ui/Theme.kt): warm paper, ink, and one still.fail orange that means "this needs you".
 // The palette in use comes from the prefs' appearance (system, light, dark), as the Android app picks it.
 import { createContext, createElement, useContext, type ReactNode } from "react";
-import { useColorScheme } from "react-native";
+import { PixelRatio, useColorScheme } from "react-native";
 import { usePrefs } from "../../../../web/src/prefs.ts";
 
 export interface StillFailColors {
@@ -54,6 +54,17 @@ export function useC(): StillFailColors {
 
 /** Raised (ui/Glass.kt): what floats over the page, white in light and a step up in dark. */
 export const raised = (c: StillFailColors) => (c.dark ? "#2A2C31" : "#FFFFFF");
+
+/**
+ * A Compose dp as Compose lays it out: whole pixels (Dp.roundToPx, half up), each padding, size and gap on its own.
+ * Yoga keeps the fractions and rounds only where things land, so at 2.625 a 12dp padding is 31.5 px here and 32 in
+ * Kotlin: a page of rows drifted a pixel a row (its sections 8–10 px higher by its middle), a meter's ten 7dp cells
+ * and their gaps came out 6 px wider. Given the shared parts' numbers, they land on Kotlin's pixels.
+ */
+export function dp(n: number): number {
+  const k = PixelRatio.get();
+  return Math.round(n * k) / k;
+}
 
 /** The code face: JetBrains Mono, carried in the app (assets/fonts), not the system's monospace. */
 export const CODE_FONT = "JetBrainsMono";

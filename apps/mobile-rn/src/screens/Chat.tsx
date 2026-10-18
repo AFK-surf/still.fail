@@ -217,10 +217,10 @@ function ChatBar({ station, of, view, agents, onLayout }: { station: string; of:
           trailing={
             <>
               <Expanding visible={canArchive} axis="x" from="end">
-                <View accessibilityLabel={t("android-chat.archive")}>
+                <View>
                   {archiving
-                    ? <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center" }}><Spinner /></View>
-                    : <NavButton icon={Icons.Archive} onClick={() => { if (canArchive && session != null) archiveChat(app, station, view, session); }} />}
+                    ? <View accessible accessibilityLabel={t("android-chat.archive")} style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center" }}><Spinner /></View>
+                    : <NavButton icon={Icons.Archive} label={t("android-chat.archive")} onClick={() => { if (canArchive && session != null) archiveChat(app, station, view, session); }} />}
                 </View>
               </Expanding>
               {(jobs.value?.jobs?.length ?? 0) > 0 && (
@@ -267,7 +267,7 @@ function BarFrame({ title, more, onMore = () => undefined, style, onLayout, line
           {children}
         </View>
         {trailing}
-        {more && <View accessibilityLabel={t("android-chat.info.title")}><NavButton icon={Icons.More} onClick={onMore} /></View>}
+        {more && <NavButton icon={Icons.More} label={t("android-chat.info.title")} onClick={onMore} />}
       </View>
       {line && <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 0.5, backgroundColor: C.line }} />}
     </View>

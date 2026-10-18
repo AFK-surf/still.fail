@@ -25,7 +25,7 @@ import { BarAction } from "../ui/Bar";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { Smooth } from "../ui/Smooth";
 import { T } from "../ui/Text";
-import { useC, withAlpha } from "../ui/Theme";
+import { dp, useC, withAlpha } from "../ui/Theme";
 import { Spinner, WaitShape, Waiting, breathing, rememberBreath } from "../ui/Waiting";
 import { RetryPill } from "./Connection";
 import { PlacePage } from "./PlacePage";
@@ -55,7 +55,7 @@ export function joinedMark(s: StationView): string | null {
 export function TopBack({ label, onBack, trailing }: { label: string; onBack: () => void; trailing?: ReactNode }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ alignSelf: "stretch", paddingTop: insets.top + 6, paddingLeft: 10, paddingRight: 10, paddingBottom: 4, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+    <View style={{ alignSelf: "stretch", paddingTop: insets.top + dp(6), paddingLeft: dp(10), paddingRight: dp(10), paddingBottom: dp(4), flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
       <NavBack label={label} onClick={onBack} />
       {trailing}
     </View>

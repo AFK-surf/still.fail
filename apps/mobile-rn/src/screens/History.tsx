@@ -27,7 +27,7 @@ import { Markdown } from "../ui/Markdown";
 import { Ease } from "../ui/Motion";
 import { MakerIcon, Mark, MeterChips, ModelMark, NavBar, NavButton, ProviderMark, QuotaChip, QuotaRings, Seg, SlackMark } from "../ui/Parts";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { Mono, useC, withAlpha } from "../ui/Theme";
 import { ToolStepBody } from "../ui/ToolStep";
 import { BusyIcon, WaitLine, WaitShape, Waiting } from "../ui/Waiting";
@@ -61,7 +61,7 @@ export function HistoryScreen({ station, of, sessionKey: key, entry = null }: { 
         onBack={() => app.pop()}
         title={t("android-chat.history.title")}
         trailing={title != null && link != null ? () => (
-          <View accessibilityLabel={t("web-mobile.history.copyLink")}><NavButton icon={Icons.Copy} onClick={() => copyChatLink(app, title, link)} /></View>
+          <NavButton icon={Icons.Copy} label={t("web-mobile.history.copyLink")} onClick={() => copyChatLink(app, title, link)} />
         ) : null}
       />
       <HistoryContent station={station} of={of} sessionKey={key} entry={entry} />
@@ -610,7 +610,7 @@ function Folding({ name, hint, meta, failed, body }: { name: string; hint: strin
       >
         <T size={13} color={failed ? C.red : C.ink} weight={hint != null ? "500" : undefined} numberOfLines={1} style={hint == null ? { flex: 1, minWidth: 0 } : { maxWidth: 160 }}>{name}</T>
         {/* The hint takes all the width the name and meta leave: two weights would cut it at half the row. */}
-        {hint != null && <Text numberOfLines={1} style={[Mono, { fontSize: 12, color: C.muted, flexShrink: 1, includeFontPadding: false }]}>{hint}</Text>}
+        {hint != null && <Text numberOfLines={1} style={[Mono, { fontSize: sp(12), color: C.muted, flexShrink: 1, includeFontPadding: false }]}>{hint}</Text>}
         {meta != null && meta !== "" && <T size={11} color={failed ? C.red : C.subtle}>{meta}</T>}
       </Pressable>
       {open && body()}

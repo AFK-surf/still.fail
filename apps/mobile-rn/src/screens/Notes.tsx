@@ -9,7 +9,7 @@ import { Icons } from "../ui/Icon";
 import { Ease } from "../ui/Motion";
 import { IconIn, ripple } from "../ui/Parts";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { raised, useC, withAlpha } from "../ui/Theme";
 
 /** A numbered note, as its box and card show it (NoteBox, Card): a passage of a message's, or a mark on an image (ImageMarks.tsx). */
@@ -82,7 +82,7 @@ export function NoteBox({ note, modifier, onDone, onRemove }: { note: NoteLike; 
               multiline
               cursorColor={C.accent}
               selectionColor={withAlpha(C.accent, 0.4)}
-              style={{ fontSize: 16, lineHeight: 21, color: C.ink, padding: 0, includeFontPadding: false, maxHeight: 21 * 8 }}
+              style={{ fontSize: sp(16), lineHeight: 21, color: C.ink, padding: 0, includeFontPadding: false, maxHeight: 21 * 8 }}
             />
           </View>
           <Pressable accessibilityLabel={t("android-chat.annotate.done")} onPress={onDone} android_ripple={ripple(C.bg)} style={{ width: 36, height: 36, borderRadius: 18, overflow: "hidden", backgroundColor: C.ink, alignItems: "center", justifyContent: "center" }}>

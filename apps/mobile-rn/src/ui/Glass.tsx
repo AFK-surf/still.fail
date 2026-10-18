@@ -111,7 +111,9 @@ export function FootGlass({ style, children }: { style?: StyleProp<ViewStyle>; c
 export function Floating({ radius, tint, style, children }: { radius: number; tint?: string; style?: StyleProp<ViewStyle>; children?: ReactNode }) {
   const C = useC();
   return (
-    <Smooth radius={radius} style={[{ elevation: 1, shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 1, shadowOffset: { width: 0, height: 0.5 } }, style]}>
+    // Kotlin's shadow(1.dp) in black at 30% (ambient and spot): Android draws an elevation's shadow in shadowColor, alpha
+    // and all (shadowOpacity is iOS's), so the 30% is in the colour; plain black was a darker rim under the capsule.
+    <Smooth radius={radius} style={[{ elevation: 1, shadowColor: "#0000004D", shadowOpacity: 0.3, shadowRadius: 1, shadowOffset: { width: 0, height: 0.5 } }, style]}>
       <Frost tint={tint ?? raised(C)} alpha={0.72} px={20} style={StyleSheet.absoluteFill} />
       {children}
     </Smooth>

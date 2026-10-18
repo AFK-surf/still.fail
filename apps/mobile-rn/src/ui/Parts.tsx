@@ -16,7 +16,7 @@ import { useUi } from "./Host";
 import { Ease } from "./Motion";
 import { Smooth } from "./Smooth";
 import { T } from "./Text";
-import { lerpColor, useC, withAlpha, type StillFailColors } from "./Theme";
+import { dp, lerpColor, useC, withAlpha, type StillFailColors } from "./Theme";
 import { Quiet } from "./Quiet";
 
 /**
@@ -348,7 +348,7 @@ export function QuotaDials({ quota, modifier: modifier_, style = modifier_ }: { 
  */
 export function MeterDials({ meters, modifier: modifier_, style = modifier_ }: { meters: Meter[]; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   return (
-    <View style={[style, { alignSelf: "stretch", flexDirection: "row", gap: 16 }]}>
+    <View style={[style, { alignSelf: "stretch", flexDirection: "row", gap: dp(16) }]}>
       {meters.map((m, i) => <Dial key={i} number={m.big} unit={m.unit} fill={usedOf(m.left)} level={m.level} label={m.title} note={m.total} style={{ flex: 1, minWidth: 0 }} />)}
     </View>
   );
@@ -361,13 +361,13 @@ function Dial({ number, unit, fill, level, label, note, style }: { number: strin
   const low = level === "amber" || level === "red";
   const lit = Math.round(fill / 10);
   return (
-    <View style={[style, { gap: 2 }]}>
+    <View style={[style, { gap: dp(2) }]}>
       <View style={{ flexDirection: "row", alignItems: "flex-end" }}>
         <T size={28} line={32} weight="600" style={{ letterSpacing: -0.56 }} color={low ? tone : C.ink} numberOfLines={1}>{number}</T>
         <T size={15} line={26} weight="500" color={C.muted} style={{ paddingLeft: 1 }} numberOfLines={1}>{unit}</T>
       </View>
-      <View style={{ flexDirection: "row", paddingTop: 4, paddingBottom: 6, gap: 2 }}>
-        {Array.from({ length: 10 }, (_, i) => <View key={i} style={{ width: 7, height: 14, borderRadius: 2, backgroundColor: i < lit ? tone : C.chip }} />)}
+      <View style={{ flexDirection: "row", paddingTop: dp(4), paddingBottom: dp(6), gap: dp(2) }}>
+        {Array.from({ length: 10 }, (_, i) => <View key={i} style={{ width: dp(7), height: dp(14), borderRadius: 2, backgroundColor: i < lit ? tone : C.chip }} />)}
       </View>
       <T size={13} weight="500" color={C.ink} numberOfLines={1}>{label}</T>
       <T size={12} color={C.muted} numberOfLines={1}>{note ?? " "}</T>
@@ -560,8 +560,8 @@ export function NavBack({ label, onClick }: { label: string; onClick: () => void
   const C = useC();
   return (
     <Smooth radius={8}>
-      <Pressable onPress={onClick} android_ripple={ripple(C.ink)} style={{ flexDirection: "row", alignItems: "center", paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
-        <IconIn icon={Icons.ChevronLeft} size={22} tint={C.accent} />
+      <Pressable onPress={onClick} android_ripple={ripple(C.ink)} style={{ flexDirection: "row", alignItems: "center", paddingRight: dp(6), paddingTop: dp(4), paddingBottom: dp(4) }}>
+        <IconIn icon={Icons.ChevronLeft} size={dp(22)} tint={C.accent} />
         <T size={17} color={C.accent}>{label}</T>
       </Pressable>
     </Smooth>
@@ -569,12 +569,13 @@ export function NavBack({ label, onClick }: { label: string; onClick: () => void
 }
 
 /** A round chip-colored button in a bar. */
-export function NavButton({ icon, onClick, iconSize = 18 }: { icon: IconPaths; onClick: () => void; iconSize?: number }) {
+export function NavButton({ icon, onClick, iconSize = 18, label }: { icon: IconPaths; onClick: () => void; iconSize?: number; label?: string }) {
   const C = useC();
-  // The icon alone, no disc behind it: a bar's buttons are quiet.
+  // The icon alone, no disc behind it: a bar's buttons are quiet. `label`: what Compose's semantics on the Box round it
+  // say (a label on a plain View round the Pressable is not read out, nor seen by uiautomator).
   return (
-    <View style={{ width: 34, height: 34, borderRadius: 17, overflow: "hidden" }}>
-      <Pressable onPress={onClick} android_ripple={ripple(C.ink)} style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center" }}>
+    <View style={{ width: dp(34), height: dp(34), borderRadius: 17, overflow: "hidden" }}>
+      <Pressable onPress={onClick} accessibilityLabel={label} android_ripple={ripple(C.ink)} style={{ width: dp(34), height: dp(34), alignItems: "center", justifyContent: "center" }}>
         <IconIn icon={icon} size={iconSize} />
       </Pressable>
     </View>
@@ -587,7 +588,7 @@ export function NavBar({ back, onBack, title, sub, trailing }: { back: string; o
   const insets = useSafeAreaInsets();
   return (
     <View style={{ alignSelf: "stretch", backgroundColor: C.bg, paddingTop: insets.top }}>
-      <View style={{ paddingLeft: 10, paddingRight: 16, paddingTop: 6, paddingBottom: 10, minHeight: 6 + 32 + 10 }}>
+      <View style={{ paddingLeft: dp(10), paddingRight: dp(16), paddingTop: dp(6), paddingBottom: dp(10), minHeight: dp(6) + dp(32) + dp(10) }}>
         {/* As the web's (mobile/parts.css.ts mNavbar): the buttons and the title's first line share one 32dp line at the
             top; a title's second line (sub) hangs below it rather than pushing the title up off the back button's line. */}
         <View style={{ alignSelf: "stretch", paddingHorizontal: 84, alignItems: "center" }}>
@@ -611,7 +612,7 @@ export function LargeTitle({ small, big, lead }: { small: string; big: string; l
   const C = useC();
   const word = <T size={32} weight="700" color={C.ink} style={{ letterSpacing: -0.6 }}>{big}</T>;
   return (
-    <View style={{ paddingLeft: 16, paddingRight: 16, paddingBottom: 6 }}>
+    <View style={{ paddingLeft: dp(16), paddingRight: dp(16), paddingBottom: dp(6) }}>
       {small.length > 0 && <T size={13} color={C.muted}>{small}</T>}
       {lead == null ? word : <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>{slot(lead)}{word}</View>}
     </View>
@@ -623,7 +624,7 @@ export function LargeTitle({ small, big, lead }: { small: string; big: string; l
 export function SectionHeader({ title, trailing, start = 20 }: { title: string; trailing?: string | null; start?: number }) {
   const C = useC();
   return (
-    <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "flex-end", paddingLeft: start, paddingRight: 20, paddingTop: 14, paddingBottom: 6 }}>
+    <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "flex-end", paddingLeft: dp(start), paddingRight: dp(20), paddingTop: dp(14), paddingBottom: dp(6) }}>
       <T size={15} weight="600" color={C.ink}>{title}</T>
       <View style={{ flex: 1 }} />
       {trailing != null && <T size={13} color={C.muted}>{trailing}</T>}
@@ -634,9 +635,9 @@ export function SectionHeader({ title, trailing, start = 20 }: { title: string; 
 export function Card({ modifier: modifier_, style = modifier_, onClick, content, children: kids }: { modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; onClick?: (() => void) | null; content?: Slot; children?: ReactNode }) {
   const C = useC();
   const children = content != null ? slot(content) : kids;
-  const inner: ViewStyle = { paddingHorizontal: 16, paddingVertical: 14 };
+  const inner: ViewStyle = { paddingHorizontal: dp(16), paddingVertical: dp(14) };
   return (
-    <View style={[style, { paddingHorizontal: 12, paddingBottom: 10, alignSelf: "stretch" }]}>
+    <View style={[style, { paddingHorizontal: dp(12), paddingBottom: dp(10), alignSelf: "stretch" }]}>
       <Smooth radius={20} style={{ backgroundColor: C.surface }}>
         {onClick != null
           ? <Pressable onPress={onClick} android_ripple={ripple(C.ink)} style={inner}>{children}</Pressable>
@@ -651,7 +652,7 @@ export function ListCard({ modifier: modifier_, style = modifier_, content, chil
   const C = useC();
   const children = content != null ? slot(content) : kids;
   return (
-    <View style={[style, { paddingHorizontal: 12, paddingBottom: 10, alignSelf: "stretch" }]}>
+    <View style={[style, { paddingHorizontal: dp(12), paddingBottom: dp(10), alignSelf: "stretch" }]}>
       <Smooth radius={16} style={{ backgroundColor: C.surface }}>{children}</Smooth>
     </View>
   );
@@ -660,7 +661,7 @@ export function ListCard({ modifier: modifier_, style = modifier_, content, chil
 export function ListRow({ onClick, content, children: kids }: { onClick?: (() => void) | null; content?: Slot; children?: ReactNode }) {
   const C = useC();
   const children = content != null ? slot(content) : kids;
-  const row: ViewStyle = { alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 };
+  const row: ViewStyle = { alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: dp(12), paddingHorizontal: dp(16), paddingVertical: dp(12) };
   if (onClick == null) return <View style={row}>{children}</View>;
   return <Pressable onPress={onClick} android_ripple={ripple(C.ink)} style={row}>{children}</Pressable>;
 }

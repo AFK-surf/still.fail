@@ -23,7 +23,7 @@ import type { IconPaths } from "../ui/IconSet";
 import { Frost } from "../ui/Glass";
 import { Ease } from "../ui/Motion";
 import { SMOOTH_SCALE, Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { CODE_FONT, lerpColor, useC, withAlpha } from "../ui/Theme";
 import { chatInk } from "../ui/ChatInk";
 import { fileSize } from "../ui/Controls";
@@ -730,7 +730,7 @@ function Viewer({ station, opened, gallery, onClose, flight, closing, canDraft, 
       {/* Over the image's sides, in the middle: to the one before and after. */}
       {(before !== null || after !== null) && !marks.on ? ([[before, "left"], [after, "right"]] as const).map(([to, side], i) => (to !== null ? (
         <Animated.View key={side} pointerEvents={show ? "auto" : "none"} style={[{ position: "absolute", top: 0, bottom: 0, [side]: 8, justifyContent: "center" }, chromeShown]}>
-          <View style={{ opacity: show ? 1 : 0, width: 36, height: 36, borderRadius: 18, elevation: 1, shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 1, shadowOffset: { width: 0, height: 0.5 } }}>
+          <View style={{ opacity: show ? 1 : 0, width: 36, height: 36, borderRadius: 18, elevation: 1, shadowColor: "#0000004D", shadowOpacity: 0.3, shadowRadius: 1, shadowOffset: { width: 0, height: 0.5 } }}>
             <Pressable disabled={!show} onPress={() => go(i === 0 ? -1 : 1)} android_ripple={{ color: withAlpha("#FFFFFF", 0.2), borderless: false }}
               style={{ width: 36, height: 36, borderRadius: 18, overflow: "hidden", backgroundColor: withAlpha(DarkCanvas, 0.8), alignItems: "center", justifyContent: "center" }}>
               <Icon icon={i === 0 ? Icons.ChevronLeft : Icons.ChevronRight} size={22} color={DarkText} />
@@ -1259,7 +1259,7 @@ function TextViewer({ bytes, kind, language, name, source, onTap }: { bytes: Uin
       </View>
     </ScrollView>
   );
-  else content = <Text style={{ fontFamily: CODE_FONT, fontSize: 12.5, lineHeight: 20.6, color: C.ink, paddingLeft: 16, paddingRight: 16, paddingTop: 60 + top, paddingBottom: 48 + bottom }}>{tx}</Text>;
+  else content = <Text style={{ fontFamily: CODE_FONT, fontSize: sp(12.5), lineHeight: 20.6, color: C.ink, paddingLeft: 16, paddingRight: 16, paddingTop: 60 + top, paddingBottom: 48 + bottom }}>{tx}</Text>;
   return (
     <ScrollView style={{ flex: 1 }} onTouchEnd={onTap}>
       {cut ? <Cut words={t("android-chat.file.cut", { size: fileSize(SHOW_LIMIT) })} top={top} /> : null}

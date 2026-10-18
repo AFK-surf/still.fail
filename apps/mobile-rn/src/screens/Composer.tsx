@@ -26,7 +26,7 @@ import { Ease } from "../ui/Motion";
 import { MakerIcon } from "../ui/Parts";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { concentric, Smooth, smoothMiddle } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { cjkRoom, sp, T, withRoom } from "../ui/Text";
 import { lerpColor, raised, useC, withAlpha } from "../ui/Theme";
 import { BusyIcon, Spinner, WaitLine } from "../ui/Waiting";
 import { openAttach, AttachLaunchers } from "./Attach";
@@ -792,13 +792,13 @@ function DraftQuoteCard({ draft, q }: { draft: Draft; q: DraftQuote }) {
       <View style={{ width: "100%" }}>
         <Text
           numberOfLines={2} ellipsizeMode="tail"
-          style={{ fontSize: 13, lineHeight: 19.5, color: ink.muted, paddingLeft: 16, paddingRight: 34, paddingTop: 9, includeFontPadding: false, letterSpacing: 0 }}
+          style={{ fontSize: sp(13), lineHeight: 19.5, color: ink.muted, paddingLeft: 16, paddingRight: 34, paddingTop: 9, includeFontPadding: false, letterSpacing: 0 }}
         >{quoteLine(q.author, q.text)}</Text>
         <View style={{ width: "100%", paddingLeft: 16, paddingRight: 16, paddingTop: 3, paddingBottom: 10 }}>
           {q.comment === "" && <T size={15} line={22} color={ink.subtle} style={{ position: "absolute", left: 16, top: 3 }}>{t("android-chat.quote.comment")}</T>}
           <TextInput
             ref={field} value={q.comment} onChangeText={(v) => { q.comment = v; }} multiline={false}
-            style={{ color: C.ink, fontSize: 15, lineHeight: 22, padding: 0, margin: 0, includeFontPadding: false, width: "100%" }}
+            style={{ color: C.ink, fontSize: sp(15), lineHeight: 22, padding: 0, margin: 0, includeFontPadding: false, width: "100%" }}
             cursorColor={C.accent} selectionColor={withAlpha(C.accent, 0.35)}
             returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => { draft.focus++; }}
           />
@@ -1006,6 +1006,9 @@ export function ComposerBar({
   // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
   const style = { ...SendTextStyle, color: C.ink };
   const lineHeight = (SendTextStyle as { lineHeight?: number }).lineHeight ?? 21;
+  // Empty, the field is as tall as its hint (Kotlin's decoration box holds it): a hint in Chinese a line of the CJK
+  // face's height (Text.tsx cjkRoom), taller than one of Latin words.
+  const hintRoom = draft.text === "" ? cjkRoom(SendTextStyle.fontSize, lineHeight, placeholder) : null;
   const locked = draft.locked || draft.starting;
   const expanded = draft.composerExpanded;
   const field = useRef<TextInput>(null);
@@ -1063,7 +1066,7 @@ export function ComposerBar({
         style={{ minHeight: 36, marginLeft: expanded ? 0 : 36 + gap, marginRight: expanded ? 0 : 36 + gap, paddingLeft: expanded ? 14 : 0, paddingRight: 14, paddingTop: 7, paddingBottom: 7, justifyContent: "center", marginTop: "auto" }}
       >
         {draft.text === "" && (
-          <Animated.Text numberOfLines={1} ellipsizeMode="tail" style={[style, { color: C.subtle, position: "absolute", left: expanded ? 14 : 0, right: 14 }, hintStyle]}>
+          <Animated.Text numberOfLines={1} ellipsizeMode="tail" style={[withRoom([style, { color: C.subtle, position: "absolute", left: expanded ? 14 : 0, right: 14 }], hintRoom), hintStyle]}>
             {placeholder}
           </Animated.Text>
         )}
@@ -1082,7 +1085,7 @@ export function ComposerBar({
           onFocus={() => { draft.focused = true; }} onBlur={() => { draft.focused = false; }}
           onLayout={(e: LayoutChangeEvent) => { setFieldWidth(e.nativeEvent.layout.width); measureField(); }}
           cursorColor={C.accent} selectionColor={withAlpha(C.accent, 0.35)}
-          style={[style, { width: "100%", maxHeight: lineHeight * 6, padding: 0, margin: 0, textAlignVertical: "top", includeFontPadding: false }]}
+          style={[style, { width: "100%", maxHeight: lineHeight * 6, padding: 0, margin: 0, textAlignVertical: "top", includeFontPadding: false }, hintRoom != null && { minHeight: lineHeight + hintRoom.top + hintRoom.bottom }]}
         >
           {marks}
         </TextInput>

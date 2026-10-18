@@ -17,7 +17,7 @@ import { Icons } from "../ui/Icon";
 import type { IconPaths } from "../ui/IconSet";
 import { IconIn, ripple, SectionHeader } from "../ui/Parts";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { useC, withAlpha } from "../ui/Theme";
 import { Spinner, Waiting } from "../ui/Waiting";
 import { PlacePage } from "./PlacePage";
@@ -112,18 +112,22 @@ function ArchiveSearch({ q, onChange }: { q: string; onChange: (q: string) => vo
     <View style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 4, paddingBottom: 8 }}>
       <Smooth radius={19} style={{ height: 38, backgroundColor: withAlpha(C.ink, 0.06), paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 8 }}>
         <IconIn icon={Icons.Search} size={17} tint={C.muted} />
-        <TextInput
-          value={q}
-          onChangeText={onChange}
-          placeholder={t("web-pages.archive.search")}
-          placeholderTextColor={C.muted}
-          accessibilityLabel={t("web-pages.archive.search")}
-          returnKeyType="search"
-          cursorColor={C.accent}
-          selectionColor={withAlpha(C.accent, 0.4)}
-          numberOfLines={1}
-          style={{ flex: 1, minWidth: 0, fontSize: 16, color: C.ink, padding: 0, includeFontPadding: false }}
-        />
+        {/* Its hint a Text of its own under the field, as Kotlin's (a TextInput's placeholder sits lower than a Text). */}
+        <View style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
+          {q.length === 0 && <T size={16} color={C.muted} numberOfLines={1} style={{ position: "absolute", left: 0, right: 0 }}>{t("web-pages.archive.search")}</T>}
+          <TextInput
+            value={q}
+            onChangeText={onChange}
+            accessibilityLabel={t("web-pages.archive.search")}
+            returnKeyType="search"
+            // The keyboard's search key leaves it up (Kotlin's ImeAction.Search, no action of its own).
+            submitBehavior="submit"
+            cursorColor={C.accent}
+            selectionColor={withAlpha(C.accent, 0.4)}
+            numberOfLines={1}
+            style={{ fontSize: sp(16), color: C.ink, padding: 0, margin: 0, includeFontPadding: false }}
+          />
+        </View>
       </Smooth>
     </View>
   );

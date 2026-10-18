@@ -24,7 +24,7 @@ import { Icons, type IconPaths } from "../ui/IconSet";
 import { Ease } from "../ui/Motion";
 import { IconIn } from "../ui/Parts";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { useC } from "../ui/Theme";
 import { WaitPill } from "../ui/Waiting";
 import { join, nameOf, parentOf } from "./DriveScreen";
@@ -315,7 +315,7 @@ function Playing({ station, root, path }: { station: string; root: string; path:
       {subtitlesOn && cues.length > 0 ? (
         <View pointerEvents="none" style={{ position: "absolute", left: 24, right: 24, bottom: insets.bottom + (shownNow > 0.5 ? 132 : 28), alignItems: "center" }}>
           <Smooth radius={6} style={{ backgroundColor: "rgba(0,0,0,0.35)", paddingHorizontal: 8, paddingVertical: 2 }}>
-            <Text style={{ fontSize: sideways ? 20 : 16, lineHeight: sideways ? 26 : 22, color: "#FFFFFF", textAlign: "center", textShadowColor: "#000000", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6, includeFontPadding: false }}>{cues}</Text>
+            <Text style={{ fontSize: sp(sideways ? 20 : 16), lineHeight: sideways ? 26 : 22, color: "#FFFFFF", textAlign: "center", textShadowColor: "#000000", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6, includeFontPadding: false }}>{cues}</Text>
           </Smooth>
         </View>
       ) : null}
@@ -361,7 +361,7 @@ function Playing({ station, root, path }: { station: string; root: string; path:
       <Animated.View style={[{ position: "absolute", bottom: insets.bottom, left: insets.left, right: insets.right, paddingHorizontal: 8, paddingVertical: 8, alignItems: "center" }, fade]} pointerEvents={controls ? "box-none" : "none"}>
         <Glass radius={20} style={{ width: "100%", maxWidth: 720 }}>
           <View onTouchStart={wake} style={{ paddingLeft: 6, paddingRight: 6, paddingTop: 8, paddingBottom: 4 }}>
-            <Text numberOfLines={1} style={[TNUM, { fontSize: 12, lineHeight: 12 * 1.4, color: Muted, paddingLeft: 10, includeFontPadding: false }]}>
+            <Text numberOfLines={1} style={[TNUM, { fontSize: sp(12), lineHeight: 12 * 1.4, color: Muted, paddingLeft: 10, includeFontPadding: false }]}>
               <Text style={{ color: Ink, fontWeight: "600" }}>{clock(position)}</Text>
               {` / ${duration > 0 ? clock(duration) : "--:--"}`}
             </Text>

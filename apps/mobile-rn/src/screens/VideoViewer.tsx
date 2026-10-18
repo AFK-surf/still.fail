@@ -15,7 +15,7 @@ import { app } from "../AppState";
 import { t } from "../i18n";
 import { Icon, Icons } from "../ui/Icon";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { CODE_FONT, useC, withAlpha } from "../ui/Theme";
 import { WaitPill } from "../ui/Waiting";
 import { Zoomable, ZoomState } from "../ui/Zoom";
@@ -241,7 +241,7 @@ export function VideoViewer({
                   const before = cut >= 0 ? sentence.substring(0, cut) : sentence;
                   const after = cut >= 0 ? sentence.substring(cut + 4) : "";
                   return (
-                    <Text numberOfLines={1} style={{ fontFamily: CODE_FONT, fontSize: 12, lineHeight: 12 * 1.4 }}>
+                    <Text numberOfLines={1} style={{ fontFamily: CODE_FONT, fontSize: sp(12), lineHeight: 12 * 1.4 }}>
                       <Text style={{ color: quiet }}>{before}</Text>
                       <Text style={{ color: "#F4F4F5", fontWeight: "600" }}>{`${at + 1}`}</Text>
                       <Text style={{ color: quiet }}>{after}</Text>
@@ -267,7 +267,7 @@ export function VideoViewer({
                       wake();
                     }}
                   >
-                    <Text style={{ fontFamily: CODE_FONT, fontSize: 12, lineHeight: 12 * 1.4, fontWeight: "600", color: "#F4F4F5" }}>{`${rate === 1 ? "1" : String(rate)}×`}</Text>
+                    <Text style={{ fontFamily: CODE_FONT, fontSize: sp(12), lineHeight: 12 * 1.4, fontWeight: "600", color: "#F4F4F5" }}>{`${rate === 1 ? "1" : String(rate)}×`}</Text>
                   </Pressable>
                 </Smooth>
                 <PictureButton icon={Icons.Camera} label={t("android-chat.video.saveFrame")} enabled={!playing && ready} onClick={() => {
@@ -366,7 +366,7 @@ export function AudioViewer({ file, name }: { file: string; name: string }) {
           <View style={{ flex: 1 }}>
             <Timeline start={0} end={duration * 1000} now={time * 1000} dark={false} onSeek={(us) => { if (ready) { player.currentTime = Math.floor(us / 1000) / 1000; setTime(Math.floor(us / 1000)); } }} />
           </View>
-          <Text style={{ fontSize: 12, lineHeight: 12 * 1.4, color: C.muted, fontFamily: CODE_FONT, paddingRight: 10 }}>{failed ? t("android-chat.video.playFailed") : `${short(time)} / ${short(duration)}`}</Text>
+          <Text style={{ fontSize: sp(12), lineHeight: 12 * 1.4, color: C.muted, fontFamily: CODE_FONT, paddingRight: 10 }}>{failed ? t("android-chat.video.playFailed") : `${short(time)} / ${short(duration)}`}</Text>
         </View>
       </Smooth>
     </View>

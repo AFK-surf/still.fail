@@ -9,7 +9,11 @@
 # with bounds); a screen not found is named in missing.txt and the rest go on. Labels are tried in Chinese and in
 # English. The screens: home-light, home-dark, home-filter-menu, bar-panel (the bottom bar drawn up: the other bars),
 # bar-second (the second bar chosen), chat-markdown (+ chat-markdown-up, scrolled up), chat-decision, chat-image,
-# composer (the composer focused, the keyboard closed; "LGTM" typed in where adb text input reaches the field), settings, stations, profiles, files.
+# composer (the composer focused, the keyboard closed; "LGTM" typed in where adb text input reaches the field),
+# chat-info (the chat's "…" sheet), agent-sheet (an agent's name in the chat tapped), history (its card's history row),
+# new-chat (the bar's action), search (the field over the chats, "station" looked for), archive (the filter menu's archived), settings
+# (+ workspace, usage, appearance, bar-settings: its rows), stations (+ station: its station's page), profiles, files
+# (+ drive-folder: still.fail, file-preview: its README.md).
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 TARGET=${1:?usage: shots.sh <package>/<activity> [out]}
@@ -127,8 +131,10 @@ if open_chat "Profile 页的头像裁剪" "~裁剪框从 64 dp"; then
   if xy=$(at --below $((H * 2 / 3)) "发消息" "~Message" "~回复" "~Reply" "@EditText"); then
     a shell input tap $xy
     sleep 2
+    # Typed into the IME (a pinyin keyboard composes Latin letters): enter commits them as they are.
     a shell input text "LGTM"
-    sleep 1
+    a shell input keyevent KEYCODE_ENTER
+    sleep 2
     keyboard_away
     shot composer
     # The draft taken out again (so the next run starts the same).
@@ -136,16 +142,61 @@ if open_chat "Profile 页的头像裁剪" "~裁剪框从 64 dp"; then
     for i in 1 2 3 4 5 6; do a shell input keyevent KEYCODE_DEL; done
     keyboard_away
   else miss composer "no composer field"; fi
+  # The chat's sheet ("…"), then an agent's card (its name over its message) and the history its card leads to.
+  if tap "~对话信息" "~Chat info"; then
+    until_seen "~发起" "~started it" "~最新" "~latest" && shot chat-info || miss chat-info "the sheet did not show"
+    back
+  else miss chat-info "no “对话信息” in the chat's bar"; fi
+  if tap --below $((H / 6)) "Opus 4.7"; then
+    until_seen "历史" "History" && shot agent-sheet || miss agent-sheet "the card did not show"
+    if tap "历史" "History"; then sleep 2; shot history; back; else miss history "no history row in the card"; fi
+    in_front
+  else miss agent-sheet "no agent's name in the chat"; fi
   back
 else miss chat-image "could not open “Profile 页的头像裁剪”"; fi
 
+# ── a new chat (the bar's action), the search over the chats, the archive (from the filter menu) ──
+home
+if tap --below $((H * 3 / 4)) "新建对话" "New chat"; then sleep 2; keyboard_away; shot new-chat; back; else miss new-chat "no “新建对话” in the bar"; fi
+home
+# The search is at the list's top, there once the list is scrolled to it.
+a shell input swipe $((W / 2)) $((H * 3 / 10)) $((W / 2)) $((H * 7 / 10)) 300
+sleep 1
+# "station" typed in (what adb text input reaches): chats and messages found.
+# (Shot with the keyboard as it is: put away, back would close the search in one app and not the other.)
+if tap "~搜索对话和消息" "~Search chats"; then
+  sleep 2; tap "@EditText"; sleep 1; a shell input text station; a shell input keyevent KEYCODE_ENTER; sleep 3; shot search; back; back
+else miss search "no search field over the chats"; fi
+home
+if tap "~筛选会话" "~Filter chats" "~筛选" "~Filter"; then
+  if tap "已归档" "Archived"; then sleep 2; shot archive; back; else miss archive "no “已归档” in the filter menu"; back; fi
+else miss archive "no filter button"; fi
+
 # ── settings, the places ──
 home
-if tap "设置" "Settings"; then sleep 1; shot settings; back; else miss settings "no settings button"; fi
+if tap "设置" "Settings"; then
+  sleep 1; shot settings
+  for row in "workspace:Workspace:Workspace" "usage:用量:Usage" "appearance:外观:Appearance" "bar-settings:下方栏:Bottom bar"; do
+    IFS=: read -r name zh en <<< "$row"
+    if tap --below $((H / 6)) "$zh" "$en"; then sleep 2; shot "$name"; back; else miss "$name" "no “$zh” row in settings"; fi
+  done
+  back
+else miss settings "no settings button"; fi
 for place in "stations:~Station:~Stations" "profiles:Profile:Profiles" "files:文件:Files"; do
   IFS=: read -r name zh en <<< "$place"
   home
-  if tap --below $((H * 3 / 4)) "$zh" "$en"; then shot "$name"; else miss "$name" "no “${zh#\~}” in the bottom bar"; fi
+  if tap --below $((H * 3 / 4)) "$zh" "$en"; then
+    shot "$name"
+    case $name in
+      stations) if tap --above $((H * 3 / 4)) "studio"; then sleep 2; shot station; back; else miss station "no “studio” in the stations"; fi ;;
+      files)
+        if tap --above $((H * 3 / 4)) "still.fail"; then
+          until_seen "README.md" && shot drive-folder || miss drive-folder "no README.md in still.fail"
+          if tap "README.md"; then sleep 3; shot file-preview; back; else miss file-preview "no README.md to open"; fi
+          back
+        else miss drive-folder "no “still.fail” in the files"; fi ;;
+    esac
+  else miss "$name" "no “${zh#\~}” in the bottom bar"; fi
 done
 home
 rm -f "$UI"

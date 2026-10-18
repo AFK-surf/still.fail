@@ -23,7 +23,7 @@ import type { IconPaths } from "../ui/IconSet";
 import { IconIn, LargeTitle, ListCard, ListRow, NavBar, ProviderMark, ripple, SectionHeader, Seg } from "../ui/Parts";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { CODE_FONT, useC } from "../ui/Theme";
 import { Spinner, WaitLine, WaitShape, Waiting } from "../ui/Waiting";
 import { Switch } from "./Connects";
@@ -1033,7 +1033,7 @@ function VaultField({ value, onChange, placeholder, mono = false, secret = false
         keyboardType={secret ? (shown ? "visible-password" : "default") : mono ? "ascii-capable" : "default"}
         cursorColor={C.accent}
         textAlignVertical={lines > 1 ? "top" : "center"}
-        style={{ flex: 1, minWidth: 0, color: C.ink, fontSize: size, lineHeight: 20, fontFamily: mono ? CODE_FONT : undefined, padding: 0, includeFontPadding: false, minHeight: lines * 20, maxHeight: lines === 1 ? 20 : 200 }}
+        style={{ flex: 1, minWidth: 0, color: C.ink, fontSize: sp(size), lineHeight: 20, fontFamily: mono ? CODE_FONT : undefined, padding: 0, includeFontPadding: false, minHeight: lines * 20, maxHeight: lines === 1 ? 20 : 200 }}
       />
       {secret && (
         <Pressable accessibilityLabel={shown ? t("android-settings.vault.hide") : t("android-settings.vault.reveal")} onPress={() => setShown(!shown)} android_ripple={ripple(C.ink)} style={{ width: 20, height: 20, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>

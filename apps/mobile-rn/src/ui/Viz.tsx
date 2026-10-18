@@ -19,6 +19,7 @@ import { CodeBlock } from "./Markdown";
 import { Smooth } from "./Smooth";
 import { useC, withAlpha } from "./Theme";
 import { bridge, stylesheet } from "./VizAssets";
+import { sp } from "./Text";
 
 /** What a page says it keeps: any JSON. */
 export type JsonElement = unknown;
@@ -277,7 +278,7 @@ export function VizFull({ name, html, state, keep, onClose }: { name: string; ht
       <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
         <View style={{ flex: 1 }}>
           <View style={{ alignSelf: "stretch", height: 48, paddingLeft: 18, paddingRight: 8, flexDirection: "row", alignItems: "center" }}>
-            <Text numberOfLines={1} style={{ fontSize: 15, lineHeight: 21, color: C.ink, flex: 1, minWidth: 0, includeFontPadding: false }}>{name}</Text>
+            <Text numberOfLines={1} style={{ fontSize: sp(15), lineHeight: 21, color: C.ink, flex: 1, minWidth: 0, includeFontPadding: false }}>{name}</Text>
             <Pressable onPress={onClose} android_ripple={{ color: withAlpha(C.ink, 0.12), borderless: false }} style={{ width: 36, height: 36, borderRadius: 18, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
               <Icon icon={Icons.Close} size={18} color={C.ink} />
             </Pressable>

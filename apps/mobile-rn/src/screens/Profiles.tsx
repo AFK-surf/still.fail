@@ -21,7 +21,7 @@ import { Icon, Icons } from "../ui/Icon";
 import { Card, ListCard, ListRow, NavBar, NavButton, ProviderMark, QuotaDials, QuotaRings, SectionHeader, SlackMark } from "../ui/Parts";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { CODE_FONT, useC, withAlpha } from "../ui/Theme";
 import { Spinner, WaitLine, WaitShape, Waiting } from "../ui/Waiting";
 import { Action, useAction } from "./Action";
@@ -1487,7 +1487,7 @@ function ConnectForm({ d, edit, busy, submit }: { d: ProfileFlowView; edit: (key
               autoCapitalize="none"
               cursorColor={C.accent}
               selectionColor={withAlpha(C.accent, 0.4)}
-              style={{ alignSelf: "stretch", color: C.ink, fontSize: 15, lineHeight: 21, fontFamily: CODE_FONT, padding: 0, includeFontPadding: false }}
+              style={{ alignSelf: "stretch", color: C.ink, fontSize: sp(15), lineHeight: 21, fontFamily: CODE_FONT, padding: 0, includeFontPadding: false }}
             />
           </Smooth>
           {d.endpointHint != null && <T size={12} color={C.muted}>{d.endpointHint}</T>}

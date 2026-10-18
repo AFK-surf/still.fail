@@ -26,8 +26,8 @@ import { Backdrop, LocalFrostSource, useFrostName } from "../ui/Glass";
 import { Smooth } from "../ui/Smooth";
 import { StationGlyph, glyphCounts } from "../ui/StationGlyph";
 import { doneLead, waitLead } from "../ui/StatusText";
-import { T } from "../ui/Text";
-import { lerpColor, useC, withAlpha } from "../ui/Theme";
+import { sp, T } from "../ui/Text";
+import { dp, lerpColor, useC, withAlpha } from "../ui/Theme";
 import { Waiting } from "../ui/Waiting";
 import { ChangelogNews } from "./Changelog";
 import { askTitle } from "./ChatInfo";
@@ -292,14 +292,15 @@ function ChatPane({ current, chats, filter, padding, onSearch, searching, index,
   }
   const note = view?.note;
   const waiting = note?.reading === true;
-  // Starting past the search field (Kotlin's LazyListState(1)): Android's list takes no first offset (contentOffset is
+  // Starting past the search field (Kotlin's LazyListState(1)) when the list was there as it was first drawn (else at its
+  // top, the search in view, as Kotlin's LazyListState(0)): Android's list takes no first offset (contentOffset is
   // iOS's), so it is scrolled there once it has rows.
   const list = useRef<FlatList<PaneItem>>(null);
   const placed = useRef(false);
   // Asked again as its rows come (the first ones may not fill the screen, the offset then cut short), until it is there
   // or a finger has moved it.
   const place = () => {
-    if (placed.current || view == null || items.length === 0 || view.note?.empty === true) return;
+    if (top === 0 || placed.current || view == null || items.length === 0 || view.note?.empty === true) return;
     // The frame after: the list takes no offset before its rows are laid out.
     requestAnimationFrame(() => list.current?.scrollToOffset({ offset: SEARCH_HEIGHT, animated: false }));
   };
@@ -664,7 +665,7 @@ function SwipeToArchive({ item, motion, busy, children }: { item: ChatItem; moti
       >
         {/* Under it, at the right edge it uncovers: 归档, quiet until letting go would archive it, then filled in ink. */}
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { paddingHorizontal: 22, alignItems: "flex-end", justifyContent: "center" }, under]}>
-          <Animated.Text importantForAccessibility="no" style={[{ fontSize: 15, lineHeight: 21, fontWeight: "600", includeFontPadding: false }, word]}>{t("android-chat.archive")}</Animated.Text>
+          <Animated.Text importantForAccessibility="no" style={[{ fontSize: sp(15), lineHeight: 21, fontWeight: "600", includeFontPadding: false }, word]}>{t("android-chat.archive")}</Animated.Text>
         </Animated.View>
         <Animated.View style={moved}>{children}</Animated.View>
       </View>
@@ -748,7 +749,7 @@ export function ChatRowBody({ item, lead, held, busy = false, failed = null, onA
   const reconnecting = item.reconnecting;
   // Where it stands (奏 · …, 在等：…, 做完了), from a station that says; else what was said last.
   const state = item.stateText ?? item.decision?.text;
-  const frame: ViewStyle = { height: 66, backgroundColor: held ? withAlpha(C.ink, 0.05) : "transparent" };
+  const frame: ViewStyle = { height: dp(66), backgroundColor: held ? withAlpha(C.ink, 0.05) : "transparent" };
   const content = (
     // Nothing left in it (its agents all done, nothing at work, waiting or unread): the row faded (the core says so),
     // its 归档 at its start not.
@@ -766,7 +767,7 @@ export function ChatRowBody({ item, lead, held, busy = false, failed = null, onA
         </Pressable>
       )}
       <View style={{ flex: 1, minWidth: 0, justifyContent: "center", opacity: item.settled === true ? 0.45 : 1 }}>
-        <View style={{ height: 22, flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={{ height: dp(22), flexDirection: "row", alignItems: "center", gap: 8 }}>
           <ChatMark item={item} />
           <T
             size={16} line={22} weight={item.unread ? "600" : "400"} color={C.ink} numberOfLines={1} ellipsizeMode="tail"
@@ -797,7 +798,7 @@ export function ChatRowBody({ item, lead, held, busy = false, failed = null, onA
             </View>
           )}
         </View>
-        <View style={{ height: 20, flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={{ height: dp(20), flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ flex: 1, minWidth: 0, opacity: dim, justifyContent: "center", alignItems: "flex-start" }}>
             {state != null ? (
               <View ref={onStateLine} collapsable={false} style={{ alignSelf: "stretch" }}>
