@@ -1544,7 +1544,9 @@ data class ChatItem (
 	val xshare: RowShare? = null,
 	/// Another workspace's chat, its name: the `@` menu's `elsewhere` lists them after the workspace's own. Absent for
 	/// the workspace's own.
-	val outside: String? = null
+	val outside: String? = null,
+	/// A chat a search found in its station's archive (`search`). Absent otherwise.
+	val archived: Boolean? = null
 )
 
 /// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日); or, above them all, the chats the viewer pinned
@@ -4145,6 +4147,79 @@ data class ScreensView (
 	/// The station said which it has (false while it has not been reached since the core started).
 	val known: Boolean,
 	/// Why there are none to show, when there is a reason (the station needs an update, is offline).
+	val note: String? = null
+)
+
+/// A thing a search found besides chats and messages (`SearchGroup.items`), and what opens it.
+@Serializable
+data class SearchItem (
+	val kind: String,
+	/// Unique among all found.
+	val key: String,
+	val station: String,
+	val stationName: String,
+	val stationEmoji: String? = null,
+	val stationIcon: String? = null,
+	/// What it is called: a service's name, a skill's, the chat of a step of an execution history…
+	val title: String,
+	/// The part of it that has the words, on one line.
+	val text: String,
+	/// Where the words are in `text`.
+	val marks: List<TextMark>,
+	/// The chat it is in (its key in its station's list): its page is `chats/<chat>`.
+	val chat: String? = null,
+	val chatTitle: String? = null,
+	val thread: Long? = null,
+	/// A step of an execution history: its session (opened at `index`).
+	val session: String? = null,
+	val index: UInt? = null,
+	/// The tool a step called.
+	val tool: String? = null,
+	/// A service or task: its id; `port` a service's.
+	val job: String? = null,
+	val port: UInt? = null,
+	val skill: String? = null,
+	val profile: String? = null,
+	/// A file: where it is on its station.
+	val path: String? = null,
+	val archived: Boolean? = null,
+	val createdAt: Long? = null,
+	/// Its times in words, by field (`createdAt`).
+	val time: Map<String, Stamp>? = null
+)
+
+@Serializable
+data class SearchGroup (
+	/// file | history | job | skill | memory | profile | station
+	val kind: String,
+	/// Its heading.
+	val title: String,
+	val items: List<SearchItem>,
+	/// More of this kind were found than are listed: the kind alone lists them.
+	val more: Boolean
+)
+
+/// What a few words find in a workspace (the `search` topic, docs/search.md): ⌘K and the phones' search list it. With
+/// `kind`, that kind alone, more of it.
+@Serializable
+data class SearchView (
+	/// The chats found: those the sidebar has whose title (or else agent, station, line) has the words, then those
+	/// the stations found (archived ones too, `archived`); with nothing typed, the latest chats. At most 8 with every kind.
+	val items: List<ChatItem>,
+	/// More chats than `items` were found: the kind alone (`kind: chat`) lists them.
+	val chatsMore: Boolean? = null,
+	/// The words looked for, as a found message marks them in its chat when opened.
+	val words: List<String>? = null,
+	/// The messages found, on the device and on the stations, each once, newest first.
+	val messages: List<FoundMessage>? = null,
+	/// More messages than these were found.
+	val messagesMore: Boolean? = null,
+	/// What else was found, by kind (files, execution history, services and tasks, skills, memory, profiles,
+	/// stations), in that order; a kind with none is left out.
+	val groups: List<SearchGroup>? = null,
+	/// The stations not answered yet, and those that could not be searched.
+	val wait: ListNote,
+	/// What the list says under it: stations offline or too old to search, an index still being built.
 	val note: String? = null
 )
 

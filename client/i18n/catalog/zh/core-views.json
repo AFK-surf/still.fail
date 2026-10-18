@@ -394,5 +394,19 @@
   "core-views.permissions.askingHere": "授权窗口已在该 Mac 上打开，可在远程屏幕中点击「允许」",
   "core-views.permissions.askingThere": "授权窗口已在该 Mac 上打开，请在该 Mac 上点击「允许」",
   "core-views.models.borrowed_from": "借自 {station}",
-  "core-views.models.on_station": "在 {station} 上"
+  "core-views.models.on_station": "在 {station} 上",
+  "core-views.search.kind.chat": "对话",
+  "core-views.search.kind.message": "消息",
+  "core-views.search.kind.file": "文件",
+  "core-views.search.kind.history": "执行历史",
+  "core-views.search.kind.job": "服务和任务",
+  "core-views.search.kind.skill": "Skill",
+  "core-views.search.kind.memory": "记忆",
+  "core-views.search.kind.profile": "Profile",
+  "core-views.search.kind.station": "Station",
+  "core-views.search.memory": "记忆",
+  "core-views.search.offline": "离线",
+  "core-views.search.offlineStations": "{names} 离线，其上的内容未搜索",
+  "core-views.search.older": "{names} 需要更新后才能搜索",
+  "core-views.search.building": "部分 station 正在建立索引，结果可能不完整"
 }

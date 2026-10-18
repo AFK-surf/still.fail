@@ -36,6 +36,7 @@ import * as brief from "./brief.ts";
 import * as xshare from "./xshare.ts";
 import * as memberships from "./memberships.ts";
 import * as publish from "./publish.ts";
+import { type SearchSource, searchView, stationTopic } from "./search.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -50,7 +51,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "stations", "profiles", "connects", "chat", "history", "agentCard", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -359,7 +360,7 @@ export class Views implements Owner {
     this.local.onChange = (change) => this.#localChanged(change);
     // What was said changed: the searches that find messages look again.
     core.data.onLogChange((table) => {
-      if (table === "entry") this.#invalidate((v) => v.topic === "chatSearch" && typeof v.messages === "number" && v.messages > 0 && refs.terms(String(v.query ?? "")).length > 0);
+      if (table === "entry") this.#invalidate((v) => ((v.topic === "chatSearch" && typeof v.messages === "number" && v.messages > 0) || v.topic === "search") && refs.terms(String(v.query ?? "")).length > 0);
     });
     // What an agent said in Slack or heard from it changed: the chats it is in show it.
     core.data.onLogChange((table, station, key) => {
@@ -409,7 +410,7 @@ export class Views implements Owner {
         this.#invalidate((v) => v.topic === "decisions" || v.topic === "workspaceMarks");
         return;
       case "pending":
-        this.#invalidate((v) => (v.topic === "chat" && v.thread === null && v.session === change.key) || v.topic === "chats" || v.topic === "chatSearch");
+        this.#invalidate((v) => (v.topic === "chat" && v.thread === null && v.session === change.key) || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
         return;
       case "first":
         this.#invalidate((v) => v.topic === "chat" && v.station === change.station && v.thread === null && v.session === change.key);
@@ -418,7 +419,7 @@ export class Views implements Owner {
         this.#invalidate((v) => v.topic === "chats" || v.topic === "workspaceMarks" || v.topic === "decisions");
         return;
       case "changing":
-        this.#invalidate((v) => ["chats", "chatSearch", "archive", "workspaceMarks", "decisions"].includes(v.topic) || (v.topic === "chat" && v.station === change.station));
+        this.#invalidate((v) => ["chats", "chatSearch", "search", "archive", "workspaceMarks", "decisions"].includes(v.topic) || (v.topic === "chat" && v.station === change.station));
         return;
     }
   }
@@ -488,6 +489,13 @@ export class Views implements Owner {
         scope = (view.scope ?? view.workspace) as string;
         perStation = (s) => [{ topic: "chatRows", station: s }, { topic: "overview", station: s }, { topic: "link", station: s }];
         break;
+      case "search": {
+        scope = view.scope as string;
+        // With words, what each station finds (views/search.ts).
+        const typed = String(view.query ?? "").trim() !== "";
+        perStation = (s) => [{ topic: "chatRows", station: s }, { topic: "overview", station: s }, { topic: "link", station: s }, ...(typed ? [stationTopic(s, view)] : [])];
+        break;
+      }
       case "stations":
       case "profiles":
         scope = view.scope as string;
@@ -736,6 +744,11 @@ export class Views implements Owner {
     switch (view.topic) {
       case "chats":
         return this.#chats(view.scope as string, view.mine === true, view.watching === true);
+      case "search": {
+        const chats = this.#chats(view.scope as string, false, false);
+        if (chats === undefined || !("ok" in chats)) return chats;
+        return searchView(this.#searchSource, chats.ok, view);
+      }
       case "chatSearch": {
         const chats = this.#chats(view.scope as string, false, false);
         if (chats === undefined || !("ok" in chats)) return chats;
@@ -958,6 +971,16 @@ export class Views implements Owner {
   /// after another, the list computed again after each.
   /// The messages a search's words find in the chats the sidebar lists (those `refs.search` would list, by the same
   /// station and exclusion), newest first, at most `view.messages`: each with its chat's row, who said it and its line.
+  /// What the search (views/search.ts) reads of the views.
+  readonly #searchSource: SearchSource = {
+    value: (topic) => this.value(topic),
+    ok: (topic) => this.ok(topic),
+    stations: (scope) => this.stations(scope),
+    foundMessages: (chats, view) => this.#foundMessages(chats, view),
+    me: (scope) => this.me(scope),
+    clock: () => this.#clock(),
+  };
+
   #foundMessages(chats: J, view: Topic): J[] {
     const words = refs.terms(view.query as string);
     if (words.length === 0) return [];
@@ -1005,7 +1028,7 @@ export class Views implements Owner {
             data.shared({ topic: "chatRows", station });
           }
           this.#loading.delete(scope);
-          this.#invalidate((v) => (v.topic === "chats" || v.topic === "chatSearch") && v.scope === scope);
+          this.#invalidate((v) => (v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search") && v.scope === scope);
         }),
       );
     }

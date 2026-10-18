@@ -133,6 +133,7 @@ export function ticks(topic: Topic): boolean {
 const SHAPED: Record<string, Ty> = {
   chats: "ChatsView",
   chatSearch: "ChatSearchView",
+  search: "SearchView",
   chat: "ChatView",
   stations: { vec: "StationView" },
   connects: "ConnectsView",

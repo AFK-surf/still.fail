@@ -37,7 +37,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -171,6 +171,8 @@ export class StationTopics implements Owner {
     // A folder of the drive: read again each time it is shown (what is held is shown meanwhile); while shown, the station
     // says when something in it changes (sync.ts `driveWatch`).
     if (topic.topic === "drive") this.#sync.driveShown(station, topic.root as string, topic.path as string);
+    // What a search finds there: asked once its words settle, while shown (sync.ts `searchShown`).
+    if (topic.topic === "stationSearch") this.#sync.searchShown(topic);
   }
 
   stop(topic: Topic): void {
@@ -179,6 +181,7 @@ export class StationTopics implements Owner {
     const key = topicKey(topic);
     if (topic.topic === "thread") this.#core.data.opened("entry", station, String(topic.thread), false);
     if (topic.topic === "live") this.#core.data.opened("transcript", station, topic.key as string, false);
+    if (topic.topic === "stationSearch") this.#sync.searchHidden(topic);
     this.#core.scheduler.prioritize(key, null);
     this.#windows.delete(key);
     this.#firsts.delete(key);
@@ -213,6 +216,11 @@ export class StationTopics implements Owner {
         return { ok: screenCard(this.#core, station, topic.screen, this.#sync.screens(station), link?.state.state === "online") };
       }
       case "jobLog": {
+        const v = link?.memory.get(topicKey(topic));
+        return v === undefined ? undefined : { ok: v };
+      }
+      case "stationSearch": {
+        if (error) return { err: error };
         const v = link?.memory.get(topicKey(topic));
         return v === undefined ? undefined : { ok: v };
       }

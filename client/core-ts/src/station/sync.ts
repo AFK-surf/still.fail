@@ -54,6 +54,8 @@ export const CHANGES_RETRY_MS = 3_600_000;
 export const HISTORY_BATCH = 40;
 
 export const RECHECKING = "等它回来确认";
+/// How long the words of a search stay as they are before the stations are asked what they find.
+export const SEARCH_SETTLE_MS = 150;
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
@@ -283,6 +285,56 @@ export class StationsSync {
         }
       }),
     );
+  }
+
+  /// What a search finds on the station (`stationSearch`, docs/search.md): asked a moment after the words stop changing
+  /// (one shown that long), at the urgency of what is shown; held in memory while shown, the station's answer as it
+  /// came. A station from before search answers 404: said so (its `err`), and it is not asked again while shown.
+  searchShown(topic: Topic): void {
+    const address = topic.station as string;
+    const key = topicKey(topic);
+    const link = this.#links.get(address);
+    const refused = link?.errors.get(key);
+    if (!link || link.memory.has(key) || (refused && (refused.status ?? 500) < 500)) return;
+    this.#core.runner.fork(
+      Effect.sleep(SEARCH_SETTLE_MS).pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            if (this.#core.store.inUse(topic)) this.#enqueue(address, `search/${key}`, Priority.shown, this.#search(topic));
+          }),
+        ),
+      ),
+    );
+  }
+
+  #search(topic: Topic): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const address = topic.station as string;
+      const key = topicKey(topic);
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address) || !this.#core.store.inUse(topic)) return;
+      const params = [`q=${encode(topic.q as string)}`];
+      if (typeof topic.kind === "string") params.push(`kinds=${encode(topic.kind)}`);
+      if (typeof topic.limit === "number") params.push(`limit=${topic.limit}`);
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", `/search?${params.join("&")}`, null, { quiet: true }));
+      if (answer._tag === "Success") {
+        link.memory.set(key, answer.success);
+        this.onChange(address, "log", key);
+      } else if (answer.failure.status !== undefined) {
+        // Refused (a station from before search), or busy (its index starting: asked again as it is shown again).
+        link.errors.set(key, answer.failure);
+        this.onChange(address, "errors", key);
+      }
+    });
+  }
+
+  /// A search no longer shown: let go.
+  searchHidden(topic: Topic): void {
+    const link = this.#links.get(topic.station as string);
+    if (!link) return;
+    const key = topicKey(topic);
+    link.memory.delete(key);
+    link.errors.delete(key);
   }
 
   /// A task of the station's lane; its key is `<address> <what>` (what `prioritize` matches).

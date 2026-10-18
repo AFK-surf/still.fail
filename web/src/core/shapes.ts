@@ -1546,6 +1546,8 @@ export interface ChatItem {
 	 * the workspace's own.
 	 */
 	outside?: string;
+	/** A chat a search found in its station's archive (`search`). Absent otherwise. */
+	archived?: boolean;
 }
 
 /**
@@ -4184,6 +4186,82 @@ export interface ScreensView {
 	/** The station said which it has (false while it has not been reached since the core started). */
 	known: boolean;
 	/** Why there are none to show, when there is a reason (the station needs an update, is offline). */
+	note?: string;
+}
+
+/** A thing a search found besides chats and messages (`SearchGroup.items`), and what opens it. */
+export interface SearchItem {
+	kind: string;
+	/** Unique among all found. */
+	key: string;
+	station: string;
+	stationName: string;
+	stationEmoji?: string;
+	stationIcon?: string;
+	/** What it is called: a service's name, a skill's, the chat of a step of an execution history… */
+	title: string;
+	/** The part of it that has the words, on one line. */
+	text: string;
+	/** Where the words are in `text`. */
+	marks: TextMark[];
+	/** The chat it is in (its key in its station's list): its page is `chats/<chat>`. */
+	chat?: string;
+	chatTitle?: string;
+	thread?: number;
+	/** A step of an execution history: its session (opened at `index`). */
+	session?: string;
+	index?: number;
+	/** The tool a step called. */
+	tool?: string;
+	/** A service or task: its id; `port` a service's. */
+	job?: string;
+	port?: number;
+	skill?: string;
+	profile?: string;
+	/** A file: where it is on its station. */
+	path?: string;
+	archived?: boolean;
+	createdAt?: number;
+	/** Its times in words, by field (`createdAt`). */
+	time?: Record<string, Stamp>;
+}
+
+export interface SearchGroup {
+	/** file | history | job | skill | memory | profile | station */
+	kind: string;
+	/** Its heading. */
+	title: string;
+	items: SearchItem[];
+	/** More of this kind were found than are listed: the kind alone lists them. */
+	more: boolean;
+}
+
+/**
+ * What a few words find in a workspace (the `search` topic, docs/search.md): ⌘K and the phones' search list it. With
+ * `kind`, that kind alone, more of it.
+ */
+export interface SearchView {
+	/**
+	 * The chats found: those the sidebar has whose title (or else agent, station, line) has the words, then those
+	 * the stations found (archived ones too, `archived`); with nothing typed, the latest chats. At most 8 with every kind.
+	 */
+	items: ChatItem[];
+	/** More chats than `items` were found: the kind alone (`kind: chat`) lists them. */
+	chatsMore?: boolean;
+	/** The words looked for, as a found message marks them in its chat when opened. */
+	words?: string[];
+	/** The messages found, on the device and on the stations, each once, newest first. */
+	messages?: FoundMessage[];
+	/** More messages than these were found. */
+	messagesMore?: boolean;
+	/**
+	 * What else was found, by kind (files, execution history, services and tasks, skills, memory, profiles,
+	 * stations), in that order; a kind with none is left out.
+	 */
+	groups?: SearchGroup[];
+	/** The stations not answered yet, and those that could not be searched. */
+	wait: ListNote;
+	/** What the list says under it: stations offline or too old to search, an index still being built. */
 	note?: string;
 }
 
