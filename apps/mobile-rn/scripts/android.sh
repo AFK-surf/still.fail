@@ -11,6 +11,11 @@ cd "$here"
 [ -f modules/stillfail-core/android/repo/fail/still/core/0.1.0/core-0.1.0.aar ] || bash scripts/core-android.sh
 npx expo prebuild -p android --no-install > /dev/null
 sed -i '' 's/^reactNativeArchitectures=.*/reactNativeArchitectures=arm64-v8a/' android/gradle.properties
+# The native libraries and the dex compressed in the APK (93 MB stored, under 50 compressed: a chat takes it as an
+# attachment); installed, Android unpacks them once.
+sed -i '' 's/^expo.useLegacyPackaging=.*/expo.useLegacyPackaging=true/' android/gradle.properties
+grep -q 'dex { useLegacyPackaging' android/app/build.gradle || sed -i '' 's/^    packagingOptions {$/    packagingOptions {\
+        dex { useLegacyPackaging true }/' android/app/build.gradle
 variant=Release; [ "${1:-}" = --debug ] && variant=Debug
 # The JS bundled again each time: Gradle takes it as up to date when only EXPO_PUBLIC_* (the cloud it is for) changed.
 rm -rf android/app/build/generated/assets/createBundleReleaseJsAndAssets android/app/build/intermediates/assets/release
