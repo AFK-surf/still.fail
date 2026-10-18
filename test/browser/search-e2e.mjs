@@ -124,6 +124,7 @@ async function main() {
   };
   await say("帮我看看本地分析用什么", "结论：用 DuckDB 直接查 Parquet，不用导数据");
   await say("把预览部署到 studio", "已部署，预览在 5173 端口");
+  await say("动效测试（请照做）：先用命令运行 sleep 3，等它结束后再回复一句火烈鸟", "火烈鸟");
   await page.waitForTimeout(3000);
 
   const switcher = async (words, shot) => {
@@ -159,6 +160,9 @@ async function main() {
   await page.emulateMedia({ colorScheme: "dark" });
   await switcher("部署", "desktop-deploy-dark");
   await page.emulateMedia({ colorScheme: "light" });
+  // A chat whose long title has the words late: the part that has them under it.
+  const late = await switcher("火烈鸟", "desktop-late-title");
+  check("⌘K says where a long title has the words", late.replace(/\s+/g, " ").slice(0, 300), /…[^\n]*火烈鸟/.test(late));
   // A member, by their email: opens the workspace's settings.
   const member = await switcher("alice", "desktop-member");
   check("⌘K finds a member by their email", member.replace(/\s+/g, " ").slice(0, 300), /成员/.test(member) && /alice/i.test(member));
