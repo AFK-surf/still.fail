@@ -115,8 +115,9 @@ export class Inner {
   adb!: Adb;
   viewCalls!: ViewCalls;
   router!: Router;
-  /// The calls of the app's modules, by full name (module.ts).
+  /// The calls of the app's modules, by full name (module.ts), and the modules' names (their topics are `<name>.…`).
   moduleCalls = new Map<string, ModuleCall<any>>();
+  moduleNames: string[] = [];
   /// The calls under way that a UI can stop, by `client/id`.
   calls = new Map<string, Fiber.Fiber<unknown, unknown>>();
   doing = new Doing();
@@ -235,6 +236,7 @@ export class Core {
       hooks.device = (_inner, facts) => inner.changelog.device(facts);
       inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
       inner.moduleCalls = installModules(inner, options.modules ?? []);
+      inner.moduleNames = (options.modules ?? []).map((m) => m.name);
       // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
       let reconciling = false;
       inner.cloudSync.onReach = () => {
@@ -305,7 +307,7 @@ export class Core {
 
   /// A message from a UI as an object; `bytes`, those a native host handed over beside it.
   receiveRaw(client: ClientId, raw: unknown, bytes?: Uint8Array): void {
-    const message = parseClientMessage(raw, bytes);
+    const message = parseClientMessage(raw, bytes, (name) => this.inner.moduleNames.some((m) => name.startsWith(`${m}.`)));
     if ("invalid" in message) {
       const id = isObject(raw) && typeof raw.id === "number" && Number.isInteger(raw.id) && raw.id >= 0 ? raw.id : null;
       if (id !== null) this.inner.host.emit(client, { id, error: new CoreError("bad_message", t("core-misc.host.bad_message", { error: message.invalid })) });

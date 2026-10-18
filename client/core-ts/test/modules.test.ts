@@ -87,6 +87,29 @@ test("a module's topic is read from its part of the station, kept, and its call 
   core.close();
 });
 
+test("a UI's messages reach a module as they come, by JSON (as the hosts hand them over)", async () => {
+  const books = [{ id: "b1", title: "三体" }];
+  const { host, core } = await started(undefined, 0, undefined, undefined, [demo([])]);
+  stationReplies(host, (req) => (req.url.endsWith("/admin/api/m/demo/books") ? { books } : undefined));
+  const ui = core.connect();
+  core.receiveJson(ui, JSON.stringify({ id: 1, subscribe: { topic: "demo.books", station: ST } }));
+  // Not a module's, nor the core's: no such topic.
+  core.receiveJson(ui, JSON.stringify({ id: 2, subscribe: { topic: "other.books", station: ST } }));
+  // A module's topic's params are plain values.
+  core.receiveJson(ui, JSON.stringify({ id: 3, subscribe: { topic: "demo.books", station: { nested: true } } }));
+  core.receiveJson(ui, JSON.stringify({ id: 4, call: "demo.add", params: { station: ST } }));
+  await host.settle();
+  const emitted = host.takeEmitted();
+  for (const [, m] of emitted) host.emitted.push([ui, m]);
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).books.map((b: { title: string }) => b.title), ["三体"]);
+  assert.equal((answers(emitted, 2)?.error as CoreError).code, "bad_message");
+  assert.equal((answers(emitted, 3)?.error as CoreError).code, "bad_message");
+  assert.equal((answers(emitted, 4)?.error as CoreError).code, "invalid_params");
+  core.close();
+});
+
 test("a module's call that is wrong, or that its station refuses, says why", async () => {
   const { host, core } = await started(undefined, 0, undefined, undefined, [demo([])]);
   stationReplies(host, (req) => (req.url.includes("/admin/api/m/demo/") ? status(503, { error: "模块没有运行" }) : undefined));
