@@ -382,6 +382,17 @@ export class Views implements Owner {
     this.#core.store.invalidate(view);
   }
 
+  /// Shown again while it was kept: a search asks its stations again (what they hold changes; station/sync.ts
+  /// `searchShown`), what they found before shown meanwhile.
+  resume(view: Topic): void {
+    if (view.topic !== "search") return;
+    const live = this.#views.get(topicKey(view));
+    for (const key of live?.watches.keys() ?? []) {
+      const topic = JSON.parse(key) as Topic;
+      if (topic.topic === "stationSearch") this.#core.stationTopics.resume(topic);
+    }
+  }
+
   stop(view: Topic): void {
     const key = topicKey(view);
     const again = this.#again.get(key);
