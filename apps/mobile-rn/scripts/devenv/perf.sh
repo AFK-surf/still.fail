@@ -69,6 +69,8 @@ for i in $(seq 1 60); do
 done
 at "$ROW" > /dev/null || { echo "$LABEL: no chats after 2 min" >&2; exit 1; }
 sleep 5
+# CHAT=1: the strokes in that chat (its long answer, a table and code), not in the list.
+if [ "${CHAT:-}" = 1 ]; then a shell input tap $(at "$ROW"); sleep 6; fi
 # A stroke each way first: what the first scroll lays out once is not what scrolling costs.
 stroke() { a shell input swipe $((W / 2)) $1 $((W / 2)) $2 ${3:-250}; }
 stroke $((H * 3 / 4)) $((H / 4)); sleep 1; stroke $((H / 4)) $((H * 3 / 4)); sleep 1.5
