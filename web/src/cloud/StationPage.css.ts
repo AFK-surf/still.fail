@@ -23,14 +23,8 @@ globalStyle(`${warn} [data-level="red"]`, { color: vars.red });
 export const parts = style({ display: "flex", marginBottom: 24 });
 /** What is left of the machine large, then this device's connection to it. */
 export const machine = style({ display: "grid", gap: 18, justifyItems: "start", minWidth: 0 });
-/** Its agents, counted as the dials above are written: the number large, what it counts under it. */
-export const figures = style({ display: "flex", flexWrap: "wrap", gap: "12px 36px" });
-export const figure = style({ display: "grid", justifyItems: "start", gap: 2, minWidth: 96 });
-export const figureNumber = style({
-  fontSize: vars.textDisplay, fontWeight: "600", lineHeight: "1.15", letterSpacing: "-0.02em", color: vars.text, fontVariantNumeric: "tabular-nums",
-  selectors: { "&[data-accent]": { color: vars.accentText } },
-});
-export const figureLabel = style({ fontSize: vars.textUi, fontWeight: "500", color: vars.text });
+/** What its agents' processes take, under how this device reaches it: quiet, as the network's labels. */
+export const memory = style({ margin: 0, fontSize: vars.textUi, color: vars.muted });
 export const note = style({ margin: "10px 0 0", fontSize: vars.textUi, color: vars.muted });
 /** A folder lent: its name, then where it is, quiet, cut at the end (the chevron stays). */
 export const folder = style({ minHeight: 44 });

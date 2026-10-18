@@ -5,6 +5,7 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link, Navigate, NavLink, useParams, useSearchParams } from "react-router";
 import { stamp, useMemberships, useStations, type StationView } from "../api.ts";
+import { useGo } from "../go.ts";
 import { MeterChip, MeterDials } from "../components.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { drivePath } from "../drive/useDrive.ts";
@@ -145,14 +146,14 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
 type Edits = ReturnType<typeof useStationEdits>;
 
 /** Its mark and name (a title its managers rename where it is, as the workspace's), how it is and what it is; beside
- * them trying it again while away, and its ⋯ (its 文件 there, its folders in the overview). */
+ * them trying it again while away, and its ⋯ (its 文件 are opened from the overview's folders). */
 function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: Edits }) {
   const [name, setName] = useState(s.name);
   useEffect(() => setName(s.name), [s.name]);
   const keep = () => { const to = name.trim(); if (!to) setName(s.name); else edits.rename(s, to); };
   const silent = useLong(s.online && !s.host, 15_000);
   const wrong = problems(s, silent);
-  const items = edits.menu(s, manager);
+  const items = edits.menu(s, manager, false);
   return (
     <>
       <header className={settingsCss.workspaceHead}>
@@ -208,8 +209,10 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
   );
 }
 
-/** How it is, what is left of the machine, and what runs on it: its agents, screens, profiles, connects and folders. */
+/** What is left of the machine (and what its agents take of it), and what runs on it: its screens, profiles, connects and
+ * folders (its agents at work are in its head). */
 function Overview({ s }: { s: StationView }) {
+  const navigate = useGo();
   const o = s.overview;
   const base = stationBase(s.station);
   const folders = o?.drive?.roots ?? [];
@@ -221,17 +224,9 @@ function Overview({ s }: { s: StationView }) {
             <MeterDials meters={s.host.meters} />
             {s.net && <Net net={s.net} flush />}
             {s.net && <LanKept lan={s.net.lan} />}
+            {/* What its agents' processes take of the memory. */}
+            {o && o.processes.length > 0 && <p className={css.memory}>{o.processesText}</p>}
           </div>
-        </Section>
-      )}
-      {o && (
-        <Section title="Agent">
-          <div className={css.figures}>
-            <Figure n={o.counts.running} label={t("web-pages.stations.page.running")} accent={o.counts.running > 0} />
-            <Figure n={o.counts.warm} label={t("web-pages.stations.page.warm")} />
-            <Figure n={o.counts.sessions} label={t("web-pages.stations.page.sessions")} />
-          </div>
-          {o.processes.length > 0 && <p className={css.note}>{o.processesText}</p>}
         </Section>
       )}
       {/* Its screens, to see and drive (docs/remote-screens.md); a station from before them says so quietly. */}
@@ -268,9 +263,11 @@ function Overview({ s }: { s: StationView }) {
           </ul>
         </Section>
       )}
-      {folders.length > 0 && (
-        <Section title={<>{t("web-pages.drive.title")}<span className={settingsCss.titleCount}>{folders.length}</span></>}>
-          <ul className={pagesCss.list}>
+      {/* Its drive (docs/drive.md): opened whole from here, or at one of the folders pinned. */}
+      {o?.drive && (
+        <Section title={<>{t("web-pages.drive.title")}{folders.length > 0 && <span className={settingsCss.titleCount}>{folders.length}</span>}</>}
+          actions={<Button variant="ghost" icon={Folder} onClick={() => navigate(`${base}/files`)}>{t("web-pages.stations.page.openFiles")}</Button>}>
+          {folders.length === 0 ? <p className={css.note}>{t("web-pages.drive.noneYet")}</p> : <ul className={pagesCss.list}>
             {folders.map((r) => (
               <li key={r.path}>
                 {/* Its name, where it is quiet after it, on one line. */}
@@ -282,7 +279,7 @@ function Overview({ s }: { s: StationView }) {
                 </Link>
               </li>
             ))}
-          </ul>
+          </ul>}
         </Section>
       )}
     </>
@@ -378,15 +375,5 @@ function Workspaces({ s }: { s: StationView }) {
         ))}
       </div>
     </Section>
-  );
-}
-
-/** A count large over what it counts, as the machine's dials are written; the agents at work in the accent. */
-function Figure({ n, label, accent = false }: { n: number; label: string; accent?: boolean }) {
-  return (
-    <div className={css.figure}>
-      <b className={css.figureNumber} data-accent={accent || undefined}>{n}</b>
-      <span className={css.figureLabel}>{label}</span>
-    </div>
   );
 }
