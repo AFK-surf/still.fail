@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
+import { routes as publishRoutes } from "../src/api/routes/publish.ts";
+import { StationParts } from "../src/parts.ts";
 import type { Request } from "../src/api/request.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
 import type { Connection, Stream } from "../src/mesh/native.ts";
@@ -113,7 +115,10 @@ test("a chat published: previewed, written out frozen with the attachments ticke
   const jobs = new Jobs({ store, data, notify: () => {}, link: () => null });
   hub.setJobs(jobs);
   const readers = new Readers(data, 1);
-  const admin = new Admin(readers, { store, agents: { hub, jobs, place: () => ({ origin: "o", workspace: "w", station: "s", name: "Studio" }) } as any });
+  // The publish routes are a part of the station's (publish/module.ts), given to the admin API as main.ts does.
+  const parts = new StationParts();
+  parts.routes((tools) => publishRoutes(tools));
+  const admin = new Admin(readers, { store, parts, agents: { hub, jobs, place: () => ({ origin: "o", workspace: "w", station: "s", name: "Studio" }) } as any });
   const ask = async (viewer: typeof alice, method: string, path: string, body?: unknown) => {
     const r: Request = { method, path, query: [], headers: {}, body: Buffer.from(body === undefined ? "" : JSON.stringify(body)), viewer, lang: "en" };
     const a = await admin.handle(r);

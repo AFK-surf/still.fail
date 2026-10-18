@@ -15,12 +15,10 @@ import { routes as marks } from "./routes/marks.ts";
 import { routes as updates } from "./routes/updates.ts";
 import { routes as accounts } from "./routes/accounts.ts";
 import { routes as xshare } from "./routes/xshare.ts";
-import { routes as publish } from "./routes/publish.ts";
 import { routes as slack } from "./routes/slack.ts";
 import { routes as hub, uploadPath } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
 import { routes as agentEnv } from "./routes/agent-env.ts";
-import { routes as links } from "./routes/links.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
 import { routes as machineLogins } from "./routes/logins.ts";
@@ -104,6 +102,8 @@ type Slot = { at: number | null; answer: Promise<Kept | null> };
 export class Admin {
   private slots = new Map<string, Slot>();
   private routes: Route[];
+  /// What the routes are given; the station's parts' too (parts.ts).
+  private tools: Tools;
   private readers: Readers;
 
   readonly host: Host;
@@ -128,7 +128,8 @@ export class Admin {
       store: deps.store,
       agents: deps.agents,
     };
-    this.routes = [...chats(tools), ...usage(tools), ...search(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...links(), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
+    this.tools = tools;
+    this.routes = [...chats(tools), ...usage(tools), ...search(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
       ...(deps.agents?.slack && deps.store
         ? slack({
             slack: deps.agents.slack,
@@ -167,7 +168,6 @@ export class Admin {
           })
         : []),
       ...(deps.agents?.xshare ? xshare({ xshare: deps.agents.xshare, store: deps.store }) : []),
-      ...publish(tools),
       ...(deps.agents ? machineLogins(() => deps.agents?.logins) : []),
       ...(deps.agents?.accounts
         ? accounts({
@@ -259,7 +259,7 @@ export class Admin {
     // A module's (modules/forward.ts): any method, its answer as it comes.
     const module = moduleOf(r.path);
     if (module !== null && this.deps.modules) return this.deps.modules.forward(r, module);
-    for (const route of [...this.routes, ...(this.deps.parts?.allRoutes() ?? [])]) {
+    for (const route of [...this.routes, ...(this.deps.parts?.allRoutes(this.tools) ?? [])]) {
       const found = r.method === route.method ? route.pattern.exec(r.path) : null;
       if (found) return route.handle(r, found.slice(1));
     }

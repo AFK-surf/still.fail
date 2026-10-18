@@ -3,7 +3,7 @@
 // the endpoint and every connection and loop it started.
 import { Cause, Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Own, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
+import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { Agents } from "../sessions/agents.ts";
@@ -14,7 +14,6 @@ import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
 import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
-import { GUEST_ALPN, Guests } from "../publish/guest.ts";
 import { bindStation } from "./native.ts";
 import { lanAddrs } from "./lan.ts";
 import { Superseded } from "./superseded.ts";
@@ -32,6 +31,8 @@ export const MeshLive = Layer.effectDiscard(
     const own = yield* Own;
     const previous = yield* Previous;
     const peers = yield* Peers;
+    // The protocols the station's parts answer themselves (parts.ts): a published chat's visitors, say.
+    const parts = yield* Parts;
     const config = yield* StationConfig;
     const shares = yield* AdbShares;
     const screens = yield* ScreenRegistry;
@@ -47,7 +48,7 @@ export const MeshLive = Layer.effectDiscard(
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
       // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_ALPN, TOOLS_ALPN, GUEST_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
+        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_ALPN, TOOLS_ALPN, ...parts.allAlpns().map((p) => p.alpn)], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
@@ -112,8 +113,6 @@ export const MeshLive = Layer.effectDiscard(
       // The same tools for requests Comma pushes on the presence socket.
       cloud.state.toolCalls = presenceTools(gateways);
       yield* Effect.addFinalizer(() => Effect.sync(() => (cloud.state.toolCalls = null)));
-      // Visitors of published snapshots (publish/guest.ts): no credential, nothing but the snapshots.
-      const guests = new Guests(store);
       // A member's device connecting again: its connections left by a process that died are found and closed.
       const superseded = new Superseded();
       for (;;) {
@@ -126,8 +125,7 @@ export const MeshLive = Layer.effectDiscard(
             conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
             : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => agents.forwards?.forwarded(port) === true })
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
-            : conn.alpn().equals(GUEST_ALPN) ? guests.serve(conn)
-            : serve(members, conn),
+            : (parts.allAlpns().find((p) => conn.alpn().equals(p.alpn))?.serve(conn) ?? serve(members, conn)),
           ).pipe(
             Effect.catch((e) => Effect.sync(() => log.info("mesh", "connection ended", { error: String((e as Error).cause ?? e) }))),
             Effect.ensuring(Effect.sync(() => conn.close(0, "station stopping"))),
