@@ -10,7 +10,7 @@ import { openStore } from "../read/store.ts";
 import * as store from "../read/store.ts";
 import { agentHomeOf } from "../read/memory.ts";
 import { type Asker, SearchIndex } from "./index.ts";
-import { READING, historyDocs, jobDocs, memoryDocs, memoryWorkspaces, profileDocs, profilesOf, sessionKeys, threadDocs, threadIds, type Indexed } from "./sources.ts";
+import { READING, Readings, historyDocs, jobDocs, memoryDocs, memoryWorkspaces, profileDocs, profilesOf, sessionKeys, threadDocs, threadIds, type Indexed } from "./sources.ts";
 
 export type Told =
   | { type: "thread"; id: number }
@@ -33,6 +33,8 @@ const s = openStore(data);
 const index = new SearchIndex(join(data, "search.db"));
 
 const threads = new Set<number>();
+/// Where the transcripts read lately were read to.
+const readings = new Readings();
 const jobs = new Set<string>();
 /// Sessions whose transcript is to be read, and from when.
 const histories = new Map<string, number>();
@@ -76,7 +78,7 @@ const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 function history(key: string, profiles: ReturnType<typeof profilesOf>): void {
   const source = `h:${key}`;
   const had = index.mark(source);
-  apply(source, historyDocs(s, key, profiles, had, () => index.setMark(source, READING)));
+  apply(source, historyDocs(s, key, profiles, had, () => index.setMark(source, READING), readings));
 }
 
 /// Everything looked over: each thread, session and workspace indexed where it is not as it is now, and what is gone
@@ -201,6 +203,7 @@ parentPort!.on("message", (told: Told) => {
       break;
     }
     case "sessionRemoved":
+      readings.forget(told.key);
       index.drop(`h:${told.key}`);
       index.drop(`j:${told.key}`);
       return;

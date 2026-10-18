@@ -176,7 +176,7 @@ test("the station's index thread keeps up with its store, and answers as it does
 });
 
 test("an execution history is found, grown from where it was, and one that stopped the index's thread is passed over until it changes", async () => {
-  const { historyDocs, READING, FAILED } = await import("../src/search/sources.ts");
+  const { historyDocs, READING, FAILED, Readings } = await import("../src/search/sources.ts");
   const { appendFileSync } = await import("node:fs");
   const s = station();
   const key = "k1";
@@ -202,5 +202,13 @@ test("an execution history is found, grown from where it was, and one that stopp
   assert.deepEqual(historyDocs(read, key, profiles, failed.version)!.docs, []);
   appendFileSync(file, said("again"));
   assert.equal(historyDocs(read, key, profiles, failed.version)!.docs.length, 3);
+  // Read on from where it was read to: only what was added is read, at the index it has in the whole.
+  const readings = new Readings();
+  let whole = 0;
+  const all = historyDocs(read, key, profiles, null, () => whole++, readings)!;
+  appendFileSync(file, said("one more deploy"));
+  const more = historyDocs(read, key, profiles, all.version, () => whole++, readings)!;
+  assert.equal(whole, 1);
+  assert.deepEqual(more.docs.map((d) => [d.key, d.body]), [[`h:${key}:3`, "one more deploy"]]);
   read.db.close();
 });

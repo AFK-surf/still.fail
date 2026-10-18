@@ -12,7 +12,7 @@ import { readdirSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import * as store from "../read/store.ts";
 import type { MessageRow, SessionRow, Store } from "../read/store.ts";
-import { brief, readTimeline, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
+import { type ReadAt, brief, readTimelineFrom, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
 import { memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
 import { STILLFAIL_SURFACE } from "../read/store.ts";
@@ -184,10 +184,34 @@ export function transcriptFiles(s: Store, session: SessionRow, profiles: Profile
   return { paths, runtime, version: paths.map((p) => `${p}=${stamp(p)}`).join("|") };
 }
 
+/// Where the transcripts of the sessions read lately were read to, to read on from there as they grow (a long one is
+/// not read whole at each turn's end): the most recently read few.
+export class Readings {
+  #kept = new Map<string, { paths: string; at: ReadAt[]; count: number }>();
+  constructor(readonly most = 16) {}
+  get(key: string) {
+    const v = this.#kept.get(key);
+    if (v) {
+      this.#kept.delete(key);
+      this.#kept.set(key, v);
+    }
+    return v;
+  }
+  set(key: string, v: { paths: string; at: ReadAt[]; count: number }): void {
+    this.#kept.delete(key);
+    this.#kept.set(key, v);
+    while (this.#kept.size > this.most) this.#kept.delete(this.#kept.keys().next().value!);
+  }
+  forget(key: string): void {
+    this.#kept.delete(key);
+  }
+}
+
 /// A session's execution history as documents (null: nothing to index; none when as indexed: `had`). A transcript only
-/// grows: what was indexed of it stays, and only the entries after those are added, unless it is another now (a new
-/// runtime session, a file put away).
-export function historyDocs(s: Store, key: string, profiles: Profiles, had: string | null, reading?: () => void): Indexed | null {
+/// grows: what was indexed of it stays, and only the entries after those are added, read on from where it was read to
+/// when `readings` has it, else read whole; unless it is another now (a new runtime session, a file put away).
+/// `reading`: told before a transcript is read whole.
+export function historyDocs(s: Store, key: string, profiles: Profiles, had: string | null, reading?: () => void, readings?: Readings): Indexed | null {
   const session = store.getSession(s, key);
   if (session === null) return null;
   const files = transcriptFiles(s, session, profiles);
@@ -199,25 +223,42 @@ export function historyDocs(s: Store, key: string, profiles: Profiles, had: stri
   if (before?.files === files.version) return { version: had!, docs: [], whole: false };
   // One whose reading stopped the index's thread before (too large for it): not read again until it changes.
   if (had === READING || had === `${FAILED}${files.version}`) return { version: `${FAILED}${files.version}`, docs: [], whole: true };
-  reading?.();
-  const entries = files.paths.flatMap((p) => readTimeline(files.runtime!, p));
+  const runtime = files.runtime!;
+  const paths = files.paths.join("|");
+  const same = before !== null && typeof before.n === "number" && samePaths(before.files, files.version);
+  const kept = readings?.get(key);
+  let from: number;
+  let entries: TimelineEntry[];
+  let count: number;
+  if (kept && same && kept.paths === paths && kept.count === before!.n) {
+    entries = files.paths.flatMap((p, i) => readTimelineFrom(runtime, p, kept.at[i]!));
+    from = kept.count;
+    count = kept.count + entries.length;
+    kept.count = count;
+  } else {
+    reading?.();
+    const at: ReadAt[] = files.paths.map(() => ({ offset: 0, state: { inner: new Map() } }));
+    const all = files.paths.flatMap((p, i) => readTimelineFrom(runtime, p, at[i]!));
+    from = same && all.length >= before!.n ? before!.n : 0;
+    entries = all.slice(from);
+    count = all.length;
+    readings?.set(key, { paths, at, count });
+  }
   const thread = store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
   const chatTitle = session.title ?? thread?.title ?? thread?.autoTitle ?? "";
-  const grown = before !== null && typeof before.n === "number" && entries.length >= before.n && samePaths(before.files, files.version);
-  const from = grown ? before!.n : 0;
   const docs: Doc[] = [];
-  for (let i = from; i < entries.length; i++) {
-    const e = entries[i]!;
+  entries.forEach((e, j) => {
+    const i = from + j;
     const text = historyText(e);
-    if (text === null || text.trim() === "") continue;
+    if (text === null || text.trim() === "") return;
     const at = e.at === null ? null : Date.parse(e.at);
     docs.push({
       key: `h:${key}:${i}`, kind: "history", source: `h:${key}`, ws: session.ws, title: "", body: text,
       at: at !== null && Number.isFinite(at) ? at : null,
       ref: { session: key, index: i, entry: e.kind, ...(e.tool ? { tool: e.tool } : {}), chat: key, chatTitle, ...(thread ? { thread: thread.id } : {}) },
     });
-  }
-  return { version: JSON.stringify({ files: files.version, n: entries.length }), docs, whole: !grown };
+  });
+  return { version: JSON.stringify({ files: files.version, n: count }), docs, whole: from === 0 };
 }
 
 /// A transcript's mark while it is read, and once its reading stopped the index's thread (with the version it was of).
