@@ -13,6 +13,22 @@ These patched crates come from the corresponding crates.io releases. The iroh an
 | noq-udp | 1.3.0 | MIT OR Apache-2.0 | [MIT](vendor/noq-udp/LICENSE-MIT), [Apache](vendor/noq-udp/LICENSE-APACHE) |
 | swarm-discovery | 0.6.3 | Apache-2.0 | [Apache](vendor/swarm-discovery/LICENSE.Apache_2.0) |
 
+## FFmpeg in the media service's package
+
+The media service's package (`media/service`, installed by stations as the module `media`) carries `ffmpeg` and `ffprobe` in its `bin/`, one build per platform (darwin-arm64, linux-x64, linux-arm64). They are built in CI from the unmodified upstream sources below by `scripts/ffmpeg.ts` (the native part `ffmpeg` of `scripts/native.ts`), each tarball checked against its SHA-256. Each package's `bin/` also holds FFmpeg's `LICENSE.md` and `COPYING.LGPLv2.1` (as `ffmpeg-LICENSE.md`, `ffmpeg-COPYING.LGPLv2.1`), the notices of what is linked in, and `SOURCE`, which names these sources and the exact configure flags.
+
+| Component | Version | License | Source | In |
+| --- | --- | --- | --- | --- |
+| FFmpeg | 9.0.2 | LGPL-2.1-or-later | <https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz> (sha256 `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`) | all three |
+| OpenH264 (Cisco Systems) | 2.6.0 | BSD-2-Clause | <https://github.com/cisco/openh264/archive/refs/tags/v2.6.0.tar.gz> (sha256 `558544ad358283a7ab2930d69a9ceddf913f4a51ee9bf1bfb9e377322af81a69`) | Linux (the H.264 encoder) |
+| zlib | 1.3.2 | Zlib | <https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz> (sha256 `bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16`) | Linux (macOS uses the system's libz) |
+
+FFmpeg is configured as LGPL only: `--disable-gpl --disable-nonfree --disable-version3` (no libx264, libx265 or any other GPL or non-free library), `--disable-autodetect` (nothing from the build machine is picked up) and `--disable-everything`, then only the demuxers, muxers, decoders, encoders, parsers, bitstream filters, filters and protocols the media service uses (`COMPONENTS` in `scripts/ffmpeg.ts`). H.264 is encoded by Apple's VideoToolbox on macOS (`--enable-videotoolbox`, `h264_videotoolbox`) and by OpenH264 on Linux (`--enable-libopenh264`); audio by FFmpeg's own AAC encoder. The binaries are static apart from the operating system's own libraries (macOS: libSystem, libz and the VideoToolbox, CoreMedia, CoreVideo, CoreFoundation and CoreServices frameworks; Linux: glibc 2.28 or later). The full flag list is in each package's `bin/SOURCE` and printed by `ffmpeg -buildconf`.
+
+Whoever has the package may replace these binaries with their own build: the media service runs `$MEDIA_FFMPEG` and `$MEDIA_FFPROBE` when they are set. NASM 3.02 (BSD-2-Clause) assembles the x86-64 code during the Linux x64 build and is not distributed.
+
+Patents are a separate question from copyright: H.264, HEVC, AAC, AC-3 and others may be covered by patents in some countries. Cisco's royalty-free H.264 patent coverage applies only to the OpenH264 binaries Cisco distributes, not to OpenH264 built from source as here.
+
 ## Model and runtime marks
 
 The AI model and runtime logos (`web/public/models/`, `design/mobile/assets/`, the Android `maker_*` drawables and the marks drawn in `web/src/ui.tsx`) are adapted from [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0-1.0) and [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT). The names and logos are trademarks of their respective owners; their use here identifies the services and does not imply endorsement.

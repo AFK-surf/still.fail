@@ -12,7 +12,7 @@
 // says each as `module:<id>`), at once for one named and not yet installed, and when someone asks from the pages; what
 // is newer is installed by itself.
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
@@ -77,6 +77,19 @@ export function entryOf(dir: string): string | null {
   }
 }
 
+/// Where a package's own programs are (scripts/module-bundle.ts: its native parts), in it.
+export const BIN = "bin";
+
+/// The programs a build's module.json says are in its bin/ (`bin`: names of files there), those that may be.
+export function binOf(dir: string): string[] {
+  try {
+    const bin = JSON.parse(readFileSync(join(dir, "module.json"), "utf8"))?.bin;
+    return Array.isArray(bin) ? bin.filter((name: unknown): name is string => typeof name === "string" && !name.includes("/") && safePath(name)) : [];
+  } catch {
+    return [];
+  }
+}
+
 /// A refusal, in words the pages say in their reader's language.
 class Refused extends Error {
   readonly words: Words;
@@ -120,6 +133,11 @@ export function unpack(app: string, buildOf: number, bytes: Uint8Array): void {
     }
     const entry = entryOf(aside);
     if (entry === null || !files.some((f) => f.path === entry)) throw new Refused({ key: "station.updates.moduleBadPackage", args: { why: "module.json names no entry it has" } });
+    // Its programs run: the archive holds plain files, written above for the station's user to read and write alone.
+    for (const name of binOf(aside)) {
+      if (!files.some((f) => f.path === `${BIN}/${name}`)) throw new Refused({ key: "station.updates.moduleBadPackage", args: { why: `module.json names a program it lacks: ${BIN}/${name}` } });
+      chmodSync(join(aside, BIN, name), 0o700);
+    }
     rmSync(join(app, String(buildOf)), { recursive: true, force: true });
     renameSync(aside, join(app, String(buildOf)));
   } finally {
@@ -223,7 +241,8 @@ export class Packages {
   }
 
   /// Module `spec` as it is run: the station's own Node (the desktop app's Electron as Node) on the entry of the build
-  /// installed; null while none is.
+  /// installed, told where the package's own programs are when it has some (MODULE_BIN_DIR: its bin/, the media
+  /// service's ffmpeg and ffprobe); null while none is.
   runnable(spec: PackageSpec): ModuleSpec | null {
     const current = this.#current(spec);
     if (current === null) return null;
@@ -237,7 +256,7 @@ export class Packages {
       id: spec.id,
       command: process.execPath,
       args: [join(dir, entry), ...spec.args],
-      env: { ...spec.env, ELECTRON_RUN_AS_NODE: "1" },
+      env: { ...spec.env, ELECTRON_RUN_AS_NODE: "1", ...(binOf(dir).length > 0 ? { MODULE_BIN_DIR: join(dir, BIN) } : {}) },
       installed: { package: spec.package, build: current },
     };
   }

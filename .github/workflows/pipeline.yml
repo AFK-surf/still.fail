@@ -7,7 +7,7 @@
 #             and signed on the organization Mac runner with the existing certificate).
 #             Nothing goes out after a step that fails; the tag moves to the commit once all of it is out.
 # The native parts (scripts/native.ts: the station's mesh addon, launcher and runner, the web's iroh, Android's shell
-# and engine, the desktop's dock) are prebuilt: the natives job builds those whose key the release
+# and engine, the desktop's dock, the media service's ffmpeg) are prebuilt: the natives job builds those whose key the release
 # native-artifacts lacks, on mini1, and on main publishes them there; every other job gets them from the release (a
 # branch's: from its natives job's run artifact), so a change that is not to a native part compiles no Rust.
 # Stable: the manual Publish stable workflow. Relay remains manual (deploying it drops every connection).
@@ -26,8 +26,9 @@ permissions:
   contents: read
 env:
   # The native parts a branch's checks and builds use (the Linux station parts are built and published from main; the
-  # Linux check's mesh addon is built on a branch that changed it).
-  BRANCH_NATIVES: mesh:darwin-arm64 dock:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 window-controls:win32-x64 notify-permission:darwin-arm64 notify-permission:win32-x64 helper:darwin-arm64
+  # Linux check's mesh addon is built on a branch that changed it). ffmpeg, all three, on a branch that changed
+  # scripts/ffmpeg.ts: nothing on a branch runs it, but its build there is the evidence for the merge.
+  BRANCH_NATIVES: mesh:darwin-arm64 dock:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 window-controls:win32-x64 notify-permission:darwin-arm64 notify-permission:win32-x64 helper:darwin-arm64 ffmpeg:darwin-arm64 ffmpeg:linux-x64 ffmpeg:linux-arm64
 jobs:
   # What can runs on mini1; what needs Linux (the Linux check) and the small jobs (plan, the API's deploy, put, the
   # changelog, timing) on GitHub's own runners, free for a public repository, not on Blacksmith's (2026-10-15, as asked).
@@ -641,9 +642,10 @@ jobs:
   # The modules' packages stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): when what one
   # packs changed. Each one's archive, named by its version, is put at once (one already out is checked to be the same
   # bytes: scripts/release.sh), its beta feed signed and put by `put` once the check passed. On GitHub's runner: plain
-  # files, nothing of a machine's in them.
+  # files, nothing of a machine's in them. After natives: a module carrying a native part (the media service's ffmpeg,
+  # one archive a platform) takes the build the release native-artifacts has, which natives publishes first.
   modules:
-    needs: [plan]
+    needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.modules == 'true' }}
     runs-on: ubuntu-24.04
     environment: production

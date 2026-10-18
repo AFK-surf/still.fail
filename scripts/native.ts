@@ -35,6 +35,7 @@ import {
 import { homedir, hostname, platform as osPlatform, arch as osArch, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import * as ffmpeg from "./ffmpeg.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /// The Rust every part is built with (rustup installs it on first use): part of each key, so a newer one is a rebuild.
@@ -61,6 +62,9 @@ type Part = {
   /// What goes into it, as git paths; and how it is built, as data (both are in the key).
   inputs?: string[];
   recipe: (target: Target) => unknown;
+  /// Built with no Rust: the toolchain is not in its key. With its own zig: that one is (not ZIG).
+  rust?: false;
+  zig?: string;
   /// Built into `out` (a fresh directory).
   build: (target: Target, out: string) => void;
 };
@@ -263,6 +267,18 @@ const PARTS: Record<string, Part> = {
       run("codesign", ["--force", "--sign", "-", "--identifier", "fail.still.helper", app]);
     },
   },
+  // ffmpeg and ffprobe for the media service, LGPL only, from FFmpeg's source (scripts/ffmpeg.ts: its key is that file
+  // alone, and the media service's package carries it: scripts/module-bundle.ts).
+  ffmpeg: {
+    files: (t) => ffmpeg.files(t as ffmpeg.FfmpegTarget),
+    targets: ffmpeg.TARGETS,
+    env: "MEDIA_FFMPEG",
+    inputs: ["scripts/ffmpeg.ts"],
+    rust: false,
+    zig: ffmpeg.ZIG,
+    recipe: (t) => ffmpeg.recipe(t as ffmpeg.FfmpegTarget),
+    build: (t, out) => ffmpeg.build(t as ffmpeg.FfmpegTarget, out),
+  },
   // iroh's relay in dev mode, for the core's mesh tests (client/core-ts/test/mesh.test.ts): n0's own build, the
   // version still.fail's relays run (cloud/Dockerfile).
   "iroh-relay": {
@@ -331,7 +347,8 @@ function inputs(paths: string[]): [string, string][] {
 }
 function key(part: string, target: Target): string {
   const p = P(part);
-  const what = { part, target, toolchain: TOOLCHAIN, zig: target.startsWith("linux") || target === "win32-x64" ? ZIG : undefined, recipe: p.recipe(target), files: p.files(target), inputs: inputs(p.inputs ?? []) };
+  const zig = target.startsWith("linux") || target === "win32-x64" ? (p.zig ?? ZIG) : undefined;
+  const what = { part, target, toolchain: p.rust === false ? undefined : TOOLCHAIN, zig, recipe: p.recipe(target), files: p.files(target), inputs: inputs(p.inputs ?? []) };
   return createHash("sha256").update(JSON.stringify(what)).digest("hex").slice(0, 24);
 }
 const asset = (part: string, target: Target, k: string) => `${part}-${target}-${k}.tar.gz`;
@@ -434,7 +451,7 @@ async function download(part: string, target: Target, k: string): Promise<string
 
 function buildHere(part: string, target: Target, k: string): string {
   const started = Date.now();
-  log(`${part} ${target} ${k}: not prebuilt; building it here${P(part).inputs ? " (cargo)" : ""}…`);
+  log(`${part} ${target} ${k}: not prebuilt; building it here${P(part).inputs && P(part).rust !== false ? " (cargo)" : ""}…`);
   const tmp = fresh(part);
   try {
     P(part).build(target, tmp);
@@ -695,7 +712,19 @@ async function main(argv: string[]) {
   }
 }
 
-main(process.argv.slice(2)).catch((e) => {
-  log((e as Error).message);
-  process.exit(1);
-});
+/// What a part is made of, as paths in the repository (scripts/module-bundle.ts: a package carrying the part is a new
+/// version when they change).
+export const inputsOf = (part: string): string[] => P(part).inputs ?? [];
+/// The targets a part is built for.
+export const targetsOf = (part: string): string[] => P(part).targets;
+/// The files a part's artifact holds for a target.
+export const filesOf = (part: string, target: string): string[] => P(part).files(target as Target);
+/// Whether there is such a part.
+export const isPart = (name: string): boolean => Object.hasOwn(PARTS, name);
+
+if (import.meta.main) {
+  main(process.argv.slice(2)).catch((e) => {
+    log((e as Error).message);
+    process.exit(1);
+  });
+}

@@ -2,10 +2,11 @@
 // server: a module packed and its feed signed as CI does it (scripts/module-bundle.ts, scripts/release-sign.ts) with the
 // tests' key, installed from the feed, run by the station's own Node, updated to a newer build and gone back from one
 // that never comes up; and refused: a signature by a key it does not take, words that are not this module's release,
-// an archive that is not the one signed, a release for a newer station, one older than what came up. The real media
-// service packed the same way runs too.
+// an archive that is not the one signed, a release for a newer station, one older than what came up. A module with a
+// native part (ffmpeg) packed once per platform, its programs in bin/: installed as this machine's, started told where
+// they are (MODULE_BIN_DIR). The real media service packed the same way runs too.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -13,7 +14,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { Effect, Fiber } from "effect";
-import { pack } from "../../scripts/module-bundle.ts";
+import { PLATFORMS, changes, pack } from "../../scripts/module-bundle.ts";
+import { filesOf as nativeFiles } from "../../scripts/native.ts";
 import { stationDrive } from "../src/drive/drive.ts";
 import { ask } from "../src/modules/forward.ts";
 import { keep, type Life } from "../src/modules/live.ts";
@@ -23,6 +25,7 @@ import { ConfigFile } from "../src/ops/config.ts";
 import { readArchive, writeArchive } from "../src/updates/archive.ts";
 import { Unverified, sha256, verifyModule } from "../src/updates/signed.ts";
 import { Updates } from "../src/updates/updates.ts";
+import { platform } from "../src/updates/versions.ts";
 import { KEY, OTHER, signed, trusted } from "./release-fakes.ts";
 
 delete process.env.STILLFAIL_CONFIG;
@@ -80,7 +83,53 @@ function packFake(out: string, build: number, o: { crash?: boolean; beta?: boole
     mkdirSync(join(dir, "lib"));
     writeFileSync(join(dir, "lib", "words.txt"), `build ${build}`);
     writeFileSync(join(dir, "lib", ".hidden"), "not packed");
-    return pack(dir, out, { beta: o.beta ?? true, build, unsignedOk: false, env: { ...process.env, CI: "", RELEASE_SIGNING_KEY: KEY.pem } });
+    const names = pack(dir, out, { beta: o.beta ?? true, build, unsignedOk: false, env: { ...process.env, CI: "", RELEASE_SIGNING_KEY: KEY.pem } });
+    assert.equal(names.length, 2, "one archive, for every machine, and the feed");
+    return [names[0]!, names[1]!];
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/// Native parts as scripts/native.ts fetch gives them, made up: each part's files for each platform in a directory of
+/// their own, its programs (executable) shell scripts saying which they are; what was asked for, in order.
+function fakeNatives(t: { after: (f: () => unknown) => void }) {
+  const dir = temp("mp-n-");
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const asked: string[] = [];
+  const natives = (part: string, target: string) => {
+    asked.push(`${part}:${target}`);
+    const at = join(dir, part, target);
+    if (existsSync(at)) return at;
+    mkdirSync(at, { recursive: true });
+    for (const name of nativeFiles(part, target)) {
+      const program = !name.includes("LICENSE") && !name.includes("COPYING") && name !== "SOURCE";
+      writeFileSync(join(at, name), program ? `#!/bin/sh\necho ${name} ${target} "$@"\n` : `${name} of ${part} for ${target}\n`, { mode: program ? 0o755 : 0o644 });
+    }
+    return at;
+  };
+  return { natives, asked };
+}
+
+/// A module with a native part (ffmpeg), at `build`, packed as CI packs it (an archive a platform) with `natives`:
+/// when asked, it says where its programs are (MODULE_BIN_DIR) and what its ffmpeg says when run.
+function packNative(out: string, build: number, natives: (part: string, platform: string) => string): string[] {
+  const dir = temp("mp-m-");
+  try {
+    writeFileSync(join(dir, "module.json"), JSON.stringify({ id: "fake", entry: "main.ts", files: [], native: ["ffmpeg"], needsStation: 100 }));
+    writeFileSync(join(dir, "main.ts"), `import { execFileSync } from "node:child_process";
+import { createServer } from "node:http";
+import { join } from "node:path";
+process.stdin.on("end", () => process.exit(0));
+process.stdin.resume();
+const bin: string | null = process.env.MODULE_BIN_DIR ?? null;
+createServer((req, res) => {
+  res.writeHead(200, { "content-type": "application/json" });
+  if (req.url === "/manifest") return res.end("{}");
+  res.end(JSON.stringify({ build: ${build}, bin, ffmpeg: bin ? execFileSync(join(bin, "ffmpeg"), ["-version"], { encoding: "utf8" }).trim() : null }));
+}).listen(process.env.STILLFAIL_MODULE_SOCKET);
+`);
+    return pack(dir, out, { beta: true, build, unsignedOk: false, natives, env: { ...process.env, CI: "", RELEASE_SIGNING_KEY: KEY.pem } });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -185,6 +234,64 @@ test("a module packed: its files and module.json, hidden ones left out, the same
   assert.deepEqual(release, { kind: "stillfail-module-release", id: "fake", version: "0.1.41", build: 41, needsStation: 100, builds: { any: { sha256: sha256(bytes), size: bytes.length } } });
   // The stable channel's feed names the same archive.
   assert.equal(packFake(out, 41, { beta: false })[1], "modules/fake/fake.json");
+});
+
+test("a module with a native part: packed once per platform it is built for, its files in bin/, the programs said", (t) => {
+  const out = temp("mp-p-");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  const { natives, asked } = fakeNatives(t);
+  const names = packNative(out, 42, natives);
+  assert.deepEqual(names, [...PLATFORMS.map((p) => `modules/fake/fake-0.1.42-${p}.tar.gz`), "modules/fake/fake-beta.json"]);
+  assert.deepEqual(asked, PLATFORMS.map((p) => `ffmpeg:${p}`));
+  const release = verifyModule(JSON.parse(readFileSync(join(out, names.at(-1)!), "utf8")), "fake", trusted);
+  assert.deepEqual(Object.keys(release.builds), PLATFORMS);
+  for (const [i, platform] of PLATFORMS.entries()) {
+    const bytes = readFileSync(join(out, names[i]!));
+    assert.deepEqual(release.builds[platform], { sha256: sha256(bytes), size: bytes.length });
+    const files = readArchive(bytes);
+    assert.deepEqual(files.map((f) => f.path), [...nativeFiles("ffmpeg", platform).map((f) => `bin/${f}`).sort(), "main.mjs", "module.json"]);
+    assert.equal(Buffer.from(files.find((f) => f.path === "bin/ffmpeg")!.bytes).toString(), `#!/bin/sh\necho ffmpeg ${platform} "$@"\n`);
+    assert.ok(files.some((f) => f.path === "bin/ffmpeg-LICENSE.md") && files.some((f) => f.path === "bin/SOURCE"), "FFmpeg's license and source note go with it");
+    assert.deepEqual(JSON.parse(Buffer.from(files.find((f) => f.path === "module.json")!.bytes).toString()), {
+      id: "fake", entry: "main.mjs", files: ["main.mjs", "bin"], needsStation: 100, native: ["ffmpeg"], bin: ["ffmpeg", "ffprobe"],
+    });
+  }
+  // The same bytes packed again (the release's part, not a build).
+  const first = readFileSync(join(out, names[0]!));
+  packNative(out, 42, natives);
+  assert.deepEqual(readFileSync(join(out, names[0]!)), first);
+  // What the native part is made of is what the package is: a change to it is a new version.
+  assert.equal(changes(["scripts/ffmpeg.ts"]), true);
+  assert.equal(changes(["scripts/native.ts"]), false);
+});
+
+test("a package with programs: its platform's archive installed, the programs executable, the module told where they are", async (t) => {
+  const machine = platform();
+  if (machine === null || !PLATFORMS.includes(machine)) return t.skip(`no modules on ${machine}`);
+  const r = await releases(t);
+  const { natives } = fakeNatives(t);
+  packNative(r.dir, 110, natives);
+  const s = station(t, r.base, { modules: [{ id: "fake", package: "fake" }] });
+  await until(async () => (await s.said())?.build === 110);
+  const bin = join(s.app, "110", "bin");
+  assert.deepEqual(await s.said(), { build: 110, bin, ffmpeg: `ffmpeg ${machine} -version` });
+  assert.deepEqual(r.asked.slice(0, 2), ["/releases/modules/fake/fake-beta.json", `/releases/modules/fake/fake-0.1.110-${machine}.tar.gz`]);
+  assert.equal(s.modules.get("fake")!.spec.env.MODULE_BIN_DIR, bin);
+  assert.equal(statSync(join(bin, "ffprobe")).mode & 0o777, 0o700);
+  assert.equal(statSync(join(bin, "ffmpeg-LICENSE.md")).mode & 0o777, 0o600, "only the programs run");
+});
+
+test("a package naming a program it lacks is not taken", async (t) => {
+  const r = await releases(t);
+  const s = station(t, r.base, { run: false });
+  s.packages.named(named);
+  const archive = Buffer.from(writeArchive([
+    { path: "module.json", bytes: Buffer.from(JSON.stringify({ id: "fake", entry: "main.mjs", bin: ["ffmpeg"] })) },
+    { path: "main.mjs", bytes: Buffer.from(fakeMain(101)) },
+  ]));
+  feedOf(r.dir, 101, { archive });
+  await assert.rejects(s.packages.update("module:fake", "en"), /can't be opened.*a program it lacks: bin\/ffmpeg/);
+  assert.equal(s.state().current, null);
 });
 
 test("a package: installed from its signed feed, run by the station's Node, updated, and gone back from a build that never comes up", async (t) => {
@@ -328,16 +435,22 @@ test("the station's updates read the packages with the rest, a line each after t
   assert.equal(updates.get("en").some((l) => l.id.startsWith("module:")), false);
 });
 
-test("the media service, packed as CI packs it (one bundled main.mjs), installed and run as module media", async (t) => {
+test("the media service, packed as CI packs it (one bundled main.mjs, ffmpeg in bin/), installed and run as module media", async (t) => {
+  const machine = platform();
+  if (machine === null || !PLATFORMS.includes(machine)) return t.skip(`no modules on ${machine}`);
   const r = await releases(t);
-  pack(MEDIA, r.dir, { beta: true, build: 3600, unsignedOk: false, env: { ...process.env, CI: "", RELEASE_SIGNING_KEY: KEY.pem } });
+  const { natives } = fakeNatives(t);
+  const names = pack(MEDIA, r.dir, { beta: true, build: 3600, unsignedOk: false, natives, env: { ...process.env, CI: "", RELEASE_SIGNING_KEY: KEY.pem } });
+  assert.deepEqual(names, [...PLATFORMS.map((p) => `modules/media/media-0.1.3600-${p}.tar.gz`), "modules/media/media-beta.json"]);
   const s = station(t, r.base, { station: 4000, modules: [{ id: "media", package: "media" }] });
   await until(() => s.modules.get("media")?.running === true);
   const at = s.packages.appOf("media");
   assert.deepEqual(readInstalled(at).current, 3600);
-  assert.deepEqual(readdirSync(join(at, "3600")).sort(), ["main.mjs", "module.json"]);
+  assert.deepEqual(readdirSync(join(at, "3600")).sort(), ["bin", "main.mjs", "module.json"]);
+  assert.deepEqual(readdirSync(join(at, "3600", "bin")).sort(), nativeFiles("ffmpeg", machine).sort());
   assert.equal(JSON.parse(readFileSync(join(at, "3600", "module.json"), "utf8")).entry, "main.mjs");
   assert.deepEqual(s.modules.get("media")!.spec.args, [join(at, "3600", "main.mjs")]);
+  assert.equal(s.modules.get("media")!.spec.env.MODULE_BIN_DIR, join(at, "3600", "bin"));
   // Its data where it always was, beside the code.
   await until(() => existsSync(join(s.data, "modules", "media", "media.db")));
 });
