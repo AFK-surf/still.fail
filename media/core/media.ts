@@ -16,7 +16,12 @@ const T = {
   book: "media.book",
   place: "media.place",
   notes: "media.notes",
+  timeline: "media.timeline",
+  albums: "media.albums",
 } as const;
+
+/// How many days with photos a timeline's window holds each side of its day, at most.
+const DAYS_MOST = 120;
 
 const enc = encodeURIComponent;
 
@@ -47,6 +52,7 @@ export const media: CoreModule = {
       book: (station: string, book: string): Topic => ({ topic: T.book, station, book }),
       place: (station: string, book: string): Topic => ({ topic: T.place, station, book }),
       notes: (station: string, book: string): Topic => ({ topic: T.notes, station, book }),
+      albums: (station: string): Topic => ({ topic: T.albums, station }),
     };
     // What a topic is read as, from the service, and kept as.
     const source = (t: Topic): { path: string; key: string; take: (got: unknown) => unknown } | null => {
@@ -61,6 +67,17 @@ export const media: CoreModule = {
           return { path: `/books/${enc(book)}/place`, key: `place/${book}`, take: (got) => ({ place: obj(got).place ?? null }) };
         case T.notes:
           return { path: `/books/${enc(book)}/notes`, key: `notes/${book}`, take: (got) => got };
+        // A window of the photos' timeline: `before` and `after` days that have photos about `around` (none: the
+        // latest), each kept as it was read.
+        case T.timeline: {
+          const around = typeof t.around === "string" && /^\d{4}-\d{2}-\d{2}$/.test(t.around) ? t.around : "";
+          const days = (v: unknown, fallback: number) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? Math.min(v, DAYS_MOST) : fallback);
+          const before = days(t.before, 30);
+          const after = days(t.after, around === "" ? 0 : 30);
+          return { path: `/photos/timeline?${around ? `around=${around}&` : ""}before=${before}&after=${after}`, key: `timeline/${around}/${before}/${after}`, take: (got) => got };
+        }
+        case T.albums:
+          return { path: "/photos/albums", key: "albums", take: (got) => got };
       }
       return null;
     };
@@ -76,7 +93,8 @@ export const media: CoreModule = {
     // Shown topics by station; a station with any has its events followed.
     const shown = new Map<string, Map<string, Topic>>();
     const following = new Map<string, () => void>();
-    const keyOf = (t: Topic) => `${t.topic}\n${String(t.book ?? "")}`;
+    // A topic by its params, whatever order they came in.
+    const keyOf = (t: Topic) => JSON.stringify(Object.entries(t).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
     const follow = (station: string) =>
       Effect.scoped(
         Effect.gen(function* () {
@@ -97,6 +115,11 @@ export const media: CoreModule = {
               })();
               const of = shown.get(station);
               if (!of) continue;
+              // The photos changed: every window of the timeline shown, and the albums.
+              if (event === "photos") {
+                for (const t of [...of.values()].filter((t) => t.topic === T.timeline || t.topic === T.albums)) yield* Effect.ignore(read(t));
+                continue;
+              }
               const asked = event === "shelf" ? topic.shelf(station) : event === "place" ? topic.place(station, book) : event === "notes" ? topic.notes(station, book) : null;
               // A book changed: its contents too, if shown.
               const also = event === "shelf" ? [...of.values()].filter((t) => t.topic === T.book) : [];
@@ -150,6 +173,8 @@ export const media: CoreModule = {
       keyed: {
         [T.shelf]: { fields: { books: { key: ["id"] } } },
         [T.notes]: { fields: { notes: { key: ["id"] } } },
+        [T.timeline]: { fields: { days: { key: ["day"], item: { fields: { items: { key: ["id"] } } } } } },
+        [T.albums]: { fields: { albums: { key: ["id"] } } },
       },
       calls: {
         // A chapter's text: kept on the device once read, so a book read before opens without the station.
@@ -213,6 +238,100 @@ export const media: CoreModule = {
             Effect.andThen(env.request(p.station, "DELETE", `/books/${enc(p.book)}/notes/${enc(p.id)}`, null), Effect.as(read(topic.notes(p.station, p.book)), null)),
           station: (p: { station: string }) => p.station,
           counts: true,
+        },
+        // Photos' thumbnails, many at once (a grid's screenful): their bytes one after another beside the answer, where
+        // each is in them (`index`: id, offset, length, w, h).
+        thumbs: {
+          parse: (params) => {
+            const p = obj(params);
+            const ids = Array.isArray(p.ids) ? p.ids.filter((i): i is string => typeof i === "string" && /^[0-9a-f]{1,64}$/.test(i)) : [];
+            if (ids.length === 0 || ids.length > 64) throw CoreError.invalid("ids: 1 to 64 photos");
+            return { station: str(p, "station"), ids, size: p.size === "large" ? "large" : "grid" };
+          },
+          run: (p: { station: string; ids: string[]; size: string }) =>
+            Effect.flatMap(env.exchange(p.station, "GET", `/photos/thumbs?ids=${p.ids.join(",")}&size=${p.size}`, [], new Uint8Array()), (r) => {
+              if (r.status < 200 || r.status >= 300) return Effect.fail(new CoreError("not_found", `缩略图读取失败（${r.status}）`));
+              const said = r.headers.find(([k]) => k.toLowerCase() === "stillfail-index")?.[1] ?? "[]";
+              let index: unknown;
+              try {
+                index = JSON.parse(said);
+              } catch {
+                index = [];
+              }
+              return Effect.succeed(new Beside({ index }, r.body));
+            }),
+          station: (p: { station: string }) => p.station,
+        },
+        // One photo's thumbnail (`large`: to look at it), its bytes beside the answer.
+        thumb: {
+          parse: (params) => {
+            const p = obj(params);
+            return { station: str(p, "station"), id: str(p, "id"), size: p.size === "grid" ? "grid" : "large" };
+          },
+          run: (p: { station: string; id: string; size: string }) =>
+            Effect.flatMap(env.exchange(p.station, "GET", `/photos/thumbs/${enc(p.id)}?size=${p.size}`, [], new Uint8Array()), (r) => {
+              if (r.status < 200 || r.status >= 300) return Effect.fail(new CoreError("not_found", `缩略图读取失败（${r.status}）`));
+              const header = (name: string) => r.headers.find(([k]) => k.toLowerCase() === name)?.[1];
+              return Effect.succeed(new Beside({ type: header("content-type") ?? "image/jpeg", w: Number(header("stillfail-width") ?? 0), h: Number(header("stillfail-height") ?? 0) }, r.body));
+            }),
+          station: (p: { station: string }) => p.station,
+        },
+        // A photo or video as it is: when, how big, where on the drive (its original read as a drive file), its camera.
+        item: {
+          parse: (params) => {
+            const p = obj(params);
+            return { station: str(p, "station"), id: str(p, "id") };
+          },
+          run: (p: { station: string; id: string }) => env.request(p.station, "GET", `/photos/items/${enc(p.id)}`, null),
+          station: (p: { station: string }) => p.station,
+        },
+        // The folders the photos are from (the phones' backups always among them), and setting them (owners and admins).
+        "photos.folders": {
+          parse: (params) => ({ station: str(obj(params), "station") }),
+          run: (p: { station: string }) => env.request(p.station, "GET", "/photos/folders", null),
+          station: (p: { station: string }) => p.station,
+        },
+        "photos.setFolders": {
+          parse: (params) => {
+            const p = obj(params);
+            const folders = Array.isArray(p.folders) ? p.folders.map(obj).map((f) => ({ root: str(f, "root"), path: typeof f.path === "string" ? f.path : "" })) : [];
+            return { station: str(p, "station"), folders };
+          },
+          run: (p: { station: string; folders: { root: string; path: string }[] }) =>
+            Effect.tap(env.request(p.station, "PUT", "/photos/folders", { folders: p.folders }), () => read(topic.albums(p.station))),
+          station: (p: { station: string }) => p.station,
+          counts: true,
+        },
+        // A phone's backup: whether a photo is there already (by its sha256), and its parts sent up, resumed from `have`.
+        "photos.has": {
+          parse: (params) => {
+            const p = obj(params);
+            const hash = str(p, "hash");
+            if (!/^[0-9a-f]{64}$/.test(hash)) throw CoreError.invalid("hash: a sha256");
+            return { station: str(p, "station"), hash };
+          },
+          run: (p: { station: string; hash: string }) => env.request(p.station, "GET", `/photos/has?hash=${p.hash}`, null, { quiet: true }),
+          station: (p: { station: string }) => p.station,
+        },
+        "photos.upload": {
+          parse: (params, bytes) => {
+            const p = obj(params);
+            if (bytes === undefined || bytes.length === 0) throw CoreError.invalid("bytes: the part going up");
+            const hash = str(p, "hash");
+            if (!/^[0-9a-f]{64}$/.test(hash)) throw CoreError.invalid("hash: a sha256");
+            return { station: str(p, "station"), name: str(p, "name"), size: count(p, "size"), hash, taken: typeof p.taken === "number" ? p.taken : null, offset: count(p, "offset"), bytes };
+          },
+          run: (p: { station: string; name: string; size: number; hash: string; taken: number | null; offset: number; bytes: Uint8Array }) => {
+            const q = `name=${enc(p.name)}&size=${p.size}&hash=${p.hash}&offset=${p.offset}${p.taken === null ? "" : `&taken=${p.taken}`}`;
+            return Effect.flatMap(env.exchange(p.station, "POST", `/photos/upload?${q}`, [["content-type", "application/octet-stream"]], p.bytes, { quiet: true }), (r) => {
+              let said: unknown = {};
+              try {
+                said = JSON.parse(new TextDecoder().decode(r.body));
+              } catch {}
+              return r.status >= 200 && r.status < 300 ? Effect.succeed(said) : Effect.fail(new CoreError("upload", String(obj(said).error ?? `上传失败（${r.status}）`)));
+            });
+          },
+          station: (p: { station: string }) => p.station,
         },
         // A book file, or every book in a folder, of the station's drive put on the shelf.
         import: {

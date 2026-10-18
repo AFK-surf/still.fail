@@ -90,3 +90,38 @@ test("a chapter is kept once read; a picture comes with its bytes", async () => 
   assert.equal((answers(emitted, 4)?.error as { code: string }).code, "invalid_params");
   core.close();
 });
+
+test("the photos' timeline, a window of it read as it is shown and again when the photos change; thumbnails many at once", async () => {
+  let days = [{ day: "2026-10-18", items: [{ id: "a1", kind: "photo", taken: 1, w: 4, h: 3, thumbhash: "x" }] }];
+  const s = await started(undefined, 0, undefined, undefined, [media]);
+  const { host, core } = s;
+  const jpeg = new Uint8Array([255, 216, 1, 2, 255, 217, 255, 216, 3, 255, 217]);
+  stationReplies(host, (req) => {
+    if (req.url.includes(`${M}/photos/timeline?`)) return { days, more: { before: false, after: false } };
+    if (req.url.includes(`${M}/photos/thumbs?ids=a1,b2&size=grid`))
+      return new Raw({ status: 200, headers: [["content-type", "application/octet-stream"], ["stillfail-index", JSON.stringify([{ id: "a1", offset: 0, length: 6, w: 4, h: 3 }, { id: "b2", offset: 6, length: 5, w: 3, h: 4 }])]], body: jpeg });
+    return undefined;
+  });
+  const ui = core.connect();
+  core.receiveJson(ui, JSON.stringify({ id: 1, subscribe: { topic: "media.timeline", station: ST, before: 30 } }));
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).days.map((d: { day: string }) => d.day), ["2026-10-18"]);
+  assert.ok(host.requests.some((r) => r.url.endsWith(`${M}/photos/timeline?before=30&after=0`)));
+  const events = s.streams.find((x) => x.path === "/m/media/events" && !x.closed)!;
+  days = [{ day: "2026-10-19", items: [{ id: "b2", kind: "video", taken: 2, w: 3, h: 4, thumbhash: "y" }] }, ...days];
+  Queue.offerUnsafe(events.queue, new TextEncoder().encode("event: photos\ndata: {}\n\n"));
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).days.map((d: { day: string }) => d.day), ["2026-10-19", "2026-10-18"]);
+  call(core, ui, 2, "media.thumbs", { station: ST, ids: ["a1", "b2"] });
+  call(core, ui, 3, "media.thumbs", { station: ST, ids: [] });
+  await host.settle();
+  const emitted = host.takeEmitted();
+  const thumbs = answers(emitted, 2) as { ok: { index: { id: string; offset: number; length: number }[] }; bytes: Uint8Array };
+  assert.deepEqual(thumbs.ok.index.map((i) => [i.id, i.offset, i.length]), [["a1", 0, 6], ["b2", 6, 5]]);
+  assert.equal(thumbs.bytes.length, 11);
+  assert.equal((answers(emitted, 3)?.error as { code: string }).code, "invalid_params");
+  core.close();
+});
