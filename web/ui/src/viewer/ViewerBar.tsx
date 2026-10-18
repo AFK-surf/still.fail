@@ -3,14 +3,14 @@
 // along the window's top: the way back on the left (where to, by name), the file's name and a line about it in the
 // middle, its tools on the right as icons, download last. Its ground is the file's (`--viewer-ground`, the paper
 // under a text), its ink and line with it. On a phone each keeps its own floating bars.
-import { useCallback, useRef, useState, type ReactNode, type UIEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type UIEvent, type PointerEvent } from "react";
 import { ChevronLeft, Download } from "../icons.tsx";
 import { Tip } from "../parts.tsx";
 import * as css from "./ViewerBar.css.ts";
 import { t } from "../i18n.ts";
 import * as pageCss from "../styles/page.css.ts";
 
-export function ViewerBar({ back, name, meta, tools, title, hidden = false }: {
+export function ViewerBar({ back, name, meta, tools, title, hidden = false, onHeld }: {
   /** Where its way back goes, by name, and going there (or closing it). */
   back: { label: string; onClick: () => void };
   name: ReactNode;
@@ -22,9 +22,31 @@ export function ViewerBar({ back, name, meta, tools, title, hidden = false }: {
   title?: string | undefined;
   /** Gone up out of the way (the file played on, or read on down): it comes back as the pointer comes to the top. */
   hidden?: boolean;
+  /** The pointer came onto it (true), or left it (false): a bar that fades as the pointer rests stays while it is on it. */
+  onHeld?: (held: boolean) => void;
 }) {
+  // In the desktop app the bar drags the window, and where it does the page hears nothing of the pointer. Dragging all
+  // the time, the page could never tell the pointer is on it (its rest timed out under it), nor reach the file under it
+  // once it has gone. So it drags only while the pointer is on it: heard coming onto it (not dragging yet), held from
+  // then on, let go as the pointer is heard anywhere else (back on the file), or as the bar goes.
+  const [held, setHeld] = useState(false);
+  const el = useRef<HTMLElement>(null);
+  const told = useRef(onHeld);
+  told.current = onHeld;
+  const was = useRef(false);
+  useEffect(() => {
+    if (was.current !== held) told.current?.(held);
+    was.current = held;
+    if (!held) return;
+    const away = (e: globalThis.PointerEvent) => { if (!el.current?.contains(e.target as Node)) setHeld(false); };
+    document.addEventListener("pointermove", away, true);
+    document.addEventListener("pointerdown", away, true);
+    return () => { document.removeEventListener("pointermove", away, true); document.removeEventListener("pointerdown", away, true); };
+  }, [held]);
+  if (hidden && held) setHeld(false);
   return (
-    <header className={css.bar} data-hidden={hidden || undefined} inert={hidden}>
+    <header ref={el} className={css.bar} data-hidden={hidden || undefined} data-held={held || undefined} inert={hidden}
+      onPointerMove={(e) => { if (e.pointerType === "mouse" && !hidden && !held) setHeld(true); }}>
       <button type="button" className={css.back} onClick={back.onClick} aria-label={back.label}><ChevronLeft size={20} /><span>{back.label}</span></button>
       <span className={css.center} title={title}>
         <b className={css.name}>{name}</b>
@@ -72,14 +94,6 @@ export function useBarOnScroll(): { hidden: boolean; onScroll: (e: UIEvent) => v
   const onPointerMove = useCallback((e: PointerEvent) => { if (e.pointerType === "mouse" && e.clientY < VIEWER_BAR_REACH) setHidden(false); }, []);
   return { hidden, onScroll, onPointerMove };
 }
-
-/**
- * Whether the pointer, last seen at `e`, is on the bar (or just coming to it): within VIEWER_BAR_REACH of the window's
- * top. A viewer whose bar fades as the pointer rests keeps it while so. In the desktop app the bar drags the window, and
- * over it the page hears nothing of the pointer (it seems to rest there, or to have left the page): where it was last
- * seen tells.
- */
-export const byBar = (e: { clientY: number }) => e.clientY < VIEWER_BAR_REACH;
 
 /** Read down this far before the bar goes; this much of a scroll at once says which way. */
 const TOP_KEPT = 48;

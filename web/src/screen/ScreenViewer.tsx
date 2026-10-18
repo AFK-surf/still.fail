@@ -15,7 +15,7 @@ import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { byBar, ViewerBar, ViewerTool } from "@stillfail/ui/viewer/ViewerBar.tsx";
+import { ViewerBar, ViewerTool, VIEWER_BAR_REACH } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { REST_MS } from "@stillfail/ui/viewer/rest.ts";
 import { Button, PanelButton, Segmented, Tip, WaitPill } from "../ui.tsx";
@@ -315,7 +315,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   // anywhere, while only looking). A finger keeps it; so does someone else driving it (who, and 接管, stay in sight).
   const [awake, setAwake] = useState(true);
   const rest = useRef(0);
-  // The pointer on the bar, which it does not hear where it drags the window (ViewerBar.tsx byBar): it stays.
+  // The pointer on the bar (ViewerBar's onHeld): it stays.
   const onBar = useRef(false);
   const wake = useCallback(() => {
     setAwake(true);
@@ -327,8 +327,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   const onPointerMove = (e: React.PointerEvent) => {
     if (e.pointerType !== "mouse") { touched.current = true; clearTimeout(rest.current); setAwake(true); return; }
     touched.current = false;
-    onBar.current = !phone && byBar(e);
-    if (!drivingRef.current || onBar.current) wake();
+    if (!drivingRef.current || e.clientY < VIEWER_BAR_REACH) wake();
   };
 
   const title = shown?.title || t("web-pages.screen.title");
@@ -481,6 +480,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
         </>
       ) : (
         <ViewerBar back={{ label: backLabel, onClick: onBack }} name={title} meta={line}
+          onHeld={(on) => { onBar.current = on; if (on) { clearTimeout(rest.current); setAwake(true); } else wake(); }}
           hidden={live && !awake && !touched.current && !takeOver && controllers.length === 0}
           tools={over ? undefined : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : <>{sendTool}{modes}</>} />
       )}

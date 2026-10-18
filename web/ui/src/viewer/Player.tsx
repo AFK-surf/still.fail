@@ -21,7 +21,7 @@ import type { Got, ViewerEntry, ViewerFile } from "./file.ts";
 import { compareNatural, sideSubtitle } from "./names.ts";
 import { REST_MS, TAP_REST_MS } from "./rest.ts";
 import * as vvCss from "./media.css.ts";
-import { byBar, ViewerBar, ViewerDownload, ViewerTool } from "./ViewerBar.tsx";
+import { ViewerBar, ViewerDownload, ViewerTool } from "./ViewerBar.tsx";
 import { decodeText } from "./text.ts";
 import { toVtt } from "./subtitles.ts";
 import * as css from "./Player.css.ts";
@@ -149,7 +149,7 @@ export function Player({ file, siblings = [], backLabel, onBack, onGo = () => {}
   const [awake, setAwake] = useState(true);
   const resting = useRef(0);
   const onControls = useRef(false);
-  // The pointer on the bar along the top (with a mouse on a wide screen), which it does not hear where it drags the window.
+  // The pointer on the bar along the top (with a mouse on a wide screen; ViewerBar's onHeld).
   const onBar = useRef(false);
   const wake = useCallback((ms = REST_MS) => {
     setAwake(true);
@@ -303,13 +303,8 @@ export function Player({ file, siblings = [], backLabel, onBack, onGo = () => {}
 
   return (
     <div ref={root} className={`${vvCss.vv} ${css.player}`} data-narrow={narrow || undefined} data-list={(desk && listing && list.length > 1) || undefined}
-      onPointerMove={(e) => { if (e.pointerType === "mouse") { onBar.current = desk && !full && byBar(e); wake(); } }}
-      onPointerLeave={(e) => {
-        if (e.pointerType !== "mouse") return;
-        clearTimeout(resting.current);
-        onBar.current = desk && !full && byBar(e);
-        if (!onControls.current && !onBar.current && playing) setAwake(false);
-      }}
+      onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
+      onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onControls.current && !onBar.current && playing) setAwake(false); }}
       onPointerDown={(e) => { tapAt.current = { x: e.clientX, y: e.clientY }; }}
       onPointerUp={(e) => {
         const tap = tapAt.current;
@@ -328,6 +323,7 @@ export function Player({ file, siblings = [], backLabel, onBack, onGo = () => {}
       {captions && cue && <div className={css.cue} data-awake={awake || undefined}><span>{cue.replace(/<[^>]+>/g, "")}</span></div>}
       {desk && !full ? (
         <ViewerBar back={{ label: backLabel, onClick: onBack }} name={entry.name} title={file.title} hidden={!awake && !listing}
+          onHeld={(on) => { onBar.current = on; if (on) { clearTimeout(resting.current); setAwake(true); } else wake(); }}
           meta={[list.length > 1 && index >= 0 ? `${index + 1} / ${list.length}` : null, sizeOf(entry.size)].filter(Boolean).join(" · ")}
           tools={<>
             {list.length > 1 && <ViewerTool label={t("web-pages.drive.player.list")} on={listing} onClick={() => setListing((l) => !l)}><List size={18} /></ViewerTool>}
