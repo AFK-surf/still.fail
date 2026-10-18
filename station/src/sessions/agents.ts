@@ -18,7 +18,7 @@ import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdbShares, AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, Modules, Own, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store } from "../services.ts";
+import { AdbShares, AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store } from "../services.ts";
 import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { permissionsView } from "../api/routes/permissions.ts";
 import { Gpus } from "../jobs/gpu.ts";
@@ -75,10 +75,6 @@ import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { chatsTouched, forPeer, READ } from "./others.ts";
 import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
-import { Secrets } from "../vault/secrets.ts";
-import { plainStore } from "../vault/plain.ts";
-import { vaultStore } from "../vault/store.ts";
-import { vaultTools } from "../tools/vault.ts";
 import { readAgentEnvFrom } from "../ops/agent-env.ts";
 
 /// server.rs `encode` (encodeURIComponent).
@@ -117,8 +113,6 @@ export type AgentsParts = {
   net: Net;
   /// GET /overview as `viewer` sees it.
   overview(viewer: Viewer, lang: Lang): Promise<unknown>;
-  /// The agents' requests for the vault's secrets, and the grants they hold (docs/vault.md).
-  secrets: Secrets;
   /// The folders macOS protects, through still.fail Helper (helper/files.ts), shared by the drive and the directories
   /// people and agents name (ops/places.ts); null where there is no helper for them.
   helperFiles?: HelperFiles | null;
@@ -144,6 +138,7 @@ export const AgentsLive = (control: Control) =>
       const host = yield* AdminHost;
       const modules = yield* Modules;
       const own = yield* Own;
+      const parts = yield* Parts;
       const previous = (yield* Previous).gone;
       const run = join(data, "run");
       const config = yield* StationConfig;
@@ -432,14 +427,6 @@ export const AgentsLive = (control: Control) =>
           link: (session, id) => loginLink(session, id),
         }),
       ];
-      // The vault's secrets, asked for by agents and granted from the members' apps (docs/vault.md).
-      const vaults = vaultStore(store.db);
-      const secrets = new Secrets({
-        db: store.db, vaults, plain: plainStore(store.db), hub, data, home: () => cloud.home(),
-        lock: (ws) => cloud.locked(ws === null || ws === cloud.home() ? null : ws)?.state ?? null, now: () => wall.now(),
-        title: (session) => sender(hub, session)[0] ?? null,
-      });
-      secrets.listen((r) => events.tell("vault-request", r, `vault-request\0${r.id}`, (viewer) => secrets.tells(r, viewer)));
       tools.push(...searchTools({
         search,
         workspaceOf: (session) => {
@@ -458,7 +445,6 @@ export const AgentsLive = (control: Control) =>
         },
         ask: (station, request) => remote.ask(station, request),
       }));
-      tools.push(...vaultTools(secrets, (k) => store.getSession(k)?.workspace ?? null));
       // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
       // itself while nothing runs and nothing is asked of it (auto update), watched or not.
       const updates = makeUpdates({
@@ -492,7 +478,8 @@ export const AgentsLive = (control: Control) =>
         const ws = store.getSession(session)?.ws ?? null;
         return ws === null || cloud.membership(ws) !== null;
       };
-      const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, tools, (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL));
+      // The agents' tools, and those the station's parts add as they are made (parts.ts).
+      const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, () => [...tools, ...parts.allTools()], (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL));
 
       // The connects' Slack: connected while the station is in its workspace, once the sessions are taken up (a
       // Socket Mode event goes to one connection of an app; two processes' would split them).
@@ -561,7 +548,9 @@ export const AgentsLive = (control: Control) =>
         teams: (viewer: Viewer) => slack.overview(viewer.email).slackTeams,
         apps: (viewer: Viewer) => slack.overview(viewer.email).slackApps,
       };
-      const view = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, slack: slackView, rootView: (p) => rootViewThrough(p, helperFiles), modules: () => modules.listed(), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
+      const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, slack: slackView, rootView: (p) => rootViewThrough(p, helperFiles), modules: () => modules.listed(), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
+      // And the fields the station's parts add (parts.ts).
+      const view = async (viewer: Viewer, lang: Lang) => ({ ...((await platformView(viewer, lang)) as object), ...(await parts.overviewOf(viewer, lang)) });
 
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
@@ -796,6 +785,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, search, updates, accounts, sharing: sharing!, xshare, peers, forwards, logins, slack, overview: view, cloud, net, secrets, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, search, updates, accounts, sharing: sharing!, xshare, peers, forwards, logins, slack, overview: view, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

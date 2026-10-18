@@ -30,16 +30,15 @@ export type Tool = {
 export type Reply = { status: number; body?: unknown };
 
 export class McpEndpoint {
-  private tools: Tool[];
-  private byName: Map<string, Tool>;
+  /// The tools as they are now: the agents' own and the station's parts' (parts.ts), which say theirs as they are made.
+  private tools: () => readonly Tool[];
   /// A bearer token's session key.
   private resolve: (token: string) => string | undefined;
   /// Why the OUTWARD tools are refused now for a session, if they are.
   private gate?: (session: string) => string | undefined;
 
-  constructor(resolve: (token: string) => string | undefined, tools: Tool[], gate?: (session: string) => string | undefined) {
-    this.tools = tools;
-    this.byName = new Map(tools.map((t) => [t.name, t]));
+  constructor(resolve: (token: string) => string | undefined, tools: readonly Tool[] | (() => readonly Tool[]), gate?: (session: string) => string | undefined) {
+    this.tools = typeof tools === "function" ? tools : () => tools;
     this.resolve = resolve;
     this.gate = gate;
   }
@@ -70,10 +69,10 @@ export class McpEndpoint {
       case "ping":
         return reply({ result: {} });
       case "tools/list":
-        return reply({ result: { tools: this.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })) } });
+        return reply({ result: { tools: this.tools().map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })) } });
       case "tools/call": {
         const name = typeof params?.name === "string" ? params.name : "";
-        const tool = this.byName.get(name);
+        const tool = this.tools().find((t) => t.name === name);
         if (!tool) return reply({ error: { code: -32602, message: `unknown tool ${name}` } });
         if (OUTWARD.includes(name)) {
           const why = this.gate?.(session);

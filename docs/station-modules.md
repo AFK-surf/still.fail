@@ -79,3 +79,17 @@ station 按这个成员套用 drive 的规则（docs/drive.md）：viewer 只能
 - 模块包的下载、签名校验、更新（同 station 自更新）。
 - 缩略图只有一个尺寸（原生件里写死的 720×600），要别的尺寸得改 thumbs.rs、重新发原生件。HEIC 不在原生支持的格式里。
 - `<data>/thumbs/drive` 不会自动清理。
+
+## 进程内的部分（parts.ts）
+
+和聊天、agent 绑得紧的功能（库、事件流、hub），不单独起进程，而是作为 station 进程里的一个「部分」：一个由组合根（`main.ts`）点名的 layer，在平台和 agents 之后构造，构造时经 `Parts` 服务说清自己往哪些面上加了什么：
+
+- `routes`：管理 API 的路由，排在平台自己的之后；
+- `viewerMay`：只读成员可以对它做的写（比如自己的标记）；
+- `overview`：overview 里的字段，一个字段只能有一个部分说；
+- `tools`：给 agent 的 MCP 工具。
+
+这些都在被用到的时候才读（每个请求、agent 每次列工具），所以先构造好的管理 API 和 agents 也能拿到。没有全局注册表：一个部分在不在 station 里，只看 `main.ts` 有没有列它。
+
+第一个搬过来的是 vault（`vault/module.ts`）：自带的表、两组路由、agent 的 secret 工具、`vault-request` 事件都由它自己挂上，agents 和管理 API 里不再有 vault 的代码。
+
