@@ -644,7 +644,7 @@ function SearchSheet({ r }: { r: Reading }) {
       <View style={{ paddingHorizontal: 20, gap: 10 }}>
         <View style={{ borderRadius: 999, borderWidth: 1, borderColor: C.line, paddingHorizontal: 18, paddingVertical: 11, overflow: "hidden" }}>
           <TextInput
-            ref={input} value={r.query} onChangeText={(it) => { r.query = it; }} multiline={false} returnKeyType="search"
+            ref={input} value={r.query} onChangeText={(it) => { r.query = it; }} multiline={false} returnKeyType="search" submitBehavior="submit"
             placeholder={t("android-misc.drive.reader.searchAll")} placeholderTextColor={C.subtle} cursorColor={C.accent} selectionColor={withAlpha(C.accent, 0.4)}
             style={{ color: C.ink, fontSize: sp(15), padding: 0, includeFontPadding: false }}
           />

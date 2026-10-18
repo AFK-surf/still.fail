@@ -144,6 +144,8 @@ export function SearchPage({ scope, from, wide, onLeave = () => {}, onClose }: {
                   cursorColor={C.accent}
                   selectionColor={withAlpha(C.accent, 0.4)}
                   returnKeyType="search"
+                  // The keyboard's search key leaves it up, the field focused (Kotlin's ImeAction.Search, no action of its own).
+                  submitBehavior="submit"
                   accessibilityLabel={t("android-chat.search.field")}
                   style={{ fontSize: sp(16), color: C.ink, padding: 0, margin: 0, includeFontPadding: false }}
                 />

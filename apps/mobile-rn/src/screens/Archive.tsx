@@ -120,6 +120,8 @@ function ArchiveSearch({ q, onChange }: { q: string; onChange: (q: string) => vo
             onChangeText={onChange}
             accessibilityLabel={t("web-pages.archive.search")}
             returnKeyType="search"
+            // The keyboard's search key leaves it up (Kotlin's ImeAction.Search, no action of its own).
+            submitBehavior="submit"
             cursorColor={C.accent}
             selectionColor={withAlpha(C.accent, 0.4)}
             numberOfLines={1}
