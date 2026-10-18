@@ -52,6 +52,8 @@ const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
 /// How soon before a web page's device runs out its person is reminded.
 export const RENEW_SECS = 5 * 86400;
+/// How soon a station that refused this device, though the lock as held here names it, is tried again.
+export const BEHIND_MS = 3_000;
 /// A device of the person's own added this recently is pointed out on their other devices.
 const RECENT_SECS = 7 * 86400;
 
@@ -251,7 +253,16 @@ function moved(inner: Inner, ws: string): void {
 function refused(inner: Inner, ws: string, station: string): CoreError | null {
   if (inner.provider.kind !== "stillfail") return null;
   const p = part(inner, ws);
-  const head = held(inner, ws)?.head?.hash ?? null;
+  const h = held(inner, ws);
+  const base = p.base ?? bases.get(inner) ?? null;
+  const f = fold(h?.entries ?? []);
+  // In the lock as this device holds it: the station has not heard of it yet (from the cloud, or the device that
+  // signed it), and is tried again shortly rather than once the lock moves on, which it may not again for long.
+  if (base !== null && h?.head != null && !f.disabled && f.devices.has(base)) {
+    inner.runner.fork(Effect.andThen(Effect.sleep(BEHIND_MS), Effect.sync(() => inner.stations?.cameOnline(`${ws}/${station}`))));
+    return new CoreError("lock_unconfirmed", t("core-misc.lock.behind"));
+  }
+  const head = h?.head?.hash ?? null;
   p.refused.set(station, head);
   ask(inner, ws);
   return unconfirmed(inner, ws);
@@ -777,7 +788,7 @@ class Lock {
       if (body.kind === "app" && typeof r.sign_key === "string") body.sign_key = r.sign_key;
       if (body.kind === "web") body.exp = now(self.#inner) + WEB_DEVICE_SECS;
       const done = yield* self.append("device", body);
-      yield* Effect.ignore(self.#cloud("DELETE", `/lock/requests/${device}`));
+      yield* Effect.ignore(self.#cloud("DELETE", `/lock/requests/${encodeURIComponent(device)}`));
       return done;
     });
   }
@@ -803,7 +814,7 @@ class Lock {
     return Effect.gen(function* () {
       if (shortCode(station) !== code.trim().toUpperCase()) return yield* Effect.fail(CoreError.invalid("the code does not match that station's"));
       const s = arr(get(view(self.#inner, self.ws), "stations")).find((x) => x.id === station);
-      return yield* self.append("station", { key: station, name: s?.name ?? "" });
+      return yield* self.append("station", { key: station, name: s?.name ?? "" }, [station]);
     });
   }
 
@@ -822,16 +833,19 @@ class Lock {
         const old = asked.failure.status === 404 || /404|no route/.test(asked.failure.message);
         return yield* Effect.fail(new CoreError(old ? "lock_station_old" : "lock_station_offline", old ? t("core-misc.lock.stationOld", { name: s.name }) : t("core-misc.lock.stationOffline", { name: s.name })));
       }
-      const done = yield* self.append("station", { key: station, name: s.name ?? "" });
+      const done = yield* self.append("station", { key: station, name: s.name ?? "" }, [station]);
       const pinned = get(get(done, "stations"), station);
       if (isObject(pinned) && typeof pinned.error === "string") return yield* Effect.fail(new CoreError("lock_station_refused", pinned.error));
       return done;
     });
   }
 
-  /// One more entry, signed by this app's key, after the chain as the cloud keeps it: to the cloud, then to each
-  /// station of the lock this device reaches (they also bring each other level, and ask the cloud).
-  append(kind: string, body: unknown): Effect.Effect<unknown, CoreError> {
+  /// One more entry, signed by this app's key, after the chain as the cloud keeps it: to the cloud, which is when it is
+  /// done (the cloud tells the stations at once, and one offline asks it once back), then to each station of the lock
+  /// this device reaches, after the call answers: one offline held an approval up until asking it gave up, some ten
+  /// seconds to minutes. `waitFor`: the stations whose answers the call waits for (one just taken in pins only what this
+  /// device brings it).
+  append(kind: string, body: unknown, waitFor: string[] = []): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
       const signer = yield* Signer.load(self.#inner.host);
@@ -841,7 +855,11 @@ class Lock {
       const entry = signer.sign(next(self.ws, head, self.#inner.host.nowMs() / 1000, kind, body));
       yield* self.#cloud("POST", "/lock", { entries: [entry] });
       // The whole chain: a station that is behind takes what it lacks, and skips what it has.
-      const pinned = yield* self.#bring([...entries, entry], [...fold([...entries, entry]).stations.keys()]);
+      const chain = [...entries, entry];
+      const stations = [...fold(chain).stations.keys()];
+      const later = stations.filter((s) => !waitFor.includes(s));
+      if (later.length > 0) self.#inner.runner.fork(Effect.ignore(self.#bring(chain, later)));
+      const pinned = yield* self.#bring(chain, stations.filter((s) => waitFor.includes(s)));
       return { head: { seq: entry.seq, hash: entryHash(entry), genesis: head.genesis }, stations: pinned };
     });
   }

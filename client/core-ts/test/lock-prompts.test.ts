@@ -14,8 +14,9 @@ import type { HttpRequest } from "../src/host.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { hex, utf8 } from "../src/util.ts";
+import { BEHIND_MS } from "../src/views/lock.ts";
 import { call, subscribe } from "./helpers.ts";
-import { started, stationReplies } from "./station-fixture.ts";
+import { started, stationLater, stationReplies } from "./station-fixture.ts";
 
 const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
 /// The base key of the testing core's device (its mesh's).
@@ -24,12 +25,12 @@ const ME = "ab".repeat(32);
 const PHONE = "cd".repeat(32);
 
 /// A workspace's lock: s1 the owner, `signer` (this device's key, when it is in) their app; s2 a member.
-function genesis(ws: string, signer: { id: string; signBytes(b: Uint8Array): string }, withMe: boolean): Entry {
+function genesis(ws: string, signer: { id: string; signBytes(b: Uint8Array): string }, withMe: boolean, stations: { key: string; name: string }[] = []): Entry {
   const e = next(ws, null, 1000, "genesis", {
     owner: "s1", origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: {},
     members: [{ sub: "s1", email: "a@x.com", role: "owner" }, { sub: "s2", email: "b@x.com", role: "member" }],
     devices: withMe ? [{ id: ME, sub: "s1", kind: "app", label: "this", sign_key: signer.id }] : [],
-    passkeys: [], stations: [], gateways: [],
+    passkeys: [], stations, gateways: [],
   });
   return { ...e, sig: { key: signer.id, alg: "Ed25519", sig: signer.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e))])) } };
 }
@@ -212,3 +213,32 @@ test("a station's refusal names the workspace and the code to approve, where the
   assert.equal(again?.message, said!.message);
 });
 
+
+test("an approval is done once the cloud keeps it, not once every station of the lock has heard (one offline held it up)", async () => {
+  // `st` is protected, and never answers what it is brought: offline.
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [{ key: "st", name: "studio" }]) }), (host) => {
+    stationLater(host, (req) => (req.method === "POST" && req.url.endsWith("/admin/api/lock") ? new Promise(() => {}) : undefined));
+  });
+  const prompts = await r.watch({ topic: "lockPrompts" });
+  r.cloud.requests.set("ws", [phoneRequest]);
+  r.core.inner.data.set({ topic: "workspace", workspace: "ws" }, { ...(r.core.inner.data.shared({ topic: "workspace", workspace: "ws" }) as object), lock_requests: 1 });
+  assert.equal((await prompts()).prompt?.device, PHONE);
+  await r.ask("lockPrompt.confirm", { device: PHONE, code: shortCode(PHONE) });
+  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
+  assert.deepEqual(r.cloud.requests.get("ws"), [], "its request gone with it");
+  assert.deepEqual((await prompts()).waiting, []);
+});
+
+test("a station that refuses this device though the lock names it has not heard yet: tried again shortly, not held", async () => {
+  const r = await rig((me) => ({ ws: genesis("ws", me, true) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const woke: string[] = [];
+  r.core.inner.stations.cameOnline = (address: string) => void woke.push(address);
+  const said = hooks.lockRefused!(r.core.inner, "ws", "st");
+  assert.equal(said?.code, "lock_unconfirmed");
+  assert.equal(hooks.lockWaiting!(r.core.inner, "ws", "st"), null, "asked again as any station would be");
+  await r.host.time.pass(BEHIND_MS - 10);
+  assert.deepEqual(woke, []);
+  await r.host.time.pass(20);
+  assert.deepEqual(woke, ["ws/st"], "and woken soon to be");
+});
