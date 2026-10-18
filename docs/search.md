@@ -20,8 +20,7 @@ each station looks through its data as it is when asked.
 | skill, memory | the skills (their files too) and MEMORY.md of the workspace on the station. Agents only | its station |
 | profile | the station's profiles: name, runtime, model, account kind. Agents only | its station |
 
-Later: Documents, Desktop and Downloads on macOS through still.fail Helper, the cloud's own (feedback), Slack
-channels' history.
+Later: the cloud's own (feedback), Slack channels' history.
 
 ## The machine's files (station/src/search/files.ts)
 
@@ -29,7 +28,9 @@ channels' history.
   apps by name, for a member who may write; a read-only member's only in the folders their workspace pinned. What
   tools make and keep (node_modules, .git, virtual environments, build caches, the home's Library) is passed over;
   names that have the first word first, an app before a file, then the nearer the home's top, the latest. Documents,
-  Desktop and Downloads are kept from the station by macOS: not found yet.
+  Desktop and Downloads, which macOS keeps from the station, are asked of still.fail Helper (its `files.search`:
+  Spotlight as the helper, which holds their grants), only those it is known to hold the grant of: a search never puts
+  its window up (a folder not known yet is looked at in the background, found next time).
 - Elsewhere: the home (or the folders pinned) walked as a search comes, a folder at a time, nearest the top first, for
   at most 3 s: names of all, the words of text files up to 256 KB; the same folders passed over. What was not reached
   in time is said (`left`).
