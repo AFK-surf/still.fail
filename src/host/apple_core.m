@@ -7,6 +7,8 @@
 //
 // The script's `__native` goes to the Rust shell (client/shell, linked in: HTTP, still.fail cloud's socket, files and
 // the accounts' SQLite, TCP, iroh), whose answers come from its threads (`complete`) and are posted here as tasks.
+// `__native` is ember's HermesNative (hosts/hermes-globals.ts; bytes as ArrayBuffers both ways) plus `os`, so the
+// script starts the core as on Android, through hosts/engine.ts (core/jsc-start.ts).
 // What only an app can do is not the shell's: `secure.*` (the Keychain) and `listen.*` (a login's loopback listener)
 // are answered "unsupported" for now. A JS error that escapes, or a bug the core reports, ends the core as on Android:
 // `{"fatal": …}` to the UI, and the host starts another.
@@ -93,13 +95,13 @@ static void post(void (^task)(void)) {
 
 static void free_bytes(void *bytes, void *ctx) { free(bytes); }
 
-// A Uint8Array over a copy of `bytes` (handed to the JS heap without a second copy).
-static JSValue *uint8_array(const uint8_t *bytes, size_t n) {
+// An ArrayBuffer over a copy of `bytes` (handed to the JS heap without a second copy): what engine.ts takes.
+static JSValue *array_buffer(const uint8_t *bytes, size_t n) {
   JSGlobalContextRef g = C.js.JSGlobalContextRef;
   void *copy = malloc(n ? n : 1);
   if (n) memcpy(copy, bytes, n);
   JSValueRef exc = NULL;
-  JSObjectRef a = JSObjectMakeTypedArrayWithBytesNoCopy(g, kJSTypedArrayTypeUint8Array, copy, n, free_bytes, NULL, &exc);
+  JSObjectRef a = JSObjectMakeArrayBufferWithBytesNoCopy(g, copy, n, free_bytes, NULL, &exc);
   if (!a) {
     free(copy);
     return [JSValue valueWithUndefinedInContext:C.js];
@@ -168,7 +170,7 @@ static void on_complete(void *ctx, uint64_t id, const uint8_t *json, size_t jl, 
       JSValue *null = [JSValue valueWithNullInContext:C.js];
       JSValue *jv = e.length ? null : js_string(j.bytes, j.length);
       JSValue *ev = e.length ? js_string(e.bytes, e.length) : null;
-      JSValue *bv = b ? uint8_array(b.bytes, b.length) : [JSValue valueWithUndefinedInContext:C.js];
+      JSValue *bv = b ? array_buffer(b.bytes, b.length) : [JSValue valueWithUndefinedInContext:C.js];
       complete(id, jv, ev, bv);
     });
   }
@@ -251,11 +253,6 @@ static void install(JSContext *js) {
   native[@"now"] = ^double(void) { return clock_ms(CLOCK_REALTIME); };
   native[@"monotonic"] = ^double(void) { return clock_ms(CLOCK_MONOTONIC); };
   native[@"utcOffset"] = ^double(double at) { return (double)sf_utc_offset_min(at); };
-  native[@"fill"] = ^(JSValue *buf) {
-    const uint8_t *p = NULL;
-    size_t n = 0;
-    if (bytes_of(buf, &p, &n) && n) arc4random_buf((void *)p, n);
-  };
   native[@"random"] = ^JSValue *(double count) {
     size_t n = count > 0 ? (size_t)count : 0;
     void *bytes = malloc(n ? n : 1);
@@ -268,6 +265,7 @@ static void install(JSContext *js) {
   native[@"log"] = ^(double level, NSString *message) {
     if (level >= 1 || getenv("MB_CORE_DEBUG")) fprintf(stderr, "[core %s] %s\n", level >= 3 ? "error" : level == 2 ? "warn" : level == 1 ? "info" : "debug", message.UTF8String);
   };
+  native[@"os"] = kOS;  // for core/jsc-start.ts's startEngine
   js[@"__native"] = native;
 }
 
@@ -308,7 +306,7 @@ static void run(NSString *dataDir, NSString *cloud, int beta) {
       double t2 = clock_ms(CLOCK_MONOTONIC);
       C.sf = C.js[@"__stillfail"];
       if (!C.dead && C.sf.isObject) {
-        [C.sf invokeMethod:@"start" withArguments:@[ cloud, @(beta != 0), kOS ]];
+        [C.sf invokeMethod:@"start" withArguments:@[ cloud, @(beta != 0) ]];
         C.client = [[C.sf invokeMethod:@"connect" withArguments:@[]] toDouble];
       } else if (!C.dead) {
         fatal(@"the core's script has no __stillfail");
@@ -364,8 +362,8 @@ void mb_core_send(const char *json, size_t len, const uint8_t *bytes, size_t ble
   post(^{
     if (C.dead || !C.sf) return;
     JSValue *s = js_string(j.bytes, j.length);
-    NSArray *args = b ? @[ @(C.client), s, uint8_array(b.bytes, b.length) ] : @[ @(C.client), s ];
-    [C.sf invokeMethod:@"receive" withArguments:args];
+    if (b) [C.sf invokeMethod:@"receiveBytes" withArguments:@[ @(C.client), s, array_buffer(b.bytes, b.length) ]];
+    else [C.sf invokeMethod:@"receive" withArguments:@[ @(C.client), s ]];
   });
 }
 
