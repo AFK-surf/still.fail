@@ -16,6 +16,8 @@
 # SKIP_WEB=1 takes dist/cloud-web as it is. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops
 # at build/: no packing, no signing, for Electron's own app to run as it is (dev.sh).
 # UNSIGNED=1 makes either channel's package without the maintainer's signing certificate, for local testing.
+# Packed, each of its executables gets a Mach-O UUID of its own before it is signed (after-pack.cjs): Electron's are
+# every Electron app's, and macOS's Local Network privacy took apps sharing one for one another.
 # Packed, the app is also zipped (stillfail-<version>-arm64-mac.zip) with stillfail-mac.yml beside it in out/: what
 # scripts/release.sh desktop publishes for the apps' updater (main.ts, keepUpdated). Its version is 0.1.<the commits
 # in the history>, each release's higher than the one before it.
@@ -93,6 +95,8 @@ node -e '
   const pkg = JSON.parse(require("fs").readFileSync("package.json", "utf8"));
   const b = pkg.build;
   b.extraMetadata = { ...b.extraMetadata, version };
+  // Each executable a Mach-O UUID of its own before it is signed (after-pack.cjs: macOS Local Network privacy).
+  b.afterPack = require("path").resolve("after-pack.cjs");
   if (beta) {
     const name = "youdid.wtf";
     b.appId = "fail.still.desktop.beta";
