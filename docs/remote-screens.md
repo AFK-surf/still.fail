@@ -165,9 +165,12 @@ go to the page as they come, their bytes beside the JSON rather than in it (the 
 desktop's utility process posts them on the page's port, Android's engine hands them to Kotlin with `emitBytes`); the
 page decodes (WebCodecs or `createImageBitmap` on the web, MediaCodec or a bitmap on Android) and acknowledges each
 frame it drew. What the page draws of the view (its phase, 只看/控制, who else is on it) the core says whole as it
-changes; it opens the view again when the link drops or 只看/控制 changes. A station from before screens answers
-`GET /screens` 404: its list is empty and says it needs an update, and a link to one of its screens says so without
-opening a stream (such a station would take the stream for a request and wait for a body).
+changes; it opens the view again when the link drops or 只看/控制 changes. Opened with no `control` asked (a link, the
+station's page), it only looks while someone other than the viewer drives the screen (an agent at work, another
+person); the viewer's own views, however many the list names (another window, or those an app killed with the view
+open left), are not someone else. A station from before screens answers `GET /screens` 404: its list is empty and says
+it needs an update, and a link to one of its screens says so without opening a stream (such a station would take the
+stream for a request and wait for a body).
 
 On a phone (Android, the phone web) a finger drives a screen as a trackpad unless the device keeps `direct`
 (`prefs.screenTouch`, switched on the viewer's foot): one finger moves the pointer (relative, faster strokes further:

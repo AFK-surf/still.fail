@@ -491,6 +491,16 @@ each("a_screen_an_agent_drives_opens_only_looking_and_is_taken_over_in_one_tap",
   core.close();
 });
 
+each("a_screen_only_the_viewers_own_views_drive_opens_driving", async (seed) => {
+  // The app killed with the view open, twice: the station still names both views until it finds them gone.
+  const answers = { ...base(), "GET /screens": { screens: [{ ...SCREENS.screens[1], viewers: ["a@x.com", "A@x.com"], controlledBy: ["a@x.com", "A@x.com"] }] } };
+  const { host, core, ui, views } = await viewing(seed, answers);
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "browser:T1", view: "v" });
+  await host.settle();
+  assert.equal(views[0]!.ask.control, true, "the viewer's own views are not someone else driving it");
+  core.close();
+});
+
 test("a_screen_the_station_does_not_list_is_not_opened", async () => {
   const { host, core, ui, views } = await viewing(1);
   const log: J[] = [];
