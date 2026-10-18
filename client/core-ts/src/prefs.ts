@@ -8,7 +8,7 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "screenTouch", "driveViews", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "driveViews", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "resume", "lockNotice", "rails", "barsBy"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
@@ -49,6 +49,16 @@ export function badgeKindsOf(prefs: unknown): BadgeKinds {
   const k = isObject(prefs) && isObject(prefs.badgeKinds) ? prefs.badgeKinds : {};
   const flag = (name: keyof BadgeKinds) => (typeof k[name] === "boolean" ? k[name] as boolean : base[name]);
   return { on: flag("on"), wait: flag("wait"), failed: flag("failed"), done: flag("done"), message: flag("message") };
+}
+
+export type ArchiveHint = "off" | "done" | "reviewed";
+
+/// When a done chat is offered to archive (`archiveHint`, the appearance page): off, never; reviewed, only once its
+/// station's archive review recommended it (never where the review is off); done, the default (none kept), whenever
+/// nothing is left in it, going by the review where its station has one on.
+export function archiveHintOf(prefs: unknown): ArchiveHint {
+  const v = isObject(prefs) ? prefs.archiveHint : null;
+  return v === "off" || v === "reviewed" ? v : "done";
 }
 
 /// The places a phone's bottom bar can hold (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt), in no order.
@@ -139,6 +149,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if ("badge" in prefs && !["decisions", "attention", "all"].includes(prefs.badge as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badge" }));
   if ("motion" in prefs && prefs.motion !== "reduce" && prefs.motion !== "full") throw CoreError.invalid(t("core-misc.params.invalid", { error: "motion" }));
   if ("dropAs" in prefs && prefs.dropAs !== "file" && prefs.dropAs !== "path") throw CoreError.invalid(t("core-misc.params.invalid", { error: "dropAs" }));
+  if ("archiveHint" in prefs && !["off", "done", "reviewed"].includes(prefs.archiveHint as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "archiveHint" }));
   if ("screenTouch" in prefs && prefs.screenTouch !== "direct" && prefs.screenTouch !== "pad") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenTouch" }));
   if ("badgeKinds" in prefs && prefs.badgeKinds !== null && !isObject(prefs.badgeKinds)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badgeKinds" }));
   if ("language" in prefs && !(prefs.language === "zh" || prefs.language === "en")) throw CoreError.invalid(t("core-misc.params.language"));

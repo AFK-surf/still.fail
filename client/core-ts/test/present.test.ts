@@ -271,6 +271,12 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   reviewed.archiveRecommended = true;
   assert.ok(p.archivable(reviewed));
   assert.ok(!p.archivable(kept));
+  // Offered to archive as the viewer's archiveHint says: done as archivable, off never, reviewed only once recommended.
+  assert.ok(p.offered(row([done], false), "done"));
+  assert.ok(!p.offered(row([done], false), "off"));
+  assert.ok(!p.offered(row([done], false), "reviewed"));
+  assert.ok(p.offered(reviewed, "reviewed"));
+  assert.ok(!p.offered(kept, "done"));
   const merged = agent({ declared: "final", ending: "all_done", need: "已合并所有代码", outcome: "completed" }, "warm");
   assert.equal(merged.statusText, "已完成：已合并所有代码");
   assert.equal(p.rowStateText(row([merged], false)), "已完成：已合并所有代码");

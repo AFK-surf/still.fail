@@ -1532,10 +1532,11 @@ data class ChatItem (
 	/// there is none (and from a station before decisions).
 	val decision: RowDecision? = null,
 	/// Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,
-	/// nothing unread; where its station's archive review is on, only once the review recommended archiving it. Drawn faded,
-	/// below the rest of its day (the core orders it so). Absent otherwise.
+	/// nothing unread; where its station's archive review is on, only once the review recommended archiving it; and the
+	/// viewer's `archiveHint` offers it. Drawn faded, below the rest of its day (the core orders it so). Absent otherwise.
 	val settled: Boolean? = null,
-	/// With `settled`: offer to archive it with one tap (`chat.archive`). Absent otherwise.
+	/// Nothing is left in it, whatever the viewer's `archiveHint` says: offer to archive it with one tap
+	/// (`chat.archive`). Absent otherwise.
 	val archivable: Boolean? = null,
 	/// Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a
 	/// card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
@@ -1705,7 +1706,7 @@ data class ChatMessage (
 	/// or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise.
 	val asked: Boolean? = null,
 	/// In a chat's page: the agent's last post, at the chat's end, saying it is all done, with nothing left in the chat
-	/// (`archivable`): 归档 is offered under it. Absent otherwise.
+	/// (`archiveOffered`): 归档 is offered under it. Absent otherwise.
 	val archive: Boolean? = null,
 	/// Under the same last all-done post: what the archive check made of the chat (the chat's `archiveCheck`).
 	val archiveCheck: ArchiveCheck? = null,
@@ -1999,6 +2000,8 @@ data class ChatView (
 	/// Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
 	/// (`chat.archive`). Absent otherwise.
 	val archivable: Boolean? = null,
+	/// Archivable, and the viewer's `archiveHint` offers it: 归档 under its last all-done post. Absent otherwise.
+	val archiveOffered: Boolean? = null,
 	/// What the archive check made of it as it stands (the option picked, or a failure). Absent when none did.
 	val archiveCheck: ArchiveCheck? = null,
 	/// Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or
@@ -3843,6 +3846,10 @@ data class PrefsView (
 	val driveViews: Map<String, String>? = null,
 	/// How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path.
 	val dropAs: String? = null,
+	/// When a done chat is offered to archive (drawn faded, 归档 under its last all-done post): `off`, never;
+	/// `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it
+	/// (where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says.
+	val archiveHint: String? = null,
 	/// How a finger drives a station's screen on a phone: `direct` (a tap clicks where it is), or (none) as a
 	/// trackpad (the finger moves the pointer, a tap clicks where it points).
 	val screenTouch: String? = null,

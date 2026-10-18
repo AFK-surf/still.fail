@@ -1523,11 +1523,14 @@ export interface ChatItem {
 	decision?: RowDecision;
 	/**
 	 * Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,
-	 * nothing unread; where its station's archive review is on, only once the review recommended archiving it. Drawn faded,
-	 * below the rest of its day (the core orders it so). Absent otherwise.
+	 * nothing unread; where its station's archive review is on, only once the review recommended archiving it; and the
+	 * viewer's `archiveHint` offers it. Drawn faded, below the rest of its day (the core orders it so). Absent otherwise.
 	 */
 	settled?: boolean;
-	/** With `settled`: offer to archive it with one tap (`chat.archive`). Absent otherwise. */
+	/**
+	 * Nothing is left in it, whatever the viewer's `archiveHint` says: offer to archive it with one tap
+	 * (`chat.archive`). Absent otherwise.
+	 */
 	archivable?: boolean;
 	/**
 	 * Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a
@@ -1721,7 +1724,7 @@ export interface ChatMessage {
 	asked?: boolean;
 	/**
 	 * In a chat's page: the agent's last post, at the chat's end, saying it is all done, with nothing left in the chat
-	 * (`archivable`): 归档 is offered under it. Absent otherwise.
+	 * (`archiveOffered`): 归档 is offered under it. Absent otherwise.
 	 */
 	archive?: boolean;
 	/** Under the same last all-done post: what the archive check made of the chat (the chat's `archiveCheck`). */
@@ -2035,6 +2038,8 @@ export interface ChatView {
 	 * (`chat.archive`). Absent otherwise.
 	 */
 	archivable?: boolean;
+	/** Archivable, and the viewer's `archiveHint` offers it: 归档 under its last all-done post. Absent otherwise. */
+	archiveOffered?: boolean;
 	/** What the archive check made of it as it stands (the option picked, or a failure). Absent when none did. */
 	archiveCheck?: ArchiveCheck;
 	/**
@@ -3887,6 +3892,12 @@ export interface PrefsView {
 	driveViews?: Record<string, string>;
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
+	/**
+	 * When a done chat is offered to archive (drawn faded, 归档 under its last all-done post): `off`, never;
+	 * `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it
+	 * (where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says.
+	 */
+	archiveHint?: string;
 	/**
 	 * How a finger drives a station's screen on a phone: `direct` (a tap clicks where it is), or (none) as a
 	 * trackpad (the finger moves the pointer, a tap clicks where it points).

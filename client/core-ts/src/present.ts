@@ -311,11 +311,19 @@ export function settled(row: J): boolean {
   return agents.length > 0 && agents.every((a) => shownStatus(a) === "final") && !decisions.waits(row) && get(row, "unread") !== true;
 }
 
-/// Shown as one to archive (faded, below the rest of its day, archived with one tap): settled, not pinned, not kept by
-/// the viewer; and where its station's archive review is on (`archiveReviewed`), only once the review recommended it.
+/// Archived with one tap (the page's bar, a phone's swipe): settled, not pinned, not kept by the viewer; and where its
+/// station's archive review is on (`archiveReviewed`), only once the review recommended it.
 export function archivable(row: J): boolean {
   if (!settled(row) || pinned(row) || get(row, "archiveReminderDismissed") === true) return false;
   return get(row, "archiveReviewed") !== true || get(row, "archiveRecommended") === true;
+}
+
+/// Offered to archive as the viewer's `archiveHint` says (prefs.ts archiveHintOf): faded, below the rest of its day, 归档
+/// under its last all-done post. off: never; reviewed: only once its station's archive review recommended it; done: as
+/// it is archivable.
+export function offered(row: J, hint: prefsMod.ArchiveHint): boolean {
+  if (hint === "off" || !archivable(row)) return false;
+  return hint !== "reviewed" || (get(row, "archiveReviewed") === true && get(row, "archiveRecommended") === true);
 }
 
 export function pinned(row: J): boolean {
