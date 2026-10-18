@@ -126,7 +126,7 @@
   "web-pages.appearance.archive.description": "做完的 chat 要不要提示你归档：侧栏里变淡、排到当天最后，最后一条消息下面显示「归档此对话」。只对这台设备生效；顶栏的归档按钮、⌘⇧E 和右键菜单都不受影响。",
   "web-pages.appearance.archive.off": "不提示",
   "web-pages.appearance.archive.done": "做完就提示",
-  "web-pages.appearance.archive.reviewed": "模型判断后提示",
+  "web-pages.appearance.archive.reviewed": "按模型判断",
   "web-pages.appearance.archive.offHint": "做完的 chat 照常显示，需要时自己归档。",
   "web-pages.appearance.archive.doneHint": "所有 agent 都说做完了、没有待你决定的事、你也读过了，就提示。只看状态，不读内容；station 开了归档建议时，按模型的判断提示。",
   "web-pages.appearance.archive.reviewedHint": "只提示 station 的归档建议（设置 → 自动决策）判断为没有后续事项的 chat。没开归档建议的 station 不会提示。",

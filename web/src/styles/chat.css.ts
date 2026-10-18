@@ -41,6 +41,8 @@ export const inlineLink = style({
   },
 });
 export const appearanceSetting = style({});
+/** What the option chosen above it does (Appearance.tsx ArchiveSetting): as a section's words, under its control. */
+export const appearanceHint = style({ margin: "8px 0 0", fontSize: vars.textMeta, color: vars.muted, maxWidth: "52em" });
 export const textButton = style({
   padding: "0", border: "0", background: "none", color: vars.text, font: "inherit", textDecoration: "underline",
   textUnderlineOffset: "2px", cursor: "pointer",

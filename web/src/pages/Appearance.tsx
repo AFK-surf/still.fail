@@ -52,13 +52,12 @@ function DropSetting() {
 }
 
 /** 提示归档: when a done chat is offered to archive (the core's `archiveHint`): never, once done (the default), or once
- * its station's archive review recommended it; what the one chosen does, under the section's words. */
+ * its station's archive review recommended it; what the one chosen does, under it. */
 function ArchiveSetting() {
   const kept = usePrefs((p) => p.archiveHint);
   const value = kept === "off" || kept === "reviewed" ? kept : "done";
   return (
-    <Section title={t("web-pages.appearance.archive.title")}
-      description={<>{t("web-pages.appearance.archive.description")} {t(`web-pages.appearance.archive.${value}Hint`)}</>}>
+    <Section title={t("web-pages.appearance.archive.title")} description={t("web-pages.appearance.archive.description")}>
       <div className={chatCss.appearanceSetting}>
         <Segmented label={t("web-pages.appearance.archive.title")} value={value}
           onChange={(v) => setPrefs({ archiveHint: v === "done" ? null : v })}
@@ -68,6 +67,7 @@ function ArchiveSetting() {
             { value: "reviewed", label: t("web-pages.appearance.archive.reviewed") },
           ]} />
       </div>
+      <p className={chatCss.appearanceHint}>{t(`web-pages.appearance.archive.${value}Hint`)}</p>
     </Section>
   );
 }
