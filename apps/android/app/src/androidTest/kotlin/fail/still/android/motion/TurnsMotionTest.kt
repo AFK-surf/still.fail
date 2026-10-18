@@ -1,12 +1,13 @@
 // What changes the height of a chat's list plays one at a time (screens/ListTurns.kt), frame by frame (Harness.kt): a
 // decision waits at the end, the reader answers it by writing; their words fly in, the options close, the agent's line
-// comes, its reply comes out of its avatar.
+// comes, its reply comes out of its avatar. Or they pick an option: the options close, their answer comes, then the line.
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
@@ -52,9 +53,10 @@ class TurnsMotionTest {
         DecisionOption("先不部署", "等下周再说"),
         DecisionOption("并行切换", "慢一点，不中断", recommended = true),
     )
-    private fun card(resolved: Boolean) = Fixtures.agent(5, "部署有两种做法：直接替换，几分钟完成但会中断一下；新旧并行再切流量，慢一点但不中断。你选哪个？").copy(
+    private fun card(resolved: Boolean, chosen: String? = null) = Fixtures.agent(5, "部署有两种做法：直接替换，几分钟完成但会中断一下；新旧并行再切流量，慢一点但不中断。你选哪个？").copy(
         card = MessageCard(type = "options", options = options, assigneeText = "待你决策"), options = options,
-        decision = MessageDecision(resolved = resolved, answeredBy = if (resolved) "Alice" else null, text = if (resolved) "Alice 回复了" else null),
+        decision = MessageDecision(resolved = resolved, answeredBy = if (resolved) "Alice" else null, chosen = chosen,
+            text = if (!resolved) null else if (chosen != null) "Alice 选了「$chosen」" else "Alice 回复了"),
         asked = if (resolved) null else true,
     )
 
@@ -83,6 +85,39 @@ class TurnsMotionTest {
         r.frames(110)
         // Its reply, and its turn's end.
         val replied = answered + Fixtures.agent(7, "好，切流量前我会先在这里说一声。", later(), said = true)
+        h.fake.put(topic, chat(replied, running = true))
+        h.deliver()
+        r.frames(6)
+        h.fake.put(topic, chat(replied, running = false))
+        h.deliver()
+        r.frames(110)
+        r.end()
+    }
+
+    @Test
+    fun answeredByPicking() {
+        val h = Harness(rule)
+        h.fake.put(Topics.live(Fixtures.STATION, key), Live(loaded = true, timeline = emptyList(), steps = emptyList(), activity = Activity(ActivityNow(key = "read", text = "读取 deploy.yml"))))
+        val asking = Fixtures.talk + card(resolved = false)
+        h.fake.put(topic, chat(asking, running = false))
+        val text = "并行切换"
+        // The core sends the option picked (decisions.ts answer): it waits in the outbox, the decision answered by it.
+        h.fake.answer = { name, _ ->
+            if (name == "decision.answer") h.fake.put(topic, chat(Fixtures.talk + card(resolved = true, chosen = text), running = false, outbox = listOf(Fixtures.outgoing("out-2", text))))
+            JsonNull
+        }
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        h.settle()
+        val r = h.record("answered-by-picking")
+        r.frame { rule.onNode(hasText(text)).performSemanticsAction(SemanticsActions.OnClick) }
+        h.deliver()
+        r.frames(20)
+        // The station has it, the agent starting on it.
+        val answered = Fixtures.talk + card(resolved = true, chosen = text) + Fixtures.mine(6, text, later(), said = true).copy(outgoing = "out-2")
+        h.fake.put(topic, chat(answered, running = true))
+        h.deliver()
+        r.frames(110)
+        val replied = answered + Fixtures.agent(7, "好，按并行切换来，切流量前我会先说一声。", later(), said = true)
         h.fake.put(topic, chat(replied, running = true))
         h.deliver()
         r.frames(6)

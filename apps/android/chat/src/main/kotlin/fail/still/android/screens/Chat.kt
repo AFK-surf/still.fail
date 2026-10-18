@@ -563,7 +563,9 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val sentRow = { r: Entry -> sentFrom != null && r.id !in sentFrom && (r is Entry.Out || (r is Entry.Said && r.m.mine && !r.m.system)) }
     val newcomers = if (!drawn[0] || following[0]?.on == false || reveal.revealing) emptyList() else all.filter { r ->
         r.id !in known && r.id !in admitted && !caught(r) && !sentRow(r) &&
-            (r is Entry.Working || (r is Entry.Said && !r.m.mine && !motion.emits(r.m.seq)))
+            // (Sent otherwise than from the composer, a decision's option picked: in its turn as anything else coming,
+            // before the options close, as they do once it is answered.)
+            (r is Entry.Working || r is Entry.Out || (r is Entry.Said && !motion.emits(r.m.seq)))
     }
     val inList = all.filter { r -> r.id !in turns.waiting && r !in newcomers && !(turns.sendWaiting && sentRow(r)) }
     SideEffect { newcomers.forEach { r -> admitted += r.id; turns.admit(r.id, if (r is Entry.Working) 220L else 320L, after = r is Entry.Working) } }
@@ -971,12 +973,14 @@ private fun JumpToLatest(shown: Boolean, count: Long?, haze: HazeState, modifier
 
 /** 忽略 under a post that asks what no one has decided: the viewer lets it go, going at once and back if that fails. */
 @Composable
-private fun AskDismiss(ctx: Here, m: ChatMessage) {
+private fun AskDismiss(ctx: Here, m: ChatMessage, asking: Boolean) {
     val app = LocalApp.current
     var gone by remember(m.seq) { mutableStateOf(false) }
-    // Going as the archive buttons go (below), rather than vanishing; back at once if letting it go failed.
+    val answered = m.decision?.resolved == true || m.decision?.dismissed == true
+    // Going as the archive buttons go (below), rather than vanishing; back at once if letting it go failed. Answered, it
+    // goes with the options (`asking`), in their turn.
     AnimatedVisibility(
-        visible = inTurn(m.asked == true && !gone, 280), enter = EnterTransition.None,
+        visible = asking && inTurn((m.asked == true || answered) && !gone, 280), enter = EnterTransition.None,
         exit = fadeOut(tween(280, easing = ArchiveEase)) + scaleOut(tween(280, easing = ArchiveEase), targetScale = 0.85f, transformOrigin = TransformOrigin(0f, 0f)) + shrinkVertically(tween(280, easing = ArchiveEase), shrinkTowards = Alignment.Top, clip = false),
     ) {
         Text(
@@ -1176,9 +1180,12 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             // An agent's files are placed in its words (Prose.kt), the rest below them there.
             if (m.authorKind == "person") Files(ctx, m.attachments)
             // A decision it asks (its options): them under it, a line saying how it went once it has.
-            if (decide) DecisionUnder(ctx, m)
+            // Answered (or let go), what is under it for that closes in one turn among what changes the list's height
+            // (ListTurns.kt), its options and 忽略 together, after the answer has come in (Chat: an option picked).
+            val asking = if (decide) inTurn(m.decision?.resolved != true && m.decision?.dismissed != true, CLOSE_TURN_MS) else true
+            if (decide) DecisionUnder(ctx, m, asking)
             // It asks what no one has decided (the core's `asked`): letting it go, right under it (web Chat.tsx AskDismiss).
-            if (decide) AskDismiss(ctx, m)
+            if (decide) AskDismiss(ctx, m, asking)
             // What the archive check made of the chat (web Chat.tsx archiveCheck): a quiet line, red when it failed.
             if (decide && ctx.checkUnder == m.seq) ctx.view.archiveCheck?.let { Text(it.text, fontSize = 12.sp, lineHeight = 18.sp, color = if (it.failed) C.red else C.muted, modifier = Modifier.padding(top = 6.dp)) }
             // Under its agent's latest 做完了 while nothing is left in the chat: archiving it, right there.

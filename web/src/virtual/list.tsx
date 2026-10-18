@@ -312,6 +312,9 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     let opening = false;
     const clicked = () => { opening = true; requestAnimationFrame(() => requestAnimationFrame(() => { opening = false; })); };
     el.addEventListener("click", clicked, true);
+    // Unless what it did was send something (a decision's option picked, Decisions.tsx): what that brings is new.
+    const sent = () => { opening = false; };
+    el.addEventListener("sent", sent);
     const watchRow = (n: Node) => { if (n instanceof HTMLElement && n.dataset.vk !== undefined) sizes.observe(n); };
     for (const n of el.children) watchRow(n);
     const rows = new MutationObserver((records) => {
@@ -397,6 +400,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       el.removeEventListener("scroll", scrolled);
       for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.removeEventListener(type, touched);
       el.removeEventListener("click", clicked, true);
+      el.removeEventListener("sent", sent);
       el.removeEventListener("focusin", hold);
       el.removeEventListener("focusout", hold);
       document.removeEventListener("selectionchange", hold);

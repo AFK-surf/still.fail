@@ -19,7 +19,8 @@ import { CoreError, useApi, useStationViews } from "./api.ts";
 import { scopeOf, StationContext, stationBase, useStation, type Station } from "./station.tsx";
 import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import { play } from "@stillfail/ui/motion.ts";
+import { ENTER, motionMs, play } from "@stillfail/ui/motion.ts";
+import { listPaneOf, reserveRow } from "./listQueue.ts";
 import { useSettling } from "./settling.tsx";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
 import { DecisionsIdle } from "./DecisionsIdle.tsx";
@@ -41,19 +42,27 @@ const FLING = 0.6;
 const DIGITS = [Option1, Option2, Option3, Option4, Option5, Option6];
 
 /** The options of one decision, in one card, numbered; pressing one answers with it (its label, quoting the post). */
-export function DecisionOptions({ station, thread, seq, options, onPick, className }: {
+export function DecisionOptions({ station, thread, seq, options, onPick, settled, className }: {
   station: string; thread: number; seq: number; options: DecisionOption[];
   /** Before the answer goes: the decisions page sends the decision on its way. */
   onPick?: (option: DecisionOption) => void;
+  /** Answered, still drawn till they close (in a chat): none pressed any more, the one picked (its label) as it was. */
+  settled?: string | null | undefined;
   className?: string;
 }) {
   const call = useCall();
   const act = useAct();
   const doing = useDoingList();
   const sending = doing.find((d) => !failed(d) && doingMatches(d, "decision.answer", { station, thread, seq }));
-  const pick = (o: DecisionOption) => {
-    if (sending) return;
-    onPick?.(o);
+  const pick = (o: DecisionOption, button: HTMLElement) => {
+    if (sending || settled !== undefined) return;
+    if (onPick) onPick(o);
+    // In a chat, the answer (its row, in the outbox) comes in first, in the turn taken now, the options closing after
+    // it; the list follows its end for it, as for words sent (Chat.tsx useToEnd).
+    else {
+      reserveRow(button, motionMs(ENTER.duration));
+      listPaneOf(button)?.dispatchEvent(new Event("sent"));
+    }
     act(call("decision.answer", { station, thread, seq, option: o.label }), t("web-main.decisions.answerWhat", { option: o.label }));
   };
   return (
@@ -63,7 +72,9 @@ export function DecisionOptions({ station, thread, seq, options, onPick, classNa
         const Digit = DIGITS[i];
         return (
           <button key={o.label} type="button" className={css.choice} data-recommended={o.recommended || undefined} data-busy={busy || undefined}
-            disabled={!!sending} aria-busy={busy || undefined} aria-description={o.recommended ? t("common.recommended") : undefined} onClick={() => pick(o)}>
+            data-chosen={(settled !== undefined && settled === o.label) || undefined}
+            disabled={!!sending || settled !== undefined} aria-busy={busy || undefined} aria-description={o.recommended ? t("common.recommended") : undefined}
+            onClick={(e) => pick(o, e.currentTarget)}>
             <span className={css.choiceNumber} aria-hidden="true">{Digit ? <Digit size={20} /> : i + 1}</span>
             <span className={css.choiceLabel}>{o.label}</span>
             {o.detail && <span className={css.choiceDetail}>{o.detail}</span>}
@@ -134,7 +145,10 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
  * Under an agent's post with options, in its chat: the options while it waits for the viewer (none in a chat that
  * cannot be written to: `thread` null), else how it was settled, quietly, if the core says.
  */
-export function MessageDecision({ message: m, thread }: { message: ChatMessage; thread: number | null }) {
+export function MessageDecision({ message: m, thread, children }: { message: ChatMessage; thread: number | null;
+  /** Under the options, going with them (its 忽略; not under a login card, which stays). */
+  children?: ReactNode;
+}) {
   const station = useStation().address;
   const d = m.decision;
   const open = !d?.resolved && !d?.dismissed;
@@ -161,7 +175,8 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
         {/* An agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words. */}
         {m.card?.vault ? <VaultCard address={station} id={m.card.vault} />
           : thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&
-          <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />}
+          <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} settled={open ? undefined : d?.chosen ?? null} />}
+        {children}
       </> : d?.text ? <p className={css.settledLine}>{d.text}</p> : null}
     </div>
   );

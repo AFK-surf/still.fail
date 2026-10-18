@@ -345,6 +345,8 @@ export function sentAfter(chat: { messages: readonly { seq: number }[]; outbox: 
 
 /** Words sent in an open chat, waiting for their row or on their way to it; `done` lets them go (at once). */
 let flying: { done(): void } | null = null;
+/** Whether words sent from a composer are waiting for their row or on their way to it (the outbox's row coming now is theirs). */
+export const sendingNow = (): boolean => flying !== null;
 
 /** Told once the row of what the reader just sent is in its chat's list (or it will not be): `sendingHere` waits for it. */
 const rowIn: (() => void)[] = [];

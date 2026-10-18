@@ -167,7 +167,7 @@ internal fun OptionButton(label: String, modifier: Modifier = Modifier, strong: 
  * other messages, nor from a station before decisions.
  */
 @Composable
-internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
+internal fun DecisionUnder(ctx: Here, m: ChatMessage, open: Boolean) {
     val card = m.card
     if (card == null && m.options == null) return
     // A login card stays as its login goes (waiting, done, failed, cancelled): it says how it ended itself, once closed
@@ -193,9 +193,9 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
     val app = LocalApp.current
     val station = ctx.station
     val busy = options.firstOrNull { app.isDoing("decision.answer", "station" to station, "thread" to m.thread, "seq" to m.seq, "option" to it.label) }?.label
-    // Closing in its turn among what changes the list's height (ListTurns.kt): the leave and its delayed close, what
-    // says how it was settled coming in its place in the same turn.
-    val open = inTurn(!resolved, CLOSE_TURN_MS)
+    // `open`: till its turn to close among what changes the list's height comes (Chat.kt SaidRow), answered or not; then
+    // the leave and its delayed close, what says how it was settled coming in its place in the same turn. Answered
+    // meanwhile, none is pressed any more, the one picked as it was.
     Column {
         // Match chat-list archive: the whole group shrinks/fades, then a delayed spring closes its space.
         AnimatedVisibility(
@@ -214,7 +214,7 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
                 Elsewhere.VaultApproval(station.substringBefore('/'), vault, mine = who == null || me == null || who.equals(me, ignoreCase = true), Modifier.padding(top = 6.dp))
             } else DecisionOptions(
                 options, Modifier.padding(top = 6.dp),
-                enabled = !ctx.view.offline && ctx.view.archived != true, busy = busy,
+                enabled = !resolved && !ctx.view.offline && ctx.view.archived != true, busy = busy, chosen = decision?.chosen.takeIf { resolved },
             ) { o -> if (!resolved) app.act(t("android-misc.decisions.answerWhat")) { app.api(station).answerDecision(m.thread, m.seq, o.label) } }
             }
         }

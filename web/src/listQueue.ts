@@ -68,11 +68,16 @@ class ListQueue {
 
 const queues = new WeakMap<Element, ListQueue>();
 
-/** The queue of the list `el` is in (or is): its pane's. Outside a list, a queue of its own that never waits. */
-export function listQueue(el: Element): ListQueue {
+/** The pane of the list `el` is in (or is), if any. */
+export function listPaneOf(el: Element): Element | null {
   let pane: Element | null = el;
   while (pane && !isListPane(pane)) pane = pane.parentElement;
-  const at = pane ?? el;
+  return pane;
+}
+
+/** The queue of the list `el` is in (or is): its pane's. Outside a list, a queue of its own that never waits. */
+export function listQueue(el: Element): ListQueue {
+  const at = listPaneOf(el) ?? el;
   let queue = queues.get(at);
   if (!queue) { queue = new ListQueue(at); queues.set(at, queue); }
   return queue;
@@ -93,3 +98,46 @@ export function queueRow(row: HTMLElement, start: () => Promise<unknown> | void 
 
 /** A promise over in `ms` (a motion of that length played). */
 export const after = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * The row of what the reader just did here (an option picked: their answer, in the outbox) takes its turn as they do it,
+ * before what comes of it (the options closing): `claimReserved` gives it the row once made, which comes in then, its
+ * motion taking `ms`. No row within `wait`, the turn goes.
+ */
+export function reserveRow(near: Element, ms: number, wait = 5000): void {
+  const queue = listQueue(near);
+  reserved.get(queue)?.finish();
+  let end = () => {};
+  const ended = new Promise<void>((resolve) => { end = resolve; });
+  const r: Reserved = {
+    granted: false, row: null, timer: 0,
+    finish() {
+      clearTimeout(r.timer);
+      if (reserved.get(queue) === r) reserved.delete(queue);
+      if (r.row) delete r.row.dataset.queued;
+      end();
+    },
+    come() {
+      if (!r.row || !r.granted) return;
+      delete r.row.dataset.queued;
+      r.timer = window.setTimeout(r.finish, ms);
+    },
+  };
+  r.timer = window.setTimeout(r.finish, wait);
+  reserved.set(queue, r);
+  queue.take(() => { r.granted = true; r.come(); return ended; });
+}
+
+/** Whether `row` is the one a turn was kept for (reserveRow): it comes in that turn, waiting for it meanwhile. */
+export function claimReserved(row: HTMLElement): boolean {
+  const r = reserved.get(listQueue(row));
+  if (!r || r.row) return false;
+  clearTimeout(r.timer);
+  r.row = row;
+  if (!r.granted) row.dataset.queued = "";
+  r.come();
+  return true;
+}
+
+type Reserved = { granted: boolean; row: HTMLElement | null; timer: number; finish(): void; come(): void };
+const reserved = new WeakMap<ListQueue, Reserved>();

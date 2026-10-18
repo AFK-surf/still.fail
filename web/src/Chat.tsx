@@ -49,8 +49,8 @@ import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as dockCss from "./dock.css.ts";
-import { sendingHere, sentAfter, toMadeChat as toMadeChatOf } from "./madeChat.ts";
-import { after, listQueue, queueRow } from "./listQueue.ts";
+import { sendingHere, sendingNow, sentAfter, toMadeChat as toMadeChatOf } from "./madeChat.ts";
+import { after, claimReserved, listQueue, queueRow } from "./listQueue.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "@stillfail/ui/toast.tsx";
@@ -166,13 +166,16 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
  * 忽略 under a post that asks what no one has decided (the core's `asked`): the viewer lets it go (`decision.dismiss`:
  * their lists and the bell say nothing of it any more), going at once (settling.tsx) and back if that fails.
  */
-function AskDismiss({ thread, seq, asked }: { thread: number; seq: number; asked: boolean }) {
+function AskDismiss({ thread, seq, asked, answered }: { thread: number; seq: number; asked: boolean;
+  /** Its post answered: it goes as the options it is under close (Decisions.tsx MessageDecision), not before. */
+  answered: boolean;
+}) {
   const station = useStation().address;
   const call = useCall();
   const act = useAct();
   const [gone, setGone] = useState(false);
   return (
-    <Settles shown={asked && !gone}>
+    <Settles shown={(asked || answered) && !gone}>
       <button type="button" className={css.askDismiss} onClick={() => {
         setGone(true);
         act(call("decision.dismiss", { station, thread, seq }).catch((e: unknown) => { setGone(false); throw e; }), t("web-main.decisions.dismissWhat"));
@@ -584,10 +587,12 @@ function useQueuedEntries(list: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const pane = list.current;
     if (!pane) return;
-    // (The outbox's rows are what is sent from here: madeChat.ts sendingHere.)
-    for (const el of pane.querySelectorAll<HTMLElement>(":scope > [data-enter]:not([data-vk^='o:'])")) {
+    // (An outbox row takes the turn what sent it took: words sent from the composer fly into it, madeChat.ts sendingHere;
+    // an option picked, Decisions.tsx. One sent otherwise comes in like any other.)
+    for (const el of pane.querySelectorAll<HTMLElement>(":scope > [data-enter]")) {
       if (seen.current.has(el)) continue;
       seen.current.add(el);
+      if (el.dataset.vk?.startsWith("o:") && (sendingNow() || claimReserved(el))) continue;
       queueRow(el, () => after(motionMs(ENTER.duration)));
     }
   });
@@ -1012,9 +1017,13 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         ? <>{m.text && <PersonWords text={m.text} />}<Files files={besideQuotes(m.quotes, m.attachments)} /></>
         : <ProseWithFiles text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
-      {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
-      {/* It asks what no one has decided (the core's `asked`): letting it go, right under it. */}
-      {options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} />}
+      {/* It asks what no one has decided (the core's `asked`): letting it go, right under it, closing with its options. */}
+      {options && (m.card || m.options?.length) && !(m.card?.type === "login" && m.card.login)
+        ? <MessageDecision message={m} thread={thread}>{thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={!!(m.decision?.resolved || m.decision?.dismissed)} />}</MessageDecision>
+        : <>
+          {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
+          {options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={false} />}
+        </>}
       {m.archiveCheck && <p className={css.archiveCheck} data-failed={m.archiveCheck.failed || undefined}>{m.archiveCheck.text}</p>}
       {/* Coming and going in one motion (settling.tsx), as the phone's does. */}
       {options && chat && <Settles shown={!!m.archive}><ArchiveOption thread={m.thread} chat={chat} /></Settles>}

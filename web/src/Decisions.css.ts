@@ -41,8 +41,8 @@ export const choice = style({
     // Not over the one under the pointer, nor under it.
     "&:hover:not(:disabled)::before, &:hover:not(:disabled) + &::before": { opacity: "0" },
     "&:disabled": { cursor: "default" },
-    // Another one of them is being sent: the rest step back.
-    "&:disabled:not([data-busy])": { opacity: ".5" },
+    // Another one of them is being sent, or was picked: the rest step back.
+    "&:disabled:not([data-busy]):not([data-chosen])": { opacity: ".5" },
   },
 });
 /**
