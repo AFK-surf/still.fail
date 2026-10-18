@@ -103,17 +103,21 @@ async function main() {
     await page.goto(`${ORIGIN}/w/${workspace}/new`);
     const box = page.locator("textarea").first();
     await box.waitFor({ timeout: 60_000 });
-    await box.click();
-    await page.keyboard.insertText(`${text} post:${answer}`);
-    // Sent once the page can (the station's models read): its button, until the page leaves the new chat.
-    const send = page.getByRole("button", { name: "发送" });
-    console.log(`send buttons: ${await send.count()}, enabled: ${await send.first().isEnabled().catch(() => "?")}, value: ${await box.inputValue()}`);
+    // Typed once the page knows what the chat runs on (the station's models read), key by key as a person types.
+    await page.getByText("Opus 4.1").first().waitFor({ timeout: 60_000 });
+    await page.waitForTimeout(1500);
+    const send = page.getByRole("button", { name: "发送" }).last();
     await until(async () => {
-      if (!page.url().endsWith("/new")) return true;
-      await page.getByRole("button", { name: "发送" }).click({ timeout: 2000 }).catch(() => {});
-      await sleep(1000);
-      return !page.url().endsWith("/new");
-    }, "the message sent", 60);
+      await box.click();
+      await page.keyboard.press("ControlOrMeta+a");
+      await page.keyboard.press("Backspace");
+      await page.keyboard.type(`${text} post:${answer}`, { delay: 5 });
+      await sleep(500);
+      if (!(await send.isEnabled())) return false;
+      await send.click();
+      await page.waitForURL((u) => !u.pathname.endsWith("/new"), { timeout: 10_000 });
+      return true;
+    }, "the message sent", 5);
     // The agent's post in its chat (the composer empty by then).
     // Said twice: in the person's message (after post:) and as the agent's.
     await page.waitForFunction((a) => document.body.innerText.split(a).length > 2, answer, { timeout: 90_000 });
