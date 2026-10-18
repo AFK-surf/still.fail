@@ -152,8 +152,6 @@ const screenView = (story: ViewStory, phone = false, h264 = false): Pick<Story, 
   demo: screensDemo(story, undefined, h264),
   render: () => stage(<ScreenViewer station="demo/local" screen="desktop" backLabel="返回" onBack={noop} phone={phone} />),
 });
-/** With a mouse, the pointer brought to the top: the bar there while the view is live. */
-const toTheBar: Step[] = [{ move: [640, 20] }];
 /** A chat row of the demo's, the made-up ones copied from (kept from its first view, whatever is typed later). */
 let shareRowLike: ShareInView["items"][number] | undefined;
 /** What the share stories share: a video's link, with the title its app gave it. */
@@ -688,13 +686,13 @@ export const stories: Story[] = [
 
   // ── a station's screens (docs/remote-screens.md) ──
   { id: "screen-connecting", group: "屏幕", title: "屏幕 · 连接中", ...screenView("connecting") },
-  { id: "screen-live", group: "屏幕", title: "屏幕 · 控制", ...screenView("live"), steps: toTheBar },
-  { id: "screen-live-h264", group: "屏幕", title: "屏幕 · 控制 · H.264", ...screenView("live", false, true), steps: toTheBar },
-  { id: "screen-read-only", group: "屏幕", title: "屏幕 · 只读成员只能看", ...screenView("readOnly"), steps: toTheBar },
-  { id: "screen-undrivable", group: "屏幕", title: "屏幕 · station 没有辅助功能权限", ...screenView("undrivable"), steps: toTheBar },
+  { id: "screen-live", group: "屏幕", title: "屏幕 · 控制", ...screenView("live") },
+  { id: "screen-live-h264", group: "屏幕", title: "屏幕 · 控制 · H.264", ...screenView("live", false, true) },
+  { id: "screen-read-only", group: "屏幕", title: "屏幕 · 只读成员只能看", ...screenView("readOnly") },
+  { id: "screen-undrivable", group: "屏幕", title: "屏幕 · station 没有辅助功能权限", ...screenView("undrivable") },
   { id: "screen-agent-driving", group: "屏幕", title: "屏幕 · Agent 正在控制", ...screenView("agent") },
   { id: "screen-agent-driving-phone", group: "屏幕", title: "屏幕 · Agent 正在控制 · 手机", phone: true, ...screenView("agent", true) },
-  { id: "screen-taken-over", group: "屏幕", title: "屏幕 · 接管之后", ...screenView("agent"), steps: [{ click: 'button:has-text("接管")' }, ...toTheBar] },
+  { id: "screen-taken-over", group: "屏幕", title: "屏幕 · 接管之后", ...screenView("agent"), steps: [{ click: 'button:has-text("接管")' }] },
   { id: "screen-reconnecting", group: "屏幕", title: "屏幕 · 重新连接", ...screenView("reconnecting") },
   { id: "screen-ended", group: "屏幕", title: "屏幕 · 结束了", ...screenView("ended") },
   { id: "screen-outdated", group: "屏幕", title: "屏幕 · station 要更新", ...screenView("outdated") },
@@ -709,12 +707,12 @@ export const stories: Story[] = [
   { id: "screen-copied", group: "屏幕", title: "屏幕 · 远端复制了（浏览器没让直接写剪贴板）", ...screenView("copied"), steps: [{ hover: '[role="status"]:has(button)' }] },
   { id: "screen-dragging", group: "屏幕", title: "屏幕 · 拖文件进来", ...screenView("dragging") },
   { id: "screen-sending", group: "屏幕", title: "屏幕 · 文件发送中", ...screenView("sending") },
-  { id: "screen-sent", group: "屏幕", title: "屏幕 · 文件已发到那台机器", ...screenView("sent"), steps: toTheBar },
+  { id: "screen-sent", group: "屏幕", title: "屏幕 · 文件已发到那台机器", ...screenView("sent") },
   { id: "screen-sent-phone", group: "屏幕", title: "屏幕 · 文件已发到那台机器 · 手机", phone: true, ...screenView("sent", true) },
   { id: "app-station-screens", group: "屏幕", title: "station · 屏幕", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-screens-lacking", group: "屏幕", title: "station · 屏幕 · 缺权限", app: true, demo: screensDemo("live", SCREENS_LACKING), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-screens-outdated", group: "屏幕", title: "station · 屏幕 · 要更新", app: true, demo: screensDemo("live", OUTDATED), steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "app-screen", group: "屏幕", title: "station · 打开屏幕", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }, { click: 'a[href$="/screen/desktop"]' }, ...toTheBar] },
+  { id: "app-screen", group: "屏幕", title: "station · 打开屏幕", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }, { click: 'a[href$="/screen/desktop"]' }] },
   { id: "app-chat-screen-links", group: "屏幕", title: "对话里的屏幕链接", app: true, demo: screenLinksDemo },
   { id: "phone-chat-screen-links", group: "屏幕", title: "手机 · 对话里的屏幕链接", app: true, phone: true, demo: screenLinksDemo },
   { id: "app-chat-adb-link", group: "屏幕", title: "对话里的共享调试链接", app: true, demo: adbLinksDemo(false) },
@@ -726,7 +724,7 @@ export const stories: Story[] = [
   { id: "app-station-permissions-asking", group: "权限", title: "station · 权限 · 申请中（可远程点）", app: true, demo: permissionsDemo("asking"), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-permissions-asking-there", group: "权限", title: "station · 权限 · 申请中（要去那台 Mac）", app: true, demo: permissionsDemo("askingThere"), steps: [{ click: '[aria-label^="Station"]' }] },
   // Asked for where the screen can be driven: one tap, and the desktop opens with the window up on it.
-  { id: "app-station-permissions-requested", group: "权限", title: "station · 权限 · 申请后打开屏幕", app: true, demo: permissionsDemo("missing", screensDemo()), steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label="申请「桌面」"]' }, ...toTheBar] },
+  { id: "app-station-permissions-requested", group: "权限", title: "station · 权限 · 申请后打开屏幕", app: true, demo: permissionsDemo("missing", screensDemo()), steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label="申请「桌面」"]' }] },
   { id: "app-station-permissions-read-only", group: "权限", title: "station · 权限 · 只读成员", app: true, demo: permissionsDemo("readOnly"), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-permissions-none", group: "权限", title: "station · 权限 · 不是 Mac（不显示）", app: true, demo: permissionsDemo("none"), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "phone-station-permissions", group: "权限", title: "手机 · station · 权限 · 都已允许", app: true, phone: true, demo: permissionsDemo("granted"), steps: toPhoneStation },

@@ -1,12 +1,13 @@
 // A station's screen seen (and driven) in the app (ScreenViewer.tsx): the picture fitted in the window, letterboxed
-// on the app's own ground (light or dark as the app is), and the controls over it as a media viewer's are. With a
-// mouse the bar every file opened has (ViewerBar) along the top, gone after a moment at rest; on a phone frosted
-// bars above and below the picture, which stays clear of them.
+// on the app's own ground (light or dark as the app is). With a mouse the bar every file opened has (ViewerBar) along
+// the top, always there, the picture below it; on a phone frosted bars above and below the picture, which stays clear
+// of them. Nothing of the screen is ever under a bar, out of reach.
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { pictureGlass as glass } from "@stillfail/ui/styles/glass.ts";
 import { IN, PANEL_PAD, PANEL_PILL, centred, centredX, pillInner } from "@stillfail/ui/styles/align.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
+import { VIEWER_BAR } from "@stillfail/ui/viewer/ViewerBar.css.ts";
 
 /** The page it is on, over the whole window (as a file opened is: pages/Drive.css.ts opened). */
 export const page = style({
@@ -31,6 +32,8 @@ export const viewer = style({
 export const stage = style({
   position: "absolute", inset: "0", overflow: "hidden", touchAction: "none",
   selectors: {
+    // With a mouse, below the bar along the top.
+    [`${viewer}:not([data-phone]) &`]: { top: `${VIEWER_BAR}px` },
     // On a phone, between its bars: they stay, so they never cover it.
     [`${viewer}[data-phone] &`]: {
       top: `calc(var(--m-top, 0px) + max(${EDGE}px, var(--safe-top)) + ${HEAD + GAP}px)`,

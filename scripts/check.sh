@@ -299,7 +299,7 @@ fi
 if [ $full = 1 ]; then
   # Every story (web/stories) opened and every corner and small panel in it measured (test/browser/stories.mjs,
   # docs/ui-panels.md), then what moves in a chat's message list watched frame by frame (test/browser/list-settle.mjs,
-  # docs/list-motion.md), and a picture's bar kept while pointed at (test/browser/viewer-bar.mjs, the motion's last share):
+  # docs/list-motion.md), and nothing a viewer shows under its bar (test/browser/viewer-bar.mjs, the motion's last share):
   # on a Chrome the machine has (CI's Linux runners have one). On CI shared out between jobs side by
   # side (STILLFAIL_BROWSER): on one of GitHub's four cores it all took ~3 minutes (2026-10-15).
   if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar)\.mjs$'; }; then

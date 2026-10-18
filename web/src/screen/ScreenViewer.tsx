@@ -15,9 +15,8 @@ import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { byBar, ViewerBar, ViewerTool } from "@stillfail/ui/viewer/ViewerBar.tsx";
+import { ViewerBar, ViewerTool } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
-import { REST_MS } from "@stillfail/ui/viewer/rest.ts";
 import { Button, PanelButton, Segmented, Tip, WaitPill } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import { ScreenFrames, decodable, viewSize, type FrameConfig, type FrameHead } from "./frames.ts";
@@ -311,26 +310,6 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
     <span className={css.controllers}><span className={css.controllersDot} aria-hidden="true" /><span className={css.controllersText}>{controlling}</span></span>
   );
 
-  // With a mouse, the bar goes after a moment at rest while live, and comes back as the pointer comes to the top (or
-  // anywhere, while only looking). A finger keeps it; so does someone else driving it (who, and 接管, stay in sight).
-  const [awake, setAwake] = useState(true);
-  const rest = useRef(0);
-  // The pointer on the bar, which it does not hear where it drags the window (ViewerBar.tsx byBar): it stays.
-  const onBar = useRef(false);
-  const wake = useCallback(() => {
-    setAwake(true);
-    clearTimeout(rest.current);
-    rest.current = window.setTimeout(() => { if (!onBar.current) setAwake(false); }, REST_MS);
-  }, []);
-  useEffect(() => { wake(); return () => clearTimeout(rest.current); }, [wake]);
-  const touched = useRef(false);
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (e.pointerType !== "mouse") { touched.current = true; clearTimeout(rest.current); setAwake(true); return; }
-    touched.current = false;
-    onBar.current = !phone && byBar(e);
-    if (!drivingRef.current || onBar.current) wake();
-  };
-
   const title = shown?.title || t("web-pages.screen.title");
   // Over, the panel says why; while it cannot be driven, what to turn on follows who is on it.
   const line = over ? "" : [shown?.line, undrivable ? access?.message : undefined].filter(Boolean).join(" · ");
@@ -354,7 +333,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
 
   return (
     <div ref={viewerEl} className={css.viewer} data-phone={phone || undefined} data-full={(phone && full) || undefined}
-      data-keys={(phone && !over && driving && (!full || typing)) || undefined} data-phase={phase} onPointerMove={onPointerMove} onPointerDown={onPointerMove}
+      data-keys={(phone && !over && driving && (!full || typing)) || undefined} data-phase={phase}
       onDragOver={(e) => { if (drop && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
       onDrop={(e) => { if (!drop || !e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); sendFiles([...e.dataTransfer.files]); }}>
@@ -480,8 +459,9 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
           )}
         </>
       ) : (
+        // Always there, the picture below it (ScreenViewer.css.ts stage): nothing of the screen under the bar, which
+        // drags the desktop window, to be out of reach.
         <ViewerBar back={{ label: backLabel, onClick: onBack }} name={title} meta={line}
-          hidden={live && !awake && !touched.current && !takeOver && controllers.length === 0}
           tools={over ? undefined : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : <>{sendTool}{modes}</>} />
       )}
     </div>

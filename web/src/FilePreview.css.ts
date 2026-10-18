@@ -8,6 +8,7 @@ import { codeBar, codeBlock, codeShiki } from "./Prose.css.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
 import { pictureGlass } from "@stillfail/ui/styles/glass.ts";
+import { VIEWER_BAR } from "@stillfail/ui/viewer/ViewerBar.css.ts";
 
 /** Frosted glass over a picture (@stillfail/ui's, as its viewers have it). */
 export const glass = pictureGlass;
@@ -96,6 +97,9 @@ export const fpBody = style({
   },
 });
 globalStyle(`${fpBody} > *`, { gridArea: "1 / 1" });
+// Docked (a wide screen with a mouse), a picture or a video lies below the bar along the top, never under it: the bar
+// stays, and drags the desktop window, so what it covered could not be pointed at.
+globalStyle(`${fp}[data-docked]:is([data-kind="image"], [data-kind="video"]) ${fpBody}`, { paddingTop: `${VIEWER_BAR}px` });
 /** What is shown, in the body's place: moved sideways as one stepping through images slides it. */
 export const fpSlide = style({
   position: "relative", minWidth: "0", minHeight: "0", width: "100%", height: "100%", display: "grid", gridTemplate: "minmax(0, 1fr) / minmax(0, 1fr)",
