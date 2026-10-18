@@ -19,6 +19,8 @@ export const warn = style({ display: "grid", gap: 4, marginTop: 6, fontSize: var
 globalStyle(`${warn} [data-level="amber"]`, { color: vars.amber });
 globalStyle(`${warn} [data-level="red"]`, { color: vars.red });
 
+/** The page's parts to pick from, under its head: as wide as their names, at the column's start. */
+export const parts = style({ display: "flex", marginBottom: 24 });
 /** What is left of the machine large, then this device's connection to it. */
 export const machine = style({ display: "grid", gap: 18, justifyItems: "start", minWidth: 0 });
 /** Its agents, counted as the dials above are written: the number large, what it counts under it. */

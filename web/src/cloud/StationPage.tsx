@@ -14,7 +14,7 @@ import { useRailItems } from "../Rail.tsx";
 import { stationBase } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { same } from "../stationPick.ts";
-import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, StatusDot, Time, Waiting } from "../ui.tsx";
+import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, Segmented, StatusDot, Time, Waiting } from "../ui.tsx";
 import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, joinedText, LanKept, Net, problems, state, useLong } from "./StationCards.tsx";
@@ -185,10 +185,33 @@ function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: 
   );
 }
 
-/** The rest of it, each part once there is something to show of it. */
+/** The page's parts, one shown at a time: how it is and what runs on it; what it is let do and set to; its software and
+ * the machine. */
+type Part = "overview" | "settings" | "machine";
+const PARTS: Part[] = ["overview", "settings", "machine"];
+
+/** The rest of it in its parts (`?part=`, the overview by default), each section once there is something to show of it. */
 function Body({ s, manager }: { s: StationView; manager: boolean }) {
   // A login's link (`/w/<ws>/s/<station>/login/<id>`, workspace.tsx) comes here with it: its card brought into view.
-  const [search] = useSearchParams();
+  const [search, setSearch] = useSearchParams();
+  const asked = search.get("part") as Part | null;
+  const part: Part = search.get("login") ? "settings" : asked && PARTS.includes(asked) ? asked : "overview";
+  const show = (to: Part) => setSearch((was) => { const next = new URLSearchParams(was); next.delete("login"); if (to === "overview") next.delete("part"); else next.set("part", to); return next; }, { replace: true });
+  return (
+    <>
+      <div className={css.parts}>
+        <Segmented<Part> label={t("web-pages.stations.page.parts")} value={part} onChange={show}
+          options={PARTS.map((p) => ({ value: p, label: t(`web-pages.stations.page.part.${p}`) }))} />
+      </div>
+      {part === "overview" && <Overview s={s} />}
+      {part === "settings" && <Settings s={s} manager={manager} marked={search.get("login")} />}
+      {part === "machine" && <Machine s={s} manager={manager} />}
+    </>
+  );
+}
+
+/** How it is, what is left of the machine, and what runs on it: its agents, screens, profiles, connects and folders. */
+function Overview({ s }: { s: StationView }) {
   const o = s.overview;
   const base = stationBase(s.station);
   const folders = o?.drive?.roots ?? [];
@@ -215,8 +238,6 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
       )}
       {/* Its screens, to see and drive (docs/remote-screens.md); a station from before them says so quietly. */}
       <ScreensSection station={s.station} />
-      {/* What macOS lets its still.fail Helper do (a Mac's station only), each grant asked for from here. */}
-      {s.online && o?.permissions && <PermissionsSection station={s.station} permissions={o.permissions} />}
       {o && o.profiles.length > 0 && (
         <Section title={<>Profile<span className={settingsCss.titleCount}>{o.profiles.length}</span></>}>
           <ul className={pagesCss.list}>
@@ -230,8 +251,6 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           </ul>
         </Section>
       )}
-      {/* The command-line tools its agents use, logged in here for every chat (docs/remote-login.md). */}
-      <LoginsSection station={s.station} marked={search.get("login")} />
       {o && o.connects.length > 0 && (
         <Section title={<>{t("web-pages.settings.nav.connects")}<span className={settingsCss.titleCount}>{o.connects.length}</span></>}>
           <ul className={pagesCss.list}>
@@ -268,11 +287,34 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           </ul>
         </Section>
       )}
+    </>
+  );
+}
+
+/** What it is let do and set to: the grants macOS gives it, the tools logged in on it, its agents' variables, what its
+ * search finds, the workspaces it is in. */
+function Settings({ s, manager, marked }: { s: StationView; manager: boolean; marked: string | null }) {
+  const o = s.overview;
+  return (
+    <>
+      {/* What macOS lets its still.fail Helper do (a Mac's station only), each grant asked for from here. */}
+      {s.online && o?.permissions && <PermissionsSection station={s.station} permissions={o.permissions} />}
+      {/* The command-line tools its agents use, logged in here for every chat (docs/remote-login.md). */}
+      <LoginsSection station={s.station} marked={marked} />
       {/* The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them. */}
       {o?.agentEnv && <AgentEnv station={s.station} env={o.agentEnv} manager={manager} />}
       {/* What its search finds of the machine (docs/search.md): the person's own data only where its managers say. */}
       {s.online && o?.search && <SearchSection station={s.station} search={o.search} manager={manager} />}
       {manager && <Workspaces s={s} />}
+    </>
+  );
+}
+
+/** Its software, its updates, and the machine itself. */
+function Machine({ s, manager }: { s: StationView; manager: boolean }) {
+  const o = s.overview;
+  return (
+    <>
       {/* Its updates are its home workspace's managers' to make (docs/multi-workspace.md). */}
       <Section title={t("web-pages.stations.software")}>
         {s.online ? <SoftwareList station={s.station} updates={o?.updates} manager={manager} beta={s.betaOffered ?? false} /> : <p className={css.note}>{t("web-pages.stations.softwareOffline")}</p>}

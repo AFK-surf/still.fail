@@ -29,7 +29,7 @@ import { AT, apk, clips, folder, HISTORY, JOIN_REFUSED, JOINABLE, LOGINS, logins
 import { LoginCard, LoginsSection } from "../src/MachineLogins.tsx";
 import * as pagesCss from "../src/styles/pages.css.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
-import type { ChatMessage, ChatView, ShareInView } from "../src/core/shapes.ts";
+import type { ChatMessage, ChatView, ShareInView, StationView } from "../src/core/shapes.ts";
 import { stamp } from "../src/demo/fixtures.ts";
 import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
@@ -77,6 +77,8 @@ export interface Story {
 const at = (name: string) => ({ ...AT, path: name });
 /** To 设置 › 密钥: the wide screen's settings, the phone's (from its chat, back to the list). */
 const toVault: Step[] = [{ click: '[aria-label="设置"]' }, { text: "密钥" }];
+/** To the wide screen's station page, at one of its parts (StationPage.tsx). */
+const toStation = (part: "设置" | "软件与设备"): Step[] => [{ click: '[aria-label^="Station"]' }, { click: `[aria-label="显示"] button:has-text("${part}")` }];
 /** To a station's page on the phone (settings › Station › the demo's one). */
 const toPhoneStation: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }];
 const toPhoneVault: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "密钥" }];
@@ -147,6 +149,20 @@ const memberships = (joined = false): DemoExtension => ({
     return [...value, { ...first, station: "demo/mini1", id: "mini1", name: "Mini1", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab" }];
   },
 });
+/** Several of these at once: the first that answers a topic or call, each `then` over the last's value. */
+const together = (...all: DemoExtension[]): DemoExtension => ({
+  topic: (t) => { for (const e of all) { const v = e.topic?.(t); if (v !== undefined) return v; } return undefined; },
+  then: (t, value) => { let changed: unknown; for (const e of all) { const v = e.then?.(t, changed ?? value); if (v !== undefined) changed = v; } return changed; },
+  call: (name, params) => { for (const e of all) { const v = e.call?.(name, params); if (v !== undefined) return v; } return undefined; },
+  stream: (name, params, emit, signal) => { for (const e of all) { const v = e.stream?.(name, params, emit, signal); if (v !== undefined) return v; } return undefined; },
+});
+/** A Mac station with everything its page shows: screens, grants missing, logins, variables, search, two workspaces. */
+const fullStation = (): DemoExtension => together(
+  permissionsDemo("missing", screensDemo()), agentEnvDemo("set"), logins(), memberships(),
+  { then: (t, value) => (t.topic === "stations" && Array.isArray(value)
+    ? (value as StationView[]).map((s) => (s.overview ? { ...s, overview: { ...s.overview, search: { files: "spotlight", personal: false } } } : s))
+    : undefined) },
+);
 /** One of the demo station's screens seen, its view going as `story` says (screens.ts), alone on the window; `h264`: in
  * H.264 where the browser encodes it. */
 const screenView = (story: ViewStory, phone = false, h264 = false): Pick<Story, "render" | "demo"> => ({
@@ -499,7 +515,7 @@ export const stories: Story[] = [
   { id: "app-chat-files-card", group: "应用", title: "对话 · 文件卡片悬停", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }, { hover: "text=Studio · 路径" }] },
   { id: "app-station", group: "应用", title: "station", app: true, steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-mark", group: "应用", title: "station · 选图标", app: true, steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label^="为 Studio 选择图标"]' }] },
-  { id: "app-station-workspaces", group: "应用", title: "station · 在几个 workspace 里", app: true, demo: memberships(), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-workspaces", group: "应用", title: "station · 在几个 workspace 里", app: true, demo: memberships(), steps: toStation("设置") },
   { id: "app-station-joined", group: "应用", title: "station · 从别的 workspace 加入的", app: true, demo: memberships(true), steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
   { id: "app-station-add-existing", group: "应用", title: "添加 station · 已有的", app: true, demo: joining("list"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
   { id: "app-first-station-existing", group: "应用", title: "第一台 station · 也可加已有的", app: true, demo: firstJoining },
@@ -543,7 +559,7 @@ export const stories: Story[] = [
   { id: "logins-section-under-way", group: "登录", title: "station 页 · 登录（一个进行中）", render: loginsSection, demo: logins({ listed: ["device"] }) },
   { id: "logins-section-marked", group: "登录", title: "station 页 · 链接指到的那张卡片", render: () => stage(<div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><LoginsSection station="demo/local" marked="device" /></div>), demo: logins({ listed: ["device", "done"] }) },
   { id: "logins-section-readonly", group: "登录", title: "station 页 · 只读成员", render: loginsSection, demo: logins({ canLogin: false }) },
-  { id: "app-station-logins", group: "登录", title: "station 页 · 在页面里", app: true, demo: logins(), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-logins", group: "登录", title: "station 页 · 在页面里", app: true, demo: logins(), steps: toStation("设置") },
   { id: "login-card-loopback", group: "登录", title: "卡片 · 回环（桌面）", render: loginCard("loopback"), demo: logins() },
   { id: "login-card-loopback-web", group: "登录", title: "卡片 · 回环（网页）", render: loginCard("loopback"), demo: logins({ canRelay: false }) },
   { id: "login-card-loopback-listening", group: "登录", title: "卡片 · 回环 · 等浏览器回来", render: loginCard("listening"), demo: logins() },
@@ -744,14 +760,14 @@ export const stories: Story[] = [
   { id: "phone-chat-adb-link", group: "屏幕", title: "手机 · 对话里的共享调试链接（已共享）", app: true, phone: true, demo: adbLinksDemo(true) },
   { id: "phone-station-screens", group: "屏幕", title: "手机 · station 的屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },
   // ── a Mac station's grants to still.fail Helper (docs/remote-screens.md "Grants") ──
-  { id: "app-station-permissions", group: "权限", title: "station · 权限 · 都已允许", app: true, demo: permissionsDemo("granted"), steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "app-station-permissions-missing", group: "权限", title: "station · 权限 · 缺几项", app: true, demo: permissionsDemo("missing"), steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "app-station-permissions-asking", group: "权限", title: "station · 权限 · 申请中（可远程点）", app: true, demo: permissionsDemo("asking"), steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "app-station-permissions-asking-there", group: "权限", title: "station · 权限 · 申请中（要去那台 Mac）", app: true, demo: permissionsDemo("askingThere"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-permissions", group: "权限", title: "station · 权限 · 都已允许", app: true, demo: permissionsDemo("granted"), steps: toStation("设置") },
+  { id: "app-station-permissions-missing", group: "权限", title: "station · 权限 · 缺几项", app: true, demo: permissionsDemo("missing"), steps: toStation("设置") },
+  { id: "app-station-permissions-asking", group: "权限", title: "station · 权限 · 申请中（可远程点）", app: true, demo: permissionsDemo("asking"), steps: toStation("设置") },
+  { id: "app-station-permissions-asking-there", group: "权限", title: "station · 权限 · 申请中（要去那台 Mac）", app: true, demo: permissionsDemo("askingThere"), steps: toStation("设置") },
   // Asked for where the screen can be driven: one tap, and the desktop opens with the window up on it.
-  { id: "app-station-permissions-requested", group: "权限", title: "station · 权限 · 申请后打开屏幕", app: true, demo: permissionsDemo("missing", screensDemo()), steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label="申请「桌面」"]' }, ...toTheBar] },
-  { id: "app-station-permissions-read-only", group: "权限", title: "station · 权限 · 只读成员", app: true, demo: permissionsDemo("readOnly"), steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "app-station-permissions-none", group: "权限", title: "station · 权限 · 不是 Mac（不显示）", app: true, demo: permissionsDemo("none"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-permissions-requested", group: "权限", title: "station · 权限 · 申请后打开屏幕", app: true, demo: permissionsDemo("missing", screensDemo()), steps: [...toStation("设置"), { click: '[aria-label="申请「桌面」"]' }, ...toTheBar] },
+  { id: "app-station-permissions-read-only", group: "权限", title: "station · 权限 · 只读成员", app: true, demo: permissionsDemo("readOnly"), steps: toStation("设置") },
+  { id: "app-station-permissions-none", group: "权限", title: "station · 权限 · 不是 Mac（不显示）", app: true, demo: permissionsDemo("none"), steps: toStation("设置") },
   { id: "phone-station-permissions", group: "权限", title: "手机 · station · 权限 · 都已允许", app: true, phone: true, demo: permissionsDemo("granted"), steps: toPhoneStation },
   { id: "phone-station-permissions-missing", group: "权限", title: "手机 · station · 权限 · 缺几项", app: true, phone: true, demo: permissionsDemo("missing"), steps: toPhoneStation },
   { id: "phone-station-permissions-asking", group: "权限", title: "手机 · station · 权限 · 申请中（可远程点）", app: true, phone: true, demo: permissionsDemo("asking"), steps: toPhoneStation },
@@ -760,9 +776,12 @@ export const stories: Story[] = [
   { id: "phone-station-permissions-read-only", group: "权限", title: "手机 · station · 权限 · 只读成员", app: true, phone: true, demo: permissionsDemo("readOnly"), steps: toPhoneStation },
   { id: "phone-station-permissions-none", group: "权限", title: "手机 · station · 权限 · 不是 Mac（不显示）", app: true, phone: true, demo: permissionsDemo("none"), steps: toPhoneStation },
   // The variables what a station starts for its agents runs with (docs/agent-env.md): set, none yet, and edited on a phone.
-  { id: "app-station-agent-env", group: "设置", title: "station · Agent 环境变量", app: true, demo: agentEnvDemo("set"), steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "app-station-agent-env-empty", group: "设置", title: "station · Agent 环境变量 · 暂无", app: true, demo: agentEnvDemo("empty"), steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "app-station-agent-env-wrong", group: "设置", title: "station · Agent 环境变量 · 有错的行", app: true, demo: agentEnvDemo("wrong"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-full", group: "应用", title: "station · 什么都有的 Mac", app: true, demo: fullStation(), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-full-settings", group: "应用", title: "station · 什么都有的 Mac · 设置", app: true, demo: fullStation(), steps: toStation("设置") },
+  { id: "app-station-full-machine", group: "应用", title: "station · 什么都有的 Mac · 软件与设备", app: true, demo: fullStation(), steps: toStation("软件与设备") },
+  { id: "app-station-agent-env", group: "设置", title: "station · Agent 环境变量", app: true, demo: agentEnvDemo("set"), steps: toStation("设置") },
+  { id: "app-station-agent-env-empty", group: "设置", title: "station · Agent 环境变量 · 暂无", app: true, demo: agentEnvDemo("empty"), steps: toStation("设置") },
+  { id: "app-station-agent-env-wrong", group: "设置", title: "station · Agent 环境变量 · 有错的行", app: true, demo: agentEnvDemo("wrong"), steps: toStation("设置") },
   { id: "phone-station-agent-env", group: "设置", title: "手机 · station · Agent 环境变量", app: true, phone: true, demo: agentEnvDemo("set"), steps: toPhoneStation },
   { id: "phone-station-agent-env-edit", group: "设置", title: "手机 · station · Agent 环境变量 · 编辑", app: true, phone: true, demo: agentEnvDemo("wrong"), steps: [...toPhoneStation, { text: "编辑变量" }] },
   { id: "phone-screen", group: "屏幕", title: "手机 · 打开屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }, { text: "登录 · GitHub" }] },
