@@ -483,5 +483,6 @@
   "core-views.search.offline": "Offline",
   "core-views.search.offlineStations": "{names} offline, not searched",
   "core-views.search.older": "{names} must be updated to be searched",
-  "core-views.search.building": "Some stations are still indexing; results may be incomplete"
+  "core-views.search.building": "Some stations are still indexing; results may be incomplete",
+  "core-views.search.archived": "Archived"
 }

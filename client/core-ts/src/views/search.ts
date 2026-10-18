@@ -45,6 +45,9 @@ export function stationTopic(station: string, view: Topic): Topic {
   return { topic: "stationSearch", station, q, ...(kind ? { kind } : {}), limit: kind ? ONE_KIND : SHOWN + 1 };
 }
 
+/// A chat found archived: marked so, its second line saying so where a list's says where it stands.
+const archived = () => ({ archived: true, stateText: t("core-views.search.archived") });
+
 const titled = (title: string, words: string[]) => words.length > 0 && title.toLowerCase().includes(words[0]!);
 
 /// A chat a station found that the device's list does not have (archived, or not read yet): drawn as a row of it.
@@ -52,7 +55,7 @@ function chatRow(hit: J, s: { address: string; name: string }, chatTitle: string
   const id = str(hit.chat) ?? "";
   return {
     id, session: id, thread: num(hit.thread), title: chatTitle || t("core-views.new_chat"), agents: [], unread: false, mine: false,
-    lastActiveAt: num(hit.at) ?? 0, station: s.address, stationName: s.name, ...(hit.archived === true ? { archived: true } : {}),
+    lastActiveAt: num(hit.at) ?? 0, station: s.address, stationName: s.name, ...(hit.archived === true ? archived() : {}),
   };
 }
 
@@ -114,7 +117,7 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
           if (seenChats.has(`${s.address}\u0001${id}`)) {
             // The device's row of it, archived meanwhile (its station says so before the list does): said archived.
             const at = hit.archived === true ? items.findIndex((i) => i.station === s.address && i.id === id) : -1;
-            if (at >= 0 && items[at].archived !== true) items[at] = { ...items[at], archived: true };
+            if (at >= 0 && items[at].archived !== true) items[at] = { ...items[at], ...archived() };
             continue;
           }
           seenChats.add(`${s.address}\u0001${id}`);
