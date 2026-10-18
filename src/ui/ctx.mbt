@@ -85,6 +85,8 @@ pub struct Ctx {
   mut press_x : Double
   mut press_y : Double
   mut last_y : Double
+  mut last_x : Double
+  mut vel_x : Double
   mut last_t : Double
   mut vel : Double
   mut editor_drag : Bool
@@ -141,6 +143,8 @@ fn Ctx::new() -> Ctx {
     press_x: 0.0,
     press_y: 0.0,
     last_y: 0.0,
+    last_x: 0.0,
+    vel_x: 0.0,
     last_t: 0.0,
     vel: 0.0,
     editor_drag: false,

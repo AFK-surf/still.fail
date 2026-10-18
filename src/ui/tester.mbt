@@ -49,6 +49,7 @@ fn reset_globals() -> Unit {
   text_cache.glyphs.clear()
   text_cache.generation = -1
   image_cache.clear()
+  pagers.clear()
   image_data.clear()
   bench.mode = 0
 }

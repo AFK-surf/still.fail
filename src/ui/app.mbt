@@ -186,6 +186,8 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
     c.press_x = x
     c.press_y = y
     c.last_y = y
+    c.last_x = x
+    c.vel_x = 0.0
     c.last_t = t
     c.vel = 0.0
     c.dragging = false
@@ -228,21 +230,33 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
           None => ()
         }
       } else if c.drag_scroll != 0 {
-        if !c.dragging && (y - c.press_y).abs() > 6.0 {
+        // a pager follows the finger sideways, a list up and down
+        let pager = pagers.contains(c.drag_scroll)
+        let moved = if pager { x - c.press_x } else { y - c.press_y }
+        if !c.dragging && moved.abs() > 6.0 {
           c.dragging = true
           c.active = 0
         }
         if c.dragging {
-          let dy = y - c.last_y
-          c.scroll_list(c.drag_scroll, -dy)
           let dt = t - c.last_t
-          if dt > 0.0 {
-            let v = -dy / dt
-            c.vel = c.vel * 0.4 + v * 0.6
+          if pager {
+            let dx = x - c.last_x
+            c.pager_drag(c.drag_scroll, dx) |> ignore
+            if dt > 0.0 {
+              c.vel_x = c.vel_x * 0.4 + dx / dt * 0.6
+            }
+          } else {
+            let dy = y - c.last_y
+            c.scroll_list(c.drag_scroll, -dy)
+            if dt > 0.0 {
+              let v = -dy / dt
+              c.vel = c.vel * 0.4 + v * 0.6
+            }
           }
         }
       }
       c.last_y = y
+      c.last_x = x
       c.last_t = t
     }
   } else if kind == 2 {
@@ -254,6 +268,12 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
       match c.lists.get(c.drag_scroll) {
         Some(st) => if t - c.last_t < 80.0 { st.vel = dclamp(c.vel, -8.0, 8.0) }
         None => ()
+      }
+      if pagers.contains(c.drag_scroll) {
+        c.pager_release(
+          c.drag_scroll,
+          if t - c.last_t < 80.0 { c.vel_x } else { 0.0 },
+        )
       }
     }
     c.down = false
@@ -292,7 +312,7 @@ fn on_key(code : Int, mods : Int) -> Unit {
     }
     None => {
       let target = hit_in(c.scroll_ids, c.scroll_rects, c.px, c.py)
-      if target != 0 && c.list_key(target, code) {
+      if target != 0 && (c.list_key(target, code) || c.pager_key(target, code)) {
         h_request_frame()
       }
     }

@@ -264,39 +264,56 @@ fn image_leaf_size(
 
 ///|
 fn Ctx::paint_image(self : Ctx, n : Node, alpha : Double) -> Unit {
+  self.draw_image(n.text, n.x, n.y, n.fw, n.fh, n.fit, n.radius, alpha)
+}
+
+///|
+/// Draws the image from `src` in the box (x, y, w, h), loading it at the
+/// size of the box.
+fn Ctx::draw_image(
+  self : Ctx,
+  src : String,
+  bx : Double,
+  by : Double,
+  bw : Double,
+  bh : Double,
+  fit : Fit,
+  radius : Double,
+  alpha : Double,
+) -> Unit {
   // a side still 0 waits for the image's proportions: load it anyway,
   // small if it has no size yet at all
-  let px = dmax(n.fw, n.fh) * self.scale
+  let px = dmax(bw, bh) * self.scale
   let px = if px <= 0.0 { 256.0 } else { px }
-  let e = match self.image_for(n.text, px) {
+  let e = match self.image_for(src, px) {
     Some(e) => e
     None => return
   }
-  if n.fw <= 0.0 || n.fh <= 0.0 {
+  if bw <= 0.0 || bh <= 0.0 {
     return
   }
   let fade = dclamp((self.now - e.ready_at) / 150.0, 0.0, 1.0)
   if fade < 1.0 {
     self.wants_frame = true
   }
-  let (x, y, w, h, u0, v0, du, dv) = match n.fit {
-    FitFill => (n.x, n.y, n.fw, n.fh, 0.0, 0.0, 1.0, 1.0)
+  let (x, y, w, h, u0, v0, du, dv) = match fit {
+    FitFill => (bx, by, bw, bh, 0.0, 0.0, 1.0, 1.0)
     FitCover => {
       // the part of the image the box shows, centred
-      let k = dmax(n.fw / e.w, n.fh / e.h)
-      let du = n.fw / k / e.w
-      let dv = n.fh / k / e.h
-      (n.x, n.y, n.fw, n.fh, (1.0 - du) / 2.0, (1.0 - dv) / 2.0, du, dv)
+      let k = dmax(bw / e.w, bh / e.h)
+      let du = bw / k / e.w
+      let dv = bh / k / e.h
+      (bx, by, bw, bh, (1.0 - du) / 2.0, (1.0 - dv) / 2.0, du, dv)
     }
     FitContain => {
-      let k = dmin(n.fw / e.w, n.fh / e.h)
+      let k = dmin(bw / e.w, bh / e.h)
       let w = e.w * k
       let h = e.h * k
-      (n.x + (n.fw - w) / 2.0, n.y + (n.fh - h) / 2.0, w, h, 0.0, 0.0, 1.0, 1.0)
+      (bx + (bw - w) / 2.0, by + (bh - h) / 2.0, w, h, 0.0, 0.0, 1.0, 1.0)
     }
   }
   self.push_inst(
-    x, y, w, h, n.radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha * fade, u0, v0, du,
+    x, y, w, h, radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha * fade, u0, v0, du,
     dv,
   )
   self.inst[(self.ninst - 1) * inst_size + 20] = e.id.to_double()

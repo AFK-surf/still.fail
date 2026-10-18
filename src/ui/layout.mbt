@@ -107,6 +107,14 @@ fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
         s.shrink = 1.0
       }
   }
+  if n.pager != 0 {
+    // a pager's pages lie over each other, moved sideways as they turn
+    s.position = Absolute
+    s.inset.left = Pt(0.0)
+    s.inset.top = Pt(0.0)
+    s.width = Pct(100.0)
+    s.height = Pct(100.0)
+  }
   match n.h {
     Px(p) => s.height = Pt(p)
     Fill(k) =>
@@ -157,6 +165,9 @@ fn Ctx::layout(
 /// inside the leaves.
 fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   let n = self.nodes[i]
+  if n.pager != 0 {
+    self.place_pager_slot(i)
+  }
   let f = n.fl
   n.x = px + f.left + n.tx
   n.y = py + f.top + n.ty

@@ -50,6 +50,9 @@ let kind_scroll = 4
 let kind_image = 5
 
 ///|
+let kind_page = 6
+
+///|
 struct Node {
   mut kind : Int
   mut id : Int
@@ -86,6 +89,11 @@ struct Node {
   mut color : Int64
   mut wrap : Bool
   mut fit : Fit
+  // a page of a book, and which
+  mut pages : Pages?
+  mut page_no : Int
+  // a pager's page: the pager's id
+  mut pager : Int
   // layout results, absolute, in logical pixels
   mut x : Double
   mut y : Double
@@ -141,6 +149,9 @@ fn Node::new() -> Node {
     color: 0x000000FFL,
     wrap: true,
     fit: FitCover,
+    pages: None,
+    page_no: -1,
+    pager: 0,
     x: 0.0,
     y: 0.0,
     fw: 0.0,
@@ -191,6 +202,9 @@ fn Node::reset(self : Node) -> Unit {
   self.color = 0x000000FFL
   self.wrap = true
   self.fit = FitCover
+  self.pages = None
+  self.page_no = -1
+  self.pager = 0
   self.x = 0.0
   self.y = 0.0
   self.fw = 0.0

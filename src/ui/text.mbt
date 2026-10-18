@@ -171,6 +171,7 @@ fn layout_text(
   weight : Int,
   max_w : Double,
   wrap : Bool,
+  indent? : Double = 0.0,
 ) -> TextLayout {
   let s = shape(text, size, weight)
   let (asc, desc, line_h) = font_metrics(size, weight)
@@ -183,7 +184,8 @@ fn layout_text(
   let line_w = []
   let mut ls = 0
   let mut i = 0
-  let mut x = 0.0
+  // the first line may start indented
+  let mut x = indent
   let mut last_break = -1
   let mut w_max = 0.0
   fn finish(start : Int, end : Int) {
