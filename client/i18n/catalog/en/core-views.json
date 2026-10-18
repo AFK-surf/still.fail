@@ -473,16 +473,11 @@
   "core-views.search.kind.chat": "Chats",
   "core-views.search.kind.message": "Messages",
   "core-views.search.kind.file": "Files",
-  "core-views.search.kind.history": "Execution history",
   "core-views.search.kind.job": "Services and tasks",
-  "core-views.search.kind.skill": "Skills",
-  "core-views.search.kind.memory": "Memory",
-  "core-views.search.kind.profile": "Profiles",
   "core-views.search.kind.station": "Stations",
-  "core-views.search.memory": "Memory",
+  "core-views.search.kind.member": "Members",
   "core-views.search.offline": "Offline",
   "core-views.search.offlineStations": "{names} offline, not searched",
   "core-views.search.older": "{names} must be updated to be searched",
-  "core-views.search.building": "Some stations are still indexing; results may be incomplete",
   "core-views.search.archived": "Archived"
 }

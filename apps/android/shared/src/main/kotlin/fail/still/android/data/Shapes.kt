@@ -4156,11 +4156,12 @@ data class SearchItem (
 	val kind: String,
 	/// Unique among all found.
 	val key: String,
+	/// The station it is on (empty: a member).
 	val station: String,
 	val stationName: String,
 	val stationEmoji: String? = null,
 	val stationIcon: String? = null,
-	/// What it is called: a service's name, a skill's, the chat of a step of an execution history…
+	/// What it is called: a file's name, a service's, a station's, a member's…
 	val title: String,
 	/// The part of it that has the words, on one line.
 	val text: String,
@@ -4170,18 +4171,13 @@ data class SearchItem (
 	val chat: String? = null,
 	val chatTitle: String? = null,
 	val thread: Long? = null,
-	/// A step of an execution history: its session (opened at `index`).
-	val session: String? = null,
-	val index: UInt? = null,
-	/// The tool a step called.
-	val tool: String? = null,
 	/// A service or task: its id; `port` a service's.
 	val job: String? = null,
 	val port: UInt? = null,
-	val skill: String? = null,
-	val profile: String? = null,
 	/// A file: where it is on its station.
 	val path: String? = null,
+	/// A member: their email (their place is the workspace's settings).
+	val email: String? = null,
 	val archived: Boolean? = null,
 	val createdAt: Long? = null,
 	/// Its times in words, by field (`createdAt`).
@@ -4190,7 +4186,7 @@ data class SearchItem (
 
 @Serializable
 data class SearchGroup (
-	/// file | history | job | skill | memory | profile | station
+	/// file | job | station | member
 	val kind: String,
 	/// Its heading.
 	val title: String,
@@ -4214,12 +4210,12 @@ data class SearchView (
 	val messages: List<FoundMessage>? = null,
 	/// More messages than these were found.
 	val messagesMore: Boolean? = null,
-	/// What else was found, by kind (files, execution history, services and tasks, skills, memory, profiles,
-	/// stations), in that order; a kind with none is left out.
+	/// What else was found, by kind (files, services and tasks, stations, members), in that order; a kind with
+	/// none is left out.
 	val groups: List<SearchGroup>? = null,
 	/// The stations not answered yet, and those that could not be searched.
 	val wait: ListNote,
-	/// What the list says under it: stations offline or too old to search, an index still being built.
+	/// What the list says under it: stations offline or too old to search.
 	val note: String? = null
 )
 

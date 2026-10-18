@@ -252,12 +252,9 @@ private fun BackRow(onClick: () -> Unit) {
 /** What a kind is drawn with (web Switcher.tsx's KIND_ICON). */
 private fun kindIcon(kind: String): ImageVector = when (kind) {
     "file" -> Icons.File
-    "history" -> Icons.Thread
     "job" -> Icons.Web
-    "skill" -> Icons.Sparks
-    "memory" -> Icons.Brain
-    "profile" -> Icons.Quota
     "station" -> Icons.Server
+    "member" -> Icons.User
     else -> Icons.Search
 }
 
@@ -289,28 +286,20 @@ private fun ItemRow(item: SearchItem, several: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * Where something found opens (as the web's, Switcher.tsx openOf): a step of an execution history its chat and the
- * history at it; a service its chat and its page, a task its chat; a skill or the memory that page of its station's
- * memory; a profile the profiles; a station its page; anything else its chat.
+ * Where something found opens (as the web's, Switcher.tsx openOf): a service its chat and its page, a task its chat; a
+ * station its page; a member the workspace's page; anything else its chat.
  */
 internal fun openFound(app: AppState, item: SearchItem) {
     val chat = item.chat?.let { Screen.Chat(item.station, ChatOf.Session(it)) }
     when (item.kind) {
-        "history" -> {
-            if (chat == null) return
-            app.push(chat)
-            item.session?.let { app.push(Screen.History(item.station, chat.of, it, item.index?.toLong())) }
-        }
         "job" -> {
             if (chat == null) return
             app.push(chat)
             val job = item.job
             if (item.port != null && job != null) app.push(Screen.Preview(item.station, job))
         }
-        "skill" -> app.push(item.skill?.let { Screen.MemoryDoc(item.station, it) } ?: Screen.Memory(item.station))
-        "memory" -> app.push(Screen.MemoryDoc(item.station, null))
-        "profile" -> app.push(Screen.Profiles())
         "station" -> app.push(Screen.Station(item.station))
+        "member" -> app.push(Screen.Workspace)
         else -> chat?.let(app::push)
     }
 }

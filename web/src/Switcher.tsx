@@ -12,7 +12,7 @@ import { jumpTo } from "./jumpTo.ts";
 import { Mark, useAppUpdate } from "./brand.tsx";
 import { commands, useCommands, type Command } from "./commands.ts";
 import { webUpdates } from "./core/webUpdates.ts";
-import { Archive, ArrowLeft, Brain, Command as CommandIcon, Compose, Download, File, More, PanelOpen, Quota, Refresh, Server, Settings, Sparks, Stop, Thread, Web, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowLeft, Command as CommandIcon, Compose, Download, File, More, PanelOpen, Refresh, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
 import { ACTIONS, availableActions, labelOf, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { stationBase } from "./station.tsx";
@@ -286,7 +286,7 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
   );
 }
 
-const KIND_ICON: Record<string, ComponentType<IconProps>> = { file: File, history: Thread, job: Web, skill: Sparks, memory: Brain, profile: Quota, station: Server };
+const KIND_ICON: Record<string, ComponentType<IconProps>> = { file: File, job: Web, station: Server, member: User };
 
 /** Something found besides a chat or a message: what it is, where (its station, when), and its line that has the words. */
 function ItemRow({ item, ...rest }: { item: SearchItem } & Record<string, unknown>) {
@@ -310,24 +310,18 @@ function ItemRow({ item, ...rest }: { item: SearchItem } & Record<string, unknow
   );
 }
 
-/** Where something found opens: its chat (at a step of its history, a service, a task), a station's memory, a page of the settings. */
+/** Where something found opens: its chat (a service, a task), a station's page, the workspace's members. */
 export function openOf(item: SearchItem, settings: string): string | null {
   const at = item.station.indexOf("/");
   const id = encodeURIComponent(at < 0 ? item.station : item.station.slice(at + 1));
   const chat = item.chat ? `${stationBase(item.station)}/chats/${encodeURIComponent(item.chat)}` : null;
   switch (item.kind) {
-    case "history":
-      return chat && item.session ? `${chat}?history=${encodeURIComponent(item.session)}&entry=${item.index ?? 0}` : chat;
     case "job":
       return chat && item.job ? `${chat}?${item.port != null ? "service" : "job"}=${encodeURIComponent(item.job)}` : chat;
-    case "skill":
-      return item.skill ? `${settings}/memory/${id}/skill/${encodeURIComponent(item.skill)}` : `${settings}/memory`;
-    case "memory":
-      return `${settings}/memory/${id}/global`;
-    case "profile":
-      return `${settings}/profiles`;
     case "station":
       return `${settings}/stations/${id}`;
+    case "member":
+      return `${settings}/workspace`;
     default:
       return chat;
   }

@@ -1,6 +1,7 @@
 // What a search finds on this station (docs/search.md): GET /search?q=&kinds=&limit=&offset=, as the asker may see it
 // (their workspace's, and what only a member who may write reaches). `{groups: [{kind, hits, more}], building}`
-// (`building` always false). People are not given the execution history: agents search it (tools/search.ts).
+// (`building` always false). People find chats, messages, services and tasks, files: the execution history, skills and
+// memory, the profiles are the agents' to search (tools/search.ts).
 import { type Request, error, json, param } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { readOnly } from "../../mesh/credential.ts";
@@ -8,6 +9,9 @@ import type { Asker } from "../../search/match.ts";
 
 /// What a viewer is asking as.
 export const askerOf = (viewer: Request["viewer"]): Asker => ({ workspace: viewer.workspace, home: viewer.home !== false, scopes: readOnly(viewer) ? [] : ["write"] });
+
+/// What people find here.
+export const PEOPLE = ["chat", "message", "job", "file"];
 
 const count = (v: string | undefined, fallback: number) => (v !== undefined && /^[0-9]{1,4}$/.test(v) ? Number(v) : fallback);
 
@@ -18,8 +22,9 @@ export const routes = ({ agents }: Tools): Route[] => [
     handle: async (r: Request) => {
       const q = param(r, "q") ?? "";
       if (q.length > 200) return error(400, "a search is at most 200 characters");
-      const kinds = (param(r, "kinds") ?? "").split(",").filter((k) => /^[a-z]{1,24}$/.test(k) && k !== "history");
-      if (param(r, "kinds") === "history") return json(200, JSON.stringify({ groups: [], building: false }));
+      const asked = (param(r, "kinds") ?? "").split(",").filter((k) => k !== "");
+      const kinds = asked.length > 0 ? asked.filter((k) => PEOPLE.includes(k)) : PEOPLE;
+      if (kinds.length === 0) return json(200, JSON.stringify({ groups: [], building: false }));
       if (!agents) return error(503, "station starting");
       try {
         const found = await agents.search.query(q, askerOf(r.viewer), { kinds, limit: count(param(r, "limit"), 8), offset: count(param(r, "offset"), 0) });
