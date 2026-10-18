@@ -6,7 +6,8 @@
 // nothing is made there. The member continues it in a chat (POST /machine-sessions); while the station looks at that
 // directory, the member's other requests (GET /host, every 100 ms) must each answer within a second. Without the
 // helper's grant for that folder the continuing is refused naming it, the helper's window comes up for it (the
-// overview's `permissions.asking`), and asking again does not show it again. Nobody is asked to click: the window goes
+// overview's `permissions.asking`), and asking again does not show it again. The helper is stopped first, so the
+// station starts it again while it looks. Nobody is asked to click: the window goes
 // as the station stops (the helper with it). Which folder: FOLDER (desktop, documents, downloads; default the first the
 // helper has no grant for, else it stops: a grant there leaves nothing to see).
 //
@@ -207,7 +208,12 @@ async function main(): Promise<boolean> {
   const id = "33333333-aaaa-bbbb-cccc-000000000001";
   rollout(codex, id, cwd);
 
-  say(`continuing a session that ran in ${cwd} (${grant}: ${state(grant)})`);
+  // The helper stopped: the station starts it again while it looks, so the look is pending a while.
+  try {
+    execFileSync("pkill", ["-9", "-f", join(data, "helper", HELPER_APP)], { stdio: "ignore" });
+  } catch {}
+  await sleep(500);
+  say(`continuing a session that ran in ${cwd} (${grant}: ${state(grant)}), still.fail Helper stopped first`);
   const started = performance.now();
   const continuing = ask(conn, "POST", "/machine-sessions", { runtime: "codex", id });
   const times = await meanwhile(conn, continuing);
