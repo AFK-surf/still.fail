@@ -2,16 +2,57 @@
 // `accounts` topic has them, and 登录, which signs a person in through the system's browser session (@core.sign_in).
 // MBUI_CORE_SIGNIN=1 presses 登录 once the accounts are read (scripted runs; with MBUI_AUTH_DRY=1 the browser
 // session is made but not opened).
+//
+// Signing in on another device (the person's phone, this Mac's screen being locked): MBUI_AUTH_BEGIN=1 prints the
+// login page's URL (AUTH_URL …), whose end is a loopback address that page on the phone can't open: the person sends
+// back the address it shows, and MBUI_AUTH_COMPLETE=<that URL> finishes the sign-in (AUTH_DONE … or AUTH_FAILED …).
+// Both runs on the same MBUI_CORE_DATA: the core keeps the sign-in it began there.
 
 ///|
 struct App {
   mut status : String
   mut signing_in : Bool
   mut auto_sign_in : Bool
+  /// by hand: "begin", or the URL the browser was sent back to
+  mut by_hand : String
 }
 
 ///|
-let app : App = { status: "", signing_in: false, auto_sign_in: false }
+let app : App = { status: "", signing_in: false, auto_sign_in: false, by_hand: "" }
+
+///|
+/// Where the cloud sends the browser back: a loopback address it accepts for apps (nothing listens there; the
+/// address is what we want).
+let loopback = "http://127.0.0.1:43025/oauth/callback"
+
+///|
+fn by_hand(step : String) -> Unit {
+  if step == "begin" {
+    let params : Map[String, Json] = {
+      "redirect_uri": Json::string(loopback),
+      "return_to": Json::string("/"),
+    }
+    @core.call("auth.begin", params=Json::object(params), on_done=fn(r) {
+      match r {
+        Ok(ok) => @host.log("AUTH_URL " + str(Some(ok), "url"))
+        Err(e) => @host.log("AUTH_FAILED " + e.stringify())
+      }
+    })
+  } else {
+    let params : Map[String, Json] = { "query": Json::string(@core.query_of(step)) }
+    @core.call("auth.complete", params=Json::object(params), on_done=fn(r) {
+      match r {
+        Ok(Object(m)) => {
+          app.status = "已登录：\{str(m.get("account"), "email")}"
+          @host.log("AUTH_DONE " + str(m.get("account"), "email"))
+        }
+        Ok(_) => @host.log("AUTH_DONE")
+        Err(e) => @host.log("AUTH_FAILED " + e.stringify())
+      }
+      @host.request_frame()
+    })
+  }
+}
 
 ///|
 let grey : Int64 = 0x8E8E93FFL
@@ -94,6 +135,11 @@ fn view(c : @ui.Ctx) -> Unit {
     app.auto_sign_in = false
     sign_in()
   }
+  if app.by_hand.length() > 0 && accounts.value is Some(_) {
+    let step = app.by_hand
+    app.by_hand = ""
+    by_hand(step)
+  }
   c.box(w=Fill(1.0), h=Fill(1.0), bg=0xF5F5F7FFL, padx=28.0, pady=24.0, gap=18.0, fn() {
     c.row(gap=12.0, fn() {
       c.text("still.fail", size=22.0, weight=700, wrap=false) |> ignore
@@ -154,5 +200,10 @@ fn main {
     app.status = "这个版本没有链接内核（MBUI_CORE=1 scripts/mac.sh build）"
   }
   app.auto_sign_in = env("MBUI_CORE_SIGNIN") == "1"
+  app.by_hand = if env("MBUI_AUTH_BEGIN") == "1" {
+    "begin"
+  } else {
+    env("MBUI_AUTH_COMPLETE")
+  }
   @ui.run("still.fail · mbui", view)
 }
