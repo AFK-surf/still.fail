@@ -40,12 +40,10 @@ import { Forwards } from "../mesh/peer-forward.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
-import { UsageCounter } from "../usage/counter.ts";
 import { Search } from "../search/search.ts";
 import { FileSearch } from "../search/files.ts";
 import { rootsOf } from "../drive/drive.ts";
 import { SEARCH, searchForPeer, searchTools } from "../tools/search.ts";
-import { sessionUsage } from "../read/usage.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
@@ -79,7 +77,6 @@ export type AgentsParts = {
   remote: Remote;
   mcp: McpEndpoint;
   config: ConfigFile;
-  usage: UsageCounter;
   /// What a search finds on this station (docs/search.md).
   search: Search;
   updates: Updates;
@@ -596,15 +593,7 @@ export const AgentsLive = (control: Control) =>
         control.failed(`the agents' side did not start: ${(e as Error).message}`);
       })));
 
-      // What the agents spent, read from their transcripts: now, and after each turn ends.
-      const usage = new UsageCounter({ store, config: () => ({ dataDir: data, profiles: settings().profiles }), clock: hub.clock });
-      usage.start();
-      // An execution's details show its calls as counted here, as the usage page does, and are told when more are.
-      hub.live.countWith({ of: (key) => sessionUsage(store.usageOfSession(key)), ask: () => usage.soon() });
       search.start();
-      const unsubscribeCounted = store.subscribe((change) => {
-        if (change.type === "usage") hub.live.usageCounted();
-      });
 
       // What the chats' people hear about while no client of theirs runs: pushed by the control plane.
       const notifier = new Notifier(store, readers, cloud, (notices, ws) => Effect.runPromise(plane.notify(notices, ws)));
@@ -670,8 +659,6 @@ export const AgentsLive = (control: Control) =>
             await hub.shutdown();
           }
           await jobs.shutdown();
-          unsubscribeCounted();
-          await usage.stop();
           await search.stop();
           await updates.close();
           await accounts.close();
@@ -683,6 +670,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, usage, search, updates, accounts, sharing: sharing!, xshare, peers, forwards, slack, overview: view, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, search, updates, accounts, sharing: sharing!, xshare, peers, forwards, slack, overview: view, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );
