@@ -14,7 +14,6 @@ import { routes as marks } from "./routes/marks.ts";
 import { routes as updates } from "./routes/updates.ts";
 import { routes as accounts } from "./routes/accounts.ts";
 import { routes as xshare } from "./routes/xshare.ts";
-import { routes as slack } from "./routes/slack.ts";
 import { routes as hub, uploadPath } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
 import { routes as agentEnv } from "./routes/agent-env.ts";
@@ -128,18 +127,6 @@ export class Admin {
     };
     this.tools = tools;
     this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
-      ...(deps.agents?.slack && deps.store
-        ? slack({
-            slack: deps.agents.slack,
-            config: deps.agents.config,
-            data: deps.agents.config.data,
-            store: deps.store,
-            hub: () => deps.agents!.hub,
-            overview: (viewer, lang) => deps.agents!.overview(viewer, lang),
-            place: () => deps.agents!.place(),
-            overviewChanged: () => deps.events?.overviewChanged(),
-          })
-        : []),
       ...(deps.agents?.config ? deviceTools({ config: deps.agents.config, changed: () => deps.events?.overviewChanged() }) : []),
       ...(deps.agents?.config ? agentEnv({ config: deps.agents.config, changed: () => deps.events?.overviewChanged(), restart: () => deps.agents!.hub.everyChanged() }) : []),
       ...(deps.agents?.cloud ? workspaces({ cloud: deps.agents.cloud, data: deps.agents.config.data, changed: () => deps.events?.overviewChanged() }) : []),

@@ -109,6 +109,8 @@ station 按这个成员套用 drive 的规则（docs/drive.md）：viewer 只能
 
 第一个搬过来的是 vault（`vault/module.ts`）：自带的表、两组路由、agent 的 secret 工具、`vault-request` 事件都由它自己挂上，agents 和管理 API 里不再有 vault 的代码。
 
+agents 那一侧的部分（slack）还要跟着 agents 的节奏：`Agents` 给它们几个钩子。`surfaces` 说 connect 的聊天在哪里，hub 从那里收、往那里发；`slackView` 提供 overview 里 connect 的状态；`along` 注册几件事，agents 会按自己需要的顺序 await 它们：会话接管之后、恢复之前（`taken`），station 进入 workspace 时（`joined`），离开时、会话挂起之后（`left`），某个加入的 workspace 进出时（`changed`）。agents 要等 station 整个装好（所有部分都挂上了，`Up`）才接管会话。部分比 agents 后构造、先关闭，所以 Slack 会在会话交接之前断开，事件从这时起交给下一个进程。
+
 ## 用到就装上，也能在 app 里开关（api/routes/modules.ts）
 
 still.fail 做的模块（`modules/catalog.ts`）不用任何人去开：`/m/<id>/…` 第一次被请求而 config.json 里还没有它时，station 自己写上 `{id, package: id}`，照常下载、验签、启动，这期间请求答 503 `{code: "module_starting"}`，客户端过一会儿再问（媒体模块的事件流本来就每 5 秒重连，连上就把显示着的 topic 重读一遍）。owner 和 admin 关掉过的（`enabled: false`）不会这样被装回来。

@@ -7,7 +7,7 @@
 // which process holds the sessions), and opens the agents' door only then, so no call reaches a hub without its session.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Context, Effect, Layer, Stream } from "effect";
+import { Context, Effect, Layer, Stream, SubscriptionRef } from "effect";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { ClaudeDriver } from "../agents/claude.ts";
 import { CodexDriver } from "../agents/codex.ts";
@@ -18,7 +18,7 @@ import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store } from "../services.ts";
+import { AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { permissionsView } from "../api/routes/permissions.ts";
 import { Gpus } from "../jobs/gpu.ts";
@@ -43,9 +43,9 @@ import { remoteTools } from "../tools/remote.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
-import { overview } from "../api/overview.ts";
+import { type SlackView, overview } from "../api/overview.ts";
+import type { ChatSurface } from "./chat.ts";
 import { rootViewThrough } from "../drive/drive.ts";
-import { type SlackParts, makeConnections } from "../slack/index.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
@@ -84,7 +84,15 @@ export type AgentsParts = {
   peers: { route: PeerRoute | null };
   /// Ports of other stations forwarded here (mesh/peer-forward.ts).
   forwards: Forwards;
-  slack: SlackParts;
+  /// The connects' chats the hub takes and posts to (Slack's, slack/module.ts): one surface says them.
+  surfaces(chats: (connect: string) => ChatSurface | undefined): void;
+  /// The connects' connections and the viewer's Slack workspaces and apps, for the overview.
+  slackView(view: SlackView): void;
+  /// What a part does as the station takes its sessions up and as its workspaces change (`Along`).
+  along(a: Along): void;
+  /// Whether the sessions are taken up (the process before is gone), and whether the station is in its workspace.
+  taken(): boolean;
+  bound(): boolean;
   /// A session's page in the app (`<origin>/o/…`), in still.fail cloud only.
   pageOf(key: string): string | undefined;
   /// Where the station is in its control plane while in a workspace.
@@ -99,6 +107,12 @@ export type AgentsParts = {
   /// people and agents name (ops/places.ts); null where there is no helper for them.
   helperFiles?: HelperFiles | null;
 };
+
+/// What a part of the agents' side does along with them (slack/module.ts), awaited in the order the agents need: as the
+/// sessions are taken up in a workspace (`taken`, before they recover), as the station comes into its workspace
+/// (`joined`, before they recover), as it leaves it (`left`, once they are suspended, before the jobs stop), and as one
+/// of the workspaces it joined is left or back (`changed`).
+export type Along = { taken?(): Promise<void>; joined?(): Promise<void>; left?(): Promise<void>; changed?(): Promise<void> };
 
 export class Agents extends Context.Service<Agents, AgentsParts>()("stillfail/Agents") {}
 
@@ -118,6 +132,7 @@ export const AgentsLive = (control: Control) =>
       const host = yield* AdminHost;
       const modules = yield* Modules;
       const own = yield* Own;
+      const up = yield* Up;
       const parts = yield* Parts;
       const previous = (yield* Previous).gone;
       const run = join(data, "run");
@@ -152,11 +167,16 @@ export const AgentsLive = (control: Control) =>
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
         lent: { borrowed, write: (p) => sharing!.lendCodex(p) },
       });
+      // What the parts of the agents' side add (slack/module.ts): the connects' chats, their overview, and what they do
+      // as the station takes its sessions up and as its workspaces change, in the order the agents need.
+      let surfaceChats: (connect: string) => ChatSurface | undefined = () => undefined;
+      let slackView: SlackView | undefined;
+      const along: Along[] = [];
       const hub = new Hub({
         config: settings,
         store,
-        // The connects' Slack (made below); the station's own chat is the hub's.
-        chats: (id) => slack.chats(id),
+        // The connects' chats (Slack's: slack/module.ts, which says them below); the station's own chat is the hub's.
+        chats: (id) => surfaceChats(id),
         drivers: [
           new ClaudeDriver({ data, machineToken: (env, rejected) => accounts.machineToken(env, rejected), lent: { borrowed, token: (p, rejected) => sharing!.lendClaude(p, rejected) } }),
           codex,
@@ -340,38 +360,7 @@ export const AgentsLive = (control: Control) =>
       // The agents' tools, and those the station's parts add as they are made (parts.ts).
       const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, () => [...tools, ...parts.allTools()], (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL));
 
-      // The connects' Slack: connected while the station is in its workspace, once the sessions are taken up (a
-      // Socket Mode event goes to one connection of an app; two processes' would split them).
-      const slack: SlackParts = makeConnections({
-        data, store, config, receive: (connect, event) => hub.receive(connect, event), bound: () => taken && bound(),
-        inWorkspace: (ws) => ws === null || cloud.membership(ws) !== null,
-      });
       let taken = false;
-      // The names the pages show of Slack people and channels are the readers' (from the names book); a connection
-      // looks up those it does not know yet as it hears of them: who wrote, and where.
-      const learn = (thread: number, people: string[]) => {
-        const t = store.getThread(thread);
-        if (t === null || t.surface === "ember") return;
-        const connect = store.threadSessions(thread).map((m) => m.connect).find((c) => c !== "ember");
-        const chat = connect === undefined ? undefined : slack.chat(connect);
-        if (chat === undefined) return;
-        chat.knownChannel?.(t.channel);
-        for (const user of people) chat.knownPerson?.(user);
-      };
-      const unlearn = store.subscribe((change) => {
-        if (change.type === "thread") learn(change.id, [...new Set(change.entries.filter((e) => e.authorKind === "person").map((e) => e.author))]);
-      });
-      // A connect connected: the Slack threads people read lately, learned once.
-      const learned = new Set<string>();
-      const unlearnConnected = slack.onChange(() => {
-        for (const c of slack.connects()) {
-          if (learned.has(c.id) || slack.state(c.id)?.state !== "connected") continue;
-          learned.add(c.id);
-          for (const t of store.listThreads("", null, null).slice(0, 200)) {
-            if (t.sessions.some((m) => m.connect === c.id)) learn(t.thread.id, [...t.people.flatMap((p) => (p.startsWith(`slack:${c.id}:`) ? [p.slice(`slack:${c.id}:`.length)] : []))]);
-          }
-        }
-      });
 
       // Profiles, sign-ins, allowances and the machine's own logins; the Claude driver's machine token renewed by it.
       const hostName = (p: any) => {
@@ -402,11 +391,6 @@ export const AgentsLive = (control: Control) =>
       });
       sharing.start();
       xshare.start();
-      const slackView = {
-        connection: (c: any) => slack.state(c.id),
-        teams: (viewer: Viewer) => slack.overview(viewer.email).slackTeams,
-        apps: (viewer: Viewer) => slack.overview(viewer.email).slackApps,
-      };
       const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, slack: slackView, rootView: (p) => rootViewThrough(p, helperFiles), modules: () => modules.listed(), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
       // And the fields the station's parts add (parts.ts).
       const view = async (viewer: Viewer, lang: Lang) => ({ ...((await platformView(viewer, lang)) as object), ...(await parts.overviewOf(viewer, lang)) });
@@ -436,8 +420,6 @@ export const AgentsLive = (control: Control) =>
       // What the overview shows changes: told on the event streams.
       const unlistenOverview = [
         accounts.onChange(() => events.overviewChanged()),
-        // The sidebar names connects and their Slack workspaces.
-        slack.onChange(() => (events.overviewChanged(), events.rowsChanged(null))),
         updates.changes(() => events.overviewChanged()),
         // macOS's grants to still.fail Helper (the station's page shows them as they change).
         grants?.onChange(() => events.overviewChanged()) ?? (() => {}),
@@ -471,13 +453,13 @@ export const AgentsLive = (control: Control) =>
           }
           for (const ws of back) hub.backIn(ws);
           // Its connects: those of a workspace left disconnect, those of one back connect.
-          if (left.length > 0 || back.length > 0) await slack.reconcile();
+          if (left.length > 0 || back.length > 0) for (const a of along) await a.changed?.();
         }
         if (now === inWorkspace) return;
         inWorkspace = now;
         if (now) {
           log.info("station", "in a workspace: connects, turns and jobs go on");
-          await slack.reconcile();
+          for (const a of along) await a.joined?.();
           hub.recover();
           jobs.relaunch();
           hub.release("unbound");
@@ -486,7 +468,7 @@ export const AgentsLive = (control: Control) =>
           log.warn("station", "out of its workspace: ending the agents' runtimes, stopping jobs and services", { why });
           hub.hold("unbound");
           await hub.suspendAll();
-          await slack.stopAll();
+          for (const a of along) await a.left?.();
           await jobs.stopAll(why);
         }
       };
@@ -500,6 +482,10 @@ export const AgentsLive = (control: Control) =>
       let handing = false;
       // Taken up once the previous process is gone; then the door opens, and what was cut off resumes.
       const start = async () => {
+        // The station made whole (its parts, which say what they do along: `along`), then the process before it gone.
+        await Effect.runPromise(Effect.gen(function* () {
+          if (!(yield* SubscriptionRef.get(up))) yield* SubscriptionRef.changes(up).pipe(Stream.filter((now) => now), Stream.runHead);
+        }));
         await previous;
         mkdirSync(run, { recursive: true });
         writeFileSync(join(run, "hub.json"), JSON.stringify({ pid: process.pid }) + "\n");
@@ -536,8 +522,7 @@ export const AgentsLive = (control: Control) =>
         hub.toolsAt(opened.url);
         taken = true;
         if (inWorkspace) {
-          await slack.reconcile();
-          if (slack.connects().length === 0) log.warn("station", "no connect is connected; add or enable one in the workspace's settings");
+          for (const a of along) await a.taken?.();
           hub.recover();
           jobs.relaunch();
         } else if (cloud.removed()) {
@@ -602,10 +587,6 @@ export const AgentsLive = (control: Control) =>
           await xshare.close();
           unlistenRule();
           notifier.close();
-          // Slack's events go to the next process from now on.
-          unlearn();
-          unlearnConnected();
-          await slack.close();
           await door?.close(30_000);
           await forwards.close();
           try {
@@ -625,6 +606,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, slack, overview: view, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void (surfaceChats = chats), slackView: (view) => void (slackView = view), along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );
