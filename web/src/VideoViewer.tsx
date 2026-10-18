@@ -33,7 +33,8 @@ class Frames {
   private last = 0;
   private closed = false;
 
-  private constructor(private input: Input, private sink: CanvasSink, readonly starts: number[], readonly lastDuration: number, private room: number) {}
+  /** `keys`: the frames decoding can start at (its key frames), in order. */
+  private constructor(private input: Input, private sink: CanvasSink, readonly starts: number[], private keys: number[], readonly lastDuration: number, private room: number) {}
 
   /** The frames of a video, or null when there is no video track the browser can decode. */
   static async open(blob: Blob): Promise<Frames | null> {
@@ -42,14 +43,15 @@ class Frames {
     try {
       const track = await input.getPrimaryVideoTrack();
       if (!track || !(await track.canDecode())) { input.dispose(); return null; }
-      const packets: { timestamp: number; duration: number }[] = [];
-      for await (const p of new mb.EncodedPacketSink(track).packets(undefined, undefined, { metadataOnly: true })) packets.push({ timestamp: p.timestamp, duration: p.duration });
+      const packets: { timestamp: number; duration: number; key: boolean }[] = [];
+      for await (const p of new mb.EncodedPacketSink(track).packets(undefined, undefined, { metadataOnly: true })) packets.push({ timestamp: p.timestamp, duration: p.duration, key: p.type === "key" });
       if (!packets.length) { input.dispose(); return null; }
       // Packets come in decoding order; frames show in time order.
       packets.sort((a, b) => a.timestamp - b.timestamp);
       const pixels = (await track.getDisplayWidth()) * (await track.getDisplayHeight());
       const room = Math.max(10, Math.min(90, Math.floor(KEEP_BYTES / (pixels * 4))));
-      return new Frames(input, new mb.CanvasSink(track), packets.map((p) => p.timestamp), packets.at(-1)!.duration, room);
+      const keys = packets.flatMap((p, i) => (p.key ? [i] : []));
+      return new Frames(input, new mb.CanvasSink(track), packets.map((p) => p.timestamp), keys, packets.at(-1)!.duration, room);
     } catch (e) {
       input.dispose();
       throw e;
@@ -86,8 +88,10 @@ class Frames {
     let c = this.cursor;
     if (!c || c.next > i || i - c.next > this.room) {
       await c?.canvases.return();
-      // Going back, the frames before it are decoded along with it: the steps back after it are then at hand.
-      const from = i < this.last ? Math.max(0, i - this.room + 2) : i;
+      // Going back, the frames before it are decoded along with it: the steps back after it are then at hand. Only
+      // those from its key frame on, which are decoded to reach it anyway: from further back, the key frame before
+      // would be decoded from too, and a drag back would wait on a few dozen frames more than one forward does.
+      const from = i < this.last ? Math.max(this.keyAt(i), i - this.room + 2) : i;
       c = this.cursor = { canvases: this.sink.canvases(this.starts[from]), next: from };
     }
     while (c.next <= i) {
@@ -104,6 +108,18 @@ class Frames {
     }
     this.last = i;
     return this.kept.get(i) ?? null;
+  }
+
+  /** The key frame decoding frame `i` starts from. */
+  private keyAt(i: number): number {
+    const k = this.keys;
+    let lo = 0, hi = k.length - 1;
+    if (hi < 0 || k[0]! > i) return 0;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (k[mid]! <= i) lo = mid; else hi = mid - 1;
+    }
+    return k[lo]!;
   }
 
   private nearest(time: number): number {
@@ -222,18 +238,26 @@ export function VideoViewer({ url, blob, name, onMeta }: { url: string; blob: Bl
     return () => v.cancelVideoFrameCallback(id);
   }, []);
 
-  // Paused, the frame is drawn from the file.
+  // Paused, the frame is drawn from the file. Each is drawn as it comes, though another was asked for since: dragging
+  // along the timeline, the picture follows as fast as the frames are decoded, not only once the pointer rests. What
+  // is drawn stays until the next is (the video under it was left where it paused), and goes as it plays again.
+  const drawing = useRef({ live: false });
+  useEffect(() => {
+    if (!decoded || playing) return;
+    const d = { live: true };
+    drawing.current = d;
+    return () => { d.live = false; setDrawn(-1); };
+  }, [decoded, playing]);
   useEffect(() => {
     if (!decoded || playing || at < 0) return;
-    let live = true;
+    const d = drawing.current;
     decoded.get(at).then((frame) => {
       const el = picture.current;
-      if (!live || !frame || !el) return;
+      if (!d.live || !frame || !el) return;
       if (el.width !== frame.width || el.height !== frame.height) { el.width = frame.width; el.height = frame.height; }
       el.getContext("2d", { willReadFrequently: true })!.drawImage(frame, 0, 0);
       setDrawn(at);
     }, (e: unknown) => console.warn("video frame:", e));
-    return () => { live = false; };
   }, [decoded, playing, at]);
 
   useEffect(() => { if (video.current) video.current.playbackRate = Number(rate); }, [rate]);
@@ -339,7 +363,7 @@ export function VideoViewer({ url, blob, name, onMeta }: { url: string; blob: Bl
           onLoadedMetadata={(e) => { const v = e.currentTarget; setNatural({ w: v.videoWidth, h: v.videoHeight }); setDuration(v.duration); }}
           onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
         <canvas ref={picture} className={css.vvPicture} data-pixelated={pixelated} aria-label={decoded ? t("web-main.video.frame", { n: at + 1 }) : undefined}
-          style={{ ...(zoom.place ?? {}), visibility: still && zoom.place ? "visible" : "hidden" }} />
+          style={{ ...(zoom.place ?? {}), visibility: !playing && drawn >= 0 && zoom.place ? "visible" : "hidden" }} />
       </div>
       {pixel && (
         <span className={css.vvPixel} style={{ top: pixel.clientY + 16, ...(left ? { right: window.innerWidth - pixel.clientX + 12 } : { left: pixel.clientX + 16 }) }}>
