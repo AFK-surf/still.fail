@@ -198,10 +198,10 @@ function ConfirmSheet({ r, workspace }: { r: LockPrompt | LockRequest; workspace
   useEffect(() => { if (gone) app.sheet(null); }, [gone]); // eslint-disable-line react-hooks/exhaustive-deps
   const places = workspace ? [] : (now ?? (r as LockPrompt)).workspaces ?? [];
   const many = places.length > 1;
-  const deny = () => workspace ? run("lock.deny", { workspace, device: r.device }, t("web-pages.security.deny")) : run("lockPrompt.deny", { device: r.device }, t("web-pages.security.deny"));
+  const deny = () => workspace ? run("lock.deny", { workspace, device: r.device }, t("web-pages.security.denyDevice")) : run("lockPrompt.deny", { device: r.device }, t("web-pages.security.denyDevice"));
   const confirm = () => workspace
-    ? run("lock.confirm", { workspace, device: r.device, code: r.code }, t("web-pages.security.confirm"), t("web-pages.security.confirmed"))
-    : run("lockPrompt.confirm", { device: r.device, code: r.code }, t("web-pages.security.confirm"), t("web-pages.security.confirmed"));
+    ? run("lock.confirm", { workspace, device: r.device, code: r.code }, t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed"))
+    : run("lockPrompt.confirm", { device: r.device, code: r.code }, t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed"));
   return (
     <div className={css.mSheet}>
       <b className={css.mSheetTitle}>{t("web-pages.security.confirmTitle", { name: r.name || r.email })}</b>
@@ -212,9 +212,9 @@ function ConfirmSheet({ r, workspace }: { r: LockPrompt | LockRequest; workspace
       </div>}
       <div className={css.mBigCode}>{r.code}</div>
       <span className={css.mNote}>{r.kind === "web" ? t("web-pages.security.confirmWeb") : t("web-pages.security.confirmApp")}</span>
-      <div className={css.mPair}>
-        <Button primary={false} label={many ? t("web-pages.security.denyAll") : t("web-pages.security.deny")} onClick={close(() => void deny())} />
+      <div className={`${css.mPair} ${css.mStack}`}>
         <Button primary label={many ? t("web-pages.security.confirmAll") : t("web-pages.security.confirm")} onClick={close(() => void confirm())} />
+        <Button primary={false} label={many ? t("web-pages.security.denyAll") : t("web-pages.security.deny")} onClick={close(() => void deny())} />
       </div>
     </div>
   );

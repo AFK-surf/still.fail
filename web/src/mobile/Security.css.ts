@@ -36,3 +36,6 @@ export const mFootNote = style({ textAlign: "center", fontSize: vars.textMeta, c
 /** Two answers side by side, as wide as the sheet. */
 export const mPair = style({ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "4px" });
 globalStyle(`${mPair} > button`, { height: "46px", borderRadius: "23px", justifyContent: "center" });
+/** With mPair: approve over deny, each as wide as the sheet; their words fit in any language (side by side, English
+ * ones were cut). */
+export const mStack = style({ gridTemplateColumns: "1fr" });
