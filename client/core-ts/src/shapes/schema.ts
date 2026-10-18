@@ -668,6 +668,7 @@ export const SHAPES: Record<string, Shape> = {
     ["footprint", opt("FootprintBrief"), { doc: "How much of the disk it takes (none from a station older than the footprint page, which then is not offered)." }],
     ["agentEnv", vec("EnvVar"), { default: true, doc: "The variables everything it starts for its agents runs with (docs/agent-env.md), by name, a secret's value\nmasked (none from a station older than them, which then does not offer them)." }],
     ["drive", opt("DriveRoots"), { doc: "Its files: the folders pinned, and whether the viewer browses every folder (none from a station older\nthan the drive, which then is not offered)." }],
+    ["search", opt("StationSearch"), { doc: "What its search finds of the machine (docs/search.md). None from a station older than it." }],
     ["permissions", opt("StationPermissions"), { doc: "What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then\nshows nothing)." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
   StationPermissions: struct([
@@ -1563,6 +1564,10 @@ export const SHAPES: Record<string, Shape> = {
     ["words", vec("String"), { default: true, doc: "The words looked for, as a found message marks them in its chat when opened (with `messages`)." }],
     ["messages", vec("FoundMessage"), { default: true, doc: "The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats\nlisted. Empty when not asked for." }],
   ], { doc: "The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words\nfirst. What the composer's `@` menu and the switcher list.", keepNone: true }),
+  StationSearch: struct([
+    ["files", "String", { doc: "spotlight (macOS: Spotlight finds the machine's files) | index (the station's own index of them)" }],
+    ["personal", "bool", { doc: "The machine's person's own mail, messages, calendars, contacts, notes and photos are found too." }],
+  ], { doc: "What a station's search finds of its machine (`Overview.search`)." }),
   SearchView: struct([
     ["items", vec("ChatItem"), { doc: "The chats found: those the sidebar has whose title (or else agent, station, line) has the words, then those\nthe stations found (archived ones too, `archived`); with nothing typed, the latest chats. At most 8 with every kind." }],
     ["chatsMore", "bool", { default: true, doc: "More chats than `items` were found: the kind alone (`kind: chat`) lists them." }],
@@ -1599,7 +1604,13 @@ export const SHAPES: Record<string, Shape> = {
     ["port", opt("u32")],
     ["skill", opt("String")],
     ["profile", opt("String")],
-    ["path", opt("String"), { doc: "A file: where it is on its station." }],
+    ["path", opt("String"), { doc: "A file: where it is on its station (absolute)." }],
+    ["root", opt("String"), { doc: "A file found in a folder pinned (a read-only member's): that folder, `rel` the file under it." }],
+    ["rel", opt("String")],
+    ["dir", opt("bool"), { doc: "A file that is a folder." }],
+    ["fileKind", opt("String"), { doc: "What opens a file, as a drive's entry says (`DriveEntry.kind`: folder, video, text…)." }],
+    ["size", opt("f64")],
+    ["sizeText", opt("String")],
     ["archived", opt("bool")],
     ["createdAt", opt("i64"), { client: opt("I54") }],
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`)." }],

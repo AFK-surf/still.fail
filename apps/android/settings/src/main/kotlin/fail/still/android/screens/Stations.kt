@@ -106,6 +106,8 @@ import androidx.compose.foundation.layout.offset
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.ListCard
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.Waiting
 import fail.still.android.ui.WaitShape
@@ -342,10 +344,33 @@ fun StationScreen(current: WorkspaceEntry, address: String, login: String? = nul
             StationLogins(address, marked = login)
             // The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them.
             overview?.agentEnv?.let { StationAgentEnv(address, it, manager) }
+            // What its search finds of the machine (docs/search.md): the person's own data only where its managers say.
+            if (s.online) overview?.search?.takeIf { it.files == "spotlight" }?.let { StationSearchSection(address, it.personal, manager) }
             if (manager) StationWorkspaces(address)
             // Its updates are its home workspace's managers' (docs/multi-workspace.md).
             if (s.online && overview != null) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
             Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+/** Whether the station's search finds the machine's person's own mail, messages and the like (web StationSearch.tsx). */
+@Composable
+private fun StationSearchSection(address: String, personal: Boolean, manager: Boolean) {
+    val app = LocalApp.current
+    val busy = app.isDoing("search.setPersonal", "station" to address)
+    SectionHeader(t("web-pages.stations.search.section"), start = 24.dp)
+    ListCard {
+        ListRow(onClick = if (!manager || busy) null else ({
+            app.act(t("web-pages.stations.search.what")) {
+                app.core.call("search.setPersonal", buildJsonObject { put("station", address); put("personal", !personal) })
+            }
+        })) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(t("web-pages.stations.search.personal"), color = C.ink, fontSize = 15.sp)
+                Text(t("web-pages.stations.search.personalLine"), color = C.muted, fontSize = 13.sp)
+            }
+            Switch(personal)
         }
     }
 }

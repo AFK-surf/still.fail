@@ -1634,5 +1634,9 @@
   "web-pages.vault.approve.what": "approve",
   "web-pages.vault.approve.denyWhat": "deny",
   "web-pages.vault.approve.inClient": "Approve in the client",
-  "web-pages.vault.approve.inClientDetail": "The web app cannot access keys"
+  "web-pages.vault.approve.inClientDetail": "The web app cannot access keys",
+  "web-pages.stations.search.section": "Search",
+  "web-pages.stations.search.personal": "Search personal data",
+  "web-pages.stations.search.personalLine": "Workspace members can also search mail, messages, calendars, contacts, notes and photos",
+  "web-pages.stations.search.what": "change search settings"
 }

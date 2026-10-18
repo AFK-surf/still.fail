@@ -24,6 +24,7 @@ import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
 import { openHistory } from "./History.tsx";
+import { fileOpen } from "../searchOpen.ts";
 import { ChangelogNews } from "./Changelog.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
@@ -222,6 +223,9 @@ function openFound(app: ReturnType<typeof useApp>, item: SearchItem): void {
       return app.push(app.at("/settings/profiles"));
     case "station":
       return app.push(app.at(`/s/${id}/overview`));
+    case "file":
+      if (item.path) return app.push(fileOpen(app.at(`/s/${id}`), item));
+      break;
   }
   if (chat) app.open(chat);
 }

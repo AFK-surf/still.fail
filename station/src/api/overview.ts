@@ -3,6 +3,7 @@
 // thread from what is in memory and the config; told again on /events when it changes (`overview`).
 import { statfsSync } from "node:fs";
 import { homedir } from "node:os";
+import { FileSearch } from "../search/files.ts";
 import type { Accounts } from "../accounts/index.ts";
 import { mask } from "../accounts/index.ts";
 import type { Cloud } from "../cloud/state.ts";
@@ -137,6 +138,9 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // The variables everything it starts for its agents runs with (ops/agent-env.ts): a proxy, mostly.
     agentEnv: agentEnvView(raw),
     drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map((p) => (d.rootView ?? rootView)(p)), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
+    // What its search finds of the machine (docs/search.md): its files through Spotlight (macOS) or its own index, and
+    // whether the person's own mail, messages and the like too.
+    search: { files: FileSearch.here() ? "spotlight" : "index", personal: raw?.search?.personal === true },
     // macOS's grants to still.fail Helper (a Mac's station only; a station from before them says none: not shown).
     ...withPermissions(d, viewer),
   };

@@ -220,3 +220,59 @@ test("an execution history is found, grown from where it was, and one that stopp
   assert.equal(JSON.parse(more.version).n, readTimeline("claude", file).length);
   read.db.close();
 });
+
+test("the machine's files are found as the drive lends them: not the station's own, the person's own only when said, a read-only member only in what is pinned", async () => {
+  const { FileSearch, spotlightQuery } = await import("../src/search/files.ts");
+  const home = mkdtempSync(join(tmpdir(), "search-files-"));
+  dirs.push(home);
+  const made = (rel: string) => {
+    const path = join(home, rel);
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, "x");
+    return path;
+  };
+  const plan = made("work/plan.md");
+  const old = made("notes/old plan.txt");
+  const own = made(".stillfail/plan.json");
+  const mail = made("Library/Mail/plan.emlx");
+  const asked: [string, string[]][] = [];
+  let personal = false;
+  const files = new FileSearch({
+    home, protect: () => [join(home, ".stillfail")], roots: (ws) => (ws === null ? [join(home, "work")] : []), personal: () => personal,
+    spotlight: async (query, within) => {
+      asked.push([query, within]);
+      return [plan, old, own, mail];
+    },
+  });
+  const writer = { workspace: "W1", home: true, scopes: ["write"] };
+  const found = (await files.query(["plan"], writer, 10))!;
+  assert.deepEqual(found.hits.map((h) => h.path).sort(), [old, plan].sort());
+  assert.equal(found.hits.find((h) => h.path === plan)!.text, "~/work");
+  // Everywhere for one who may write; only what is pinned for one who reads.
+  assert.deepEqual(asked[0]![1], []);
+  personal = true;
+  assert.ok((await files.query(["plan"], writer, 10))!.hits.some((h) => h.path === mail));
+  const reader = (await files.query(["plan"], { ...writer, scopes: [] }, 10))!;
+  assert.deepEqual(asked.at(-1)![1], [join(home, "work")]);
+  assert.deepEqual(reader.hits.map((h) => [h.path, h.root, h.rel]), [[plan, join(home, "work"), "plan.md"]]);
+  // Another workspace that pinned nothing: nothing for its readers.
+  assert.equal(await files.query(["plan"], { workspace: "W2", home: false, scopes: [] }, 10), null);
+  assert.equal(spotlightQuery(['a"b']), '(kMDItemFSName == "*a\\"b*"cd || kMDItemTextContent == "a\\"b*"cdw)');
+});
+
+test("a home's files walked into the index: names and the words of small texts, not the station's own nor what tools keep", async () => {
+  const { walkFiles } = await import("../src/search/sources.ts");
+  const top = mkdtempSync(join(tmpdir(), "search-walk-"));
+  dirs.push(top);
+  mkdirSync(join(top, "docs"), { recursive: true });
+  mkdirSync(join(top, "node_modules/x"), { recursive: true });
+  mkdirSync(join(top, "data"), { recursive: true });
+  writeFileSync(join(top, "docs/plan.md"), "ship the search");
+  writeFileSync(join(top, "node_modules/x/plan.md"), "no");
+  writeFileSync(join(top, "data/key"), "secret");
+  const docs: { key: string; body: string }[] = [];
+  const n = await walkFiles(top, { ws: "*", scope: "write", skip: [join(top, "data")], source: "fs:home", each: async (d) => void docs.push(...d) });
+  assert.equal(n, 1);
+  assert.deepEqual(docs.map((d) => d.key), [`f:${join(top, "docs/plan.md")}`]);
+  assert.ok(docs[0]!.body.includes("ship the search"));
+});
