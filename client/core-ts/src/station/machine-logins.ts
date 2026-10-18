@@ -15,6 +15,7 @@ import { CoreError } from "../error.ts";
 import { clock, local, localDay } from "../format.ts";
 import type { LoopbackRequest, Pull } from "../host.ts";
 import { t } from "../i18n.ts";
+import { param } from "../asks.ts";
 import { encode } from "../ops.ts";
 import { base64, fromBase64, get, isObject } from "../util.ts";
 import { StationAddr } from "./addr.ts";
@@ -202,8 +203,10 @@ export function isCallback(expect: Expect, request: { method: string; path: stri
   const at = request.path.indexOf("?");
   const path = at < 0 ? request.path : request.path.slice(0, at);
   if ((path === "" ? "/" : path) !== expect.path) return false;
-  const query = new URLSearchParams(at < 0 ? "" : request.path.slice(at + 1));
-  const state = expect.post ? (new URLSearchParams(new TextDecoder().decode(request.body)).get("state") ?? query.get("state")) : query.get("state");
+  // By hand (asks.ts param): Android's engine (Hermes) has no URLSearchParams; using it there ended the core at the
+  // browser's first request (found by the real check on the emulator, 2026-10-18).
+  const query = at < 0 ? "" : request.path.slice(at + 1);
+  const state = expect.post ? (param(new TextDecoder().decode(request.body), "state") ?? param(query, "state")) : param(query, "state");
   return state === expect.state;
 }
 

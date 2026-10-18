@@ -199,8 +199,9 @@ function decode(s: string): string {
   return fromUtf8(new Uint8Array(out));
 }
 
-/// A query's value of `name` (its first), decoded; null when it has none.
-function param(query: string, name: string): string | null {
+/// A query's value of `name` (its first), decoded; null when it has none. By hand: Android's engine (Hermes) has no
+/// URLSearchParams.
+export function param(query: string, name: string): string | null {
   for (const kv of query.split("&")) {
     const i = kv.indexOf("=");
     if (i >= 0 && kv.slice(0, i) === name) return decode(kv.slice(i + 1).replaceAll("+", " "));
