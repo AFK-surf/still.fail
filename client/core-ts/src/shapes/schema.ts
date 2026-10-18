@@ -208,8 +208,10 @@ export const SHAPES: Record<string, Shape> = {
   RuntimeInstall: struct([
     ["runtime", "String", { doc: "claude | codex | dsh: what `software.update` installs ({station, id: runtime})." }],
     ["state", "String", { doc: "missing | installing | failed | installed" }],
-    ["text", opt("String"), { doc: "A line under the notice: how far it is, why it failed, or who can install it. Absent when nothing to say." }],
-    ["action", opt("String"), { doc: "The button's label (安装 DeepSeek Harness, 重试安装) when the viewer can install it now. Absent otherwise." }],
+    ["title", opt("String"), { doc: "Said in place of the notice's own first words while it installs, once it has, and when that failed (正在安装 X,\n已安装 X, 无法安装 X). Absent: the notice's own." }],
+    ["detail", opt("String"), { doc: "With `title`: how far it is, or why it failed. Absent when nothing to say." }],
+    ["note", opt("String"), { doc: "Not installable by the viewer from here: who can, or why the station cannot. Under the notice's words." }],
+    ["action", opt("String"), { doc: "The button's label (安装, 重试) when the viewer can install it now. Absent otherwise." }],
     ["percent", opt("i64"), { client: opt("I54"), doc: "While installing, how much of its download is in, 0–100, when known." }],
   ], { doc: "A runtime a chat's notice says is not installed, and installing it there (core views.ts `installView`): once\ninstalled, the station gives the chat's waiting messages to the agent." }),
   MessageCard: struct([

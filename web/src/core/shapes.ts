@@ -1622,9 +1622,16 @@ export interface RuntimeInstall {
 	runtime: string;
 	/** missing | installing | failed | installed */
 	state: string;
-	/** A line under the notice: how far it is, why it failed, or who can install it. Absent when nothing to say. */
-	text?: string;
-	/** The button's label (安装 DeepSeek Harness, 重试安装) when the viewer can install it now. Absent otherwise. */
+	/**
+	 * Said in place of the notice's own first words while it installs, once it has, and when that failed (正在安装 X,
+	 * 已安装 X, 无法安装 X). Absent: the notice's own.
+	 */
+	title?: string;
+	/** With `title`: how far it is, or why it failed. Absent when nothing to say. */
+	detail?: string;
+	/** Not installable by the viewer from here: who can, or why the station cannot. Under the notice's words. */
+	note?: string;
+	/** The button's label (安装, 重试) when the viewer can install it now. Absent otherwise. */
 	action?: string;
 	/** While installing, how much of its download is in, 0–100, when known. */
 	percent?: number;

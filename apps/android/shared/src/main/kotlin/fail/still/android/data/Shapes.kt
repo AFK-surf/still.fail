@@ -1616,9 +1616,14 @@ data class RuntimeInstall (
 	val runtime: String,
 	/// missing | installing | failed | installed
 	val state: String,
-	/// A line under the notice: how far it is, why it failed, or who can install it. Absent when nothing to say.
-	val text: String? = null,
-	/// The button's label (安装 DeepSeek Harness, 重试安装) when the viewer can install it now. Absent otherwise.
+	/// Said in place of the notice's own first words while it installs, once it has, and when that failed (正在安装 X,
+	/// 已安装 X, 无法安装 X). Absent: the notice's own.
+	val title: String? = null,
+	/// With `title`: how far it is, or why it failed. Absent when nothing to say.
+	val detail: String? = null,
+	/// Not installable by the viewer from here: who can, or why the station cannot. Under the notice's words.
+	val note: String? = null,
+	/// The button's label (安装, 重试) when the viewer can install it now. Absent otherwise.
 	val action: String? = null,
 	/// While installing, how much of its download is in, 0–100, when known.
 	val percent: Long? = null

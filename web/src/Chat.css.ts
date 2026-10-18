@@ -72,20 +72,29 @@ export const msgSystemBox = style({
   minWidth: "0", maxWidth: "100%", padding: "6px 14px", borderRadius: "999px", background: vars.hover, color: vars.text,
   fontSize: vars.textUi, cursor: "pointer",
   selectors: {
-    "&[data-failed]": { background: vars.redBg, color: vars.red },
     "&[data-open]": { borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape },
   },
 });
-/** Under a notice that a runtime is not installed: installing it, or how that goes, centred under the pill. */
-export const msgSystemInstall = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", maxWidth: "100%" });
-/** How far it is or why it failed: a ring or how much is in, then the words. */
-export const msgSystemInstallLine = style({ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", maxWidth: "100%" });
-export const msgSystemInstallText = style({
-  fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere", textAlign: "center",
-  selectors: { [`${msgSystemInstall}[data-state="failed"] &`]: { color: vars.red } },
+/**
+ * A failure still.fail tells of (Chat.tsx FailureNotice): a settings card (pages.css.ts card, its corner from its
+ * button when one is in it) as wide as its words, centred in the chat as a notice is; no red ground, its title in red.
+ */
+export const failure = style({ width: "fit-content", minWidth: "min(100%, 320px)", maxWidth: "min(100%, 520px)", boxSizing: "border-box", cursor: "pointer", textAlign: "left" });
+/** Its words as tall as a button (title 20, then 16 a line): a button at its end stands CARD_PAD from the card's corner. */
+export const failureText = style({});
+export const failureAction = style({});
+export const failureTitle = style({
+  fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500", color: vars.red, overflowWrap: "anywhere",
+  selectors: { "&[data-settled]": { color: vars.text } },
 });
-/** Its button: an answer's, as wide as its words (over the answer's own full width, whichever sheet comes later). */
-export const msgSystemInstallButton = style({ selectors: { [`${msgSystemInstall} &`]: { width: "auto", textAlign: "center" } } });
+globalStyle(`${failure} ${failureText}`, { gap: "0" });
+globalStyle(`${failure} ${failureAction}`, { alignSelf: "flex-start" });
+/** What went wrong, quiet: two lines until the card is opened. */
+export const failureDetail = style({
+  fontSize: vars.textMeta, lineHeight: "16px", color: vars.muted, overflowWrap: "anywhere",
+  display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden",
+  selectors: { [`${failure}[data-open] &`]: { display: "block", WebkitLineClamp: "unset" } },
+});
 /** What went wrong in a notice about a profile: a link to that profile's page, in the pill's own colour, underlined. */
 export const msgSystemLink = style({ textDecoration: "underline", textUnderlineOffset: "3px" });
 globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit" });

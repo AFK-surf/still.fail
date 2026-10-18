@@ -1215,70 +1215,72 @@ private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
 /**
  * What still.fail itself says (web Chat.tsx → SystemNotice): a pill across the chat, in one line and no time, cut short
  * where it does not fit. A tap opens it: all its words, wrapped, and its time under it. The station begins its failures
- * with ⚠️; here a failure is the pill in red instead. A notice is a line of the UI, not prose: no 。 at its end. Under one
- * saying the station does not have the chat's runtime, installing it (`install`).
+ * with ⚠️; here a failure is a card instead (FailureNotice). A notice is a line of the UI, not prose: no 。 at its end.
  */
 @Composable
 private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toProfile: (() -> Unit)?, install: fail.still.android.data.RuntimeInstall? = null, station: String = "") {
     val failed = remember(text) { Regex("^⚠️\\s*").find(text) }
     val said = remember(text) { (failed?.let { text.substring(it.range.last + 1) } ?: text).replace(Regex("。\\s*$"), "") }
     var open by remember { mutableStateOf(false) }
-    val dark = C.dark
-    // The web's --hover (the offline notice's grey), --red-bg and --red.
-    val ground = if (failed != null) (if (dark) Color(0xFF442322) else Color(0xFFFFF0EF)) else if (dark) Color.White.copy(alpha = 0.05f) else Color(0xFF262117).copy(alpha = 0.065f)
-    val ink = if (failed != null) (if (dark) Color(0xFFF68482) else Color(0xFFA12F35)) else chatInk().text
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        val shape = if (open) Smooth(16.dp) else RoundedCornerShape(50)
-        Box(
-            Modifier.clip(shape).background(ground)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = !open }
-                .padding(horizontal = 14.dp, vertical = 6.dp),
-        ) {
-            // In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page.
-            val colon = if (toProfile != null) said.indexOf('：').let { if (it >= 0) it else said.indexOf(':') } else -1
-            if (toProfile != null && colon >= 0) {
-                val linked = remember(said) {
-                    androidx.compose.ui.text.buildAnnotatedString {
-                        append(said.substring(0, colon + 1))
-                        withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("profile", androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(textDecoration = TextDecoration.Underline))) { toProfile() }) {
-                            append(said.substring(colon + 1))
-                        }
-                    }
-                }
-                Text(
-                    linked, fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
-                    maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis,
+        if (failed != null) FailureNotice(said, toProfile, install, station, open) { open = !open }
+        else {
+            // The web's --hover (the offline notice's grey).
+            val ground = if (C.dark) Color.White.copy(alpha = 0.05f) else Color(0xFF262117).copy(alpha = 0.065f)
+            val ink = chatInk().text
+            Box(
+                Modifier.clip(if (open) Smooth(16.dp) else RoundedCornerShape(50)).background(ground)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = !open }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            ) {
+                if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
+                else Text(
+                    plain(said.lineSequence().firstOrNull { it.isNotBlank() } ?: said), fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
-            } else if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
-            else Text(
-                plain(said.lineSequence().firstOrNull { it.isNotBlank() } ?: said), fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+            }
         }
-        if (install != null) InstallOffer(install, station)
         if (open) MessageTime(time)
     }
 }
 
 /**
- * Under a notice that the station does not have the chat's runtime (web Chat.tsx InstallOffer): installing it (a
- * manager's button), how far that is, or why it failed, as the core says. Once installed, the station gives the agent
- * what waits.
+ * A failure still.fail tells of (web Chat.tsx FailureNotice): a card of the chat's grey, its first words (to its colon) a
+ * title in red over the rest, quiet, cut to two lines until it is opened. One about a profile (its sign-in failed) links
+ * what went wrong to that profile's page. One saying the station does not have the chat's runtime ends in installing it
+ * (a manager's button) and says how that goes in place of its own words (RuntimeInstall); once installed, the station
+ * gives the agent what waits.
  */
 @Composable
-private fun InstallOffer(install: fail.still.android.data.RuntimeInstall, station: String) {
+private fun FailureNotice(said: String, toProfile: (() -> Unit)?, install: fail.still.android.data.RuntimeInstall?, station: String, open: Boolean, toggle: () -> Unit) {
     val app = LocalApp.current
-    val busy = app.isDoing("software.update", "station" to station, "id" to install.runtime)
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        install.text?.let { text ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                if (install.state == "installing") Spinner(inline = true)
-                Text(text, fontSize = 12.sp, lineHeight = 18.sp, color = if (install.state == "failed") C.red else C.muted, textAlign = TextAlign.Center)
+    val busy = install != null && app.isDoing("software.update", "station" to station, "id" to install.runtime)
+    val colon = remember(said) { Regex("[：:]\\s*").find(said) }
+    val title = install?.title ?: colon?.let { said.substring(0, it.range.first) } ?: said
+    val rest = colon?.let { said.substring(it.range.last + 1) } ?: ""
+    val detail = if (install?.title != null) install.detail else rest.ifEmpty { null }
+    val settled = install?.state == "installing" || install?.state == "installed"
+    val action = install?.action
+    Row(
+        Modifier.widthIn(max = 520.dp).clip(Smooth(if (action != null) 38.dp else 22.dp)).background(C.chip)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { toggle() }
+            .padding(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f, fill = false)) {
+            Text(title, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, color = if (settled) C.ink else C.red)
+            if (detail != null) {
+                val shown = if (toProfile != null && install == null) remember(detail) {
+                    androidx.compose.ui.text.buildAnnotatedString {
+                        withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("profile", androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(textDecoration = TextDecoration.Underline))) { toProfile() }) { append(detail) }
+                    }
+                } else androidx.compose.ui.text.AnnotatedString(detail)
+                Text(shown, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
             }
+            install?.note?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted) }
         }
-        install.action?.let { label ->
-            OptionButton(label, strong = true, enabled = !busy, busy = busy) { app.act(label) { app.api(station).updateSoftware(install.runtime) } }
-        }
+        if (install?.state == "installing") Box(Modifier.align(Alignment.CenterVertically)) { Spinner(inline = true) }
+        if (install != null && action != null) OptionButton(action, strong = true, enabled = !busy, busy = busy) { app.act(action) { app.api(station).updateSoftware(install.runtime) } }
     }
 }
 

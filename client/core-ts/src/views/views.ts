@@ -170,24 +170,26 @@ export function sentFrom(text: string): [string, string, string] | null {
 
 /// A notice that the station does not have a chat's runtime installed: installing it there, as the station's updates
 /// (`updates`, its overview's) say it stands, and whether the viewer may (`manages`: the workspace's owner or an admin).
-/// Nothing offered by a station older than its updates.
+/// While it installs, once it has and when that failed, it says so in place of the notice's own words (`title`,
+/// `detail`). Nothing offered by a station older than its updates.
 export function installView(runtime: string, updates: J[], manages: boolean): J | null {
   const v = updates.find((u) => get(u, "id") === runtime);
   if (v === undefined) return null;
   const name = str(v.name) ?? runtime;
   if (v.state === "updating") {
     const percent = u64(v.percent);
-    return { runtime, state: "installing", text: str(v.progress) ?? t("core-views.install.installing", { name }), ...(percent !== null ? { percent } : {}) };
+    const detail = str(v.progress);
+    return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(detail !== null ? { detail } : {}), ...(percent !== null ? { percent } : {}) };
   }
-  if (v.installed === true) return { runtime, state: "installed", text: t("core-views.install.installed", { name }) };
+  if (v.installed === true) return { runtime, state: "installed", title: t("core-views.install.installed", { name }) };
   const can = manages && v.updatable === true;
   if (v.state === "failed") {
     const why = str(v.message);
-    return { runtime, state: "failed", text: why ? t("core-views.install.failed_why", { error: why }) : t("core-views.install.failed"), ...(can ? { action: t("core-views.install.retry") } : {}) };
+    return { runtime, state: "failed", title: t("core-views.install.failed", { name }), ...(why ? { detail: why } : {}), ...(can ? { action: t("core-views.install.retry") } : {}) };
   }
-  if (can) return { runtime, state: "missing", action: t("core-views.install.action", { name }) };
+  if (can) return { runtime, state: "missing", action: t("core-views.install.action") };
   const why = str(v.note) ?? (manages ? null : t("core-views.install.managers_only"));
-  return { runtime, state: "missing", ...(why !== null ? { text: why } : {}) };
+  return { runtime, state: "missing", ...(why !== null ? { note: why } : {}) };
 }
 
 /// A message as a chat shows it: whether it is the viewer's, still.fail's own notice, who said it, mentions named.
