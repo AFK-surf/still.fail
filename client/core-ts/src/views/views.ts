@@ -299,6 +299,8 @@ export type ViewsEnv = {
   revoking?: (station: string, id: string) => boolean;
   /// The name of the home workspace of a station a workspace joined, when the viewer is in it (memberships.ts).
   homeName?: (workspace: string, id: string) => string | null;
+  /// A topic a view watches shown again (its owner asked to bring it up to date, store.ts `resume`).
+  resume?: (topic: Topic) => void;
 };
 
 /// The views' environment in a core.
@@ -318,6 +320,7 @@ export function envOf(core: Inner): ViewsEnv {
       return sub !== null && get(get(core.data.record("me", sub), "user"), "beta") === true;
     },
     places: () => xshare.places(core),
+    resume: (topic) => core.router.resume(topic),
     xshareAsked: (station, session) => xshare.asked(core, station, session),
     revoking: (station, id) => publish.revoking(core, station, id),
     homeName: (workspace, id) => memberships.homeName(core, workspace, id),
@@ -389,7 +392,7 @@ export class Views implements Owner {
     const live = this.#views.get(topicKey(view));
     for (const key of live?.watches.keys() ?? []) {
       const topic = JSON.parse(key) as Topic;
-      if (topic.topic === "stationSearch") this.#core.stationTopics.resume(topic);
+      if (topic.topic === "stationSearch") this.#core.resume?.(topic);
     }
   }
 
