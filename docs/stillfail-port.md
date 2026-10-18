@@ -60,6 +60,47 @@ Done (branch fw-richtext-nav, 2026-10-19):
 - The demo's kit screen shows both: `MBUI_SCREEN=kit` (`?MBUI_SCREEN=kit`),
   `scripts/shots.sh kit web-kit`.
 
+Slice 3, Home (branch home-list, 2026-10-19): `APP=stillfail` (src/stillfail) is
+still.fail itself, beside the demos. It starts the core as src/coredemo does
+(both on src/sfcore now: the core's start, signing in, the engine's glue for
+Apple and Android), shows the sign-in page signed out (SignIn.kt) and
+otherwise Home at the root of a `@ui.Nav` (src/sfapp, Home.kt and its parts):
+
+- The top bar: settings, the workspace's name (24 bold) with its mark (the
+  other workspaces' `workspaceMarks.others`, or the invitation dot) and ▾,
+  the filter (全部 / 我参与的 / 监控中, kept as the prefs' `listFilter`; 已归档).
+- The list: the `chats {scope, mine, watching}` view as it is, its days
+  (SectionHeader) and rows (66 high: the state mark, the title bold while
+  unread, the station's mark, unplugged or Slack; where it stands, with
+  要你帮忙 / 做完了 / 在等 / 监控中 as icons and 奏 bold, or the last message;
+  the agents' makers' marks and the people's faces, RowPicture.kt); the time
+  (`time.lastActiveAt.ago`) while a row is held; 归档 at a done row's start
+  (`chat.archive`); the search field at its top; while it is read, the rows to
+  come breathing (WaitShapes), what is wrong over them; the empty list's and
+  the first station's illustrations.
+- A row tapped pushes its chat (its bar only: slice 4 fills it), swiped back
+  from the left edge.
+- The workspace's name opens the workspaces' sheet: the one in use, the others
+  with what each has waiting (MarkCounts); one tapped is the one in view (the
+  prefs' `workspace`); 登录其他账号.
+- src/sf draws the Android app's own pictures now (src/sf/picture.mbt over
+  drawable_data.mbt, which scripts/drawables.py makes from ember's
+  res/drawable and ui/Icons.kt): the makers' marks, Slack's, still.fail's
+  mark, the illustrations and the 314 station glyphs.
+- `APP=sffix` (src/sffix) is the same Home over made-up chats in the core's
+  shapes (src/sfapp/fixture.mbt), no core: `scripts/shots.sh home web-home`
+  compares it with goldens/mac-home*.png and web-home.png.
+
+Not yet, against the current app: the bottom bar (slice 7: 奏 N and 令 in
+it, so no new-chat button here), the frosted glass (the top bar is the page's
+ground at 94%), the search page, the long-press menu (pin, rename, copy link)
+and swiping a row away, the rows' motion as the list changes, the open jobs
+banner and the changelog's note, pull to refresh (the app has none either),
+the update button, inviting and new workspaces in the sheet, English (the
+words are the Chinese catalog's), avatars' pictures on Android (no image
+decoding there yet), `client.focus`, and picking the first workspace into the
+prefs at start (only a switch made here writes them).
+
 ## What the hosts need (platform)
 
 Hermes + shell on Android; secure storage with biometrics (`secure.*`);

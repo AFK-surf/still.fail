@@ -1,7 +1,8 @@
 #!/bin/bash
 # Android: build libmbui.so from the C that moon generates plus the runtime
 # and src/host/android_host.c, package it with Gradle, and run it on an
-# emulator of our own (AVD mbui-avd, port 5580). APP=demo|photos|coredemo picks the app;
+# emulator of our own (AVD mbui-avd, port 5580). APP=demo|photos|coredemo|stillfail|sffix picks the app (coredemo and
+# stillfail with the still.fail core in them);
 # ENV="K=V;K2=V2" gives `run` the app's environment variables (MainActivity sets them before the app starts).
 #   scripts/android.sh build | emu | run [script] | shot NAME | log | listen-test | stop | delete
 # moon.pkg cannot choose files per OS, so the build runs on a copy of the
@@ -33,14 +34,16 @@ sync() {
   cp -p moon.mod $M/
   cp -rp src/. $M/src/
   cp -p src/photos/pictures/android.mbt $M/src/photos/pictures_native.mbt
-  # moon still links a (macOS) program of the copy, which nothing runs: only its C is taken. The core demo's needs
-  # the Apple shell (scripts/core.sh shell), which an Android build has no use for; its symbols are left unresolved.
-  sed -e 's|out/core/aarch64-apple-darwin/libstillfail_shell.a|-Wl,-undefined,dynamic_lookup|' \
-    src/coredemo/moon.pkg > $M/src/coredemo/moon.pkg
-  if ! grep -q dynamic_lookup $M/src/coredemo/moon.pkg; then
-    echo "android.sh: src/coredemo/moon.pkg no longer links the shell as expected" >&2
-    exit 1
-  fi
+  # moon still links a (macOS) program of the copy, which nothing runs: only its C is taken. The apps with the core
+  # need the Apple shell (scripts/core.sh shell), which an Android build has no use for; its symbols are left unresolved.
+  for app in coredemo stillfail; do
+    sed -e 's|out/core/aarch64-apple-darwin/libstillfail_shell.a|-Wl,-undefined,dynamic_lookup|' \
+      src/$app/moon.pkg > $M/src/$app/moon.pkg
+    if ! grep -q dynamic_lookup $M/src/$app/moon.pkg; then
+      echo "android.sh: src/$app/moon.pkg no longer links the shell as expected" >&2
+      exit 1
+    fi
+  done
 }
 
 # the photos app's pictures (see pictures/android.mbt): copied into the
@@ -79,17 +82,19 @@ aar_lib() {
   unzip -o -q -j $aar jni/arm64-v8a/$4 -d $jni
 }
 
-# APP=coredemo: the still.fail core, as still.fail's own app runs it (src/host/android_core.c). Into out/android/apk,
+# APP=coredemo or stillfail: the still.fail core, as still.fail's own app runs it (src/host/android_core.c). Into out/android/apk,
 # which Gradle packs: ember's prebuilt engine and shell (EMBER: the checkout, as scripts/core.sh has it; `node
 # scripts/native.ts path engine|shell android-arm64` there, prebuilt or built by it), libhermes.so from React Native's
 # hermes-android (the Hermes the engine is built against: Gradle's cache, else Maven Central), and the core as Hermes
 # bytecode (scripts/core.sh hermes; ENTRY picks the core's entry, by default the one with the media module). For the other apps it stays empty.
+has_core() { [ $PKG = coredemo ] || [ $PKG = stillfail ]; }
+
 core_parts() {
   local apk=$OUT/apk
   jni=$OUT/apk/jniLibs/arm64-v8a
   rm -rf $apk
   mkdir -p $jni $apk/assets
-  [ $PKG = coredemo ] || return 0
+  has_core || return 0
   EMBER=${EMBER:-$(cd "$TOOLS/.." 2>/dev/null && pwd)/ember-src}
   local engine shell
   engine=$(cd "$EMBER" && node scripts/native.ts path engine android-arm64)
@@ -126,10 +131,10 @@ case "${1:-build}" in
     done
     $CC $CFLAGS -c src/host/android_host.c -o $OUT/obj/android_host.o
     CORE_LIBS=
-    if [ $PKG = coredemo ]; then
-      # mbui/core's queue and the app's engine (src/coredemo/android_engine.c, which includes android_core.c)
+    if has_core; then
+      # mbui/core's queue and the app's engine (src/<app>/android_engine.c, which includes src/sfcore/android_engine.c)
       $CC $CFLAGS -c src/core/core_native.c -o $OUT/obj/core_native.o
-      $CC $CFLAGS -c src/coredemo/android_engine.c -o $OUT/obj/android_engine.o
+      $CC $CFLAGS -c src/$PKG/android_engine.c -o $OUT/obj/android_engine.o
       CORE_LIBS="-L$OUT/apk/jniLibs/arm64-v8a -lstillfail_hermes"
     fi
     $CC -shared -o android/app/src/main/jniLibs/arm64-v8a/libmbui.so $OUT/obj/*.o \

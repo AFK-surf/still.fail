@@ -25,7 +25,7 @@ jobs:
         run: moon version --all && moon check --target js --output-json 2>&1 | python3 scripts/errs.py
       - name: ui, gallery and core tests
         run: |
-          moon test --target js -p mbui/ui -p mbui/gallery -p mbui/md -p mbui/sf 2>&1 | tail -3
+          moon test --target js -p mbui/ui -p mbui/gallery -p mbui/md -p mbui/sf -p mbui/sfapp 2>&1 | tail -3
           moon test --target js -p mbui/core 2>&1 | tail -3
       - name: flexbox (Yoga's tests)
         run: moon test --target native -p mbui/flex 2>&1 | tail -3
@@ -40,12 +40,12 @@ jobs:
           echo "$MOON_HOME/bin" >> $GITHUB_PATH
       - name: macOS apps
         run: |
-          for app in demo books photos; do
+          for app in demo books photos sffix; do
             /usr/bin/time -p env APP=$app scripts/mac.sh build 2>&1 | tail -4
           done
       - name: Screenshot against the golden
         continue-on-error: true
-        run: scripts/shots.sh mac kit
+        run: scripts/shots.sh mac kit home
       - name: iOS simulator app
         run: scripts/ios.sh build
       - uses: actions/upload-artifact@v4

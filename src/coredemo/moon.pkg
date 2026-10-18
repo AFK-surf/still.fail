@@ -5,6 +5,7 @@ import {
   "mbui/shelf",
   "mbui/gallery",
   "mbui/videos",
+  "mbui/sfcore",
 }
 
 options(

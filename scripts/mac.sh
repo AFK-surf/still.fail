@@ -1,10 +1,11 @@
 #!/bin/bash
-# Build the macOS app and run it. MODE=release|debug, APP=demo|photos (only that
+# Build the macOS app and run it. MODE=release|debug, APP=demo|photos|books|stillfail|sffix (only that
 # app is built), then:
 #   scripts/mac.sh build | run [env...] | script ime | bench | shot | login
 # MBUI_CORE=1: the app with the still.fail core in it (src/coredemo: the shell's .a and JavaScriptCore linked in, the
 # core's script from out/core/core.js; scripts/core.sh shell + bundle make them). Without it, only src/demo is built:
-# the default app stays lean (the shell is some 57 MB stripped).
+# the default app stays lean (the shell is some 57 MB stripped). APP=stillfail (still.fail in mbui, src/stillfail) has
+# the core in it the same way; APP=sffix is its Home over made-up chats, with no core.
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -15,8 +16,8 @@ PKG=${APP:-demo}
 # login: the core demo signing in the way a command-line tool does (MBUI_AUTH_LOGIN, src/coredemo): what a station's
 # remote login runs on this machine. MBUI_CORE_DATA says whose sign-in it is.
 [ "${1:-}" = login ] && MBUI_CORE=1
-if [ "${MBUI_CORE:-0}" != 0 ]; then
-  PKG=coredemo
+[ "${MBUI_CORE:-0}" != 0 ] && PKG=coredemo
+if [ $PKG = coredemo ] || [ $PKG = stillfail ]; then
   [ -f out/core/aarch64-apple-darwin/libstillfail_shell.a ] || "$D/core.sh" shell
   [ -f out/core/core.js ] || "$D/core.sh" bundle
   export MB_CORE_BUNDLE=${MB_CORE_BUNDLE:-$PWD/out/core/core.js}

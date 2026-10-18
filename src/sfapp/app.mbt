@@ -1,0 +1,454 @@
+// still.fail, as its Android app is (ember apps/android app/App.kt): signed out it is the sign-in page; signed in,
+// the chats of one workspace are home (Home.kt), and everything else a page pushed over it (@ui.Nav: sliding in,
+// swiped back from the left edge), or a sheet from the bottom (the workspaces').
+
+///|
+/// A page of the stack.
+pub(all) enum Page {
+  Home
+  /// a chat: its station, its id in the station's list, its title (slice 4 fills it)
+  Chat(String, String, String)
+  /// the archived chats (from the filter's menu)
+  Archived
+  /// settings (the gear)
+  Settings
+}
+
+///|
+priv struct App {
+  mut nav : @ui.Nav[Page]
+  /// the workspace switched to here, before the core's prefs say it
+  mut picked : String
+  /// the list's filter chosen here, by workspace, before the prefs say it
+  filters : Map[String, String]
+  /// the workspaces' sheet: open, and how far up (0 gone … 1 up)
+  mut sheet : Bool
+  /// the filter's menu
+  mut menu : Bool
+  /// when the sheet, the menu were opened
+  mut sheet_at : Double
+  mut menu_at : Double
+  /// a row held: its id, since when (the time shows while it is)
+  mut held : Int
+  mut held_at : Double
+  /// what was said last of a write (a toast), and when
+  mut toast : String
+  mut toast_at : Double
+}
+
+///|
+let app : App = {
+  nav: @ui.Nav::new(Home),
+  picked: "",
+  filters: {},
+  sheet: false,
+  menu: false,
+  sheet_at: 0.0,
+  menu_at: 0.0,
+  held: 0,
+  held_at: 0.0,
+  toast: "",
+  toast_at: 0.0,
+}
+
+///|
+/// As at the start: Home alone, nothing chosen here yet (tests).
+fn reset() -> Unit {
+  app.nav = @ui.Nav::new(Home)
+  app.picked = ""
+  app.filters.clear()
+  app.sheet = false
+  app.menu = false
+  app.held = 0
+  app.toast = ""
+  read_views.clear()
+  splash_first.val = -1.0
+}
+
+///|
+/// Back to Home (the stack's root), the sheet and the menu closed.
+fn home() -> Unit {
+  app.sheet = false
+  app.menu = false
+  while app.nav.depth() > 1 {
+    if !app.nav.pop() {
+      break
+    }
+  }
+}
+
+///|
+/// The app over `src`: call each frame.
+pub fn view(c : @ui.Ctx, src : Source) -> Unit {
+  let t = @sf.begin(c)
+  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+    let accounts = (src.topic)("accounts", {})
+    match (accounts.value, (src.fatal)()) {
+      (_, Some(why)) => splash(c, Some(why), true)
+      (Some(Array(list)), _) if list.length() == 0 => sign_in_page(c, src)
+      (Some(Array(_)), _) => signed_in(c, src)
+      (_, _) =>
+        splash(
+          c,
+          match accounts.error {
+            Some(e) => Some(text(Some(e), "message"))
+            None => None
+          },
+          accounts.error is Some(_),
+        )
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Signed in: the workspace in view (the one switched to, else the one last open, else the first once every account
+/// has answered), its Home at the root of the pages; the splash while none is known yet, and a page that says so when
+/// there is none.
+fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
+  let t = @sf.theme()
+  let ws = (src.topic)("workspaces", {})
+  let prefs = (src.topic)("prefs", {})
+  let (all, answered, invited) = workspaces_of(ws.value)
+  let kept = if app.picked != "" {
+    app.picked
+  } else {
+    text(prefs.value, "workspace")
+  }
+  let current = match all.iter().find_first(fn(w) { w.id == kept }) {
+    Some(w) => Some(w)
+    None =>
+      if all.length() > 0 && (kept == "" || answered) {
+        Some(all[0])
+      } else {
+        None
+      }
+  }
+  match current {
+    Some(w) => {
+      c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
+      |> ignore
+      if app.menu {
+        filter_menu(c, src, w)
+      }
+      if app.sheet {
+        workspaces_sheet(c, src, w, all, ws.value)
+      }
+      toast(c)
+    }
+    None =>
+      if ws.value is Some(_) && answered {
+        no_workspace(c, ws.value)
+      } else {
+        let failed = match ws.error {
+          Some(e) => Some(text(Some(e), "message"))
+          None => None
+        }
+        splash(
+          c,
+          Some(failed.unwrap_or(t_reading_workspaces(src))),
+          failed is Some(_),
+        )
+      }
+  }
+}
+
+///|
+/// 正在读取你的 workspace, with what the core has been waiting on for a while under it (`status`).
+fn t_reading_workspaces(src : Source) -> String {
+  let status = (src.topic)("status", {})
+  match text(status.value, "text") {
+    "" => tr("android-misc.workspaces.loading")
+    s => tr("android-misc.workspaces.loading") + "\n" + s
+  }
+}
+
+///|
+fn page_view(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  all : Array[Workspace],
+  invited : Bool,
+  page : Page,
+) -> Unit {
+  match page {
+    Home => home_page(c, src, w, all, invited)
+    Chat(station, id, title) => chat_page(c, src, station, id, title)
+    Archived => placeholder_page(c, tr("android-chat.home.filter.archived"))
+    Settings => placeholder_page(c, tr("android-chat.home.settings"))
+  }
+}
+
+///|
+/// What a write said (Sheet.kt ToastHost): over the foot, in ink, 2.6s.
+fn toast(c : @ui.Ctx) -> Unit {
+  if app.toast == "" {
+    return
+  }
+  let t = @sf.theme()
+  let age = c.now() - app.toast_at
+  if age > 2800.0 {
+    app.toast = ""
+    return
+  }
+  c.wake_in(2800.0 - age)
+  c.layer(align=ACenter, fn() {
+    c.spacer()
+    c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, fn() {
+      c.text(app.toast, size=14.0, color=t.p.bg, line=20.0) |> ignore
+    })
+    |> ignore
+    c.box(h=Px(90.0), fn() {  }) |> ignore
+  })
+  |> ignore
+}
+
+///|
+fn say(c : @ui.Ctx, words : String) -> Unit {
+  app.toast = words
+  app.toast_at = c.now()
+}
+
+///|
+/// The app starting, or waiting for what every page needs (Parts.kt Splash): still.fail's mark floating; what it
+/// waits for said only once it takes a while (a second), or at once when `now` (a failure).
+fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
+  let t = @sf.theme()
+  let since = splash_since(c)
+  c.box(
+    w=Fill(1.0),
+    h=Fill(1.0),
+    pad=24.0,
+    gap=16.0,
+    align=ACenter,
+    justify=JCenter,
+    fn() {
+      let lift = if c.stable() {
+        0.0
+      } else {
+        c.request_frame()
+        // 900 ms up, 900 down, eased
+        let k = c.now() / 1800.0
+        let f = k - k.floor()
+        let p = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
+        p * p * (3.0 - 2.0 * p)
+      }
+      c.box(ty=-5.0 * lift, fn() {
+        @sf.drawable(
+          c,
+          if t.dark {
+            "stillfail_mark_dark"
+          } else {
+            "stillfail_mark"
+          },
+          56.0,
+        )
+        |> ignore
+      })
+      |> ignore
+      match label {
+        Some(s) => {
+          let shown = now || c.now() - since > 1000.0
+          if !shown {
+            c.wake_in(1000.0 - (c.now() - since))
+          }
+          c.box(opacity=if shown { 1.0 } else { 0.0 }, fn() {
+            c.text(s, size=13.0, color=t.p.muted, center=true, line=18.0)
+            |> ignore
+          })
+          |> ignore
+        }
+        None => ()
+      }
+    },
+  )
+  |> ignore
+}
+
+///|
+let splash_first : Ref[Double] = { val: -1.0 }
+
+///|
+fn splash_since(c : @ui.Ctx) -> Double {
+  if splash_first.val < 0.0 {
+    splash_first.val = c.now()
+  }
+  splash_first.val
+}
+
+///|
+/// Signed out (SignIn.kt SignInScreen): the illustration, what still.fail is for, and 登录或注册.
+fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
+  let t = @sf.theme()
+  let busy = (src.signing_in)()
+  c.box(
+    w=Fill(1.0),
+    h=Fill(1.0),
+    padx=30.0,
+    pady=40.0,
+    gap=12.0,
+    align=ACenter,
+    justify=JCenter,
+    fn() {
+      @sf.drawable(
+        c,
+        if t.dark {
+          "illus_sign_in_dark"
+        } else {
+          "illus_sign_in"
+        },
+        dmin(300.0, c.width - 60.0),
+      )
+      |> ignore
+      c.box(pt=10.0, fn() {
+        c.text(
+          tr("android-settings.signIn.title"),
+          size=28.0,
+          weight=700,
+          color=t.p.text,
+          wrap=false,
+        )
+        |> ignore
+      })
+      |> ignore
+      c.text(
+        tr("android-settings.signIn.note"),
+        size=15.0,
+        color=t.p.muted,
+        center=true,
+        w=Fill(1.0),
+        line=21.0,
+      )
+      |> ignore
+      c.box(h=Px(6.0), fn() {  }) |> ignore
+      let id = c.id("sign-in")
+      if c.clicked(id) && !busy {
+        (src.sign_in)()
+      }
+      c.box(
+        dir=Row,
+        w=Fill(1.0),
+        h=Px(50.0),
+        radius=25.0,
+        bg=if c.pressed(id) {
+          @sf.mix(t.p.text, 0.85, t.p.bg)
+        } else {
+          t.p.text
+        },
+        align=ACenter,
+        justify=JCenter,
+        id~,
+        fn() {
+          c.text(
+            if busy {
+              tr("common.opening")
+            } else {
+              tr("android-settings.signIn.google")
+            },
+            size=16.0,
+            weight=600,
+            color=t.p.bg,
+            wrap=false,
+          )
+          |> ignore
+        },
+      )
+      |> ignore
+      c.text(
+        tr("android-settings.signIn.many"),
+        size=12.0,
+        color=t.p.muted,
+        wrap=false,
+      )
+      |> ignore
+    },
+  )
+  |> ignore
+}
+
+///|
+/// Signed in, with no workspace yet (Workspaces.kt Landing): said so. (Making one, or joining by an invitation, is
+/// a later slice's.)
+fn no_workspace(c : @ui.Ctx, ws : Json?) -> Unit {
+  let t = @sf.theme()
+  let email = match ws {
+    Some(Array(a)) if a.length() > 0 => text(field(Some(a[0]), "account"), "email")
+    _ => ""
+  }
+  c.box(
+    w=Fill(1.0),
+    h=Fill(1.0),
+    padx=24.0,
+    pady=40.0,
+    gap=12.0,
+    align=ACenter,
+    fn() {
+      @sf.drawable(
+        c,
+        if t.dark {
+          "illus_sign_in_dark"
+        } else {
+          "illus_sign_in"
+        },
+        dmin(260.0, c.width - 48.0),
+      )
+      |> ignore
+      c.text(
+        tr("android-misc.workspace.none"),
+        size=22.0,
+        weight=700,
+        color=t.p.text,
+        center=true,
+        w=Fill(1.0),
+      )
+      |> ignore
+      c.text(
+        fill("android-misc.workspace.none.lead", [
+          ("app", "still.fail"),
+          ("email", email),
+        ]),
+        size=14.0,
+        color=t.p.muted,
+        center=true,
+        w=Fill(1.0),
+        line=20.0,
+      )
+      |> ignore
+    },
+  )
+  |> ignore
+}
+
+///|
+fn dmin(a : Double, b : Double) -> Double {
+  if a < b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+fn dmax(a : Double, b : Double) -> Double {
+  if a > b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+/// How far something opened at `at` has come in (0 … 1, eased out over `ms`): all the way at once in screenshots.
+fn opening(c : @ui.Ctx, at : Double, ms : Double) -> Double {
+  if c.stable() {
+    return 1.0
+  }
+  let p = (c.now() - at) / ms
+  if p >= 1.0 {
+    return 1.0
+  }
+  c.request_frame()
+  let q = 1.0 - (if p < 0.0 { 0.0 } else { p })
+  1.0 - q * q * q
+}

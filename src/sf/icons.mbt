@@ -47,11 +47,15 @@ let spin_frames = 24
 ///|
 /// The spinner (styles/spinner.css.ts): a ring of line_strong, a quarter of
 /// it in the accent, turning in 0.8s; 14, or 12 in a line of small text.
+/// `sweep` (of a turn) and `period` for other rings that turn (a chat's mark
+/// at work: three quarters, 1.2s).
 pub fn spinner(
   c : @ui.Ctx,
   size? : Double = 14.0,
   ring? : Int64,
   arc? : Int64,
+  sweep? : Double = 0.25,
+  period? : Double = 800.0,
 ) -> Int {
   let t = theme()
   let ring = ring.unwrap_or(t.p.line_strong)
@@ -60,11 +64,12 @@ pub fn spinner(
     0
   } else {
     c.request_frame()
-    let turns = c.now() / 800.0
+    let turns = c.now() / period
     ((turns - turns.floor()) * spin_frames.to_double()).to_int() % spin_frames
   }
   let px = px_of(c, size)
-  let key = "mem:sf/spin/\{px}/\{ring}/\{arc}/\{frame}"
+  let key = "mem:sf/spin/\{px}/\{ring}/\{arc}/\{frame}" +
+    (if sweep != 0.25 { "/\{sweep}" } else { "" })
   if !made.contains(key) {
     made[key] = true
     // a border 2 wide inside the box: its middle 1 in from the edge
@@ -85,7 +90,12 @@ pub fn spinner(
     let whole = Art::new(unit)
     whole.stroke(circle(0.0, 2.0 * pi, 48), 2.0, true)
     let top = Art::new(unit)
-    top.stroke(circle(-0.75 * pi + turn, -0.25 * pi + turn, 12), 2.0, false)
+    let from = -0.75 * pi + turn
+    top.stroke(
+      circle(from, from + sweep * 2.0 * pi, (48.0 * sweep).ceil().to_int()),
+      2.0,
+      false,
+    )
     let a = whole.cover(px)
     let b = top.cover(px)
     // the arc over the ring, as one picture

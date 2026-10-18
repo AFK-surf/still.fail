@@ -421,9 +421,11 @@ pub fn Ctx::text(
   wrap? : Bool = true,
   w? : Size = Auto,
   line? : Double = 0.0,
+  center? : Bool = false,
 ) -> Int {
   let i = self.alloc(kind_text)
   let n = self.nodes[i]
+  n.center = center
   n.line_h = line
   n.text = s
   n.font_size = size

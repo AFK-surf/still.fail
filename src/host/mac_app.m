@@ -353,6 +353,32 @@ static void run_script_step(int step) {
     }
     if (step > 81 && step <= 91) mb_cb.pointer(1, 5 + (step - 81) * 20, 400, 0);
     [v requestFrame];
+  } else if (strcmp(script, "home") == 0) {
+    // still.fail's Home (APP=sffix, made-up chats; or APP=stillfail): the list (at MBUI_SHOT_AT, 30 by default: later
+    // for the core's first answers); the workspaces' sheet from the name; closed, the first row tapped: its chat
+    // pushed; swiped back from the left edge, held halfway. MBUI_HOME_READONLY=1 stops before the row (a real
+    // account's chats are not opened).
+    static int at = -1;
+    if (at < 0) at = getenv("MBUI_SHOT_AT") ? atoi(getenv("MBUI_SHOT_AT")) : 30;
+    int k = step - at;
+    switch (k) {
+      case 0: shot("home-1"); break;
+      case 1: mb_cb.pointer(0, 110, 25, 0); mb_cb.pointer(2, 110, 25, 0); break;
+      case 30: shot("home-2-workspaces"); break;
+      case 31: mb_cb.pointer(0, s.width / 2, 80, 0); mb_cb.pointer(2, s.width / 2, 80, 0); break;
+      case 40:
+        if (getenv("MBUI_HOME_READONLY")) exit(0);
+        mb_cb.pointer(0, s.width / 2, 176, 0); mb_cb.pointer(2, s.width / 2, 176, 0);
+        break;
+      case 80: shot("home-3-chat"); break;
+      case 81: mb_cb.pointer(0, 5, 400, 0); break;
+      case 120: shot("home-4-swipe"); break;
+      case 121: mb_cb.pointer(2, 5 + 10 * 20, 400, 0); break;
+      case 170: shot("home-5-back"); break;
+      case 171: exit(0);
+    }
+    if (k > 81 && k <= 91) mb_cb.pointer(1, 5 + (k - 81) * 20, 400, 0);
+    [v requestFrame];
   } else if (strcmp(script, "shot") == 0) {
     // MBUI_SHOT_AT: the frame to take it at (later for what waits on something, as the core's first answers)
     static int at;

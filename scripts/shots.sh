@@ -5,12 +5,14 @@
 # out/shots/<name>-review.png (golden | new | differences). `kit` (macOS) and
 # `web-kit` are the demo's kit screen (MBUI_SCREEN=kit, a phone's window: rich
 # text, Markdown, pages): kit gives mac-kit (its first page) and mac-kit-swipe
-# (the next page pushed, then swiped halfway back from the left edge).
+# (the next page pushed, then swiped halfway back from the left edge). `home` (macOS) and `web-home` are still.fail's
+# Home over made-up chats (APP=sffix, src/sfapp/fixture.mbt) in a phone's window: home gives mac-home (the list),
+# mac-home-sheet (the workspaces' sheet) and mac-home-swipe (a chat pushed, swiped halfway back).
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit web web-kit ios android}
+PLATFORMS=${*:-mac kit home web web-kit web-home ios android}
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
 fi
@@ -30,6 +32,17 @@ for p in $PLATFORMS; do
       cp out/shot-kit/kit-1-root.png out/shots/mac-kit.png
       cp out/shot-kit/kit-3-swipe.png out/shots/mac-kit-swipe.png
       names="mac-kit mac-kit-swipe" ;;
+    home)
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-home; mkdir -p out/shot-home
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_SCRIPT=home MBUI_SHOT_DIR=$PWD/out/shot-home ./_build/native/release/build/sffix/sffix.exe >/dev/null
+      cp out/shot-home/home-1.png out/shots/mac-home.png
+      cp out/shot-home/home-2-workspaces.png out/shots/mac-home-sheet.png
+      cp out/shot-home/home-4-swipe.png out/shots/mac-home-swipe.png
+      names="mac-home mac-home-sheet mac-home-swipe" ;;
+    web-home)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-home.png ;;
     web-kit)
       bash scripts/web.sh build >/dev/null
       QUERY=MBUI_SCREEN=kit NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-kit.png ;;

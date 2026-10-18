@@ -108,6 +108,7 @@ fn Ctx::emit_text(
   oy : Double,
   color : Int64,
   alpha : Double,
+  center_in? : Double = -1.0,
 ) -> Unit {
   let s = tl.shaped
   let n = s.starts.length()
@@ -129,7 +130,13 @@ fn Ctx::emit_text(
     if g.gw <= 0.0 {
       continue
     }
-    let gx = ((ox + tl.xs[c] + g.ox) * sc).round() / sc
+    // centred: each line by half of what it leaves of the box
+    let dx = if center_in >= 0.0 && line < tl.line_w.length() {
+      dmax((center_in - tl.line_w[line]) / 2.0, 0.0)
+    } else {
+      0.0
+    }
+    let gx = ((ox + dx + tl.xs[c] + g.ox) * sc).round() / sc
     let gy = ((top + tl.ascent + g.oy) * sc).round() / sc
     self.push_inst(
       gx,
@@ -206,7 +213,19 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   if n.kind == kind_text {
     match n.tl {
-      Some(tl) => self.emit_text(tl, n.x + n.pad_l, n.y + n.pad_t, n.color, alpha)
+      Some(tl) =>
+        self.emit_text(
+          tl,
+          n.x + n.pad_l,
+          n.y + n.pad_t,
+          n.color,
+          alpha,
+          center_in=if n.center {
+            dmax(n.fw - n.pad_l - n.pad_r, 0.0)
+          } else {
+            -1.0
+          },
+        )
       None => ()
     }
     return

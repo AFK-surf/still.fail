@@ -98,6 +98,8 @@ struct Node {
   mut weight : Int
   mut color : Int64
   mut wrap : Bool
+  // a wrapped text's lines each centred across its box
+  mut center : Bool
   // a line's height (0: the font's own)
   mut line_h : Double
   mut fit : Fit
@@ -173,6 +175,7 @@ fn Node::new() -> Node {
     weight: 400,
     color: 0x000000FFL,
     wrap: true,
+    center: false,
     line_h: 0.0,
     fit: FitCover,
     fade: true,
@@ -237,6 +240,7 @@ fn Node::reset(self : Node) -> Unit {
   self.weight = 400
   self.color = 0x000000FFL
   self.wrap = true
+  self.center = false
   self.line_h = 0.0
   self.fit = FitCover
   self.fade = true
