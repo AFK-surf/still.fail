@@ -43,7 +43,15 @@ const SPECS: Record<string, Spec> = {
 };
 
 export function specOf(topic: Topic): Spec | null {
-  return SPECS[topic.topic] ?? null;
+  return SPECS[topic.topic] ?? MODULES.get(topic.topic) ?? null;
+}
+
+/// Modules' topics' keyed lists (module.ts), by topic name: each under its module's name, so none is the core's.
+const MODULES = new Map<string, Spec>();
+
+export function addSpec(topic: string, spec: Spec): void {
+  if (topic in SPECS) throw new Error(`the core's own topic: ${topic}`);
+  MODULES.set(topic, spec);
 }
 
 /// An item's key: the fields' values (a field missing is null).

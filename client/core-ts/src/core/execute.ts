@@ -117,6 +117,8 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       case "draftGet": {
         return Effect.succeed(inner.composers.readDraft(call.station, call.chat));
       }
+      case "module":
+        return call.call.def.run(call.call.params, { progress, client: at[0], id: at[1], trace: ctx });
       case "migrate":
         return Effect.gen(function* () {
           if (call.accounts !== null) yield* inner.accounts.migrate(call.accounts);

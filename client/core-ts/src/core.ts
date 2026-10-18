@@ -53,6 +53,7 @@ import * as publish from "./views/publish.ts";
 import * as lockCalls from "./views/lock.ts";
 import * as vaultCalls from "./views/vault.ts";
 import { isObject } from "./util.ts";
+import { type CoreModule, type ModuleCall, installModules } from "./module.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
 export const CREDENTIAL_KEY = "credential";
@@ -77,6 +78,8 @@ export type Options = {
   /// Who the accounts are with (account-provider.ts): still.fail cloud unless the embedding app gives another
   /// (`commaAccountProvider`, comma.ts).
   account?: AccountProviderFactory;
+  /// What the app adds besides the platform (module.ts, docs/core-modules.md): installed once the rest is.
+  modules?: readonly CoreModule[];
 };
 
 /// What the core holds: every module.
@@ -112,6 +115,8 @@ export class Inner {
   adb!: Adb;
   viewCalls!: ViewCalls;
   router!: Router;
+  /// The calls of the app's modules, by full name (module.ts).
+  moduleCalls = new Map<string, ModuleCall<any>>();
   /// The calls under way that a UI can stop, by `client/id`.
   calls = new Map<string, Fiber.Fiber<unknown, unknown>>();
   doing = new Doing();
@@ -229,6 +234,7 @@ export class Core {
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
       hooks.device = (_inner, facts) => inner.changelog.device(facts);
       inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
+      inner.moduleCalls = installModules(inner, options.modules ?? []);
       // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
       let reconciling = false;
       inner.cloudSync.onReach = () => {
@@ -335,7 +341,7 @@ export class Core {
     const asked = heavy(name) ? null : params;
     let call: Call;
     try {
-      call = parseCall(name, params, bytes);
+      call = parseCall(name, params, bytes, inner.moduleCalls);
     } catch (e) {
       inner.host.emit(client, answer(id, { err: asCoreError(e) }));
       return;

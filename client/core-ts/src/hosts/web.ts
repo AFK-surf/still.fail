@@ -8,6 +8,7 @@
 // starts from its database.
 import { Effect, Queue, type Scope } from "effect";
 import { Core } from "../core.ts";
+import type { CoreModule } from "../module.ts";
 import { HostError } from "../error.ts";
 import type { BindOptions, Iroh } from "../iroh.ts";
 import { type BoundEndpoint, wrapIroh } from "../iroh-bindings.ts";
@@ -433,11 +434,12 @@ export type WebCore = { connect(): number; disconnect(client: number): void; rec
 /// A core in this worker (as the Rust core's wasm `start` was): `emit(client, message)` gets what it says to each client;
 /// `testChannel` the page is the test channel's. A bug that ends a fiber ends it as a panic ended the Rust core's:
 /// `onFatal` is told, with the error itself (its stack is the only clue where), and the worker tells the pages and closes.
-export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>): Promise<WebCore> {
+/// `modules`: what the app adds to the core (module.ts).
+export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>, modules: readonly CoreModule[] = []): Promise<WebCore> {
   service.name = "stillfail-web";
   service.os = "browser";
   const host = new WebHost(emit, testChannel, loadSqlite);
-  return Core.create(host, { iroh: webIroh(loadIroh) }).then((core) => {
+  return Core.create(host, { iroh: webIroh(loadIroh), modules }).then((core) => {
     core.inner.runner.onDefect = (error) => onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }), error);
     core.keepTime();
     return {
