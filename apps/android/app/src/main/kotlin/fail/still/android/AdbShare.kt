@@ -37,7 +37,11 @@ import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import fail.still.android.data.t
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.NetworkInterface
+import java.net.Socket
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -45,9 +49,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -265,6 +271,7 @@ class AdbShareService : Service() {
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun begin(station: String) {
         job?.cancel()
         ports?.stop()
@@ -283,7 +290,9 @@ class AdbShareService : Service() {
             contentResolver.registerContentObserver(AdbShare.wirelessUri(), false, observer)
             coroutineContext.job.invokeOnCompletion { contentResolver.unregisterContentObserver(observer) }
             launch {
-                combine(found.ports, wireless) { ports, on -> if (on) ports else AdbPorts.Found(null, null) }.distinctUntilChanged().collect { (connect, pair) ->
+                combine(found.ports, wireless) { ports, on -> if (on) ports else AdbPorts.Found(emptyList(), null) }.distinctUntilChanged()
+                    .mapLatest { AdbPorts.Found(listOfNotNull(AdbPorts.live(it.connects)), it.pair) }.distinctUntilChanged().collect { (connects, pair) ->
+                    val connect = connects.firstOrNull()
                     try {
                         core.call("adb.share", buildJsonObject {
                             put("station", station)
@@ -336,9 +345,12 @@ class AdbShareService : Service() {
  * on the same Wi-Fi are announced too.
  */
 class AdbPorts(context: Context) {
-    data class Found(val connect: Int?, val pair: Int?)
+    /** `connects`: adb's ports announced, the latest first. An OPPO goes on announcing the one before Wireless
+     *  debugging was turned off and on again, under its old name, beside the new one under "<name> (2)" (2026-10-18:
+     *  the latest found was the old one, refused, and the station's adb never reached the phone). */
+    data class Found(val connects: List<Int>, val pair: Int?)
 
-    val ports = MutableStateFlow(Found(null, null))
+    val ports = MutableStateFlow(Found(emptyList(), null))
     private val nsd = context.getSystemService(NsdManager::class.java)
     private val main = Handler(Looper.getMainLooper())
     private val listeners = mutableListOf<NsdManager.DiscoveryListener>()
@@ -347,8 +359,8 @@ class AdbPorts(context: Context) {
     private val queue = ArrayDeque<Pair<NsdServiceInfo, (Int) -> Unit>>()
 
     fun start() {
-        discover("_adb-tls-connect._tcp") { port -> ports.update { it.copy(connect = port) } }
-        discover("_adb-tls-pairing._tcp") { port -> ports.update { it.copy(pair = port) } }
+        discover("_adb-tls-connect._tcp") { found -> ports.update { it.copy(connects = found) } }
+        discover("_adb-tls-pairing._tcp") { found -> ports.update { it.copy(pair = found.firstOrNull()) } }
     }
 
     fun stop() {
@@ -356,15 +368,15 @@ class AdbPorts(context: Context) {
         listeners.clear()
     }
 
-    private fun discover(type: String, set: (Int?) -> Unit) {
+    private fun discover(type: String, set: (List<Int>) -> Unit) {
         // By the service's name: one goes as Wireless debugging (or the dialog) closes, another comes as it opens again.
         val found = LinkedHashMap<String, Int>()
         val listener = object : NsdManager.DiscoveryListener {
             override fun onServiceFound(info: NsdServiceInfo) {
-                resolve(info) { port -> main.post { found[info.serviceName] = port; set(found.values.lastOrNull()) } }
+                resolve(info) { port -> main.post { found.remove(info.serviceName); found[info.serviceName] = port; set(found.values.reversed()) } }
             }
             override fun onServiceLost(info: NsdServiceInfo) {
-                main.post { found.remove(info.serviceName); set(found.values.lastOrNull()) }
+                main.post { found.remove(info.serviceName); set(found.values.reversed()) }
             }
             override fun onDiscoveryStarted(type: String) {}
             override fun onDiscoveryStopped(type: String) {}
@@ -409,6 +421,16 @@ class AdbPorts(context: Context) {
                 main.post { resolving = false; next() }
             }
         })
+    }
+
+    companion object {
+        /** Of adb's ports announced (the latest first), the one adbd listens on: the first that takes a connection
+         *  here, else the latest (adbd still starting). */
+        suspend fun live(connects: List<Int>): Int? = withContext(Dispatchers.IO) {
+            connects.firstOrNull { port ->
+                runCatching { Socket().use { it.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), port), 500) } }.isSuccess
+            } ?: connects.firstOrNull()
+        }
     }
 
     /** Whether an announced host is this phone. */
