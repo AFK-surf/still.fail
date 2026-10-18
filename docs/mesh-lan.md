@@ -23,6 +23,15 @@ its punched paths went quiet on 2026-10-17 is not known. A phone says how its wa
 (docs/telemetry.md): which opened, went or was chosen, round trips and packets a tick before and after, and the first
 ping missed on each.
 
+On 2026-10-18 one way a direct path goes dark was found, on an Android emulator on studio driving the station's
+desktop: the path carried small packets both ways, and went dark the moment the phone sent something larger (a picture
+pasted, 116 KB) until iroh let it go 15 s later, the picture then going through the relay. Linux (Android) sends such a
+burst as one segmented datagram (UDP GSO, noq-udp); the emulator's network accepts it and drops all of it, and every
+retransmission is a burst again. With GSO off on Android (vendor/noq-udp, one datagram a sendmsg) eight pastes in a row,
+four of them right after the app was killed and opened again, reached the station within about 1 s of the tap; with it
+on, each of eight took 16–19 s. Whether a real phone's network drops such bursts too is not known; with GSO off it no
+longer matters.
+
 ## How
 
 - The station says its LAN addresses with its answer to a device's first credential: `lan`, `ip:port` for each private
