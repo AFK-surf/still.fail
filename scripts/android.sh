@@ -43,7 +43,7 @@ case "${1:-build}" in
       IMG=$(ls -d $SDK/system-images/android-3*/google_apis*/arm64-v8a 2>/dev/null | sort | tail -1)
       PKG="system-images;$(echo $IMG | sed "s|$SDK/system-images/||; s|/|;|g")"
       echo "creating $AVD from $PKG"
-      echo no | $SDK/cmdline-tools/latest/bin/avdmanager create avd -n $AVD -k "$PKG" -d pixel_7 >/dev/null
+      echo no | $(ls -d $SDK/cmdline-tools/*/bin | tail -1)/avdmanager create avd -n $AVD -k "$PKG" -d pixel_7 >/dev/null
     fi
     if ! $ADB devices | grep -q "^$SERIAL"; then
       nohup $SDK/emulator/emulator -avd $AVD -port $PORT -no-window -no-audio -no-boot-anim \
@@ -75,6 +75,6 @@ case "${1:-build}" in
   delete)
     $ADB -s $SERIAL emu kill 2>/dev/null || true
     sleep 3
-    $SDK/cmdline-tools/latest/bin/avdmanager delete avd -n $AVD
+    $(ls -d $SDK/cmdline-tools/*/bin | tail -1)/avdmanager delete avd -n $AVD
     ;;
 esac
