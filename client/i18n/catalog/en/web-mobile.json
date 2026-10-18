@@ -638,6 +638,7 @@
   "web-mobile.home.searchCancel": "Cancel",
   "web-mobile.home.searchChats": "Chats",
   "web-mobile.home.searchMessages": "Messages",
+  "web-mobile.home.searchArchived": "Archived",
   "web-mobile.home.searchNone": "No results",
   "web-mobile.home.searchUpdate": "Update to search",
   "web-mobile.history.stepUnread": "Couldn't load: {error}",

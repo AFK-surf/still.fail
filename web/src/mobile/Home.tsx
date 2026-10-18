@@ -176,7 +176,7 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
         {chats.length > 0 && (
           <section>
             <SectionHeader title={t("web-mobile.home.searchChats")} />
-            {chats.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead="agents" />)}
+            {chats.map((item) => (item.foundText ? <FoundChatRow key={`${item.station}/${item.id}`} item={item} /> : <ChatRow key={`${item.station}/${item.id}`} item={item} lead="agents" />))}
             {!kind && view?.chatsMore && more("chat")}
           </section>
         )}
@@ -238,7 +238,7 @@ function FoundItemRow({ item }: { item: SearchItem }) {
   );
 }
 
-/** A message the words found: its chat, who said it and when, over the line that has them (those drawn out); tapped,
+/** A message the words found: the line that has them (those drawn out), who said it and when, over its chat; tapped,
  *  its chat opens at it, the words marked there (../jumpTo.ts). */
 function FoundRow({ found, words }: { found: FoundMessage; words: string[] | undefined }) {
   const app = useApp();
@@ -248,11 +248,29 @@ function FoundRow({ found, words }: { found: FoundMessage; words: string[] | und
       onClick={() => { jumpTo({ station: found.station, thread: found.thread, seq: found.seq, words }); app.open(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`); }}>
       <span className={css.mChatText}>
         <span className={css.mChatLine1}>
-          <span className={css.mFoundChat}>{item.title}</span>
+          <span className={css.mFoundChat}><Marked text={found.text} marks={found.marks} className={css.mFoundHit} /></span>
           <span className={css.mFoundMeta}>{[found.by, found.time?.createdAt?.ago].filter(Boolean).join(" · ")}</span>
         </span>
         <span className={css.mChatLine2}>
-          <span className={css.mLastText}><Marked text={found.text} marks={found.marks} className={css.mFoundHit} /></span>
+          <span className={css.mLastText}>{item.title}</span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** A chat found by words its title shows late or not at all: the part of it that has them first, its title under it. */
+function FoundChatRow({ item }: { item: ChatItem }) {
+  const app = useApp();
+  return (
+    <button type="button" className={css.mChatRow} onClick={() => app.open(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`)}>
+      <span className={css.mChatText}>
+        <span className={css.mChatLine1}>
+          <span className={css.mFoundChat}><Marked text={item.foundText ?? ""} marks={item.foundMarks ?? []} className={css.mFoundHit} /></span>
+          <span className={css.mFoundMeta}>{[item.archived ? t("web-mobile.home.searchArchived") : null, item.time?.lastActiveAt?.ago].filter(Boolean).join(" · ")}</span>
+        </span>
+        <span className={css.mChatLine2}>
+          <span className={css.mLastText}>{item.title}</span>
         </span>
       </span>
     </button>

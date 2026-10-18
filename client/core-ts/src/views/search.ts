@@ -49,7 +49,7 @@ export function stationTopic(station: string, view: Topic): Topic {
 const SEEN_CHARS = 12;
 
 /// A chat found by words its title shows late (cut where it is listed) or not at all: the part of it that has them
-/// (what its station said of it, else its title) as its second line, so chats alike are told apart by why they were found.
+/// (what its station said of it, else its title), shown first, so chats alike are told apart by why they were found.
 function foundChat(item: J, said: string | undefined, words: string[]): J {
   const title = String(item.title ?? "");
   const at = title.toLowerCase().indexOf(words[0] ?? "");
@@ -58,7 +58,7 @@ function foundChat(item: J, said: string | undefined, words: string[]): J {
   if (!words.every((w) => source.toLowerCase().includes(w))) return item;
   const found = refs.excerpt(source, words);
   if (found.text === "") return item;
-  return { ...item, foundText: found.text, foundMarks: found.marks, stateText: item.archived === true ? `${t("core-views.search.archived")} · ${found.text}` : found.text };
+  return { ...item, foundText: found.text, foundMarks: found.marks };
 }
 
 /// A chat found archived: marked so, its second line saying so where a list's says where it stands.

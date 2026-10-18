@@ -1555,7 +1555,7 @@ data class ChatItem (
 	/// A chat a search found in its station's archive (`search`). Absent otherwise.
 	val archived: Boolean? = null,
 	/// A chat a search found by words its title shows late or not at all: the part of it that has them, on one line
-	/// (`search`; its `stateText` says it too). Absent otherwise.
+	/// (`search`: listed first, its title under it). Absent otherwise.
 	val foundText: String? = null,
 	/// Where the words are in `foundText`.
 	val foundMarks: List<TextMark>? = null

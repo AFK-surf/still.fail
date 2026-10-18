@@ -605,6 +605,7 @@
   "web-mobile.home.searchCancel": "取消",
   "web-mobile.home.searchChats": "对话",
   "web-mobile.home.searchMessages": "消息",
+  "web-mobile.home.searchArchived": "已归档",
   "web-mobile.home.searchNone": "未找到结果",
   "web-mobile.home.searchUpdate": "更新后才能搜索",
   "web-mobile.history.stepUnread": "无法读取：{error}",
