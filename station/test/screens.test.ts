@@ -23,7 +23,8 @@ import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle } from "./hub-fakes.ts";
-import { memoryMesh } from "./memory-mesh.ts";
+import { memoryMesh, vanish } from "./memory-mesh.ts";
+import { Superseded } from "../src/mesh/superseded.ts";
 
 const member: Viewer = { sub: "u1", email: "pat@example.com", name: "Pat", role: "member", workspace: "w", device: "d" };
 const reader: Viewer = { sub: "u2", email: "vic@example.com", name: "Vic", role: "viewer", workspace: "w", device: "e" };
@@ -262,6 +263,55 @@ test("who is on a screen: every view's person, told to all on it and in the list
   await driver.stream.finish();
   await driver.served;
   assert.deepEqual(hub.people("fake"), { viewers: [], controlledBy: [] });
+});
+
+test("an app killed with a view open: connecting again, its dead connection is closed and its view lets the screen go; a live one's stays", async () => {
+  const hub = new ScreenHub();
+  hub.add(new FakeSource());
+  const mesh = memoryMesh();
+  const station = await mesh.bind({ secretKey: randomBytes(32), alpns: [ALPN], relayUrls: [] });
+  const superseded = new Superseded();
+  const key = randomBytes(32);
+  /// The device's process (one key, as Android's app and every tab of a phone's Chrome have), its view driving.
+  const app = async () => {
+    const device = await mesh.bind({ secretKey: key, alpns: [ALPN], relayUrls: [] });
+    const accepting = station.accept();
+    const conn = await device.connect({ id: station.id() }, ALPN);
+    const theirs = (await accepting)!;
+    const asked = superseded.arrived(theirs);
+    const stream = await conn.openBi();
+    await writeLine(stream, { method: "POST", path: "/admin/api/screens/fake/view", headers: {}, screen: { codecs: ["h264"], control: true } });
+    const incoming = (await theirs.acceptBi())!;
+    const heard = new Reader(incoming);
+    const served = answerScreen(hub, incoming, heard.carry, await heard.line(), member, () => true);
+    const client = new Reader(stream);
+    await client.line();
+    await until(new FrameIn(stream, client.carry), KIND.video);
+    return { device, theirs, asked, served };
+  };
+  const first = await app();
+  await settle();
+  assert.deepEqual(hub.people("fake").controlledBy, ["Pat"]);
+  // Another tab of the same phone: the first answers, and keeps its view.
+  const tab = await app();
+  await tab.asked;
+  await settle();
+  assert.equal(first.theirs.isClosed(), false, "a live client of the same key is left alone");
+  assert.deepEqual(hub.people("fake").controlledBy, ["Pat", "Pat"]);
+  // Both killed (force-stopped): nothing tells the station. Opened again: both found gone, their views ended.
+  vanish(first.device);
+  vanish(tab.device);
+  await settle();
+  assert.deepEqual(hub.people("fake").controlledBy, ["Pat", "Pat"], "a killed app's views are held until its key comes again");
+  const again = await app();
+  await again.asked;
+  await first.served;
+  await tab.served;
+  await settle();
+  assert.equal(first.theirs.isClosed(), true);
+  assert.equal(tab.theirs.isClosed(), true);
+  assert.equal(again.theirs.isClosed(), false);
+  assert.deepEqual(hub.people("fake"), { viewers: ["Pat"], controlledBy: ["Pat"] });
 });
 
 test("a preview (a link's card in a chat) only looks, is not among those on it, and only of a source that can be previewed", async () => {

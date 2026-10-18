@@ -94,6 +94,8 @@ class End implements Stream {
 
 class Conn implements Connection {
   peer!: Conn;
+  /// Its process is gone without a word (killed): it answers nothing, and nothing tells its peer.
+  silent = false;
   #incoming: End[] = [];
   #accepting: ((s: End | null) => void) | null = null;
   #ends: End[] = [];
@@ -150,7 +152,11 @@ class Conn implements Connection {
   }
   close(_code: number, reason: string): void {
     this.gone(reason);
-    this.peer.gone(reason);
+    if (!this.silent) this.peer.gone(reason);
+  }
+  /// The addon's: whether the other end is still there, at once (nothing here takes time).
+  async answers(_withinMs: number): Promise<boolean> {
+    return this.#reason === null && !this.peer.silent;
   }
   isClosed(): boolean {
     return this.#reason !== null;
@@ -216,10 +222,16 @@ class MemoryEndpoint implements Endpoint {
     there.#arrive(theirs);
     return mine;
   }
+  /// Its process killed: gone from the mesh, its connections left open on the other side, never answering again.
+  vanish() {
+    this.#closed = true;
+    if (this.#net.get(this.#id) === this) this.#net.delete(this.#id);
+    for (const c of this.#conns) c.silent = true;
+  }
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
-    this.#net.delete(this.#id);
+    if (this.#net.get(this.#id) === this) this.#net.delete(this.#id);
     for (const c of this.#conns) c.close(0, "endpoint closed");
     const take = this.#accepting;
     this.#accepting = null;
@@ -239,4 +251,9 @@ export function memoryMesh(options: { window?: number } = {}): Pick<Mesh, "bind"
       return e;
     },
   };
+}
+
+/// A device's process killed with its connections open (memoryMesh's endpoints only).
+export function vanish(endpoint: Endpoint) {
+  (endpoint as MemoryEndpoint).vanish();
 }

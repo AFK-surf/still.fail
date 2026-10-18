@@ -16,6 +16,8 @@ pulldown-cmark = { version = "=0.13.4", default-features = false }
 url = "=2.5.8"
 anyhow = "1"
 base64 = "0.22"
+# A datagram that asks whether a connection's other end is still there (`Connection::answers`).
+bytes = "1"
 hex = "0.4"
 iroh = { version = "=1.0.3" }
 iroh-mdns-address-lookup = "=0.4.0"

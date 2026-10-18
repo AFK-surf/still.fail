@@ -18,6 +18,7 @@ import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
 import { GUEST_ALPN, Guests } from "../publish/guest.ts";
 import { bindStation } from "./native.ts";
 import { lanAddrs } from "./lan.ts";
+import { Superseded } from "./superseded.ts";
 
 export const MeshLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -114,9 +115,12 @@ export const MeshLive = Layer.effectDiscard(
       yield* Effect.addFinalizer(() => Effect.sync(() => (cloud.state.toolCalls = null)));
       // Visitors of published snapshots (publish/guest.ts): no credential, nothing but the snapshots.
       const guests = new Guests(store);
+      // A member's device connecting again: its connections left by a process that died are found and closed.
+      const superseded = new Superseded();
       for (;;) {
         const conn = yield* Effect.promise(() => endpoint.accept());
         if (!conn) return;
+        if (conn.alpn().equals(ALPN) || conn.alpn().equals(FORMER_ALPN)) void superseded.arrived(conn);
         yield* FiberSet.run(
           connections,
           Effect.tryPromise(() =>

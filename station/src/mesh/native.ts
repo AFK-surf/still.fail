@@ -20,6 +20,9 @@ export type Connection = {
   paths?(): { selected: boolean; relay?: string | null; ip?: string | null; rttMs: number; txPackets: number; lostPackets: number }[];
   acceptBi(): Promise<Stream | null>;
   openBi(): Promise<Stream>;
+  /// Whether the other end is still there: true once anything is heard from it within `withinMs` (superseded.ts).
+  /// A mesh addon from before it has none.
+  answers?(withinMs: number): Promise<boolean>;
   close(code: number, reason: string): void;
   isClosed(): boolean;
   closed(): Promise<string>;

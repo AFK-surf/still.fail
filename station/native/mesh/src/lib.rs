@@ -10,6 +10,7 @@ mod local;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::{Duration, Instant};
 
 use iroh::endpoint::{Connection as IrohConnection, QuicTransportConfig, RecvStream, SendStream, presets::Minimal};
 use iroh::{Endpoint as IrohEndpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, SecretKey, Watcher};
@@ -396,6 +397,39 @@ impl Connection {
                 lost_packets: stats.lost_packets as f64,
             }
         }).collect()
+    }
+
+    /// Whether the other end is still there: asked with a datagram (which a live end acknowledges at once) a few times
+    /// within `within_ms`, true as soon as anything is heard from it. A process killed with the connection open says
+    /// nothing, and the connection would only go at QUIC's idle timeout, half a minute on. An end that takes no
+    /// datagrams is not asked, and counts as there.
+    #[napi]
+    pub async fn answers(&self, within_ms: u32) -> bool {
+        let heard = self.inner.stats().udp_rx.datagrams;
+        let within = Duration::from_millis(within_ms.into());
+        let deadline = Instant::now() + within;
+        let mut ask = Instant::now();
+        loop {
+            if self.inner.close_reason().is_some() {
+                return false;
+            }
+            if self.inner.stats().udp_rx.datagrams > heard {
+                return true;
+            }
+            let now = Instant::now();
+            if now >= deadline {
+                return false;
+            }
+            if now >= ask {
+                match self.inner.send_datagram(bytes::Bytes::from_static(&[0])) {
+                    Ok(()) => {}
+                    Err(iroh::endpoint::SendDatagramError::ConnectionLost(_)) => return false,
+                    Err(_) => return true,
+                }
+                ask = now + within / 3;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
     }
 
     #[napi]
