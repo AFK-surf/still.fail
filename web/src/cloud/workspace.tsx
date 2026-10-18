@@ -37,6 +37,7 @@ import { CHANGEABLE, workspaceIndexOf, workspaceKeyLabel } from "../keymap.ts";
 import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
 import { NotificationsPage } from "../pages/Notifications.tsx";
+import { ArchivingPage } from "../pages/Archiving.tsx";
 import { PermissionsPage } from "../pages/Permissions.tsx";
 import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
@@ -176,6 +177,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/stations" element={<StationsIndex entry={entry} />} />
             <Route path="settings/stations/:station" element={<StationSettings entry={entry} />} />
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
+            <Route path="settings/archive" element={<ArchivingPage back={`/w/${entry.id}/settings`} workspace={entry.id} />} />
             <Route path="settings/automatic-decisions" element={<AutomaticDecisionsSettings entry={entry} />} />
             <Route path="settings/automatic-decisions/completion" element={<AutomaticDecisionCompletionSettings entry={entry} />} />
             <Route path="settings/automatic-decisions/completion/:station" element={<AutomaticDecisionPolicySettings entry={entry} />} />

@@ -391,6 +391,8 @@ export function stationApi(t: StationCall) {
   const ops = bindStationOperations((name, params) => t.op(name, params));
   return {
     /** A chat kept (never offered for archiving, nor archived on its own), or let go (`kept: false`). */
+    /** How the station archives chats on its own (设置 › 归档): its managers'. */
+    saveArchiving: (input: { days: number; slackDays: number; reviewed: boolean }) => ops.archivingSave(input),
     keepChat: (thread: number, kept = true) => ops.chatKeep(kept ? { thread } : { thread, kept }),
     stop: (key: string) => ops.sessionStop<{ ok: true }>({ key }),
     /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */

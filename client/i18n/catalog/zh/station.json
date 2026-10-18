@@ -168,6 +168,8 @@
   "station.decisions.managersOnlyRefresh": "只有 workspace 管理员能刷新决策模型",
   "station.decisions.managersOnlyPolicy": "只有 workspace 管理员能改归档策略",
   "station.decisions.modelUnavailable": "配置的模型在现有 Profile 中暂不可用",
+  "station.archiving.managersOnly": "只有 workspace 管理员能修改自动归档",
+  "station.archiving.badSettings": "自动归档的设置不正确：天数要在 0 到 365 之间",
   "station.decisions.badSettings": "自动决策配置格式不正确",
   "station.decisions.pickVerified": "请选择现有 Profile 中已验证可用的决策模型",
   "station.decisions.reviewUnsupported": "此 station 暂不支持手动检查",

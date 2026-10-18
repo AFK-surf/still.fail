@@ -210,6 +210,13 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["input"] = input
         return call("automaticDecisions.policy", JsonObject(values))
     }
+    suspend fun archivingSave(days: Long, reviewed: Boolean, slackDays: Long): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["days"] = JsonPrimitive(days)
+        values["reviewed"] = JsonPrimitive(reviewed)
+        values["slackDays"] = JsonPrimitive(slackDays)
+        return call("archiving.save", JsonObject(values))
+    }
     class ConnectCreateFields : OperationFields() {
         var input: JsonElement? by field<JsonElement>("input") { it }
         var id: String? by field<String>("id") { JsonPrimitive(it) }

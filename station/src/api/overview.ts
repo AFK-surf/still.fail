@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import type { Accounts } from "../accounts/index.ts";
 import { mask } from "../accounts/index.ts";
 import type { Cloud } from "../cloud/state.ts";
-import { type Viewer, readOnly } from "../mesh/credential.ts";
+import { type Viewer, managesStation, readOnly } from "../mesh/credential.ts";
 import { platform } from "../platform/index.ts";
 import type { Lang } from "../ops/i18n.ts";
 import type { Hub } from "../sessions/hub.ts";
@@ -110,6 +110,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
   const states = sessions.map((s) => d.hub.processState(s.key));
   return {
     automaticDecisions: d.accounts ? decisionsView(d, viewer) : null,
+    archiving: archivingView(raw, viewer),
     viewer: { via: "mesh", ...viewer },
     mesh: meshStatus(d.cloud, viewer),
     connects,
@@ -152,6 +153,14 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
 function withModules(d: OverviewDeps): { modules?: { id: string; running: boolean }[] } {
   const modules = d.modules?.() ?? [];
   return modules.length === 0 ? {} : { modules };
+}
+
+/// How its chats go to the archive on their own (sessions/lifecycle.ts autoArchive): after so many days idle (0: never),
+/// Slack's sessions stopped at a block after theirs, and whether only those the archive review recommended. Everyone
+/// sees it (why their chats went); its managers change it (PUT /archiving).
+function archivingView(raw: any, viewer: Viewer) {
+  const days = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, v) : fallback);
+  return { days: days(raw?.autoArchiveDays, 1), slackDays: days(raw?.slackArchiveDays, 3), reviewed: raw?.autoArchiveReviewed === true, canEdit: managesStation(viewer) };
 }
 
 function withPermissions(d: OverviewDeps, viewer: Viewer): { permissions?: unknown } {

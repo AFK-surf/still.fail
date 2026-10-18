@@ -1208,6 +1208,23 @@ test("kept chats survive idle archiving but can be archived by hand", async () =
   await r.close();
 });
 
+test("where only what the archive review recommended is archived on its own, an idle chat waits for its recommendation", async () => {
+  const r = new Rig();
+  const later = Date.now() + 3 * 86_400_000;
+  const [key, thread] = newSession(r.hub, chat());
+  r.edit((raw: any) => { raw.autoArchiveReviewed = true; });
+  autoArchive(r.hub, later);
+  assert.equal(r.session(key).archivedAt, null, "the review is off: nothing goes");
+  r.edit((raw: any) => { raw.automaticDecisions = { completion: { enabled: true, model: "m" } }; });
+  autoArchive(r.hub, later);
+  assert.equal(r.session(key).archivedAt, null, "not recommended yet");
+  r.store.suggestArchive(key, thread.id, r.store.lastEntry(thread.id));
+  autoArchive(r.hub, later);
+  assert.equal(r.session(key).archivedBy, AUTO);
+  await settle();
+  await r.close();
+});
+
 const withProfile = (id: string, name: string, models: string[]) => (raw: any) => raw.profiles.push({ ...raw.profiles[0], id, name, models });
 
 test("a session changes profile, model and effort by hand, and is taken on by another profile when its own cannot run", async () => {

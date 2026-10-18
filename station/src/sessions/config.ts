@@ -58,6 +58,9 @@ export type HubConfig = {
   /// Sessions heard only in Slack idle this long are archived even when stopped at a block for someone (nobody sees
   /// those in the station's lists); 0: never.
   slackArchiveMs: number;
+  /// Only chats the archive review recommended are archived on their own (none while the review is off); Slack sessions
+  /// stopped at a block go after slackArchiveMs all the same.
+  autoArchiveReviewed: boolean;
 };
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
@@ -116,6 +119,7 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
     maxWarmClaude: typeof raw?.maxWarmClaude === "number" ? raw.maxWarmClaude : 4,
     autoArchiveMs: Math.trunc(Math.max(0, typeof raw?.autoArchiveDays === "number" ? raw.autoArchiveDays : 1) * 86_400_000),
     slackArchiveMs: Math.trunc(Math.max(0, typeof raw?.slackArchiveDays === "number" ? raw.slackArchiveDays : 3) * 86_400_000),
+    autoArchiveReviewed: raw?.autoArchiveReviewed === true,
   };
 }
 
