@@ -158,7 +158,19 @@ static int frames_drawn;
     }
     return;
   }
-  if (self.imeActive) [self interpretKeyEvents:@[ e ]];
+  if (self.imeActive) {
+    [self interpretKeyEvents:@[ e ]];
+    return;
+  }
+  // without a field to type in: keys that scroll the list under the pointer
+  switch (e.keyCode) {
+    case 115: mb_cb.key(8, mods); break;   // Home
+    case 119: mb_cb.key(9, mods); break;   // End
+    case 116: mb_cb.key(15, mods); break;  // Page Up
+    case 121: mb_cb.key(16, mods); break;  // Page Down
+    case 126: mb_cb.key(5, mods); break;   // up
+    case 125: mb_cb.key(6, mods); break;   // down
+  }
 }
 
 static int shift_down(void) {
@@ -181,6 +193,8 @@ static int shift_down(void) {
     mods = 1;
   } else if ([s hasPrefix:@"moveToBeginningOfLine"] || [s hasPrefix:@"moveToBeginningOfDocument"]) code = 8;
   else if ([s hasPrefix:@"moveToEndOfLine"] || [s hasPrefix:@"moveToEndOfDocument"]) code = 9;
+  else if ([s hasPrefix:@"scrollPageUp"] || [s hasPrefix:@"pageUp"]) code = 15;
+  else if ([s hasPrefix:@"scrollPageDown"] || [s hasPrefix:@"pageDown"]) code = 16;
   if ([s containsString:@"AndModifySelection"]) mods |= 1;
   if (code == 7 && shift_down()) mods |= 1;
   if (code) mb_cb.key(code, mods);

@@ -67,9 +67,10 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   c.nodes[root].w = Px(w)
   c.nodes[root].h = Px(h)
   c.with_parent(root, fn() { (g_view.val)(c) })
-  c.clicked.clear()
   let t1 = h_now()
+  // lists build their rows while laid out, and those see clicks too
   c.layout(root, 0.0, 0.0, w, h) |> ignore
+  c.clicked.clear()
   let t2 = h_now()
   c.ninst = 0
   c.next_hit_ids.clear()
@@ -288,7 +289,12 @@ fn on_key(code : Int, mods : Int) -> Unit {
       st.key(code, mods, h_now())
       h_request_frame()
     }
-    None => ()
+    None => {
+      let target = hit_in(c.scroll_ids, c.scroll_rects, c.px, c.py)
+      if target != 0 && c.list_key(target, code) {
+        h_request_frame()
+      }
+    }
   }
 }
 

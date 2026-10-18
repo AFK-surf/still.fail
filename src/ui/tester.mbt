@@ -294,9 +294,13 @@ pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
   let c = g
   let out = []
   for i in 0..<c.count {
-    let n = c.nodes[i]
-    if n.item >= 0 && n.parent >= 0 && c.nodes[n.parent].kind == kind_list {
-      out.push((n.item, n.y, n.fh))
+    if c.nodes[i].kind == kind_list {
+      let mut r = c.nodes[i].first
+      while r >= 0 {
+        let n = c.nodes[r]
+        out.push((n.item, n.y, n.fh))
+        r = n.next
+      }
     }
   }
   out
@@ -320,4 +324,123 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
     }
   }
   []
+}
+
+///|
+/// The pointer moved to (x, y), no button down.
+pub fn Tester::move(self : Tester, x : Double, y : Double) -> Unit {
+  on_pointer(1, x, y, 0)
+  self.frame()
+}
+
+///|
+fn Tester::list_state(self : Tester) -> ListState {
+  ignore(self)
+  let c = g
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.kind == kind_list {
+      match c.lists.get(n.id) {
+        Some(st) => return st
+        None => ()
+      }
+    }
+  }
+  abort("no list on screen")
+}
+
+///|
+/// Scrolls the (first) list so that row `item` starts at its top, from the
+/// next frame on.
+pub fn Tester::scroll_to(self : Tester, item : Int) -> Unit {
+  self.list_state().scroll_to(item)
+}
+
+///|
+pub fn Tester::scroll_to_end(self : Tester) -> Unit {
+  self.list_state().scroll_to_end()
+}
+
+///|
+/// The first and last rows of the list in view (-1, -1 when none).
+pub fn Tester::visible(self : Tester) -> (Int, Int) {
+  let st = self.list_state()
+  (st.vis_first, st.vis_last)
+}
+
+///|
+pub fn Tester::at_end(self : Tester) -> Bool {
+  self.list_state().at_end
+}
+
+///|
+/// Where row `item` of the list is (x, y, w, h), if built.
+pub fn Tester::row(self : Tester, item : Int) -> (Double, Double, Double, Double)? {
+  ignore(self)
+  let c = g
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.item == item && n.parent >= 0 && c.nodes[n.parent].kind == kind_list {
+      // only rows the list kept (it may build some it doesn't show)
+      let mut ch = c.nodes[n.parent].first
+      while ch >= 0 {
+        if ch == i {
+          return Some((n.x, n.y, n.fw, n.fh))
+        }
+        ch = c.nodes[ch].next
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Checks the list's rows in view follow each other without gaps or
+/// overlaps and fill the view from `top` to `bottom` (unless they run
+/// out), as mygo's checkRows does.
+pub fn Tester::check_rows(self : Tester, top : Double, bottom : Double) -> Unit raise {
+  let (first, last) = self.visible()
+  if last < first || first < 0 {
+    fail("no row in view")
+  }
+  let (_, y0, _, h0) = self.row(first).unwrap()
+  if y0 > top + 0.01 {
+    fail("row \{first}, the first in view, starts at \{y0}, below the top \{top}")
+  }
+  let mut end = y0 + h0
+  for i in (first + 1)..=last {
+    match self.row(i) {
+      Some((_, y, _, h)) => {
+        if (y - end).abs() > 0.01 {
+          fail("row \{i} starts \{y - end} from where row \{i - 1} ends")
+        }
+        end = y + h
+      }
+      None => fail("row \{i} in view was not built")
+    }
+  }
+  if last < self.list_state().count - 1 && end < bottom - 0.01 {
+    fail("row \{last}, the last in view, ends at \{end}, above the bottom \{bottom}")
+  }
+}
+
+///|
+/// A key by name: Home, End, PageUp, PageDown, Up, Down, Left, Right,
+/// Enter, Backspace, Delete.
+pub fn Tester::press(self : Tester, name : String) -> Unit {
+  let code = match name {
+    "Home" => key_home
+    "End" => key_end
+    "PageUp" => key_page_up
+    "PageDown" => key_page_down
+    "Up" => key_up
+    "Down" => key_down
+    "Left" => key_left
+    "Right" => key_right
+    "Enter" => key_enter
+    "Backspace" => key_backspace
+    "Delete" => key_delete
+    _ => abort("no key \{name}")
+  }
+  self.key(code)
 }

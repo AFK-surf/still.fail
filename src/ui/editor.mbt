@@ -104,6 +104,12 @@ let key_home = 8
 let key_end = 9
 
 ///|
+let key_page_up = 15
+
+///|
+let key_page_down = 16
+
+///|
 let key_select_all = 12
 
 ///|

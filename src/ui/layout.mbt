@@ -173,7 +173,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
       None => ()
     }
   } else if n.kind == kind_list {
-    self.place_list(n, ix, iy, iw, ih)
+    self.place_list(i, ix, iy, iw, ih)
   } else {
     let mut c = n.first
     while c >= 0 {

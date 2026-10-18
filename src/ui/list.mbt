@@ -13,54 +13,23 @@ fn ListState::height(self : ListState, i : Int) -> Double {
 }
 
 ///|
-fn ListState::normalize(self : ListState) -> Unit {
-  if self.count == 0 {
-    self.anchor = 0
-    self.anchor_off = 0.0
-    self.at_end = true
-    return
-  }
-  if self.anchor >= self.count {
-    self.anchor = self.count - 1
-  }
-  while self.anchor_off < 0.0 && self.anchor > 0 {
-    self.anchor = self.anchor - 1
-    self.anchor_off = self.anchor_off + self.height(self.anchor)
-  }
-  if self.anchor_off < 0.0 {
-    self.anchor_off = 0.0
-    if self.vel < 0.0 {
-      self.vel = 0.0
-    }
-  }
-  while self.anchor < self.count - 1 &&
-        self.anchor_off >= self.height(self.anchor) {
-    self.anchor_off = self.anchor_off - self.height(self.anchor)
-    self.anchor = self.anchor + 1
-  }
-  // never scroll past the end
-  let mut rem = -self.anchor_off
-  let mut i = self.anchor
-  while i < self.count && rem < self.vp_h {
-    rem = rem + self.height(i)
-    i = i + 1
-  }
-  if rem < self.vp_h {
-    self.anchor_off = self.anchor_off - (self.vp_h - rem)
-    if self.vel > 0.0 {
-      self.vel = 0.0
-    }
-    while self.anchor_off < 0.0 && self.anchor > 0 {
-      self.anchor = self.anchor - 1
-      self.anchor_off = self.anchor_off + self.height(self.anchor)
-    }
-    if self.anchor_off < 0.0 {
-      self.anchor_off = 0.0
-    }
-    self.at_end = true
-  } else {
-    self.at_end = i >= self.count && rem <= self.vp_h + 1.0
-  }
+fn ListState::scroll_to(self : ListState, item : Int) -> Unit {
+  self.anchor = item
+  self.anchor_off = 0.0
+  self.pending = 0.0
+  self.vel = 0.0
+  self.at_end = false
+}
+
+///|
+fn ListState::scroll_to_end(self : ListState) -> Unit {
+  // the last row, scrolled past further than it can be: laid out, it
+  // comes back to end at the bottom
+  self.anchor = 1 << 30
+  self.anchor_off = 1.0e9
+  self.pending = 0.0
+  self.vel = 0.0
+  self.at_end = true
 }
 
 ///|
@@ -75,8 +44,39 @@ fn Ctx::scroll_list(self : Ctx, id : Int, d : Double) -> Unit {
 }
 
 ///|
-/// A list of `count` rows; `row(i)` builds row i. Rows are estimated at
-/// `est` pixels until they have been laid out once.
+/// Home, End, Page Up and Page Down, and the arrows by a line, for the
+/// list under the pointer.
+fn Ctx::list_key(self : Ctx, id : Int, code : Int) -> Bool {
+  match self.lists.get(id) {
+    Some(st) => {
+      if code == key_home {
+        st.scroll_to(0)
+      } else if code == key_end {
+        st.scroll_to_end()
+      } else if code == key_page_up {
+        self.scroll_list(id, -(st.vp_h - 40.0))
+      } else if code == key_page_down {
+        self.scroll_list(id, st.vp_h - 40.0)
+      } else if code == key_up {
+        self.scroll_list(id, -40.0)
+      } else if code == key_down {
+        self.scroll_list(id, 40.0)
+      } else {
+        return false
+      }
+      st.last_scroll = self.now
+      true
+    }
+    None => false
+  }
+}
+
+///|
+/// A list of `count` rows; `row(i)` builds row i. Only rows in view are
+/// built, while the list is laid out, so it knows their real heights;
+/// rows not built yet count as `est` pixels (for the scroll bar). With
+/// `stick_end` it starts at its end and stays there as rows come, until
+/// scrolled away.
 pub fn Ctx::list(
   self : Ctx,
   key : String,
@@ -93,8 +93,8 @@ pub fn Ctx::list(
     Some(s) => s
     None => {
       let s = {
-        anchor: if stick_end && count > 0 { count - 1 } else { 0 },
-        anchor_off: if stick_end { 1.0e9 } else { 0.0 },
+        anchor: 0,
+        anchor_off: 0.0,
         heights: [],
         est,
         count: 0,
@@ -104,8 +104,10 @@ pub fn Ctx::list(
         stick_end,
         last_scroll: -1.0e9,
         pending: 0.0,
-        first_built: 0,
-        last_built: 0,
+        row,
+        seed: 0,
+        vis_first: -1,
+        vis_last: -1,
       }
       self.lists[id] = s
       s
@@ -117,11 +119,9 @@ pub fn Ctx::list(
   while st.heights.length() < count {
     st.heights.push(-1.0)
   }
-  if count > st.count && st.stick_end && st.at_end && st.count > 0 {
-    st.anchor = count - 1
-    st.anchor_off = 1.0e9
-  }
   st.count = count
+  st.row = row
+  st.seed = self.id_seed
   if st.vel != 0.0 {
     st.pending = st.pending + st.vel * self.dt
     st.vel = st.vel * 0.997.pow(self.dt)
@@ -132,9 +132,6 @@ pub fn Ctx::list(
       self.wants_frame = true
     }
   }
-  st.anchor_off = st.anchor_off + st.pending
-  st.pending = 0.0
-  st.normalize()
   let i = self.alloc(kind_list)
   let n = self.nodes[i]
   n.id = id
@@ -142,20 +139,6 @@ pub fn Ctx::list(
   n.h = h
   n.clip = true
   n.bg = bg
-  self.with_parent(i, fn() {
-    let mut acc = -st.anchor_off
-    let mut k = st.anchor
-    st.first_built = k
-    while k < count && acc < st.vp_h + 64.0 {
-      let r = self.alloc(kind_box)
-      self.nodes[r].item = k
-      let item = k
-      self.with_parent(r, fn() { self.scope(item, fn() { row(item) }) })
-      acc = acc + st.height(k)
-      k = k + 1
-    }
-    st.last_built = k
-  })
   if self.now - st.last_scroll < 900.0 {
     self.wake_at_time(st.last_scroll + 900.0)
   }
@@ -163,47 +146,191 @@ pub fn Ctx::list(
 }
 
 ///|
+/// Builds row `k` of list node `li` (appended to its children).
+fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
+  let saved_cur = self.cur
+  let saved_seed = self.id_seed
+  self.cur = li
+  self.id_seed = st.seed
+  let r = self.alloc(kind_box)
+  self.nodes[r].item = k
+  let row = st.row
+  self.with_parent(r, fn() { self.scope(k, fn() { row(k) }) })
+  self.id_seed = saved_seed
+  self.cur = saved_cur
+  r
+}
+
+///|
+/// Moves a laid-out subtree down by `dy`.
+fn Ctx::shift(self : Ctx, i : Int, dy : Double) -> Unit {
+  let n = self.nodes[i]
+  n.y = n.y + dy
+  if n.kind == kind_editor {
+    match self.editors.get(n.id) {
+      Some(st) => st.oy = st.oy + dy
+      None => ()
+    }
+  }
+  let mut c = n.first
+  while c >= 0 {
+    self.shift(c, dy)
+    c = self.nodes[c].next
+  }
+}
+
+///|
+/// Lays out the list in its content box: builds rows from the one the
+/// scroll position is anchored to (or the last, when it sticks to its
+/// end), downward and then upward until the view is full, never past
+/// either end. Positions come from the rows' real heights, so scrolling
+/// moves rows by exactly what was scrolled, measured or not.
 fn Ctx::place_list(
   self : Ctx,
-  n : Node,
+  li : Int,
   ix : Double,
   iy : Double,
   iw : Double,
   ih : Double,
 ) -> Unit {
-  match self.lists.get(n.id) {
-    Some(st) => {
-      let vp_changed = (st.vp_h - ih).abs() > 0.5
-      st.vp_h = ih
-      let mut y = iy - st.anchor_off
-      let mut c = n.first
-      let mut changed = false
-      while c >= 0 {
-        let row = self.nodes[c]
-        let h = self.layout(c, ix, y, iw, 0.0 / 0.0)
-        let old = st.heights[row.item]
-        if (old - h).abs() > 0.5 {
-          changed = true
-        }
-        st.heights[row.item] = h
-        y = y + h
-        c = row.next
+  let n = self.nodes[li]
+  let st = match self.lists.get(n.id) {
+    Some(st) => st
+    None => return
+  }
+  st.vp_h = ih
+  // rows built in the build phase (none, normally) are not shown
+  n.first = -1
+  n.last = -1
+  if st.count == 0 {
+    st.anchor = 0
+    st.anchor_off = 0.0
+    st.pending = 0.0
+    st.at_end = true
+    st.vis_first = -1
+    st.vis_last = -1
+    return
+  }
+  let nan = 0.0 / 0.0
+  let top_rows : Array[Int] = [] // above the pivot, nearest first
+  let rows : Array[Int] = [] // the pivot and below
+  let lay = fn(k : Int, y : Double) -> (Int, Double) {
+    let r = self.build_row(li, st, k)
+    let h = self.layout(r, ix, y, iw, nan)
+    st.heights[k] = h
+    (r, h)
+  }
+  let bottom_edge = iy + ih
+  let mut top = 0.0
+  let mut bottom = 0.0
+  let mut first = 0
+  let mut last = 0
+  if st.stick_end && st.at_end && st.pending >= 0.0 {
+    // the last row's bottom on the view's
+    let (r, h) = lay(st.count - 1, 0.0)
+    self.shift(r, bottom_edge - h)
+    rows.push(r)
+    top = bottom_edge - h
+    bottom = bottom_edge
+    first = st.count - 1
+    last = st.count - 1
+  } else {
+    let a = imax(imin(st.anchor, st.count - 1), 0)
+    let y = iy - st.anchor_off - st.pending
+    let (r, h) = lay(a, y)
+    rows.push(r)
+    top = y
+    bottom = y + h
+    first = a
+    last = a
+  }
+  st.pending = 0.0
+  let mut pinned_end = false
+  // down, then up, then down again if the start was reached
+  for pass in 0..<2 {
+    while bottom < bottom_edge && last + 1 < st.count {
+      last = last + 1
+      let (r, h) = lay(last, bottom)
+      rows.push(r)
+      bottom = bottom + h
+    }
+    if bottom < bottom_edge && pass == 0 {
+      // the end: no space after it
+      let d = bottom_edge - bottom
+      for r in rows {
+        self.shift(r, d)
       }
-      // a list pinned to its end stays there when rows turn out taller
-      // or shorter than estimated
-      if (changed || vp_changed) && st.stick_end && st.at_end {
-        st.anchor = imax(st.count - 1, 0)
-        st.anchor_off = 1.0e9
+      for r in top_rows {
+        self.shift(r, d)
       }
-      // rows measured for the first time, or a resized viewport, can
-      // leave a gap: build again next frame with the real heights.
-      if (changed || vp_changed) &&
-         (y < iy + ih || (st.stick_end && st.at_end)) {
-        self.wants_frame = true
+      top = top + d
+      bottom = bottom_edge
+      pinned_end = true
+      if st.vel > 0.0 {
+        st.vel = 0.0
       }
     }
-    None => ()
+    while top > iy && first > 0 {
+      first = first - 1
+      let (r, h) = lay(first, 0.0)
+      self.shift(r, top - h)
+      top_rows.push(r)
+      top = top - h
+    }
+    if top > iy {
+      // the start: no space before it
+      let d = iy - top
+      for r in rows {
+        self.shift(r, d)
+      }
+      for r in top_rows {
+        self.shift(r, d)
+      }
+      top = iy
+      bottom = bottom + d
+      pinned_end = false
+      if st.vel < 0.0 {
+        st.vel = 0.0
+      }
+    } else {
+      break
+    }
   }
+  // the children, top to bottom
+  let order : Array[Int] = []
+  for j = top_rows.length() - 1; j >= 0; j = j - 1 {
+    order.push(top_rows[j])
+  }
+  for r in rows {
+    order.push(r)
+  }
+  let mut prev = -1
+  for r in order {
+    if prev >= 0 {
+      self.nodes[prev].next = r
+    } else {
+      n.first = r
+    }
+    self.nodes[r].next = -1
+    prev = r
+  }
+  n.last = prev
+  // the new scroll position: the first row in view, and how far it is
+  // scrolled past
+  st.vis_first = -1
+  st.vis_last = -1
+  for r in order {
+    let rn = self.nodes[r]
+    if rn.y + rn.fh > iy + 0.001 && rn.y < bottom_edge - 0.001 {
+      if st.vis_first < 0 {
+        st.vis_first = rn.item
+        st.anchor = rn.item
+        st.anchor_off = iy - rn.y
+      }
+      st.vis_last = rn.item
+    }
+  }
+  st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.5)
 }
 
 ///|

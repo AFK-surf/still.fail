@@ -15,8 +15,12 @@ struct ListState {
   stick_end : Bool
   mut last_scroll : Double
   mut pending : Double
-  mut first_built : Int
-  mut last_built : Int
+  // how to build a row, and the id scope it is built in
+  mut row : (Int) -> Unit
+  mut seed : Int
+  // rows in view after the last layout, first to last (-1 when none)
+  mut vis_first : Int
+  mut vis_last : Int
 }
 
 ///|
