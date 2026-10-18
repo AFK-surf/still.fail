@@ -27,5 +27,13 @@ known yet.
 - A device off the station's LAN gets no answer at those addresses. It tries them once for each set the station says,
   and again after the network changes. While the station was reached directly in the last 10 minutes, it tries again
   every 30 s.
+- A direct way, on the LAN endpoint or a punched path, can still go quiet. On 2026-10-18 a phone on studio's LAN
+  moved to such a way and back to a relay every minute or so. When requests lose a direct way within `MIN_STAY_MS` of
+  moving to it twice in a row, the core moves them to no direct way for `DIRECT_HOLD_MS`, unless no other way is up.
+  The hold doubles each time this happens again, up to `DIRECT_HOLD_MAX_MS`. A direct way that stays starts the count
+  anew. The `mesh.route` span that starts a hold says how long it is (`stillfail.direct_held_ms`).
+- A station's event stream that ends while another way to the station is up opens again on that way at once. The
+  station is shown as reached throughout (`StationWire.standing`, station/link.ts). Before, every move between ways
+  showed 正在重连 for a moment.
 - Tests: `client/core-ts/test/mesh.test.ts`. The simulated LAN (`SimNet.lan` with `quietAfterMs`) has the punched path
   go quiet, and `SimNet.away` puts the device off the LAN.

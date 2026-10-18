@@ -68,6 +68,13 @@ export const DIRECT_RECALL_MS = 10 * 60_000;
 /// requests on it waited out iroh's 15 s before going back to a relay (studio and a phone, 2026-10-17); a connection
 /// dialled by address kept working.
 export const LAN = "lan";
+/// A way direct (on the LAN endpoint, or the main endpoint's punched path) lost within MIN_STAY_MS of the requests moving
+/// to it, FLAKY_LOSSES times in a row: no way direct is moved to for DIRECT_HOLD_MS, twice as long each time it happens
+/// again, up to DIRECT_HOLD_MAX_MS, unless no other way is up. A phone on studio's LAN moved to it and back to a relay
+/// every minute or so, each time its requests waiting out DEAD_PINGS pings on the way gone quiet (2026-10-18).
+const FLAKY_LOSSES = 2;
+export const DIRECT_HOLD_MS = 2 * 60_000;
+export const DIRECT_HOLD_MAX_MS = 30 * 60_000;
 /// The least a read waits for its answer on its way before it is asked on the next best way as well.
 export const HEDGE_FLOOR_MS = 1_000;
 /// How often a read gone slow looks again for another way to be asked on, while there is none.
@@ -558,6 +565,11 @@ export class Mesh {
   readonly #moved = new Map<string, string>();
   readonly #moves = new Map<string, number>();
   readonly #movedAt = new Map<string, number>();
+  /// By address: whether the way requests last moved to went direct; how many ways direct were lost in a row soon after
+  /// they were moved to, and until when no way direct is moved to (FLAKY_LOSSES).
+  readonly #movedDirect = new Map<string, boolean>();
+  readonly #directLosses = new Map<string, number>();
+  readonly #directHeldUntil = new Map<string, number>();
   #closed = false;
   /// By address: the relays its workspace has of its own, as the last `link` to it said.
   readonly #theirs = new Map<string, string[]>();
@@ -828,7 +840,7 @@ export class Mesh {
       }
       // Gone, with another way still open: requests go on that one at once.
       if (!fresh && existing !== undefined) {
-        const standby = this.#best(addr, this.#live(addr).filter((w) => w.missed === 0));
+        const standby = this.#best(addr, this.#takeable(addr, this.#live(addr).filter((w) => w.missed === 0)));
         if (standby !== null) {
           this.#promote(addr, standby, "lost");
           return standby.link;
@@ -1095,7 +1107,12 @@ export class Mesh {
     span.set("stillfail.to", way.key());
     span.set("stillfail.to.score", Math.round(this.#score(addr, way).score));
     span.set("stillfail.to.paths", way.link.paths());
+    if (why === "lost" && this.#movedDirect.get(addr) === true) {
+      const held = this.#lostDirect(addr, this.now() - (this.#movedAt.get(addr) ?? -Infinity));
+      if (held !== null) span.set("stillfail.direct_held_ms", held);
+    }
     span.end();
+    this.#movedDirect.set(addr, this.#isDirect(way));
     const done = Deferred.makeUnsafe<Link, CoreError>();
     Deferred.doneUnsafe(done, Effect.succeed(way.link));
     this.#links.set(addr, { done, result: { ok: way.link } });
@@ -1116,6 +1133,11 @@ export class Mesh {
   /// The ways open to the station, the link requests go on among them.
   ways(addr: string): Way[] {
     return this.#live(addr);
+  }
+
+  /// Whether a way to the station is up: one open that answered its last ping (one not pinged yet: its handshake did).
+  standing(addr: string): boolean {
+    return this.#links.has(addr) && this.#live(addr).some((w) => w.missed === 0);
   }
 
   /// Pings a way: its credential presented again on it, answered by the station. Not answered within PING_TIMEOUT_MS,
@@ -1167,15 +1189,16 @@ export class Mesh {
     const up = ways.filter((w) => w.missed < DEAD_PINGS);
     const mine = ways.find((w) => w.link === cur);
     if (cur === null || !cur.usable() || mine === undefined || mine.missed >= DEAD_PINGS) {
-      const best = this.#best(addr, up.filter((w) => w.link !== cur));
+      const best = this.#best(addr, this.#takeable(addr, up.filter((w) => w.link !== cur)));
       if (best !== null) this.#promote(addr, best, "lost");
       return;
     }
+    const held = this.#directHeld(addr);
     // A way gone direct and answering clearly quicker is taken at once: the station is on the LAN (or a hole was punched
     // to it), where a relay only adds its round trip. A phone that came back to the app on its station's LAN went on
     // through a relay as that link came through first, and stayed there for minutes (BETTER_TICKS, MIN_STAY_MS) while
     // the direct way waited its turn (2026-10-17).
-    if (mine.samples > 0 && mine.link.pinned !== LAN) {
+    if (!held && mine.samples > 0 && mine.link.pinned !== LAN) {
       // One on the LAN endpoint is taken over the main endpoint's punched path as well: that one stopped answering seconds
       // after it opened (docs/mesh-lan.md).
       const lan = up.find((w) => w.link !== cur && w.link.pinned === LAN && w.samples > 0 && w.missed === 0);
@@ -1191,7 +1214,7 @@ export class Mesh {
     }
     if (mine.samples < MIN_SAMPLES) return;
     if (!now && this.now() - (this.#movedAt.get(addr) ?? -Infinity) < MIN_STAY_MS) return;
-    const best = this.#best(addr, up.filter((w) => w.link !== cur && w.samples >= MIN_SAMPLES));
+    const best = this.#best(addr, up.filter((w) => w.link !== cur && w.samples >= MIN_SAMPLES && !(held && this.#isDirect(w))));
     for (const w of ways) if (w !== best) w.better = 0;
     if (best === null) return;
     if (!clearlyBetter(this.#score(addr, mine), this.#score(addr, best))) {
@@ -1200,6 +1223,38 @@ export class Mesh {
     }
     best.better++;
     if (now || best.better >= BETTER_TICKS) this.#promote(addr, best, now ? "asked" : "better");
+  }
+
+  /// Whether `way` goes direct: on the LAN endpoint, or on a path iroh punched.
+  #isDirect(way: Way): boolean {
+    return way.link.pinned === LAN || way.key() === "direct";
+  }
+
+  /// Whether no way direct is moved to now (FLAKY_LOSSES).
+  #directHeld(addr: string): boolean {
+    return this.now() < (this.#directHeldUntil.get(addr) ?? -Infinity);
+  }
+
+  /// Of `ways`, those requests may move to: while ways direct are held off, the others (all, if none is another).
+  #takeable(addr: string, ways: Way[]): Way[] {
+    if (!this.#directHeld(addr)) return ways;
+    const others = ways.filter((w) => !this.#isDirect(w));
+    return others.length > 0 ? others : ways;
+  }
+
+  /// The way direct the requests went on was lost, `stayed` after they moved to it: one lost soon after, FLAKY_LOSSES
+  /// times in a row, holds ways direct off a while (how long, or null); one that stayed MIN_STAY_MS starts the count anew.
+  #lostDirect(addr: string, stayed: number): number | null {
+    if (stayed >= MIN_STAY_MS) {
+      this.#directLosses.delete(addr);
+      return null;
+    }
+    const n = (this.#directLosses.get(addr) ?? 0) + 1;
+    this.#directLosses.set(addr, n);
+    if (n < FLAKY_LOSSES) return null;
+    const hold = Math.min(DIRECT_HOLD_MS * 2 ** (n - FLAKY_LOSSES), DIRECT_HOLD_MAX_MS);
+    this.#directHeldUntil.set(addr, this.now() + hold);
+    return hold;
   }
 
   /// No more requests go on `way`; it is closed RETIRE_MS later, unless they went back to it meanwhile (replies under way
@@ -1284,6 +1339,8 @@ export class Mesh {
         yield* this.#sample(addr);
         this.#choose(addr, false);
         this.#prune(addr);
+        // The way direct requests moved to stayed: one lost after this is not lost soon after.
+        if (this.#movedDirect.get(addr) === true && this.now() - (this.#movedAt.get(addr) ?? Infinity) >= MIN_STAY_MS) this.#directLosses.delete(addr);
         const live = this.#live(addr);
         if (live.some((w) => w.key() === "direct")) this.#directAt.set(addr, this.now());
         const credentials = (this.current(addr) ?? live[0]?.link)?.credentials;
@@ -1741,6 +1798,10 @@ export class MeshWire implements StationWire {
     const link = mesh?.current(station.toString()) ?? null;
     if (mesh === null || link === null) return Effect.never;
     return mesh.replaced(station.toString(), link);
+  }
+
+  standing(station: StationAddr): boolean {
+    return this.#env.meshNow()?.standing(station.toString()) ?? false;
   }
 
   net(station: StationAddr): LinkNet | null {

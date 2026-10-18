@@ -76,6 +76,9 @@ export interface StationWire {
   /// Succeeds once the way to the station a request would take now is replaced by another (never, for a wire that
   /// does not race).
   replaced?(station: StationAddr): Effect.Effect<void>;
+  /// Whether a way to the station is up now (one open that answered when last asked): a stream gone with its way opens
+  /// again on another, the station not taken for coming back (never, for a wire with one way).
+  standing?(station: StationAddr): boolean;
   /// How the connection to the station runs now; null where there is none of its own.
   net?(station: StationAddr): LinkNet | null;
   /// Measures the ways to the station now.

@@ -1681,6 +1681,62 @@ test("events_reconnect_report_the_link_and_read_everything_once", async () => {
   core.close();
 });
 
+/// 2026-10-18: a phone on its station's LAN showed 正在重连 every minute or so, as its requests moved between the LAN and
+/// a relay and its stream opened again on the new way. A stream that ends while another way to the station is up opens
+/// again at once, the station shown as reached all along; with none up, it is coming back as before.
+test("a_stream_gone_while_another_way_is_up_opens_again_with_the_station_still_reached", async () => {
+  class Ways extends HostWire {
+    up = true;
+    standing() {
+      return this.up;
+    }
+  }
+  const made: Ways[] = [];
+  const { host, core, end, streams } = await started(base(), 0, (h) => {
+    const w = new Ways(h);
+    made.push(w);
+    return w;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  const seen: unknown[] = [];
+  subscribe(core, ui, 1, { topic: "link", station: ST });
+  const read = async () => {
+    await host.settle();
+    apply(host, values);
+    seen.push(linkOf(values, 1));
+  };
+  await read();
+  assert.equal(linkOf(values, 1), "online");
+  await host.time.pass(RECONNECT_MS + 50, 50);
+  const opened = streams.length;
+  end();
+  await read();
+  // Open again on the other way at once, nothing waited out, never shown as coming back.
+  assert.equal(streams.length, opened + 1);
+  assert.equal(streams.filter((x) => !x.closed).length, 1);
+  assert.deepEqual([...new Set(seen)], ["online"]);
+  // One that ends as soon as it opens is opened again after RECONNECT_MS, the station still reached.
+  end();
+  await read();
+  assert.equal(streams.length, opened + 1);
+  assert.equal(linkOf(values, 1), "online");
+  await host.time.pass(RECONNECT_MS + 50, 50);
+  await read();
+  assert.equal(streams.length, opened + 2);
+  assert.deepEqual([...new Set(seen)], ["online"]);
+  // No way up: coming back.
+  await host.time.pass(RECONNECT_MS + 50, 50);
+  for (const w of made) w.up = false;
+  end();
+  await read();
+  assert.equal(linkOf(values, 1), "reconnecting");
+  await host.time.pass(RECONNECT_MS + 50, 50);
+  await read();
+  assert.equal(linkOf(values, 1), "online");
+  core.close();
+});
+
 const liveK = { topic: "live", station: ST, key: "k1" };
 /// The live topic's value as the core makes it (before the protocol's shapes: these items are only markers).
 const liveOf = (core: J) => topicOf(core, liveK).ok;

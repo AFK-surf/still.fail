@@ -497,8 +497,14 @@ export class Links {
             if (link.generation !== generation) return { done: true } as const;
             link.heard = null;
             const woke = why === GONE || why === NETWORK || why === t("station.core.replaced");
-            self.setLink(address, { state: "reconnecting", message: why === "ended" ? t("station.core.disconnected") : why });
-            return { again: woke, why, lasted: core.host.nowMs() - openedAt, bytes: opened.success.came?.bytes ?? read, read, events } as const;
+            const lasted = core.host.nowMs() - openedAt;
+            // Another way to the station is up (the requests moved to it, or one beside the way gone answers): the station
+            // is reached, and the stream opens again there, going on from its last event, the station still shown as
+            // reached. Shown as coming back each time, a phone on its station's LAN showed 正在重连 every minute or so as
+            // its requests moved between the LAN and a relay (2026-10-18). One that ended at once waits its RECONNECT_MS.
+            const standing = why !== GONE && why !== NETWORK && (self.#requests.wire.standing?.(link.addr) ?? false);
+            if (!standing) self.setLink(address, { state: "reconnecting", message: why === "ended" ? t("station.core.disconnected") : why });
+            return { again: woke || (standing && lasted >= RECONNECT_MS), why, lasted, bytes: opened.success.came?.bytes ?? read, read, events } as const;
           }),
         );
         if ("done" in ended) return;

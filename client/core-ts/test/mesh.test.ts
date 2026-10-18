@@ -14,7 +14,7 @@ import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -899,6 +899,45 @@ sim("a_station_on_the_lan_is_dialled_at_its_lan_addresses_and_the_requests_stay_
   assert.equal(mesh.current(id)?.pinned, LAN, JSON.stringify(mesh.measured(id)));
   assert.ok(mesh.moves(id) - moves <= 1, `moved ${mesh.moves(id) - moves} times in ten minutes`);
   assert.equal((await request(s, mesh.current(id)!, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
+/// 2026-10-18, a phone on studio's LAN: each way direct went quiet within a minute of the requests moving to it, and
+/// they moved to the next one dialled, and back to a relay once it went quiet too, every minute or so. Lost soon after
+/// twice in a row, ways direct are held off a while, longer each time; once one stays, they are taken again.
+sim("ways_direct_that_keep_going_quiet_are_held_off_a_while", async (s) => {
+  const { station, mesh, id } = await onLan(s);
+  station.lan = station.addr().ips;
+  await reach(s, mesh, id);
+  await s.until(() => mesh.current(id)?.path() === "direct", 60_000);
+  // Each way direct goes quiet 20 s after the requests move to it, for good.
+  let flaky = true;
+  let on: Link | null = null;
+  let since = s.time.now();
+  let quieted = 0;
+  const watch = () => {
+    const cur = mesh.current(id);
+    if (cur !== on) [on, since] = [cur, s.time.now()];
+    if (!flaky || cur?.path() !== "direct" || s.time.now() - since < 20_000) return;
+    for (const c of station.conns) {
+      if (c.reason !== null || c.way.relay !== null || c.way.silentUntil === Infinity) continue;
+      c.way.silentUntil = c.peer.way.silentUntil = Infinity;
+      quieted++;
+    }
+  };
+  const moves = mesh.moves(id);
+  for (let t = 0; t < 30 * 60_000; t += TICK_MS) {
+    watch();
+    await s.time.pass(TICK_MS);
+  }
+  // Moved to a way direct and off it again a few times in half an hour, not every minute.
+  assert.ok(quieted >= 3, `${quieted} ways quieted`);
+  assert.ok(mesh.moves(id) - moves <= 16, `moved ${mesh.moves(id) - moves} times in half an hour, ${quieted} ways quieted`);
+  // The LAN well again: the requests go direct once the hold is over, and stay.
+  flaky = false;
+  await s.until(() => mesh.current(id)?.path() === "direct", DIRECT_HOLD_MAX_MS + 2 * 60_000);
+  await s.time.pass(10 * 60_000);
+  assert.equal(mesh.current(id)?.path(), "direct");
   await close(s, station, mesh);
 });
 
