@@ -84,8 +84,8 @@ export const msgSystemInstallText = style({
   fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere", textAlign: "center",
   selectors: { [`${msgSystemInstall}[data-state="failed"] &`]: { color: vars.red } },
 });
-/** Its button: an answer's, as wide as its words. */
-export const msgSystemInstallButton = style({ width: "auto", textAlign: "center" });
+/** Its button: an answer's, as wide as its words (over the answer's own full width, whichever sheet comes later). */
+export const msgSystemInstallButton = style({ selectors: { [`${msgSystemInstall} &`]: { width: "auto", textAlign: "center" } } });
 /** What went wrong in a notice about a profile: a link to that profile's page, in the pill's own colour, underlined. */
 export const msgSystemLink = style({ textDecoration: "underline", textUnderlineOffset: "3px" });
 globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit" });
