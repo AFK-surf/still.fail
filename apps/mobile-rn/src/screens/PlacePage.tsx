@@ -12,7 +12,7 @@ import type { WorkspaceEntry } from "../data/Accounts";
 import { t } from "../i18n";
 import { LocalPlaceRoot, PlaceAction, PlaceRoot, placeLabel } from "../Places";
 import type { BarAction } from "../ui/Bar";
-import { TopGlass } from "../ui/Glass";
+import { Backdrop, LocalFrostSource, TopGlass, useFrostName } from "../ui/Glass";
 import { Icons } from "../ui/Icon";
 import { NavBar, NavButton } from "../ui/Parts";
 import { T } from "../ui/Text";
@@ -104,17 +104,23 @@ export function PlacePage({ current, place, primary, known = true, title, back, 
   // Its height kept with the page's state (as Home's): coming back, what scrolls is laid out under it at once.
   const [bar, setBar] = useState(() => barHeights.get(key) ?? insets.top + 50);
   const action = <PlaceAction workspace={current.workspace.id} place={place} action={primary} known={known} />;
+  const frosted = useFrostName("place");
   if (root === PlaceRoot.Bar) {
     return (
-      <View style={{ flex: 1 }}>
-        {action}
-        <View style={{ flex: 1 }}>{content(bar + 8)}</View>
-        <TopGlassBar modifier={{ position: "absolute", left: 0, right: 0, top: 0 }} onLayout={(h) => { barHeights.set(key, h); setBar(h); }}>
-          <SettingsGear />
-          <TopBarTitle text={name} modifier={{ flex: 1, minWidth: 0 }} />
-          {slot(actions)}
-        </TopGlassBar>
-      </View>
+      <LocalFrostSource.Provider value={frosted}>
+        <View style={{ flex: 1 }}>
+          {action}
+          {/* What the top bar frosts (the page's hazeSource). */}
+          <Backdrop name={frosted} style={{ flex: 1 }}>
+            <View style={{ flex: 1 }}>{content(bar + 8)}</View>
+          </Backdrop>
+          <TopGlassBar modifier={{ position: "absolute", left: 0, right: 0, top: 0 }} onLayout={(h) => { barHeights.set(key, h); setBar(h); }}>
+            <SettingsGear />
+            <TopBarTitle text={name} modifier={{ flex: 1, minWidth: 0 }} />
+            {slot(actions)}
+          </TopGlassBar>
+        </View>
+      </LocalFrostSource.Provider>
     );
   }
   // Pushed, or the top of a place on a wide screen (no bar there: back goes to the chats).

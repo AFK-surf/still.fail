@@ -2,7 +2,7 @@
 // runs (station), on what (model) and how hard it thinks. The first message
 // (or file) makes the session on that station; then the page becomes the chat.
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { BackHandler, Pressable, ScrollView, View, type StyleProp, type ViewStyle } from "react-native";
+import { BackHandler, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { Easing, useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CoreError } from "../../../../web/src/core/client.ts";
@@ -17,7 +17,7 @@ import { RUNTIME_LABEL } from "../data/Words";
 import { t } from "../i18n";
 import { Button, PickRow } from "../ui/Controls";
 import { Illustration } from "../ui/Drawing";
-import { Floating, FootGlass } from "../ui/Glass";
+import { Backdrop, Floating, FootGlass, LocalFrostSource, useFrostName } from "../ui/Glass";
 import { Icon, Icons } from "../ui/Icon";
 import { Markdown } from "../ui/Markdown";
 import { MakerIcon, NavBar, ProviderMark, StationMark } from "../ui/Parts";
@@ -119,6 +119,8 @@ function NewChatOn({ workspace, choice, view, stations, onStation, host, leaving
     return { transform: [{ translateY: -lift * a }, { scaleX: s }, { scaleY: s }], opacity: 1 - a };
   });
   const footFade = useAnimatedStyle(() => ({ opacity: 1 - (leaving ? leaveFade(Math.min(1, Math.max(0, leave.value / 80))) : 0) }));
+  // What the choices' glass frosts: the scene (NewChat.kt's hazeSource).
+  const frosted = useFrostName("new");
   // What stands at the foot (the choices, the composer's room) is over the scene, which runs on under them: they frost it.
   const [foot, setFoot] = useState(0);
   // The composer's room: as tall as it was when the page began to leave (it changes shape under what leaves).
@@ -161,81 +163,85 @@ function NewChatOn({ workspace, choice, view, stations, onStation, host, leaving
   });
 
   return (
-    <View style={{ flex: 1, alignSelf: "stretch" }}>
-      {/* What the composer and the choices frost: the scene (its own paper) until it leaves. */}
-      <View style={[{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0 }, !leaving && { backgroundColor: C.bg }]}>
-        <Animated.ScrollView style={[{ flex: 1 }, scene]}>
-          <View style={{ alignSelf: "stretch", paddingLeft: 30, paddingRight: 30, paddingTop: 30, paddingBottom: 10, alignItems: "center", gap: 6 }}>
-            <Illustration light="illus_new_chat" dark="illus_new_chat_dark" width={230} />
-            <T size={22} weight="700" style={{ paddingTop: 6 }}>{t("android-chat.new.heading")}</T>
-            <T size={14} color={C.muted} align="center">{t("android-chat.new.sub", { station: view.name })}</T>
-            {choice.frequent != null && choice.frequent.length > 0 && (
-              <View style={{ alignSelf: "stretch", paddingVertical: 12, alignItems: "center", gap: 8 }}>
-                <T size={12} color={C.muted}>{t("android-chat.new.frequent")}</T>
-                <View style={{ alignSelf: "stretch", flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
-                  {choice.frequent.map((combo) => (
-                    <Smooth key={`${combo.runtime}/${combo.model}/${combo.effort ?? ""}`} radius={18} style={{ backgroundColor: withAlpha(C.ink, combo.selected ? 0.1 : 0.04) }}>
-                      <Pressable
-                        disabled={leaving}
-                        accessibilityState={{ selected: combo.selected }}
-                        onPress={() => pickNew(app, workspace, { model: combo.model, runtime: combo.runtime, effort: combo.effort ?? null })}
-                        android_ripple={{ color: withAlpha(C.ink, 0.1) }}
-                        style={{ paddingHorizontal: 10, paddingVertical: 8 }}
-                      >
-                        <T size={13} line={18} color={combo.selected ? C.ink : C.muted}>{combo.label}</T>
-                      </Pressable>
-                    </Smooth>
-                  ))}
-                </View>
+    <LocalFrostSource.Provider value={frosted}>
+      <View style={{ flex: 1, alignSelf: "stretch" }}>
+        {/* What the composer and the choices frost: the scene (its own paper) until it leaves. */}
+        <Backdrop name={frosted} style={StyleSheet.absoluteFill}>
+          <View style={[{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0 }, !leaving && { backgroundColor: C.bg }]}>
+            <Animated.ScrollView style={[{ flex: 1 }, scene]}>
+              <View style={{ alignSelf: "stretch", paddingLeft: 30, paddingRight: 30, paddingTop: 30, paddingBottom: 10, alignItems: "center", gap: 6 }}>
+                <Illustration light="illus_new_chat" dark="illus_new_chat_dark" width={230} />
+                <T size={22} weight="700" style={{ paddingTop: 6 }}>{t("android-chat.new.heading")}</T>
+                <T size={14} color={C.muted} align="center">{t("android-chat.new.sub", { station: view.name })}</T>
+                {choice.frequent != null && choice.frequent.length > 0 && (
+                  <View style={{ alignSelf: "stretch", paddingVertical: 12, alignItems: "center", gap: 8 }}>
+                    <T size={12} color={C.muted}>{t("android-chat.new.frequent")}</T>
+                    <View style={{ alignSelf: "stretch", flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
+                      {choice.frequent.map((combo) => (
+                        <Smooth key={`${combo.runtime}/${combo.model}/${combo.effort ?? ""}`} radius={18} style={{ backgroundColor: withAlpha(C.ink, combo.selected ? 0.1 : 0.04) }}>
+                          <Pressable
+                            disabled={leaving}
+                            accessibilityState={{ selected: combo.selected }}
+                            onPress={() => pickNew(app, workspace, { model: combo.model, runtime: combo.runtime, effort: combo.effort ?? null })}
+                            android_ripple={{ color: withAlpha(C.ink, 0.1) }}
+                            style={{ paddingHorizontal: 10, paddingVertical: 8 }}
+                          >
+                            <T size={13} line={18} color={combo.selected ? C.ink : C.muted}>{combo.label}</T>
+                          </Pressable>
+                        </Smooth>
+                      ))}
+                    </View>
+                  </View>
+                )}
+                {choice.problem != null && <T size={13} color={choice.waiting ? C.muted : C.red} align="center" style={{ paddingTop: 6 }}>{choice.problem}</T>}
+                {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}
+                {overview != null && choice.blocked === "profile" && (
+                  <>
+                    <T size={13} color={C.muted} align="center" style={{ paddingTop: 6 }}>{t("android-chat.new.profile.text", { station: view.name })}</T>
+                    <Button label={t("android-chat.new.profile.add")} primary onClick={() => app.push({ kind: "NewProfile", station: view.station })} />
+                    <View style={{ alignSelf: "stretch", paddingTop: 12 }}><MachineLoginOffers station={view.station} overview={overview} inset={0} /></View>
+                  </>
+                )}
+                {/* The machine's own Claude Code and Codex sessions, to go on with one (web/src/MachineSessions.tsx).
+                    Not on a station this workspace joined with no profile open to it (the machine's sessions are its home's). */}
+                {overview != null && choice.blocked !== "profile" && choice.blocked !== "shared" && <MachineSessionsOffer view={view} />}
+              </View>
+              {/* Its end clear of what stands at the foot. */}
+              <View style={{ height: foot }} />
+            </Animated.ScrollView>
+          </View>
+        </Backdrop>
+        {/* A band of glass of its own, from the choices to the screen's end: what runs under it is frosted all over,
+            not seen between the choices; it goes with them as the page leaves. */}
+        <Animated.View style={[{ position: "absolute", left: 0, right: 0, bottom: 0 }, footFade]} onLayout={(e) => setFoot(e.nativeEvent.layout.height)}>
+          <FootGlass>
+            {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
+            {!leaving && choice.spent != null && (
+              <View style={{ paddingHorizontal: 12 }}>
+                <Smooth radius={12} style={{ alignSelf: "stretch", backgroundColor: lerpColor(C.bg, C.warn, 0.12), paddingHorizontal: 12, paddingVertical: 8 }}>
+                  <T size={13}>{choice.spent}</T>
+                </Smooth>
               </View>
             )}
-            {choice.problem != null && <T size={13} color={choice.waiting ? C.muted : C.red} align="center" style={{ paddingTop: 6 }}>{choice.problem}</T>}
-            {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}
-            {overview != null && choice.blocked === "profile" && (
-              <>
-                <T size={13} color={C.muted} align="center" style={{ paddingTop: 6 }}>{t("android-chat.new.profile.text", { station: view.name })}</T>
-                <Button label={t("android-chat.new.profile.add")} primary onClick={() => app.push({ kind: "NewProfile", station: view.station })} />
-                <View style={{ alignSelf: "stretch", paddingTop: 12 }}><MachineLoginOffers station={view.station} overview={overview} inset={0} /></View>
-              </>
-            )}
-            {/* The machine's own Claude Code and Codex sessions, to go on with one (web/src/MachineSessions.tsx).
-                Not on a station this workspace joined with no profile open to it (the machine's sessions are its home's). */}
-            {overview != null && choice.blocked !== "profile" && choice.blocked !== "shared" && <MachineSessionsOffer view={view} />}
-          </View>
-          {/* Its end clear of what stands at the foot. */}
-          <View style={{ height: foot }} />
-        </Animated.ScrollView>
+            {/* The choices, over the composer (the host's, a floating capsule as in a chat), with room for it below. */}
+            <View style={{ alignSelf: "stretch", paddingLeft: 10, paddingRight: 10, paddingTop: 8 }}>
+              {/* One line that fits the width, no scrolling: where it runs, and what it runs on as one control (web/src/ModelTriple.tsx),
+                  cut short rather than pushed off the edge. Room above and below for the chips' shadows. */}
+              <View style={{ alignSelf: "stretch", flexDirection: "row", paddingHorizontal: 2, paddingVertical: 6, gap: 6 }}>
+                <Chooser leading={<StationMark emoji={view.emoji} icon={view.icon} size={14} tint={C.ink} none={Icons.Server} />} label={view.name} style={{ maxWidth: 128 }} onClick={() => pickStation(app, stations, view.station, onStation)} />
+                {runtime == null || model == null || p == null || p.options.length === 0 ? (
+                  // Nothing to choose from: the chooser leads to where models are enabled.
+                  <Chooser leading={null} label={t("android-chat.new.noModels")} style={{ flexShrink: 1, minWidth: 0 }} onClick={() => app.push({ kind: "Profiles" })} />
+                ) : (
+                  <Chooser leading={<MakerIcon maker={p.valueOption?.maker ?? entry!.maker} runtime={runtime} size={14} />} label={tripleLabel(p)} style={{ flexShrink: 1, minWidth: 0 }} chevron onClick={() => openRunPicker(app, view.station)} />
+                )}
+              </View>
+            </View>
+            <View style={{ height: room.current }} />
+          </FootGlass>
+        </Animated.View>
       </View>
-      {/* A band of glass of its own, from the choices to the screen's end: what runs under it is frosted all over,
-          not seen between the choices; it goes with them as the page leaves. */}
-      <Animated.View style={[{ position: "absolute", left: 0, right: 0, bottom: 0 }, footFade]} onLayout={(e) => setFoot(e.nativeEvent.layout.height)}>
-        <FootGlass>
-          {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
-          {!leaving && choice.spent != null && (
-            <View style={{ paddingHorizontal: 12 }}>
-              <Smooth radius={12} style={{ alignSelf: "stretch", backgroundColor: lerpColor(C.bg, C.warn, 0.12), paddingHorizontal: 12, paddingVertical: 8 }}>
-                <T size={13}>{choice.spent}</T>
-              </Smooth>
-            </View>
-          )}
-          {/* The choices, over the composer (the host's, a floating capsule as in a chat), with room for it below. */}
-          <View style={{ alignSelf: "stretch", paddingLeft: 10, paddingRight: 10, paddingTop: 8 }}>
-            {/* One line that fits the width, no scrolling: where it runs, and what it runs on as one control (web/src/ModelTriple.tsx),
-                cut short rather than pushed off the edge. Room above and below for the chips' shadows. */}
-            <View style={{ alignSelf: "stretch", flexDirection: "row", paddingHorizontal: 2, paddingVertical: 6, gap: 6 }}>
-              <Chooser leading={<StationMark emoji={view.emoji} icon={view.icon} size={14} tint={C.ink} none={Icons.Server} />} label={view.name} style={{ maxWidth: 128 }} onClick={() => pickStation(app, stations, view.station, onStation)} />
-              {runtime == null || model == null || p == null || p.options.length === 0 ? (
-                // Nothing to choose from: the chooser leads to where models are enabled.
-                <Chooser leading={null} label={t("android-chat.new.noModels")} style={{ flexShrink: 1, minWidth: 0 }} onClick={() => app.push({ kind: "Profiles" })} />
-              ) : (
-                <Chooser leading={<MakerIcon maker={p.valueOption?.maker ?? entry!.maker} runtime={runtime} size={14} />} label={tripleLabel(p)} style={{ flexShrink: 1, minWidth: 0 }} chevron onClick={() => openRunPicker(app, view.station)} />
-              )}
-            </View>
-          </View>
-          <View style={{ height: room.current }} />
-        </FootGlass>
-      </Animated.View>
-    </View>
+    </LocalFrostSource.Provider>
   );
 }
 

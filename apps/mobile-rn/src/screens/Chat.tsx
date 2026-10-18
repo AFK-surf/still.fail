@@ -4,7 +4,7 @@
 // Your messages sit right in a bubble; everyone else gets a face, a name and
 // the time over their words. Long-press quotes or copies a message; ＋ adds files.
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { FlatList, Pressable, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { Easing as REasing, FadeOut, runOnJS, useAnimatedProps, useAnimatedStyle, useSharedValue, withRepeat, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Path } from "react-native-svg";
@@ -20,7 +20,7 @@ import { AnnotatedText, thenText, type InlineTextContent, type TextLayout } from
 import { chatInk, rememberStationName } from "../ui/ChatInk";
 import { DoingMark } from "../ui/Controls";
 import { awayFromEnd, endInView, rememberFollow, rememberLazyListState, type Follow, type LazyListState } from "../ui/Follow";
-import { Floating, TopGlass } from "../ui/Glass";
+import { Backdrop, Floating, LocalFrostSource, TopGlass, useFrostName } from "../ui/Glass";
 import { Icon, Icons } from "../ui/Icon";
 import type { IconPaths } from "../ui/IconSet";
 import { letsGoOfKeyboard } from "../ui/Keyboard";
@@ -145,15 +145,19 @@ function ChatRead({ station, of, view, host, draft, topBar, setTopBar }: { stati
   const spec = chatComposer(host, station, of, view, agents, draft);
   useLayoutEffect(() => { host.spec = spec; });
   const room = useHost(host, (h) => h.roomForList()) ?? 0;
+  // What the bar and the buttons over the messages frost (Chat.kt's list hazeSource).
+  const list = useFrostName("chat");
   // Its own paper under all of it: the bars are see-through, and what is under the page must not show in them.
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* What a preview's marks put into this chat's draft (Preview.tsx). */}
-      <TakeDraftOffers station={station} sessions={keys} draft={draft} />
-      {/* The messages run under the bar and the composer, which are frosted glass over them. */}
-      <Messages station={station} of={of} view={view} agents={agents} draft={draft} style={{ flex: 1, backgroundColor: C.bg }} top={topBar} bottom={room} host={host} />
-      <ChatBar station={station} of={of} view={view} agents={agents} onLayout={(e) => setTopBar(e.nativeEvent.layout.height)} />
-    </View>
+    <LocalFrostSource.Provider value={list}>
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        {/* What a preview's marks put into this chat's draft (Preview.tsx). */}
+        <TakeDraftOffers station={station} sessions={keys} draft={draft} />
+        {/* The messages run under the bar and the composer, which are frosted glass over them. */}
+        <Messages station={station} of={of} view={view} agents={agents} draft={draft} style={{ flex: 1, backgroundColor: C.bg }} top={topBar} bottom={room} host={host} backdrop={list} />
+        <ChatBar station={station} of={of} view={view} agents={agents} onLayout={(e) => setTopBar(e.nativeEvent.layout.height)} />
+      </View>
+    </LocalFrostSource.Provider>
   );
 }
 
@@ -422,7 +426,7 @@ interface ListCtx {
 }
 
 /** `top` and `bottom`: the bars over it, which the list keeps its ends clear of. */
-function Messages({ station, of, view, agents, draft, style, top = 0, bottom = 0, host }: { station: string; of: ChatOf; view: ChatView; agents: AgentHere[]; draft: Draft; style?: StyleProp<ViewStyle>; top?: number; bottom?: number; host: Host }) {
+function Messages({ station, of, view, agents, draft, style, top = 0, bottom = 0, host, backdrop }: { station: string; of: ChatOf; view: ChatView; agents: AgentHere[]; draft: Draft; style?: StyleProp<ViewStyle>; top?: number; bottom?: number; host: Host; backdrop: string }) {
   const C = useC();
   const ink = chatInk(C);
   useApp((s) => s.doing);
@@ -885,42 +889,44 @@ function Messages({ station, of, view, agents, draft, style, top = 0, bottom = 0
       <LocalChatMotion.Provider value={motion}>
         <LocalMessagePick.Provider value={pick}>
           {/* The list is what the bars and capsules over it frost (the button over it too, so it is not in it). */}
-          {/* A new chat's first words coming up: the list after them, cut at the composer's top edge. */}
-          <View style={[{ position: "absolute", left: 0, right: 0, top: 0 }, cut != null ? { height: Math.max(0, cut), overflow: "hidden" } : { bottom: 0 }]}>
-            <Animated.View style={[{ position: "absolute", left: 0, right: 0, top: 0 }, paneH != null ? { height: paneH } : { bottom: 0 }, carriedStyle]}>
-              {/* Reading on (a tap, a drag): the keyboard goes, out of the way. */}
-              <View style={{ flex: 1, opacity: begun || messages.length === 0 ? 1 : 0 }} {...keyboard}>
-                <FlatList
-                  style={{ flex: 1, backgroundColor: C.bg }}
-                  data={rows}
-                  keyExtractor={(r) => r.id}
-                  renderItem={({ item }) => <RowItem row={item} lc={lc} />}
-                  ref={binding.ref as never}
-                  onScroll={binding.onScroll}
-                  scrollEventThrottle={binding.scrollEventThrottle}
-                  onLayout={binding.onLayout}
-                  onContentSizeChange={(w, h) => { binding.onContentSizeChange(w, h); if (h > 0 && !laid) setLaid(true); }}
-                  onScrollBeginDrag={binding.onScrollBeginDrag}
-                  onScrollEndDrag={binding.onScrollEndDrag}
-                  onMomentumScrollBegin={binding.onMomentumScrollBegin}
-                  onMomentumScrollEnd={binding.onMomentumScrollEnd}
-                  onScrollToIndexFailed={binding.onScrollToIndexFailed}
-                  CellRendererComponent={Cell as never}
-                  contentContainerStyle={[
-                    { paddingLeft: 14, paddingRight: 14, paddingTop: top + 14, paddingBottom: bottom + 10, gap: GAP },
-                    // Arrangement.Bottom while it comes in from its newest: what is there sits at the list's end.
-                    revealing && { flexGrow: 1, justifyContent: "flex-end" },
-                  ]}
-                  initialNumToRender={Math.max(10, rows.length)}
-                  windowSize={21}
-                  // A page coming in above leaves what is in view where it is (the row after a page's spinner, not the spinner).
-                  maintainVisibleContentPosition={{ minIndexForVisible: rows[0]?.kind === "Older" ? 1 : 0 }}
-                  removeClippedSubviews={false}
-                  keyboardShouldPersistTaps="handled"
-                />
-              </View>
-            </Animated.View>
-          </View>
+          <Backdrop name={backdrop} style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            {/* A new chat's first words coming up: the list after them, cut at the composer's top edge. */}
+            <View style={[{ position: "absolute", left: 0, right: 0, top: 0 }, cut != null ? { height: Math.max(0, cut), overflow: "hidden" } : { bottom: 0 }]}>
+              <Animated.View style={[{ position: "absolute", left: 0, right: 0, top: 0 }, paneH != null ? { height: paneH } : { bottom: 0 }, carriedStyle]}>
+                {/* Reading on (a tap, a drag): the keyboard goes, out of the way. */}
+                <View style={{ flex: 1, opacity: begun || messages.length === 0 ? 1 : 0 }} {...keyboard}>
+                  <FlatList
+                    style={{ flex: 1, backgroundColor: C.bg }}
+                    data={rows}
+                    keyExtractor={(r) => r.id}
+                    renderItem={({ item }) => <RowItem row={item} lc={lc} />}
+                    ref={binding.ref as never}
+                    onScroll={binding.onScroll}
+                    scrollEventThrottle={binding.scrollEventThrottle}
+                    onLayout={binding.onLayout}
+                    onContentSizeChange={(w, h) => { binding.onContentSizeChange(w, h); if (h > 0 && !laid) setLaid(true); }}
+                    onScrollBeginDrag={binding.onScrollBeginDrag}
+                    onScrollEndDrag={binding.onScrollEndDrag}
+                    onMomentumScrollBegin={binding.onMomentumScrollBegin}
+                    onMomentumScrollEnd={binding.onMomentumScrollEnd}
+                    onScrollToIndexFailed={binding.onScrollToIndexFailed}
+                    CellRendererComponent={Cell as never}
+                    contentContainerStyle={[
+                      { paddingLeft: 14, paddingRight: 14, paddingTop: top + 14, paddingBottom: bottom + 10, gap: GAP },
+                      // Arrangement.Bottom while it comes in from its newest: what is there sits at the list's end.
+                      revealing && { flexGrow: 1, justifyContent: "flex-end" },
+                    ]}
+                    initialNumToRender={Math.max(10, rows.length)}
+                    windowSize={21}
+                    // A page coming in above leaves what is in view where it is (the row after a page's spinner, not the spinner).
+                    maintainVisibleContentPosition={{ minIndexForVisible: rows[0]?.kind === "Older" ? 1 : 0 }}
+                    removeClippedSubviews={false}
+                    keyboardShouldPersistTaps="handled"
+                  />
+                </View>
+              </Animated.View>
+            </View>
+          </Backdrop>
           {/* Over the list, under the bar and the composer: the picked passage's handles and what to do with it. */}
           <PickLayer pick={pick} follow={() => scrolled} moving={moving} top={top} bottom={bottom} style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0 }} />
           {/* Over the send button, in line with it (the composer's capsule insets it 18dp from the edge); it comes up

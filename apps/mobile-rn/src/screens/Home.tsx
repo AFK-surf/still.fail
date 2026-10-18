@@ -2,7 +2,7 @@
 // chat yet), newest first and grouped by day. A fixed head (settings · workspace · the filter · stations); at the bottom
 // the bar of places floats over it (ui/Bar.tsx: 奏 and 令 are there).
 import * as Haptics from "expo-haptics";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Platform, Pressable, StyleSheet, View, useWindowDimensions, type LayoutChangeEvent, type PressableProps, type StyleProp, type TextLayoutEventData, type NativeSyntheticEvent, type ViewStyle } from "react-native";
 import { FlatList, Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -22,6 +22,7 @@ import { Illustration } from "../ui/Drawing";
 import { Icon, Icons } from "../ui/Icon";
 import { Ease, MoveSpring } from "../ui/Motion";
 import { NavButton, SectionHeader, SlackMark, StationMark, hasStationMark, reducedMotion } from "../ui/Parts";
+import { Backdrop, LocalFrostSource, useFrostName } from "../ui/Glass";
 import { Smooth } from "../ui/Smooth";
 import { StationGlyph, glyphCounts } from "../ui/StationGlyph";
 import { doneLead, waitLead } from "../ui/StatusText";
@@ -110,74 +111,82 @@ export function HomeScreen({ current }: { current: WorkspaceEntry }) {
   // (`status` in trouble) puts it to sleep. Only on a wide screen: under the bottom bar they are a place of it
   // (Places.tsx PlaceBar), drawn and said the same.
   const status = rememberTopic<StatusView>(room === 0 ? Topics.status(scope) : null);
+  const lists = useFrostName("home");
 
   return (
-    <View style={{ flex: 1 }}>
-      <Animated.View style={[StyleSheet.absoluteFill, { overflow: "hidden" }, listsStyle]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-        <ChatPane current={current} chats={all} filter="all" padding={padding} onSearch={onSearch} searching={searching} index={0} shift={shift} width={width} />
-        <ChatPane current={current} chats={mine} filter="mine" padding={padding} onSearch={onSearch} searching={searching} index={1} shift={shift} width={width} />
-        <ChatPane current={current} chats={watching} filter="watching" padding={padding} onSearch={onSearch} searching={searching} index={2} shift={shift} width={width} />
-      </Animated.View>
-      {/* The top bar (PlacePage.tsx has every place's page wear it too). */}
-      <Animated.View style={[{ position: "absolute", left: 0, top: 0, right: 0 }, barStyle]} onLayout={(e) => setTopBar(e.nativeEvent.layout.height)}>
-        <TopGlassBar>
-          {/* Settings, at the top left (SettingsHome.tsx): the account, the workspace's things, this device's. */}
-          <SettingsGear />
-          <Smooth radius={8} style={{ flex: 1, minWidth: 0 }}>
-            <Pressable onPress={() => openWorkspaces(app)} android_ripple={ripple(C.ink)} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <TopBarTitle text={current.workspace.name} style={{ flexShrink: 1, minWidth: 0 }} />
-              {/* The other workspaces have something waiting: its dot by the name, before an invitation's. */}
-              {others != null ? (
-                <WorkspaceMark tone={others} label={marks.value?.othersLabel ?? ""} />
-              ) : invited ? (
-                <View accessible accessibilityLabel={t("android-chat.home.invited")} style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.accent }} />
-              ) : null}
-              <Icon icon={Icons.ChevronDown} size={16} color={C.muted} />
-            </Pressable>
-          </Smooth>
-          {(updates.progress != null || (updates.available?.news ?? []).length > 0) && (
-            // Quiet like the bar's other buttons: the icon with a dot; while it downloads, how far it is instead.
-            updates.progress != null ? (
-              <T size={13} color={C.muted} numberOfLines={1} accessibilityLabel={updates.progress}>{after(updates.progress, " ", "…")}</T>
-            ) : (
-              <View accessible accessibilityLabel={t("android-chat.home.update", { version: updates.available?.versionName ?? "" })}>
-                <NavButton icon={Icons.Download} onClick={() => { void updates.install().then((said: string | null) => { if (said) app.toast = said; }); }} iconSize={20} />
-                <View pointerEvents="none" style={{ position: "absolute", right: 3, top: 3, width: 13, height: 13, borderRadius: 6.5, backgroundColor: C.bg, padding: 2 }}>
-                  <View style={{ flex: 1, borderRadius: 4.5, backgroundColor: C.accent }} />
-                </View>
-              </View>
-            )
-          )}
-          {/* The filter, and the archive in its menu, as on the wide screen (web mobile/Home.tsx FilterButton): nothing to
-              narrow or look back on with no station. The accent while it narrows the list. */}
-          {(all.value?.stations.length ?? 0) > 0 && (
-            <View ref={filterButton} collapsable={false} style={{ width: 34, height: 34, borderRadius: 17, overflow: "hidden" }}>
-              <Pressable
-                accessibilityLabel={t("android-chat.home.filter.label", { filter: filter === "mine" ? t("android-chat.home.filter.mine") : filter === "watching" ? t("android-chat.home.filter.watching") : t("android-chat.home.filter.all") })}
-                android_ripple={ripple(C.ink)}
-                style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-                onPress={() => filterButton.current?.measureInWindow((x, y, w, h) => {
-                  // The menu is 180 wide (Sheet.tsx MenuHost): its right edge under the button's.
-                  const left = x + w - 180;
-                  app.menu = new MenuSpec({ left, top: y, right: left, bottom: y + h }, [
-                    new MenuItem(t("android-chat.home.filter.all"), filter === "all" ? Icons.Check : null, () => app.showChats(scope, "all")),
-                    new MenuItem(t("android-chat.home.filter.mine"), filter === "mine" ? Icons.Check : null, () => app.showChats(scope, "mine")),
-                    new MenuItem(t("android-chat.home.filter.watching"), filter === "watching" ? Icons.Check : null, () => app.showChats(scope, "watching")),
-                    new MenuItem(t("android-chat.home.filter.archived"), Icons.Archive, () => app.push({ kind: "Archive" })),
-                  ]);
-                })}
-              >
-                <Icon icon={Icons.Filter} size={20} color={filter !== "all" ? C.accent : C.ink} />
-              </Pressable>
+    <LocalFrostSource.Provider value={lists}>
+      <View style={{ flex: 1 }}>
+        <Animated.View style={[StyleSheet.absoluteFill, { overflow: "hidden" }, listsStyle]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+          {/* What the top bar frosts (Home.kt's hazeSource on the lists). */}
+          <Backdrop name={lists} style={StyleSheet.absoluteFill}>
+            <View style={StyleSheet.absoluteFill}>
+              <ChatPane current={current} chats={all} filter="all" padding={padding} onSearch={onSearch} searching={searching} index={0} shift={shift} width={width} />
+              <ChatPane current={current} chats={mine} filter="mine" padding={padding} onSearch={onSearch} searching={searching} index={1} shift={shift} width={width} />
+              <ChatPane current={current} chats={watching} filter="watching" padding={padding} onSearch={onSearch} searching={searching} index={2} shift={shift} width={width} />
             </View>
-          )}
-          {room === 0 && <StationsButton all={all.value} status={status.value} />}
-        </TopGlassBar>
-      </Animated.View>
-      {searchFrom !== null && (
-        <SearchPage scope={scope} from={searchFrom} wide={searchWidth} onLeave={() => setSearchOpen(false)} onClose={() => setSearchFrom(null)} />
-      )}
-    </View>
+          </Backdrop>
+        </Animated.View>
+        {/* The top bar (PlacePage.tsx has every place's page wear it too). */}
+        <Animated.View style={[{ position: "absolute", left: 0, top: 0, right: 0 }, barStyle]} onLayout={(e) => setTopBar(e.nativeEvent.layout.height)}>
+          <TopGlassBar>
+            {/* Settings, at the top left (SettingsHome.tsx): the account, the workspace's things, this device's. */}
+            <SettingsGear />
+            <Smooth radius={8} style={{ flex: 1, minWidth: 0 }}>
+              <Pressable onPress={() => openWorkspaces(app)} android_ripple={ripple(C.ink)} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <TopBarTitle text={current.workspace.name} style={{ flexShrink: 1, minWidth: 0 }} />
+                {/* The other workspaces have something waiting: its dot by the name, before an invitation's. */}
+                {others != null ? (
+                  <WorkspaceMark tone={others} label={marks.value?.othersLabel ?? ""} />
+                ) : invited ? (
+                  <View accessible accessibilityLabel={t("android-chat.home.invited")} style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.accent }} />
+                ) : null}
+                <Icon icon={Icons.ChevronDown} size={16} color={C.muted} />
+              </Pressable>
+            </Smooth>
+            {(updates.progress != null || (updates.available?.news ?? []).length > 0) && (
+              // Quiet like the bar's other buttons: the icon with a dot; while it downloads, how far it is instead.
+              updates.progress != null ? (
+                <T size={13} color={C.muted} numberOfLines={1} accessibilityLabel={updates.progress}>{after(updates.progress, " ", "…")}</T>
+              ) : (
+                <View accessible accessibilityLabel={t("android-chat.home.update", { version: updates.available?.versionName ?? "" })}>
+                  <NavButton icon={Icons.Download} onClick={() => { void updates.install().then((said: string | null) => { if (said) app.toast = said; }); }} iconSize={20} />
+                  <View pointerEvents="none" style={{ position: "absolute", right: 3, top: 3, width: 13, height: 13, borderRadius: 6.5, backgroundColor: C.bg, padding: 2 }}>
+                    <View style={{ flex: 1, borderRadius: 4.5, backgroundColor: C.accent }} />
+                  </View>
+                </View>
+              )
+            )}
+            {/* The filter, and the archive in its menu, as on the wide screen (web mobile/Home.tsx FilterButton): nothing to
+                narrow or look back on with no station. The accent while it narrows the list. */}
+            {(all.value?.stations.length ?? 0) > 0 && (
+              <View ref={filterButton} collapsable={false} style={{ width: 34, height: 34, borderRadius: 17, overflow: "hidden" }}>
+                <Pressable
+                  accessibilityLabel={t("android-chat.home.filter.label", { filter: filter === "mine" ? t("android-chat.home.filter.mine") : filter === "watching" ? t("android-chat.home.filter.watching") : t("android-chat.home.filter.all") })}
+                  android_ripple={ripple(C.ink)}
+                  style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+                  onPress={() => filterButton.current?.measureInWindow((x, y, w, h) => {
+                    // The menu is 180 wide (Sheet.tsx MenuHost): its right edge under the button's.
+                    const left = x + w - 180;
+                    app.menu = new MenuSpec({ left, top: y, right: left, bottom: y + h }, [
+                      new MenuItem(t("android-chat.home.filter.all"), filter === "all" ? Icons.Check : null, () => app.showChats(scope, "all")),
+                      new MenuItem(t("android-chat.home.filter.mine"), filter === "mine" ? Icons.Check : null, () => app.showChats(scope, "mine")),
+                      new MenuItem(t("android-chat.home.filter.watching"), filter === "watching" ? Icons.Check : null, () => app.showChats(scope, "watching")),
+                      new MenuItem(t("android-chat.home.filter.archived"), Icons.Archive, () => app.push({ kind: "Archive" })),
+                    ]);
+                  })}
+                >
+                  <Icon icon={Icons.Filter} size={20} color={filter !== "all" ? C.accent : C.ink} />
+                </Pressable>
+              </View>
+            )}
+            {room === 0 && <StationsButton all={all.value} status={status.value} />}
+          </TopGlassBar>
+        </Animated.View>
+        {searchFrom !== null && (
+          <SearchPage scope={scope} from={searchFrom} wide={searchWidth} onLeave={() => setSearchOpen(false)} onClose={() => setSearchFrom(null)} />
+        )}
+      </View>
+    </LocalFrostSource.Provider>
   );
 }
 
@@ -237,6 +246,7 @@ function ChatPane({ current, chats, filter, padding, onSearch, searching, index,
   const order = useMemo(() => new HeldOrder(), [current.workspace.id]);
   const sizes = useMemo(() => new Map<string, number>(), [current.workspace.id]);
   useSyncExternalStore(motion.subscribe, motion.version);
+  const paneValue = useMemo(() => ({ motion, still, sizes }), [motion, still, sizes]);
   const [pressed, setPressed] = useState(false);
   const [scrolling, setScrolling] = useState(false);
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -303,7 +313,7 @@ function ChatPane({ current, chats, filter, padding, onSearch, searching, index,
     >
       {/* Rows gone, each drawn where it was as it goes, under the rows closing over it. */}
       {view != null && motion.ghosts.map((g) => <Leaving key={`${g.key}@${g.at}`} g={g} view={view} motion={motion} />)}
-      <PaneContext.Provider value={{ motion, still, sizes }}>
+      <PaneContext.Provider value={paneValue}>
         <FlatList
           ref={list}
           style={StyleSheet.absoluteFill}
@@ -333,8 +343,8 @@ function ChatPane({ current, chats, filter, padding, onSearch, searching, index,
               case "wait": return view == null ? <Waiting text={t("android-chat.home.loading")} error={chats.error?.message ?? null} /> : <Waiting count={waiting ? 7 : 4} text={t("android-chat.home.loading")} note={note ?? null} />;
               case "empty": return view ? <Empty current={current} view={view} filter={filter} /> : null;
               case "jobs": return <OpenJobs scope={current.workspace.id} />;
-              case "day": return <Moving motion={motion} rowKey={i.key} still={still}><SectionHeader title={i.label} /></Moving>;
-              case "row": return view ? <Moving motion={motion} rowKey={i.key} still={still}><ChatRow item={i.item} view={view} motion={motion} /></Moving> : null;
+              case "day": return <DayCell motion={motion} rowKey={i.key} still={still} label={i.label} />;
+              case "row": return view ? <RowCell motion={motion} rowKey={i.key} still={still} item={i.item} view={view} /> : null;
             }
           }}
         />
@@ -355,6 +365,14 @@ function Cell({ item, style, onLayout, children }: { item: PaneItem; style?: Sty
   const moving = item.kind === "day" || item.kind === "row";
   const key = item.key;
   const lifting = moving && !pane.still && pane.motion.liftedAt(key) !== null;
+  // Made again only as what it is made of changes (whether the row is lifted): each one made is a worklet sent to the UI
+  // thread, and the list draws its cells again as a fling starts and ends.
+  const lifted = pane.motion.liftedAt(key) !== null;
+  const placement = useMemo(
+    () => (moving && !pane.still ? pane.motion.placement(key) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pane.motion, pane.still, moving, key, lifted],
+  );
   const layout = (e: LayoutChangeEvent) => {
     onLayout?.(e);
     if (!moving) return;
@@ -362,7 +380,7 @@ function Cell({ item, style, onLayout, children }: { item: PaneItem; style?: Sty
     pane.sizes.set(key, e.nativeEvent.layout.height);
   };
   return (
-    <Animated.View style={[style, { zIndex: lifting ? 1 : 0 }]} onLayout={layout} layout={moving && !pane.still ? pane.motion.placement(key) : undefined}>
+    <Animated.View style={[style, { zIndex: lifting ? 1 : 0 }]} onLayout={layout} layout={placement}>
       {children}
     </Animated.View>
   );
@@ -405,6 +423,21 @@ function Moving({ motion, rowKey: key, still, children }: { motion: ListMotion; 
     </Animated.View>
   );
 }
+
+/**
+ * A row and a day heading as the list draws them: drawn again only when what they show changed, not each time the list
+ * is (a finger set on it, a scroll begun or ended, which re-render the list for its `hold`): a row is heavy (its swipe,
+ * its motion), and those come as a fling starts.
+ */
+const RowCell = memo(function RowCell({ motion, rowKey, still, item, view }: { motion: ListMotion; rowKey: string; still: boolean; item: ChatItem; view: ChatsView }) {
+  // The list's motion (a row lifted, one arriving) is read as they draw: they follow it themselves.
+  useSyncExternalStore(motion.subscribe, motion.version);
+  return <Moving motion={motion} rowKey={rowKey} still={still}><ChatRow item={item} view={view} motion={motion} /></Moving>;
+});
+const DayCell = memo(function DayCell({ motion, rowKey, still, label }: { motion: ListMotion; rowKey: string; still: boolean; label: string }) {
+  useSyncExternalStore(motion.subscribe, motion.version);
+  return <Moving motion={motion} rowKey={rowKey} still={still}><SectionHeader title={label} /></Moving>;
+});
 
 /** A row gone from the list: a copy of it where it was shrinks and fades (200 ms, ease-out), then is dropped. */
 function Leaving({ g, view, motion }: { g: Ghost; view: ChatsView; motion: ListMotion }) {

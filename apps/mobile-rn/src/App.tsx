@@ -49,6 +49,7 @@ import { VaultItemScreen, VaultScreen } from "./screens/Vault";
 import { WideAt, WideCorners } from "./screens/Wide";
 import { Blocked, Landing, openInvite } from "./screens/Workspaces";
 import { LocalWide } from "./ui/ChatInk";
+import { Backdrop, LocalFrostSource } from "./ui/Glass";
 import { KeyboardInsets } from "./ui/Keyboard";
 import { Splash, reducedMotion } from "./ui/Parts";
 import { MenuHost, ReaderHost, SheetHost, ToastHost } from "./ui/Sheet";
@@ -98,17 +99,22 @@ function AppContent({ app }: { app: AppState }) {
   return (
     <LocalUriHandler.Provider value={links}>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
-          {signedIn == null ? <Splash label={accounts.error?.message ?? null} now={accounts.error != null} />
-            : signedIn.length === 0 ? <SignInScreen />
-            : <SignedIn app={app} signedIn={signedIn} workspaces={workspaces.value} workspacesError={workspaces.error?.message ?? null} />}
-        </View>
-        {/* An image or a video opened, over the pages (it grows out of its thumbnail in the chat); sheets and notes over it. */}
-        <ViewerHost />
-        <SheetHost spec={sheet} haze={app.haze} close={() => { app.sheet?.onClose?.(); app.sheet = null; }} />
-        <ReaderHost spec={reader} close={() => { app.reader = null; }} />
-        <MenuHost spec={menu} closed={() => { app.menu = null; }} />
-        <ToastHost toast={toast} done={() => { app.toast = null; }} />
+        {/* What the sheets and the rest over the pages frost (App.kt's app.haze). */}
+        <Backdrop name="app" style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: C.bg }}>
+            {signedIn == null ? <Splash label={accounts.error?.message ?? null} now={accounts.error != null} />
+              : signedIn.length === 0 ? <SignInScreen />
+              : <SignedIn app={app} signedIn={signedIn} workspaces={workspaces.value} workspacesError={workspaces.error?.message ?? null} />}
+          </View>
+        </Backdrop>
+        <LocalFrostSource.Provider value="app">
+          {/* An image or a video opened, over the pages (it grows out of its thumbnail in the chat); sheets and notes over it. */}
+          <ViewerHost />
+          <SheetHost spec={sheet} haze={app.haze} close={() => { app.sheet?.onClose?.(); app.sheet = null; }} />
+          <ReaderHost spec={reader} close={() => { app.reader = null; }} />
+          <MenuHost spec={menu} closed={() => { app.menu = null; }} />
+          <ToastHost toast={toast} done={() => { app.toast = null; }} />
+        </LocalFrostSource.Provider>
       </View>
     </LocalUriHandler.Provider>
   );
@@ -696,28 +702,35 @@ function Pages({ app, current }: { app: AppState; current: WorkspaceEntry }) {
       <BackHandlerOf enabled={root != null && root.kind !== "Home" && placeOf(root) != null && !overlaid} onBack={() => app.place({ kind: "Home" })} />
       {/* A view of its own (not flattened into its parent): the pages' zIndex orders them among themselves, not over the bar. */}
       <EdgeBack {...back}>
-        <View style={{ flex: 1 }} collapsable={false}>
-          <LocalWide.Provider value={wide}>
-            {order.current.map((key) => {
-              const screen = screens.get(key);
-              if (screen == null) return null;
-              const role: Role = run ? (key === run.to ? "in" : key === run.from ? "out" : "hidden") : key === keyOf(pages.current.currentState) ? "rest" : "hidden";
-              const parts = run == null ? null : role === "in" ? run.spec.enter : role === "out" ? run.spec.exit : null;
-              const z = zOf.current.get(key) ?? 0;
-              return (
-                <PageView
-                  key={key} pageKey={key} app={app} current={current} screen={screen} role={role} parts={parts} play={play} width={width}
-                  zIndex={role === "hidden" ? 0 : 1 + z * 2 + (role === "in" ? 1 : 0)} wide={wide} topics={topicsOf(key)}
-                  inStack={stack.some((s) => sameScreen(s, screen))} isRoot={stack.length > 0 && sameScreen(stack[0], screen)}
-                  letGoOf={() => { if (!app.stack.some((s) => keyOf(s) === key)) letGo((k) => k !== key); }}
-                />
-              );
-            })}
-          </LocalWide.Provider>
-        </View>
+        {/* What the bar frosts (App.kt's barHaze): round the pages' own view (a native box keeps no zIndex). */}
+        <Backdrop name="pages" style={{ flex: 1 }}>
+          <View style={{ flex: 1 }} collapsable={false}>
+            <LocalWide.Provider value={wide}>
+              {order.current.map((key) => {
+                const screen = screens.get(key);
+                if (screen == null) return null;
+                const role: Role = run ? (key === run.to ? "in" : key === run.from ? "out" : "hidden") : key === keyOf(pages.current.currentState) ? "rest" : "hidden";
+                const parts = run == null ? null : role === "in" ? run.spec.enter : role === "out" ? run.spec.exit : null;
+                const z = zOf.current.get(key) ?? 0;
+                return (
+                  <PageView
+                    key={key} pageKey={key} app={app} current={current} screen={screen} role={role} parts={parts} play={play} width={width}
+                    zIndex={role === "hidden" ? 0 : 1 + z * 2 + (role === "in" ? 1 : 0)} wide={wide} topics={topicsOf(key)}
+                    inStack={stack.some((s) => sameScreen(s, screen))} isRoot={stack.length > 0 && sameScreen(stack[0], screen)}
+                    letGoOf={() => { if (!app.stack.some((s) => keyOf(s) === key)) letGo((k) => k !== key); }}
+                  />
+                );
+              })}
+            </LocalWide.Provider>
+          </View>
+        </Backdrop>
       </EdgeBack>
       {/* The bottom bar (Places.tsx): a phone's, on a place's top page with nothing over it; the keyboard up (a field on the page): out of its way. */}
-      {!wide ? <PlaceBar app={app} current={current} haze={null} shown={root != null && placeOf(root) != null && !keyboardUp && !barAway} /> : null}
+      {!wide ? (
+        <LocalFrostSource.Provider value="pages">
+          <PlaceBar app={app} current={current} haze={null} shown={root != null && placeOf(root) != null && !keyboardUp && !barAway} />
+        </LocalFrostSource.Provider>
+      ) : null}
       {wide ? <WideCorners current={current} top={top} /> : null}
     </View>
   );

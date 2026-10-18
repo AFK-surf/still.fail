@@ -292,9 +292,22 @@ function chats(): Chat[] {
   ];
 }
 
+/// FILLER=n more chats, one question and its answer each (a long list, as people's are, for perf.sh's scrolling).
+function filler(n: number): Chat[] {
+  const topics = ["CI 偶发失败", "首页列表", "下方栏动画", "通知声音", "文件预览", "Station 内存", "Slack 连接", "分享到 App", "深色模式", "登录跳转"];
+  return Array.from({ length: n }, (_, i) => {
+    const topic = topics[i % topics.length]!;
+    return {
+      title: `${topic} · 第 ${i + 1} 个`,
+      read: i % 3 !== 0,
+      messages: [{ text: `filler ${i + 1}: 看一下${topic}`, steps: [{ post: { text: `看过了${topic}，第 ${i + 1} 个没有问题。`, kind: "all_done", done: `${topic}没有问题` } }] }],
+    };
+  });
+}
+
 async function main() {
   mkdirSync(ASSETS, { recursive: true });
-  const all = chats();
+  const all = [...filler(Number(process.env.FILLER ?? 0)), ...chats()];
   // The scenes, by what each message says.
   const scenes = all.flatMap((c) => c.messages.map((m) => ({ match: m.text, steps: m.steps })));
   writeFileSync(SCENES, JSON.stringify(scenes, null, 1));

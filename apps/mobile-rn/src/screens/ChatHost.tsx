@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { screenId, type Screen, type ScreenOf } from "../AppState";
 import type { WorkspaceEntry } from "../data/Accounts";
 import { LocalWide } from "../ui/ChatInk";
-import { ComposerCorner, ComposerFilesIn, ComposerInset, Floating } from "../ui/Glass";
+import { Backdrop, ComposerCorner, ComposerFilesIn, ComposerInset, Floating, LocalFrostSource, useFrostName } from "../ui/Glass";
 import { keyboard } from "../ui/Keyboard";
 import { Ease } from "../ui/Motion";
 import { reducedMotion } from "../ui/Parts";
@@ -572,20 +572,28 @@ export function ChatHost({ current, screen }: { current: WorkspaceEntry; screen:
   const foot = useAnimatedStyle(() => ({ paddingBottom: Math.max(kb.value, insets.bottom) }));
   // A new chat keeps a column in the middle of a wide screen (Wide.tsx), its composer too; a chat is the screen's width.
   const column = wide && chat == null ? NewChatColumn : null;
+  const frosted = useFrostName("host");
   return (
     <LocalSendTextWidth.Provider value={fieldWidth}>
       <Animated.View style={[{ flex: 1 }, foot]}>
         <View style={{ flex: 1 }}>
-          {chat && <ChatScreen key={screenId(chat)} station={chat.station} of={chat.of} host={host} />}
-          {/* A new chat's scene stays over its chat while it leaves. */}
-          {(chat == null || leaving) && (
-            <View key="new" style={[{ position: "absolute", top: 0, bottom: 0, alignSelf: "center", width: "100%" }, wide ? NewChatColumn : null]}>
-              <NewChatScreen current={current} host={host} leaving={chat != null} />
+          {/* What the composer frosts (Chat.kt's host.haze): the chat and the new chat's scene. */}
+          <Backdrop name={frosted} style={StyleSheet.absoluteFill}>
+            <View style={StyleSheet.absoluteFill}>
+              {chat && <ChatScreen key={screenId(chat)} station={chat.station} of={chat.of} host={host} />}
+              {/* A new chat's scene stays over its chat while it leaves. */}
+              {(chat == null || leaving) && (
+                <View key="new" style={[{ position: "absolute", top: 0, bottom: 0, alignSelf: "center", width: "100%" }, wide ? NewChatColumn : null]}>
+                  <NewChatScreen current={current} host={host} leaving={chat != null} />
+                </View>
+              )}
             </View>
-          )}
-          <View pointerEvents="box-none" style={[{ position: "absolute", left: 0, right: 0, bottom: 0 }, column]}>
-            <HostComposer host={host} besideRecent={wide && chat != null} />
-          </View>
+          </Backdrop>
+          <LocalFrostSource.Provider value={frosted}>
+            <View pointerEvents="box-none" style={[{ position: "absolute", left: 0, right: 0, bottom: 0 }, column]}>
+              <HostComposer host={host} besideRecent={wide && chat != null} />
+            </View>
+          </LocalFrostSource.Provider>
           <FlightLayer host={host} />
         </View>
       </Animated.View>

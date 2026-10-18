@@ -1,7 +1,6 @@
 // What lies over the pages: one sheet from the bottom at a time (dragged by
 // its grabber between half and full height, or down to close), a message's
 // long-press menu, and a short note.
-import { BlurView } from "expo-blur";
 import { slot, type Slot } from "./Parts";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BackHandler, Keyboard, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
@@ -16,7 +15,7 @@ import { IconIn, NavBack } from "./Parts";
 import { Smooth } from "./Smooth";
 import { T } from "./Text";
 import { useC, withAlpha } from "./Theme";
-import { Quiet } from "./Quiet";
+import { FrostLayer } from "./Glass";
 
 /**
  * A sheet (AppState's SheetSpec, as Sheet.kt has it): how much of the screen it takes at first (`height`), and whether
@@ -50,12 +49,9 @@ function useBack(enabled: boolean, onBack: () => void) {
   }, [enabled]);
 }
 
-/** expo-blur's intensity for a CSS blur of `px` (as Glass.tsx reckons it). */
-// As Glass.tsx blur: the radius px, no white of expo-blur's own over it (its intensity kept at 1).
-const blurOf = (px: number) => ({ intensity: 1, blurReductionFactor: 1 / px }) as const;
 const canBlur = Platform.OS === "android" ? (Platform.Version as number) >= 31 : true;
 
-/** `haze`: the Android app's frosting source; here what is behind is blurred as it is (Glass.tsx), so none is needed. */
+/** `haze`: the Android app's frosting source; here the frost's (Glass.tsx LocalFrostSource: the app's, App.tsx). */
 export function SheetHost({ spec, close }: { spec: SheetSpec | null; haze?: unknown; close: () => void }) {
   const [shown, setShown] = useState<SheetSpec | null>(null);
   if (spec != null && shown !== spec) setShown(spec);
@@ -168,7 +164,7 @@ function SheetBody({ spec, current, scrim, close, gone }: { spec: SheetSpec | nu
             {(current.solid ?? false) || !canBlur ? (
               <View style={[StyleSheet.absoluteFill, { backgroundColor: paper }]} />
             ) : (
-              <Quiet style={StyleSheet.absoluteFill}><BlurView experimentalBlurMethod="dimezisBlurView" {...blurOf(28)} tint="default" style={StyleSheet.absoluteFill} /></Quiet>
+              <FrostLayer px={28} />
             )}
             {!(current.solid ?? false) && (
               <>
