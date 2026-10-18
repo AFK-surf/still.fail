@@ -35,13 +35,17 @@ static ID3D11BlendState *blend;
 static ID3D11RasterizerState *raster;
 static int fb_w, fb_h;
 static double vw = 800, vh = 600, vscale = 1;
-// the last frame, kept for snapshots (the vertex buffer still holds it)
+// the last frame, kept for snapshots (the vertex buffer still holds it) and
+// to find the runs of each image
 static int32_t last_count;
+static float *last_inst;
+static size_t last_cap;
 static float last_bg[3];
 
 static const char *shader_src =
     "cbuffer U : register(b0) { float2 vp; float scale; float pad; };\n"
     "Texture2D atlas : register(t0);\n"
+    "Texture2D img : register(t1);\n"
     "SamplerState samp : register(s0);\n"
     "struct VIn { float4 rect : INST0; float4 p : INST1; float4 color : INST2; float4 c2 : INST3;\n"
     "  float4 clip : INST4; uint vid : SV_VertexID; };\n"
@@ -54,7 +58,7 @@ static const char *shader_src =
     "  float2 corner = float2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0,\n"
     "                         (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);\n"
     "  int kind = int(I.p.y + 0.5);\n"
-    "  float grow = kind == 2 ? I.p.w * 2.0 + 2.0 : (kind == 0 ? 1.0 : 0.0);\n"
+    "  float grow = kind == 2 ? I.p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4) ? 1.0 : 0.0);\n"
     "  float2 pos = I.rect.xy - grow + corner * (I.rect.zw + 2.0 * grow);\n"
     "  VOut o;\n"
     "  o.pos = float4(pos.x / vp.x * 2.0 - 1.0, 1.0 - pos.y / vp.y * 2.0, 0.0, 1.0);\n"
@@ -77,6 +81,10 @@ static const char *shader_src =
     "  float r = min(I.prm.x, min(hs.x, hs.y));\n"
     "  float2 q = abs(p - c) - hs + r;\n"
     "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n"
+    "  if (kind == 4) {\n"
+    "    float2 uv = I.c2.xy + saturate((p - I.rect.xy) / I.rect.zw) * I.c2.zw;\n"
+    "    return img.SampleLevel(samp, uv, 0) * (col.a * saturate(0.5 - d * scale));\n"
+    "  }\n"
     "  if (kind == 2) {\n"
     "    float b = max(I.prm.w, 0.5);\n"
     "    float a = 1.0 - smoothstep(-b, b, d);\n"
@@ -186,6 +194,8 @@ int mb_render_init(void *hwnd) {
   return chain != NULL;
 }
 
+void *mb_render_device(void) { return dev; }
+
 void mb_render_set_size(int pw, int ph, double w, double h, double scale) {
   vw = w;
   vh = h;
@@ -209,7 +219,8 @@ void mb_atlas_upload(int x, int y, int w, int h, const void *rgba) {
   ctx->UpdateSubresource(atlas, 0, &box, rgba, (UINT)w * 4, 0);
 }
 
-static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count, const float *bg) {
+static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count, const float *bg,
+                   const float *f) {
   float clear[4] = {bg[0], bg[1], bg[2], 1};
   ctx->OMSetRenderTargets(1, &target, NULL);
   ctx->ClearRenderTargetView(target, clear);
@@ -230,7 +241,18 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
   ctx->PSSetShaderResources(0, 1, &atlas_srv);
   ctx->PSSetSamplers(0, 1, &sampler);
   ctx->OMSetBlendState(blend, NULL, 0xffffffff);
-  ctx->DrawInstanced(6, (UINT)count, 0, 0);
+  // one draw per run of instances showing the same image (slot 20; 0: none,
+  // the atlas stands in)
+  int32_t start = 0;
+  while (start < count) {
+    int tid = (int)f[start * 24 + 20];
+    int32_t end = start + 1;
+    while (end < count && (int)f[end * 24 + 20] == tid) end++;
+    ID3D11ShaderResourceView *t = tid ? (ID3D11ShaderResourceView *)mb_image_srv(tid) : atlas_srv;
+    ctx->PSSetShaderResources(1, 1, t ? &t : &atlas_srv);
+    ctx->DrawInstanced(6, (UINT)(end - start), 0, (UINT)start);
+    start = end;
+  }
 }
 
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
@@ -247,13 +269,18 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   if (FAILED(ctx->Map(vbuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) return;
   float *f = (float *)m.pData;
   int32_t n = count * 24;
-  for (int32_t i = 0; i < n; i++) f[i] = (float)inst[i];
+  if (last_cap < need) {
+    last_cap = need * 2;
+    last_inst = (float *)realloc(last_inst, last_cap);
+  }
+  for (int32_t i = 0; i < n; i++) last_inst[i] = (float)inst[i];
+  memcpy(f, last_inst, (size_t)n * sizeof(float));
   ctx->Unmap(vbuf, 0);
   last_count = count;
   last_bg[0] = (float)r;
   last_bg[1] = (float)g;
   last_bg[2] = (float)b;
-  encode(rtv, fb_w, fb_h, count, last_bg);
+  encode(rtv, fb_w, fb_h, count, last_bg, last_inst);
   // a hidden or minimized window does not wait for vsync; pace it as if it did
   if (chain->Present(1, 0) == DXGI_STATUS_OCCLUDED) Sleep(16);
 }
@@ -300,7 +327,7 @@ int mb_render_snapshot(const wchar_t *path) {
   ID3D11RenderTargetView *view = NULL;
   dev->CreateTexture2D(&td, NULL, &tex);
   dev->CreateRenderTargetView(tex, NULL, &view);
-  encode(view, w, h, last_count, last_bg);
+  encode(view, w, h, last_count, last_bg, last_inst);
   td.Usage = D3D11_USAGE_STAGING;
   td.BindFlags = 0;
   td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
