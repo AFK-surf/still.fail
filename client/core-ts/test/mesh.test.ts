@@ -941,6 +941,42 @@ sim("ways_direct_that_keep_going_quiet_are_held_off_a_while", async (s) => {
   await close(s, station, mesh);
 });
 
+/// 2026-10-18, mini1 and studio: a link through a relay had iroh punch a path to the station on the LAN about every
+/// minute, which carried nothing back and went 15 s later, the requests on it meanwhile unanswered; a link dialled by
+/// address carried every one. On its station's LAN, the requests keep off the main endpoint (whose link that is), and
+/// it is not dialled again every REDIAL_MAIN_MS: its LAN way lost, they go to a relay's own way until the LAN
+/// endpoint's is dialled again.
+sim("on_its_stations_lan_the_requests_keep_off_the_main_endpoint", async (s) => {
+  const { station, mesh, id } = await onLan(s);
+  station.lan = station.addr().ips;
+  await reach(s, mesh, id);
+  await s.until(() => mesh.current(id)?.pinned === LAN, 60_000);
+  await s.time.pass(30_000);
+  const on: string[] = [];
+  let mains = 0;
+  const note = () => {
+    const cur = mesh.current(id);
+    on.push(cur === null ? "none" : cur.pinned === LAN ? "lan" : cur.pinned === null ? "main" : "relay");
+    if (mesh.ways(id).some((w) => w.link.pinned === null)) mains++;
+  };
+  for (let t = 0; t < 2 * 60_000; t += TICK_MS) {
+    note();
+    await s.time.pass(TICK_MS);
+  }
+  // The LAN endpoint's link goes quiet for good.
+  for (const c of station.conns) if (c.reason === null && c.peer.endpoint.relays.length === 0) c.way.silentUntil = c.peer.way.silentUntil = Infinity;
+  for (let t = 0; t < 5 * 60_000; t += TICK_MS) {
+    note();
+    await s.time.pass(TICK_MS);
+  }
+  assert.ok(!on.includes("main"), on.join(" "));
+  assert.ok(on.includes("relay"), on.join(" "));
+  assert.equal(on.at(-1), "lan", on.join(" "));
+  assert.equal(mains, 0, `a way on the main endpoint open ${mains} ticks of ${on.length}`);
+  assert.equal((await request(s, mesh.current(id)!, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
 /// Off the station's LAN, its LAN addresses lead nowhere: tried once, not again every while; tried again once the
 /// network changes.
 sim("off_the_stations_lan_its_lan_addresses_are_tried_once_and_again_as_the_network_changes", async (s) => {

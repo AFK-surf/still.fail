@@ -75,6 +75,12 @@ export const LAN = "lan";
 const FLAKY_LOSSES = 2;
 export const DIRECT_HOLD_MS = 2 * 60_000;
 export const DIRECT_HOLD_MAX_MS = 30 * 60_000;
+/// While a way on the LAN endpoint answered within this long, the requests keep off the main endpoint unless no other
+/// way is up. Its link goes through a relay, and iroh punches a path to the station beside it about every minute and
+/// sends on it: the station sent a few packets on such a path and nothing more, the device heard nothing back on it and
+/// let it go 15 s later, and the requests sent on it meanwhile went unanswered (mini1 and studio, 2026-10-18;
+/// docs/mesh-lan.md). A link dialled by address, as on the LAN endpoint, carried every request.
+export const LAN_RECALL_MS = DIRECT_RECALL_MS;
 /// The least a read waits for its answer on its way before it is asked on the next best way as well.
 export const HEDGE_FLOOR_MS = 1_000;
 /// How often a read gone slow looks again for another way to be asked on, while there is none.
@@ -208,8 +214,9 @@ export class Way {
     this.samples++;
   }
 
-  /// Where it goes: its relay (as a key), or "direct".
+  /// Where it goes: its relay (as a key), "lan" (the LAN endpoint's), or "direct" (a path iroh punched).
   key(): string {
+    if (this.link.pinned === LAN) return LAN;
     const via = this.link.via();
     if (via !== null) return relayKey(via);
     if (this.link.path() === "direct") return "direct";
@@ -570,6 +577,8 @@ export class Mesh {
   readonly #movedDirect = new Map<string, boolean>();
   readonly #directLosses = new Map<string, number>();
   readonly #directHeldUntil = new Map<string, number>();
+  /// By address: when a way on the LAN endpoint last answered its ping (LAN_RECALL_MS).
+  readonly #lanAt = new Map<string, number>();
   #closed = false;
   /// By address: the relays its workspace has of its own, as the last `link` to it said.
   readonly #theirs = new Map<string, string[]>();
@@ -1206,7 +1215,7 @@ export class Mesh {
         this.#promote(addr, lan, "lan");
         return;
       }
-      const direct = mine.key() === "direct" ? null : this.#best(addr, up.filter((w) => w.link !== cur && w.samples > 0 && w.missed === 0 && w.key() === "direct"));
+      const direct = mine.key() === "direct" ? null : this.#best(addr, up.filter((w) => w.link !== cur && w.samples > 0 && w.missed === 0 && w.key() === "direct" && !this.#avoided(addr, w)));
       if (direct !== null && clearlyBetter(this.#score(addr, mine), this.#score(addr, direct))) {
         this.#promote(addr, direct, "direct");
         return;
@@ -1214,7 +1223,7 @@ export class Mesh {
     }
     if (mine.samples < MIN_SAMPLES) return;
     if (!now && this.now() - (this.#movedAt.get(addr) ?? -Infinity) < MIN_STAY_MS) return;
-    const best = this.#best(addr, up.filter((w) => w.link !== cur && w.samples >= MIN_SAMPLES && !(held && this.#isDirect(w))));
+    const best = this.#best(addr, up.filter((w) => w.link !== cur && w.samples >= MIN_SAMPLES && !this.#avoided(addr, w)));
     for (const w of ways) if (w !== best) w.better = 0;
     if (best === null) return;
     if (!clearlyBetter(this.#score(addr, mine), this.#score(addr, best))) {
@@ -1235,10 +1244,16 @@ export class Mesh {
     return this.now() < (this.#directHeldUntil.get(addr) ?? -Infinity);
   }
 
-  /// Of `ways`, those requests may move to: while ways direct are held off, the others (all, if none is another).
+  /// Whether the requests keep off `way` while another is up: a way direct while those are held off (FLAKY_LOSSES), the
+  /// main endpoint's while the station was reached on the LAN endpoint lately (LAN_RECALL_MS).
+  #avoided(addr: string, way: Way): boolean {
+    if (this.#directHeld(addr) && this.#isDirect(way)) return true;
+    return way.link.pinned === null && this.now() - (this.#lanAt.get(addr) ?? -Infinity) < LAN_RECALL_MS;
+  }
+
+  /// Of `ways`, those requests may move to: those not avoided (`#avoided`; all, if every one is).
   #takeable(addr: string, ways: Way[]): Way[] {
-    if (!this.#directHeld(addr)) return ways;
-    const others = ways.filter((w) => !this.#isDirect(w));
+    const others = ways.filter((w) => !this.#avoided(addr, w));
     return others.length > 0 ? others : ways;
   }
 
@@ -1299,9 +1314,11 @@ export class Mesh {
       this.#retire(addr, keep === w ? other : w);
       byKey.set(k, keep);
     }
+    // Those the requests keep off last: the way kept beside theirs is one they would move to (a relay's, not the main
+    // endpoint's, while the LAN endpoint's is lost).
     const others = this.#live(addr)
       .filter((w) => w.link !== cur && w.samples >= MIN_SAMPLES)
-      .sort((a, b) => this.#score(addr, a).score - this.#score(addr, b).score);
+      .sort((a, b) => Number(this.#avoided(addr, a)) - Number(this.#avoided(addr, b)) || this.#score(addr, a).score - this.#score(addr, b).score);
     for (const w of others.slice(Math.max(0, KEEP_WAYS - 1))) this.#retire(addr, w);
   }
 
@@ -1316,7 +1333,9 @@ export class Mesh {
       const have = new Set(this.#live(addr).map((w) => w.link.pinned ?? "main"));
       const relays = this.relaysFor(addr);
       const tries: Effect.Effect<Link, CoreError>[] = [];
-      if (!have.has("main")) tries.push(open(this.#env, this.#endpoint, relays, stationId(addr), credentials, false, null, undefined));
+      // Not while the LAN endpoint reaches it: the requests keep off the main endpoint then (LAN_RECALL_MS).
+      const onLan = this.now() - (this.#lanAt.get(addr) ?? -Infinity) < LAN_RECALL_MS;
+      if (!have.has("main") && !onLan) tries.push(open(this.#env, this.#endpoint, relays, stationId(addr), credentials, false, null, undefined));
       if (!mainOnly) for (const r of this.#pinnable(addr)) if (!have.has(r)) tries.push(this.#dialPinned(addr, r, credentials, false, undefined));
       yield* Effect.all(
         tries.map((attempt) => Effect.map(Effect.result(attempt), (r) => (r._tag === "Success" ? this.#adopt(addr, r.success) : undefined))),
@@ -1342,7 +1361,8 @@ export class Mesh {
         // The way direct requests moved to stayed: one lost after this is not lost soon after.
         if (this.#movedDirect.get(addr) === true && this.now() - (this.#movedAt.get(addr) ?? Infinity) >= MIN_STAY_MS) this.#directLosses.delete(addr);
         const live = this.#live(addr);
-        if (live.some((w) => w.key() === "direct")) this.#directAt.set(addr, this.now());
+        if (live.some((w) => this.#isDirect(w))) this.#directAt.set(addr, this.now());
+        if (live.some((w) => w.link.pinned === LAN && w.missed === 0 && w.samples > 0)) this.#lanAt.set(addr, this.now());
         const credentials = (this.current(addr) ?? live[0]?.link)?.credentials;
         if (credentials === undefined) continue;
         this.#dialLanIf(addr, credentials);
@@ -1350,6 +1370,8 @@ export class Mesh {
         else if (
           !live.some((w) => w.link.pinned === null) &&
           this.now() - (this.#directAt.get(addr) ?? -Infinity) < DIRECT_RECALL_MS &&
+          // Not for the punched path while the LAN endpoint reaches it: the requests keep off that (LAN_RECALL_MS).
+          this.now() - (this.#lanAt.get(addr) ?? -Infinity) >= LAN_RECALL_MS &&
           this.now() - (this.#mainDialledAt.get(addr) ?? -Infinity) >= REDIAL_MAIN_MS
         )
           this.#env.runner.fork(this.#explore(addr, credentials, true));
@@ -1390,7 +1412,7 @@ export class Mesh {
     const relays: [string, number | null][] = [];
     const seen = new Set<string>();
     for (const w of [...ways].sort((a, b) => a.srtt - b.srtt)) {
-      const key = w.key();
+      const key = w.key() === LAN ? "direct" : w.key();
       if (seen.has(key)) continue;
       seen.add(key);
       const via = w.link.via();

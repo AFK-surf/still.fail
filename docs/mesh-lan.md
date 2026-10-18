@@ -10,8 +10,14 @@ the way every link starts. iroh then punched a path to the station's LAN address
 after it opened: one end's packets stopped reaching the other, though the same addresses and ports carried plain UDP
 both ways without loss. iroh lets a path go after hearing nothing for 15 s (`PATH_MAX_IDLE_TIMEOUT`), and requests on it
 waited that long each time before going back through the relay. A connection dialled straight at the station's
-address (its path 0, no relay, no punching) stayed direct for minutes with little loss. The cause in iroh is not
-known yet.
+address (its path 0, no relay, no punching) stayed direct for minutes with little loss.
+
+On 2026-10-18 this was measured between mini1 (wired) and a test station on studio, a request every 5 s for 12 minutes
+each. A connection dialled by address answered all 144 requests at 1–2 ms. A connection that started through a relay
+had iroh punch a path to the station about every minute. The device moved to that path, but measured 12–80 ms on it:
+what came back still went through the relay. The station sent 6 packets on the path and nothing more, and the device let
+it go 15 s later. 3 and 2 requests timed out on the two such connections, each in the first seconds of a punched path.
+Why the station sends nothing on a path the device punched is not known yet.
 
 ## How
 
@@ -24,6 +30,10 @@ known yet.
   relay, so it does no lookups and punches no holes. Its link is one more way to the station (`pinned: "lan"`).
 - Requests move to that way at the next ping it answers (`mesh.route` with why `lan`). It is taken over a punched path
   on the main endpoint as well.
+- While a way on the LAN endpoint answered within `LAN_RECALL_MS`, requests keep off the main endpoint unless no other
+  way is up, because its link is the one iroh punches paths on. When the LAN way is lost, they go to a relay's own
+  way, and the main endpoint is not dialled again every `REDIAL_MAIN_MS`. A way's key is `lan` on the LAN endpoint,
+  and `direct` only for a punched path.
 - A device off the station's LAN gets no answer at those addresses. It tries them once for each set the station says,
   and again after the network changes. While the station was reached directly in the last 10 minutes, it tries again
   every 30 s.
