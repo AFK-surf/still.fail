@@ -655,6 +655,28 @@ test("dismissing_archive_reminders_restores_the_rows_color_and_order", async () 
   }
 });
 
+test("a_done_chat_is_offered_to_archive_as_the_archive_hint_says_and_archivable_whatever_it_says", async () => {
+  const t = setup();
+  const now = t.host.nowMs();
+  const u = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.set(workspace(), oneStation());
+  await t.host.time.pass(100);
+  const done = row("done", now);
+  done.agents[0].lastTurn = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1 };
+  const active = row("active", now - 1);
+  t.set(rows("ws/st"), [done, active]);
+  for (const [hint, offered] of [[undefined, true], ["off", false], ["reviewed", false], ["done", true]] as const) {
+    t.set(prefs(), hint === undefined ? {} : { archiveHint: hint });
+    await t.read(u, 1);
+    const v = u.value;
+    assert.deepEqual(ids(v), offered ? ["active", "done"] : ["done", "active"], String(hint));
+    const shown = v.days[0].items.find((r: J) => r.id === "done");
+    assert.equal(shown.settled, offered ? true : undefined, String(hint));
+    assert.equal(shown.archivable, true, String(hint));
+  }
+});
+
 test("pinned_rows_go_above_the_days_the_latest_pinned_first", async () => {
   const t = setup();
   const now = t.host.nowMs();
@@ -1482,8 +1504,15 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archivi
   // Kept by the chat's agent: the only one, its workspace's or not.
   assert.deepEqual(v.messages.map((m: J) => m.attachments.map((a: J) => a.owner)), [["k"], [], ["k"]]);
   assert.equal(v.archivable, true);
+  assert.equal(v.archiveOffered, true);
   // 归档 only under its last all-done post.
   assert.deepEqual(v.messages.map((m: J) => m.archive ?? false), [false, false, true]);
+  // Not offered where the viewer's archiveHint says off: archivable with one tap all the same, nothing under the post.
+  t.set(prefs(), { archiveHint: "off" });
+  await t.read(u, 1);
+  assert.equal(u.value.archivable, true);
+  assert.equal(u.value.archiveOffered, undefined);
+  assert.deepEqual(u.value.messages.map((m: J) => m.archive ?? false), [false, false, false]);
 });
 
 test("the_viewers_messages_sent_one_after_another_go_close_together_their_time_under_the_last", async () => {

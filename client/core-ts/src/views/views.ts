@@ -24,6 +24,7 @@ import type { Value, Watch } from "../store.ts";
 import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
+import { archiveHintOf, type ArchiveHint } from "../prefs.ts";
 import { near, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
@@ -902,6 +903,7 @@ export class Views implements Owner {
     const data = this.#core.data;
     const me = this.me(scope);
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
+    const hint = archiveHintOf(this.ok({ topic: "prefs" }) ?? null);
     const states: J[] = [];
     const troubles: [string, string][] = [];
     const rows: J[] = [];
@@ -925,7 +927,7 @@ export class Views implements Owner {
         const link = this.link(s.address);
         // Its station's emoji and icon only with several stations (with one, it says nothing).
         const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
-        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, me, slackUsers, members_, watching]);
+        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, me, slackUsers, members_, watching, hint]);
         for (const listedRaw of [...asked.rows, ...listed]) {
           const raw = asked.titled.get(get(listedRaw, "id")) ?? listedRaw;
           if (mine && get(raw, "mine") !== true) continue;
@@ -937,7 +939,7 @@ export class Views implements Owner {
           let row: J;
           if (kept && kept.sig === sig) row = kept.row;
           else {
-            row = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark);
+            row = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
             // Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
             if (row !== null) deepFreeze(row);
             if (keepable) this.#rowsMade.set(shown, { sig, row });
@@ -1050,7 +1052,7 @@ export class Views implements Owner {
   }
 
   /// A station's row as the list shows it (null: not in this list).
-  #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, mark: { emoji: string | null; icon: string | null } | null): J {
+  #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, mark: { emoji: string | null; icon: string | null } | null, hint: ArchiveHint): J {
     let row = structuredClone(raw);
     // Pinned rows are pinned (true) in the list, in the order they were pinned in (pinnedAt, below); one unpinned says
     // false.
@@ -1091,9 +1093,11 @@ export class Views implements Owner {
       by.maker = present.maker(str(by.model));
     }
     row = decisions.presentRow(row);
+    // Archived with one tap whenever nothing is left in it; offered to archive (faded, below the rest of its day) as the
+    // viewer's `archiveHint` says.
     if (present.archivable(row)) {
-      row.settled = true;
       row.archivable = true;
+      if (present.offered(row, hint)) row.settled = true;
     }
     const line = present.rowStateLine(row);
     if (line !== null) {
@@ -1356,7 +1360,10 @@ export class Views implements Owner {
       const m = messages.find((x) => u64(get(x, "seq")) === ask.seq);
       if (isObject(m)) (m as J).asked = true;
     }
-    if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
+    if (row !== undefined && present.archivable(row) && view.archived !== true) {
+      view.archivable = true;
+      if (present.offered(row, archiveHintOf(this.ok({ topic: "prefs" }) ?? null))) view.archiveOffered = true;
+    }
     const check = row !== undefined && view.archived !== true ? present.archiveCheck(row.archiveCheck) : null;
     if (check !== null) view.archiveCheck = check;
     return { ok: view };
@@ -1739,7 +1746,7 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
   }
   if (lastAt >= 0 && messages[lastAt].ending === "all_done") {
     const last: J = { ...messages[lastAt] };
-    if (view.archivable === true && view.offline !== true && isObject(view.thread)) last.archive = true;
+    if (view.archiveOffered === true && view.offline !== true && isObject(view.thread)) last.archive = true;
     if (isObject(view.archiveCheck)) last.archiveCheck = view.archiveCheck;
     messages[lastAt] = last;
   }
