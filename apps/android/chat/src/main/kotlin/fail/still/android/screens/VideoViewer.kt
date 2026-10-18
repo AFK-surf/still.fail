@@ -80,6 +80,8 @@ import fail.still.android.ui.ZoomState
 import fail.still.android.ui.zoomable
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.WaitPill
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.math.roundToInt
@@ -132,11 +134,11 @@ private fun short(ms: Long): String = "${ms / 60000}:${(ms / 1000 % 60).toString
 
 /**
  * The video in `file`: pinch to zoom, controls over it (`awake`: shown; `wake`: a finger on them keeps them a while
- * longer; `onTap`: a tap on the picture shows or hides them).
+ * longer; `onTap`: a tap on the picture shows or hides them; `glass`: their ground, frosting what is behind them).
  */
 @Composable
 internal fun VideoViewer(
-    file: File, name: String, awake: Boolean, wake: () -> Unit, onTap: () -> Unit, glass: Modifier,
+    file: File, name: String, awake: Boolean, wake: () -> Unit, onTap: () -> Unit, glass: @Composable (HazeState) -> Modifier,
     /** Where the picture shows (the viewer's own, known from the still before the player is ready). */
     zoomOf: ZoomState? = null,
     /** On the picture (and the still over it): the viewer's flight from the chat's thumbnail (FilePreview.kt). */
@@ -261,9 +263,11 @@ internal fun VideoViewer(
     }
     fun seek(us: Long) = go { if (starts != null) starts.at(us) else (us / GUESSED_STEP_US).toInt() }
 
-    // Its ground is the viewer's (black, coming in with it).
+    // Its ground is the viewer's (black, coming in with it). The picture is the controls' glass's own source: inside the
+    // viewer's, a glass on that frosts nothing, and the controls stood bare on a white picture.
+    val picture = remember { HazeState() }
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().then(stage).zoomable(zoom, scope, onTap = onTap)) {
+        Box(Modifier.fillMaxSize().hazeSource(picture).then(stage).zoomable(zoom, scope, onTap = onTap)) {
             AndroidView({ ctx ->
                 TextureView(ctx).apply {
                     surfaceTextureListener = object : TextureView.SurfaceTextureListener {
@@ -281,7 +285,7 @@ internal fun VideoViewer(
         // The controls: where it is, the steps and play, which frame, the speed, a frame saved, turned sideways.
         Column(
             Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 8.dp, vertical = 8.dp)
-                .fillMaxWidth().graphicsLayer { alpha = chrome() }.alpha(if (awake) 1f else 0f).then(glass).pointerInput(Unit) { detectTapGestures(onPress = { wake() }) }
+                .fillMaxWidth().graphicsLayer { alpha = chrome() }.alpha(if (awake) 1f else 0f).then(glass(picture)).pointerInput(Unit) { detectTapGestures(onPress = { wake() }) }
                 .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
         ) {
             val end = if (starts != null) starts.last() + (if (starts.size > 1) starts.last() - starts[starts.size - 2] else 0) else duration

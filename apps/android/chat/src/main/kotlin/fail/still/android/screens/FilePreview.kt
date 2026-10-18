@@ -590,7 +590,7 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
                 !sure || shownLoaded is FileLoad.Loading -> Note { if (progress != null) FileProgress(progress, file.size, dark = false) else Waiting() }
                 shownLoaded is FileLoad.Failed -> Note { Text(t("android-chat.file.loadFailed", "error" to shownLoaded.message), fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center) }
                 disk != null -> when (kind) {
-                    PreviewKind.Video -> VideoViewer(disk, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, Smooth(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
+                    PreviewKind.Video -> VideoViewer(disk, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, { darkGlass(it, Smooth(16.dp)) }, videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
                         startAtUs = FileViewers.frames[FileViewers.id(station, key, file.path)]?.atUs ?: 0L, frameOut = { flight.frame = it })
                     PreviewKind.Audio -> Note { AudioViewer(disk, file.name) }
                     PreviewKind.Pdf -> PdfViewer(disk, ::toggle)
@@ -598,7 +598,7 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
                 }
                 bytes == null -> {}
                 kind == PreviewKind.Video -> OnDisk(fullId, file.name, bytes, waiting = { if (still != null) Poster(still, videoZoom, Modifier.viewerFlying(flight)) else Note { Waiting() } }) {
-                    VideoViewer(it, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, Smooth(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
+                    VideoViewer(it, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, { darkGlass(it, Smooth(16.dp)) }, videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
                         startAtUs = FileViewers.frames[FileViewers.id(station, key, file.path)]?.atUs ?: 0L, frameOut = { flight.frame = it })
                 }
                 kind == PreviewKind.Audio -> OnDisk(fullId, file.name, bytes) { Note { AudioViewer(it, file.name) } }
