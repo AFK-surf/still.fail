@@ -32,6 +32,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.browser)
+    implementation(libs.androidx.webkit)
     implementation(libs.commonmark)
     implementation(libs.haze)
     // Videos and songs in a chat (VideoViewer.kt), played as they stream.

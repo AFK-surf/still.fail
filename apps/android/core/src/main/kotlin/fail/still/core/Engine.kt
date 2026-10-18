@@ -18,14 +18,15 @@ private val sealedScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 internal interface Engine {
     /** Returns at once; the core catches up on its own thread. */
     fun connect(): Long
-    fun receive(client: Long, json: String)
+    /** `bytes`: what a call carries beside its JSON (an upload's part, a preview's request body), null for the rest. */
+    fun receive(client: Long, json: String, bytes: ByteArray? = null)
     /** Stops this core (its thread ends). */
     fun close()
 }
 
 /**
  * Starts an engine whose messages go to `onMessage`, tagged with the engine they came from; `bytes`: what a message
- * carries beside its JSON (a screen view's frame, docs/client-core.md "Protocol"), null for the rest.
+ * carries beside its JSON (a screen view's frame, a file's part, docs/client-core.md "Protocol"), null for the rest.
  */
 internal typealias EngineFactory = (onMessage: (from: Engine, json: String, bytes: ByteArray?) -> Unit) -> Engine
 
@@ -51,6 +52,8 @@ internal object HermesNative {
     external fun start(script: ByteArray, url: String, dataDir: String, cloudOrigin: String, beta: Boolean, listener: HermesListener): Long
     external fun connect(handle: Long): Long
     external fun receive(handle: Long, client: Long, json: String)
+    /** A call with bytes beside its JSON: they reach the core as an ArrayBuffer (`__stillfail.receiveBytes`). */
+    external fun receiveBytes(handle: Long, client: Long, json: String, bytes: ByteArray)
     external fun close(handle: Long)
     /** The answer to a call the engine handed to Kotlin ([HermesListener.onApp]): `error` null when it succeeded. */
     external fun complete(handle: Long, id: Long, json: String?, error: String?, bytes: ByteArray?)
@@ -113,7 +116,8 @@ internal fun hermesEngines(
                 }
             }
             override fun connect() = HermesNative.connect(handle)
-            override fun receive(client: Long, json: String) = HermesNative.receive(handle, client, json)
+            override fun receive(client: Long, json: String, bytes: ByteArray?) =
+                if (bytes == null) HermesNative.receive(handle, client, json) else HermesNative.receiveBytes(handle, client, json, bytes)
             override fun close() {
                 synchronized(answering) { closed = true }
                 loopback.closeAll()

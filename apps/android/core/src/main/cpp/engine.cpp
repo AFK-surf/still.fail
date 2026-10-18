@@ -126,6 +126,14 @@ class Engine {
     });
   }
 
+  /// A call from the app with bytes beside its JSON (an upload's part, a preview's request body): the bytes reach the
+  /// core as an ArrayBuffer, never as text.
+  void receiveBytes(int64_t client, std::string json, std::string bytes) {
+    post([client, json = std::move(json), bytes = std::move(bytes)](jsi::Runtime& rt) {
+      stillfail(rt).getPropertyAsFunction(rt, "receiveBytes").callWithThis(rt, stillfail(rt), jsi::Value(double(client)), jsi::String::createFromUtf8(rt, json), arrayBuffer(rt, bytes.data(), bytes.size()));
+    });
+  }
+
   /// Ends the loop and waits for it; the shell's answers still on their way are let go.
   void stop() {
     {
@@ -467,6 +475,13 @@ extern "C" JNIEXPORT jlong JNICALL Java_fail_still_core_HermesNative_connect(JNI
 
 extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_receive(JNIEnv* env, jobject, jlong handle, jlong client, jstring json) {
   reinterpret_cast<Engine*>(handle)->receive(client, utf8(env, json));
+}
+
+extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_receiveBytes(JNIEnv* env, jobject, jlong handle, jlong client, jstring json, jbyteArray bytes) {
+  jsize n = env->GetArrayLength(bytes);
+  std::string data(size_t(n), '\0');
+  env->GetByteArrayRegion(bytes, 0, n, reinterpret_cast<jbyte*>(data.data()));
+  reinterpret_cast<Engine*>(handle)->receiveBytes(client, utf8(env, json), std::move(data));
 }
 
 /// Kotlin's answer to a call it was handed (`secure.*`, `listen.*`; Engine.kt): `error` null when it succeeded. Never

@@ -699,7 +699,7 @@ class ScreenViewerTest {
                 val path = p["path"]!!.jsonPrimitive.contentOrNull!!
                 val offset = p["offset"]!!.jsonPrimitive.long
                 val total = p["total"]!!.jsonPrimitive.long
-                val got = android.util.Base64.decode(p["bytes"]!!.jsonPrimitive.contentOrNull!!, android.util.Base64.NO_WRAP).size
+                val got = v.h.fake.carried.last()!!.size
                 assertEquals("/Users/alice/Downloads", p["root"]!!.jsonPrimitive.contentOrNull)
                 // A file of its name there already.
                 if (path == "季度报告.pdf") throw CoreException("exists", "there is already a file by that name", 409)
