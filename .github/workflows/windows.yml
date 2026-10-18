@@ -1,0 +1,55 @@
+# The demo on Windows: build with MoonBit and MSVC, take the scripted
+# screenshot (Direct3D falls back to WARP on the GPU-less runner), and compare
+# it with goldens/windows.png when there is one.
+name: windows
+on:
+  push:
+    branches: [main, windows]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  demo:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Install MoonBit
+        shell: pwsh
+        run: |
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$env:USERPROFILE\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Build
+        run: |
+          moon version --all
+          scripts/win.sh build
+          echo "binary: $(stat -c %s out/win/mod/_build/native/release/build/demo/demo.exe) bytes"
+      - name: Screenshot
+        run: |
+          scripts/win.sh shot
+          ls -la out/shot-win
+      - name: IME script
+        run: scripts/win.sh script ime
+      - name: Compare with the golden
+        run: |
+          mkdir -p out/shots
+          cp out/shot-win/main.png out/shots/windows.png
+          if [ -f goldens/windows.png ]; then
+            mkdir -p out/node && cd out/node && npm init -y >/dev/null && npm i pngjs pixelmatch >/dev/null && cd ../..
+            node scripts/imgdiff.mjs goldens/windows.png out/shots/windows.png out/shots/windows-review.png
+          else
+            echo "no goldens/windows.png yet"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-shots
+          path: |
+            out/shots/
+            out/shot-win/
+            out/ime/
+          if-no-files-found: warn
