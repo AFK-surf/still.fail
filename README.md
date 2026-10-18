@@ -1,0 +1,38 @@
+# mbui — a MoonBit UI prototype
+
+A small cross-platform UI framework written in MoonBit, to find out what a
+mygo-style toolkit costs in MoonBit: one core that builds, lays out and paints
+a tree every frame, and thin hosts that draw it and feed it input.
+
+```
+src/ui      the framework (MoonBit, target independent)
+  node.mbt    the tree: pooled nodes linked by index
+  layout.mbt  flexbox subset (row/column, gap, padding, align, justify, fill)
+  text.mbt    shaping cache, line breaking (CJK + spaces), caret geometry
+  list.mbt    virtual list, rows of any height, anchored scrolling, fling
+  editor.mbt  multi-line text field with input-method composition
+  widgets.mbt button, segmented control with a spring indicator
+  scene.mbt   paint: one flat array of 24-float instances
+  app.mbt     frame loop, input dispatch, bench mode
+src/host    the platform boundary
+  host_native.mbt / host_js.mbt   the same API over C and over JS
+  apple_render.m  Metal renderer (macOS and iOS)
+  apple_text.m    Core Text shaping and glyph atlas (macOS and iOS)
+  mac_app.m       AppKit window, NSTextInputClient
+  ios_app.m       UIKit view, UITextInput (built by scripts/ios.sh)
+web/        browser host: WebGL2, canvas-2D text, hidden textarea for IME
+src/demo    the demo: a chat screen with 10,000 messages
+```
+
+Every renderer draws the same instances with the same shader (rounded rects
+with borders, shadows, alpha-mask glyphs, color glyphs).
+
+## Running (on a Mac with MoonBit and Xcode)
+
+```sh
+scripts/mac.sh build && scripts/mac.sh run      # macOS window
+scripts/mac.sh script ime                       # scripted IME run, snapshots in out/ime
+MBUI_BENCH=1 _build/native/release/build/demo/demo.exe   # scroll bench
+scripts/web.sh build && scripts/web.sh test     # browser build + Playwright run
+scripts/ios.sh build && scripts/ios.sh run      # iOS simulator
+```

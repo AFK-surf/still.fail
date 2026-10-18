@@ -12,6 +12,8 @@ case "${1:-build}" in
   build)
     /usr/bin/time -p moon build --target native $FLAG 2>&1 | python3 "$D/errs.py"
     ls -la $EXE ;;
+  run)
+    ./$EXE ;;
   script)
     mkdir -p out/$2
     MBUI_SCRIPT=$2 MBUI_SHOT_DIR=$PWD/out/$2 ./$EXE ;;
