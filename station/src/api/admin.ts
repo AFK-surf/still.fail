@@ -21,7 +21,6 @@ import { routes as deviceTools } from "./routes/tools.ts";
 import { routes as agentEnv } from "./routes/agent-env.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
-import { routes as machineLogins } from "./routes/logins.ts";
 import { type Drive, stationDrive } from "../drive/drive.ts";
 import { type ModuleSet, moduleOf } from "../modules/modules.ts";
 import type { StationParts } from "../parts.ts";
@@ -168,7 +167,6 @@ export class Admin {
           })
         : []),
       ...(deps.agents?.xshare ? xshare({ xshare: deps.agents.xshare, store: deps.store }) : []),
-      ...(deps.agents ? machineLogins(() => deps.agents?.logins) : []),
       ...(deps.agents?.accounts
         ? accounts({
             accounts: deps.agents.accounts,
