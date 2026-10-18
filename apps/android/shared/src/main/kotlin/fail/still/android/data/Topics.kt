@@ -329,13 +329,21 @@ object Topics {
     fun draft(station: String, chat: String) = buildJsonObject { put("topic", "draft"); put("station", station); put("chat", chat) }
     /**
      * The chats of a scope a few words find, titles first: only `station`'s, not `exclude` (a chat's id or agent), `limit`
-     * at most (ChatRefMenu); with `messages`, that many of the messages that have the words too (Search.kt). `elsewhere`:
+     * at most (ChatRefMenu); with `messages`, that many of the messages that have the words too. `elsewhere`:
      * then those of the viewer's other workspaces, each saying whose (`ChatItem.outside`: the `@` menu).
      */
     fun chatSearch(scope: String, query: String, station: String? = null, exclude: String? = null, limit: Int? = null, messages: Int? = null, elsewhere: Boolean = false) = buildJsonObject {
         put("topic", "chatSearch"); put("scope", scope); put("query", query)
         station?.let { put("station", it) }; exclude?.let { put("exclude", it) }; limit?.let { put("limit", it) }; messages?.let { put("messages", it) }
         if (elsewhere) put("elsewhere", true)
+    }
+    /**
+     * What a few words find in a workspace (client/core-ts/src/views/search.ts, docs/search.md): its chats, the messages,
+     * and what every station finds besides, by kind (Search.kt). `kind`: that kind alone, more of it (`limit` at most).
+     */
+    fun search(scope: String, query: String, kind: String? = null, limit: Int? = null) = buildJsonObject {
+        put("topic", "search"); put("scope", scope); put("query", query)
+        kind?.let { put("kind", it) }; limit?.let { put("limit", it) }
     }
     /** A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here (web/src/pick.ts). */
     fun newChat(scope: String) = buildJsonObject { put("topic", "newChat"); put("scope", scope) }

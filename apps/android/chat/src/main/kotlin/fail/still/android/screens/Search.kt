@@ -1,7 +1,11 @@
 // The search at the top of the home lists (web mobile/Home.tsx SearchField, SearchPage): a field there once a list is
 // scrolled to its top; tapped, the list goes up and away with the bars, the field comes up from where it was to the
-// top (narrowing as 取消 comes in beside it), and under it the chats the words find (the core's `chatSearch`, as ⌘K's on the wide screen), then the messages
-// that have them, newest first, each opening its chat at it. 取消 (or back) puts the field back in the list.
+// top (narrowing as 取消 comes in beside it), and under it what the words find in the workspace (the core's `search`,
+// as ⌘K's on the wide screen, docs/search.md): the chats, the messages that have them (newest first, each opening its
+// chat at it), then what the stations found besides, a section per kind (execution history, services and tasks,
+// skills, memory, profiles, stations). 查看更多 under a section lists that kind alone; 全部结果 (or back) every kind
+// again. Under it all, the stations still answering and what the core says of the rest. 取消 (or back) puts the field
+// back in the list.
 package fail.still.android.screens
 
 import androidx.activity.compose.BackHandler
@@ -24,6 +28,8 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
@@ -41,7 +47,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
@@ -61,7 +70,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.LocalApp
 import fail.still.android.Screen
-import fail.still.android.data.ChatSearchView
+import fail.still.android.AppState
+import fail.still.android.data.ChatOf
+import fail.still.android.data.SearchItem
+import fail.still.android.data.SearchView
+import fail.still.android.data.StationView
+import fail.still.android.data.TextMark
 import fail.still.android.data.FoundMessage
 import fail.still.android.data.Topics
 import fail.still.android.data.page
@@ -71,12 +85,11 @@ import fail.still.android.ui.Ease
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.StationMark
+import fail.still.android.ui.WaitLine
 import fail.still.android.data.t
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
-
-/** How many of the messages that have the words the search lists, under the chats. */
-private const val FOUND_MESSAGES = 50
 
 /** The field's height, and the room over it in the search's bar (as the home bar's: 8dp under the status bar). */
 private val FIELD = 38.dp
@@ -106,14 +119,23 @@ internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> 
     val app = LocalApp.current
     val density = LocalDensity.current
     var query by rememberSaveable { mutableStateOf("") }
-    val search by rememberTopic<ChatSearchView>(app.core, Topics.chatSearch(scope, query, messages = FOUND_MESSAGES))
+    // One kind alone (查看更多), more of it; null: every kind, a few of each.
+    var kind by rememberSaveable { mutableStateOf<String?>(null) }
+    val search by rememberTopic<SearchView>(app.core, Topics.search(scope, query, kind))
+    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(scope))
+    val several = (stations.value?.size ?: 0) > 1
     // While the next words are looked up, what the last ones found stays.
-    val kept = remember { arrayOfNulls<ChatSearchView>(1) }
+    val kept = remember { arrayOfNulls<SearchView>(1) }
     search.value?.let { kept[0] = it }
     val view = search.value ?: kept[0]
     val words = query.isNotBlank()
     val chats = if (words) view?.items.orEmpty() else emptyList()
     val messages = if (words) view?.messages.orEmpty() else emptyList()
+    val groups = if (words) view?.groups.orEmpty() else emptyList()
+    val none = chats.isEmpty() && messages.isEmpty() && groups.all { it.items.isEmpty() }
+    val list = rememberLazyListState()
+    // Into one kind or back out of it: from the top.
+    LaunchedEffect(kind) { list.scrollToItem(0) }
     // Where the field is laid out (under the status bar, as the home bar's top), so its move is known before it is drawn.
     val to = WindowInsets.statusBars.getTop(density) + with(density) { BAR_TOP.toPx() }
     val up = remember { Animatable(0f) }
@@ -137,6 +159,8 @@ internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> 
         }
     }
     BackHandler(enabled = !leaving) { close() }
+    // Over one kind alone, back goes to every kind first (registered after, so asked first).
+    BackHandler(enabled = !leaving && kind != null) { kind = null }
     // Over the lists (faded away, still there): nothing under it is touched through it.
     Column(Modifier.fillMaxSize().clickable(interactionSource = null, indication = null) {}.imePadding()) {
         Row(
@@ -171,21 +195,138 @@ internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> 
                 modifier = Modifier.graphicsLayer { alpha = up.value; translationX = (size.width + 12.dp.toPx()) * (1f - up.value) }.clickable(enabled = !leaving) { close() },
             )
         }
-        LazyColumn(Modifier.fillMaxWidth().weight(1f).graphicsLayer { alpha = up.value }) {
+        LazyColumn(Modifier.fillMaxWidth().weight(1f).graphicsLayer { alpha = up.value }, state = list) {
+            if (words && kind != null) item(key = "all") { BackRow { kind = null } }
             if (words && view == null && search.error != null) item(key = "update") { SearchNote(t("android-chat.search.update")) }
-            if (words && view != null && chats.isEmpty() && messages.isEmpty()) item(key = "none") { SearchNote(t("android-chat.search.none")) }
             if (chats.isNotEmpty()) {
                 item(key = "chats") { SectionHeader(t("android-chat.search.chats")) }
                 items(chats, key = { "c/${it.station}/${it.id}" }) { item ->
                     ChatRowBody(item, "agents", held = false, modifier = Modifier.clickable { app.push(Screen.Chat(item.station, item.page)) })
                 }
+                if (kind == null && view?.chatsMore == true) item(key = "more/chat") { MoreRow { kind = "chat" } }
             }
             if (messages.isNotEmpty()) {
                 item(key = "messages") { SectionHeader(t("android-chat.search.messages")) }
                 items(messages, key = { "m/${it.station}/${it.thread}/${it.seq}" }) { FoundRow(it, view?.words) }
+                if (kind == null && view?.messagesMore == true) item(key = "more/message") { MoreRow { kind = "message" } }
+            }
+            for (group in groups) {
+                item(key = "g/${group.kind}") { SectionHeader(group.title) }
+                items(group.items, key = { "i/${it.key}" }) { ItemRow(it, several) { openFound(app, it) } }
+                if (kind == null && group.more) item(key = "more/${group.kind}") { MoreRow { kind = group.kind } }
+            }
+            // Under what was found: the stations still answering (or that could not be searched), and what the core
+            // says of the rest (offline, too old to search, an index still being built).
+            if (words && view != null) {
+                val wait = view.wait
+                if (none && !wait.reading) item(key = "none") { SearchNote(t("android-chat.search.none")) }
+                if (wait.reading) item(key = "reading") { WaitLine(wait.text ?: t("common.reading"), modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp)) }
+                items(wait.failing, key = { "failing/${it.station}" }) { WaitLine(it.text, error = true, modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp)) }
+                view.note?.let { note -> item(key = "note") { Text(note, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 12.dp)) } }
             }
         }
     }
+}
+
+/** 查看更多 under a kind: that kind alone. */
+@Composable
+private fun MoreRow(onClick: () -> Unit) {
+    Text(
+        t("android-chat.search.more"), fontSize = 14.sp, color = C.accent, maxLines = 1,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 22.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
+    )
+}
+
+/** Over one kind alone: back to every kind (as back does). */
+@Composable
+private fun BackRow(onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        IconIn(Icons.ChevronLeft, 16.dp, C.accent)
+        Text(t("android-chat.search.all"), fontSize = 14.sp, color = C.accent, maxLines = 1)
+    }
+}
+
+/** What a kind is drawn with (web Switcher.tsx's KIND_ICON). */
+private fun kindIcon(kind: String): ImageVector = when (kind) {
+    "file" -> Icons.File
+    "history" -> Icons.Thread
+    "job" -> Icons.Web
+    "skill" -> Icons.Sparks
+    "memory" -> Icons.Brain
+    "profile" -> Icons.Quota
+    "station" -> Icons.Server
+    else -> Icons.Search
+}
+
+/**
+ * Something found besides a chat or a message: its kind's icon (a station its own mark), what it is, where (its
+ * station, with several) and when, over its line that has the words.
+ */
+@Composable
+private fun ItemRow(item: SearchItem, several: Boolean, onClick: () -> Unit) {
+    val ink = C.ink
+    val line = remember(item.text, item.marks, ink) { marked(item.text, item.marks, ink) }
+    Row(
+        Modifier.fillMaxWidth().height(if (item.text.isEmpty()) 50.dp else 66.dp).clickable(onClick = onClick).padding(start = 22.dp, end = 16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+            if (item.kind == "station") StationMark(item.stationEmoji, item.stationIcon, 18.dp, C.muted, none = Icons.Server)
+            else IconIn(kindIcon(item.kind), 18.dp, C.muted)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(item.title, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                val meta = listOfNotNull(item.stationName.takeIf { several && item.kind != "station" && it.isNotEmpty() }, item.time?.get("createdAt")?.ago).joinToString(" · ")
+                if (meta.isNotEmpty()) Text(meta, fontSize = 12.sp, color = C.muted, maxLines = 1)
+            }
+            if (item.text.isNotEmpty()) Text(line, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
+/**
+ * Where something found opens (as the web's, Switcher.tsx openOf): a step of an execution history its chat and the
+ * history at it; a service its chat and its page, a task its chat; a skill or the memory that page of its station's
+ * memory; a profile the profiles; a station its page; anything else its chat.
+ */
+internal fun openFound(app: AppState, item: SearchItem) {
+    val chat = item.chat?.let { Screen.Chat(item.station, ChatOf.Session(it)) }
+    when (item.kind) {
+        "history" -> {
+            if (chat == null) return
+            app.push(chat)
+            item.session?.let { app.push(Screen.History(item.station, chat.of, it, item.index?.toLong())) }
+        }
+        "job" -> {
+            if (chat == null) return
+            app.push(chat)
+            val job = item.job
+            if (item.port != null && job != null) app.push(Screen.Preview(item.station, job))
+        }
+        "skill" -> app.push(item.skill?.let { Screen.MemoryDoc(item.station, it) } ?: Screen.Memory(item.station))
+        "memory" -> app.push(Screen.MemoryDoc(item.station, null))
+        "profile" -> app.push(Screen.Profiles())
+        "station" -> app.push(Screen.Station(item.station))
+        else -> chat?.let(app::push)
+    }
+}
+
+/** `text` with the words found (`marks`) in ink and bold, the rest as the line's colour. */
+private fun marked(text: String, marks: List<TextMark>, ink: Color): AnnotatedString = buildAnnotatedString {
+    var at = 0
+    for (m in marks) {
+        val from = m.from.toInt()
+        val to = m.to.toInt()
+        if (from < at || to > text.length || from > to) continue
+        append(text.substring(at, from))
+        withStyle(SpanStyle(color = ink, fontWeight = FontWeight.SemiBold)) { append(text.substring(from, to)) }
+        at = to
+    }
+    append(text.substring(at))
 }
 
 @Composable
@@ -199,20 +340,7 @@ private fun SearchNote(text: String) {
 private fun FoundRow(found: FoundMessage, words: List<String>?) {
     val app = LocalApp.current
     val ink = C.ink
-    val line = remember(found.text, found.marks, ink) {
-        buildAnnotatedString {
-            var at = 0
-            for (m in found.marks) {
-                val from = m.from.toInt()
-                val to = m.to.toInt()
-                if (from < at || to > found.text.length) continue
-                append(found.text.substring(at, from))
-                withStyle(SpanStyle(color = ink, fontWeight = FontWeight.SemiBold)) { append(found.text.substring(from, to)) }
-                at = to
-            }
-            append(found.text.substring(at))
-        }
-    }
+    val line = remember(found.text, found.marks, ink) { marked(found.text, found.marks, ink) }
     Column(
         Modifier.fillMaxWidth().height(66.dp).clickable { app.push(Screen.Chat(found.station, found.chat.page, at = found.seq, words = words)) }
             .padding(start = 22.dp, end = 16.dp),
