@@ -63,8 +63,9 @@ export const has = (text: string, words: string[]): boolean => {
   return words.every((w) => lower.includes(w));
 };
 
-/// A document as a hit, said around the words (a chat's in its title too: a long one is cut where it is listed).
-export const hitOf = (d: Doc, words: string[]): Hit => ({ ...d.ref, kind: d.kind, key: d.key, title: d.title, text: excerpt(d.kind === "chat" ? `${d.title}\n${d.body}` : d.body, words), at: d.at });
+/// A document as a hit, said around the words (a chat's from its title when that has them: a long one is cut where it is
+/// listed).
+export const hitOf = (d: Doc, words: string[]): Hit => ({ ...d.ref, kind: d.kind, key: d.key, title: d.title, text: excerpt(d.kind === "chat" && has(d.title, words) ? d.title : d.body, words), at: d.at });
 
 /**
  * What of `docs` the words find for `asker`, by kind, `limit` of each from `offset`: those whose title has the first word
