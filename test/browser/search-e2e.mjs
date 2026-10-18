@@ -93,6 +93,7 @@ async function main() {
   }, account);
   const page = await context.newPage();
   shown = page;
+  page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") console.log(`page ${m.type()}: ${m.text().slice(0, 300)}`); });
   await page.goto(`${ORIGIN}/`, { timeout: 60_000 });
   await page.waitForURL(/\/w\/[^/]+/, { timeout: 60_000 });
   const workspace = /\/w\/([^/]+)/.exec(page.url())[1];
@@ -105,6 +106,8 @@ async function main() {
     await box.click();
     await page.keyboard.insertText(`${text} post:${answer}`);
     // Sent once the page can (the station's models read): its button, until the page leaves the new chat.
+    const send = page.getByRole("button", { name: "发送" });
+    console.log(`send buttons: ${await send.count()}, enabled: ${await send.first().isEnabled().catch(() => "?")}, value: ${await box.inputValue()}`);
     await until(async () => {
       if (!page.url().endsWith("/new")) return true;
       await page.getByRole("button", { name: "发送" }).click({ timeout: 2000 }).catch(() => {});
