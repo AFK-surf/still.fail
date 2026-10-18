@@ -67,7 +67,7 @@ case "${1:-build}" in
   shot)
     ID=$(device)
     mkdir -p $OUT/shots
-    xcrun simctl io "$ID" screenshot $OUT/shots/$2.png >/dev/null 2>&1 && echo "screenshot $OUT/shots/$2.png"
+    xcrun simctl io "$ID" screenshot $OUT/shots/$2.png 2>&1 | tail -2
     ;;
   delete)
     ID=$(device)

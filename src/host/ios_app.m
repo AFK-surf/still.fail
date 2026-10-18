@@ -342,12 +342,17 @@ static void run_script_step(int step) {
         break;
       case 60: [v setMarkedText:@"ni'hao" selectedRange:NSMakeRange(6, 0)]; break;
       case 80: shot("02-composing"); break;
-      case 81: [v unmarkText]; break;
-      case 82: [v setMarkedText:@"" selectedRange:NSMakeRange(0, 0)]; break;
-      case 83: [v insertText:@"你好，MoonBit 👋"]; break;
+      // the keyboard commits a candidate by inserting it over the composition
+      case 81: [v insertText:@"你好"]; break;
+      case 82: [v setMarkedText:@"shi'jie" selectedRange:NSMakeRange(7, 0)]; break;
+      case 83: [v insertText:@"世界，MoonBit 👋"]; break;
       case 100: shot("03-typed"); break;
       case 101: [v insertText:@"\n"]; break;
       case 160: shot("04-sent"); break;
+      case 161:  // focus again so the system keyboard shows for the screenshot
+        mb_cb.pointer(0, 100, s.height - 30, 0);
+        mb_cb.pointer(2, 100, s.height - 30, 0);
+        break;
       default: break;
     }
     [v requestFrame];
