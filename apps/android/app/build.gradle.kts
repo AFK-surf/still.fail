@@ -48,6 +48,9 @@ android {
         // ports); -PemberCloud (the name before the rename) is still read.
         val cloud = providers.gradleProperty("stillfailCloud").orElse(providers.gradleProperty("emberCloud")).getOrElse("https://app.still.fail")
         buildConfigField("String", "CLOUD_ORIGIN", "\"$cloud\"")
+        // The dev cloud's sign-in in a release build too (-PstillfailDevSignIn): a release measured against a dev
+        // environment (apps/mobile-rn/scripts/devenv/perf.sh). Debug builds always have it; it shows for a dev cloud only.
+        buildConfigField("boolean", "DEV_SIGN_IN", "${providers.gradleProperty("stillfailDevSignIn").isPresent}")
         buildConfigField("String", "FCM_PROJECT_ID", "\"${fcm("fcmProjectId")}\"")
         buildConfigField("String", "FCM_APP_ID", "\"${fcm(if (beta) "fcmBetaAppId" else "fcmAppId")}\"")
         buildConfigField("String", "FCM_API_KEY", "\"${fcm("fcmApiKey")}\"")

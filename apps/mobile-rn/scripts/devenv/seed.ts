@@ -355,7 +355,9 @@ async function main() {
     await sleep(1200);
   }
   const failed = existsSync(`${SCENES}.errors`) ? readFileSync(`${SCENES}.errors`, "utf8").trim() : "";
-  if (failed !== "") throw new Error(`the agent's calls failed:\n${failed}`);
+  // The filler's few failed calls (a post now and then said to want its thread) leave its chats there all the same.
+  if (failed !== "" && !process.env.FILLER) throw new Error(`the agent's calls failed:\n${failed}`);
+  if (failed !== "") console.error(`the agent's calls failed (the filler's chats are there):\n${failed}`);
   writeFileSync(join(STATE, "seeded.json"), JSON.stringify(made, null, 1));
   process.exit(0);
 }

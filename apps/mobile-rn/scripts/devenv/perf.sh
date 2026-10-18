@@ -1,8 +1,10 @@
 #!/bin/bash
 # How smoothly an app's chats scroll, on studio: on an emulator of this script's own (AVD rn-perf, port 5702, no
-# window), the APK installed, pointed at the dev environment up.sh made (PORT; FILLER=60 there gives a list long enough
-# to scroll), signed in as alice if it asks; then strokes up and down the list, and what the system counted of its
-# frames (gfxinfo: janky frames, the frame times' percentiles, why the slow ones were slow).
+# window, drawn by studio's GPU; the emulator's own software renderer makes every app slow), the APK installed,
+# pointed at the dev environment up.sh made (PORT; FILLER=60 there gives a list long enough to scroll), signed in as
+# alice if it asks; then strokes up and down the list, and what the system counted of its frames (gfxinfo: janky
+# frames, the frame times' percentiles, why the slow ones were slow). The Kotlin app to compare with: its release built
+# with -PstillfailDevSignIn, ACTIVITY=fail.still.android/fail.still.android.MainActivity.
 #
 #   APK=<apk> [ACTIVITY=fail.still.rntrial/.MainActivity] [LABEL=x] bash apps/mobile-rn/scripts/devenv/perf.sh
 #   bash apps/mobile-rn/scripts/devenv/perf.sh stop          the emulator stopped and its AVD deleted
@@ -28,7 +30,7 @@ fi
 if ! ours; then
   if a devices | grep -q "^emulator-$EPORT"; then echo "emulator-$EPORT is someone else's" >&2; exit 1; fi
   [ -d ~/.android/avd/$AVD.avd ] || echo no | avdmanager create avd -n "$AVD" -k "system-images;android-36;google_apis;arm64-v8a" -d pixel_7 > /dev/null
-  ANDROID_SDK_ROOT=$SDK python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' "$SDK/emulator/emulator" -avd "$AVD" -no-window -no-audio -no-boot-anim -no-snapshot -port $EPORT > "$HERE/state/perf-emulator.log" 2>&1 < /dev/null &
+  ANDROID_SDK_ROOT=$SDK python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' "$SDK/emulator/emulator" -avd "$AVD" -no-window -no-audio -no-boot-anim -no-snapshot -gpu "${GPU:-host}" -port $EPORT > "$HERE/state/perf-emulator.log" 2>&1 < /dev/null &
   disown
   a wait-for-device
   for i in $(seq 1 120); do [ "$(a shell getprop sys.boot_completed 2> /dev/null | tr -d '\r')" = 1 ] && break; sleep 2; done
