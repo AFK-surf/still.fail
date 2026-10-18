@@ -9,7 +9,10 @@ plugins {
 android {
     namespace = "fail.still.android.settings"
     compileSdk = 36
-    lint { ignoreTestSources = true }
+    lint {
+        ignoreTestSources = true
+        lintConfig = rootProject.file("lint.xml")
+    }
     defaultConfig { minSdk = 29 }
     buildFeatures { compose = true }
     compileOptions {

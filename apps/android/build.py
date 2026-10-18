@@ -91,7 +91,7 @@ def main():
         for name in ENGINE:
             shutil.copy2(engine / name, jni / name)
     # The core: bundled for Hermes and compiled to its bytecode (client/core-ts/scripts/hermes-bundle.ts). Lint alone (CI's
-    # check-android lint) gets an empty stand-in, the same every run: lint cannot read the bytecode, but :core's assets are
+    # check-android-lint) gets an empty stand-in, the same every run: lint cannot read the bytecode, but :core's assets are
     # in every module's lint inputs, and the core's next bytecode linted all six anew (~3 minutes on CI, 2026-10-18).
     lint_only = bool(args.tasks) and all(task.rsplit(":", 1)[-1].startswith("lint") for task in args.tasks)
     if lint_only:

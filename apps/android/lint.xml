@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Android lint, every module (lintConfig in their build.gradle.kts): a check is off or an error, nothing between, as a
+     warning no one reads finds nothing (2026-10-18). On: the checks lint has as errors, and of its warnings the ones that
+     find a bug, a leak or a hole in what is shipped (each below with what it finds); off: style, performance hints,
+     wording, icons, layouts in XML (the app is Compose) and two whose every find here was as meant (StaticFieldLeak,
+     ConstantLocale). A check of a library a module does not use is unknown there: ignored
+     with the rest (UnknownIssueId). -->
+<lint>
+    <issue id="all" severity="ignore" />
+
+    <!-- Lint's own errors. -->
+    <issue id="AaptCrash" severity="error" />
+    <issue id="AccidentalOctal" severity="error" />
+    <issue id="AppCompatCustomView" severity="error" />
+    <issue id="AppCompatResource" severity="error" />
+    <issue id="AppLinkSplitToWebAndCustom" severity="error" />
+    <issue id="AppLinkUriRelativeFilterGroupError" severity="error" />
+    <issue id="AppLinkUrlError" severity="error" />
+    <issue id="BidiSpoofing" severity="error" />
+    <issue id="BinderGetCallingInMainThread" severity="error" />
+    <issue id="BlockedPrivateApi" severity="error" />
+    <issue id="BottomAppBar" severity="error" />
+    <issue id="ByteOrderMark" severity="error" />
+    <issue id="ChildInNonViewGroup" severity="error" />
+    <issue id="CoarseFineLocation" severity="error" />
+    <issue id="ConstantContentStateKeyInItemsCall" severity="error" />
+    <issue id="ContextCastToActivity" severity="error" />
+    <issue id="CoreLibDesugaringV1" severity="error" />
+    <issue id="CoroutineCreationDuringComposition" severity="error" />
+    <issue id="CredManMissingDal" severity="error" />
+    <issue id="DeletedProvider" severity="error" />
+    <issue id="DiffUtilEquals" severity="error" />
+    <issue id="DuplicateActivity" severity="error" />
+    <issue id="DuplicateDefinition" severity="error" />
+    <issue id="DuplicateIds" severity="error" />
+    <issue id="DuplicatePlatformClasses" severity="error" />
+    <issue id="EditedTargetSdkVersion" severity="error" />
+    <issue id="EllipsizeMaxLines" severity="error" />
+    <issue id="EnforceUTF8" severity="error" />
+    <issue id="EnsureInitializerMetadata" severity="error" />
+    <issue id="EnsureInitializerNoArgConstr" severity="error" />
+    <issue id="ExactAlarm" severity="error" />
+    <issue id="ExperimentalAnnotationRetention" severity="error" />
+    <issue id="ExpiredTargetSdkVersion" severity="error" />
+    <issue id="ExtraText" severity="error" />
+    <issue id="ExtraTranslation" severity="error" />
+    <issue id="FlowOperatorInvokedInComposition" severity="error" />
+    <issue id="FontValidation" severity="error" />
+    <issue id="ForegroundServicePermission" severity="error" />
+    <issue id="ForegroundServiceType" severity="error" />
+    <issue id="FullBackupContent" severity="error" />
+    <issue id="GetContentDescriptionOverride" severity="error" />
+    <issue id="GetLocales" severity="error" />
+    <issue id="GradleCompatible" severity="error" />
+    <issue id="GradleGetter" severity="error" />
+    <issue id="GradleIdeError" severity="error" />
+    <issue id="GradlePluginVersion" severity="error" />
+    <issue id="GridLayout" severity="error" />
+    <issue id="HalfFloat" severity="error" />
+    <issue id="HardcodedDebugMode" severity="error" />
+    <issue id="HighAppVersionCode" severity="error" />
+    <issue id="ImpliedQuantity" severity="error" />
+    <issue id="ImpliedTouchscreenHardware" severity="error" />
+    <issue id="IncludeLayoutParam" severity="error" />
+    <issue id="Instantiatable" severity="error" />
+    <issue id="InvalidAnalyticsName" severity="error" />
+    <issue id="InvalidFragmentVersionForActivityResult" severity="error" />
+    <issue id="InvalidId" severity="error" />
+    <issue id="InvalidImeActionId" severity="error" />
+    <issue id="InvalidLanguageTagDelimiter" severity="error" />
+    <issue id="InvalidPermission" severity="error" />
+    <issue id="InvalidPurposeString" severity="error" />
+    <issue id="InvalidResourceFolder" severity="error" />
+    <issue id="InvalidUsesTagAttribute" severity="error" />
+    <issue id="InvalidVectorPath" severity="error" />
+    <issue id="InvalidWakeLockTag" severity="error" />
+    <issue id="InvalidWearFeatureAttribute" severity="error" />
+    <issue id="JavascriptInterface" severity="error" />
+    <issue id="KnownPermissionError" severity="error" />
+    <issue id="KotlinNullnessAnnotation" severity="error" />
+    <issue id="LaunchDuringComposition" severity="error" />
+    <issue id="LibraryCustomView" severity="error" />
+    <issue id="LifecycleCurrentStateInComposition" severity="error" />
+    <issue id="LintImplBadUrl" severity="error" />
+    <issue id="LintImplDollarEscapes" severity="error" />
+    <issue id="LintImplIdFormat" severity="error" />
+    <issue id="LintImplTrimIndent" severity="error" />
+    <issue id="LintImplUseUast" severity="error" />
+    <issue id="LocalContextConfigurationRead" severity="error" />
+    <issue id="LocalContextGetResourceValueCall" severity="error" />
+    <issue id="LocalSuppress" severity="error" />
+    <issue id="LogTagMismatch" severity="error" />
+    <issue id="LongLogTag" severity="error" />
+    <issue id="ManifestResource" severity="error" />
+    <issue id="ManifestTypo" severity="error" />
+    <issue id="MenuTitle" severity="error" />
+    <issue id="MergeMarker" severity="error" />
+    <issue id="MissingClass" severity="error" />
+    <issue id="MissingConstraints" severity="error" />
+    <issue id="MissingDefaultResource" severity="error" />
+    <issue id="MissingInflatedId" severity="error" />
+    <issue id="MissingIntentFilterForMediaSearch" severity="error" />
+    <issue id="MissingLeanbackLauncher" severity="error" />
+    <issue id="MissingLeanbackSupport" severity="error" />
+    <issue id="MissingMediaBrowserServiceIntentFilter" severity="error" />
+    <issue id="MissingOnPlayFromSearch" severity="error" />
+    <issue id="MissingPermission" severity="error" />
+    <issue id="MissingPrefix" severity="error" />
+    <issue id="MissingPurpose" severity="error" />
+    <issue id="MissingQuantity" severity="error" />
+    <issue id="MissingSuperCall" severity="error" />
+    <issue id="MissingTranslation" severity="error" />
+    <issue id="MissingTvBanner" severity="error" />
+    <issue id="MockLocation" severity="error" />
+    <issue id="ModifierFactoryUnreferencedReceiver" severity="error" />
+    <issue id="MotionLayoutInvalidSceneFileReference" severity="error" />
+    <issue id="MotionLayoutMissingId" severity="error" />
+    <issue id="MotionSceneFileValidationError" severity="error" />
+    <issue id="MultipleUsesSdk" severity="error" />
+    <issue id="MutableImplicitPendingIntent" severity="error" />
+    <issue id="NamespaceTypo" severity="error" />
+    <issue id="NetworkSecurityConfig" severity="error" />
+    <issue id="NewApi" severity="error" />
+    <issue id="NfcTechWhitespace" severity="error" />
+    <issue id="NioDesugaring" severity="error" />
+    <issue id="NoCollectCallFound" severity="error" />
+    <issue id="NotInterpolated" severity="error" />
+    <issue id="NotShrinkingResources" severity="error" />
+    <issue id="NotSibling" severity="error" />
+    <issue id="NotificationId0" severity="error" />
+    <issue id="NotificationPermission" severity="error" />
+    <issue id="NotificationTrampoline" severity="error" />
+    <issue id="NullSafeMutableLiveData" severity="error" />
+    <issue id="ObjectAnimatorBinding" severity="error" />
+    <issue id="OnClick" severity="error" />
+    <issue id="OpenForTesting" severity="error" />
+    <issue id="Orientation" severity="error" />
+    <issue id="OverrideAbstract" severity="error" />
+    <issue id="PackageManagerCheckPermission" severity="error" />
+    <issue id="PackagedPrivateKey" severity="error" />
+    <issue id="ParcelCreator" severity="error" />
+    <issue id="PendingBindings" severity="error" />
+    <issue id="PermissionImpliesUnsupportedChromeOsHardware" severity="error" />
+    <issue id="PlaySdkIndexDeprecated" severity="error" />
+    <issue id="PlaySdkIndexGenericIssues" severity="error" />
+    <issue id="PlaySdkIndexNonCompliant" severity="error" />
+    <issue id="PlaySdkIndexVulnerability" severity="error" />
+    <issue id="ProduceStateDoesNotAssignValue" severity="error" />
+    <issue id="Proguard" severity="error" />
+    <issue id="ProguardAndroidTxtUsage" severity="error" />
+    <issue id="PropertyEscape" severity="error" />
+    <issue id="ProtectedPermissions" severity="error" />
+    <issue id="QueryAllPackagesPermission" severity="error" />
+    <issue id="Range" severity="error" />
+    <issue id="RecyclerView" severity="error" />
+    <issue id="ReferenceType" severity="error" />
+    <issue id="RelativeClassResolution" severity="error" />
+    <issue id="RememberInComposition" severity="error" />
+    <issue id="RememberReturnType" severity="error" />
+    <issue id="RememberSaveableSaverParameter" severity="error" />
+    <issue id="RemoteViewLayout" severity="error" />
+    <issue id="RepeatOnLifecycleWrongUsage" severity="error" />
+    <issue id="RequiresWindowSdk" severity="error" />
+    <issue id="ResAuto" severity="error" />
+    <issue id="ReservedSystemPermission" severity="error" />
+    <issue id="ResourceAsColor" severity="error" />
+    <issue id="ResourceCycle" severity="error" />
+    <issue id="ResourceName" severity="error" />
+    <issue id="ResourceType" severity="error" />
+    <issue id="RestrictedApi" severity="error" />
+    <issue id="RetainLeaksContext" severity="error" />
+    <issue id="RetainRememberObserver" severity="error" />
+    <issue id="RetainUnitType" severity="error" />
+    <issue id="RetainingDoNotRetainType" severity="error" />
+    <issue id="ReturnThis" severity="error" />
+    <issue id="RtlCompat" severity="error" />
+    <issue id="ScheduleExactAlarm" severity="error" />
+    <issue id="ServiceCast" severity="error" />
+    <issue id="SoonBlockedPrivateApi" severity="error" />
+    <issue id="StartActivityAndCollapseDeprecated" severity="error" />
+    <issue id="StateFlowValueCalledInComposition" severity="error" />
+    <issue id="StringEscaping" severity="error" />
+    <issue id="StringFormatInvalid" severity="error" />
+    <issue id="StringFormatMatches" severity="error" />
+    <issue id="StringShouldBeInt" severity="error" />
+    <issue id="SupportAnnotationUsage" severity="error" />
+    <issue id="Suspicious0dp" severity="error" />
+    <issue id="SuspiciousCompositionLocalModifierRead" severity="error" />
+    <issue id="SuspiciousIndentation" severity="error" />
+    <issue id="SuspiciousModifierThen" severity="error" />
+    <issue id="TestAppLink" severity="error" />
+    <issue id="ThreadConstraint" severity="error" />
+    <issue id="TilePreviewImageFormat" severity="error" />
+    <issue id="UniqueConstants" severity="error" />
+    <issue id="UniquePermission" severity="error" />
+    <issue id="UnknownId" severity="error" />
+    <issue id="UnrememberedMutableState" severity="error" />
+    <issue id="UnsafeImplicitIntentLaunch" severity="error" />
+    <issue id="UnsafeLifecycleWhenUsage" severity="error" />
+    <issue id="UnsafeOptInUsageError" severity="error" />
+    <issue id="UnspecifiedImmutableFlag" severity="error" />
+    <issue id="UnspecifiedRegisterReceiverFlag" severity="error" />
+    <issue id="UnsupportedTvHardware" severity="error" />
+    <issue id="UnusedBoxWithConstraintsScope" severity="error" />
+    <issue id="UnusedContentLambdaTargetStateParameter" severity="error" />
+    <issue id="UnusedCrossfadeTargetStateParameter" severity="error" />
+    <issue id="UnusedMaterial3ScaffoldPaddingParameter" severity="error" />
+    <issue id="UnusedSharedTransitionModifierParameter" severity="error" />
+    <issue id="UnusedTargetStateInContentKeyLambda" severity="error" />
+    <issue id="UnusedTransitionTargetStateParameter" severity="error" />
+    <issue id="UseSdkSuppress" severity="error" />
+    <issue id="UsingC2DM" severity="error" />
+    <issue id="ValidFragment" severity="error" />
+    <issue id="ValidRestrictions" severity="error" />
+    <issue id="VectorDrawableCompat" severity="error" />
+    <issue id="ViewBindingType" severity="error" />
+    <issue id="WatchFaceFormatDeclaresHasNoCode" severity="error" />
+    <issue id="WatchFaceFormatInvalidVersion" severity="error" />
+    <issue id="WatchFaceFormatMissingVersion" severity="error" />
+    <issue id="WearMaterialTheme" severity="error" />
+    <issue id="WearPasswordInput" severity="error" />
+    <issue id="WearStandaloneAppFlag" severity="error" />
+    <issue id="WearableBindListener" severity="error" />
+    <issue id="WebViewLayout" severity="error" />
+    <issue id="WebpUnsupported" severity="error" />
+    <issue id="WifiManagerLeak" severity="error" />
+    <issue id="WrongCall" severity="error" />
+    <issue id="WrongCase" severity="error" />
+    <issue id="WrongConstant" severity="error" />
+    <issue id="WrongFolder" severity="error" />
+    <issue id="WrongGradleMethod" severity="error" />
+    <issue id="WrongManifestParent" severity="error" />
+    <issue id="WrongRequiresOptIn" severity="error" />
+    <issue id="WrongSdkInt" severity="error" />
+    <issue id="WrongViewCast" severity="error" />
+    <issue id="XmlEscapeNeeded" severity="error" />
+
+    <!-- Its warnings that are bugs. -->
+    <issue id="AllowAllHostnameVerifier" severity="error" /> <!-- Insecure HostnameVerifier -->
+    <issue id="AutoboxingStateValueProperty" severity="error" /> <!-- State access causes value to be autoboxed -->
+    <issue id="BadHostnameVerifier" severity="error" /> <!-- Insecure HostnameVerifier -->
+    <issue id="CheckResult" severity="error" /> <!-- Ignoring results -->
+    <issue id="ConfigurationScreenWidthHeight" severity="error" /> <!-- Using Configuration.screenWidthDp/screenHeightDp instead of -->
+    <issue id="CustomX509TrustManager" severity="error" /> <!-- Implements custom TLS trust manager -->
+    <issue id="DefaultLocale" severity="error" /> <!-- Implied default locale in case conversion -->
+    <issue id="DeprecatedSinceApi" severity="error" /> <!-- Using a method deprecated in earlier SDK -->
+    <issue id="DiscouragedPrivateApi" severity="error" /> <!-- Using Discouraged Private API -->
+    <issue id="DrawAllocation" severity="error" /> <!-- Memory allocations within drawing code -->
+    <issue id="ExportedContentProvider" severity="error" /> <!-- Content provider does not require permission -->
+    <issue id="ExportedReceiver" severity="error" /> <!-- Receiver does not require permission -->
+    <issue id="ExportedService" severity="error" /> <!-- Exported service does not require permission -->
+    <issue id="FrequentlyChangingValue" severity="error" /> <!-- Reading a value annotated with @FrequentlyChangingValue inside -->
+    <issue id="GrantAllUris" severity="error" /> <!-- Content provider shares everything -->
+    <issue id="HandlerLeak" severity="error" /> <!-- Handler reference leaks -->
+    <issue id="HardwareIds" severity="error" /> <!-- Hardware Id Usage -->
+    <issue id="InlinedApi" severity="error" /> <!-- Using inlined constants on older versions -->
+    <issue id="IntentWithNullActionLaunch" severity="error" /> <!-- Unsafe intent launched with no action set -->
+    <issue id="LocalContextResourcesRead" severity="error" /> <!-- Reading Resources using LocalContext.current.resources -->
+    <issue id="MultipleAwaitPointerEventScopes" severity="error" /> <!-- Suspicious use of multiple awaitPointerEventScope blocks. Using -->
+    <issue id="MutableCollectionMutableState" severity="error" /> <!-- Creating a MutableState object with a mutable collection type -->
+    <issue id="OpaqueUnitKey" severity="error" /> <!-- Passing an expression which always returns Unit as a key argument -->
+    <issue id="PrivateApi" severity="error" /> <!-- Using Private APIs -->
+    <issue id="ProxyPassword" severity="error" /> <!-- Proxy Password in Cleartext -->
+    <issue id="Recycle" severity="error" /> <!-- Missing recycle() calls -->
+    <issue id="ReturnFromAwaitPointerEventScope" severity="error" /> <!-- Returning from awaitPointerEventScope may cause some input events to -->
+    <issue id="SecretInSource" severity="error" /> <!-- Secret in source code -->
+    <issue id="SecureRandom" severity="error" /> <!-- Using a fixed seed with SecureRandom -->
+    <issue id="SetWorldReadable" severity="error" /> <!-- File.setReadable() used to make file world-readable -->
+    <issue id="SetWorldWritable" severity="error" /> <!-- File.setWritable() used to make file world-writable -->
+    <issue id="ShiftFlags" severity="error" /> <!-- Dangerous Flag Constant Declaration -->
+    <issue id="ShowToast" severity="error" /> <!-- Toast created but not shown -->
+    <issue id="SimpleDateFormat" severity="error" /> <!-- Implied locale in date format -->
+    <issue id="SwitchIntDef" severity="error" /> <!-- Missing @IntDef in Switch -->
+    <issue id="TrulyRandom" severity="error" /> <!-- Weak RNG -->
+    <issue id="TrustAllX509TrustManager" severity="error" /> <!-- Insecure TLS/SSL trust manager -->
+    <issue id="UnsafeDynamicallyLoadedCode" severity="error" /> <!-- load used to dynamically load code -->
+    <issue id="UnsafeIntentLaunch" severity="error" /> <!-- Launched Unsafe Intent -->
+    <issue id="UnsafeNativeCodeLocation" severity="error" /> <!-- Native code outside library directory -->
+    <issue id="UnsafeOptInUsageWarning" severity="error" /> <!-- Unsafe opt-in usage intended to be warning-level severity -->
+    <issue id="UnsafeProtectedBroadcastReceiver" severity="error" /> <!-- Unsafe Protected BroadcastReceiver -->
+    <issue id="UnsanitizedFilenameFromContentProvider" severity="error" /> <!-- Trusting ContentProvider filenames without any sanitization -->
+    <issue id="UsingHttp" severity="error" /> <!-- Using HTTP instead of HTTPS -->
+    <issue id="Wakelock" severity="error" /> <!-- Incorrect WakeLock usage -->
+    <issue id="WakelockTimeout" severity="error" /> <!-- Using wakeLock without timeout -->
+    <issue id="WebViewClientOnReceivedSslError" severity="error" /> <!-- Proceeds with the HTTPS connection despite SSL errors -->
+    <issue id="WeekBasedYear" severity="error" /> <!-- Week Based Year -->
+    <issue id="WorldReadableFiles" severity="error" /> <!-- openFileOutput() with MODE_WORLD_READABLE -->
+    <issue id="WorldWriteableFiles" severity="error" /> <!-- openFileOutput() with MODE_WORLD_WRITEABLE -->
+</lint>
