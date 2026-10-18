@@ -6,10 +6,11 @@ process.env.TZ = "Asia/Shanghai";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { request } from "node:http";
 import { join } from "node:path";
 import { test } from "node:test";
 import { photoId } from "../src/photos.ts";
-import { MEMBER, OWNER, PHONE_EXIF, POSTER, VIEWER, bmp, callBytes, exifJpeg, gif, header, heic, jpeg, listen, mp4, png, started, tiff, wait } from "./helpers.ts";
+import { MEMBER, OWNER, ascii, PHONE_EXIF, POSTER, VIEWER, bmp, callBytes, exifJpeg, gif, header, heic, jpeg, listen, mp4, png, started, tiff, wait } from "./helpers.ts";
 
 const at = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12, 0, 0).getTime();
 const write = (file: string, bytes: Buffer, mtime?: number) => {
@@ -296,4 +297,17 @@ test("upload: resumed, checked, put in the member's backup folder by month, a na
   assert.deepEqual((await s.call("GET", `/photos/has?hash=${hash}`, MEMBER)).json, { id: done.json.id });
   const albums = (await s.call("GET", "/photos/albums", MEMBER)).json.albums;
   assert.deepEqual(albums.map((a: any) => [a.id, a.count]), [["backup", 3]]);
+});
+
+test("photos are the home workspace's: a member of another workspace the station joined is refused", async () => {
+  const s = await started();
+  const away = ascii({ sub: "u-away", email: "away@example.com", name: "外", role: "member", workspace: "w9", home: false });
+  const got = await new Promise<{ status: number }>((resolve, reject) => {
+    request({ socketPath: s.socket, path: "/photos/albums", headers: { "stillfail-viewer": away } }, (res) => {
+      res.resume();
+      resolve({ status: res.statusCode! });
+    }).on("error", reject).end();
+  });
+  assert.equal(got.status, 403);
+  await s.stop();
 });

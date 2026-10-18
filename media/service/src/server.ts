@@ -121,7 +121,7 @@ const thumbSize = (q: URLSearchParams) => {
 };
 
 /// Who listens to `/events`: a member's connections, by workspace, account and role.
-type Listener = { workspace: string; sub: string; role: string; res: ServerResponse };
+type Listener = { workspace: string; sub: string; role: string; home: boolean; res: ServerResponse };
 
 export type Service = { server: Server; store: Store; photos: Library; close: () => Promise<void> };
 
@@ -151,7 +151,7 @@ export async function startService(o: Options): Promise<Service> {
     if (photosTimer) clearTimeout(photosTimer);
     photosTimer = setTimeout(() => {
       photosTimer = null;
-      send((l) => WRITERS.has(l.role), "photos", {});
+      send((l) => WRITERS.has(l.role) && l.home, "photos", {});
     }, PHOTOS_SETTLE);
     photosTimer.unref();
   };
@@ -423,7 +423,7 @@ export async function startService(o: Options): Promise<Service> {
       handle: ({ viewer, res }) => {
         res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" });
         res.write(": ok\n\n");
-        const l: Listener = { workspace: viewer.workspace, sub: viewer.sub, role: viewer.role, res };
+        const l: Listener = { workspace: viewer.workspace, sub: viewer.sub, role: viewer.role, home: viewer.home, res };
         listeners.add(l);
         res.on("close", () => listeners.delete(l));
         return null;
@@ -454,6 +454,8 @@ export async function startService(o: Options): Promise<Service> {
     if (!route) throw new MediaError("not_found", matching.length > 0 ? "不支持这个请求方法" : "没有这个接口", matching.length > 0 ? 405 : 404);
     if (route.who === "writer" && !WRITERS.has(viewer.role)) throw new MediaError("forbidden", "只读成员不能修改书架");
     if (route.who === "photos" && !WRITERS.has(viewer.role)) throw new MediaError("forbidden", "只读成员看不到照片");
+    // The photos are the station's own people's: its home workspace's, not those of another it joined.
+    if ((route.who === "photos" || route.who === "keeper") && !viewer.home) throw new MediaError("forbidden", "照片只给这台 station 所在的主 workspace 的成员看");
     if (route.who === "keeper" && !KEEPERS.has(viewer.role)) throw new MediaError("forbidden", "只有 owner 和 admin 能设置照片库的文件夹");
     if (route.who === "photos" || route.who === "keeper") photos.noteWriter(viewer);
     let params: string[];

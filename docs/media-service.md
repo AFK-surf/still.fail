@@ -64,6 +64,8 @@
 - **上传**：`has` 和上传按 sha256 查，只有上传进来的条目有 sha256（扫到的文件不算哈希：要整个读一遍，太贵）；扫描时文件大小没变就保留它。分段写到 `<模块目录>/uploads/<账号+hash+size>.part`，`offset` 不能超过已收的（409，带 `have`），等于或小于都按位置写（重发的一段、空 body 问进度都行），一段 ≤8 MB（413）。收齐后核 sha256（不对 409 并删掉重来），移到 `<备份目录>/<邮箱>/<YYYY>/<MM>/<name>`（年月按 `taken`，没给按现在；重名加「 (1)」），mtime 设成 `taken`，马上建条目，发 `photos`。7 天没动的 `.part` 在全量对的时候删掉。
 - **事件**：库变了（索引、上传、thumbhash）1 秒内没再变就给可写成员的 `/events` 发 `event: photos`（`{}`）。
 
+照片只给这台 station 的主 workspace 里能写的成员看（owner、admin、member）：只读成员，以及 station 另外加入的 workspace 的成员，都回 403，也收不到 `photos` 事件。
+
 ## 存储
 
 `<STILLFAIL_MODULE_DIR>/media.db`（WAL，外键级联删除），自己的 `user_version`（`store.ts` 的 `MIGRATIONS`，按顺序往前迁；比代码新的库拒绝打开）。表：`books`（workspace、root、path 唯一）、`chapters`（blocks 存 JSON，原样发出）、`images`、`places`（book+sub）、`notes`（book+id，带 sub）；第 2 版加了 `photo_items`（照片和视频，按 day、相册、目录、sha256 建索引）和 `photo_settings`（文件夹、读库用的身份）。
