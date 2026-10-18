@@ -1693,7 +1693,7 @@ const pinnedAt = new WeakMap<object, number>();
 /// agent who said it is one of the chat's (its name opens its history), whose workspace keeps each of its files (and the
 /// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), the 归档 offer and what the archive check made of the chat under its last all-done post, and what its
 /// agents sent to Slack or were given there after it (`elsewhere`; the chat's own `elsewhere` keeps what came before
-/// its first message), and which of the viewer's have their time under their next one instead (`followed`).
+/// its first message), and which of the viewer's go close together with their next one, its time under that one (`followed`, `joined`).
 function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined): V {
   if (out === undefined || !("ok" in out) || !isObject(out.ok)) return out;
   // Everything said here goes on copies: what the view is made of may be the core's kept values, frozen (a message's
@@ -1756,19 +1756,28 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     }
     view.elsewhere = first;
   }
-  // The viewer's messages sent one after another: the time only under the last of them, while each one's is within
-  // FOLLOWED_MS of the time shown under a later one (nothing else between them: no one else's, nothing sent to Slack).
-  const sending = view.newer === true ? [] : arr(view.outbox).filter((o) => isObject(o) && o.state !== "failed");
-  let shownAt = sending.length > 0 ? u64(sending[0].createdAt) : null;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
+  // The viewer's messages sent one after another, in their bubbles: close together, the time only under the last of
+  // them, while each one's is within FOLLOWED_MS of the time shown under a later one (nothing else between them: no
+  // one else's, nothing sent to Slack). Those still on their way count; one not sent stands apart.
+  const outbox = view.newer === true ? [] : arr(view.outbox);
+  const all: J[] = [...messages, ...outbox];
+  const followed = new Set<number>();
+  let shownAt: number | null = null;
+  for (let i = all.length - 1; i >= 0; i--) {
+    const m = all[i];
     const at = u64(m.createdAt);
-    if (m.mine !== true || at === null) { shownAt = null; continue; }
-    if (shownAt !== null && m.elsewhere === undefined && shownAt - at <= FOLLOWED_MS) messages[i] = { ...m, followed: true };
+    const mine = i >= messages.length ? m.state !== "failed" : m.mine === true;
+    if (!mine || at === null) { shownAt = null; continue; }
+    if (shownAt !== null && m.elsewhere === undefined && shownAt - at <= FOLLOWED_MS) followed.add(i);
     else shownAt = at;
+  }
+  if (followed.size > 0) {
+    const marked = all.map((m, i) => (followed.has(i) || followed.has(i - 1) ? { ...m, ...(followed.has(i) ? { followed: true } : {}), ...(followed.has(i - 1) ? { joined: true } : {}) } : m));
+    view.messages = marked.slice(0, messages.length);
+    if (outbox.length > 0) view.outbox = marked.slice(messages.length);
   }
   return { ...out, ok: view } as V;
 }
 
-/// How far apart the viewer's messages sent one after another are still one time under the last.
+/// How far apart the viewer's messages sent one after another still go together, one time under the last.
 const FOLLOWED_MS = 5 * 60_000;

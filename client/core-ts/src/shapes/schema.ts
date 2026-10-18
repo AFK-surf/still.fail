@@ -190,7 +190,8 @@ export const SHAPES: Record<string, Shape> = {
     ["profile", opt("String"), { doc: "still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it." }],
     ["by", "MessageBy"],
     ["waiting", "bool"],
-    ["followed", opt("bool"), { doc: "In a chat's page: the viewer's, their next message sent soon after it (within 5 minutes of the time shown under a\nlater one): its time (and that its agents have yet to take it) shows under the last of them only. Absent otherwise." }],
+    ["followed", opt("bool"), { doc: "In a chat's page: the viewer's, their next message sent soon after it (within 5 minutes of the time shown under a\nlater one): the two close together, its time (and that its agents have yet to take it) under the last of them only.\nAbsent otherwise." }],
+    ["joined", opt("bool"), { doc: "In a chat's page: the viewer's, sent soon after their message before it (that one `followed`): close under it." }],
     ["said", opt("bool"), { doc: "Said while the chat shows (told as it was said, not caught up on): it comes in rather than being there at once.\nDecided by the core once, when first seen (attend.ts)." }],
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`)." }],
     ["options", opt(vec("DecisionOption")), { doc: "An agent's post with an options card: the answers to pick, in the order they are shown (the one the agent\nrecommends last), as `card.options`; drawn under the message. Absent for every other message." }],
@@ -2115,6 +2116,8 @@ export const SHAPES: Record<string, Shape> = {
     ["error", opt("String")],
     ["seq", opt("i64"), { client: opt("I54") }],
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`, `lastActiveAt`, …)." }],
+    ["followed", opt("bool"), { doc: "Another sent soon after it: as a message's `followed` (sending, it says so under the last only)." }],
+    ["joined", opt("bool"), { doc: "Sent soon after the viewer's message or outgoing one before it: as a message's `joined`." }],
   ], { doc: "A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it." }),
   Person: struct([
     ["id", "String"],

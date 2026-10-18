@@ -1684,8 +1684,11 @@ data class ChatMessage (
 	val by: MessageBy,
 	val waiting: Boolean,
 	/// In a chat's page: the viewer's, their next message sent soon after it (within 5 minutes of the time shown under a
-	/// later one): its time (and that its agents have yet to take it) shows under the last of them only. Absent otherwise.
+	/// later one): the two close together, its time (and that its agents have yet to take it) under the last of them only.
+	/// Absent otherwise.
 	val followed: Boolean? = null,
+	/// In a chat's page: the viewer's, sent soon after their message before it (that one `followed`): close under it.
+	val joined: Boolean? = null,
 	/// Said while the chat shows (told as it was said, not caught up on): it comes in rather than being there at once.
 	/// Decided by the core once, when first seen (attend.ts).
 	val said: Boolean? = null,
@@ -1886,7 +1889,11 @@ data class Outgoing (
 	val error: String? = null,
 	val seq: Long? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
-	val time: Map<String, Stamp>? = null
+	val time: Map<String, Stamp>? = null,
+	/// Another sent soon after it: as a message's `followed` (sending, it says so under the last only).
+	val followed: Boolean? = null,
+	/// Sent soon after the viewer's message or outgoing one before it: as a message's `joined`.
+	val joined: Boolean? = null
 )
 
 /// A station's mesh link: connecting | online | offline | error.

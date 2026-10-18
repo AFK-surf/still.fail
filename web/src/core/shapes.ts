@@ -1692,9 +1692,12 @@ export interface ChatMessage {
 	waiting: boolean;
 	/**
 	 * In a chat's page: the viewer's, their next message sent soon after it (within 5 minutes of the time shown under a
-	 * later one): its time (and that its agents have yet to take it) shows under the last of them only. Absent otherwise.
+	 * later one): the two close together, its time (and that its agents have yet to take it) under the last of them only.
+	 * Absent otherwise.
 	 */
 	followed?: boolean;
+	/** In a chat's page: the viewer's, sent soon after their message before it (that one `followed`): close under it. */
+	joined?: boolean;
 	/**
 	 * Said while the chat shows (told as it was said, not caught up on): it comes in rather than being there at once.
 	 * Decided by the core once, when first seen (attend.ts).
@@ -1905,6 +1908,10 @@ export interface Outgoing {
 	seq?: number;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
+	/** Another sent soon after it: as a message's `followed` (sending, it says so under the last only). */
+	followed?: boolean;
+	/** Sent soon after the viewer's message or outgoing one before it: as a message's `joined`. */
+	joined?: boolean;
 }
 
 /** A station's mesh link: connecting | online | offline | error. */

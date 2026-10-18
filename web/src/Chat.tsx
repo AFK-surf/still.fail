@@ -333,7 +333,7 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   const showsAt = o.createdAt + SENDING_SHOWS_MS;
   const [delay] = useState(() => `${Math.max(0, showsAt - Date.now())}ms`);
   return (
-    <MineMessage data-vk={`o:${o.id}`} data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
+    <MineMessage data-vk={`o:${o.id}`} data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined} data-joined={o.joined || undefined}>
       <MineWords message={upImages(o)} />
       {o.uploads?.filter((f) => !isImage(f.name)).map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} sent={f.sent} error={o.state === "failed" ? o.error ?? null : null} />)}
       {o.state === "failed"
@@ -349,6 +349,8 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
               onClick={() => { if (to !== null) sending.discard(to, o.id).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) }))); }}>
               <DoingShown state={drop} inline idle={<Trash size={12} strokeWidth={2} />} />{t("common.delete")}</button>
           </div>
+        // Another sent soon after it: that one says it is on its way.
+        : o.followed ? null
         : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><Spinner inline />{o.uploads?.length ? t("common.uploading") : t("web-main.chat.sending")}</span>}
     </MineMessage>
   );
@@ -960,10 +962,10 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   const chat = useContext(DraftKey);
   if (m.mine) {
     return (
-      <MineMessage data-vk={`m:${m.seq}`} data-outgoing={m.outgoing} data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
+      <MineMessage data-vk={`m:${m.seq}`} data-outgoing={m.outgoing} data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught} data-joined={m.joined || undefined}>
         <MineWords message={m} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). Their next
-            message soon after: under that one instead. */}
+            message soon after: under that one instead, close under this. */}
         {m.followed ? null : m.waiting
           ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><Spinner inline />{t("web-main.chat.waitingAgent")}</span>
           : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}

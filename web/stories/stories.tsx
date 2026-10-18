@@ -211,7 +211,8 @@ const logins = ({ canLogin = true, canRelay = true, old = false, card, listed }:
     return { ...chat, messages: chat.messages.map((m, i) => (i === first ? { ...m, card: { type: "login", login: card } } : m)) };
   },
 });
-/** The viewer's three messages sent one after another at the chat's end: the time under the last only (`followed`). */
+/** The viewer's three messages sent one after another at the chat's end: close together, the time under the last only
+ *  (`followed`, `joined`). */
 const followed: DemoExtension = {
   then: (t, value) => {
     if (t.topic !== "chat" || !value) return undefined;
@@ -223,7 +224,7 @@ const followed: DemoExtension = {
       const at = start + i * 40_000;
       return {
         seq: last.seq + 1 + i, thread: last.thread, ts: `${at / 1000}`, authorKind: "person", author: "local", authorName: "你", text, attachments: [], quotes: [],
-        createdAt: at, mine: true, system: false, by: { name: "你" }, waiting: false, time: { createdAt: stamp(at) }, ...(i < 2 ? { followed: true } : {}),
+        createdAt: at, mine: true, system: false, by: { name: "你" }, waiting: false, time: { createdAt: stamp(at) }, ...(i < 2 ? { followed: true } : {}), ...(i > 0 ? { joined: true } : {}),
       };
     });
     return { ...chat, messages: [...chat.messages, ...said] };

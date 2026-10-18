@@ -401,6 +401,16 @@ private const val LAYOUT_MS = 100L
 /** The list's gap between messages (web mobile: --list-gap 20px). */
 private val GAP = 20.dp
 
+/** How far under the one before it your message sent soon after it is (`joined`; web virtual/list.css.ts JOINED_GAP). */
+private val JOINED_GAP = 4.dp
+
+/** Your message sent soon after the one before it (`joined`): close under it, the list's gap taken back but JOINED_GAP. */
+private fun Modifier.joined(joined: Boolean): Modifier = if (!joined) this else layout { measurable, constraints ->
+    val placed = measurable.measure(constraints)
+    val up = (GAP - JOINED_GAP).roundToPx()
+    layout(placed.width, (placed.height - up).coerceAtLeast(0)) { placed.place(0, -up) }
+}
+
 /** `top` and `bottom`: the bars over it, which the list keeps its ends clear of. */
 @Composable
 private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<AgentHere>, draft: Draft, haze: HazeState, modifier: Modifier, top: Dp = 0.dp, bottom: Dp = 0.dp, host: Host) {
@@ -1095,11 +1105,12 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
         // A finger held on the words picks a passage of them, here (MessagePick.kt).
         val (hold, words) = messagePick(m.ts, t("android-chat.annotate.you"), "person", m.text)
         // Flashing, your words' bubble takes the accent's ground (it is the message); with no words, the row does.
-        Column(Modifier.fillMaxWidth().flashed(motion, m.ts.takeIf { m.text.isEmpty() }, flash), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.joined(m.joined == true).fillMaxWidth().flashed(motion, m.ts.takeIf { m.text.isEmpty() }, flash), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             QuoteCards(m.quotes, jump, Alignment.End)
             if (m.text.isNotEmpty()) CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) { Bubble(m.text, hold, m.ts) }
             Files(ctx, m.attachments, mine = true)
-            // Not taken by its agents yet: after a second it says it waits. Your next message soon after: under that one instead.
+            // Not taken by its agents yet: after a second it says it waits. Your next message soon after: under that one
+            // instead, close under this.
             if (m.followed == true) {}
             else if (waitingNow) UnderWay(t("android-chat.chat.waitingAgent"))
             // Coming in with the words, when they fly here from the composer.
@@ -1308,7 +1319,7 @@ private fun Out(ctx: Here, o: Outgoing) {
     // made here takes the page, and counting from then would hide what already showed.
     var slow by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(o.createdAt + 800 - System.currentTimeMillis()); slow = true }
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.joined(o.joined == true).fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Not sent: what was written faded.
         Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if (failed) 0.55f else 1f }, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             QuoteCards(o.quotes, null, Alignment.End)
@@ -1332,8 +1343,9 @@ private fun Out(ctx: Here, o: Outgoing) {
             UnsentButton(Icons.Trash, t("common.delete"), enabled = !retrying, busy = discarding, failed = app.failedOf("chat.discard", "station" to ctx.station, "id" to o.id)) {
                 app.act(t("android-chat.chat.delete.verb")) { if (thread != null) app.api(ctx.station).discard(thread.id, o.id) else pending?.let { app.api(ctx.station).discardIn(it, o.id) } }
             }
-        } else if (slow) {
-            // Not while its words are on their way here (ChatHost.kt): only once they have landed, if it is still going.
+        } else if (slow && o.followed != true) {
+            // Not while its words are on their way here (ChatHost.kt): only once they have landed, if it is still going;
+            // another sent soon after it says so for both.
             val flight = LocalFlight.current
             val host = LocalFlightHost.current
             Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { UnderWay(t("android-chat.chat.sending")) }

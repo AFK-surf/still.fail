@@ -1478,7 +1478,7 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archivi
   assert.deepEqual(v.messages.map((m: J) => m.archive ?? false), [false, false, true]);
 });
 
-test("the_viewers_messages_sent_one_after_another_have_their_time_under_the_last", async () => {
+test("the_viewers_messages_sent_one_after_another_go_close_together_their_time_under_the_last", async () => {
   const t = setup();
   const u = ui();
   t.subscribe(1, chatTopic("ws/a", 7));
@@ -1495,14 +1495,18 @@ test("the_viewers_messages_sent_one_after_another_have_their_time_under_the_last
   assert.deepEqual(v.messages.map((m: J) => m.mine), [true, true, true, true, false, true, true]);
   // 1 and 2 are within 5 minutes of 3's time; 3 is 6 minutes before 4's, so it shows its own; 5 is someone else's.
   assert.deepEqual(v.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, false]);
+  // Each close under the one before it that has its time under it.
+  assert.deepEqual(v.messages.map((m: J) => m.joined ?? false), [false, true, true, false, false, false, true]);
   // One on its way follows the last one too; failed, it does not.
   const id = t.views.outboxAdd("ws/a", 7, { text: "还有", attachments: [], quotes: [] });
   await t.read(u, 1);
   v = u.value;
   assert.deepEqual(v.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, true]);
+  assert.deepEqual([v.outbox[0].joined, v.outbox[0].followed], [true, undefined]);
   t.views.local.outboxState("ws/a", 7, id, "无法连接 station");
   await t.read(u, 1);
   assert.deepEqual(u.value.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, false]);
+  assert.equal(u.value.outbox[0].joined, undefined);
 });
 
 test("a_chats_page_is_told_which_files_its_agents_words_place_and_an_open_image_the_ones_beside_it", async () => {

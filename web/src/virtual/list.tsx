@@ -73,6 +73,12 @@ type Made = {
   shown: Set<string>;
 };
 
+/** How much of the list's gap before it a row takes back (its own negative margin, list.css.ts): held back, all of it;
+ *  going with the row before it (`data-joined`), all but JOINED_GAP. */
+function takenBack(row: HTMLElement, gap: number): number {
+  return row.hasAttribute("data-held") ? gap : row.hasAttribute("data-joined") ? gap - css.JOINED_GAP : 0;
+}
+
 /** A list's model, one for each `key` (a chat): made before its rows are, so where it opens can be said to it first. */
 /** How large the last pane of each kind of list was (a chat's, a history's: told apart by their gap): a list just
  *  made takes it for its own until its pane reports, so its first rows are the ones that show, not none (a pane of
@@ -253,6 +259,8 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     let input = 0;
     const touched = () => { input = performance.now(); };
     for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, touched, { passive: true });
+    // What of the gap each row's last told height took back (takenBack): a row's own changing is told from there.
+    const taken = new WeakMap<HTMLElement, number>();
     const sizes = new ResizeObserver((entries) => {
       // A reader's scroll was heard before this in the frame: the pane anywhere else than it was put is the browser's
       // doing as it laid the page out (what left the list's end left the pane past its end). The model puts it back.
@@ -275,10 +283,12 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
         }
         const row = entry.target as HTMLElement;
         const key = row.dataset.vk;
-        // A row held back takes no room, not even the gap before it (its own negative margin). One closing something in it
-        // says what it is going to stand at (rowHeights.ts): the pane goes toward that once, along with it.
+        // A row held back takes no room, not even the gap before it (its own negative margin); one that goes with the row
+        // before it, all but JOINED_GAP of it. One closing something in it says what it is going to stand at
+        // (rowHeights.ts): the pane goes toward that once, along with it.
         const to = row.dataset.settlesTo;
-        const less = row.hasAttribute("data-held") ? gap : 0;
+        const less = takenBack(row, gap);
+        taken.set(row, less);
         if (key !== undefined && row.isConnected) heights.push(to === undefined ? [key, box.blockSize - less] : [key, box.blockSize - less, Number(to) - less]);
       }
       // What a click in the pane just grew or shrank is the reader's doing, nothing new: their place is kept from here.
@@ -314,8 +324,15 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
         const key = row.dataset.vk;
         const size = key === undefined ? undefined : model.sizes.get(key);
         if (row.parentElement !== el || !size) continue;
+        const less = takenBack(row, gap);
+        // Gone with the row before it, or apart again: the same box, standing on more or less of the gap.
+        if (r.attributeName === "data-joined") {
+          const was = taken.get(row) ?? less;
+          taken.set(row, less);
+          if (was !== less) heights.push([key!, size.height + was - less]);
+          continue;
+        }
         const to = row.dataset.settlesTo;
-        const less = row.hasAttribute("data-held") ? gap : 0;
         heights.push(to === undefined ? [key!, size.height] : [key!, size.height, Number(to) - less]);
       }
       if (!heights.length) return;
@@ -332,7 +349,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       model.measured(heights);
       self.sync(el);
     });
-    settling.observe(el, { subtree: true, attributes: true, attributeFilter: ["data-settles-to"] });
+    settling.observe(el, { subtree: true, attributes: true, attributeFilter: ["data-settles-to", "data-joined"] });
     // A row that holds the focus stays made while it does, and so do the rows a selection runs through, from the one
     // it starts in to the one it ends in: what is copied is all of it, however far the pane has gone on meanwhile.
     let held: string[] = [];
