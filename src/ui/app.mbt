@@ -48,6 +48,42 @@ pub fn run(title : String, view : (Ctx) -> Unit) -> Unit {
 ///|
 fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let c = g
+  let t0 = frame_body(c, w, h, scale, t)
+  let t3 = h_now()
+  h_present(c.inst, c.ninst)
+  c.trim_images()
+  let t4 = h_now()
+  c.t_present = t4 - t3
+  if bench.mode > 0 {
+    bench_step(c, t3 - t0, t4 - t3)
+  }
+  if c.wants_frame || bench.mode > 0 {
+    h_request_frame()
+  } else if c.wake_at > 0.0 {
+    h_wake_after(dmax(c.wake_at - t, 1.0))
+  }
+}
+
+///|
+/// One frame without a window, for benchmarks (src/bench): `view` built,
+/// laid out and painted at time `t` (ms) as a window's frame is, into
+/// `c.inst` (`c.ninst` instances of 24 numbers); nothing is presented and
+/// no frame is asked for. `c.t_build`, `t_layout` and `t_paint` time it.
+pub fn frame_offscreen(
+  view : (Ctx) -> Unit,
+  w : Double,
+  h : Double,
+  scale : Double,
+  t : Double,
+) -> Ctx {
+  g_view.val = view
+  frame_body(g, w, h, scale, t) |> ignore
+  g
+}
+
+///|
+/// Builds, lays out and paints a frame; returns when it started.
+fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
   c.width = w
   c.height = h
   c.scale = scale
@@ -107,21 +143,10 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   c.next_scroll_rects = sr
   c.sync_ime()
   let t3 = h_now()
-  h_present(c.inst, c.ninst)
-  c.trim_images()
-  let t4 = h_now()
   c.t_build = t1 - t0
   c.t_layout = t2 - t1
   c.t_paint = t3 - t2
-  c.t_present = t4 - t3
-  if bench.mode > 0 {
-    bench_step(c, t3 - t0, t4 - t3)
-  }
-  if c.wants_frame || bench.mode > 0 {
-    h_request_frame()
-  } else if c.wake_at > 0.0 {
-    h_wake_after(dmax(c.wake_at - t, 1.0))
-  }
+  t0
 }
 
 ///|

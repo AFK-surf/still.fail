@@ -168,8 +168,9 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
   [enc endEncoding];
 }
 
-void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
-  dispatch_semaphore_wait(inflight, DISPATCH_TIME_FOREVER);
+// The instances into the next buffer of the ring (as floats), and a copy
+// kept for snapshots.
+static id<MTLBuffer> upload(const double *inst, int32_t count, double r, double g, double b) {
   buf_i = (buf_i + 1) % 3;
   size_t need = (size_t)(count > 0 ? count : 1) * 24 * sizeof(float);
   if (buf_cap[buf_i] < need) {
@@ -188,10 +189,15 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   memcpy(last_inst, f, (size_t)n * sizeof(float));
   last_count = count;
   last_bg[0] = r; last_bg[1] = g; last_bg[2] = b;
+  return bufs[buf_i];
+}
 
+void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
+  dispatch_semaphore_wait(inflight, DISPATCH_TIME_FOREVER);
+  id<MTLBuffer> buf = upload(inst, count, r, g, b);
   id<CAMetalDrawable> drawable = [mlayer nextDrawable];
   id<MTLCommandBuffer> cb = [queue commandBuffer];
-  if (drawable) encode(cb, drawable.texture, mpipe, bufs[buf_i], count, r, g, b);
+  if (drawable) encode(cb, drawable.texture, mpipe, buf, count, r, g, b);
   __block dispatch_semaphore_t sem = inflight;
   [cb addCompletedHandler:^(id<MTLCommandBuffer> _) { dispatch_semaphore_signal(sem); }];
   if (drawable) [cb presentDrawable:drawable];
@@ -240,4 +246,43 @@ int mb_render_snapshot(const char *path) {
   CGColorSpaceRelease(cs);
   free(px);
   return ok;
+}
+
+// Without a window (the bench, src/bench): the renderer with no layer, and
+// frames drawn into a texture kept across frames, the size a window's
+// drawable would be, as nanoui's hill-climb draws its own.
+static id<MTLTexture> off_target;
+
+void mb_render_init_offscreen(double w, double h, double scale) {
+  mb_render_init(nil);
+  mb_render_set_size(w, h, scale);
+  mb_text_scale = scale;
+  MTLTextureDescriptor *td = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                   width:(NSUInteger)round(w * scale)
+                                  height:(NSUInteger)round(h * scale)
+                               mipmapped:NO];
+  td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  td.storageMode = MTLStorageModePrivate;
+  off_target = [dev newTextureWithDescriptor:td];
+}
+
+// Draws a frame into the offscreen texture as a window's frame is drawn
+// (the ring of buffers, one command buffer), waits for it and times it:
+// out[0] the CPU time of uploading and encoding it, out[1] its GPU time
+// (the command buffer's timestamps), in ms.
+void mb_render_draw_timed(const double *inst, int32_t count, double r, double g, double b, double *out) {
+  @autoreleasepool {
+    dispatch_semaphore_wait(inflight, DISPATCH_TIME_FOREVER);
+    double t0 = CACurrentMediaTime();
+    id<MTLBuffer> buf = upload(inst, count, r, g, b);
+    id<MTLCommandBuffer> cb = [queue commandBuffer];
+    encode(cb, off_target, mpipe, buf, count, r, g, b);
+    [cb commit];
+    double t1 = CACurrentMediaTime();
+    [cb waitUntilCompleted];
+    out[0] = (t1 - t0) * 1000.0;
+    out[1] = (cb.GPUEndTime - cb.GPUStartTime) * 1000.0;
+    dispatch_semaphore_signal(inflight);
+  }
 }

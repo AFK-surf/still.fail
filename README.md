@@ -39,6 +39,7 @@ src/host    the platform boundary
 web/        browser host: WebGL2, canvas-2D text, hidden textarea for IME
 src/demo    the demo: a chat screen with 10,000 messages; MBUI_SCREEN=kit
             (?MBUI_SCREEN=kit in a browser) its kit: rich text, Markdown, pages
+src/bench   a headless benchmark after nanoui's hill-climb (bench/README.md)
 ```
 
 Every renderer draws the same instances with the same shader (rounded rects
@@ -50,6 +51,7 @@ with borders, shadows, alpha-mask glyphs, color glyphs).
 scripts/mac.sh build && scripts/mac.sh run      # macOS window
 scripts/mac.sh script ime                       # scripted IME run, snapshots in out/ime
 MBUI_BENCH=1 _build/native/release/build/demo/demo.exe   # scroll bench
+scripts/bench.sh                                # offscreen benchmark scenes (bench/README.md)
 scripts/web.sh build && scripts/web.sh test     # browser build + Playwright run
 scripts/ios.sh build && scripts/ios.sh run      # iOS simulator
 ```
