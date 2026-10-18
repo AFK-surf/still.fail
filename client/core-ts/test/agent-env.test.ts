@@ -57,8 +57,9 @@ test("the draft follows the station's until edited, is not saved with a line wro
   const s = store();
   const forms = new AgentEnvForms(s);
   const station = (env: [string, string][]) => s.set(overview, { ok: { agentEnv: env.map(([key, value]) => ({ key, value, secret: false })) } });
-  station([["HTTP_PROXY", "http://p:1"]]);
+  // Opened as its page shows the station (whose overview is then followed).
   forms.change(form, 1, "open", {});
+  station([["HTTP_PROXY", "http://p:1"]]);
   let v = forms.value(form);
   assert.ok("ok" in conform("AgentEnvDraft", v), JSON.stringify(conform("AgentEnvDraft", v)));
   assert.equal(v.text, "HTTP_PROXY=http://p:1");
