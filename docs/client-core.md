@@ -194,6 +194,8 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `thread` | `station`, `thread` (id) | `{ first, last, caught, end, entries, thread }`: a window of the thread's entries `first ..= last` (`EntryView`s, never changed once read), at most 150 (`WINDOW`). It opens where the chat is to be read — the page before the first entry not read and the page from it while something is unread, else where it was left (`chat.place`), else the latest page — and its first value is whole: from what is kept when all of it is and it is current (the station's `threads` say how far each goes), else read first. `chat.older` / `chat.newer` bring in the page before / after (a page is kept ahead either way), as many going at the other end; `end`: it reaches the thread's latest entry, so what is said joins it; short of it, what is said waits on the device. `caught`: its last entry read rather than told as it was said. `thread` is its summary |
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
+| `net` | `station` | this device's connection to the station, sampled every 2 s while shown and the app is in view (station/topics.ts): its way (`path`, `relay`), round trip, bytes, the last minute's samples, the relays as measured; none before a connection of its own is open |
+| `way` | `station` | the same reading's way alone, `{ path, relay }`: one sampler with `net`, but it changes only when the way does, so what shows only how a station is reached (the `stations` list) does not go out again with each reading |
 | `status` | `workspace?` | what the core is waiting on, when it is worth saying (`StatusView`, status.ts): of a workspace its stations' waits (the relay and links opened for them too), its account's still.fail cloud socket down and the relay opened for no station; with none, all of it, each station said with its workspace's name (`bft · Team`) while the core has more than one workspace |
 | `connection` | `station` | what a chat on the station says of its connection (`ConnectionView`, pill.ts): its link down or coming back, else its workspace's `status`; trouble at once, coming back only after 1.5 s, `back` (已连上) 1.5 s only after one was shown. No page shows it any more (the phones dropped the pill over a chat); kept for apps from before |
 | `notices` | `workspace?` | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md); a workspace's, or every one's (each `Notice` names its `workspace` and `station` address) |
@@ -327,7 +329,7 @@ built from subscribed inside the core (`Store::watch`: it counts as a
 subscriber and hears each change); a change only marks the view stale, and it
 is computed once, when its coalesced emission goes out, however many of them
 changed. A workspace view watches the `chatRows` / `link` (for `stations`:
-`link` / `overview` / `host`; for `connects`: `overview`) of the stations that
+`link` / `overview` / `host` / `way`; for `connects`: `overview`) of the stations that
 are online — connected to still.fail cloud right now, as the `workspace` topic says —
 and follows the workspace's station list as it changes. It has no value until
 the `workspace` topic has one; a failed `workspace` is the view's error, while
@@ -356,7 +358,8 @@ the views.
 | View | Params | Value |
 | --- | --- | --- |
 | `chats` | `scope`, `mine` | the sidebar: `{ me, stations, loading, days }`; every station's rows side by side |
-| `stations` | `scope` | every station of the scope, each with its link, overview, host and usable models; one the workspace joined (its home is another: docs/multi-workspace.md) says so, `joined`, with its home's name, `home`, when the viewer is in that one too |
+| `stations` | `scope` | every station of the scope, each with its link, overview, host, how this device reaches it (`way`: its words and `via`, from the `way` topic; the figures are `stationNet`'s) and usable models; one the workspace joined (its home is another: docs/multi-workspace.md) says so, `joined`, with its home's name, `home`, when the viewer is in that one too |
+| `stationNet` | `station` | this device's connection to the station with every figure (`StationNet`, present.ts `net`), from its `net`: subscribed where the figures are drawn (station cards, its page), which is what has them sampled; null before a connection of its own is open |
 | `connects` | `scope`, `mine` | every connect of every online station: `{ me, items: [{ station, stationName, connect }], loading }`; with `mine`, those whose `createdBy.id` is me |
 | `chat` | `station`, and `thread` (id) or `session` (key) | an item's page: `{ me, thread, title, people, agents, messages, more, outbox, link }` |
 | `archive` | `scope` | the archive: `{ days, errors, loading, note }`, every online station's archived chats newest first by the day they were archived |

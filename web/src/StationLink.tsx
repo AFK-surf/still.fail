@@ -1,6 +1,7 @@
 // How this device reaches a station, as a dot where a chat names it (the bar's agent tile, its station tag): straight
 // there (green), through a relay (amber), away (red), else coming back or a way still being chosen (a grey ring). Its
-// words (直连, 北京中继, 离线) are its label. Followed alone, not the station's whole view (its load changes much more often).
+// words (直连, 北京中继, 离线) are its label. Followed alone, not the station's whole view (its load changes much more often);
+// how it is reached only (`way`), not its round trip, which would have it sampled wherever a chat names it.
 import { useTopicSelect } from "./core/react.ts";
 import type { StationView } from "./core/shapes.ts";
 import { t } from "./i18n.ts";
@@ -15,9 +16,9 @@ export function useStationLink(address: string): StationLink | null {
     if (!s) return null;
     if (!s.online) return { via: "offline", text: t("web-pages.stations.offline") };
     if (s.reconnecting) return { via: "waiting", text: t("common.connecting") };
-    if (!s.net) return null;
-    const via = s.net.via === "direct" ? "direct" : s.net.via === "relay" ? "relay" : s.net.via === "choosing" ? "waiting" : null;
-    return via && { via, text: s.net.rtt ? `${s.net.path} · ${s.net.rtt.text}` : s.net.path };
+    if (!s.way) return null;
+    const via = s.way.via === "direct" ? "direct" : s.way.via === "relay" ? "relay" : s.way.via === "choosing" ? "waiting" : null;
+    return via && { via, text: s.way.path };
   }, (a, b) => a === b || (!!a && !!b && a.via === b.via && a.text === b.text));
 }
 

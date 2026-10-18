@@ -211,7 +211,7 @@ private val noNet = StationNet(path = "直连", rtt = NetFigure("0 ms", "ok"), r
 @Composable
 private fun StationBody(s: StationView) {
     val host = s.host?.takeIf { s.online }
-    val net = s.net?.takeIf { s.online }
+    val net = rememberStationNet(s.station.takeIf { s.online })
     Box(Modifier.fillMaxWidth().padding(top = 10.dp)) {
         // Reconnecting: the figures as last heard, faded.
         Column(Modifier.fillMaxWidth().alpha(if (s.reconnecting == true) 0.45f else 1f)) {
@@ -242,7 +242,7 @@ private fun StationBody(s: StationView) {
 @Composable
 private fun StationFigures(s: StationView, peek: Boolean = false) {
     val host = s.host
-    val net = s.net
+    val net = rememberStationNet(s.station)
     val running = s.overview?.processesText?.takeIf { it.isNotEmpty() }
     Column(Modifier.alpha(if (s.reconnecting == true) 0.45f else 1f)) {
         // What it is: on its page, under the page's title; in a chat's card, in the line above.
@@ -270,6 +270,15 @@ private fun StationFigures(s: StationView, peek: Boolean = false) {
             Line(running, 120.dp, Modifier.padding(top = 8.dp))
         }
     }
+}
+
+/** This device's connection to a station with its figures (null: none, or `station` null), followed only where they are
+ *  drawn: the core samples it while it is. */
+@Composable
+private fun rememberStationNet(station: String?): StationNet? {
+    val app = LocalApp.current
+    val net by rememberTopic<StationNet?>(app.core, station?.let { Topics.stationNet(it) })
+    return net.value
 }
 
 /** What a machine not read yet is laid out as, unseen: its figures and rows as tall as a real one's (their words in Chinese). */

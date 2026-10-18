@@ -20,7 +20,7 @@ import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { GoRow } from "./Settings.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
-import { joinedText, MachineDetails, Net } from "../cloud/StationCards.tsx";
+import { joinedText, MachineDetails, Net, useStationNet } from "../cloud/StationCards.tsx";
 import { ColorRow, EmojiGrid, GlyphGrid } from "../cloud/MarkPick.tsx";
 import { glyphColor, isPicture, MarkOrLetter, StationMark, stationGlyph } from "../StationMark.tsx";
 import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, pictureOf, same, type Kind, type Mark } from "../stationPick.ts";
@@ -141,7 +141,7 @@ function Reconnecting() {
  */
 function StationBody({ s }: { s: StationView }) {
   const host = s.online ? s.host : undefined;
-  const net = s.online ? s.net : undefined;
+  const net = useStationNet(s.online ? s.station : null) ?? undefined;
   return (
     <span className={css.mStationBody}>
       <span className={css.mStationLoad} data-stale={s.reconnecting || undefined}>

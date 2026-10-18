@@ -59,6 +59,7 @@ export const TOPICS: Record<string, Spec> = {
   host: { station: S },
   footprint: { station: S },
   net: { station: S },
+  way: { station: S },
   threads: { station: S },
   thread: { station: S, thread: ["u64", "req"] },
   chatRows: { station: S },
@@ -80,6 +81,7 @@ export const TOPICS: Record<string, Spec> = {
   chat: { station: S, thread: ["u64", "opt"], session: ["string", "opt"] },
   history: { station: S, key: S },
   agentCard: { station: S, key: S },
+  stationNet: { station: S },
   status: { workspace: ["string", "skip"] },
   notices: { workspace: ["string", "skip"] },
   connection: { station: S },
@@ -180,8 +182,8 @@ export function sameTopic(a: Topic, b: Topic): boolean {
   return topicKey(a) === topicKey(b);
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
-const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "chatSearch", "search", "archive", "chatJobs", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "adminList", "adminItem", "adminOverview"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
+const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "adminList", "adminItem", "adminOverview"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.
 export function topicStation(topic: Topic): string | null {

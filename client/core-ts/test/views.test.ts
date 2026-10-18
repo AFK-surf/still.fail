@@ -21,7 +21,7 @@ holdLanguage();
 type J = any;
 const DAY_MS = 86_400_000;
 
-const VIEWS = new Set(["chats", "chatSearch", "stations", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs"]);
+const VIEWS = new Set(["chats", "chatSearch", "stations", "stationNet", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs"]);
 
 class Router implements Source {
   views!: Views;
@@ -819,7 +819,7 @@ test("a_stopped_view_lets_its_topics_go", async () => {
   t.subscribe(1, { topic: "stations", scope: "ws" });
   t.set(workspace(), stations(t.nowS()));
   await t.read(u, 1);
-  const each = (st: string): Topic[] => [link(st), overview(st), hostOf(st), { topic: "net", station: st }];
+  const each = (st: string): Topic[] => [link(st), overview(st), hostOf(st), { topic: "way", station: st }];
   const watched = [workspace(), { topic: "workspaces" }, ...each("ws/a"), ...each("ws/b"), ...each("ws/c")];
   sameTopics(t.started(), watched);
   t.store.unsubscribe(1, 1);
@@ -828,6 +828,35 @@ test("a_stopped_view_lets_its_topics_go", async () => {
   await t.host.time.pass((EVICT_AFTER_MS * 5) / 4, 1000);
   sameTopics(t.stopped(), watched);
   assert.deepEqual(t.store.liveTopics(), []);
+});
+
+test("stations_say_how_each_is_reached_and_its_figures_are_a_view_of_their_own", async () => {
+  // The list follows each station's way (seldom changing), not its readings: those are `stationNet`, for where they are
+  // drawn.
+  const t = setup();
+  const u = ui();
+  const card = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.set(workspace(), stations(t.nowS()));
+  await t.read(u, 1);
+  t.set({ topic: "way", station: "ws/a" }, { path: "relay", relay: "relay.test" });
+  await t.read(u, 1);
+  const a = () => (u.value as J[]).find((s) => s.station === "ws/a");
+  assert.deepEqual(a().way, { path: "中继 relay.test", via: "relay" });
+  assert.equal("net" in a(), false);
+  assert.equal(t.started().some((x) => x.topic === "net"), false);
+  t.subscribe(2, { topic: "stationNet", station: "ws/a" });
+  await t.read(card, 2);
+  assert.equal(card.value, null);
+  assert.deepEqual(t.started(), [{ topic: "net", station: "ws/a" }]);
+  const computed = t.router.computed;
+  const messages = u.messages;
+  t.set({ topic: "net", station: "ws/a" }, { path: "relay", relay: "relay.test", rttMs: 286, rxBytes: 0, txBytes: 0, samples: [] });
+  await t.readAll([[u, 1], [card, 2]]);
+  const shown: J = card.value;
+  assert.deepEqual([shown.path, shown.via, shown.rtt], ["中继 relay.test", "relay", { text: "286 ms", level: "ok" }]);
+  assert.equal(t.router.computed, computed + 1, "the card's view alone");
+  assert.equal(u.messages, messages);
 });
 
 test("a_held_topic_a_view_watches_goes_out_to_a_page_subscribing_later", async () => {

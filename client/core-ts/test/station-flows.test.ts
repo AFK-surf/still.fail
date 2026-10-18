@@ -19,7 +19,9 @@ import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RE
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
 import { SOCKET_OPEN_MS } from "../src/station/requests.ts";
-import { HostWire, concat, encodeFrame, takeFrames } from "../src/station/wire.ts";
+import { HostWire, concat, encodeFrame, takeFrames, type LinkNet } from "../src/station/wire.ts";
+import { NET_EVERY_MS } from "../src/station/topics.ts";
+import { apply as applyOps, type Op } from "../src/delta.ts";
 import type { FakeHost } from "../src/testing.ts";
 
 const gets = (host: FakeHost, path: string) => host.requests.flatMap(readsOf).filter((url) => url.endsWith(path)).length;
@@ -1067,6 +1069,62 @@ test("overview_and_host_come_from_events", async () => {
   await host.time.pass(EVICT_AFTER_MS + 500, 500);
   assert.deepEqual(open(), ["/events"]);
   assert.equal(gets(host, "/admin/api/host"), 0);
+  core.close();
+});
+
+test("the_stations_list_goes_out_again_as_the_way_to_a_station_changes_not_with_each_reading_of_its_connection", async () => {
+  // One sampler for a station's `net` and `way`: a reading whose round trip and bytes moved puts out its card's figures
+  // (`stationNet`) alone; the list, which says only how it is reached, goes out again once that changes.
+  let reading: LinkNet = { path: "direct", relay: null, rttMs: 12, measured: null, today: null, rxBytes: 1000, txBytes: 100, packets: null };
+  let readings = 0;
+  const net = () => ((readings += 1), reading);
+  const { host, core } = await started(base(), 0, (h) => Object.assign(new HostWire(h), { net }));
+  const ui = core.connect();
+  const values = new Map<number, J>();
+  const said = new Map<number, number>();
+  const read = async () => {
+    await host.time.pass(NET_EVERY_MS, 100);
+    for (const [, m] of host.takeEmitted()) {
+      const id = (m as { id: number }).id;
+      if ("value" in m) values.set(id, m.value);
+      else if ("delta" in m) values.set(id, applyOps(values.get(id), m.delta as Op[]));
+      else continue;
+      said.set(id, (said.get(id) ?? 0) + 1);
+    }
+  };
+  const station = () => (values.get(1) as J[]).find((s) => s.station === ST);
+  subscribe(core, ui, 1, { topic: "stations", scope: "ws" });
+  subscribe(core, ui, 2, { topic: "stationNet", station: ST });
+  await read();
+  await read();
+  assert.deepEqual(station().way, { path: "直连", via: "direct" });
+  assert.equal(values.get(2).rtt.text, "12 ms");
+  const [list, card] = [said.get(1), said.get(2)];
+  reading = { ...reading, rttMs: 340, rxBytes: 9000, txBytes: 700 };
+  await read();
+  await read();
+  assert.deepEqual(values.get(2).rtt, { text: "340 ms", level: "amber" });
+  assert.ok(said.get(2)! > card!, "the card's figures go out");
+  assert.equal(said.get(1), list, "the list does not");
+  reading = { ...reading, path: "relay", relay: "relay.test" };
+  await read();
+  await read();
+  assert.deepEqual(station().way, { path: "中继 relay.test", via: "relay" });
+  assert.equal(values.get(2).path, "中继 relay.test");
+  assert.equal(said.get(1), list! + 1);
+  // Its figures no longer shown: the list's way is still sampled; with the list gone too, nothing is.
+  core.receive(ui, { kind: "unsubscribe", id: 2, unsubscribe: true });
+  await host.time.pass(EVICT_AFTER_MS + 500, 500);
+  reading = { ...reading, path: "direct", relay: null };
+  await read();
+  await read();
+  assert.deepEqual(station().way, { path: "直连", via: "direct" });
+  // The list goes after its grace, and the topics it watched after theirs.
+  core.receive(ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
+  await host.time.pass(2 * EVICT_AFTER_MS + 500, 500);
+  const before = readings;
+  await read();
+  assert.equal(readings, before);
   core.close();
 });
 

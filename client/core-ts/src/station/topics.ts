@@ -37,7 +37,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -64,10 +64,13 @@ export class StationTopics implements Owner {
   readonly #oldPlaces = new Set<string>();
   /// Entries told as they were said (an event), by thread: they come in with a motion; the rest is caught up on.
   readonly told = new Map<string, Set<number>>();
-  /// Connection samplers, by topic.
+  /// What runs for a topic while it is started (a drive folder kept as it is), by topic.
   readonly #samplers = new Map<string, Fiber.Fiber<void, never>>();
-  /// The net topics' readings.
+  /// Each station's connection sampler, while its `net` or `way` is started (which of the two are).
+  readonly #sampling = new Map<string, { fiber: Fiber.Fiber<void, never>; by: Set<string> }>();
+  /// Each station's last reading (its `net`), and how it is reached by it (its `way`).
   readonly #nets = new Map<string, unknown>();
+  readonly #ways = new Map<string, unknown>();
 
   constructor(core: Inner, sync: StationsSync) {
     this.#core = core;
@@ -151,7 +154,7 @@ export class StationTopics implements Owner {
       this.#moveOldPlace(station, id);
     }
     if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown);
-    if (topic.topic === "net") this.#sampleNet(topic);
+    if (topic.topic === "net" || topic.topic === "way") this.#sampleNet(station, topic.topic);
     // A folder of the drive: kept as it is on the station's disk while shown.
     if (topic.topic === "drive") this.#samplers.set(topicKey(topic), this.#core.runner.fork(this.#sync.driveWatch(station, topic.root as string, topic.path as string)));
     this.resume(topic);
@@ -182,6 +185,7 @@ export class StationTopics implements Owner {
     if (topic.topic === "thread") this.#core.data.opened("entry", station, String(topic.thread), false);
     if (topic.topic === "live") this.#core.data.opened("transcript", station, topic.key as string, false);
     if (topic.topic === "stationSearch") this.#sync.searchHidden(topic);
+    if (topic.topic === "net" || topic.topic === "way") this.#unsampleNet(station, topic.topic);
     this.#core.scheduler.prioritize(key, null);
     this.#windows.delete(key);
     this.#firsts.delete(key);
@@ -225,7 +229,9 @@ export class StationTopics implements Owner {
         return v === undefined ? undefined : { ok: v };
       }
       case "net":
-        return this.#nets.has(topicKey(topic)) ? { ok: this.#nets.get(topicKey(topic)) } : undefined;
+        return this.#nets.has(station) ? { ok: this.#nets.get(station) } : undefined;
+      case "way":
+        return this.#ways.has(station) ? { ok: this.#ways.get(station) } : undefined;
       case "live":
         return this.#live(topic);
       case "machineLogins":
@@ -616,43 +622,67 @@ export class StationTopics implements Owner {
 
   // ── a station's connection, sampled while shown ──
 
-  #sampleNet(topic: Topic): void {
-    const station = topic.station as string;
-    const key = topicKey(topic);
+  /// Samples the station's connection for its `net` (every figure) or its `way` (how it is reached), one sampler for
+  /// both: `way` goes out only when that changes, so what shows only how a station is reached (the stations' list) is
+  /// not put out again with each reading.
+  #sampleNet(station: string, by: string): void {
+    const running = this.#sampling.get(station);
+    if (running) {
+      running.by.add(by);
+      return;
+    }
     const core = this.#core;
+    const net: Topic = { topic: "net", station };
+    const way: Topic = { topic: "way", station };
     let last: [number, NonNullable<ReturnType<NonNullable<StationsSync["wire"]["net"]>>>] | null = null;
     let samples: unknown[] = [];
     const sample = Effect.sync(() => {
       const link = this.#sync.link(station);
-      const net = link ? (this.#sync.wire.net?.(link.addr) ?? null) : null;
+      const reading = link ? (this.#sync.wire.net?.(link.addr) ?? null) : null;
       const now = core.host.nowMs();
       let value: unknown = null;
-      if (net === null) {
+      if (reading === null) {
         // No connection now (coming back): how it went last is kept, the station's card saying it is reconnecting.
         last = null;
         samples = [];
-        value = this.#nets.get(key) ?? null;
+        value = this.#nets.get(station) ?? null;
       } else {
-        const since = last !== null && net.rxBytes >= last[1].rxBytes && net.txBytes >= last[1].txBytes ? last : null;
+        const since = last !== null && reading.rxBytes >= last[1].rxBytes && reading.txBytes >= last[1].txBytes ? last : null;
         if (since) {
           const secs = Math.max((now - since[0]) / 1000, 0.001);
-          samples.push({ at: Math.round(now), rttMs: net.rttMs, rxBps: Math.round((net.rxBytes - since[1].rxBytes) / secs), txBps: Math.round((net.txBytes - since[1].txBytes) / secs), ...packetsSince(since[1].packets, net.packets) });
+          samples.push({ at: Math.round(now), rttMs: reading.rttMs, rxBps: Math.round((reading.rxBytes - since[1].rxBytes) / secs), txBps: Math.round((reading.txBytes - since[1].txBytes) / secs), ...packetsSince(since[1].packets, reading.packets) });
         } else samples = [];
         while (samples.length > NET_KEPT) samples.shift();
-        const measured = net.measured ? { measuring: net.measured.measuring, relays: net.measured.relays.map(([relay, ms]) => ({ relay, rttMs: ms })), moved: net.measured.moved } : null;
-        value = { path: net.path, relay: net.relay, rttMs: net.rttMs, rxBytes: net.rxBytes, txBytes: net.txBytes, samples: [...samples], measured, todayRxBytes: net.today?.[0] ?? null, todayTxBytes: net.today?.[1] ?? null, lan: net.lan ?? [] };
-        last = [now, net];
+        const measured = reading.measured ? { measuring: reading.measured.measuring, relays: reading.measured.relays.map(([relay, ms]) => ({ relay, rttMs: ms })), moved: reading.measured.moved } : null;
+        value = { path: reading.path, relay: reading.relay, rttMs: reading.rttMs, rxBytes: reading.rxBytes, txBytes: reading.txBytes, samples: [...samples], measured, todayRxBytes: reading.today?.[0] ?? null, todayTxBytes: reading.today?.[1] ?? null, lan: reading.lan ?? [] };
+        last = [now, reading];
       }
-      if (!this.#nets.has(key) || !equal(this.#nets.get(key), value)) {
-        this.#nets.set(key, value);
-        core.store.invalidate(topic);
+      if (!this.#nets.has(station) || !equal(this.#nets.get(station), value)) {
+        this.#nets.set(station, value);
+        core.store.invalidate(net);
+      }
+      // How it is reached: what changes seldom, apart from its figures.
+      const reached = isObject(value) ? { path: value.path ?? null, relay: value.relay ?? null } : null;
+      if (!this.#ways.has(station) || !equal(this.#ways.get(station), reached)) {
+        this.#ways.set(station, reached);
+        core.store.invalidate(way);
       }
     });
-    // A measurement shown on screen: sampled while it is shown, never kept. Not while the app is out of view: the
-    // stations' list holds this topic for as long as it is open, and each reading put the whole list out again, every
-    // NET_EVERY_MS for each station, on a phone in a pocket too (most of what the core did there, 2026-10-19).
+    // A measurement shown on screen: sampled while it is shown, never kept. Not while the app is out of view: a phone
+    // in a pocket samples nothing (it was most of what the core did there, 2026-10-19).
     const inView = Effect.suspend(() => core.attention?.attend.untilShown() ?? Effect.void);
-    this.#samplers.set(key, core.runner.fork(Effect.forever(Effect.andThen(inView, Effect.andThen(sample, Effect.sleep(NET_EVERY_MS))))));
+    const fiber = core.runner.fork(Effect.forever(Effect.andThen(inView, Effect.andThen(sample, Effect.sleep(NET_EVERY_MS)))));
+    this.#sampling.set(station, { fiber, by: new Set([by]) });
+  }
+
+  /// The station's `net` or `way` stopped: its sampler goes once neither is started.
+  #unsampleNet(station: string, by: string): void {
+    const running = this.#sampling.get(station);
+    if (!running) return;
+    running.by.delete(by);
+    if (running.by.size > 0) return;
+    this.#core.runner.interrupt(running.fiber as Fiber.Fiber<unknown, unknown>);
+    this.#sampling.delete(station);
   }
 
   /// Told entries (an event) of a thread: they come in with a motion.

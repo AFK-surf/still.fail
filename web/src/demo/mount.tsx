@@ -81,6 +81,7 @@ function demoValueOf(topic: Topic): unknown {
     case "history": return chat ? historyView(chat) : null;
     case "agentCard": return chat ? agentCardView(chat) : null;
     case "host": return station.host();
+    case "stationNet": return station.NET;
     case "connects": return station.connects();
     case "stations": return [station.stationView()];
     case "archive": return station.archive(topic.q, topic.limit);

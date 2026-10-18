@@ -17,7 +17,7 @@ import { same } from "../stationPick.ts";
 import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, Segmented, StatusDot, Time, Waiting } from "../ui.tsx";
 import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
-import { HostDetails, joinedText, LanKept, Net, problems, state, useLong } from "./StationCards.tsx";
+import { HostDetails, joinedText, LanKept, Net, problems, state, useLong, useStationNet } from "./StationCards.tsx";
 import { useLanKept } from "../localNetwork.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
@@ -73,7 +73,8 @@ export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: React
  * there said too. Nothing in colour but what is off. */
 function StationRow({ s, to }: { s: StationView; to: string }) {
   const meters = s.online ? s.host?.meters ?? [] : [];
-  const lanKept = useLanKept(s.online ? s.net?.lan : undefined);
+  const net = useStationNet(s.online ? s.station : null);
+  const lanKept = useLanKept(net?.lan);
   const newer = s.online && (s.overview?.updates ?? []).some((v) => v.installed && v.updatable && (v.newer || v.downgrade));
   return (
     <NavItem to={to} title={s.name}
@@ -86,12 +87,12 @@ function StationRow({ s, to }: { s: StationView; to: string }) {
           {meters.map((m) => <MeterChip key={m.label} meter={m} brief bare />)}
         </span>
       )}
-      {s.online && (s.net || newer) && (
+      {s.online && (net || newer) && (
         <NavLine>
           <span className={navFill}>
-            {s.net && <>{s.net.path}{s.net.rtt && <>{" · "}<span className={css.low} data-level={s.net.rtt.level}>{s.net.rtt.text}</span></>}</>}
-            {s.net && lanKept && <>{" · "}<span className={css.low} data-level="amber">{t("web-pages.stations.page.lanKept")}</span></>}
-            {s.net && newer && " · "}
+            {net && <>{net.path}{net.rtt && <>{" · "}<span className={css.low} data-level={net.rtt.level}>{net.rtt.text}</span></>}</>}
+            {net && lanKept && <>{" · "}<span className={css.low} data-level="amber">{t("web-pages.stations.page.lanKept")}</span></>}
+            {net && newer && " · "}
             {newer && t("web-pages.stations.page.newer")}
           </span>
         </NavLine>
@@ -216,14 +217,15 @@ function Overview({ s }: { s: StationView }) {
   const o = s.overview;
   const base = stationBase(s.station);
   const folders = o?.drive?.roots ?? [];
+  const net = useStationNet(s.online && s.host ? s.station : null);
   return (
     <>
       {s.online && s.host && (
         <Section title={t("web-pages.stations.page.resources")}>
           <div className={css.machine}>
             <MeterDials meters={s.host.meters} />
-            {s.net && <Net net={s.net} flush />}
-            {s.net && <LanKept lan={s.net.lan} />}
+            {net && <Net net={net} flush />}
+            {net && <LanKept lan={net.lan} />}
             {/* What its agents' processes take of the memory. */}
             {o && o.processes.length > 0 && <p className={css.memory}>{o.processesText}</p>}
           </div>

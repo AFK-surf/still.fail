@@ -3691,33 +3691,13 @@ data class Overview (
 /// How a connection to a station goes: straight there, through a relay, or still being chosen.
 typealias NetVia = String
 
-/// This device's connection to a station, in words (its card's network line): how it goes, its round trip now and
-/// over the last minute, and what goes over it.
+/// How this device reaches a station, without its figures: what changes seldom, for the places that name it.
 @Serializable
-data class StationNet (
+data class StationWay (
 	/// 直连, 北京中继 (the relay's name, or 中继 host), or 正在选路.
 	val path: String,
-	/// The same as a word to tell apart (a chat's bar marks it with a dot). Missing from a core from before.
-	val via: NetVia? = null,
-	val rtt: NetFigure? = null,
-	/// Round trips over the last minute, oldest first, in milliseconds.
-	val rttHistory: List<Double>,
-	/// Bytes a second now, each way: 1.4 MB/s.
-	val down: String,
-	val up: String,
-	/// What went over it today on this device: 今天共 ↓ 212 MB · ↑ 9.6 MB (a core from before: 本次共, since it opened).
-	val total: String,
-	/// The same each way: 212 MB. Missing from a core from before.
-	val downTotal: String? = null,
-	val upTotal: String? = null,
-	/// Packets lost over the last minute, when some were.
-	val loss: NetFigure? = null,
-	/// The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from
-	/// a core from before.
-	val measured: NetMeasured? = null,
-	/// Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md): the desktop app sends there to tell
-	/// whether macOS lets it reach them (Local Network).
-	val lan: List<String>? = null
+	/// The same as a word to tell apart (a chat's bar marks it with a dot).
+	val via: NetVia? = null
 )
 
 @Serializable
@@ -3749,9 +3729,9 @@ data class StationView (
 	/// account that reaches it is in the beta or it is on the test channel already (to be switched back).
 	val betaOffered: Boolean? = null,
 	val host: Host? = null,
-	/// How this device's connection to it runs; none for a station reached without one of its own (the page's own)
-	/// or before one is open.
-	val net: StationNet? = null,
+	/// How this device reaches it; none for a station reached without a connection of its own (the page's own)
+	/// or before one is open. Its figures are the `stationNet` view's.
+	val way: StationWay? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
 	val time: Map<String, Stamp>? = null,
 	/// Its home is another workspace (docs/multi-workspace.md): this one it joined, and only the owners and
@@ -4472,6 +4452,36 @@ data class SlackTokensView (
 data class StationMemory (
 	val global: MemoryFile,
 	val skills: List<SkillFile>
+)
+
+/// This device's connection to a station, in words (its card's network line): how it goes, its round trip now and
+/// over the last minute, and what goes over it (the `stationNet` view: sampled while shown; none before a connection
+/// of its own is open).
+@Serializable
+data class StationNet (
+	/// 直连, 北京中继 (the relay's name, or 中继 host), or 正在选路.
+	val path: String,
+	/// The same as a word to tell apart (a chat's bar marks it with a dot). Missing from a core from before.
+	val via: NetVia? = null,
+	val rtt: NetFigure? = null,
+	/// Round trips over the last minute, oldest first, in milliseconds.
+	val rttHistory: List<Double>,
+	/// Bytes a second now, each way: 1.4 MB/s.
+	val down: String,
+	val up: String,
+	/// What went over it today on this device: 今天共 ↓ 212 MB · ↑ 9.6 MB (a core from before: 本次共, since it opened).
+	val total: String,
+	/// The same each way: 212 MB. Missing from a core from before.
+	val downTotal: String? = null,
+	val upTotal: String? = null,
+	/// Packets lost over the last minute, when some were.
+	val loss: NetFigure? = null,
+	/// The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from
+	/// a core from before.
+	val measured: NetMeasured? = null,
+	/// Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md): the desktop app sends there to tell
+	/// whether macOS lets it reach them (Local Network).
+	val lan: List<String>? = null
 )
 
 /// What the core is waiting on (the `status` topic), when it is worth saying: `state` slow (something has taken a

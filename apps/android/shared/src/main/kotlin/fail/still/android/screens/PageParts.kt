@@ -472,7 +472,7 @@ fun PresenceDot(state: String) {
 fun stationVia(s: StationView): String? = when {
     !s.online -> "offline"
     s.reconnecting == true -> "waiting"
-    else -> when (s.net?.via) { "direct" -> "direct"; "relay" -> "relay"; "choosing" -> "waiting"; else -> null }
+    else -> when (s.way?.via) { "direct" -> "direct"; "relay" -> "relay"; "choosing" -> "waiting"; else -> null }
 }
 
 /** The dot of [stationVia], `size` across with a ring of the ground round it when [ring] is given (on a tile's corner). */

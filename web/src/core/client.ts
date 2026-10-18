@@ -50,6 +50,9 @@ export type Topic =
   // Views: put together by the core from the topics above.
   | { topic: "chats"; scope: string; mine: boolean; watching?: boolean }
   | { topic: "stations"; scope: string }
+  // This device's connection to a station with every figure: sampled while subscribed, so only where they are drawn
+  // (the list says only how it is reached, `way`).
+  | { topic: "stationNet"; station: string }
   | { topic: "connects"; scope: string; mine: boolean }
   // An item's page: its chat, or its agent before it has one.
   | { topic: "chat"; station: string; thread: number }

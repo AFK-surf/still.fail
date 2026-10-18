@@ -258,6 +258,9 @@ object Topics {
     fun loginSessions(account: String) = buildJsonObject { put("topic", "loginSessions"); put("account", account) }
     fun overview(station: String) = buildJsonObject { put("topic", "overview"); put("station", station) }
     fun host(station: String) = buildJsonObject { put("topic", "host"); put("station", station) }
+    /** This device's connection to a station with its figures (null before one of its own is open): sampled while followed,
+     *  so only where they are drawn (the stations' list says only how it is reached, `StationView.way`). */
+    fun stationNet(station: String) = buildJsonObject { put("topic", "stationNet"); put("station", station) }
     /** An item's page: its chat, or its agent before it has one. */
     fun chat(station: String, of: ChatOf) = buildJsonObject {
         put("topic", "chat"); put("station", station)

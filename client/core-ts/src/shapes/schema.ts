@@ -2342,7 +2342,7 @@ export const SHAPES: Record<string, Shape> = {
     ["overview", opt("Overview")],
     ["betaOffered", "bool", { default: true, doc: "Its versions offer the 测试版 switch: it can be put on a channel (its station's version says one), and the\naccount that reaches it is in the beta or it is on the test channel already (to be switched back)." }],
     ["host", opt("Host")],
-    ["net", opt("StationNet"), { doc: "How this device's connection to it runs; none for a station reached without one of its own (the page's own)\nor before one is open." }],
+    ["way", opt("StationWay"), { doc: "How this device reaches it; none for a station reached without a connection of its own (the page's own)\nor before one is open. Its figures are the `stationNet` view's." }],
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`, `lastActiveAt`, …)." }],
     ["joined", "bool", { default: true, doc: "Its home is another workspace (docs/multi-workspace.md): this one it joined, and only the owners and\nadmins of that one manage the machine." }],
     ["home", opt("String"), { doc: "With `joined`: its home workspace's name, when the viewer is in that one too." }],
@@ -2379,6 +2379,10 @@ export const SHAPES: Record<string, Shape> = {
     ["here", "bool", { doc: "The workspace the page is in." }],
     ["line", "String", { doc: "What it is to the station, in a line: 主 workspace, or 加入的 workspace." }],
   ], { doc: "A workspace a station is in." }),
+  StationWay: struct([
+    ["path", "String", { doc: "直连, 北京中继 (the relay's name, or 中继 host), or 正在选路." }],
+    ["via", opt("NetVia"), { doc: "The same as a word to tell apart (a chat's bar marks it with a dot)." }],
+  ], { doc: "How this device reaches a station, without its figures: what changes seldom, for the places that name it." }),
   StationNet: struct([
     ["path", "String", { doc: "直连, 北京中继 (the relay's name, or 中继 host), or 正在选路." }],
     ["via", opt("NetVia"), { doc: "The same as a word to tell apart (a chat's bar marks it with a dot). Missing from a core from before." }],
@@ -2392,7 +2396,7 @@ export const SHAPES: Record<string, Shape> = {
     ["loss", opt("NetFigure"), { doc: "Packets lost over the last minute, when some were." }],
     ["measured", opt("NetMeasured"), { doc: "The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from\na core from before." }],
     ["lan", vec("String"), { default: true, doc: "Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md): the desktop app sends there to tell\nwhether macOS lets it reach them (Local Network)." }],
-  ], { doc: "This device's connection to a station, in words (its card's network line): how it goes, its round trip now and\nover the last minute, and what goes over it." }),
+  ], { doc: "This device's connection to a station, in words (its card's network line): how it goes, its round trip now and\nover the last minute, and what goes over it (the `stationNet` view: sampled while shown; none before a connection\nof its own is open)." }),
   NetMeasured: struct([
     ["measuring", "bool"],
     ["relays", vec("NetRelay")],

@@ -54,8 +54,8 @@ function withMeters<T extends { meters: { short: string; percent: number }[] }>(
   return { ...h, meters: h.meters.map((m) => ({ ...m, left: 100 - m.percent, ...more[m.short] })) };
 }
 
-/** How this device reaches the station: straight, quick. */
-const NET = { path: "直连", via: "direct" as const, rtt: { text: "12 ms", level: "ok" as const }, rttHistory: [11, 12, 14, 12, 11, 12], down: "1.2 KB/s", up: "0.4 KB/s", total: "今天共 ↓ 48 MB · ↑ 3.1 MB" };
+/** How this device reaches the station: straight, quick (the `stationNet` view, its figures). */
+export const NET = { path: "直连", via: "direct" as const, rtt: { text: "12 ms", level: "ok" as const }, rttHistory: [11, 12, 14, 12, 11, 12], down: "1.2 KB/s", up: "0.4 KB/s", total: "今天共 ↓ 48 MB · ↑ 3.1 MB" };
 
 /** The station's files (docs/drive.md): every folder from its home, its downloads with what the chats made in them, and
  * the folders pinned. */
@@ -99,7 +99,7 @@ export function driveFolder(root: string, path: string): DriveFolder {
 }
 export const stationView = () => {
   const base = now(data.station);
-  return { ...base, station: STATION, host: withMeters(base.host), net: NET, overview: overview() };
+  return { ...base, station: STATION, host: withMeters(base.host), way: { path: NET.path, via: NET.via }, overview: overview() };
 };
 /** What a Claude agent's model control offers and the account it runs on. */
 export const runs = (): Runs => ({ choices: stationView().models as Runs["choices"], profile: overview().profiles[0] as unknown as Runs["profile"] });

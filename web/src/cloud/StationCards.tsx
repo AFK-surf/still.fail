@@ -3,6 +3,7 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { stamp, type StationView } from "../api.ts";
 import type { Level, NetFigure, NetRelay, StationNet } from "../core/shapes.ts";
 import { Button, StatusDot, Time, Tip } from "../ui.tsx";
+import { useTopic } from "../core/react.ts";
 import { openLocalNetwork, useLanKept } from "../localNetwork.ts";
 import { UpdateSummary } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
@@ -35,6 +36,7 @@ export function StationList({ stations, menu, page, manager = false, onMark, mar
  * there, `footer`).
  */
 export function StationPeek({ s, settings, footer, panel = false }: { s: StationView; settings?: string; footer?: ReactNode; panel?: boolean }) {
+  const net = useStationNet(s.online ? s.station : null);
   // In a small panel (a hover card): the card's whole room, its words in by a row's padding, its rows at the card's
   // padding (docs/ui-panels.md).
   return (
@@ -47,13 +49,19 @@ export function StationPeek({ s, settings, footer, panel = false }: { s: Station
       </div>
       {s.host && <div className={css.peekLines}><Parts parts={[s.host.identity]} /></div>}
       {s.online && s.host && <div className={css.peekSection}><MeterChips meters={s.host.meters} /></div>}
-      {s.online && s.net && <div className={css.peekSection}><PeekNet net={s.net} /></div>}
+      {net && <div className={css.peekSection}><PeekNet net={net} /></div>}
       {/* Its drive (docs/drive.md), where it has one: beside its settings, a way there from where it is named. */}
       {settings !== undefined && s.overview?.drive && <Link className={`${css.peekLink} ${controlsCss.panelEdge}`} to={`${stationBase(s.station)}/files`}><span>{t("web-pages.drive.title")}</span><ChevronRight size={14} /></Link>}
       {settings !== undefined && <Link className={`${css.peekLink} ${controlsCss.panelEdge}`} to={settings}><span>{t("web-pages.stations.peekSettings")}</span><ChevronRight size={14} /></Link>}
       {footer}
     </div>
   );
+}
+
+/** This device's connection to a station with its figures (the `stationNet` view), for where they are drawn: sampled
+ * while something shows them. Null for none (`station` null: one away), or before a connection of its own is open. */
+export function useStationNet(station: string | null): StationNet | null {
+  return useTopic<StationNet | null>(station === null ? null : { topic: "stationNet", station }).value ?? null;
 }
 
 /** A line of facts joined by " · " that wraps only between them, never inside one ("up 25 days" stays whole). Its
@@ -113,14 +121,15 @@ export function problems(s: StationView, silent: boolean): { key: string; level:
  * to it, then the rest a quiet row each.
  */
 export function MachineDetails({ s, phone = false }: { s: StationView; phone?: boolean }) {
+  const net = useStationNet(s.online && s.host ? s.station : null);
   if (!s.host) return <span className={css.machineNote}>{s.online ? t("web-pages.stations.deviceLoading") : t("web-pages.stations.deviceOffline")}</span>;
   return (
     <div className={css.machine}>
       {/* The phone's page says what it is under its title. */}
       {!phone && <span className={css.machineNote}>{s.host.identity}</span>}
       {s.online && <MeterDials meters={s.host.meters} row={phone} />}
-      {s.online && s.net && <Net net={s.net} flush />}
-      {s.online && s.net && <LanKept lan={s.net.lan} />}
+      {net && <Net net={net} flush />}
+      {net && <LanKept lan={net.lan} />}
       <HostDetails details={s.host.details} phone={phone} />
     </div>
   );
@@ -208,6 +217,7 @@ function StationCard({ s, menu, page, manager, onMark, markBusy }: { s: StationV
   const silent = useLong(s.online && !s.host, 15_000);
   const wrong = problems(s, silent);
   const foot = [s.host?.identity, joinedText(s)].filter(Boolean).join(" · ");
+  const net = useStationNet(s.online ? s.station : null);
   return (
     <div className={css.card} data-online={s.online || undefined}>
       <div className={css.cardHead}>
@@ -224,7 +234,7 @@ function StationCard({ s, menu, page, manager, onMark, markBusy }: { s: StationV
       </div>
       {foot && <div className={css.cardFoot}>{foot}</div>}
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
-      {s.online && s.net && <Net net={s.net} />}
+      {net && <Net net={net} />}
       {s.online && <div className={css.cardVersions}><UpdateSummary station={s.station} updates={s.overview?.updates} manager={manager} /></div>}
     </div>
   );

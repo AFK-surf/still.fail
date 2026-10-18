@@ -3705,38 +3705,12 @@ export interface Overview {
 /** How a connection to a station goes: straight there, through a relay, or still being chosen. */
 export type NetVia = "direct" | "relay" | "choosing";
 
-/**
- * This device's connection to a station, in words (its card's network line): how it goes, its round trip now and
- * over the last minute, and what goes over it.
- */
-export interface StationNet {
+/** How this device reaches a station, without its figures: what changes seldom, for the places that name it. */
+export interface StationWay {
 	/** 直连, 北京中继 (the relay's name, or 中继 host), or 正在选路. */
 	path: string;
-	/** The same as a word to tell apart (a chat's bar marks it with a dot). Missing from a core from before. */
+	/** The same as a word to tell apart (a chat's bar marks it with a dot). */
 	via?: NetVia;
-	rtt?: NetFigure;
-	/** Round trips over the last minute, oldest first, in milliseconds. */
-	rttHistory: number[];
-	/** Bytes a second now, each way: 1.4 MB/s. */
-	down: string;
-	up: string;
-	/** What went over it today on this device: 今天共 ↓ 212 MB · ↑ 9.6 MB (a core from before: 本次共, since it opened). */
-	total: string;
-	/** The same each way: 212 MB. Missing from a core from before. */
-	downTotal?: string;
-	upTotal?: string;
-	/** Packets lost over the last minute, when some were. */
-	loss?: NetFigure;
-	/**
-	 * The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from
-	 * a core from before.
-	 */
-	measured?: NetMeasured;
-	/**
-	 * Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md): the desktop app sends there to tell
-	 * whether macOS lets it reach them (Local Network).
-	 */
-	lan?: string[];
 }
 
 export interface StationView {
@@ -3772,10 +3746,10 @@ export interface StationView {
 	betaOffered?: boolean;
 	host?: Host;
 	/**
-	 * How this device's connection to it runs; none for a station reached without one of its own (the page's own)
-	 * or before one is open.
+	 * How this device reaches it; none for a station reached without a connection of its own (the page's own)
+	 * or before one is open. Its figures are the `stationNet` view's.
 	 */
-	net?: StationNet;
+	way?: StationWay;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
 	/**
@@ -4525,6 +4499,41 @@ export interface SlackTokensView {
 export interface StationMemory {
 	global: MemoryFile;
 	skills: SkillFile[];
+}
+
+/**
+ * This device's connection to a station, in words (its card's network line): how it goes, its round trip now and
+ * over the last minute, and what goes over it (the `stationNet` view: sampled while shown; none before a connection
+ * of its own is open).
+ */
+export interface StationNet {
+	/** 直连, 北京中继 (the relay's name, or 中继 host), or 正在选路. */
+	path: string;
+	/** The same as a word to tell apart (a chat's bar marks it with a dot). Missing from a core from before. */
+	via?: NetVia;
+	rtt?: NetFigure;
+	/** Round trips over the last minute, oldest first, in milliseconds. */
+	rttHistory: number[];
+	/** Bytes a second now, each way: 1.4 MB/s. */
+	down: string;
+	up: string;
+	/** What went over it today on this device: 今天共 ↓ 212 MB · ↑ 9.6 MB (a core from before: 本次共, since it opened). */
+	total: string;
+	/** The same each way: 212 MB. Missing from a core from before. */
+	downTotal?: string;
+	upTotal?: string;
+	/** Packets lost over the last minute, when some were. */
+	loss?: NetFigure;
+	/**
+	 * The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from
+	 * a core from before.
+	 */
+	measured?: NetMeasured;
+	/**
+	 * Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md): the desktop app sends there to tell
+	 * whether macOS lets it reach them (Local Network).
+	 */
+	lan?: string[];
 }
 
 /**

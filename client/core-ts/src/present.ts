@@ -122,7 +122,7 @@ export function times(value: unknown, c: Clock): unknown {
   return changed ? map : value;
 }
 
-const NO_TICK = new Set(["live", "thread", "history", "host", "net", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "adbShare", "slackTokens", "joinable", "memberships", "screens", "screenCard"]);
+const NO_TICK = new Set(["live", "thread", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "adbShare", "slackTokens", "joinable", "memberships", "screens", "screenCard"]);
 
 /// Whether a topic shows times in words, sent again each minute while shown.
 export function ticks(topic: Topic): boolean {
@@ -157,6 +157,7 @@ const SHAPED: Record<string, Ty> = {
   chatJobs: "ChatJobsView",
   imageNear: "ImageNear",
   agentCard: "AgentCardView",
+  stationNet: { opt: "StationNet" },
   longJobs: "LongJobsView",
   profiles: "ProfilesView",
   usage: "UsageView",
@@ -802,10 +803,9 @@ export function host(h: J): J {
   return o;
 }
 
-/// A station's connection as its card shows it (`StationNet`).
-export function net(raw: J, relayName: (host: string) => string | null): J {
-  if (!isObject(raw)) return null;
-  const r = raw as J;
+/// How a connection to a station goes, in words (直连, 北京中继) and as a word to tell apart: a reading's (`net`) or
+/// its way alone (`way`), `{ path, relay }`.
+function reached(r: J, relayName: (host: string) => string | null): { path: string; via: string } {
   const relayHost = str(r.relay) || null;
   const path =
     r.path === "direct"
@@ -818,6 +818,20 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
             })()
           : t("core-views.present.net.relay")
         : t("core-views.present.net.choosing");
+  return { path, via: r.path === "direct" ? "direct" : r.path === "relay" ? "relay" : "choosing" };
+}
+
+/// How a station is reached as the places that name it show it (`StationWay`), from its `way`.
+export function way(raw: J, relayName: (host: string) => string | null): J {
+  if (!isObject(raw)) return null;
+  return reached(raw, relayName);
+}
+
+/// A station's connection as its card shows it (`StationNet`).
+export function net(raw: J, relayName: (host: string) => string | null): J {
+  if (!isObject(raw)) return null;
+  const r = raw as J;
+  const { path, via } = reached(r, relayName);
   const samples: J[] = arr(r.samples) ?? [];
   const figure = (ms: number) => ({
     text: ms >= 1000 ? `${format.fixed1(ms / 1000)} s` : `${Math.max(format.round(ms), 1)} ms`,
@@ -825,7 +839,7 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
   });
   const rtt = typeof r.rttMs === "number" ? figure(r.rttMs) : null;
   const named = (h: string) => relayName(h) ?? h;
-  const via = r.path === "relay" ? (str(r.relay) ?? null) : null;
+  const through = r.path === "relay" ? (str(r.relay) ?? null) : null;
   const m = r.measured;
   const measured = isObject(m)
     ? {
@@ -836,7 +850,7 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
           const ms = get(x, "rttMs");
           // "direct": the way that goes straight there, no relay.
           if (h === "direct") return [{ name: t("core-views.present.net.direct"), rtt: typeof ms === "number" ? figure(ms) : null, current: r.path === "direct" }];
-          return [{ name: named(h), rtt: typeof ms === "number" ? figure(ms) : null, current: via === h }];
+          return [{ name: named(h), rtt: typeof ms === "number" ? figure(ms) : null, current: through === h }];
         }),
         moved: typeof m.moved === "string" ? named(m.moved) : null,
       }
@@ -866,7 +880,7 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
       : null;
   return {
     path,
-    via: r.path === "direct" ? "direct" : r.path === "relay" ? "relay" : "choosing",
+    via,
     rtt,
     rttHistory: history,
     down: rate("rxBps"),

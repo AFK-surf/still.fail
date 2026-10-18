@@ -15,6 +15,7 @@ import fail.still.android.data.HostDetail
 import fail.still.android.data.NetFigure
 import fail.still.android.data.StationNet
 import fail.still.android.data.StationView
+import fail.still.android.data.StationWay
 import fail.still.android.data.Topics
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -36,8 +37,14 @@ class StationsLayoutTest {
     private fun station(name: String, online: Boolean, read: Boolean = true, reconnecting: Boolean = false) = StationView(
         station = "${Fixtures.WS}/$name", id = name, name = name, summary = if (online) "10 核 · 32 GB" else "3 小时前离线",
         face = if (online) "idle" else "offline", online = online, link = Link(if (online) "online" else "offline"),
-        runtimes = emptyList(), models = emptyList(), host = if (online && read) host else null, net = if (online && read) net else null, reconnecting = reconnecting,
+        runtimes = emptyList(), models = emptyList(), host = if (online && read) host else null, way = if (online && read) StationWay(path = net.path) else null, reconnecting = reconnecting,
     )
+
+    /** The stations' list, and each station's connection with its figures as its card follows it (`stationNet`). */
+    private fun show(h: Harness, list: List<StationView>) {
+        h.fake.put(Topics.stations(Fixtures.WS), list)
+        list.forEach { h.fake.put<StationNet?>(Topics.stationNet(it.station), if (it.host != null) net else null) }
+    }
 
     @Test fun states() {
         val h = Harness(rule)
@@ -49,7 +56,7 @@ class StationsLayoutTest {
             "reconnecting" to listOf(station("studio", true, reconnecting = true), station("mini", true, read = false, reconnecting = true), station("air", true)),
         )
         val tops = shown.map { (name, list) ->
-            rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), list) }
+            rule.runOnUiThread { show(h, list) }
             h.settle()
             h.record(name).end()
             list.map { rule.onNodeWithText(it.name).getBoundsInRoot().top }.also { Log.i("motion", "$name: $it") }
@@ -65,10 +72,10 @@ class StationsLayoutTest {
     private fun looks(dark: Boolean) {
         val h = Harness(rule)
         h.launch(listOf(Screen.Stations), dark)
-        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(station("studio", true), station("mini", false), station("air", true, read = false))) }
+        rule.runOnUiThread { show(h, listOf(station("studio", true), station("mini", false), station("air", true, read = false))) }
         h.settle()
         h.record("look-${if (dark) "dark" else "light"}").end()
-        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(station("studio", true, reconnecting = true), station("mini", false), station("air", true))) }
+        rule.runOnUiThread { show(h, listOf(station("studio", true, reconnecting = true), station("mini", false), station("air", true))) }
         h.settle()
         h.record("reconnecting-${if (dark) "dark" else "light"}").end()
         rule.runOnUiThread { h.app.push(Screen.Station("${Fixtures.WS}/studio")) }
@@ -86,7 +93,7 @@ class StationsLayoutTest {
             "page-reconnecting" to station("studio", true, reconnecting = true),
         )
         val tops = shown.map { (name, st) ->
-            rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(st)) }
+            rule.runOnUiThread { show(h, listOf(st)) }
             h.settle()
             h.record(name).end()
             listOf("在此 station 上").map { rule.onNodeWithText(it).getBoundsInRoot().top }.also { Log.i("motion", "$name: $it") }

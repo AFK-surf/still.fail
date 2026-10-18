@@ -23,6 +23,7 @@ import fail.still.android.data.Meter
 import fail.still.android.data.HostDetail
 import fail.still.android.data.NetFigure
 import fail.still.android.data.StationNet
+import fail.still.android.data.StationWay
 import fail.still.android.data.Topics
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -48,7 +49,7 @@ class StationChipTest {
         identity = "Apple M4 Max · 64 GB · macOS 26.6", details = listOf(HostDetail("主机名", "studio"), HostDetail("芯片", "Apple M4 Max · 16 核 · arm64"), HostDetail("已运行", "1 天 3 小时"), HostDetail("still.fail", "进程占用 38 MB")),
     )
     private val net = StationNet(path = "直连", via = "direct", rtt = NetFigure("12 ms", "ok"), rttHistory = emptyList(), down = "1.2 MB/s", up = "30 KB/s", total = "", downTotal = "212 MB", upTotal = "9.6 MB")
-    private val studio = Fixtures.station.copy(name = "Studio", emoji = "🍎", summary = "1 个 agent 在跑 · Apple M4 Max · 64 GB · macOS 26.6", host = host, net = net)
+    private val studio = Fixtures.station.copy(name = "Studio", emoji = "🍎", summary = "1 个 agent 在跑 · Apple M4 Max · 64 GB · macOS 26.6", host = host, way = StationWay(path = net.path, via = net.via))
     private val mini = Fixtures.station.copy(station = "${Fixtures.WS}/mini", id = "mini", name = "Mac mini", emoji = "🐧")
 
     private val talk = listOf(Fixtures.mine(1, "README 里的安装命令过时了，帮我改一下"), Fixtures.agent(2, "改好了，已推到 main。").copy(ending = "all_done"))
@@ -67,7 +68,11 @@ class StationChipTest {
         h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk).let { if (agents) it.copy(agents = listOf(agent)) else it })
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, of)), dark = dark)
         // After launching, which puts the one station of the fixtures.
-        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), stations) }
+        rule.runOnUiThread {
+            h.fake.put(Topics.stations(Fixtures.WS), stations)
+            // Each station's connection with its figures, as its card follows it.
+            stations.forEach { h.fake.put<StationNet?>(Topics.stationNet(it.station), if (it.host != null) net else null) }
+        }
         h.settle()
         return h
     }
@@ -114,7 +119,7 @@ class StationChipTest {
         val tag = if (dark) "dark" else "light"
         shot("station-tile-$tag")
         // How it is reached, a dot on the tile's corner: through a relay, away.
-        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(studio.copy(net = net.copy(path = "北京中继", via = "relay")), mini)) }
+        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(studio.copy(way = StationWay(path = "北京中继", via = "relay")), mini)) }
         h.settle()
         shot("station-tile-relay-$tag")
         rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(studio.copy(online = false), mini)) }

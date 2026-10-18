@@ -52,7 +52,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -556,7 +556,7 @@ export class Views implements Owner {
       case "stations":
       case "profiles":
         scope = view.scope as string;
-        perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }, { topic: "host", station: s }, { topic: "net", station: s }];
+        perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }, { topic: "host", station: s }, { topic: "way", station: s }];
         break;
       case "archive":
         scope = view.scope as string;
@@ -588,6 +588,8 @@ export class Views implements Owner {
           { topic: "overview", station },
           { topic: "workspace", workspace: ofAddress(station) },
         ];
+      case "stationNet":
+        return [{ topic: "net", station }];
       case "history":
         return [
           { topic: "live", station, key: view.key },
@@ -865,6 +867,11 @@ export class Views implements Owner {
       }
       case "history":
         return this.#history(view.station as string, view.key as string);
+      case "stationNet": {
+        // A station's connection with every figure, sampled while this is shown (station/topics.ts).
+        const net = this.ok({ topic: "net", station: view.station as string });
+        return { ok: net === undefined ? null : present.net(net, (h) => this.relayName(h)) };
+      }
       case "agentCard": {
         const agent = this.agent(view.station as string, view.key as string);
         if (agent === null) return undefined;
@@ -1198,7 +1205,8 @@ export class Views implements Owner {
         // What its agents do first: a narrow card cuts the line short at its end.
         summary = `${running > 0 ? t("core-views.station.running", { n: running }) : t("core-views.station.idle")} · ${what}`;
       } else summary = t("core-views.station.connecting");
-      const net = this.ok({ topic: "net", station: s.address });
+      // How it is reached alone, not its figures (they change with each reading: the `stationNet` view has them).
+      const way = this.ok({ topic: "way", station: s.address });
       const state = str(this.link(s.address).state);
       return {
         station: s.address,
@@ -1219,7 +1227,7 @@ export class Views implements Owner {
         models: models(s.joined && overview !== undefined ? servingIn(overview, scope) : overview, c.now),
         overview: shown,
         host,
-        net: net === undefined ? null : present.net(net, (h) => this.relayName(h)),
+        way: way === undefined ? null : present.way(way, (h) => this.relayName(h)),
         betaOffered: betaOffered(overview, () => this.#betaOf(scope)),
         ...(s.joined ? { joined: true, home: this.#core.homeName?.(scope, s.id) ?? null } : {}),
       };
