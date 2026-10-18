@@ -23,12 +23,10 @@ import { routes as agentEnv } from "./routes/agent-env.ts";
 import { routes as links } from "./routes/links.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
-import { routes as vault } from "./routes/vault.ts";
-import { routes as vaultRequests } from "./routes/vault-requests.ts";
-import { vaultStore } from "../vault/store.ts";
 import { routes as machineLogins } from "./routes/logins.ts";
 import { type Drive, stationDrive } from "../drive/drive.ts";
 import { type ModuleSet, moduleOf } from "../modules/modules.ts";
+import type { StationParts } from "../parts.ts";
 import { HelperFiles } from "../helper/files.ts";
 import type { HelperApp } from "../helper/app.ts";
 import type { HelperGrants } from "../helper/grants.ts";
@@ -91,6 +89,9 @@ export type AdminDeps = {
   drive?: Drive;
   /// The modules beside the station (modules/modules.ts): `/m/<id>/…` passed on to them; none, no such route.
   modules?: ModuleSet;
+  /// The station's parts in its own process (parts.ts): their routes after the platform's, and what of theirs a
+  /// read-only member may write.
+  parts?: StationParts;
 };
 
 /// The header a write's key comes in, and how long an answer is kept (once.rs).
@@ -143,22 +144,6 @@ export class Admin {
       ...(deps.agents?.config ? deviceTools({ config: deps.agents.config, changed: () => deps.events?.overviewChanged() }) : []),
       ...(deps.agents?.config ? agentEnv({ config: deps.agents.config, changed: () => deps.events?.overviewChanged(), restart: () => deps.agents!.hub.everyChanged() }) : []),
       ...(deps.agents?.cloud ? workspaces({ cloud: deps.agents.cloud, data: deps.agents.config.data, changed: () => deps.events?.overviewChanged() }) : []),
-      // The vaults (docs/vault.md), by the lock pinned in the asker's workspace.
-      ...(deps.agents?.cloud && deps.store
-        ? vault({
-            vaults: vaultStore(deps.store.db),
-            lock: (ws) => deps.agents!.cloud.locked(ws === deps.agents!.cloud.home() ? null : ws)?.state ?? null,
-            events: deps.events,
-          })
-        : []),
-      ...(deps.agents?.cloud && deps.agents.secrets
-        ? vaultRequests({
-            secrets: deps.agents.secrets,
-            plain: deps.agents.secrets.plain,
-            lock: (ws) => deps.agents!.cloud.locked(ws === deps.agents!.cloud.home() ? null : ws)?.state ?? null,
-            events: deps.events,
-          })
-        : []),
       ...(deps.agents?.config
         ? drive({
             config: deps.agents.config,
@@ -256,7 +241,7 @@ export class Admin {
   private async answer(r: Request): Promise<Answer> {
     // A viewer reads: no message sent, nothing changed (previews included); a module says what of its own a viewer
     // changes too (their reading progress, say: its manifest's `viewerWrites`).
-    if (readOnly(r.viewer) && !readOnlyMay(r) && this.deps.modules?.viewerMay(r) !== true) return error(403, "read-only members cannot change this station");
+    if (readOnly(r.viewer) && !readOnlyMay(r) && this.deps.modules?.viewerMay(r) !== true && this.deps.parts?.mayView(r) !== true) return error(403, "read-only members cannot change this station");
     if (r.method === "POST" && /^\/*batch$/.test(r.path)) return this.batch(r);
     // A session, chat or job of another workspace than the viewer's is none for them (api/seen.ts).
     const hidden = this.deps.store ? elsewhere(this.deps.store, r.path, r.viewer) : null;
@@ -274,7 +259,7 @@ export class Admin {
     // A module's (modules/forward.ts): any method, its answer as it comes.
     const module = moduleOf(r.path);
     if (module !== null && this.deps.modules) return this.deps.modules.forward(r, module);
-    for (const route of this.routes) {
+    for (const route of [...this.routes, ...(this.deps.parts?.allRoutes() ?? [])]) {
       const found = r.method === route.method ? route.pattern.exec(r.path) : null;
       if (found) return route.handle(r, found.slice(1));
     }

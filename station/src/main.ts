@@ -28,8 +28,9 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, Modules, Own, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
 import { ModulesLive } from "./modules/live.ts";
+import { VaultLive } from "./vault/module.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
@@ -127,6 +128,8 @@ function run() {
   const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
   const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive).pipe(
+    // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
+    Layer.provideMerge(VaultLive),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     // The drive, the admin API's and the modules' local API's (modules/local.ts): the platform's, before the agents.
@@ -145,6 +148,7 @@ function run() {
     Layer.provideMerge(Previous.layer),
     // The requests between the stations of the workspace (mesh/bus.ts): the mesh attaches them, the parts answer.
     Layer.provideMerge(Peers.layer),
+    Layer.provideMerge(Parts.layer),
     Layer.provideMerge(parts),
   );
   const main = Effect.gen(function* () {

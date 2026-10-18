@@ -31,6 +31,7 @@ import { ConfigFile } from "./ops/config.ts";
 import { Own as OwnPaths } from "./ops/own.ts";
 import { previousGone } from "./ops/previous.ts";
 import { PeerBus } from "./mesh/bus.ts";
+import { StationParts } from "./parts.ts";
 import { wall } from "./ops/fibers.ts";
 
 /// Where the station keeps its data, and the release it runs from.
@@ -252,6 +253,12 @@ export class Peers extends Context.Service<Peers, PeerBus>()("stillfail/Peers") 
   static readonly layer = Layer.sync(Peers, () => new PeerBus({ sleep: (ms) => wall.sleep(ms) }));
 }
 
+/// The station's parts in its own process (parts.ts): what each adds to the admin API, the overview and the agents'
+/// tools, said as it is made.
+export class Parts extends Context.Service<Parts, StationParts>()("stillfail/Parts") {
+  static readonly layer = Layer.sync(Parts, () => new StationParts());
+}
+
 /// The folders macOS protects (Documents, Desktop, Downloads, disks) through still.fail Helper (helper/files.ts): the
 /// drive's, a search's and the directories people and agents name; none where there is no helper for them. Their
 /// grants' changes are the overview's.
@@ -285,7 +292,7 @@ export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/Admi
     Effect.gen(function* () {
       return new Admin(yield* Readers, {
         store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents, screens: yield* ScreenRegistry, helper: yield* Helper, grants: yield* Grants,
-        drive: yield* StationDrive, modules: yield* Modules,
+        drive: yield* StationDrive, modules: yield* Modules, parts: yield* Parts,
       });
     }),
   );
