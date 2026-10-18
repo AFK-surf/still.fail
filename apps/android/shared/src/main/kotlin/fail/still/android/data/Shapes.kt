@@ -3174,7 +3174,10 @@ data class LockMe (
 	/// Not in the lock, it asked or a station refused it: it waits to be confirmed.
 	val waiting: Boolean,
 	/// Its request to be confirmed waits at the cloud (or is on its way); not when it was turned down.
-	val asked: Boolean? = null
+	val asked: Boolean? = null,
+	/// Why its request to be confirmed did not reach the cloud (its key could not be kept, the cloud refused it):
+	/// said on its waiting page, asked again by hand (`lock.request`).
+	val failed: String? = null
 )
 
 /// A member in the workspace's lock, with their devices.
@@ -3186,6 +3189,45 @@ data class LockPerson (
 	val role: String,
 	val you: Boolean,
 	val devices: List<LockDevice>
+)
+
+/// A workspace a device waits in, named as the person knows it.
+@Serializable
+data class LockPromptWorkspace (
+	val id: String,
+	val name: String,
+	val emoji: String? = null,
+	val icon: String? = null
+)
+
+/// A device waiting to be confirmed, in each workspace of the person's it asked in and this device approves in.
+@Serializable
+data class LockPrompt (
+	val device: String,
+	val sub: String,
+	val email: String,
+	val name: String,
+	val kind: String,
+	val label: String,
+	/// The code the device shows: the same in every workspace (it is its key's).
+	val code: String,
+	/// When it asked last.
+	val created_at: Long,
+	val yours: Boolean,
+	/// Where it waits on this device: confirmed (`lockPrompt.confirm`) or turned down in all of them at once.
+	val workspaces: List<LockPromptWorkspace>,
+	/// Its times in words (`created_at`).
+	val time: Map<String, Stamp>? = null
+)
+
+/// The devices waiting on this one to be confirmed, across workspaces (the `lockPrompts` topic; views/lock.ts).
+@Serializable
+data class LockPromptsView (
+	/// Every device waiting on this one, in every workspace of the person's: one per device.
+	val waiting: List<LockPrompt>,
+	/// The one to put up on its own (a dialog, a sheet), wherever the person is: one with a workspace whose prompt
+	/// was not closed here (`lockPrompt.shown`, said as it is closed by hand).
+	val prompt: LockPrompt? = null
 )
 
 /// A device waiting to be confirmed.
@@ -3238,9 +3280,6 @@ data class LockView (
 	val protected: UInt,
 	/// Devices waiting on the viewer: their own, anyone's for owners and admins.
 	val requests: List<LockRequest>,
-	/// The waiting device to put up on its own (a dialog, a sheet) wherever this device is: one it signs for, not
-	/// closed here before (`lock.shown`, said as it is closed by hand).
-	val prompt: LockRequest? = null,
 	/// The viewer's own web devices running out soon.
 	val renew: List<LockDevice>,
 	val attention: UInt

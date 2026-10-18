@@ -1,10 +1,11 @@
 // The workspace lock for the stories (docs/workspace-lock.md): the demo workspace's `lock` topic as the core puts it
-// together (client/core-ts/src/views/lock.ts) with security mode on, with no station in the workspace, and on a device
-// waiting to be approved (its request pending, or turned down).
+// together (client/core-ts/src/views/lock.ts) with security mode on, with no station in the workspace, on a device
+// waiting to be approved (its request pending, turned down, or not sent: its key could not be kept), and with a device
+// waiting on this one in two workspaces (`lockPrompts`).
 import type { DemoExtension } from "../src/demo/mount.tsx";
-import type { LockStation, LockView } from "../src/core/shapes.ts";
+import type { LockPromptsView, LockStation, LockView } from "../src/core/shapes.ts";
 
-export type LockStory = "on" | "noStations" | "waiting" | "denied";
+export type LockStory = "on" | "noStations" | "waiting" | "denied" | "failed" | "prompt";
 
 const STATIONS: LockStation[] = [
   { id: "s_studio", name: "Studio", version: "0.1.3217", online: true, protected: true },
@@ -13,10 +14,13 @@ const STATIONS: LockStation[] = [
 
 function view(story: LockStory): LockView {
   const stations = story === "noStations" ? [] : STATIONS;
-  const waits = story === "waiting" || story === "denied";
+  const waits = story === "waiting" || story === "denied" || story === "failed";
   return {
     available: true, locked: true, notice: false, role: "owner", manages: true, owner: true, canSign: true, signs: !waits,
-    me: { device: "d_demo", code: "4BU-L2G", kind: "app", confirmed: !waits, waiting: waits, asked: story !== "denied" },
+    me: {
+      device: "d_demo", code: "4BU-L2G", kind: "app", confirmed: !waits, waiting: waits, asked: story === "waiting",
+      ...(story === "failed" ? { failed: "无法在系统钥匙串中保存此设备的密钥：secure.set is not supported on this host" } : {}),
+    },
     signers: 1,
     members: [{
       sub: "demo-you", email: "you@acme.dev", name: "你", role: "owner", you: true,
@@ -26,11 +30,21 @@ function view(story: LockStory): LockView {
   };
 }
 
+/** A phone of a member's waiting in two workspaces, one of them not the one open. */
+function prompts(story: LockStory): LockPromptsView {
+  if (story !== "prompt") return { waiting: [] };
+  const p = {
+    device: "d_phone", sub: "demo-li", email: "li@acme.dev", name: "李二", kind: "app", label: "still.fail 安卓版 · Pixel 8", code: "K7F-2QX",
+    created_at: 1_760_000_000, yours: false, workspaces: [{ id: "w_acme", name: "Acme" }, { id: "w_daily", name: "日常", emoji: "☀️" }],
+  };
+  return { waiting: [p], prompt: p };
+}
+
 /** The demo with security mode on, as `story` has it. */
 export function lockDemo(story: LockStory): DemoExtension {
   return {
-    topic: (t) => (t.topic === "lock" ? view(story) : undefined),
+    topic: (t) => (t.topic === "lock" ? view(story) : t.topic === "lockPrompts" ? prompts(story) : undefined),
     // What changes something answers at once, the page as it was (the stories show states, not what follows).
-    call: (name) => (name.startsWith("lock.") ? {} : undefined),
+    call: (name) => (name.startsWith("lock") ? {} : undefined),
   };
 }

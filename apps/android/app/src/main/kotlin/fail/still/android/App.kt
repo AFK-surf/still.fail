@@ -196,6 +196,8 @@ private fun AppContent(app: AppState) {
                     // The core hears which workspace the app is in: what it tells the viewer is of it (attend.ts).
                     LaunchedEffect(current.workspace.id) { app.core.focus(buildJsonObject { put("workspace", current.workspace.id) }) }
                     Pages(app, current)
+                    // A device waiting on this one, in any workspace of the person's, over whichever page is open.
+                    fail.still.android.screens.LockPrompts()
                 }
             }
         } }

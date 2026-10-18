@@ -122,6 +122,7 @@ export const TOPICS: Record<string, Spec> = {
   screens: { station: S },
   screenCard: { station: S, screen: S },
   lockDraft: { workspace: S },
+  lockPrompts: {},
   vaults: { workspace: S },
   vaultItems: { workspace: S, vault: S },
   vaultUses: { workspace: S, vault: S, item: S },

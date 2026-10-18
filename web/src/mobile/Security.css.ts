@@ -11,6 +11,11 @@ export const mDot = style({
   selectors: { '&[data-on="true"]': { background: "var(--m-green)" }, '&[data-tone="amber"]': { background: "var(--m-warn)" } },
 });
 export const mWarn = style({ color: "var(--m-warn)", fontSize: vars.textMeta });
+/** Its request did not go: why, in red. */
+export const mFailed = style({ color: "var(--m-red)", fontSize: vars.textMeta, lineHeight: vars.leadingMeta });
+/** The workspaces a waiting device asks to be let into, in its sheet: their names, as large as its words. */
+export const mPlaces = style({ display: "flex", alignItems: "center", gap: "6px 14px", flexWrap: "wrap" });
+export const mPlace = style({ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textBody, fontWeight: "600", color: "var(--m-ink)" });
 export const mDevice = style({ paddingLeft: "14px" });
 export const mCode = style({ fontFamily: vars.fontMono, fontWeight: "600", letterSpacing: "1px", fontSize: vars.textUi, color: "var(--m-ink)" });
 export const mBigCode = style({ fontFamily: vars.fontMono, fontSize: vars.textDisplay, lineHeight: "1.3", letterSpacing: "5px", fontWeight: "600", textAlign: "center", color: "var(--m-ink)" });

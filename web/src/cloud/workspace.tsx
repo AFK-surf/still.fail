@@ -121,11 +121,12 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   useEffect(() => { if (archive && mode !== "archive") setMode("archive"); }, [archive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // No station yet: nothing of the workspace's pages works, so none is shown; adding the first station is the page.
-  if (known && known.length === 0 && !settings) return <><WorkspaceKept entry={entry} /><Onboarding entry={entry} /></>;
+  // The devices waiting on this one (in any workspace of the person's) are put up on each of its pages.
+  if (known && known.length === 0 && !settings) return <><WorkspaceKept entry={entry} /><SecurityPrompt /><Onboarding entry={entry} /></>;
   // A device waiting to be confirmed into the workspace's lock: nothing of it is reached until it is (its settings are).
   if (waiting && !settings) {
     return (
-      <><WorkspaceKept entry={entry} />
+      <><WorkspaceKept entry={entry} /><SecurityPrompt />
         <Bare entry={entry}><main>{lock && <SecurityWaiting entry={entry} lock={lock} />}</main></Bare>
       </>
     );
@@ -150,7 +151,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
         </div>
         <SidebarEdge />
         <SystemBubbles scope={entry.id} />
-        <SecurityPrompt entry={entry} />
+        <SecurityPrompt />
         {/* What another app shares (shareIn.ts), over whichever page is open. */}
         <ShareInPanel scope={entry.id} />
         <main className={shellCss.main}>

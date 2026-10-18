@@ -6,6 +6,8 @@
 //   lock {workspace}        how far the lock goes, this device's place in it, who waits, members, devices, stations
 //   lockDraft {workspace}   what turning it on would sign: members, the devices that asked for credentials lately,
 //                           the stations and whether each understands a lock; what is left out
+//   lockPrompts             the devices waiting on this one in every workspace of the person's where it approves,
+//                           one per device with the workspaces it waits in, and the one to put up now
 // Calls (lock.<name> {workspace, …}):
 //   open                    the owner turns it on, as the draft stands
 //   toggle {id}             a device or station of the draft left out, or put back
@@ -19,6 +21,10 @@
 //   removeDevice {device}   a device taken out of the lock
 //   disable                 the owner turns it off, once the system has asked them (Touch ID, the screen lock)
 //   state                   the `lock` topic's value, as a call (tests, scripts)
+// Calls (lockPrompt.<name> {device, …}), on a waiting device in every workspace it waits on this one in:
+//   confirm {code}          confirmed, its code compared once
+//   deny                    turned down
+//   shown                   its prompt closed by hand: not put up again this run
 //
 // A station that refuses this device for the lock (`lock_unconfirmed`) is not asked again until the lock moves on
 // (someone confirmed something): what waits for it then is tried at once.
@@ -69,10 +75,16 @@ type Part = {
   base: string | null;
   /// Waiting devices whose prompt was closed by hand here: not put up again this run.
   shown: Set<string>;
+  /// Why this device's request to be confirmed did not reach the cloud (its signing key could not be kept, the cloud
+  /// refused it): said on its waiting page until a request goes.
+  failed: CoreError | null;
 };
 
 /// What the signing key of this device is, as loaded (undefined: not loaded yet), per core.
 const signers = new WeakMap<Inner, string | null>();
+
+/// This device's base key (the mesh's, the same in every workspace), once known, per core.
+const bases = new WeakMap<Inner, string>();
 
 /// What each workspace's lock was read at (its head's hash and the waiting count the workspace view said), per core.
 const readAt = new WeakMap<Inner, Map<string, string>>();
@@ -119,7 +131,16 @@ export function fold(entries: Entry[]): Folded {
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), requested: undefined, sending: false, excluded: new Set(), devices: null, probes: new Map(), base: null, shown: new Set() }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), requested: undefined, sending: false, excluded: new Set(), devices: null, probes: new Map(), base: bases.get(inner) ?? null, shown: new Set(), failed: null }));
+
+/// This device's base key known: kept for every workspace.
+const knowBase = (inner: Inner, ws: string, base: string) => {
+  bases.set(inner, base);
+  part(inner, ws).base = base;
+};
+
+/// A workspace's lock changed as this device sees it: its `lock` topic, and the prompts of every workspace.
+const touch = (inner: Inner, ws: string) => inner.store.invalidateAll((t) => (t.topic === "lock" && t.workspace === ws) || t.topic === "lockPrompts");
 
 const held = (inner: Inner, ws: string): Held | null => {
   const h = inner.data.record("lock", ws);
@@ -127,6 +148,10 @@ const held = (inner: Inner, ws: string): Held | null => {
 };
 
 const view = (inner: Inner, ws: string): J => inner.data.shared({ topic: "workspace", workspace: ws });
+
+/// A workspace's name as the person knows it: as its view says, else as the account's list does.
+const nameOf = (inner: Inner, ws: string): string =>
+  inner.cloudSync?.workspaceName(ws) ?? str(inner.data.mes().flatMap(([, me]) => arr(get(me, "workspaces"))).find((w) => get(w, "id") === ws)?.name) ?? ws;
 
 /// What the workspace view says of the lock: its head and how many devices wait (undefined: a cloud from before).
 const cloudSays = (v: J): string | undefined => (!isObject(v) || !("lock" in v) ? undefined : `${get(v.lock, "hash") ?? ""}/${get(v, "lock_requests") ?? 0}`);
@@ -139,17 +164,20 @@ export function install(inner: Inner): void {
   hooks.lockRefused = refused;
   hooks.lockWaiting = waiting;
   handlers.lock = (core, call, _progress, _at, ctx) => run(core, call as Of, ctx);
+  handlers.lockPrompt = (core, call, _progress, _at, ctx) => runPrompt(core, (call as Extract<Call, { kind: "lockPrompt" }>).name, (call as Extract<Call, { kind: "lockPrompt" }>).params, ctx);
   // The signing key, once (it is the device's).
   inner.runner.fork(
     Effect.map(Effect.orElseSucceed(Signer.load(inner.host), () => null), (s) => {
       signers.set(inner, s?.id ?? null);
-      inner.store.invalidateAll((t) => t.topic === "lock");
+      inner.store.invalidateAll((t) => t.topic === "lock" || t.topic === "lockPrompts");
     }),
   );
   // The workspace view says how far the cloud's lock goes and how many wait: read again when that changes.
   inner.data.onChange((topic) => {
     if (topic.topic !== "workspace" || inner.provider.kind !== "stillfail") return;
     const ws = topic.workspace as string;
+    // The prompts name the workspaces, and follow the person's role in each.
+    inner.store.invalidate({ topic: "lockPrompts" });
     const says = cloudSays(view(inner, ws));
     if (says === undefined) return;
     let at = readAt.get(inner);
@@ -198,8 +226,10 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     if (base !== null && (f.devices.has(base) || requests.some((r) => r.base === base))) declined = undefined;
     else if (base !== null && (was?.requests ?? []).some((r) => r.base === base)) declined = base;
     inner.data.put("lock", ws, { head, entries: head === null ? [] : entries, requests, ...(declined ? { declined } : {}) });
+    // In the lock, or its request at the cloud: what kept it from asking is past.
+    if (base !== null && (f.devices.has(base) || requests.some((r) => r.base === base))) part(inner, ws).failed = null;
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
-    inner.store.invalidateAll((t) => (t.topic === "lock" || t.topic === "lockDraft") && t.workspace === ws);
+    inner.store.invalidateAll((t) => ((t.topic === "lock" || t.topic === "lockDraft") && t.workspace === ws) || t.topic === "lockPrompts");
     // This device not in the lock (left out when it was turned on, or new): it asks to be confirmed now, not only once
     // a station it reaches refuses it (one it is connected to may not be asked again for a while).
     if (!asking) return;
@@ -216,13 +246,15 @@ function moved(inner: Inner, ws: string): void {
   }
 }
 
-/// A station refused this device for the lock: noted, and (once a head) this device asks to be confirmed.
-function refused(inner: Inner, ws: string, station: string): void {
-  if (inner.provider.kind !== "stillfail") return;
+/// A station refused this device for the lock: noted, and (once a head) this device asks to be confirmed. What the
+/// refusal says then: which workspace, and where to approve it.
+function refused(inner: Inner, ws: string, station: string): CoreError | null {
+  if (inner.provider.kind !== "stillfail") return null;
   const p = part(inner, ws);
   const head = held(inner, ws)?.head?.hash ?? null;
   p.refused.set(station, head);
   ask(inner, ws);
+  return unconfirmed(inner, ws);
 }
 
 /// This device asks to be confirmed, once a head; not by itself once turned down (`Held.declined`).
@@ -230,18 +262,22 @@ function ask(inner: Inner, ws: string): void {
   const p = part(inner, ws);
   const h = held(inner, ws);
   const head = h?.head?.hash ?? null;
-  inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === ws);
+  touch(inner, ws);
   const sub = inner.workspaces.owner(ws);
   if (p.requested === head || sub === null || (h?.declined !== undefined && h.declined === p.base)) return;
   p.requested = head;
   // Asked again a few times if the cloud did not take it (the page says the others were told); after that, the next
-  // refusal asks anew.
-  const asking = Effect.retry(new Lock(inner, ws, sub, null).request(), { times: 5, schedule: Schedule.spaced("2 seconds") });
-  // Read again once sent, so the page has it pending with no moment between (`sending` meanwhile).
-  const asked = Effect.tapError(Effect.andThen(asking, Effect.ignore(read(inner, ws))), () => Effect.sync(() => (p.requested = undefined)));
+  // refusal asks anew. A key this device cannot keep is not tried again: it would not be kept the next time either.
+  const asking = Effect.retry(new Lock(inner, ws, sub, null).request(), { times: 5, schedule: Schedule.spaced("2 seconds"), while: (e) => e.code !== "lock_key" });
+  // Read again once sent, so the page has it pending with no moment between (`sending` meanwhile). Not sent, the page
+  // says why (`me.failed`), and the person can ask again by hand.
+  const asked = Effect.tapError(Effect.andThen(asking, Effect.ignore(read(inner, ws))), (e) => Effect.sync(() => {
+    p.requested = undefined;
+    p.failed = e;
+  }));
   const sent = Effect.sync(() => {
     p.sending = false;
-    inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === ws);
+    touch(inner, ws);
   });
   p.sending = true;
   inner.scheduler.enqueue("cloud", `lock/${ws}/request`, Priority.background, Effect.ensuring(Effect.asVoid(asked), sent));
@@ -255,37 +291,49 @@ function waiting(inner: Inner, ws: string, station: string): CoreError | null {
     p.refused.delete(station);
     return null;
   }
-  return new CoreError("lock_unconfirmed", "this device waits to be confirmed in the workspace's security mode");
+  return unconfirmed(inner, ws);
+}
+
+/// A station of the workspace refused this device for its lock: which workspace, and where it is approved (another
+/// trusted device of the person's there), with the code compared there.
+function unconfirmed(inner: Inner, ws: string): CoreError {
+  const base = part(inner, ws).base ?? bases.get(inner) ?? null;
+  const name = nameOf(inner, ws);
+  return new CoreError("lock_unconfirmed", base ? t("core-misc.lock.unconfirmed", { name, code: shortCode(base) }) : t("core-misc.lock.unconfirmedNoCode", { name }));
 }
 
 /// What a control plane that keeps no lock shows.
-const NONE = { available: false, locked: false, notice: false, role: "member", manages: false, owner: false, canSign: false, signs: false, signers: 0, members: [], stations: [], protected: 0, requests: [], prompt: null, renew: [], attention: 0 };
+const NONE = { available: false, locked: false, notice: false, role: "member", manages: false, owner: false, canSign: false, signs: false, signers: 0, members: [], stations: [], protected: 0, requests: [], renew: [], attention: 0 };
+const NO_PROMPTS = { waiting: [], prompt: null };
 const NO_DRAFT = { available: false, loading: false, canSign: false, owner: false, ready: false, members: [], devices: [], stations: [] };
 
 /// The topics.
 function owner(inner: Inner): Owner {
   return {
-    owns: (t: Topic) => t.topic === "lock" || t.topic === "lockDraft",
+    owns: (t: Topic) => t.topic === "lock" || t.topic === "lockDraft" || t.topic === "lockPrompts",
     start: (t: Topic) => {
-      const ws = t.workspace as string;
       if (inner.provider.kind !== "stillfail") return;
+      const ws = t.workspace as string;
       // The device's own key is the mesh's: brought up to know it.
       inner.runner.fork(
         Effect.ignore(
           Effect.map(inner.mesh(), (m) => {
-            part(inner, ws).base = m.deviceId();
+            bases.set(inner, m.deviceId());
+            if (t.topic !== "lockPrompts") part(inner, ws).base = m.deviceId();
             inner.store.invalidate(t);
           }),
         ),
       );
+      // The prompts are of what each workspace's lock holds, read as their workspaces change.
+      if (t.topic === "lockPrompts") return;
       if (t.topic === "lockDraft") inner.scheduler.enqueue("cloud", `lock/${ws}/draft`, Priority.shown, draft(inner, ws));
       // Shown: read again now, what is held showing meanwhile.
       else inner.scheduler.enqueue("cloud", `lock/${ws}`, Priority.shown, read(inner, ws));
     },
     compute: (t: Topic) => {
       const ws = typeof t.workspace === "string" ? t.workspace : "";
-      if (inner.provider.kind !== "stillfail") return { ok: t.topic === "lock" ? NONE : NO_DRAFT };
-      return { ok: t.topic === "lock" ? lockView(inner, ws) : draftView(inner, ws) };
+      if (inner.provider.kind !== "stillfail") return { ok: t.topic === "lock" ? NONE : t.topic === "lockPrompts" ? NO_PROMPTS : NO_DRAFT };
+      return { ok: t.topic === "lock" ? lockView(inner, ws) : t.topic === "lockPrompts" ? promptsView(inner) : draftView(inner, ws) };
     },
   };
 }
@@ -302,6 +350,8 @@ function askPerson(inner: Inner, reason: string): Effect.Effect<void, CoreError>
 /// The `lock` topic.
 export function lockView(inner: Inner, ws: string): J {
   const p = part(inner, ws);
+  // This device's base key: known in another workspace already, the same here.
+  const base = p.base ?? bases.get(inner) ?? null;
   const h = held(inner, ws);
   const v = view(inner, ws);
   const f = fold(h?.entries ?? []);
@@ -310,15 +360,15 @@ export function lockView(inner: Inner, ws: string): J {
   const t = now(inner);
   const signer = signers.get(inner) ?? null;
   const people = new Map<string, J>(arr(get(v, "members")).map((m) => [m.sub, m]));
-  const mine = p.base ? f.devices.get(p.base) : undefined;
+  const mine = base ? f.devices.get(base) : undefined;
   const role = str(get(v, "role")) ?? "member";
   const manages = role === "owner" || role === "admin";
   const device = (d: J) => ({
     id: d.id, kind: d.kind === "web" ? "web" : "app", label: d.label || "", signs: typeof d.sign_key === "string", older: Array.isArray(d.endpoints),
-    mine: d.id === p.base, daysLeft: typeof d.exp === "number" ? daysLeft(d.exp - t) : null,
+    mine: d.id === base, daysLeft: typeof d.exp === "number" ? daysLeft(d.exp - t) : null,
     renewSoon: typeof d.exp === "number" && d.exp - t < RENEW_SECS,
     // A device of the viewer's own added lately, shown on their other devices.
-    recent: d.sub === sub && d.id !== p.base && t - (f.added.get(d.id) ?? 0) < RECENT_SECS,
+    recent: d.sub === sub && d.id !== base && t - (f.added.get(d.id) ?? 0) < RECENT_SECS,
   });
   const stations = arr(get(v, "stations")).map((s) => ({
     id: s.id, name: s.name, version: s.version ?? null, online: s.online !== false, protected: f.stations.has(s.id),
@@ -332,7 +382,7 @@ export function lockView(inner: Inner, ws: string): J {
       device: r.base, sub: r.sub, email: r.email, name: str(get(people.get(r.sub), "name")) ?? "", kind: r.kind === "app" ? "app" : "web",
       label: r.label || "", code: r.code ?? shortCode(r.base), created_at: r.created_at ?? 0, yours: r.sub === sub,
     }))
-    .filter((r) => r.device !== p.base && (manages || r.yours));
+    .filter((r) => r.device !== base && (manages || r.yours));
   const renew = members.flatMap((m) => (m.you ? m.devices.filter((d) => d.renewSoon) : []));
   const dismissed = get(get(inner.data.shared({ topic: "prefs" }), "lockNotice"), ws) === true;
   const signs = mine !== undefined && typeof mine.sign_key === "string" && mine.sign_key === signer;
@@ -348,12 +398,16 @@ export function lockView(inner: Inner, ws: string): J {
     canSign: inner.host.appKeys === true,
     signs,
     me: {
-      device: p.base, code: p.base ? shortCode(p.base) : null, kind: inner.host.appKeys ? "app" : "web",
+      device: base, code: base ? shortCode(base) : null, kind: inner.host.appKeys ? "app" : "web",
       confirmed: mine !== undefined, daysLeft: typeof mine?.exp === "number" ? daysLeft(mine.exp - t) : null,
       // A station refused this device, or it asked, and the lock has not moved on since: it waits to be confirmed.
       // Its request waits at the cloud, or is on its way there; not when turned down (asked again by hand then).
-      asked: p.sending || (h?.requests ?? []).some((r) => r.base === p.base),
-      waiting: locked && p.base !== null && mine === undefined && (p.refused.size > 0 || p.requested === (h?.head?.hash ?? null) || h?.declined === p.base || (h?.requests ?? []).some((r) => r.base === p.base)),
+      asked: p.sending || (h?.requests ?? []).some((r) => r.base === base),
+      // Its request did not reach the cloud: why (its key could not be kept, the cloud refused it); it waits all the
+      // same, and asks again by hand.
+      failed: locked && mine === undefined && !p.sending ? (p.failed?.message ?? null) : null,
+      waiting: locked && base !== null && mine === undefined
+        && (p.refused.size > 0 || p.requested === (h?.head?.hash ?? null) || p.failed !== null || h?.declined === base || (h?.requests ?? []).some((r) => r.base === base)),
     },
     signers: [...f.devices.values()].filter((d) => typeof d.sign_key === "string").length,
     members,
@@ -362,11 +416,73 @@ export function lockView(inner: Inner, ws: string): J {
     // What waits on the viewer: devices to confirm (their own, or anyone's for owners and admins), their own web
     // devices running out.
     requests,
-    // The waiting device to put up on its own wherever this device is: one it can confirm, not closed here before.
-    prompt: locked && signs ? (requests.find((r) => !p.shown.has(r.device)) ?? null) : null,
     renew,
     attention: requests.length + renew.length,
   };
+}
+
+/// The `lockPrompts` topic: the devices waiting on this one in every workspace of the person's where it approves (it is
+/// trusted there), wherever they are now; one per device (it asks in each workspace it is in, by the same key), with
+/// those workspaces by name, in the order the workspaces are listed. `prompt`: the one to put up on its own, a device
+/// with a workspace whose prompt was not closed here.
+export function promptsView(inner: Inner): J {
+  const by = new Map<string, J>();
+  // As the accounts list them (the switcher's order), any not listed yet after.
+  const listed = inner.data.mes().flatMap(([, me]) => arr(get(me, "workspaces")).flatMap((w) => (typeof get(w, "id") === "string" ? [get(w, "id") as string] : [])));
+  const order = [...new Set([...listed, ...inner.workspaces.owned().map(([ws]) => ws)])].filter((ws) => inner.workspaces.owner(ws) !== null);
+  for (const ws of order) {
+    const lock = lockView(inner, ws);
+    if (!lock.locked || !lock.signs) continue;
+    const v = view(inner, ws);
+    const place = { id: ws, name: nameOf(inner, ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
+    for (const r of lock.requests as J[]) {
+      const one = by.get(r.device) ?? { ...r, workspaces: [] };
+      one.workspaces.push({ ...place, closed: part(inner, ws).shown.has(r.device) });
+      one.created_at = Math.max(one.created_at, r.created_at);
+      by.set(r.device, one);
+    }
+  }
+  const waiting = [...by.values()].map(({ workspaces, ...r }) => ({ ...r, workspaces: workspaces.map(({ closed: _, ...w }: J) => w) }));
+  const open = [...by.values()].find((r) => r.workspaces.some((w: J) => !w.closed));
+  return { waiting, prompt: open ? (waiting.find((r) => r.device === open.device) ?? null) : null };
+}
+
+/// The workspaces a device waits on this one in (`lockPrompts`), and the account of each.
+function waitsIn(inner: Inner, device: string): { ws: string; sub: string; name: string }[] {
+  const r = (promptsView(inner).waiting as J[]).find((x) => x.device === device);
+  return (r?.workspaces ?? []).flatMap((w: J) => {
+    const sub = inner.workspaces.owner(w.id);
+    return sub === null ? [] : [{ ws: w.id as string, sub, name: w.name as string }];
+  });
+}
+
+/// A `lockPrompt.*` call: on a waiting device, in every workspace it waits on this one in. Confirmed or turned down in
+/// some and not others, it fails naming the ones it did not get to (those stay waiting, in their 设置 › 安全).
+export function runPrompt(inner: Inner, name: string, params: Record<string, unknown>, ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
+  return Effect.gen(function* () {
+    const device = str(params.device) ?? "";
+    const where = waitsIn(inner, device);
+    if (name === "shown") {
+      for (const w of where) part(inner, w.ws).shown.add(device);
+      inner.store.invalidate({ topic: "lockPrompts" });
+      return null;
+    }
+    if (name !== "confirm" && name !== "deny") return yield* Effect.fail(CoreError.invalid(`no lockPrompt call ${name}`));
+    if (where.length === 0) return yield* Effect.fail(CoreError.invalid("no such device waits to be confirmed"));
+    // The code is the device's, the same everywhere: a wrong one is said once.
+    if (name === "confirm" && shortCode(device) !== (str(params.code) ?? "").trim().toUpperCase()) return yield* Effect.fail(CoreError.invalid("the code does not match that device's"));
+    const failed: { name: string; error: CoreError }[] = [];
+    for (const w of where) {
+      const lock = new Lock(inner, w.ws, w.sub, ctx);
+      const done = yield* Effect.result(name === "confirm" ? lock.confirm(device, str(params.code) ?? "") : lock.deny(device));
+      if (done._tag === "Failure") failed.push({ name: w.name, error: done.failure });
+      yield* Effect.ignore(read(inner, w.ws));
+    }
+    if (failed.length === 0) return { workspaces: where.map((w) => w.ws) };
+    if (where.length === 1) return yield* Effect.fail(failed[0]!.error);
+    const which = failed.map((f) => t("core-misc.lock.inWorkspace", { name: f.name, error: f.error.message })).join(t("core-misc.lock.listSep"));
+    return yield* Effect.fail(new CoreError(failed[0]!.error.code, which));
+  });
 }
 
 /// The draft of turning it on: the devices that asked for credentials, the stations asked whether they understand a
@@ -450,12 +566,12 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       case "dismiss":
         prefs.set(inner.data, { lockNotice: { [c.workspace]: true } }, false, inner.host.nowMs());
         inner.store.invalidate({ topic: "prefs" });
-        inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === c.workspace);
+        touch(inner, c.workspace);
         return null;
       // A waiting device's prompt closed by hand: not put up again on this device (it stays in 设置 › 安全).
       case "shown":
         part(inner, c.workspace).shown.add(param("device"));
-        inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === c.workspace);
+        touch(inner, c.workspace);
         return null;
       case "toggle": {
         const ex = part(inner, c.workspace).excluded;
@@ -467,14 +583,21 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       case "open":
         result = yield* lock.open();
         break;
-      case "request":
-        result = yield* lock.request();
+      // By hand: what kept it from asking before is said again if it is not past (`me.failed`).
+      case "request": {
+        const p = part(inner, c.workspace);
+        result = yield* Effect.tapError(lock.request(), (e) => Effect.sync(() => {
+          p.failed = e;
+          touch(inner, c.workspace);
+        }));
+        p.failed = null;
         break;
+      }
       case "confirm":
         result = yield* lock.confirm(param("device"), param("code"));
         break;
       case "deny":
-        result = yield* inner.provider.request(sub, "DELETE", `/v1/workspaces/${encodeURIComponent(c.workspace)}/lock/requests/${encodeURIComponent(param("device"))}`, null, ctx);
+        result = yield* lock.deny(param("device"));
         break;
       case "addStation":
         result = yield* lock.addStation(param("station"), param("code"));
@@ -558,7 +681,7 @@ class Lock {
 
   #base(): Effect.Effect<string, CoreError> {
     return Effect.map(this.#inner.mesh(), (m) => {
-      part(this.#inner, this.ws).base = m.deviceId();
+      knowBase(this.#inner, this.ws, m.deviceId());
       return m.deviceId();
     });
   }
@@ -632,7 +755,10 @@ class Lock {
     const self = this;
     return Effect.gen(function* () {
       const base = yield* self.#base();
-      const signer = self.#inner.host.appKeys ? yield* Signer.make(self.#inner.host) : null;
+      // An app's key it cannot keep (a host that cannot seal, the keychain refusing): its request does not go, and the
+      // waiting page says so.
+      const made = Effect.mapError(Signer.make(self.#inner.host), (e) => new CoreError("lock_key", t("core-misc.lock.keyNotKept", { error: e.message })));
+      const signer = self.#inner.host.appKeys ? yield* made : null;
       if (signer) signers.set(self.#inner, signer.id);
       yield* self.#cloud("POST", "/lock/requests", { base, kind: self.#kind(), label: prefs.deviceName(self.#inner.data) ?? "", sign_key: signer?.id ?? null });
       return { device: base, code: shortCode(base) };
@@ -654,6 +780,11 @@ class Lock {
       yield* Effect.ignore(self.#cloud("DELETE", `/lock/requests/${device}`));
       return done;
     });
+  }
+
+  /// A waiting device turned down: its request gone.
+  deny(device: string): Effect.Effect<unknown, CoreError> {
+    return this.#cloud("DELETE", `/lock/requests/${encodeURIComponent(device)}`);
   }
 
   /// A web page's device, 30 days more from now.

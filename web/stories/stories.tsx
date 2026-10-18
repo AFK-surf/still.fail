@@ -632,6 +632,10 @@ export const stories: Story[] = [
   { id: "settings-security-no-stations", group: "设置", title: "安全 · 暂无 station", app: true, demo: lockDemo("noStations"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
   { id: "security-waiting", group: "设置", title: "安全 · 等待批准此设备", app: true, demo: lockDemo("waiting") },
   { id: "security-waiting-denied", group: "设置", title: "安全 · 请求被拒绝后", app: true, demo: lockDemo("denied") },
+  { id: "security-waiting-failed", group: "设置", title: "安全 · 批准请求未能提交", app: true, demo: lockDemo("failed") },
+  { id: "phone-security-waiting-failed", group: "设置", title: "手机 · 安全 · 批准请求未能提交", app: true, phone: true, demo: lockDemo("failed") },
+  { id: "security-prompt-two-workspaces", group: "设置", title: "安全 · 新设备同时申请两个 workspace", app: true, demo: lockDemo("prompt") },
+  { id: "phone-security-prompt-two-workspaces", group: "设置", title: "手机 · 安全 · 新设备同时申请两个 workspace", app: true, phone: true, demo: lockDemo("prompt") },
   { id: "phone-security-waiting-denied", group: "设置", title: "手机 · 安全 · 请求被拒绝后", app: true, phone: true, demo: lockDemo("denied") },
   { id: "phone-settings-security-no-stations", group: "设置", title: "手机 · 安全 · 暂无 station", app: true, phone: true, demo: lockDemo("noStations"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "安全" }] },
 

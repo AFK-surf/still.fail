@@ -52,5 +52,11 @@ export const waiting = style({ maxWidth: "460px", margin: "110px auto 0", paddin
 export const waitingTitle = style({ margin: "0", fontSize: vars.textHeading, lineHeight: vars.leadingHeading, fontWeight: "600" });
 export const waitingLead = style({ margin: "0", color: vars.muted, fontSize: vars.textBody, lineHeight: vars.leadingBody });
 export const waitingNote = style({ display: "flex", alignItems: "center", gap: "8px", color: vars.muted, fontSize: vars.textMeta });
+/** Its request did not go: why, in red. */
+export const waitingFailed = style({ color: vars.red, fontSize: vars.textMeta, lineHeight: vars.leadingBody });
+/** The workspaces a waiting device asks to be let into, first in its prompt: their names, as large as the title's words. */
+export const places = style({ display: "flex", alignItems: "center", gap: "6px 14px", flexWrap: "wrap", margin: "2px 0 4px" });
+export const placesLabel = style({ color: vars.muted, fontSize: vars.textUi });
+export const place = style({ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textBody, fontWeight: "600", color: vars.text });
 /** The state's card, first on the page: as far from what follows as a section is. */
 export const lead = style({ marginBottom: "28px" });

@@ -88,12 +88,15 @@ export function stationHost(answers: Answers) {
   // station from before (no such route).
   const changes = { on: true };
   const batches = { on: true };
-  // Whether still.fail cloud lists the station as online; the viewer's role in the workspace (none: a member).
-  const cloud: { online: boolean; role?: string } = { online: true };
+  // Whether still.fail cloud lists the station as online; the viewer's role in the workspace (none: a member); more of
+  // what its view says (`also`); the account's other workspaces, as their views (`more`, no station in them).
+  const cloud: { online: boolean; role?: string; also?: Record<string, unknown>; more?: ({ id: string; name: string } & Record<string, unknown>)[] } = { online: true };
   const answer = (req: HttpRequest): HttpResponse => {
     const path = req.url.replace("https://stillfail.test", "");
-    if (path === "/v1/me") return jsonResponse(200, { workspaces: [{ id: "ws", name: "W" }], invitations: [], relay_url: null });
-    if (path === "/v1/workspaces/ws") return jsonResponse(200, { id: "ws", ...(cloud.role ? { role: cloud.role } : {}), stations: [{ id: "st", name: "studio", online: cloud.online, last_seen: null }] });
+    if (path === "/v1/me") return jsonResponse(200, { workspaces: [{ id: "ws", name: "W" }, ...(cloud.more ?? []).map((w) => ({ id: w.id, name: w.name }))], invitations: [], relay_url: null });
+    if (path === "/v1/workspaces/ws") return jsonResponse(200, { id: "ws", ...(cloud.role ? { role: cloud.role } : {}), stations: [{ id: "st", name: "studio", online: cloud.online, last_seen: null }], ...cloud.also });
+    const other = cloud.more?.find((w) => path === `/v1/workspaces/${w.id}`);
+    if (other) return jsonResponse(200, { stations: [], ...other });
     const said = replies.get(host)?.(req);
     if (said instanceof Status) return jsonResponse(said.code, said.body);
     if (said instanceof Raw) return said.response;

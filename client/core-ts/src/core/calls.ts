@@ -103,6 +103,7 @@ export type Call =
   | { kind: "screen"; call: ScreenCall }
   /// The workspace lock (views/lock.ts): `lock.<name>` on a workspace, with what it takes.
   | { kind: "lock"; name: string; workspace: string; params: Record<string, unknown> }
+  | { kind: "lockPrompt"; name: string; params: Record<string, unknown> }
   /// The vault (views/vault.ts): `vault.<name>` on a workspace, with what it takes.
   | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> }
   /// An app's module's call (module.ts): `<module>.<name>`, its params as the module checked them.
@@ -201,6 +202,8 @@ export function counts(call: Call, name: string): boolean {
       return call.call.kind === "pair" || call.call.kind === "grant";
     case "lock":
       return call.name !== "state" && call.name !== "toggle" && call.name !== "dismiss" && call.name !== "shown";
+    case "lockPrompt":
+      return call.name !== "shown";
     case "vault":
       return call.name !== "state" && call.name !== "lock" && call.name !== "open";
     default:
@@ -215,6 +218,9 @@ export const VAULT_CALLS = ["state", "lock", "setup", "create", "addDevice", "pu
 
 /// The workspace lock's calls (views/lock.ts).
 export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "shown", "request", "confirm", "deny", "addStation", "joinStation", "renew", "removeDevice", "disable"];
+
+/// The calls on a device waiting in several workspaces at once (views/lock.ts `lockPrompts`).
+export const LOCK_PROMPT_CALLS = ["confirm", "deny", "shown"];
 
 function form(name: string, params: unknown, prefix: string, actions: string[]): { topic: Topic; action: string; patch: unknown } | null {
   if (!name.startsWith(prefix)) return null;
@@ -285,6 +291,10 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
   if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
     const p = read(params, [["workspace", S, "req"]]);
     return { kind: "vault", name: name.slice(6), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  }
+  if (name.startsWith("lockPrompt.") && LOCK_PROMPT_CALLS.includes(name.slice(11))) {
+    read(params, [["device", S, "req"]]);
+    return { kind: "lockPrompt", name: name.slice(11), params: params as Record<string, unknown> };
   }
   if (name.startsWith("lock.") && LOCK_CALLS.includes(name.slice(5))) {
     const p = read(params, [["workspace", S, "req"]]);

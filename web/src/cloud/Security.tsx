@@ -11,11 +11,12 @@ import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { Button, Dialog, Field, IconButton, MobileBack, Section, Time, Spinner, Waiting } from "../ui.tsx";import { t } from "../i18n.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
+import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Security.css.ts";
 
-export type { LockDevice, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
-import type { LockDevice, LockRequest, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
+export type { LockDevice, LockPrompt, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
+import type { LockDevice, LockPrompt, LockPromptsView, LockRequest, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
 
 // A function, not a table made as the module loads: words are the page's language when shown (and the site's
 // prerender loads this module before any language is set).
@@ -23,6 +24,11 @@ const roleName = (role: string): string => ({ owner: "Owner", admin: "Admin", me
 
 export function useLock(workspace: string): LockView | undefined {
   return useTopic<LockView>({ topic: "lock", workspace }).value;
+}
+
+/** The devices waiting on this one, in every workspace of the person's (the core's `lockPrompts`). */
+export function useLockPrompts(): LockPromptsView | undefined {
+  return useTopic<LockPromptsView>({ topic: "lockPrompts" }).value;
 }
 
 /** A device's name as people know it: its label, or what kind of client it is. */
@@ -224,12 +230,39 @@ function ConfirmDevice({ entry, request, onClose }: { entry: WorkspaceEntry; req
   );
 }
 
-/** A device waiting on this one, put up wherever in the workspace this device is (the core's `prompt`) until it is
- * answered (here or on another device) or closed (`lock.shown`: then it stays in 设置 › 安全). */
-export function SecurityPrompt({ entry }: { entry: WorkspaceEntry }) {
+/** A device waiting on this one, in any workspace of the person's, put up wherever they are (the core's `lockPrompts`)
+ * until it is answered (here or on another device) or closed (`lockPrompt.shown`: then it stays in each workspace's
+ * 设置 › 安全). The workspaces it asks to be let into are named first; one code, approved in all of them at once. */
+export function SecurityPrompt() {
   const call = useCall();
-  const r = useLock(entry.id)?.prompt ?? null;
-  return <ConfirmDevice entry={entry} request={r} onClose={() => { if (r) void call("lock.shown", { workspace: entry.id, device: r.device }); }} />;
+  const act = useAct();
+  const r = useLockPrompts()?.prompt ?? null;
+  const many = (r?.workspaces.length ?? 0) > 1;
+  const close = () => { if (r) void call("lockPrompt.shown", { device: r.device }); };
+  return (
+    <Dialog open={r !== null} onClose={close} title={r ? t("web-pages.security.confirmTitle", { name: r.name || r.email }) : ""}
+      description={r ? t("web-pages.security.confirmBody", { device: deviceName(r), name: r.name || r.email }) : ""}
+      footer={r && <>
+        <Button variant="ghost" onClick={() => { close(); act(call("lockPrompt.deny", { device: r.device }), t("web-pages.security.deny")); }}>{many ? t("web-pages.security.denyAll") : t("web-pages.security.deny")}</Button>
+        <Button variant="primary" onClick={() => { close(); act(call("lockPrompt.confirm", { device: r.device, code: r.code }), t("web-pages.security.confirm"), t("web-pages.security.confirmed")); }}>{many ? t("web-pages.security.confirmAll") : t("web-pages.security.confirm")}</Button>
+      </>}>
+      {r && <>
+        <PromptPlaces r={r} />
+        <div className={css.bigCode}>{r.code}</div>
+        <p className={css.note} style={{ textAlign: "center" }}>{r.kind === "web" ? t("web-pages.security.confirmWeb") : t("web-pages.security.confirmApp")}</p>
+      </>}
+    </Dialog>
+  );
+}
+
+/** The workspaces a waiting device asks to be let into, by name and mark. */
+function PromptPlaces({ r }: { r: LockPrompt }) {
+  return (
+    <div className={css.places}>
+      <span className={css.placesLabel}>{t("web-pages.security.promptFor")}</span>
+      {r.workspaces.map((w) => <span key={w.id} className={css.place}>{marked(w) && <WorkspaceMark w={w} size={16} />}{w.name}</span>)}
+    </div>
+  );
 }
 
 /** 开启安全模式: what it will sign, everything ticked but what is left out. */
@@ -312,14 +345,15 @@ export function SecurityWaiting({ entry, lock }: { entry: WorkspaceEntry; lock: 
   const call = useCall();
   const act = useAct();
   const asking = useDoing("lock.request", { workspace: entry.id });
+  const failed = lock.me?.failed;
   return (
     <div className={css.waiting}>
       <ShieldCheck size={40} strokeWidth={1.4} />
       <h1 className={css.waitingTitle}>{t("web-pages.security.waitingTitle")}</h1>
       <p className={css.waitingLead}>{t("web-pages.security.waitingLead", { name: entry.name })}</p>
       <div className={css.bigCode}>{lock.me?.code}</div>
-      {lock.me?.asked === false && !asking
-        ? <><div className={css.waitingNote}>{t("web-pages.security.notAsked")}</div>
+      {(failed || lock.me?.asked === false) && !asking
+        ? <><div className={failed ? css.waitingFailed : css.waitingNote}>{failed ? t("web-pages.security.requestFailed", { error: failed }) : t("web-pages.security.notAsked")}</div>
           <Button variant="primary" onClick={() => act(call("lock.request", { workspace: entry.id }), t("web-pages.security.request"))}>{t("web-pages.security.request")}</Button></>
         : <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.waitingNote")}</div>}
     </div>

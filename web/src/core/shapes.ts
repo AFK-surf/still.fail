@@ -3172,6 +3172,11 @@ export interface LockMe {
 	waiting: boolean;
 	/** Its request to be confirmed waits at the cloud (or is on its way); not when it was turned down. */
 	asked?: boolean;
+	/**
+	 * Why its request to be confirmed did not reach the cloud (its key could not be kept, the cloud refused it):
+	 * said on its waiting page, asked again by hand (`lock.request`).
+	 */
+	failed?: string;
 }
 
 /** A member in the workspace's lock, with their devices. */
@@ -3182,6 +3187,44 @@ export interface LockPerson {
 	role: string;
 	you: boolean;
 	devices: LockDevice[];
+}
+
+/** A workspace a device waits in, named as the person knows it. */
+export interface LockPromptWorkspace {
+	id: string;
+	name: string;
+	emoji?: string;
+	icon?: string;
+}
+
+/** A device waiting to be confirmed, in each workspace of the person's it asked in and this device approves in. */
+export interface LockPrompt {
+	device: string;
+	sub: string;
+	email: string;
+	name: string;
+	kind: string;
+	label: string;
+	/** The code the device shows: the same in every workspace (it is its key's). */
+	code: string;
+	/** When it asked last. */
+	created_at: number;
+	yours: boolean;
+	/** Where it waits on this device: confirmed (`lockPrompt.confirm`) or turned down in all of them at once. */
+	workspaces: LockPromptWorkspace[];
+	/** Its times in words (`created_at`). */
+	time?: Record<string, Stamp>;
+}
+
+/** The devices waiting on this one to be confirmed, across workspaces (the `lockPrompts` topic; views/lock.ts). */
+export interface LockPromptsView {
+	/** Every device waiting on this one, in every workspace of the person's: one per device. */
+	waiting: LockPrompt[];
+	/**
+	 * The one to put up on its own (a dialog, a sheet), wherever the person is: one with a workspace whose prompt
+	 * was not closed here (`lockPrompt.shown`, said as it is closed by hand).
+	 */
+	prompt?: LockPrompt;
 }
 
 /** A device waiting to be confirmed. */
@@ -3231,11 +3274,6 @@ export interface LockView {
 	protected: number;
 	/** Devices waiting on the viewer: their own, anyone's for owners and admins. */
 	requests: LockRequest[];
-	/**
-	 * The waiting device to put up on its own (a dialog, a sheet) wherever this device is: one it signs for, not
-	 * closed here before (`lock.shown`, said as it is closed by hand).
-	 */
-	prompt?: LockRequest;
 	/** The viewer's own web devices running out soon. */
 	renew: LockDevice[];
 	attention: number;

@@ -1,6 +1,7 @@
 // The workspace's security mode (its lock, docs/workspace-lock.md), as the narrow web has it (web/src/mobile/Security.tsx):
 // its page from the settings, turning it on, a device to confirm in a bottom sheet, and what a device waiting itself
-// shows. All of it is the core's (`lock`, `lockDraft` topics, `lock.*` calls, client/core-ts/src/views/lock.ts).
+// shows. All of it is the core's (`lock`, `lockDraft`, `lockPrompts` topics, `lock.*`, `lockPrompt.*` calls,
+// client/core-ts/src/views/lock.ts).
 package fail.still.android.screens
 
 import fail.still.android.ui.BusyIcon
@@ -55,6 +56,8 @@ import fail.still.android.LocalApp
 import fail.still.android.Screen
 import fail.still.android.data.LockDevice
 import fail.still.android.data.LockDraftView
+import fail.still.android.data.LockPrompt
+import fail.still.android.data.LockPromptsView
 import fail.still.android.data.LockRequest
 import fail.still.android.data.LockView
 import fail.still.android.data.ROLE_LABEL
@@ -89,6 +92,10 @@ private fun deviceName(kind: String, label: String, older: Boolean = false): Str
 /** `lock.<name>` on this workspace, let go on by itself and said how it ended. */
 private fun AppState.lockCall(workspace: String, name: String, what: String, done: String? = null, vararg params: Pair<String, String>) =
     act(what, done) { core.call("lock.$name", buildJsonObject { put("workspace", workspace); params.forEach { (k, v) -> put(k, v) } }) }
+
+/** `lockPrompt.<name>` on a waiting device, in every workspace it waits on this one in. */
+private fun AppState.promptCall(name: String, what: String, done: String? = null, vararg params: Pair<String, String>) =
+    act(what, done) { core.call("lockPrompt.$name", buildJsonObject { params.forEach { (k, v) -> put(k, v) } }) }
 
 @Composable
 internal fun Dot(on: Boolean, warn: Boolean = false) =
@@ -343,6 +350,57 @@ private fun confirmSheet(app: AppState, ws: String, r: LockRequest, onClose: (()
     }
 }
 
+/**
+ * A device waiting on this one in any workspace of the person's (the core's `lockPrompts`): the workspaces it asks to be
+ * let into named first, approved in all of them at once once its code is the one on its screen.
+ */
+private fun promptSheet(app: AppState, r: LockPrompt, onClose: (() -> Unit)? = null) {
+    app.sheet = SheetSpec(0.6f, onClose = onClose) {
+        val who = r.name.ifEmpty { r.email }
+        // Answered on another device: gone here too; asked in one more workspace meanwhile, named too.
+        val prompts by rememberTopic<LockPromptsView>(app.core, Topics.lockPrompts)
+        val now = prompts.value?.waiting?.firstOrNull { it.device == r.device }
+        val gone = prompts.value != null && now == null
+        LaunchedEffect(gone) { if (gone) app.sheet = null }
+        val places = (now ?: r).workspaces
+        val many = places.size > 1
+        SheetGrab()
+        SheetHead(t("web-pages.security.confirmTitle", "name" to who))
+        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(t("web-pages.security.confirmBody", "device" to deviceName(r.kind, r.label), "name" to who), fontSize = 14.sp, color = C.muted)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(t("web-pages.security.promptFor"), fontSize = 13.sp, color = C.muted)
+                places.forEach { Text(it.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
+            }
+            Text(r.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Note(if (r.kind == "web") t("web-pages.security.confirmWeb") else t("web-pages.security.confirmApp"))
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                WideButton(if (many) t("web-pages.security.denyAll") else t("web-pages.security.deny"), primary = false, modifier = Modifier.weight(1f)) { app.sheet = null; app.promptCall("deny", t("web-pages.security.deny"), null, "device" to r.device) }
+                WideButton(if (many) t("web-pages.security.confirmAll") else t("web-pages.security.confirm"), primary = true, modifier = Modifier.weight(1f)) { app.sheet = null; app.promptCall("confirm", t("web-pages.security.confirm"), t("web-pages.security.confirmed"), "device" to r.device, "code" to r.code) }
+            }
+        }
+    }
+}
+
+/**
+ * A device waiting on this one, in any workspace of the person's, put up over whichever page is open (the core's
+ * `lockPrompts`), and again after a page change took the sheet away, until it is answered or closed by hand
+ * (`lockPrompt.shown`: then it stays in each workspace's 设置 › 安全).
+ */
+@Composable
+fun LockPrompts() {
+    val app = LocalApp.current
+    val topic by rememberTopic<LockPromptsView>(app.core, Topics.lockPrompts)
+    val prompt = topic.value?.prompt
+    val free = app.sheet == null
+    LaunchedEffect(prompt?.device, free) {
+        if (prompt == null || !free) return@LaunchedEffect
+        promptSheet(app, prompt) {
+            app.scope.launch { runCatching { app.core.call("lockPrompt.shown", buildJsonObject { put("device", prompt.device) }) } }
+        }
+    }
+}
+
 /** 开启安全模式. */
 @Composable
 fun SecurityOpenScreen(current: WorkspaceEntry) {
@@ -410,8 +468,11 @@ fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
         Text(t("web-pages.security.waitingTitle"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
         Text(t("web-pages.security.waitingLead", "name" to current.workspace.name), fontSize = 15.sp, lineHeight = 22.sp, color = C.subtle, textAlign = TextAlign.Center)
         Text(lock.me?.code ?: "", fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 36.sp, letterSpacing = 5.sp, color = C.ink)
-        if (lock.me?.asked == false && !asking) {
-            Note(t("web-pages.security.notAsked"))
+        val failed = lock.me?.failed
+        if ((failed != null || lock.me?.asked == false) && !asking) {
+            // Its request did not go: why, in red.
+            if (failed != null) Text(t("web-pages.security.requestFailed", "error" to failed), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
+            else Note(t("web-pages.security.notAsked"))
             WideButton(t("web-pages.security.request"), primary = true) { app.lockCall(ws, "request", t("web-pages.security.request")) }
         } else {
             WaitLine(t("web-pages.security.waitingNote"))
@@ -425,15 +486,5 @@ fun LockGate(current: WorkspaceEntry, content: @Composable () -> Unit) {
     val app = LocalApp.current
     val topic by rememberTopic<LockView>(app.core, Topics.lock(current.workspace.id))
     val lock = topic.value
-    // A device waiting on this one, put up wherever in the workspace this device is (the core's `prompt`), and again
-    // after a page change took the sheet away, until it is answered or closed by hand (`lock.shown`).
-    val prompt = lock?.prompt
-    val free = app.sheet == null
-    LaunchedEffect(prompt?.device, free) {
-        if (prompt == null || !free) return@LaunchedEffect
-        confirmSheet(app, current.workspace.id, prompt) {
-            app.scope.launch { runCatching { app.core.call("lock.shown", buildJsonObject { put("workspace", current.workspace.id); put("device", prompt.device) }) } }
-        }
-    }
     if (lock?.me?.waiting == true) SecurityWaitingScreen(current, lock) else content()
 }

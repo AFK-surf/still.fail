@@ -1737,7 +1737,7 @@ export type MeshWireEnv = {
   relays: (workspace: string) => string[];
   status: (workspace: string) => import("./status.ts").Status;
   /// The workspace lock (views/lock.ts): a station refused this device for it; why a station is not asked now.
-  lockRefused?: (workspace: string, station: string) => void;
+  lockRefused?: (workspace: string, station: string) => CoreError | null;
   lockWaiting?: (workspace: string, station: string) => CoreError | null;
 };
 
@@ -1761,8 +1761,9 @@ export class MeshWire implements StationWire {
     // A station that refused this device for the workspace lock is not asked again until the lock moves on.
     const waits = env.lockWaiting?.(workspace, id);
     if (waits) return Effect.fail(waits);
-    const refusedFor = (e: CoreError) => Effect.sync(() => e.code === "lock_unconfirmed" && env.lockRefused?.(workspace, id));
-    return Effect.tapError(Effect.gen(function* () {
+    // Refused for it: noted (this device asks to be confirmed), and said as the lock has it (which workspace, where).
+    const refusedFor = (e: CoreError) => (e.code === "lock_unconfirmed" ? (env.lockRefused?.(workspace, id) ?? e) : e);
+    return Effect.mapError(Effect.gen(function* () {
       const status = env.status(workspace);
       const credentials = env.credentials(workspace);
       const theirs = env.relays(workspace);
@@ -1961,7 +1962,7 @@ export function meshWire(inner: Inner): StationWire {
     credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, up?.deviceId() ?? null, up?.lockClaim(workspace, device) ?? null),
     relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
     status: (workspace) => inner.workspaces.of(workspace).status,
-    lockRefused: (workspace, station) => hooks.lockRefused?.(inner, workspace, station),
+    lockRefused: (workspace, station) => hooks.lockRefused?.(inner, workspace, station) ?? null,
     lockWaiting: (workspace, station) => hooks.lockWaiting?.(inner, workspace, station) ?? null,
   });
 }
