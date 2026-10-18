@@ -8,6 +8,7 @@ import type { Data } from "../data.ts";
 import { join, SEP } from "../data.ts";
 import type { AccountDb } from "../db/account.ts";
 import { t } from "../i18n.ts";
+import { localId } from "../ids.ts";
 import { arr as arrU, equal, get as getU, isObject } from "../util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -117,17 +118,11 @@ export class Local {
     }
     for (const [station, key, first] of db.locals(FIRST)) if (isObject(first)) this.#firsts.set(join([station, key]), first as unknown as First);
     for (const [, , change] of db.locals(CHANGING)) if (isObject(change) && !this.#changing.some((c) => c.station === change.station && c.id === change.id)) this.#changing.push(change as unknown as Change);
-    const ids = [...this.#outbox.values(), ...[...this.#pending.values()].map((p) => p.queue), ...[...this.#firsts.values()].map((f) => f.queue)].flat();
-    for (const m of ids) {
-      const n = Number(String(get(m, "id") ?? "").slice(4));
-      if (Number.isInteger(n)) this.#sent = Math.max(this.#sent, n);
-    }
     for (const c of this.#changing) this.#changes = Math.max(this.#changes, c.id);
   }
 
   #nextId(): string {
-    this.#sent++;
-    return `out-${this.#sent}`;
+    return localId("out");
   }
 
   // ── chats asked for here ──

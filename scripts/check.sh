@@ -211,6 +211,8 @@ if part ts; then
   if touches '^apps/android/'; then
     added 'apps/android/*.kt' | grep 'RoundedCornerShape(' | grep -vE 'RoundedCornerShape\(50\)|own corner:' > "$tmp/android-corners" || true
     step "phone corners smooth (in what this adds)" sh -c "! grep . '$tmp/android-corners'"
+    # Its lazy lists are ui/ListKeys.kt's, whose keys cannot crash it (a key used twice is told and keyed apart).
+    step "phone lists keyed safely" sh -c "! git grep -nE 'androidx\\.compose\\.foundation\\.lazy\\.(\\*|LazyColumn|LazyRow)\\b' -- 'apps/android/**/src/main/**' ':!apps/android/shared/src/main/kotlin/fail/still/android/ui/ListKeys.kt'"
   fi
   # The pages' modules keep their order themselves (docs/client-core.md: :settings, :chat on it, :drive on both); in
   # :app, the remote screens (remote/) and the share sheet (share/) are on none of the drive, and the remote screens on

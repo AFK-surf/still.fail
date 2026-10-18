@@ -1247,6 +1247,14 @@ test("a_sent_message_shows_until_the_chat_has_it", async () => {
   assert.equal(views.local.outboxGet("ws/b", 1, other), undefined);
 });
 
+// The UIs keep an outgoing message's id past the core that gave it (a restarted core, the page still up): the Android
+// chat's list crashed on two rows keyed o:out-1 when a new core counted from 1 again (2026-10).
+test("a_message_sent_after_the_core_restarts_is_named_apart_from_one_sent_before", () => {
+  const before = setup().views.outboxAdd("ws/a", 7, { text: "早" });
+  const after = setup().views.outboxAdd("ws/a", 7, { text: "早" });
+  assert.notEqual(before, after);
+});
+
 test("a_chat_asked_for_here_shows_at_once_and_becomes_its_stations_under_the_same_key", async () => {
   const t = setup();
   const local = t.views.local;

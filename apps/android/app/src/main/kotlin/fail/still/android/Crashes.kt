@@ -111,24 +111,31 @@ object Crashes {
     /** The core died and is started again (StillFailCore.onFailed): not a crash of the app, but what leads to one (its
      *  old engine's answers after it closed crashed the app, 2026-10), and the reason is the only trace of the core's
      *  own bug. Sent at once, as the web's CoreFailed is. */
-    fun coreFailed(context: Context, reason: String) {
+    fun coreFailed(context: Context, reason: String) = handled(context, "CoreFailed", reason.take(1000), "core_failed")
+
+    /** An error the app got past, sent at once as `type` with `value`, and `reason` as its property. */
+    private fun handled(context: Context, type: String, value: String, reason: String) {
         if (BuildConfig.POSTHOG_KEY.isEmpty()) return
         val account = account(context) ?: "android-anonymous"
         val at = System.currentTimeMillis()
         Thread {
             val r = Report(at, android.os.Process.myPid(), buildJsonArray {
                 addJsonObject {
-                    put("type", "CoreFailed")
-                    put("value", reason.take(1000))
+                    put("type", type)
+                    put("value", value)
                     putJsonObject("mechanism") { put("handled", true); put("synthetic", false); put("type", "generic") }
                 }
-            }, null, null, buildJsonObject { put("reason", "core_failed") }, null)
+            }, null, null, buildJsonObject { put("reason", reason) }, null)
             try {
                 send(listOf(event(r, account, "error")))
             } catch (_: Exception) {
             }
         }.start()
     }
+
+    /** A lazy list given the same key twice (ListKeys.kt keys it apart): no crash, but the data behind the list holds
+     *  what should be one (an id given again), and this is what says so. */
+    fun duplicateKey(context: Context, list: String, key: String) = handled(context, "DuplicateListKey", "$list: ${key.take(200)}", "duplicate_list_key")
 
     /** The account the last report went as (the signed-in one's id): what the app's other events go as (BarTiming.kt). */
     fun account(context: Context): String? = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getString(ACCOUNT, null)

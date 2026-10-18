@@ -7,6 +7,7 @@
 import * as decisions from "./decisions.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
+import { localId } from "./ids.ts";
 import { encode } from "./ops.ts";
 import * as present from "./present.ts";
 import { arr as arrU, get as getU } from "./util.ts";
@@ -42,7 +43,6 @@ export type NoticesEnv = {
 
 export class Notices {
   readonly #env: NoticesEnv;
-  #next = 1;
 
   constructor(env: NoticesEnv) {
     this.#env = env;
@@ -113,9 +113,8 @@ export class Notices {
     const at = station.indexOf("/");
     const [workspace, id] = at >= 0 ? [station.slice(0, at), station.slice(at + 1)] : ["", station];
     const session = typeof get(row, "id") === "string" ? row.id : "";
-    const n = this.#next++;
     const notice = {
-      id: `n${n}`,
+      id: localId("n"),
       kind,
       station,
       workspace,

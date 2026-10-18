@@ -10,7 +10,7 @@ import fail.still.android.ui.Waiting
 import fail.still.android.data.t
 import fail.still.android.ui.Smooth
 import androidx.compose.foundation.background
-import androidx.compose.foundation.lazy.LazyColumn
+import fail.still.android.ui.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.PaddingValues
