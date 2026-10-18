@@ -17,7 +17,10 @@ val beta = providers.gradleProperty("stillfailBeta").isPresent
 android {
     namespace = "fail.still.android.shared"
     compileSdk = 36
-    lint { ignoreTestSources = true }
+    lint {
+        ignoreTestSources = true
+        lintConfig = rootProject.file("lint.xml")
+    }
     defaultConfig {
         minSdk = 29
         buildConfigField("String", "VERSION_NAME", "\"0.1.$stillfailBuild\"")

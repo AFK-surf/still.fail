@@ -15,8 +15,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -68,7 +68,7 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
         }
         if (notice.open == true) {
             val shape = Smooth(14.dp)
-            val width = minOf(284.dp, (LocalConfiguration.current.screenWidthDp - 24).dp)
+            val width = minOf(284.dp, with(density) { LocalWindowInfo.current.containerSize.width.toDp() } - 24.dp)
             val surface = Raised
             Popup(popupPositionProvider = position, onDismissRequest = { control("close") }, properties = PopupProperties(focusable = true)) {
                 Column(Modifier.drawBehind {

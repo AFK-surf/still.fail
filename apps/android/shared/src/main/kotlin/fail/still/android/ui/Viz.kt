@@ -215,12 +215,12 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
         view.evaluateJavascript("postMessage({emberViz:true,type:\"theme\",tokens:${tokensJson(dark)},scheme:\"${if (dark) "dark" else "light"}\"},\"*\")", null)
     }
     DisposableEffect(Unit) { onDispose { web?.destroy() } }
-    val most = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.8f).dp
+    val most = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height * 0.8f
     val frame = when {
         fill -> modifier
         page -> modifier.fillMaxWidth().layout { m, c ->
             val w = c.maxWidth
-            val h = minOf((w * 9f / 16f).toInt(), most.roundToPx())
+            val h = minOf((w * 9f / 16f).toInt(), most.toInt())
             val p = m.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))
             layout(w, h) { p.place(0, 0) }
         }.clip(Smooth(20.dp)).background(if (dark) androidx.compose.ui.graphics.Color(0xFF26272B) else androidx.compose.ui.graphics.Color(0xFFF6F2EA))

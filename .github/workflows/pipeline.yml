@@ -47,7 +47,7 @@ jobs:
       relay: ${{ steps.plan.outputs.relay }}
       station: ${{ steps.plan.outputs.station }}
       android: ${{ steps.plan.outputs.android }}
-      android_parts: ${{ steps.plan.outputs.android_parts }}
+      android_lint: ${{ steps.plan.outputs.android_lint }}
       desktop: ${{ steps.plan.outputs.desktop }}
       desktop_web: ${{ steps.plan.outputs.desktop_web }}
       windows: ${{ steps.plan.outputs.windows }}
@@ -94,11 +94,11 @@ jobs:
           if has '^(station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
           android=false
           if printf '%s\n' "$changed" | sh apps/android/carries.sh; then android=true; fi
-          # check-android's jobs: its lint only for a change lint can find anything in (apps/android/lints.sh), or a
-          # branch's to .github/ (its check then runs as if all changed).
-          android_parts='["build"]'
+          # check-android-lint: only for a change lint can find anything in (apps/android/lints.sh), or a branch's to
+          # .github/ (its check then runs as if all changed).
+          android_lint=false
           if printf '%s\n' "$changed" | sh apps/android/lints.sh || { [ "$GITHUB_REF" != refs/heads/main ] && has '^\.github/'; }; then
-            android_parts='["build","lint"]'
+            android_lint=true
           fi
           # The desktop app carries the core, a station and the web app. A change to the first two (its shell) is a new
           # app; to the web app alone, a web release the beta app takes without one (scripts/desktop-web.ts,
@@ -116,12 +116,12 @@ jobs:
             echo "relay=$relay"
             echo "station=$station"
             echo "android=$android"
-            echo "android_parts=$android_parts"
+            echo "android_lint=$android_lint"
             echo "desktop=$desktop"
             echo "desktop_web=$desktop_web"
             echo "windows=$windows"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android android_parts=$android_parts desktop=$desktop desktop_web=$desktop_web relay=$relay"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
@@ -271,15 +271,10 @@ jobs:
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.android == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # Two jobs side by side: its Kotlin, unit tests and debug app; and its lint, the longest part (2026-10-17), only
-    # for a change lint reads (plan: android_parts).
-    strategy:
-      fail-fast: false
-      matrix:
-        part: ${{ fromJSON(needs.plan.outputs.android_parts) }}
+    # Its Kotlin, unit tests and debug app; its lint beside it (check-android-lint), which nothing released waits for.
     env:
       STILLFAIL_CHECK_PART: android
-      STILLFAIL_ANDROID: ${{ matrix.part }}
+      STILLFAIL_ANDROID: build
       # A branch: the debug app made in the check's Gradle run (main releases its own: android).
       STILLFAIL_CHECK_APK: ${{ github.ref != 'refs/heads/main' && '1' || '' }}
     steps:
@@ -308,11 +303,58 @@ jobs:
             apps/android/settings/build
             apps/android/chat/build
             apps/android/drive/build
-          key: android-${{ matrix.part }}-${{ github.ref_name }}-${{ github.sha }}
+          key: android-build-${{ github.ref_name }}-${{ github.sha }}
           restore-keys: |
-            android-${{ matrix.part }}-${{ github.ref_name }}-
-            android-${{ matrix.part }}-main-
-      - name: Full check (android, ${{ matrix.part }})
+            android-build-${{ github.ref_name }}-
+            android-build-main-
+      - name: Full check (android, build)
+        run: |
+          range='${{ needs.plan.outputs.range }}'
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
+          if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
+
+  check-android-lint:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.android == 'true' && needs.plan.outputs.android_lint == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Its lint (apps/android/lint.xml: only checks that are errors), for a change lint reads (plan: android_lint). Not
+    # waited for by what releases (put, changelog): the longest part of a run (4 of its 5 minutes, 2026-10-18), and an
+    # error it finds fails the run and holds deployed/beta (done), so the next run lints it again until it is fixed.
+    env:
+      STILLFAIL_CHECK_PART: android
+      STILLFAIL_ANDROID: lint
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+        with:
+          android: 'true'
+      - uses: ./.github/actions/natives
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/stillfail-check
+          key: check-android-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: check-android-${{ runner.os }}-
+      # The app's build directories and Gradle's state of the project, as the last run of this branch (else main's) left
+      # them: what did not change is up to date, and Kotlin compiles and lint looks at what did (a fresh checkout built
+      # it all: Gradle 3-6 minutes on these four cores; kept, a change to code 2 minutes, most of it lint, 2026-10-17).
+      - uses: actions/cache@v4
+        with:
+          path: |
+            apps/android/.gradle
+            apps/android/build
+            apps/android/app/build
+            apps/android/core/build
+            apps/android/shared/build
+            apps/android/settings/build
+            apps/android/chat/build
+            apps/android/drive/build
+          key: android-lint-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            android-lint-${{ github.ref_name }}-
+            android-lint-main-
+      - name: Full check (android, lint)
         run: |
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
@@ -648,8 +690,8 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-browser, check-android, api, static, station, android, desktop, desktop-win, desktop-web, put]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
+    needs: [plan, natives, check, check-linux, check-browser, check-android, check-android-lint, api, static, station, android, desktop, desktop-win, desktop-web, put]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.check-android-lint.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 10
     permissions:
@@ -669,7 +711,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, check-browser, check-android, bundle, mac-build, api, static, station, station-update, android, desktop, desktop-win, desktop-web, put, changelog, done]
+    needs: [plan, natives, check, check-linux, check-browser, check-android, check-android-lint, bundle, mac-build, api, static, station, station-update, android, desktop, desktop-win, desktop-web, put, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

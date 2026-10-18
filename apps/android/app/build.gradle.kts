@@ -35,6 +35,7 @@ android {
     lint {
         checkReleaseBuilds = false
         ignoreTestSources = true
+        lintConfig = rootProject.file("lint.xml")
     }
 
     defaultConfig {
