@@ -1,10 +1,11 @@
 # The demo on Windows: build with MoonBit and MSVC, take the scripted
 # screenshot (Direct3D falls back to WARP on the GPU-less runner), and compare
-# it with goldens/windows.png when there is one.
+# it with goldens/windows.png when there is one; then the photos app over
+# test/images and a big JPEG made here, with its decode times.
 name: windows
 on:
   push:
-    branches: [main, windows]
+    branches: [main, windows, images-android-win]
   pull_request:
   workflow_dispatch:
 
@@ -44,6 +45,26 @@ jobs:
           else
             echo "no goldens/windows.png yet"
           fi
+      - name: A big JPEG for the photos app
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $b = New-Object System.Drawing.Bitmap 6000, 4000
+          $g = [System.Drawing.Graphics]::FromImage($b)
+          $r = New-Object System.Drawing.Rectangle 0, 0, 6000, 4000
+          $g.FillRectangle((New-Object System.Drawing.Drawing2D.LinearGradientBrush $r, ([System.Drawing.Color]::SteelBlue), ([System.Drawing.Color]::DarkOrange), 45.0), $r)
+          for ($i = 0; $i -lt 40; $i++) {
+            $c = [System.Drawing.Color]::FromArgb(140, ($i * 37) % 256, ($i * 71) % 256, ($i * 13) % 256)
+            $g.FillEllipse((New-Object System.Drawing.SolidBrush $c), ($i * 137) % 5600, ($i * 251) % 3600, 400 + $i * 10, 400 + $i * 10)
+          }
+          $g.Dispose()
+          $b.Save("$PWD\test\images\big.jpg", [System.Drawing.Imaging.ImageFormat]::Jpeg)
+          "big.jpg: $((Get-Item test\images\big.jpg).Length) bytes"
+      - name: Photos
+        run: |
+          APP=photos scripts/win.sh build
+          MBUI_BENCH=-1 APP=photos scripts/win.sh script photos
+          ls -la out/photos
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -52,4 +73,5 @@ jobs:
             out/shots/
             out/shot-win/
             out/ime/
+            out/photos/
           if-no-files-found: warn

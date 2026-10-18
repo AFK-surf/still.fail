@@ -34,6 +34,13 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
 int mb_render_snapshot(const wchar_t *path);
 void mb_atlas_upload(int x, int y, int w, int h, const void *rgba);
 extern int mb_atlas_size;
+void *mb_render_device(void);  // ID3D11Device *
+
+// images (win_image.cpp): the ID3D11ShaderResourceView * of a ready one
+void *mb_image_srv(int id);
+
+// app (win_app.c): asks for a frame from any thread
+void mb_app_wake(void);
 
 // text (win_text.cpp)
 // rasterize at this many pixels per point; a change starts a new atlas

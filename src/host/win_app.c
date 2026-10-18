@@ -54,6 +54,7 @@ static void send_text(int kind, const WCHAR *s, int n, int a, int b) {
 
 static void run_script_step(int step);
 static void ime_place(void);
+double mb_host_mem_bytes(void);
 
 static void draw_frame(void) {
   RECT rc;
@@ -180,6 +181,9 @@ static void key_down(WPARAM vk) {
     case VK_RETURN: code = 7; break;
     case VK_HOME: code = 8; break;
     case VK_END: code = 9; break;
+    // without a field to type in, these scroll the list under the pointer
+    case VK_PRIOR: code = ime_active ? 0 : 15; break;
+    case VK_NEXT: code = ime_active ? 0 : 16; break;
   }
   if (code) mb_cb.key(code, mods);
 }
@@ -229,6 +233,7 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       return 0;
     }
     case WM_ERASEBKGND: return 1;
+    case WM_APP: want_frame = 1; return 0;  // mb_app_wake
     case WM_SIZE:
       want_frame = 1;
       if (sizing) draw_frame();
@@ -319,6 +324,27 @@ static void run_script_step(int step) {
       case 141: exit(0);
     }
     want_frame = 1;
+  } else if (strcmp(script, "photos") == 0) {
+    // decodes take a while: a shot once they have had some, then the keys
+    // that scroll the list under the pointer, as a keyboard sends them
+    static int phase;
+    static double at;
+    double now = mb_now_ms();
+    if (!at) at = now;
+    if (now - at > 4000) {
+      at = now;
+      char name[16];
+      snprintf(name, sizeof name, "photos-%d", phase + 1);
+      shot(name);
+      fprintf(stdout, "memory at %s: %.1f MB\n", name, mb_host_mem_bytes() / 1048576.0);
+      fflush(stdout);
+      mb_cb.pointer(1, 300, 300, 0);
+      if (phase == 0) for (int i = 0; i < 3; i++) SendMessageW(hwnd, WM_KEYDOWN, VK_NEXT, 0);
+      if (phase == 1) SendMessageW(hwnd, WM_KEYDOWN, VK_END, 0);
+      if (phase == 2) exit(0);
+      phase++;
+    }
+    want_frame = 1;
   } else if (strcmp(script, "shot") == 0) {
     if (step == 30) shot("main");
     if (step == 31) exit(0);
@@ -387,6 +413,8 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
 double mb_host_now(void) { return mb_now_ms(); }
 
 void mb_host_request_frame(void) { want_frame = 1; }
+
+void mb_app_wake(void) { PostMessageW(hwnd, WM_APP, 0, 0); }
 
 void mb_host_wake_after(double ms) {
   double t = mb_now_ms() + ms;
@@ -466,9 +494,3 @@ double mb_host_mem_bytes(void) {
   return (double)pmc.PrivateUsage;
 }
 
-// ---- images: not decoded on this platform yet; every load fails ----
-
-int32_t mb_host_image_load(moonbit_string_t src, int32_t max_px) { (void)src; (void)max_px; return 0; }
-int32_t mb_host_image_load_bytes(moonbit_bytes_t data, int32_t max_px) { (void)data; (void)max_px; return 0; }
-int32_t mb_host_image_info(int32_t id, double *out) { (void)id; (void)out; return -1; }
-void mb_host_image_free(int32_t id) { (void)id; }
