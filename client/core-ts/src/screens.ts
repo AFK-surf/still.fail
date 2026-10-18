@@ -461,8 +461,10 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       return null;
     }
     // Opened with no mode asked (a link, the station's page): only looking while someone else (an agent at work, a
-    // person) drives it, so a person who opens it to watch does not hold the agent off; else driving.
-    if (c.auto) wanted = may && othersOf(names(get(listedItem(), "controlledBy")), mine).length === 0;
+    // person) drives it, so a person who opens it to watch does not hold the agent off; else driving. The viewer's own
+    // views are not someone else, however many the list names: another window of theirs, or one of an app killed with
+    // the view open, which the station still holds until it finds the connection gone.
+    if (c.auto) wanted = may && names(get(listedItem(), "controlledBy")).every((n) => mine.includes(n.toLowerCase()));
     tell();
 
     /// One stream: opened, its frames read until it ends, is to be opened again, or fails.
