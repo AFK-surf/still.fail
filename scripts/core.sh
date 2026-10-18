@@ -1,7 +1,7 @@
 #!/bin/bash
 # The still.fail client core (client/core-ts of github.com/zzj3720/ember) in JavaScriptCore, on its Rust shell
 # (client/shell): builds the pieces from an ember checkout and runs a headless smoke test. See core/README.md.
-#   scripts/core.sh deps | shell [TARGET] | bundle | hermes | smoke [build|run] | listen | login-test | vectors | sizes | clean | all
+#   scripts/core.sh deps | shell [TARGET] | bundle | hermes | hermes-script FILE | smoke [build|run] | listen | login-test | vectors | sizes | clean | all
 # EMBER: the ember checkout (default: ember-src beside this session's tools); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -96,6 +96,14 @@ writeFileSync(f, out.code);" $OUT/core-hermes.js) || { echo "hermes: class trans
   "$(hermesc)" -emit-binary -O -block-scoping -out $OUT/core.hbc $OUT/core-hermes.js \
     || { echo "hermes: hermesc failed"; rm -f $OUT/core.hbc; return 1; }
   echo "hermes in $(since $t0) s: $(wc -c < $OUT/core-hermes.js | tr -d ' ') bytes of script, $(wc -c < $OUT/core.hbc | tr -d ' ') of bytecode"
+}
+
+# A plain script (no bundle, no Babel) as the core's bytecode, out/core/core.hbc: core/listen-test.js in the core's
+# place on Android (scripts/android.sh listen-test).
+hermes_script() {
+  rm -f $OUT/core.hbc
+  "$(hermesc)" -emit-binary -O -out $OUT/core.hbc "$1" || { echo "hermes-script: hermesc failed"; return 1; }
+  echo "hermes-script: $1 as $(wc -c < $OUT/core.hbc | tr -d ' ') bytes of bytecode"
 }
 
 # The shell's link line for TARGET, each library once (-framework X, -lY; clang adds -lSystem and -lobjc itself).
@@ -212,6 +220,7 @@ case "${1:-all}" in
   shell) shell "$2" ;;
   bundle) bundle ;;
   hermes) hermes ;;
+  hermes-script) hermes_script "$2" ;;
   listen) listen_test ;;
   login-test) login_test ;;
   smoke)
@@ -224,5 +233,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; bundle; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | bundle | hermes | smoke [build|run] | listen | login-test | vectors | sizes | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | bundle | hermes | hermes-script FILE | smoke [build|run] | listen | login-test | vectors | sizes | clean | all"; exit 2 ;;
 esac

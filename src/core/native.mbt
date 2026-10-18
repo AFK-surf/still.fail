@@ -12,6 +12,8 @@ extern "C" fn ffi_next() -> String = "mbc_next"
 
 extern "C" fn ffi_set_wake(f : FuncRef[() -> Unit]) -> Unit = "mbc_set_wake"
 
+extern "C" fn ffi_has_web_auth() -> Int = "mbc_has_web_auth"
+
 #borrow(url, scheme)
 extern "C" fn ffi_web_auth(token : Int, url : String, scheme : String) -> Int = "mbc_web_auth"
 

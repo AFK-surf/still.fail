@@ -212,7 +212,8 @@ pub fn image_free(id : Int) -> Unit {
   ffi_image_free(id)
 }
 
-// A sign-in in the browser that comes back here (browser_login.mbt; apple_browser_login.m).
+// A sign-in in the browser that comes back here (browser_login.mbt; apple_browser_login.m, and on Android
+// android_host.c on android/…/BrowserLogin.java).
 
 ///|
 #borrow(path)

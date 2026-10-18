@@ -215,6 +215,8 @@ static void auth_done(const char *url, const char *error, void *ctx) {
   free(buf);
 }
 
+int32_t mbc_has_web_auth(void) { return engine && engine->web_auth ? 1 : 0; }
+
 int32_t mbc_web_auth(int32_t token, moonbit_string_t url, moonbit_string_t scheme) {
   if (!engine || !engine->web_auth) return 0;
   char *u = utf8_of(url, NULL);

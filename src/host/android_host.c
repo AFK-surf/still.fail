@@ -28,9 +28,10 @@ static struct {
 } cb;
 
 static JavaVM *vm;
-static jclass host_cls, text_cls, images_cls;
+static jclass host_cls, text_cls, images_cls, login_cls;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
-    m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload;
+    m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
+    m_bl_open, m_bl_back, m_bl_end;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
 
@@ -68,6 +69,12 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_img_load = (*env)->GetStaticMethodID(env, images_cls, "load", "(ILjava/lang/String;[BI)V");
   m_img_free = (*env)->GetStaticMethodID(env, images_cls, "free", "(I)V");
   m_img_reload = (*env)->GetStaticMethodID(env, images_cls, "reload", "()V");
+  login_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/BrowserLogin"));
+  m_bl_start = (*env)->GetStaticMethodID(env, login_cls, "start", "(Ljava/lang/String;)I");
+  m_bl_port = (*env)->GetStaticMethodID(env, login_cls, "port", "(I)I");
+  m_bl_open = (*env)->GetStaticMethodID(env, login_cls, "open", "(ILjava/lang/String;)I");
+  m_bl_back = (*env)->GetStaticMethodID(env, login_cls, "back", "(I)Ljava/lang/String;");
+  m_bl_end = (*env)->GetStaticMethodID(env, login_cls, "end", "(I)V");
   shape_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 4 * 8192));
   small_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 16));
   return JNI_VERSION_1_6;
@@ -480,9 +487,38 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_imageDone(JNIEnv *env, jclass c, jin
   *im = (mb_image){t ? 1 : -1, t, w, h, ow, oh};
 }
 
-// A sign-in in the browser that comes back here (host_native.mbt `browser_login`): not on this host yet.
-int32_t mb_host_browser_login_start(moonbit_string_t path) { return 0; }
-int32_t mb_host_browser_login_port(int32_t id) { return 0; }
-int32_t mb_host_browser_login_open(int32_t id, moonbit_string_t url) { return 0; }
-moonbit_string_t mb_host_browser_login_back(int32_t id) { return moonbit_make_string_raw(0); }
-void mb_host_browser_login_end(int32_t id) {}
+// A sign-in in the browser that comes back here (host_native.mbt `browser_login`): dev.mbui.BrowserLogin, a loopback
+// listener (dev.mbui.Loopback) and a Custom Tab, the app brought back in front once the browser has come back.
+int32_t mb_host_browser_login_start(moonbit_string_t path) {
+  JNIEnv *env = env_();
+  jstring p = jstr(env, path);
+  jint id = (*env)->CallStaticIntMethod(env, login_cls, m_bl_start, p);
+  (*env)->DeleteLocalRef(env, p);
+  return id;
+}
+
+int32_t mb_host_browser_login_port(int32_t id) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, login_cls, m_bl_port, id);
+}
+
+int32_t mb_host_browser_login_open(int32_t id, moonbit_string_t url) {
+  JNIEnv *env = env_();
+  jstring u = jstr(env, url);
+  jint ok = (*env)->CallStaticIntMethod(env, login_cls, m_bl_open, id, u);
+  (*env)->DeleteLocalRef(env, u);
+  return ok;
+}
+
+moonbit_string_t mb_host_browser_login_back(int32_t id) {
+  JNIEnv *env = env_();
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, login_cls, m_bl_back, id);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  return out;
+}
+
+void mb_host_browser_login_end(int32_t id) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, login_cls, m_bl_end, id);
+}

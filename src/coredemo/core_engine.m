@@ -35,3 +35,6 @@ moonbit_string_t mb_coredemo_env(moonbit_string_t name) {
 
 // The engine's name, for the header.
 moonbit_string_t mb_coredemo_engine(void) { return mb_string_from_ns(@"JavaScriptCore"); }
+
+// MBUI_SECURE_TEST=1 (main.mbt): Android's (android_engine.c); not here yet.
+int32_t mb_coredemo_secure_test(void) { return 0; }

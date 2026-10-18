@@ -26,6 +26,11 @@ fn ffi_set_wake(_f : FuncRef[() -> Unit]) -> Unit {
 }
 
 ///|
+fn ffi_has_web_auth() -> Int {
+  0
+}
+
+///|
 fn ffi_web_auth(_token : Int, _url : String, _scheme : String) -> Int {
   0
 }

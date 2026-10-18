@@ -12,6 +12,10 @@
 // knows nothing of still.fail): the app listens on 127.0.0.1, hands the login page to $BROWSER (else `open`), and
 // exits 0 once the browser has come back and the sign-in is done (1 when it failed). A station's remote login runs it as its login command: the page goes
 // to the person's phone, whose still.fail app relays the browser's way back here (ember docs/remote-login.md).
+//
+// On Android there is no browser session: 登录 signs in that same way, the page in a Custom Tab and the app back in
+// front once the browser has come back (scripts/android.sh, APP=coredemo). MBUI_SECURE_TEST=1 round-trips secure.set,
+// secure.get and secure.delete through the host's own answers to the core (the Android Keystore) and logs SECURE_TEST ….
 
 ///|
 struct App {
@@ -77,20 +81,20 @@ fn by_hand(step : String) -> Unit {
 }
 
 ///|
-/// MBUI_AUTH_LOGIN: the sign-in a login command makes, on the host's browser login (@host.browser_login): auth.begin
-/// with its loopback address, the page to the browser, auth.complete with what comes back. What it prints is for
-/// whoever runs it (a station's login reads the page's address from $BROWSER, or from here); its exit code says how it
-/// went.
-let login : Ref[@host.BrowserLogin?] = Ref::new(None)
+/// A sign-in on the host's browser login (@host.browser_login, which knows nothing of still.fail): auth.begin with its
+/// loopback address, the page to the browser, auth.complete with what comes back. MBUI_AUTH_LOGIN's login command
+/// does it, and 登录 where there is no browser session (Android: a Custom Tab, the app back in front after it).
+let login : Ref[(@host.BrowserLogin, (Result[String, String]) -> Unit)?] = Ref::new(
+  None,
+)
 
 ///|
-fn login_command() -> Unit {
+/// Starts it; `done` gets the account's email, or why not.
+fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
   guard @host.browser_login(path="/oauth/callback") is Some(l) else {
-    @host.log("Sign-in failed: this host cannot take a browser coming back")
-    @host.exit(1)
+    done(Err("this host cannot take a browser coming back"))
     return
   }
-  app.status = "正在等浏览器登录…"
   let params : Map[String, Json] = {
     "redirect_uri": Json::string(l.redirect),
     "return_to": Json::string("/"),
@@ -102,25 +106,27 @@ fn login_command() -> Unit {
       Err(_) => ""
     }
     if url == "" {
-      @host.log("Sign-in failed: auth.begin gave no page")
-      @host.exit(1)
+      l.end()
+      done(Err("auth.begin gave no page"))
       return
     }
     @host.log("Sign in to still.fail in a browser: " + url)
     if !l.open(url) {
       @host.log("No browser opened: open the address above")
     }
-    login.val = Some(l)
+    login.val = Some((l, done))
   })
 }
 
 ///|
 /// Each frame while it waits: the browser back, the sign-in finished with what it brought.
 fn login_back() -> Unit {
-  guard login.val is Some(l) else { return }
+  guard login.val is Some((l, done)) else { return }
   guard l.back() is Some(back) else { return }
   login.val = None
   l.end()
+  // (not the query: its code is the sign-in's)
+  @host.log("Back from the browser at " + l.redirect + ": auth.complete")
   let params : Map[String, Json] = { "query": Json::string(@core.query_of(back)) }
   @core.call("auth.complete", params=Json::object(params), on_done=fn(r) {
     match r {
@@ -129,11 +135,29 @@ fn login_back() -> Unit {
           Object(m) => str(m.get("account"), "email")
           _ => ""
         }
+        done(Ok(email))
+      }
+      Err(e) => {
+        @host.log("auth.complete failed: " + e.stringify())
+        done(Err(str(Some(e), "message")))
+      }
+    }
+  })
+}
+
+///|
+/// MBUI_AUTH_LOGIN: the sign-in as a login command. What it prints is for whoever runs it (a station's login reads the
+/// page's address from $BROWSER, or from here); its exit code says how it went.
+fn login_command() -> Unit {
+  app.status = "正在等浏览器登录…"
+  loopback_sign_in(fn(r) {
+    match r {
+      Ok(email) => {
         @host.log("Signed in to still.fail as " + email)
         @host.exit(0)
       }
-      Err(e) => {
-        @host.log("Sign-in failed: " + str(Some(e), "message"))
+      Err(why) => {
+        @host.log("Sign-in failed: " + why)
         @host.exit(1)
       }
     }
@@ -157,6 +181,25 @@ fn str(v : Json?, key : String) -> String {
 
 ///|
 fn sign_in() -> Unit {
+  if !@core.has_browser_session() {
+    // Android: in the browser, back on a loopback address (a second press starts again: the tab may have been closed)
+    if login.val is Some((l, _)) {
+      l.end()
+      login.val = None
+    }
+    app.signing_in = true
+    app.status = "正在浏览器里登录…"
+    loopback_sign_in(fn(r) {
+      app.signing_in = false
+      app.status = match r {
+        Ok(email) => "已登录：\{email}"
+        Err(why) => "没有登录：\{why}"
+      }
+      @host.log("SIGN_IN " + app.status)
+      @host.request_frame()
+    })
+    return
+  }
   if app.signing_in {
     return
   }
@@ -380,6 +423,9 @@ fn main {
     "begin"
   } else {
     env("MBUI_AUTH_COMPLETE")
+  }
+  if env("MBUI_SECURE_TEST") == "1" && secure_test() == 0 {
+    @host.log("SECURE_TEST: not on this host")
   }
   @ui.run("still.fail · mbui", view)
 }

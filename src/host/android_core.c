@@ -7,8 +7,11 @@
 // The engine's JNI entry points (fail.still.core.HermesNative's) are called here as the C functions they are: none of
 // them looks at its `this`. What it calls back goes to a dev.mbui.CoreHost (android/): what the core says (onBytes,
 // onFrame) comes straight back here, into core_native.c's queue, and a frame is asked for, in which the host drains it
-// (mbc_frame, android_host.c); the calls only the app does (`secure.*`: the Android Keystore; `listen.*`: not yet,
-// "unsupported") CoreHost answers on a thread of its own through the engine's `complete`.
+// (mbc_frame, android_host.c); the calls only the app does (`secure.*`: the Android Keystore; `listen.*`: a loopback
+// listener, dev.mbui.Loopback) CoreHost answers on threads of its own through the engine's `complete`.
+//
+// MB_CORE_TRACE=1 in the app's environment says what the core says (its first 400 bytes) and the app's calls in the
+// log.
 //
 // mb_core_start/send/stop come from the UI's (GL) thread; on_message runs on the core's.
 #include <jni.h>
@@ -39,7 +42,7 @@ JavaVM *mb_android_vm(void);  // android_host.c
 static struct {
   int ready;
   jclass host, core_host, string;
-  jmethodID request_frame, data_dir, asset, init, started, closing, string_init;
+  jmethodID request_frame, data_dir, asset, init, started, closing, string_init, secure_test;
   jstring utf8_name;
   jobject listener;  // this core's CoreHost
   jlong handle, client;
@@ -77,9 +80,15 @@ static void ask_frame(JNIEnv *env) {
 
 // ── what the engine calls back, on the core's thread (CoreHost's natives) ──
 
+static int tracing(void) {
+  const char *t = getenv("MB_CORE_TRACE");
+  return t && t[0] == '1';
+}
+
 static void JNICALL on_bytes(JNIEnv *env, jobject self, jbyteArray json) {
   jsize n = (*env)->GetArrayLength(env, json);
   jbyte *p = (*env)->GetByteArrayElements(env, json, NULL);
+  if (tracing()) CORE_LOG("core says %.*s%s", n < 400 ? (int)n : 400, (const char *)p, n > 400 ? "…" : "");
   if (A.on_message) A.on_message((const char *)p, (size_t)n, NULL, 0, A.ctx);
   (*env)->ReleaseByteArrayElements(env, json, p, JNI_ABORT);
   ask_frame(env);
@@ -113,6 +122,7 @@ static int core_init(JNIEnv *env) {
   A.init = (*env)->GetMethodID(env, A.core_host, "<init>", "(Ljava/lang/String;)V");
   A.started = (*env)->GetMethodID(env, A.core_host, "started", "(J)V");
   A.closing = (*env)->GetMethodID(env, A.core_host, "closing", "()V");
+  A.secure_test = (*env)->GetStaticMethodID(env, A.core_host, "secureTest", "()V");
   JNINativeMethod natives[] = {
       {"onBytes", "([B)V", (void *)on_bytes},
       {"onFrame", "([B[B)V", (void *)on_frame},
@@ -208,4 +218,13 @@ void mb_core_stop(void) {
   (*env)->DeleteGlobalRef(env, A.listener);
   A.listener = NULL;
   CORE_LOG("core: stopped");
+}
+
+/// secure.set/get/delete round-tripped through CoreHost's own answers (MBUI_SECURE_TEST=1 in src/coredemo); the
+/// outcome goes to the log (SECURE_TEST …). Returns at once: 0 when there is no CoreHost.
+int mb_core_secure_test(void) {
+  JNIEnv *env = core_env();
+  if (!core_init(env)) return 0;
+  (*env)->CallStaticVoidMethod(env, A.core_host, A.secure_test);
+  return !cleared(env);
 }

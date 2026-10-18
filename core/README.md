@@ -63,7 +63,8 @@ stops the core and prints timings and the process's memory footprint.
   with `JSObjectMakeArrayBufferWithBytesNoCopy` (freed by the GC). engine.ts copies what goes out of a view first.
 - The shell's answers come on tokio's threads; they go through a `Gate` (as engine.cpp's) closed by `mb_core_stop`, so
   an answer arriving after a stop is dropped instead of touching a dead core.
-- `secure.*` and `listen.*` are answered `"unsupported"` (they are the app's, not the shell's, on Android too).
+- `secure.*` and `listen.*` are the app's, not the shell's (on Android too): answered here (the Keychain, below;
+  apple_listen.m, under Login).
 - An exception that escapes to the engine, or the core's own `fatal`, sends `{"fatal": reason}` once; the host then
   stops this core and starts another (as Android does).
 - `on_message` runs on the core thread. The MoonBit host must copy and hop to its UI thread (on macOS
@@ -168,7 +169,24 @@ it, not in one of ours.
   each frame begins (`mbc_frame`). Timers are the engine's (CLOCK_BOOTTIME).
 - **`secure.*`**: CoreHost seals each value with AES-GCM under one Android Keystore key (alias
   `dev.mbui.core.secure`), a file per value in `<files>/core/secure`, the value's name as associated data.
-  `secure.ask` and `user: true` (biometrics) answer `"unsupported"`, as does `listen.*` (no loopback listener yet).
+  `secure.ask` and `user: true` (biometrics) answer `"unsupported"`. `MBUI_SECURE_TEST=1` makes coredemo round-trip
+  `secure.set`, `secure.get` (the same bytes back, sealed on disk), `secure.delete` and `secure.get` again (`{none}`)
+  through CoreHost's own answers and log `SECURE_TEST …`.
+- **`listen.*`**: `dev.mbui.Loopback` (android/), the twin of apple_listen.m and of ember's Loopback.kt: a
+  `ServerSocket` on 127.0.0.1 or ::1 (port 0: the system's pick), each request read whole (64 KB head, 1 MB body,
+  15 s), answered once, its connection closed. CoreHost answers `listen.open {port, host}` → `{id, port}` (an error
+  such as `BindException: … (Address already in use)`), `listen.next` → `{request, method, path, headers}` + body or
+  `{end: true}` (a waiting one is answered as a request comes, never blocking a thread), `listen.respond`,
+  `listen.close`; a core's listeners close with it. While any listener is open, `dev.mbui.LoginService` (a
+  `specialUse` foreground service, as ember's LoginRelay.kt) holds the process up so the cached apps freezer does not
+  stop it answering the browser. `scripts/android.sh listen-test` runs it with core/listen-test.js in the core's place
+  (a POST from the emulator's shell; then build again without it).
+- **Sign-in**: no browser session on Android (`@core.has_browser_session()` false), so coredemo's 登录 signs in on
+  `@host.browser_login` (`dev.mbui.BrowserLogin`): `auth.begin` with `http://127.0.0.1:<port>/oauth/callback`, the
+  page in a Custom Tab (the Custom Tabs protocol's own intent extras, no androidx) on the app's task, the one GET to
+  that path under that host taken and answered, then the app brought back in front (MainActivity is `singleTask`, as
+  still.fail's; starting it again closes the tab above it; the page also links `dev.mbui.demo://back`), and
+  `auth.complete {query}`. `MB_CORE_TRACE=1` logs what the core says and the app's calls.
 - **Data**: `<the app's files>/core` (`/data/user/0/dev.mbui.demo/files/core`).
 - **Environment**: `ENV="MBUI_AUTH_BEGIN=1;K=V" APP=coredemo scripts/android.sh run` passes the intent's `env` extra,
   which MainActivity sets with `Os.setenv` before the app's MoonBit starts.
@@ -196,7 +214,7 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
   still.fail's: mbui/host's `browser_login` (browser_login.mbt, `src/host/apple_browser_login.m`) listens on
   127.0.0.1 at a port the system picks, gives the app the address to come back to, opens the app's login page with
   `$BROWSER`, else `open` (the system on iOS), and gives back the address the browser came back to, any app, any
-  service. The listener is `src/host/apple_listen.m` (`listen_api.h`: BSD sockets on a dispatch source, a request
+  service (on Android: `dev.mbui.BrowserLogin`, above). The listener is `src/host/apple_listen.m` (`listen_api.h`: BSD sockets on a dispatch source, a request
   read whole, answered once, its connection closed). The core demo's login command is still.fail's sign-in on it:
   `scripts/mac.sh login` (MBUI_AUTH_LOGIN=1) asks `auth.begin` with that address, `auth.complete`s what comes back,
   and exits 0 once signed in (1 when not). An app like that is what a station's remote login (ember
@@ -208,7 +226,7 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
 The core's own `listen.*` (`listen.open/next/respond/close`, ember client/core-ts hosts/bridge.ts) is the other way
 round: this device taking a station's login callback for it (`canRelay`; machine logins on the station page and in
 login cards). apple_core.m answers it on the same listener, as Android's Loopback.kt does there; `scripts/core.sh
-listen` tests it with core/listen-test.js in the core's place.
+listen` tests it with core/listen-test.js in the core's place (`scripts/android.sh listen-test` on Android's).
 
 `secure.*` is the other gap: at start the core asks `secure.get` twice (the lock's signing key `lock-signer`, and the
 vault's) and goes on without them (the smoke run shows it); after login, making a lock signer or opening a vault

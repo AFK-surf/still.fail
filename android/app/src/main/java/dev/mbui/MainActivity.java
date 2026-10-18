@@ -1,6 +1,7 @@
 package dev.mbui;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.os.Bundle;
@@ -61,6 +62,15 @@ public class MainActivity extends Activity {
         Host.activity = this;
         Host.view = view;
         if (Host.script != null) Script.start(view);
+    }
+
+    /** Brought back (singleTask): by BrowserLogin once the browser has come back, or by its page's link. */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        Host.log("activity onNewIntent " + (intent.getData() != null ? intent.getData().getScheme() + "://" + intent.getData().getHost() : "(in front again)"));
+        Host.requestFrame();
     }
 
     @Override

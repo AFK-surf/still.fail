@@ -1,7 +1,8 @@
 // core_engine.m's Android twin, compiled by scripts/android.sh for APP=coredemo (moon.pkg cannot pick stubs per OS,
 // so moon never sees this file): the core in ember's Hermes engine (src/host/android_core.c), handed to mbui/core as
-// the library loads. No browser session yet (web_auth NULL: @core.sign_in says so); MBUI_AUTH_BEGIN=1 and the other
-// variables come from the intent's `env` extra (MainActivity: `am start … --es env MBUI_AUTH_BEGIN=1`).
+// the library loads. No browser session (web_auth NULL): coredemo signs in on @host.browser_login instead (a loopback
+// listener and a Custom Tab, android_host.c). MBUI_AUTH_BEGIN=1 and the other variables come from the intent's `env`
+// extra (MainActivity: `am start … --es env MBUI_AUTH_BEGIN=1`).
 #include <stdlib.h>
 #include <string.h>
 #include "moonbit.h"
@@ -34,3 +35,6 @@ moonbit_string_t mb_coredemo_engine(void) {
   for (int32_t i = 0; i < (int32_t)sizeof name - 1; i++) out[i] = (uint16_t)name[i];
   return out;
 }
+
+// MBUI_SECURE_TEST=1: secure.* round-tripped through the host (android_core.c); 1 when it was started.
+int32_t mb_coredemo_secure_test(void) { return mb_core_secure_test(); }

@@ -3,7 +3,7 @@
 # and src/host/android_host.c, package it with Gradle, and run it on an
 # emulator of our own (AVD mbui-avd, port 5580). APP=demo|photos|coredemo picks the app;
 # ENV="K=V;K2=V2" gives `run` the app's environment variables (MainActivity sets them before the app starts).
-#   scripts/android.sh build | emu | run [script] | shot NAME | log | stop | delete
+#   scripts/android.sh build | emu | run [script] | shot NAME | log | listen-test | stop | delete
 # moon.pkg cannot choose files per OS, so the build runs on a copy of the
 # module in out/android/mod, where photos shows src/photos/pictures/android.mbt.
 set -e
@@ -99,8 +99,13 @@ core_parts() {
   # fbjni's AAR carries an older copy of)
   aar_lib com.facebook.react/hermes-android 0.81.4 hermes-android-0.81.4-release.aar libhermes.so
   aar_lib com.facebook.fbjni/fbjni 0.7.0 fbjni-0.7.0.aar libfbjni.so
-  EMBER=$EMBER ENTRY=${ENTRY:-$PWD/core/media-hermes.ts} "$D/core.sh" hermes \
-    || { echo "android.sh: no core for the app (scripts/core.sh hermes failed)" >&2; exit 1; }  # with media, as on macOS
+  if [ -n "${CORE_SCRIPT:-}" ]; then
+    # a script in the core's place (listen-test: core/listen-test.js)
+    EMBER=$EMBER "$D/core.sh" hermes-script "$CORE_SCRIPT" || { echo "android.sh: $CORE_SCRIPT did not compile" >&2; exit 1; }
+  else
+    EMBER=$EMBER ENTRY=${ENTRY:-$PWD/core/media-hermes.ts} "$D/core.sh" hermes \
+      || { echo "android.sh: no core for the app (scripts/core.sh hermes failed)" >&2; exit 1; }  # with media, as on macOS
+  fi
   cp -p out/core/core.hbc $apk/assets/
   echo "core parts: $(cd $jni && for f in *.so; do printf '%s %s, ' $f $(size $f); done)core.hbc $(size $apk/assets/core.hbc)"
 }
@@ -158,6 +163,38 @@ case "${1:-build}" in
     else
       $ADB -s $SERIAL shell am start -n dev.mbui.demo/dev.mbui.MainActivity ${BENCH:+--ei bench $BENCH} ${ENV:+--es env "'$ENV'"} >/dev/null
     fi
+    ;;
+  listen-test)
+    # listen.* (CoreHost on Loopback) with core/listen-test.js in the core's place, as scripts/core.sh listen on macOS:
+    # it opens a listener on a port of the system's choosing (a second one there, and one off loopback, refused), this
+    # sends it a POST from the emulator's shell, the script answers it, then closes it with a listen.next waiting.
+    # Builds APP=coredemo with that script (build again without CORE_SCRIPT for the core).
+    APP=coredemo CORE_SCRIPT=$PWD/core/listen-test.js "$0" build
+    $ADB -s $SERIAL logcat -c
+    APP=coredemo ENV="MB_CORE_TRACE=1" "$0" run
+    port=
+    for i in $(seq 1 30); do
+      port=$($ADB -s $SERIAL logcat -d -s mbui:I | sed -n 's/.*core says {"opened":\([0-9]*\).*/\1/p' | head -1)
+      [ -n "$port" ] && break
+      sleep 1
+    done
+    [ -n "$port" ] || { echo "FAIL the script opened no listener"; "$0" log 60; exit 1; }
+    echo "listening on 127.0.0.1:$port"
+    answer=$($ADB -s $SERIAL shell "(printf 'POST /oauth/callback?code=c%%20d&state=s HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nstate=s&x=1'; sleep 3) | nc 127.0.0.1 $port")
+    sleep 2
+    log=$($ADB -s $SERIAL logcat -d -s mbui:I)
+    code=0
+    ok() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; code=1; fi; }
+    ok "a second listener on that port refused" 'echo "$log" | grep -q "\"taken\":\"[^\"]*in use"'
+    ok "a listener off loopback refused" 'echo "$log" | grep -q "\"outside\":\"[^\"]*not a loopback address"'
+    ok "the POST came whole (method, path with its query, Host, body)" 'echo "$log" | grep -q "\"method\":\"POST\",\"path\":\"/oauth/callback?code=c%20d&state=s\".*\"Host\",\"127.0.0.1:$port\".*\"body\":\"state=s&x=1\""'
+    ok "the script's answer came back (status, its headers, its body)" 'echo "$answer" | grep -q "^HTTP/1.1 200 OK" && echo "$answer" | grep -q "^X-Test: yes" && echo "$answer" | grep -q "answered /oauth/callback?code=c%20d&state=s"'
+    ok "its own Content-Length not passed on (the answer's length is the body's)" '! echo "$answer" | grep -q "^Content-Length: 1\r*$"'
+    ok "a listen.next waiting as it closed, and one after, said {end}" 'echo "$log" | grep -q "\"ended\":{\"end\":true},\"after\":{\"end\":true}"'
+    ok "it no longer listens" '! $ADB -s $SERIAL shell cat /proc/net/tcp | grep -qi ":$(printf %04X $port) 00000000:0000 0A"'
+    echo "$answer" | tr -d '\r' | sed 's/^/  answer: /'
+    echo "$log" | grep "core says\|core app call" | sed 's/^/  /' | tail -20
+    exit $code
     ;;
   shot)
     mkdir -p $OUT/shots
