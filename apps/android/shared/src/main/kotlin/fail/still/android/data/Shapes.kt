@@ -1538,6 +1538,8 @@ data class ChatItem (
 	/// Nothing is left in it, whatever the viewer's `archiveHint` says: offer to archive it with one tap
 	/// (`chat.archive`). Absent otherwise.
 	val archivable: Boolean? = null,
+	/// The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise.
+	val kept: Boolean? = null,
 	/// Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a
 	/// card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
 	/// no card waiting, or with nothing to say.

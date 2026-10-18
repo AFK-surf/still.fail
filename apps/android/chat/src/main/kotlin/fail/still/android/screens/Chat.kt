@@ -375,9 +375,10 @@ class AgentAtWork(val key: String, val who: String, val runtime: String, val mak
 class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<AgentHere>, val orOwner: String? = null) {
     fun agent(key: String) = agents.firstOrNull { it.key == key }
     fun mine(m: ChatMessage) = m.mine
-    /** The post 归档这个 chat goes under: the agents' latest that ended all done, while the chat can be archived. */
+    /** The post 归档这个 chat goes under: the agents' latest that ended all done, while the chat is offered to archive
+     *  (the core's `archiveOffered`: archivable, and the viewer's `archiveHint` offers it). */
     val archiveUnder: Long? by lazy {
-        if (view.archivable != true || view.archived == true || view.pending == true) null
+        if (view.archiveOffered != true || view.archived == true || view.pending == true) null
         else view.messages.lastOrNull { it.authorKind == "agent" && it.ending == "all_done" }?.seq
     }
     /** The post what the archive check made of the chat goes under: the agents' latest, when it ended all done. */

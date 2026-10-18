@@ -43,3 +43,10 @@ test("every_operation_reads_what_its_contract_names_and_nothing_else", () => {
     assert.deepEqual([...declared].filter((f) => !seen.has(f)).sort(), [], `${name}'s contract names what it does not read`);
   }
 });
+
+test("a_chat_is_kept_by_put_and_let_go_by_delete", () => {
+  const keep = (params: Record<string, unknown>) => request("chat.keep", { station: "w/s", thread: 3, ...params });
+  assert.deepEqual([keep({})?.method, keep({})?.path], ["PUT", "/threads/3/keep"]);
+  assert.equal(keep({ kept: true })?.method, "PUT");
+  assert.deepEqual([keep({ kept: false })?.method, keep({ kept: false })?.path], ["DELETE", "/threads/3/keep"]);
+});

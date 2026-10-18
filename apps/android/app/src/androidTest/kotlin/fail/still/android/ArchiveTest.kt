@@ -239,7 +239,7 @@ class ArchiveTest {
             if (name == "chat.archive") putChats(h, listOf(busy, alsoDone))
             JsonNull
         }
-        h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = true, key = done.session))
+        h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = true, archiveOffered = true, key = done.session))
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, of)), dark = dark)
         return h
     }
@@ -266,7 +266,7 @@ class ArchiveTest {
     @Test fun chatKeepStaysInChat() {
         val h = chat()
         val before = h.app.stack.toList()
-        rule.onNodeWithText("不再提醒归档").performClick()
+        rule.onNodeWithText("保留").performClick()
         h.settle()
         assertTrue(h.fake.calls.any { it.first == "chat.keep" })
         assertTrue(h.fake.calls.none { it.first == "chat.archive" })
@@ -350,12 +350,12 @@ class ArchiveTest {
             JsonNull
         }
         val recording = h.record(name)
-        rule.onNodeWithText("不再提醒归档").performClick()
+        rule.onNodeWithText("保留").performClick()
         recording.frames(32)
         recording.end()
         h.settle()
         shot("$name-kept")
-        assertTrue(rule.onAllNodesWithText("不再提醒归档").fetchSemanticsNodes().isEmpty())
+        assertTrue(rule.onAllNodesWithText("保留").fetchSemanticsNodes().isEmpty())
         assertEquals(2, h.app.stack.size)
     }
 

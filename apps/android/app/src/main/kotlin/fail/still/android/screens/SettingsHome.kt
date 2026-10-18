@@ -68,6 +68,9 @@ import fail.still.android.ui.LocalWide
 
 private fun themes() = listOf("system" to t("android-settings.theme.system"), "light" to t("android-settings.theme.light"), "dark" to t("android-settings.theme.dark"))
 
+/** When a done chat is offered to archive: null once done (the default), as the web's (the core's `archiveHint`). */
+private fun archiveHints() = listOf("off" to t("web-pages.appearance.archive.off"), null to t("web-pages.appearance.archive.done"), "reviewed" to t("web-pages.appearance.archive.reviewed"))
+
 /** The motions to choose: null follows the system's (ui/Motion.kt; the core's `motion`, client/core-ts/src/prefs.ts). */
 private fun motions() = listOf(null to t("web-pages.appearance.motion.system"), "reduce" to t("web-pages.appearance.motion.reduce"), "full" to t("web-pages.appearance.motion.full"))
 
@@ -196,6 +199,7 @@ fun AppearanceScreen() {
             Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
         Motions()
         Language()
+        ArchiveHints()
         Spacer(Modifier.height(30.dp))
     }
 }
@@ -212,6 +216,21 @@ private fun Motions() {
     }, Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
     // As the web's note under it (mobile/Settings.css.ts mSegNote).
     Text(t("web-pages.appearance.motion.description"), fontSize = 13.sp, lineHeight = 19.5.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp))
+}
+
+/** 提示归档, as the web's (prefs `archiveHint`): never, once done, or once the station's archive review recommended it;
+ *  what the one chosen does, under it. */
+@Composable
+private fun ArchiveHints() {
+    val app = LocalApp.current
+    val hints = archiveHints()
+    val at = hints.indexOfFirst { it.first == app.archiveHint }.let { if (it < 0) 1 else it }
+    SectionHeader(t("web-pages.appearance.archive.title"), start = 24.dp)
+    Seg(hints.map { it.second }, at, { i ->
+        val value = hints[i].first
+        if (value != app.archiveHint) app.setArchiveHint(value)
+    }, Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
+    Text(t("web-pages.appearance.archive.${hints[at].first ?: "done"}Hint"), fontSize = 13.sp, lineHeight = 19.5.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp))
 }
 
 /**

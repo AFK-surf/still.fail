@@ -1095,6 +1095,7 @@ export class Views implements Owner {
     row = decisions.presentRow(row);
     // Archived with one tap whenever nothing is left in it; offered to archive (faded, below the rest of its day) as the
     // viewer's `archiveHint` says.
+    if (row.archiveReminderDismissed === true) row.kept = true;
     if (present.archivable(row)) {
       row.archivable = true;
       if (present.offered(row, hint)) row.settled = true;
@@ -1748,6 +1749,8 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     const last: J = { ...messages[lastAt] };
     if (view.archiveOffered === true && view.offline !== true && isObject(view.thread)) last.archive = true;
     if (isObject(view.archiveCheck)) last.archiveCheck = view.archiveCheck;
+    // Offered with no review behind it: why, all the same.
+    else if (last.archive === true) last.archiveCheck = { text: t("core-views.policy.allDone"), recommended: true, failed: false };
     messages[lastAt] = last;
   }
   const elsewhere = arr(view.elsewhere);

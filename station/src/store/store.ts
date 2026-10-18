@@ -1039,6 +1039,15 @@ export class Store {
     });
   }
 
+  /// A chat kept by the viewer let go: offered for archiving again, and archived on its own once idle (unless someone
+  /// else keeps it).
+  unkeepChat(viewer: string, thread: number): void {
+    this.#with((changes) => {
+      this.#run("DELETE FROM kept_chats WHERE viewer = ? AND thread = ?", viewer, thread);
+      changes.push({ type: "dismissed", viewer });
+    });
+  }
+
   // ── cards ──
 
   /// The thread's card still pending, if any: its latest post with a card (a newer one replaces an older one), as long

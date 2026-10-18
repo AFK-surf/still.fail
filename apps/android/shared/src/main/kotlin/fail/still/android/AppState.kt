@@ -314,6 +314,10 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     val motion: String? get() = kept.motion
     fun setMotion(value: String?) = setPrefs(kept.copy(motion = value), buildJsonObject { put("motion", value) })
 
+    /** 提示归档: "off" or "reviewed" as chosen; null offers a done chat (the core's `archiveHint`). */
+    val archiveHint: String? get() = kept.archiveHint
+    fun setArchiveHint(value: String?) = setPrefs(kept.copy(archiveHint = value), buildJsonObject { put("archiveHint", value) })
+
     /** How the drive's reader lays text out on this device (the core's `prefs.reader`, whole; its defaults before it says). */
     val readerPrefs: fail.still.android.data.ReaderPrefs get() = kept.reader ?: fail.still.android.data.ReaderPrefs(size = 18, line = 1.7, margin = 22, face = "sans", indent = true, paper = "follow")
     /** One setting of the reader changed (`prefs.set {reader: {field: value}}`): shown at once, kept in its bounds by the core. */

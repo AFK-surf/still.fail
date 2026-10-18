@@ -651,6 +651,8 @@ test("dismissing_archive_reminders_restores_the_rows_color_and_order", async () 
     const shown = v.days[0].items.find((r: J) => r.id === "done");
     assert.equal(shown.settled, dismissed ? undefined : true);
     assert.equal(shown.archivable, dismissed ? undefined : true);
+    // Kept by the viewer: the row says so (its menu lets it go).
+    assert.equal(shown.kept, dismissed ? true : undefined);
     assert.equal(shown.stateText, "已完成");
   }
 });
@@ -1505,14 +1507,16 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archivi
   assert.deepEqual(v.messages.map((m: J) => m.attachments.map((a: J) => a.owner)), [["k"], [], ["k"]]);
   assert.equal(v.archivable, true);
   assert.equal(v.archiveOffered, true);
-  // 归档 only under its last all-done post.
+  // 归档 only under its last all-done post, and why: no review on its station, its agents are all done.
   assert.deepEqual(v.messages.map((m: J) => m.archive ?? false), [false, false, true]);
+  assert.deepEqual(v.messages[2].archiveCheck, { text: "所有 agent 都做完了", recommended: true, failed: false });
   // Not offered where the viewer's archiveHint says off: archivable with one tap all the same, nothing under the post.
   t.set(prefs(), { archiveHint: "off" });
   await t.read(u, 1);
   assert.equal(u.value.archivable, true);
   assert.equal(u.value.archiveOffered, undefined);
   assert.deepEqual(u.value.messages.map((m: J) => m.archive ?? false), [false, false, false]);
+  assert.equal(u.value.messages[2].archiveCheck, undefined);
 });
 
 test("the_viewers_messages_sent_one_after_another_go_close_together_their_time_under_the_last", async () => {
