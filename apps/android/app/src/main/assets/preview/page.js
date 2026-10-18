@@ -188,8 +188,9 @@
   };
   // The top page's fetch() of its own host goes through the app instead (PreviewWeb.kt fetchSaid), over a message port
   // the app gives it: a WebView hands the page what the app answers only 2 KB at a time, and this way each piece of a
-  // body comes as the service sends it (a log, a streamed answer). Without the port (a file's page, an app from
-  // before), as below.
+  // body comes as the service sends it (a log, a streamed answer). Bytes go on it as they are where the app says it can
+  // (fetchBytes: an ArrayBuffer, the length of the fetch's id, the id, then the bytes), else as base64 in JSON. Without
+  // the port (a file's page, an app from before), as below.
   const bridge = (() => {
     if (window !== window.top || typeof native.fetchPort !== "function") return null;
     const token = "stillfail-fetch-" + crypto.randomUUID();
@@ -202,6 +203,13 @@
         removeEventListener("message", take, true);
         const got = event.ports[0];
         got.onmessage = ({ data }) => {
+          if (data instanceof ArrayBuffer) {
+            const all = new Uint8Array(data);
+            const n = all[0];
+            if (!n || all.length < 1 + n) return;
+            waiting.get(String.fromCharCode(...all.subarray(1, 1 + n)))?.({ t: "chunk", bytes: all.subarray(1 + n) });
+            return;
+          }
           let said;
           try { said = JSON.parse(data); } catch { return; }
           waiting.get(said && said.id)?.(said);
@@ -214,6 +222,15 @@
     let asking = false;
     try { asking = native.fetchPort(token) === true; } catch {}
     if (!asking) return null;
+    let binary = false;
+    try { binary = native.fetchBytes() === true; } catch {}
+    const frame = (id, bytes) => {
+      const out = new Uint8Array(1 + id.length + bytes.length);
+      out[0] = id.length;
+      for (let i = 0; i < id.length; i++) out[1 + i] = id.charCodeAt(i);
+      out.set(bytes, 1 + id.length);
+      return out.buffer;
+    };
     const bytesOf = (text) => { const s = atob(text); const out = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i); return out; };
     const define = (answer, props) => { for (const [k, v] of Object.entries(props)) Object.defineProperty(answer, k, { value: v }); return answer; };
     const go = (to, asked, bytes) => new Promise((resolve, reject) => {
@@ -247,7 +264,7 @@
           resolve(define(answer, { url, redirected: said.redirected === true, type: "basic" }));
         } else if (said.t === "chunk") {
           if (!stream) return;
-          stream.enqueue(bytesOf(said.b));
+          stream.enqueue(said.bytes || bytesOf(said.b));
           // Read too slowly (as in PreviewWeb.kt's Chunks): given up rather than kept here without end.
           if (stream.desiredSize < -(32 << 20)) { stream.error(new TypeError(en ? "The page read too slowly and was stopped" : "网页读得太慢，已停止")); stop(); }
         } else if (said.t === "end") {
@@ -267,9 +284,12 @@
       headers.set("user-agent", navigator.userAgent);
       if (asked.referrer && asked.referrer !== "no-referrer") headers.set("referer", asked.referrer === "about:client" ? location.href : asked.referrer);
       if (asked.method !== "GET" && asked.method !== "HEAD") headers.set("origin", location.origin);
+      const sent = bytes && bytes.length ? bytes : null;
+      // Its body first, as it is, where the port carries bytes.
+      if (sent && binary) to.postMessage(frame(id, sent));
       to.postMessage(JSON.stringify({
         t: "go", id, method: asked.method, path: to_.pathname + to_.search, headers: [...headers], redirect: asked.redirect,
-        cookies: asked.credentials !== "omit", body: bytes && bytes.length ? base64(bytes) : "",
+        cookies: asked.credentials !== "omit", body: sent && !binary ? base64(sent) : "",
       }));
     });
     const through = async (asked, bytes) => {

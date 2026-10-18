@@ -3,7 +3,6 @@
 // and brings the topics it touches up to date before it answers; nothing here keeps a cache.
 package fail.still.android.data
 
-import android.util.Base64
 import fail.still.android.shared.BuildConfig
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
@@ -248,9 +247,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
                     at += got
                     val from = have
                     val told = core.call("station.upload.part", buildJsonObject {
-                        put("station", station); put("id", id); put("name", name); put("size", size); put("offset", have)
-                        put("bytes", Base64.encodeToString(part, Base64.NO_WRAP)); put("progress", true)
-                    }) { heard -> partSent(heard)?.let { onProgress(from + it) } }.jsonObject
+                        put("station", station); put("id", id); put("name", name); put("size", size); put("offset", have); put("progress", true)
+                    }, part) { heard -> partSent(heard)?.let { onProgress(from + it) } }.jsonObject
                     val file = told["file"]?.takeIf { it !is JsonNull }
                     if (file != null) { done = decode(Attachment.serializer(), file); onProgress(size); break }
                     val next = told["have"]?.jsonPrimitive?.long ?: (have + got)
@@ -302,23 +300,21 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     /** The first `length` bytes of a file sent to the session (`station.file.part`); throws `unsupported` from a station from before parts. */
     suspend fun fileHead(key: String, name: String, length: Int): ByteArray {
-        val got = core.call("station.file.part", buildJsonObject {
+        val (_, bytes) = core.callBytes("station.file.part", buildJsonObject {
             put("station", station); put("key", key); put("name", name); put("offset", 0); put("length", length)
-        }).jsonObject
-        return Base64.decode(got["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT)
+        })
+        return bytes ?: ByteArray(0)
     }
 
     /** A video's poster as the station makes it (a small JPEG of its first frame); null when it has none. */
     suspend fun poster(key: String, name: String): ByteArray? {
-        val got = core.call("station.poster", buildJsonObject { put("station", station); put("key", key); put("name", name) })
-        if (got is JsonNull) return null
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.decode(got.jsonObject["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT) }
+        val (got, bytes) = core.callBytes("station.poster", buildJsonObject { put("station", station); put("key", key); put("name", name) })
+        return if (got is JsonNull) null else bytes
     }
 
     /** A file sent to the session. */
     suspend fun file(key: String, name: String): ByteArray {
-        val answer = core.call("station.file", buildJsonObject { put("station", station); put("key", key); put("name", name) }).jsonObject
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.decode(answer["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT) }
+        return core.callBytes("station.file", buildJsonObject { put("station", station); put("key", key); put("name", name) }).second ?: ByteArray(0)
     }
 
     /**
@@ -332,13 +328,13 @@ class StationApi(private val core: StillFailCore, val station: String) {
             if (thumb) put("thumb", true)
             if (onProgress != null) put("progress", true)
         }
-        val answer = (if (onProgress == null) core.call("station.file", params) else core.call("station.file", params) { got ->
+        val (answer, bytes) = if (onProgress == null) core.callBytes("station.file", params) else core.streamBytes("station.file", params) { got, _ ->
             val o = got as? JsonObject
             val loaded = (o?.get("loaded") as? JsonPrimitive)?.content?.toLongOrNull()
             if (loaded != null) onProgress(loaded, (o["total"] as? JsonPrimitive)?.content?.toLongOrNull())
-        }).jsonObject
-        val type = (answer["type"] as? JsonPrimitive)?.content ?: ""
-        return type to kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.decode(answer["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT) }
+        }
+        val type = ((answer as? JsonObject)?.get("type") as? JsonPrimitive)?.content ?: ""
+        return type to (bytes ?: ByteArray(0))
     }
 
     /** What a visualization's widget kept (widget.state; null when nothing, or an older station that keeps nothing). */
@@ -547,8 +543,9 @@ class StationApi(private val core: StillFailCore, val station: String) {
             put("station", station); put("root", root); put("path", path); put("offset", offset); put("length", length.coerceAtMost(DRIVE_PART))
             if (heard != null) put("progress", true)
         }
-        val got = (if (heard == null) core.call("drive.read", params) else core.call("drive.read", params) { p -> partLoaded(p)?.let(heard) }).jsonObject
-        val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.decode(got["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT) }
+        val (answer, beside) = if (heard == null) core.callBytes("drive.read", params) else core.streamBytes("drive.read", params) { p, _ -> partLoaded(p)?.let(heard) }
+        val got = answer.jsonObject
+        val bytes = beside ?: ByteArray(0)
         val total = got["total"]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: (offset + bytes.size)
         val mtime = (got["mtime"] as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()
         return DriveRead((got["type"] as? JsonPrimitive)?.content ?: "", total, bytes, mtime)
@@ -621,8 +618,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
                     val told = core.call("drive.upload.part", buildJsonObject {
                         put("station", station); put("root", root); put("path", path); put("id", id); put("offset", have); put("total", size)
                         if (replace) put("replace", true)
-                        put("bytes", Base64.encodeToString(part, Base64.NO_WRAP))
-                    }).jsonObject
+                    }, part).jsonObject
                     val entry = told["entry"]?.takeIf { it !is JsonNull }
                     val next = told["have"]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: (have + got)
                     when {

@@ -149,7 +149,7 @@ class ScreenSession(
         }
         job = scope.launch {
             try {
-                core.stream("screen.view", params, ::take)
+                core.stream("screen.view", params, onValue = ::take)
                 main.post { finished = true }
             } catch (e: CancellationException) {
                 throw e

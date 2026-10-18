@@ -211,8 +211,7 @@ private fun rememberPicture(url: String?): androidx.compose.ui.graphics.ImageBit
     val loaded by androidx.compose.runtime.produceState(known, url) {
         if (url.isNullOrBlank() || value != null) return@produceState
         val bytes = try {
-            val answer = core.call("picture", kotlinx.serialization.json.buildJsonObject { put("url", kotlinx.serialization.json.JsonPrimitive(url)) })
-            android.util.Base64.decode((answer as kotlinx.serialization.json.JsonObject)["bytes"]!!.let { (it as kotlinx.serialization.json.JsonPrimitive).content }, android.util.Base64.DEFAULT)
+            core.callBytes("picture", kotlinx.serialization.json.buildJsonObject { put("url", kotlinx.serialization.json.JsonPrimitive(url)) }).second
         } catch (_: fail.still.core.CoreException) {
             null
         } ?: return@produceState

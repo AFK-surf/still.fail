@@ -13,12 +13,14 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import android.webkit.JavascriptInterface
-import android.webkit.WebMessage
-import android.webkit.WebMessagePort
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.WebMessageCompat
+import androidx.webkit.WebMessagePortCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import java.io.ByteArrayInputStream
@@ -96,14 +98,14 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
     private val bodies = ConcurrentHashMap<String, Body>()
     /** The page's WebSockets still open, by the name the page gave each. */
     private val sockets = ConcurrentHashMap<String, Job>()
-    /** What the page sends on its sockets, in the order it sent it. */
-    private val outgoing = Channel<JsonObject>(Channel.UNLIMITED)
+    /** What the page sends on its sockets, in the order it sent it: each with the frame beside it, for a binary one. */
+    private val outgoing = Channel<Pair<JsonObject, ByteArray?>>(Channel.UNLIMITED)
 
     init {
         scope.launch {
-            for (message in outgoing) {
+            for ((message, bytes) in outgoing) {
                 try {
-                    core.call("preview.socket.send", message)
+                    core.call("preview.socket.send", message, bytes)
                 } catch (_: CoreException) {
                     // Its station is gone: its close follows from the socket's own call. A close that did not get
                     // there stops the socket's call instead, so nothing is left open for a page that let it go.
@@ -136,15 +138,16 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         val event = { kind: String, args: String -> js("window.__stillfailSocketEvent&&__stillfailSocketEvent(${q(sid)},${q(kind)}$args)") }
         val job = scope.launch {
             val closed = try {
-                core.call("preview.socket", buildJsonObject {
+                core.stream("preview.socket", buildJsonObject {
                     put("station", station); put("port", port); put("path", path); put("socket", sid)
                     putJsonArray("headers") { if (protocols.isNotEmpty()) add(JsonArray(listOf(JsonPrimitive("sec-websocket-protocol"), JsonPrimitive(protocols)))) }
-                }) { v ->
-                    val o = v as? JsonObject ?: return@call
+                }) { v, bytes ->
+                    val o = v as? JsonObject ?: return@stream
                     when {
                         o["open"] is JsonObject -> event("open", ",${q(o["open"]!!.jsonObject["protocol"]?.jsonPrimitive?.content ?: "")}")
                         o["text"] is JsonPrimitive -> event("text", ",${o["text"]}")
-                        o["binary"] is JsonPrimitive -> event("binary", ",${o["binary"]}")
+                        // A binary frame comes beside its value; the page's script takes it as base64.
+                        o["binary"] != null && bytes != null -> event("binary", ",${q(Base64.encodeToString(bytes, Base64.NO_WRAP))}")
                     }
                 }.jsonObject
             } catch (e: CancellationException) {
@@ -161,15 +164,19 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
     }
 
     @JavascriptInterface
-    fun send(sid: String, text: String) { if (sockets.containsKey(sid)) outgoing.trySend(buildJsonObject { put("socket", sid); put("text", text) }) }
+    fun send(sid: String, text: String) { if (sockets.containsKey(sid)) outgoing.trySend(buildJsonObject { put("socket", sid); put("text", text) } to null) }
 
     @JavascriptInterface
-    fun sendBinary(sid: String, base64: String) { if (sockets.containsKey(sid)) outgoing.trySend(buildJsonObject { put("socket", sid); put("binary", base64) }) }
+    fun sendBinary(sid: String, base64: String) {
+        if (!sockets.containsKey(sid)) return
+        val bytes = try { Base64.decode(base64, Base64.DEFAULT) } catch (_: IllegalArgumentException) { return }
+        outgoing.trySend(buildJsonObject { put("socket", sid); put("binary", true) } to bytes)
+    }
 
     @JavascriptInterface
     fun close(sid: String, code: Int, reason: String) {
         if (!sockets.containsKey(sid)) return
-        outgoing.trySend(buildJsonObject { put("socket", sid); putJsonArray("close") { add(JsonPrimitive(code)); add(JsonPrimitive(reason)) } })
+        outgoing.trySend(buildJsonObject { put("socket", sid); putJsonArray("close") { add(JsonPrimitive(code)); add(JsonPrimitive(reason)) } } to null)
     }
 
     @JavascriptInterface
@@ -187,12 +194,22 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
     // A WebView hands the page what shouldInterceptRequest answers only once its buffer (2 KB) is full, so a body that
     // comes a line at a time would reach the page in lumps. The page's fetch() of its own host comes here instead, over
     // a message port only the page's top frame holds: its head, then each piece of its body as the station sends it.
-    // It can only ask the service at `port` of `station`, like every other request of the page's.
+    // It can only ask the service at `port` of `station`, like every other request of the page's. Bytes go on the port
+    // as they are (an ArrayBuffer message: the fetch's id, then its bytes) where the WebView can (WEB_MESSAGE_ARRAY_BUFFER),
+    // else as base64 in JSON.
 
     /** The page's port (main thread): one per page, given to it when its script asks (fetchPort). */
-    private var fetchPort: WebMessagePort? = null
+    private var fetchPort: WebMessagePortCompat? = null
     /** The page's fetches under way, by the id the page gave each. */
     private val fetches = ConcurrentHashMap<String, Job>()
+    /** Whether the page's port carries bytes as they are. */
+    private val binary = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_ARRAY_BUFFER)
+    /** Requests' bodies the page sent on its port as bytes, each just before its `go`, by the fetch's id (main thread). */
+    private val fetchBodies = HashMap<String, ByteArray>()
+
+    /** Whether the page's script is to send its fetches' bodies as bytes, and take their answers' so. */
+    @JavascriptInterface
+    fun fetchBytes(): Boolean = binary
 
     /** The page's script asks for its port, which comes as a message (`token`, the port) to its window. False: none (a file's page). */
     @JavascriptInterface
@@ -201,15 +218,18 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         main.post {
             val view = web ?: return@post
             if (fetchPort != null) return@post
-            val (mine, theirs) = view.createWebMessageChannel()
+            val (mine, theirs) = WebViewCompat.createWebMessageChannel(view)
             fetchPort = mine
-            mine.setWebMessageCallback(object : WebMessagePort.WebMessageCallback() {
-                override fun onMessage(port: WebMessagePort, message: WebMessage?) {
-                    if (port === fetchPort) fetchSaid(port, message?.data ?: return)
+            mine.setWebMessageCallback(main, object : WebMessagePortCompat.WebMessageCallbackCompat() {
+                // The port it hears on is a wrapper made anew each time: `mine` is the one kept.
+                override fun onMessage(port: WebMessagePortCompat, message: WebMessageCompat?) {
+                    if (mine !== fetchPort || message == null) return
+                    if (message.type == WebMessageCompat.TYPE_ARRAY_BUFFER) { if (binary) framed(message.arrayBuffer)?.let { (id, bytes) -> fetchBodies[id] = bytes } }
+                    else fetchSaid(mine, message.data ?: return)
                 }
-            }, main)
+            })
             // Only to the preview's own page: a page from anywhere else in this WebView gets nothing.
-            view.postWebMessage(WebMessage(token, arrayOf(theirs)), android.net.Uri.parse("https://$PREVIEW_HOST"))
+            WebViewCompat.postWebMessage(view, WebMessageCompat(token, arrayOf(theirs)), android.net.Uri.parse("https://$PREVIEW_HOST"))
         }
         return true
     }
@@ -220,16 +240,25 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         fetchPort = null
         fetches.values.forEach { it.cancel() }
         fetches.clear()
+        fetchBodies.clear()
     }
 
     /** What the page says on its port: `go` (a request), `stop` (one it gave up). Anything else is let go. */
-    private fun fetchSaid(port: WebMessagePort, data: String) {
+    private fun fetchSaid(port: WebMessagePortCompat, data: String) {
         val o = try { kotlinx.serialization.json.Json.parseToJsonElement(data) as? JsonObject } catch (_: Exception) { null } ?: return
-        val id = (o["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotEmpty() && it.length <= 64 } ?: return
+        val id = (o["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotEmpty() && it.length <= 64 && it.all { c -> c.code in 0x21..0x7e } } ?: return
+        val sent = fetchBodies.remove(id)
         when ((o["t"] as? JsonPrimitive)?.content) {
             "stop" -> fetches.remove(id)?.cancel()
             "go" -> {
-                val tell = { reply: JsonObject -> main.post { if (port === fetchPort) port.postMessage(WebMessage(reply.toString())) }; Unit }
+                val tell = { reply: JsonObject -> main.post { if (port === fetchPort) port.postMessage(WebMessageCompat(reply.toString())) }; Unit }
+                // A piece of the answer's body: as it is beside its id where the port carries bytes, else base64.
+                val piece: (ByteArray, Int, Int) -> Unit = { bytes, at, n ->
+                    if (binary) {
+                        val frame = frame(id, bytes, at, n)
+                        main.post { if (port === fetchPort) port.postMessage(WebMessageCompat(frame)) }
+                    } else tell(buildJsonObject { put("t", "chunk"); put("id", id); put("b", Base64.encodeToString(bytes, at, n, Base64.NO_WRAP)) })
+                }
                 val failed = { message: String -> tell(buildJsonObject { put("t", "error"); put("id", id); put("message", message) }) }
                 val method = (o["method"] as? JsonPrimitive)?.content?.uppercase()?.takeIf { Regex("[A-Z]{1,16}").matches(it) }
                 val path = (o["path"] as? JsonPrimitive)?.content?.takeIf { it.startsWith("/") && it.length <= 16384 && it.none { c -> c.code <= 0x20 || c.code == 0x7f } }
@@ -239,7 +268,7 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
                         pair[0].jsonPrimitive.content to pair[1].jsonPrimitive.content
                     }.filter { (k, v) -> Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]{1,256}").matches(k) && v.none { c -> c == '\r' || c == '\n' } && !k.equals("host", ignoreCase = true) && !k.equals(BODY_HEADER, ignoreCase = true) }
                 } catch (_: Exception) { null }
-                val body = try { (o["body"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() }?.let { Base64.decode(it, Base64.DEFAULT) } } catch (_: IllegalArgumentException) { return failed(t("android-chat.web.badBody")) }
+                val body = sent?.takeIf { it.isNotEmpty() } ?: try { (o["body"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() }?.let { Base64.decode(it, Base64.DEFAULT) } } catch (_: IllegalArgumentException) { return failed(t("android-chat.web.badBody")) }
                 if (method == null || path == null || headers == null || fetches.containsKey(id)) return failed(t("android-chat.web.badRequest"))
                 val follow = (o["redirect"] as? JsonPrimitive)?.content != "manual" && (o["redirect"] as? JsonPrimitive)?.content != "error"
                 val withCookies = (o["cookies"] as? JsonPrimitive)?.content != "false"
@@ -252,7 +281,8 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
                             put("t", "head"); put("id", id); put("status", e.status); put("statusText", reason(e.status)); put("path", path); put("redirected", false)
                             putJsonArray("headers") { add(JsonArray(listOf(JsonPrimitive("content-type"), JsonPrimitive("text/plain; charset=utf-8")))) }
                         })
-                        tell(buildJsonObject { put("t", "chunk"); put("id", id); put("b", Base64.encodeToString((e.message ?: "").toByteArray(), Base64.NO_WRAP)) })
+                        val words = (e.message ?: "").toByteArray()
+                        piece(words, 0, words.size)
                         return@launch tell(buildJsonObject { put("t", "end"); put("id", id) })
                     }
                     val head = answer.head
@@ -268,7 +298,7 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
                             while (true) {
                                 val n = input.read(buf, 0, buf.size)
                                 if (n < 0) break
-                                if (n > 0) tell(buildJsonObject { put("t", "chunk"); put("id", id); put("b", Base64.encodeToString(buf, 0, n, Base64.NO_WRAP)) })
+                                if (n > 0) piece(buf, 0, n)
                             }
                         }
                         tell(buildJsonObject { put("t", "end"); put("id", id) })
@@ -282,6 +312,25 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         }
     }
 
+    /** A fetch's bytes as they go on its port: the length of its id, its id (ASCII), then the bytes. */
+    private fun frame(id: String, bytes: ByteArray, at: Int, n: Int): ByteArray {
+        val name = id.toByteArray(Charsets.US_ASCII)
+        val out = ByteArray(1 + name.size + n)
+        out[0] = name.size.toByte()
+        System.arraycopy(name, 0, out, 1, name.size)
+        System.arraycopy(bytes, at, out, 1 + name.size, n)
+        return out
+    }
+
+    /** A fetch's id and bytes, as the page frames them ([frame]); null for anything else. */
+    private fun framed(message: ByteArray): Pair<String, ByteArray>? {
+        val n = message.firstOrNull()?.toInt()?.and(0xff) ?: return null
+        if (n == 0 || n > 64 || message.size < 1 + n) return null
+        val id = String(message, 1, n, Charsets.US_ASCII)
+        if (id.any { it.code !in 0x21..0x7e }) return null
+        return id to message.copyOfRange(1 + n, message.size)
+    }
+
     // ── the WebView's requests ──
 
     /** An answer's head, its body to come (read from `body`, closed to stop it). */
@@ -293,20 +342,19 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         val chunks = Chunks()
         val job = within.launch(Dispatchers.Default) {
             try {
-                core.call("station.preview", buildJsonObject {
+                // The request's body beside the call, and each piece of the answer's beside its `{chunk: true}`.
+                core.stream("station.preview", buildJsonObject {
                     put("station", station); put("port", port); put("method", method); put("path", path); put("stream", true)
-                    put("body", body?.let { Base64.encodeToString(it, Base64.NO_WRAP) } ?: "")
                     putJsonArray("headers") { headers.forEach { (k, v) -> add(JsonArray(listOf(JsonPrimitive(k), JsonPrimitive(v)))) } }
-                }) { v ->
-                    val o = v as? JsonObject ?: return@call
+                }, body?.takeIf { it.isNotEmpty() }) { v, bytes ->
+                    val o = v as? JsonObject ?: return@stream
                     val h = o["head"] as? JsonObject
-                    val c = o["chunk"] as? JsonPrimitive
                     if (h != null) head.complete(Head(
                         h["status"]!!.jsonPrimitive.int,
                         h["headers"]?.jsonArray?.map { it.jsonArray[0].jsonPrimitive.content to it.jsonArray[1].jsonPrimitive.content } ?: emptyList(),
                         chunks,
                     ))
-                    else if (c != null) chunks.put(Base64.decode(c.content, Base64.DEFAULT))
+                    else if (o["chunk"] != null && bytes != null) chunks.put(bytes)
                 }
                 chunks.end(null)
                 head.completeExceptionally(IOException(t("android-chat.web.noAnswer")))

@@ -1,8 +1,9 @@
 // The core for the motion tests: topics answered from values the test sets (and set again mid-motion: a message
-// arriving, the station taking one), calls answered by the test's `answer`; what the app called is kept in `calls`.
-// Calls named in `streams` (`screen.view`) are held open: the test says their values (with bytes beside them, as a
-// screen's frames come) and ends them. A part read with `stream` (`drive.read`, `station.file.part`) has the `bytes` its
-// answer gives said beside a value before it, as the core says them, and none in the answer.
+// arriving, the station taking one), calls answered by the test's `answer`; what the app called is kept in `calls`, the
+// bytes it sent beside them in `carried`. Calls named in `streams` (`screen.view`) are held open: the test says their
+// values (with bytes beside them, as a screen's frames come) and ends them. An answer's `bytes` (base64, as a test writes
+// them) go beside it, as the core sends a file; a part read with `stream` (`drive.read`, `station.file.part`) has them
+// said beside a value before it, and none beside the answer.
 package fail.still.android.motion
 
 import android.util.Base64
@@ -16,6 +17,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -35,9 +37,18 @@ class FakeCore {
 
     /** Each call the app made: its name and params. */
     val calls = CopyOnWriteArrayList<Pair<String, JsonObject>>()
+    /** The bytes each of [calls] carried beside its params (an upload's part), null for one with none; in `answer`, the last is its call's. */
+    val carried = CopyOnWriteArrayList<ByteArray?>()
 
     /** The answer to a call (`ok`); throwing a [CoreException] answers it as an error. */
     @Volatile var answer: (name: String, params: JsonObject) -> JsonElement = { _, _ -> JsonNull }
+
+    /**
+     * Calls that say how they go before they answer (`station.preview` with `stream`), by name: each value said through
+     * `say` with the bytes beside it, then its answer; the bytes the call carried come with its params. Off the app's
+     * threads, as the core's.
+     */
+    val talks = ConcurrentHashMap<String, (params: JsonObject, bytes: ByteArray?, say: (JsonElement, ByteArray?) -> Unit) -> JsonElement>()
 
     /** The calls held open rather than answered (a screen's view), by name. */
     val streams: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -46,9 +57,9 @@ class FakeCore {
     /** The streamed calls the app cancelled, by name. */
     val cancelled = CopyOnWriteArrayList<String>()
 
-    val core: StillFailCore = StillFailCore.scriptedBytes { json, reply -> this.reply = reply; handle(json, reply) }
+    val core: StillFailCore = StillFailCore.scriptedBytes { json, bytes, reply -> this.reply = reply; handle(json, bytes, reply) }
 
-    private fun handle(json: String, replyBytes: (String, ByteArray?) -> Unit) {
+    private fun handle(json: String, sent: ByteArray?, replyBytes: (String, ByteArray?) -> Unit) {
         val reply = { text: String -> replyBytes(text, null) }
         val m = Json.parseToJsonElement(json).jsonObject
         val id = m["id"]!!.jsonPrimitive.long
@@ -67,21 +78,36 @@ class FakeCore {
         }
         val name = m["call"]?.jsonPrimitive?.contentOrNull ?: return
         val params = m["params"]?.jsonObject ?: JsonObject(emptyMap())
+        carried += sent
         calls += name to params
         if (name in streams) { open[name] = id; return }
+        talks[name]?.let { talk ->
+            Thread {
+                val out = try {
+                    val ok = talk(params, sent) { value, bytes -> replyBytes(valueOf(id, value), bytes) }
+                    buildJsonObject { put("id", id); put("ok", ok) }
+                } catch (e: CoreException) {
+                    buildJsonObject { put("id", id); put("error", buildJsonObject { put("code", e.code); put("message", e.message) }) }
+                }
+                reply(out.toString())
+            }.start()
+            return
+        }
+        var beside: ByteArray? = null
         val out = try {
             var ok = answer(name, params)
-            val bytes = (ok as? JsonObject)?.get("bytes")?.jsonPrimitive?.contentOrNull
-            if (params["stream"]?.jsonPrimitive?.booleanOrNull == true && bytes != null) {
+            val bytes = ((ok as? JsonObject)?.get("bytes") as? JsonPrimitive)?.takeIf { it.isString }?.content
+            if (bytes != null) {
                 val raw = Base64.decode(bytes, Base64.DEFAULT)
-                if (raw.isNotEmpty()) replyBytes(valueOf(id, buildJsonObject { put("loaded", raw.size) }), raw)
                 ok = JsonObject((ok as JsonObject) - "bytes")
+                if (params["stream"]?.jsonPrimitive?.booleanOrNull != true) beside = raw
+                else if (raw.isNotEmpty()) replyBytes(valueOf(id, buildJsonObject { put("loaded", raw.size) }), raw)
             }
             buildJsonObject { put("id", id); put("ok", ok) }
         } catch (e: CoreException) {
             buildJsonObject { put("id", id); put("error", buildJsonObject { put("code", e.code); put("message", e.message) }) }
         }
-        reply(out.toString())
+        replyBytes(out.toString(), beside)
     }
 
     private fun valueOf(id: Long, value: JsonElement) = buildJsonObject { put("id", id); put("value", value) }.toString()

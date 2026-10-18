@@ -42,10 +42,13 @@ private class FakeEngines {
 
 private class FakeEngine(val deliver: (Engine, String, ByteArray?) -> Unit) : Engine {
     val sent = mutableListOf<JsonElement>()
+    /** The bytes each of [sent] carried beside it, null for one with none. */
+    val carried = mutableListOf<ByteArray?>()
     var closed = false
     override fun connect() = 1L
-    override fun receive(client: Long, json: String) {
+    override fun receive(client: Long, json: String, bytes: ByteArray?) {
         sent += Json.parseToJsonElement(json)
+        carried += bytes
     }
     override fun close() {
         closed = true
@@ -83,7 +86,7 @@ class StillFailCoreTest {
             object : Engine {
                 init { if (first) fatal = { callback(this, """{"fatal":"restart during receive"}""", null) } }
                 override fun connect() = 1L
-                override fun receive(client: Long, json: String) {
+                override fun receive(client: Long, json: String, bytes: ByteArray?) {
                     if (first) { entered.countDown(); release.await() }
                 }
                 override fun close() { if (first) closed.countDown() }
@@ -141,6 +144,50 @@ class StillFailCoreTest {
     }
 
     @Test
+    fun bytesGoBesideACallAndComeBackBesideItsAnswer() = runTest {
+        val engines = FakeEngines(); val core = core(engines)
+        val events = mutableListOf<String>()
+        val read = async { core.callBytes("station.file", obj("""{"key":"k"}""")) }
+        val sent = async { core.call("station.upload.part", obj("""{"id":"u"}"""), "part".toByteArray()) }
+        val streamed = async {
+            core.streamBytes("station.preview", obj("""{"path":"/"}"""), "body".toByteArray()) { value, bytes -> events += "$value${bytes?.let { ":" + String(it) } ?: ""}" }
+        }
+        runCurrent()
+        assertEquals(listOf(null, "part", "body"), engines.last.carried.map { it?.let(::String) })
+        engines.last.reply("""{"id":1,"ok":{"type":"text/plain"}}""", "file".toByteArray())
+        engines.last.reply("""{"id":2,"ok":{"have":4}}""")
+        engines.last.reply("""{"id":3,"value":{"chunk":true}}""", "piece".toByteArray())
+        engines.last.reply("""{"id":3,"ok":{"status":200}}""", "rest".toByteArray())
+        runCurrent()
+        val (answer, bytes) = read.await()
+        assertEquals(json("""{"type":"text/plain"}"""), answer)
+        assertEquals("file", String(bytes!!))
+        assertEquals(json("""{"have":4}"""), sent.await())
+        val (head, rest) = streamed.await()
+        assertEquals(listOf("""{"chunk":true}:piece"""), events)
+        assertEquals(json("""{"status":200}"""), head)
+        assertEquals("rest", String(rest!!))
+    }
+
+    @Test
+    fun aCallMadeWhileTheCoreRestartsKeepsItsBytes() = runTest {
+        val engines = FakeEngines(); val core = core(engines)
+        runCurrent()
+        engines.last.reply("""{"fatal":"panic"}""")
+        engines.failing = 1
+        runCurrent()
+        val queued = async { core.call("drive.upload.part", obj("""{"offset":0}"""), "part".toByteArray()) }
+        advanceTimeBy(1000)
+        runCurrent()
+        assertEquals(2, engines.opened.size)
+        assertEquals(listOf(json("""{"id":1,"call":"drive.upload.part","params":{"offset":0}}""")), engines.last.sent)
+        assertEquals("part", String(engines.last.carried.single()!!))
+        engines.last.reply("""{"id":1,"ok":null}""")
+        runCurrent()
+        queued.await()
+    }
+
+    @Test
     fun aToldCallIsSentAndItsAnswerLetGo() = runTest {
         val engines = FakeEngines(); val core = core(engines)
         core.tell("screen.ack", obj("""{"view":"v","ts":5}"""))
@@ -164,7 +211,7 @@ class StillFailCoreTest {
             object : Engine {
                 init { deliver = { callback(this, it, null) } }
                 override fun connect() = 1L
-                override fun receive(client: Long, json: String) { sent += obj(json); posted.release() }
+                override fun receive(client: Long, json: String, bytes: ByteArray?) { sent += obj(json); posted.release() }
                 override fun close() {}
             }
         }, parseMessage = { raw ->
