@@ -480,7 +480,7 @@ export function EnvEditor({ env, title, lead, onSave, busy }: { env: EnvVar[]; t
         <div className={css.envTable}>
           {rows.length > 0
             ? <div className={`${css.envRow} ${css.envHead}`} aria-hidden><span>{t("web-pages.profiles.envName")}</span><span>{t("web-pages.profiles.envValue")}</span><span className={css.envHeadEnd}>{t("common.delete")}</span></div>
-            : <p className={shellCss.muted}>{t("web-pages.profiles.envEmpty")}</p>}
+            : <span className={shellCss.muted}>{t("web-pages.profiles.envEmpty")}</span>}
           {rows.map((r) => {
             const secret = r.masked !== null || /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(r.key);
             return (
