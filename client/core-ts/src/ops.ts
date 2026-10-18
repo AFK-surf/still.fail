@@ -58,6 +58,8 @@ export const PARAMS: Record<string, string> = {
   "session.stop": "key:string",
   "tools.access": "",
   "tools.setAccess": "access:string",
+  "station.modules": "",
+  "station.module.set": "id:string enabled:boolean",
   "agentEnv.set": "env?:json text?:string",
   "search.setPersonal": "personal:boolean",
   "session.warm": "key:string",
@@ -256,6 +258,12 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => "/tools/access", null, NONE);
     case "tools.setAccess":
       return op("PUT", () => "/tools/access", p.pick(["access"]), OVERVIEW);
+    // The modules beside the station (docs/station-modules.md): each still.fail makes and each it runs, how it is now;
+    // one turned on (installed as a package and run) or off by the workspace's owners and admins.
+    case "station.modules":
+      return op("GET", () => "/modules", null, NONE);
+    case "station.module.set":
+      return op("PUT", () => `/modules/${encode(p.str("id"))}`, { enabled: p.bool("enabled") }, OVERVIEW);
     // The variables everything the station starts for its agents runs with (docs/agent-env.md), set by the workspace's
     // owners and admins: `text`, all of them as `NAME=value` lines; or `env`, a patch (a string sets one, null removes it).
     case "agentEnv.set":

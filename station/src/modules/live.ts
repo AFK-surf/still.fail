@@ -12,10 +12,11 @@ import { randomBytes } from "node:crypto";
 import { closeSync, mkdirSync, openSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { Cause, Clock, Effect, FiberMap, Layer, Option, Queue, Schedule, Stream } from "effect";
-import { ModulePackages, Modules, Paths, Previous, StationConfig, StationDrive } from "../services.ts";
+import { Events, ModulePackages, Modules, Parts, Paths, Previous, StationConfig, StationDrive } from "../services.ts";
 import { dir as thumbsDir } from "../drive/thumbs.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { log } from "../ops/log.ts";
+import { routes as modulesRoutes } from "../api/routes/modules.ts";
 import { platform } from "../platform/index.ts";
 import { type Module, type ModuleSet, type ModuleSpec, isPackage, modulesOf } from "./modules.ts";
 import type { Packages } from "./packages.ts";
@@ -231,6 +232,9 @@ export const ModulesLive = Layer.effectDiscard(
     const drive = yield* StationDrive;
     // Those named by their package: installed and updated with the station's own updates (modules/packages.ts).
     const packages = yield* ModulePackages;
+    // Members see them, and owners and admins turn them on or off (api/routes/modules.ts).
+    const events = yield* Events;
+    (yield* Parts).routes(modulesRoutes({ config, modules, changed: () => events.overviewChanged() }));
     // Sockets (unix domain) are how a module and the station talk: macOS and Linux.
     if (!platform.hasUnixSockets) {
       if (modulesOf(config.raw()).specs.length > 0) log.warn("modules", "modules run on macOS and Linux only; none is started here");
