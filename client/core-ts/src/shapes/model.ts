@@ -1,5 +1,21 @@
 // Models by what they are rather than how a provider spells them (the station reads them alike).
 
+/// What a model's id says, worked out once per id: lists sort and name their models on every change they make (a
+/// station's card, its profiles' series), each comparison reading both ids again, much of what the core did on a phone
+/// (2026-10-19). Kept for as many ids as a workspace has, then started over.
+function remembered<T>(of: (id: string) => T): (id: string) => T {
+  const kept = new Map<string, T>();
+  return (id) => {
+    let v = kept.get(id);
+    if (v === undefined && !kept.has(id)) {
+      if (kept.size >= 2048) kept.clear();
+      v = of(id);
+      kept.set(id, v);
+    }
+    return v as T;
+  };
+}
+
 const isDigits = (s: string) => s.length > 0 && /^[0-9]+$/.test(s);
 const isAlpha = (s: string) => s.length > 0 && /^[A-Za-z]+$/.test(s);
 
@@ -40,7 +56,8 @@ export function same(a: string, b: string): boolean {
 }
 
 /// A model as people call it: Opus 5.5, GPT-6 Astra, o4 Mini; one whose family is not known here reads as spelled.
-export function name(id: string): string {
+export const name = remembered(nameOf);
+function nameOf(id: string): string {
   const k = key(id);
   const at = k.indexOf("[");
   const base = at >= 0 ? k.slice(0, at) : k;
@@ -57,7 +74,8 @@ function oSeries(first: string): boolean {
 }
 
 /// The series a model is of (Opus, Sol, GPT, o 系列, DeepSeek…); null when its family is not known here.
-export function family(id: string): string | null {
+export const family = remembered(familyOf);
+function familyOf(id: string): string | null {
   const k = key(id);
   const base = k.split("[")[0];
   if (namedOf(base) === null) return null;
@@ -93,7 +111,8 @@ export function compareOrder(a: string, b: string): number {
   return ka.key < kb.key ? -1 : ka.key > kb.key ? 1 : 0;
 }
 
-function orderKey(id: string): { rank: number; family: string; version: number[]; key: string } {
+const orderKey = remembered(orderKeyOf);
+function orderKeyOf(id: string): Readonly<{ rank: number; family: string; version: readonly number[]; key: string }> {
   const f = family(id);
   const rank = f === null ? CLAUDE.length + 1 : (() => {
     const i = CLAUDE.indexOf(f.toLowerCase());

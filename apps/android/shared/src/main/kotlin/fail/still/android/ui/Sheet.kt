@@ -204,7 +204,7 @@ fun SheetHost(spec: SheetSpec?, haze: HazeState, close: () -> Unit) {
                 // Frosted glass over the page, as the bars and capsules are. The web's backdrop has the scrim in it (it
                 // frosts all that is behind it); here the pages alone are the source, so the scrim goes under the glass.
                 .then(if (current.solid) Modifier.background(paper) else Modifier.hazeEffect(haze) {
-                    backgroundColor = paper; blurRadius = cssBlur(28f); noiseFactor = 0f
+                    backgroundColor = paper; blurRadius = cssBlur(28f); noiseFactor = 0f; inputScale = GlassScale
                     tints = listOf(HazeTint(Color.Black.copy(alpha = 0.28f * scrim)), HazeTint(glass))
                 })
                 .pointerInput(Unit) { detectTapGestures { } }

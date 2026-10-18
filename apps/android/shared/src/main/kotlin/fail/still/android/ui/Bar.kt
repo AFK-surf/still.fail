@@ -872,6 +872,7 @@ fun BottomBar(
                         backgroundColor = bg
                         tints = listOf(HazeTint(raised.copy(alpha = 0.72f)))
                         blurRadius = GlassBlur
+                        inputScale = GlassScale
                         noiseFactor = 0f
                     }
                     .drawWithContent {
@@ -942,6 +943,7 @@ fun BottomBar(
                         backgroundColor = bg
                         tints = listOf(HazeTint(accent.copy(alpha = 0.86f)))
                         blurRadius = GlassBlur
+                        inputScale = GlassScale
                         noiseFactor = 0f
                     }
                     .drawWithContent {
@@ -998,6 +1000,7 @@ fun BottomBar(
                         backgroundColor = bg
                         tints = listOf(HazeTint(raised.copy(alpha = 0.72f)), HazeTint(Color.White.copy(alpha = if (dark) 0.12f else 0.42f)))
                         blurRadius = cssBlur(24f)
+                        inputScale = GlassScale
                         noiseFactor = 0f
                     }
                     .drawWithContent {

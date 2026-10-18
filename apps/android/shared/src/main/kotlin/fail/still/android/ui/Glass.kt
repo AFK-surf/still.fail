@@ -17,9 +17,17 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+
+/**
+ * What the app's glass blurs from: the page at a third of its pixels each way, so the blur (redone whenever anything
+ * under it moves, a step of an at-work mark too) is about a ninth of the work at full size. Under the glass's 70% tint
+ * the softer source does not show (2026-10-19, battery).
+ */
+val GlassScale: HazeInputScale = HazeInputScale.Fixed(1f / 3f)
 
 /** A bar at the top of the page, over the list that `state` is the source of: frosted, a hairline along its bottom. */
 @Composable
@@ -30,6 +38,7 @@ fun Modifier.glass(state: HazeState): Modifier {
         backgroundColor = bg
         tints = listOf(HazeTint(bg.copy(alpha = 0.7f)))
         blurRadius = cssBlur(24f)
+        inputScale = GlassScale
         noiseFactor = 0f
     }.drawWithContent {
         drawContent()
@@ -47,6 +56,7 @@ fun Modifier.glassFoot(state: HazeState): Modifier {
         backgroundColor = bg
         tints = listOf(HazeTint(bg.copy(alpha = 0.7f)))
         blurRadius = cssBlur(24f)
+        inputScale = GlassScale
         noiseFactor = 0f
     }
 }
@@ -89,6 +99,7 @@ fun Modifier.floating(state: HazeState, shape: Shape, tint: Color = Raised): Mod
             backgroundColor = bg
             tints = listOf(HazeTint(tint.copy(alpha = 0.72f)))
             blurRadius = GlassBlur
+            inputScale = GlassScale
             noiseFactor = 0f
         }
         .keepsTouches()
