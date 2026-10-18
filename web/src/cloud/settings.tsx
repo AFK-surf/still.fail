@@ -8,7 +8,7 @@ import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION } from "../pages/LocalStation.tsx";
-import { ArrowLeft, Bell, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowLeft, Bell, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
 import { SecurityNotice } from "./Security.tsx";
 import { VaultWaiting } from "./Vault.tsx";
 import { useCommands } from "../commands.ts";
@@ -91,6 +91,7 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("station", "stations", "Station", Server, "station"),
     ...page("station", "connects", t("web-pages.settings.nav.connects"), Im, "connects slack", some),
     ...page("station", "profiles", "Profile", Quota, "profile", some),
+    ...page("station", "archive", t("web-pages.archiving.title"), Archive, "archive archiving auto"),
     ...page("station", "automatic-decisions", t("web-pages.automaticDecisions.title"), Check, "automatic decisions", some),
     ...page("station", "memory", t("web-pages.settings.nav.memory"), Brain, "memory", some),
     ...page("station", "usage", t("web-pages.settings.nav.usage"), Chart, "usage", some),

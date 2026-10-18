@@ -932,6 +932,21 @@ export class Accounts {
     });
   }
 
+  /// PUT /archiving (a workspace manager's): how chats go to the archive on their own (sessions/lifecycle.ts
+  /// autoArchive): `days` idle (0: never), `slackDays` for Slack's sessions stopped at a block, and `reviewed`: only
+  /// those the archive review recommended.
+  putArchiving(input: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
+    if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.archiving.managersOnly"));
+    const days = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 365;
+    if (!days(input.days) || !days(input.slackDays) || typeof input.reviewed !== "boolean") throw new Refusal(400, tr(lang, "station.archiving.badSettings"));
+    const { days: idle, slackDays, reviewed } = input;
+    this.save(viewer, "archiving", (raw) => {
+      raw.autoArchiveDays = idle;
+      raw.slackArchiveDays = slackDays;
+      raw.autoArchiveReviewed = reviewed;
+    });
+  }
+
   /// POST /automatic-decisions/review: the done chats no decision has answered, reviewed now in the background; how many.
   reviewUndecided(viewer: Viewer, lang: Lang = stationLang()): number {
     if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnlyReview"));

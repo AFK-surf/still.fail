@@ -362,6 +362,17 @@ export interface ArchiveView {
 	more?: boolean;
 }
 
+export interface ArchivingView {
+	/** Days idle before a done chat is archived on its own; 0: never. */
+	days: number;
+	/** Days idle before a session heard only in Slack goes even stopped at a block; 0: never. */
+	slackDays: number;
+	/** Only chats the archive review recommended go (none while the review is off). */
+	reviewed: boolean;
+	/** The viewer manages the station: may change it. */
+	canEdit: boolean;
+}
+
 export interface Attachment {
 	name: string;
 	path: string;
@@ -3558,6 +3569,8 @@ export interface StationPermissions {
 /** A station's overview, with what the clients show of its connects and profiles. */
 export interface Overview {
 	automaticDecisions?: AutomaticDecisionView;
+	/** How its chats go to the archive on their own (`archiving.save`). Absent from stations before it. */
+	archiving?: ArchivingView;
 	viewer: Viewer;
 	connects: Connect[];
 	profiles: Profile[];

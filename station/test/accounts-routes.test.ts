@@ -483,6 +483,16 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("automatic archiving is for a workspace manager to change", async () => {
+    const t = await rig();
+    assert.deepEqual(await t.call("PUT", "/archiving", { days: 2, slackDays: 3, reviewed: true }, member), [403, { error: "只有 workspace 管理员能修改自动归档" }]);
+    assert.deepEqual(await t.call("PUT", "/archiving", { days: -1, slackDays: 3, reviewed: true }), [400, { error: "自动归档的设置不正确：天数要在 0 到 365 之间" }]);
+    assert.deepEqual(await t.call("PUT", "/archiving", { days: 2, slackDays: 3 }), [400, { error: "自动归档的设置不正确：天数要在 0 到 365 之间" }]);
+    assert.equal((await t.call("PUT", "/archiving", { days: 2, slackDays: 5, reviewed: true }))[0], 200);
+    assert.deepEqual([t.config.raw().autoArchiveDays, t.config.raw().slackArchiveDays, t.config.raw().autoArchiveReviewed], [2, 5, true]);
+    await t.close();
+  });
+
   test("the archive policy page: its options with the chats last put there, who changed it, and edits by managers", async () => {
     const store = Store.open(":memory:", null);
     store.insertSession({ key: "titled", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/a", token: "t", createdAt: 1, lastActiveAt: 1 });

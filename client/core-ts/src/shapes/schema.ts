@@ -650,6 +650,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { keepNone: true }),
   Overview: struct([
     ["automaticDecisions", opt("AutomaticDecisionView")],
+    ["archiving", opt("ArchivingView"), { doc: "How its chats go to the archive on their own (`archiving.save`). Absent from stations before it." }],
     ["viewer", "Viewer"],
     ["connects", vec("Connect")],
     ["profiles", vec("Profile")],
@@ -2627,6 +2628,12 @@ export const SHAPES: Record<string, Shape> = {
     ["models", vec("AutomaticDecisionModel")],
     ["recent", vec("AutomaticDecisionCheck")],
     ["policy", opt("ArchivePolicyView"), { default: true, doc: "The archive policy the completion check follows. Absent from stations before it." }],
+  ], { keepNone: true }),
+  ArchivingView: struct([
+    ["days", "f64", { doc: "Days idle before a done chat is archived on its own; 0: never." }],
+    ["slackDays", "f64", { doc: "Days idle before a session heard only in Slack goes even stopped at a block; 0: never." }],
+    ["reviewed", "bool", { doc: "Only chats the archive review recommended go (none while the review is off)." }],
+    ["canEdit", "bool", { doc: "The viewer manages the station: may change it." }],
   ], { keepNone: true }),
   ArchivePolicyView: struct([
     ["text", "String", { doc: "The policy in words: what the decision model is told." }],

@@ -29,6 +29,7 @@ export interface OperationParams {
   "automaticDecisions.refresh": {  };
   "automaticDecisions.review": {  };
   "automaticDecisions.policy": { input: unknown };
+  "archiving.save": { days: number; reviewed: boolean; slackDays: number };
   "connect.create": { input?: unknown; id?: string | null | undefined };
   "connect.put": { id: string; input?: unknown };
   "connect.delete": { id: string };
@@ -148,6 +149,7 @@ export function bindStationOperations(call: Call) {
     automaticDecisionsRefresh: <T = unknown>(params: OperationParams["automaticDecisions.refresh"] = {}) => call("automaticDecisions.refresh", params) as Promise<T>,
     automaticDecisionsReview: <T = unknown>(params: OperationParams["automaticDecisions.review"] = {}) => call("automaticDecisions.review", params) as Promise<T>,
     automaticDecisionsPolicy: <T = unknown>(params: OperationParams["automaticDecisions.policy"]) => call("automaticDecisions.policy", params) as Promise<T>,
+    archivingSave: <T = unknown>(params: OperationParams["archiving.save"]) => call("archiving.save", params) as Promise<T>,
     connectCreate: <T = unknown>(params: OperationParams["connect.create"] = {}) => call("connect.create", params) as Promise<T>,
     connectPut: <T = unknown>(params: OperationParams["connect.put"]) => call("connect.put", params) as Promise<T>,
     connectDelete: <T = unknown>(params: OperationParams["connect.delete"]) => call("connect.delete", params) as Promise<T>,

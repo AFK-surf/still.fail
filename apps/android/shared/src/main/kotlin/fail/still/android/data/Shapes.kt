@@ -379,6 +379,18 @@ data class ArchiveView (
 )
 
 @Serializable
+data class ArchivingView (
+	/// Days idle before a done chat is archived on its own; 0: never.
+	val days: Double,
+	/// Days idle before a session heard only in Slack goes even stopped at a block; 0: never.
+	val slackDays: Double,
+	/// Only chats the archive review recommended go (none while the review is off).
+	val reviewed: Boolean,
+	/// The viewer manages the station: may change it.
+	val canEdit: Boolean
+)
+
+@Serializable
 data class Attachment (
 	val name: String,
 	val path: String,
@@ -3556,6 +3568,8 @@ data class StationPermissions (
 @Serializable
 data class Overview (
 	val automaticDecisions: AutomaticDecisionView? = null,
+	/// How its chats go to the archive on their own (`archiving.save`). Absent from stations before it.
+	val archiving: ArchivingView? = null,
 	val viewer: Viewer,
 	val connects: List<Connect>,
 	val profiles: List<Profile>,
