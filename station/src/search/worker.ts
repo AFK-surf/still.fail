@@ -7,6 +7,7 @@ import { parentPort, workerData } from "node:worker_threads";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { openStore } from "../read/store.ts";
+import { wall } from "../ops/fibers.ts";
 import * as store from "../read/store.ts";
 import { agentHomeOf } from "../read/memory.ts";
 import { type Asker, SearchIndex } from "./index.ts";
@@ -42,7 +43,7 @@ let sweeping = false;
 /// The first look over everything since the start is not done yet: what is found may be missing some.
 let building = true;
 let pumping = false;
-let timer: ReturnType<typeof setTimeout> | null = null;
+let timer: (() => void) | null = null;
 /// The flushes asked for, answered once the work is done.
 let flushes: number[] = [];
 
@@ -145,7 +146,7 @@ async function pump(): Promise<void> {
         await tick();
         continue;
       }
-      const now = Date.now();
+      const now = wall.now();
       const due = [...histories].find(([, at]) => at <= now);
       if (due) {
         histories.delete(due[0]);
@@ -172,8 +173,8 @@ async function pump(): Promise<void> {
   // Transcripts to read later: then.
   const next = Math.min(...histories.values());
   if (Number.isFinite(next)) {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => void pump(), Math.max(0, next - Date.now()));
+    timer?.();
+    timer = wall.after(next - wall.now(), () => void pump());
   }
 }
 
@@ -197,7 +198,7 @@ parentPort!.on("message", (told: Told) => {
       return;
     case "session": {
       jobs.add(told.key);
-      histories.set(told.key, Date.now() + SETTLE_MS);
+      histories.set(told.key, wall.now() + SETTLE_MS);
       // Its chats' titles are its own.
       for (const t of store.sessionThreads(s, told.key)) threads.add(t.id);
       break;

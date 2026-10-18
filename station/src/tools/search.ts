@@ -4,6 +4,7 @@
 import type { Asker, Group, Hit } from "../search/index.ts";
 import type { Search } from "../search/search.ts";
 import type { Tool } from "./mcp.ts";
+import { wall } from "../ops/fibers.ts";
 
 /// What another station is asked.
 export const SEARCH = "search.query";
@@ -109,10 +110,7 @@ export function searchTools(deps: SearchDeps): Tool[] {
                 const found = await deps.search.query(query, { ...place, scopes: ["write"] }, { kinds, limit });
                 return said(name, linked(found.groups, deps.link), found.building);
               }
-              const answer = await Promise.race([
-                deps.ask(s.id, { method: SEARCH, session, query, kinds, limit }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error(`did not answer within ${WAIT_MS / 1000} s`)), WAIT_MS)),
-              ]);
+              const answer = await wall.within(WAIT_MS, deps.ask(s.id, { method: SEARCH, session, query, kinds, limit }), `did not answer within ${WAIT_MS / 1000} s`);
               return said(name, Array.isArray(answer?.groups) ? answer.groups : [], answer?.building === true);
             } catch (error) {
               return `## ${name}\nNot searched: ${(error as Error).message}`;
