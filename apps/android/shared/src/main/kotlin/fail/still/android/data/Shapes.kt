@@ -1475,6 +1475,13 @@ data class RowShare (
 	val write: Boolean
 )
 
+/// A range of a text, `from` to `to` (UTF-16 units).
+@Serializable
+data class TextMark (
+	val from: UInt,
+	val to: UInt
+)
+
 /// An item of the sidebar, as its station puts it together for the viewer, and where it is.
 @Serializable
 data class ChatItem (
@@ -1546,7 +1553,12 @@ data class ChatItem (
 	/// the workspace's own.
 	val outside: String? = null,
 	/// A chat a search found in its station's archive (`search`). Absent otherwise.
-	val archived: Boolean? = null
+	val archived: Boolean? = null,
+	/// A chat a search found by words its title shows late or not at all: the part of it that has them, on one line
+	/// (`search`; its `stateText` says it too). Absent otherwise.
+	val foundText: String? = null,
+	/// Where the words are in `foundText`.
+	val foundMarks: List<TextMark>? = null
 )
 
 /// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日); or, above them all, the chats the viewer pinned
@@ -1724,13 +1736,6 @@ data class ChatPublish (
 	val may: Boolean,
 	/// The snapshots its station keeps of it, the newest first (without those being revoked here).
 	val links: List<ChatPublished>
-)
-
-/// A range of a text, `from` to `to` (UTF-16 units).
-@Serializable
-data class TextMark (
-	val from: UInt,
-	val to: UInt
 )
 
 /// A message a search's words found (`ChatSearchView.messages`): its chat opens at it (thread, seq).

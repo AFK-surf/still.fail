@@ -1461,6 +1461,12 @@ export interface RowShare {
 	write: boolean;
 }
 
+/** A range of a text, `from` to `to` (UTF-16 units). */
+export interface TextMark {
+	from: number;
+	to: number;
+}
+
 /** An item of the sidebar, as its station puts it together for the viewer, and where it is. */
 export interface ChatItem {
 	id: string;
@@ -1548,6 +1554,13 @@ export interface ChatItem {
 	outside?: string;
 	/** A chat a search found in its station's archive (`search`). Absent otherwise. */
 	archived?: boolean;
+	/**
+	 * A chat a search found by words its title shows late or not at all: the part of it that has them, on one line
+	 * (`search`; its `stateText` says it too). Absent otherwise.
+	 */
+	foundText?: string;
+	/** Where the words are in `foundText`. */
+	foundMarks?: TextMark[];
 }
 
 /**
@@ -1740,12 +1753,6 @@ export interface ChatPublish {
 	may: boolean;
 	/** The snapshots its station keeps of it, the newest first (without those being revoked here). */
 	links: ChatPublished[];
-}
-
-/** A range of a text, `from` to `to` (UTF-16 units). */
-export interface TextMark {
-	from: number;
-	to: number;
 }
 
 /** A message a search's words found (`ChatSearchView.messages`): its chat opens at it (thread, seq). */
