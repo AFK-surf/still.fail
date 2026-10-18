@@ -14,6 +14,7 @@ let bench : Bench = {
   present: [],
   start: 0.0,
   speed: 0.0,
+  phases: [0.0, 0.0, 0.0],
 }
 
 ///|
@@ -24,6 +25,8 @@ struct Bench {
   present : Array[Double]
   mut start : Double
   mut speed : Double
+  // build, layout and paint time summed over the measured frames
+  phases : Array[Double]
 }
 
 ///|
@@ -66,7 +69,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   c.with_parent(root, fn() { (g_view.val)(c) })
   c.clicked.clear()
   let t1 = h_now()
-  c.place(root, 0.0, 0.0, w, h)
+  c.layout(root, 0.0, 0.0, w, h) |> ignore
   let t2 = h_now()
   c.ninst = 0
   c.next_hit_ids.clear()
@@ -112,6 +115,9 @@ fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
     bench.speed = -23.0
   }
   if bench.frames > 30 {
+    bench.phases[0] = bench.phases[0] + c.t_build
+    bench.phases[1] = bench.phases[1] + c.t_layout
+    bench.phases[2] = bench.phases[2] + c.t_paint
     bench.cpu.push(cpu)
     bench.present.push(present)
   }
@@ -146,6 +152,11 @@ fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
       }
     }
     h_log("BENCH slow_frames(>8ms)=\{slow} first_slow_at=\{first_slow}")
+    let nd = n.to_double()
+    h_log(
+      "BENCH build_avg=\{bench.phases[0] / nd} layout_avg=\{bench.phases[1] / nd} paint_avg=\{bench.phases[2] / nd} " +
+      "flex_sized=\{@flex.counters[0].to_double() / 630.0} flex_cached=\{@flex.counters[1].to_double() / 630.0} flex_measured=\{@flex.counters[2].to_double() / 630.0}",
+    )
     h_log(
       "BENCH frames=\{n} wall_ms=\{wall} fps=\{n.to_double() * 1000.0 / wall} " +
       "cpu_avg=\{sum / n.to_double()} cpu_p50=\{p(cs, 0.5)} cpu_p99=\{p(cs, 0.99)} cpu_max=\{cs[n - 1]} " +

@@ -87,17 +87,22 @@ struct Node {
   mut y : Double
   mut fw : Double
   mut fh : Double
-  mut m_key : Double
-  mut m_w : Double
-  mut m_h : Double
   mut tl : TextLayout?
+  // the width tl was laid out in
+  mut tl_max : Double
   // list rows: index of the item this child shows
   mut item : Int
+  // its node in the flex engine, and how the engine measures it as a leaf
+  fl : @flex.Node
+  mut leaf : ((Double, @flex.MeasureMode, Double, @flex.MeasureMode) -> (
+    Double,
+    Double,
+  ))?
 }
 
 ///|
 fn Node::new() -> Node {
-  {
+  let n : Node = {
     kind: 0,
     id: 0,
     hit: false,
@@ -135,12 +140,14 @@ fn Node::new() -> Node {
     y: 0.0,
     fw: 0.0,
     fh: 0.0,
-    m_key: -1.0,
-    m_w: 0.0,
-    m_h: 0.0,
     tl: None,
+    tl_max: 0.0,
     item: -1,
+    fl: @flex.Node::new(),
+    leaf: None,
   }
+  n.leaf = Some(fn(w, wm, h, hm) { leaf_size(n, w, wm, h, hm) })
+  n
 }
 
 ///|
@@ -182,10 +189,8 @@ fn Node::reset(self : Node) -> Unit {
   self.y = 0.0
   self.fw = 0.0
   self.fh = 0.0
-  self.m_key = -1.0
-  self.m_w = 0.0
-  self.m_h = 0.0
   self.tl = None
+  self.tl_max = 0.0
   self.item = -1
 }
 

@@ -147,6 +147,45 @@ pub fn Style::new() -> Style {
 }
 
 ///|
+/// Back to the defaults, for nodes reused from a pool.
+pub fn Style::reset(self : Style) -> Unit {
+  self.display = Flex
+  self.position = Relative
+  self.direction = Column
+  self.wrap = NoWrap
+  self.justify = FlexStart
+  self.align_items = Stretch
+  self.align_self = Auto
+  self.align_content = FlexStart
+  self.grow = 0.0
+  self.shrink = 0.0
+  self.basis = Auto
+  self.width = Auto
+  self.height = Auto
+  self.min_width = Auto
+  self.min_height = Auto
+  self.max_width = Auto
+  self.max_height = Auto
+  self.margin.set(Pt(0.0))
+  self.padding.set(Pt(0.0))
+  self.border.set(Pt(0.0))
+  self.inset.set(Auto)
+  self.gap_row = Pt(0.0)
+  self.gap_col = Pt(0.0)
+  self.aspect = 0.0
+  self.box_sizing = BorderBox
+  self.overflow = Visible
+}
+
+///|
+fn Edges::set(self : Edges, d : Dim) -> Unit {
+  self.left = d
+  self.top = d
+  self.right = d
+  self.bottom = d
+}
+
+///|
 /// Measures a leaf from its content: (width, width mode, height, height
 /// mode) -> (width, height), as Yoga's measure functions.
 pub type MeasureFn = (Double, MeasureMode, Double, MeasureMode) -> (Double, Double)
@@ -163,6 +202,9 @@ pub(all) struct Node {
   mut height : Double
   // which flex line it was placed on, for baselines
   mut line : Int
+  // sizes found during the current compute(), 8 numbers each
+  cache : Array[Double]
+  mut cache_gen : Int
 }
 
 ///|
@@ -176,6 +218,8 @@ pub fn Node::new() -> Node {
     width: 0.0,
     height: 0.0,
     line: 0,
+    cache: [],
+    cache_gen: -1,
   }
 }
 

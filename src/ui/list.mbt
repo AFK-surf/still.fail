@@ -180,8 +180,7 @@ fn Ctx::place_list(
       let mut changed = false
       while c >= 0 {
         let row = self.nodes[c]
-        let (_, h) = self.measure(c, iw)
-        self.place(c, ix, y, iw, h)
+        let h = self.layout(c, ix, y, iw, 0.0 / 0.0)
         let old = st.heights[row.item]
         if (old - h).abs() > 0.5 {
           changed = true

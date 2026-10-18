@@ -118,11 +118,14 @@ fn box_of(s : Style, cb_w : Double, cb_h : Double) -> Box {
   let bor_b = edge(s.border.bottom, cb_w)
   let pbw = pad_l + pad_r + bor_l + bor_r
   let pbh = pad_t + pad_b + bor_t + bor_b
-  let content = s.box_sizing == ContentBox
-  let adj_w = fn(v : Double) { if known(v) && content { v + pbw } else { v } }
-  let adj_h = fn(v : Double) { if known(v) && content { v + pbh } else { v } }
-  let mut min_w = adj_w(resolve(s.min_width, cb_w))
-  let mut min_h = adj_h(resolve(s.min_height, cb_h))
+  // content-box sizes grow by the padding and border (NaN stays NaN)
+  let (adj_w, adj_h) = if s.box_sizing == ContentBox {
+    (pbw, pbh)
+  } else {
+    (0.0, 0.0)
+  }
+  let mut min_w = resolve(s.min_width, cb_w) + adj_w
+  let mut min_h = resolve(s.min_height, cb_h) + adj_h
   // a box is never smaller than its padding and border
   min_w = if known(min_w) { fmax(min_w, pbw) } else { pbw }
   min_h = if known(min_h) { fmax(min_h, pbh) } else { pbh }
@@ -139,12 +142,12 @@ fn box_of(s : Style, cb_w : Double, cb_h : Double) -> Box {
     mar_t: edge(s.margin.top, cb_w),
     mar_r: edge(s.margin.right, cb_w),
     mar_b: edge(s.margin.bottom, cb_w),
-    w: adj_w(resolve(s.width, cb_w)),
-    h: adj_h(resolve(s.height, cb_h)),
+    w: resolve(s.width, cb_w) + adj_w,
+    h: resolve(s.height, cb_h) + adj_h,
     min_w,
     min_h,
-    max_w: adj_w(resolve(s.max_width, cb_w)),
-    max_h: adj_h(resolve(s.max_height, cb_h)),
+    max_w: resolve(s.max_width, cb_w) + adj_w,
+    max_h: resolve(s.max_height, cb_h) + adj_h,
   }
 }
 
@@ -161,7 +164,17 @@ fn Box::pbh(self : Box) -> Double {
 ///|
 /// Lays out `root` and everything under it. Positions are relative to the
 /// parent's border box and rounded to whole pixels, as Yoga does.
-pub fn compute(root : Node, width? : Double = undef, height? : Double = undef) -> Unit {
+///|
+/// Lays out the tree under `root` in a space of `width` × `height` (NaN:
+/// unbounded), as Yoga's calculateLayout does. Results are relative to the
+/// parent's border box; with `round` they snap to whole units.
+pub fn compute(
+  root : Node,
+  width? : Double = undef,
+  height? : Double = undef,
+  round? : Bool = true,
+) -> Unit {
+  generation.val = generation.val + 1
   let b = box_of(root.style, width, height)
   let w = or_else(b.w, if root.style.position == Absolute { undef } else { width })
   let h = or_else(b.h, if root.style.position == Absolute { undef } else { height })
@@ -189,7 +202,9 @@ pub fn compute(root : Node, width? : Double = undef, height? : Double = undef) -
   root.left = b.mar_l + dx
   root.top = b.mar_t + dy
   layout_static_absolute(root, root, 0.0, 0.0)
-  round_layout(root, 0.0, 0.0)
+  if round {
+    round_layout(root, 0.0, 0.0)
+  }
 }
 
 ///|
@@ -224,11 +239,102 @@ fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> D
 }
 
 ///|
+/// Bumped by every compute(): sizes cached on nodes are only good within one.
+let generation : Ref[Int] = { val: 0 }
+
+///|
+/// Work done so far: sizes computed, sizes found in the cache, leaves
+/// measured. For benchmarks.
+pub let counters : FixedArray[Int] = FixedArray::make(3, 0)
+
+///|
+fn same(a : Double, b : Double) -> Bool {
+  a == b || (!known(a) && !known(b))
+}
+
+///|
+/// Whether a size found along one axis for (old_k, old_a) — known size,
+/// available space — is the one (k, a) would give, as Yoga's
+/// canUseCachedMeasurement decides: a box asked for exactly the size it
+/// came out at before, or offered at least the room its content took
+/// when it was offered unlimited or more room.
+fn reusable(
+  k : Double,
+  a : Double,
+  old_k : Double,
+  old_a : Double,
+  result : Double,
+) -> Bool {
+  if known(k) {
+    return (known(old_k) && old_k == k) || (result - k).abs() < 0.0001
+  }
+  if known(old_k) {
+    return false
+  }
+  if known(a) {
+    if !known(old_a) {
+      return result <= a + 0.0001
+    }
+    return old_a == a || (old_a > a && result <= a + 0.0001)
+  }
+  !known(old_a)
+}
+
+///|
 /// The border-box size of `node`. `kw`/`kh`: sizes already decided by the
 /// parent (NaN if not). `aw`/`ah`: the space available (NaN: unbounded).
 /// `cb_w`/`cb_h`: the containing block, for percentages. With `perform`,
 /// also places its children.
+///
+/// A container sizes each child for its basis, its cross size and then
+/// for real, and each of those sizes the grandchildren again: without the
+/// cache below that is exponential in the depth of the tree.
 fn size_node(
+  node : Node,
+  kw : Double,
+  kh : Double,
+  aw : Double,
+  ah : Double,
+  cb_w : Double,
+  cb_h : Double,
+  perform : Bool,
+) -> (Double, Double) {
+  if node.cache_gen != generation.val {
+    node.cache.clear()
+    node.cache_gen = generation.val
+  }
+  let c = node.cache
+  if !perform {
+    let mut k = 0
+    while k < c.length() {
+      if same(c[k + 4], cb_w) &&
+        same(c[k + 5], cb_h) &&
+        reusable(kw, aw, c[k], c[k + 2], c[k + 6]) &&
+        reusable(kh, ah, c[k + 1], c[k + 3], c[k + 7]) {
+        counters[1] = counters[1] + 1
+        return (c[k + 6], c[k + 7])
+      }
+      k = k + 8
+    }
+  }
+  counters[0] = counters[0] + 1
+  let (w, h) = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, perform)
+  if c.length() >= 8 * 16 {
+    c.clear()
+  }
+  c.push(kw)
+  c.push(kh)
+  c.push(aw)
+  c.push(ah)
+  c.push(cb_w)
+  c.push(cb_h)
+  c.push(w)
+  c.push(h)
+  (w, h)
+}
+
+///|
+fn size_uncached(
   node : Node,
   kw : Double,
   kh : Double,
@@ -300,6 +406,7 @@ fn size_node(
         } else {
           Undefined
         }
+        counters[2] = counters[2] + 1
         let (mw, mh) = m(
           if known(iw) { iw } else { 0.0 },
           wm,
@@ -582,6 +689,11 @@ fn layout_flex(
       } else {
         undef
       }
+      if known(kc) {
+        // what sizing it would return, without laying out its subtree
+        it.cross = clamp_size(kc, it.min_cross, it.max_cross)
+        continue
+      }
       let ac = if known(avail_cross) { avail_cross - it.margin_cross } else { undef }
       let (cw, ch) = if row {
         size_node(it.node, it.main, kc, it.main, ac, cb_w, cb_h, false)
@@ -788,6 +900,16 @@ fn layout_flex(
 ///|
 /// Children taking part in layout: display: contents lifts its children up.
 fn flow_children(node : Node) -> Array[Node] {
+  let mut plain = true
+  for c in node.children {
+    if c.style.display != Flex {
+      plain = false
+      break
+    }
+  }
+  if plain {
+    return node.children
+  }
   let out = []
   for c in node.children {
     match c.style.display {

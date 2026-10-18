@@ -1,5 +1,7 @@
-// Layout: a small flexbox. measure() gives a node's content size for a
-// maximum width; place() gives every node its final rectangle.
+// Layout: the tree goes to the flexbox engine in mbui/flex (checked against
+// Yoga's tests) as a tree of flex nodes, one kept on each node of the pool.
+// Text, editors and lists are its measured leaves; a list lays out its own
+// rows, each as a tree of its own.
 
 ///|
 fn Ctx::editor_display(self : Ctx, n : Node) -> String {
@@ -10,141 +12,158 @@ fn Ctx::editor_display(self : Ctx, n : Node) -> String {
 }
 
 ///|
-fn Ctx::measure(self : Ctx, i : Int, max_w : Double) -> (Double, Double) {
-  let n = self.nodes[i]
-  if n.m_key == max_w {
-    return (n.m_w, n.m_h)
+/// The text laid out in `max_w`. The engine asks for a few widths per frame;
+/// greedy wrapping gives the same lines for any width from the widest line
+/// up to the one it was laid out in, so one layout serves them all.
+fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
+  match self.tl {
+    Some(tl) if !self.wrap || (tl.w <= max_w + 0.01 && max_w <= self.tl_max) =>
+      return tl
+    _ => ()
   }
-  let pw = n.pad_l + n.pad_r
-  let ph = n.pad_t + n.pad_b
-  let avail = match n.w {
-    Px(p) => p
-    _ => max_w
-  }
-  let inner = dmax(avail - pw, 0.0)
-  let (cw, ch) = if n.kind == kind_text {
-    let tl = layout_text(n.text, n.font_size, n.weight, inner, n.wrap)
-    (tl.w, tl.h)
-  } else if n.kind == kind_editor {
-    let s = self.editor_display(n)
-    let tl = layout_text(s, n.font_size, n.weight, inner, true)
-    (inner, tl.h)
-  } else if n.kind == kind_list {
-    (inner, 0.0)
-  } else if n.dir == Column {
-    let mut w = 0.0
-    let mut h = 0.0
-    let mut c = n.first
-    let mut k = 0
-    while c >= 0 {
-      let (a, b) = self.child_size(c, inner, Column)
-      w = dmax(w, a)
-      h = h + b
-      k = k + 1
-      c = self.nodes[c].next
-    }
-    if k > 1 {
-      h = h + n.gap * (k - 1).to_double()
-    }
-    (w, h)
-  } else {
-    // fixed and content-sized children first, then fill children share
-    // what is left, as place() does
-    let mut k = 0
-    let mut c = n.first
-    while c >= 0 {
-      k = k + 1
-      c = self.nodes[c].next
-    }
-    let gaps = if k > 1 { n.gap * (k - 1).to_double() } else { 0.0 }
-    let mut used = gaps
-    let mut h = 0.0
-    let mut flex = 0.0
-    c = n.first
-    while c >= 0 {
-      let ch = self.nodes[c]
-      match ch.w {
-        Fill(f) => flex = flex + f
-        _ => {
-          let (a, b) = self.child_size(c, dmax(inner - used, 0.0), Row)
-          used = used + a
-          h = dmax(h, b)
-        }
-      }
-      c = ch.next
-    }
-    let rest = dmax(inner - used, 0.0)
-    let mut w = used
-    c = n.first
-    while c >= 0 {
-      let ch = self.nodes[c]
-      match ch.w {
-        Fill(f) => {
-          let share = rest * f / flex
-          let (a, b) = self.measure(c, share)
-          w = w + a
-          h = dmax(h, b)
-        }
-        _ => ()
-      }
-      c = ch.next
-    }
-    (w, h)
-  }
-  let fw = match n.w {
-    Px(p) => p
-    _ => cw + pw
-  }
-  let fh = match n.h {
-    Px(p) => p
-    _ => dclamp(ch + ph, n.min_h, n.max_h)
-  }
-  n.m_key = max_w
-  n.m_w = fw
-  n.m_h = fh
-  (fw, fh)
+  let tl = layout_text(self.text, self.font_size, self.weight, max_w, self.wrap)
+  self.tl = Some(tl)
+  self.tl_max = max_w
+  tl
 }
 
 ///|
-fn Ctx::child_size(
-  self : Ctx,
-  c : Int,
-  avail : Double,
-  _dir : Dir,
+/// The content size of a leaf for the flex engine.
+fn leaf_size(
+  n : Node,
+  w : Double,
+  wm : @flex.MeasureMode,
+  h : Double,
+  hm : @flex.MeasureMode,
 ) -> (Double, Double) {
-  let n = self.nodes[c]
-  match n.w {
-    Px(p) => {
-      let (_, h) = self.measure(c, p)
-      (p, h)
-    }
-    _ => self.measure(c, avail)
+  let max_w = if wm == Undefined { 1.0e9 } else { w }
+  if n.kind == kind_text {
+    let tl = n.text_layout(max_w)
+    (if wm == Exactly { w } else { tl.w }, tl.h)
+  } else if n.kind == kind_editor {
+    // an editor takes the width it is offered
+    let s = g.editor_display(n)
+    let tl = layout_text(s, n.font_size, n.weight, max_w, true)
+    (if wm == Undefined { tl.w } else { w }, tl.h)
+  } else {
+    // a list fills what it is given, and has no height of its own
+    (if wm == Undefined { 0.0 } else { w }, if hm == Exactly { h } else { 0.0 })
   }
 }
 
 ///|
-fn Ctx::place(
+/// The flex node for node `i` and its subtree, styled from the builder's
+/// sizes: Fill along the parent's direction grows from nothing, across it
+/// stretches; content-sized children of a row may shrink (and wrap), except
+/// text that must stay on one line.
+fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
+  let n = self.nodes[i]
+  let f = n.fl
+  let s = f.style
+  s.reset()
+  f.children.clear()
+  f.measure = None
+  s.direction = if n.dir == Row { Row } else { Column }
+  s.padding.left = Pt(n.pad_l)
+  s.padding.top = Pt(n.pad_t)
+  s.padding.right = Pt(n.pad_r)
+  s.padding.bottom = Pt(n.pad_b)
+  s.gap_row = Pt(n.gap)
+  s.gap_col = Pt(n.gap)
+  s.align_items = match n.align {
+    AStart => FlexStart
+    ACenter => Center
+    AEnd => FlexEnd
+    AStretch => Stretch
+  }
+  s.justify = match n.justify {
+    JStart => FlexStart
+    JCenter => Center
+    JEnd => FlexEnd
+    JBetween => SpaceBetween
+  }
+  if n.min_h > 0.0 {
+    s.min_height = Pt(n.min_h)
+  }
+  if n.max_h < 1.0e9 {
+    s.max_height = Pt(n.max_h)
+  }
+  let in_row = parent == Some(Row)
+  let in_col = parent == Some(Column)
+  match n.w {
+    Px(p) => s.width = Pt(p)
+    Fill(k) =>
+      if in_row {
+        s.grow = k
+        s.shrink = 1.0
+        s.basis = Pt(0.0)
+      } else if in_col {
+        s.align_self = Stretch
+      }
+    Auto =>
+      if in_row && !(n.kind == kind_text && !n.wrap) {
+        s.shrink = 1.0
+      }
+  }
+  match n.h {
+    Px(p) => s.height = Pt(p)
+    Fill(k) =>
+      if in_col {
+        s.grow = k
+        s.shrink = 1.0
+        s.basis = Pt(0.0)
+      } else if in_row {
+        s.align_self = Stretch
+      }
+    Auto => ()
+  }
+  if n.kind == kind_text || n.kind == kind_editor || n.kind == kind_list {
+    f.measure = n.leaf
+  } else {
+    let mut c = n.first
+    while c >= 0 {
+      f.children.push(self.flex_tree(c, Some(n.dir)))
+      c = self.nodes[c].next
+    }
+  }
+  f
+}
+
+///|
+/// Lays out node `i` and its subtree at (x, y), `w` wide and `h` high (NaN:
+/// as high as its content); returns its height.
+fn Ctx::layout(
   self : Ctx,
   i : Int,
   x : Double,
   y : Double,
   w : Double,
   h : Double,
-) -> Unit {
+) -> Double {
+  let root = self.flex_tree(i, None)
+  @flex.compute(root, width=w, height=h, round=false)
+  self.commit(i, x, y)
+  root.height
+}
+
+///|
+/// Copies the flex engine's results back as absolute rectangles (with each
+/// node's visual offset, which its subtree follows), and lays out what is
+/// inside the leaves.
+fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   let n = self.nodes[i]
-  n.x = x
-  n.y = y
-  n.fw = w
-  n.fh = h
-  let ix = x + n.pad_l
-  let iy = y + n.pad_t
-  let iw = dmax(w - n.pad_l - n.pad_r, 0.0)
-  let ih = dmax(h - n.pad_t - n.pad_b, 0.0)
+  let f = n.fl
+  n.x = px + f.left + n.tx
+  n.y = py + f.top + n.ty
+  n.fw = f.width
+  n.fh = f.height
+  let ix = n.x + n.pad_l
+  let iy = n.y + n.pad_t
+  let iw = dmax(n.fw - n.pad_l - n.pad_r, 0.0)
+  let ih = dmax(n.fh - n.pad_t - n.pad_b, 0.0)
   if n.kind == kind_text {
-    n.tl = Some(layout_text(n.text, n.font_size, n.weight, iw, n.wrap))
-    return
-  }
-  if n.kind == kind_editor {
+    n.text_layout(iw) |> ignore
+  } else if n.kind == kind_editor {
     match self.editors.get(n.id) {
       Some(st) => {
         st.tl = Some(layout_text(st.display(), n.font_size, n.weight, iw, true))
@@ -153,155 +172,13 @@ fn Ctx::place(
       }
       None => ()
     }
-    return
-  }
-  if n.kind == kind_list {
+  } else if n.kind == kind_list {
     self.place_list(n, ix, iy, iw, ih)
-    return
-  }
-  // collect children
-  let kids = []
-  let mut c = n.first
-  while c >= 0 {
-    kids.push(c)
-    c = self.nodes[c].next
-  }
-  let k = kids.length()
-  if k == 0 {
-    return
-  }
-  let gaps = n.gap * (k - 1).to_double()
-  let main_sz = Array::make(k, 0.0)
-  let cross_sz = Array::make(k, 0.0)
-  let mut fixed = gaps
-  let mut flex = 0.0
-  if n.dir == Column {
-    for j in 0..<k {
-      let ch = self.nodes[kids[j]]
-      let cw = match ch.w {
-        Px(p) => p
-        Fill(_) => iw
-        Auto =>
-          if n.align == AStretch {
-            iw
-          } else {
-            let (a, _) = self.measure(kids[j], iw)
-            dmin(a, iw)
-          }
-      }
-      cross_sz[j] = cw
-      match ch.h {
-        Px(p) => {
-          main_sz[j] = p
-          fixed = fixed + p
-        }
-        Fill(f) => flex = flex + f
-        Auto => {
-          let (_, b) = self.measure(kids[j], cw)
-          main_sz[j] = b
-          fixed = fixed + b
-        }
-      }
-    }
   } else {
-    // widths of fixed and content-sized children first
-    let mut used = gaps
-    for j in 0..<k {
-      let ch = self.nodes[kids[j]]
-      match ch.w {
-        Px(p) => {
-          main_sz[j] = p
-          used = used + p
-        }
-        _ => ()
-      }
+    let mut c = n.first
+    while c >= 0 {
+      self.commit(c, n.x, n.y)
+      c = self.nodes[c].next
     }
-    for j in 0..<k {
-      let ch = self.nodes[kids[j]]
-      match ch.w {
-        Fill(f) => flex = flex + f
-        Auto => {
-          let (a, _) = self.measure(kids[j], dmax(iw - used, 0.0))
-          main_sz[j] = a
-          used = used + a
-        }
-        _ => ()
-      }
-    }
-    fixed = used
-  }
-  let free = (if n.dir == Column { ih } else { iw }) - fixed
-  if flex > 0.0 {
-    for j in 0..<k {
-      let ch = self.nodes[kids[j]]
-      let f = if n.dir == Column {
-        match ch.h {
-          Fill(f) => f
-          _ => 0.0
-        }
-      } else {
-        match ch.w {
-          Fill(f) => f
-          _ => 0.0
-        }
-      }
-      if f > 0.0 {
-        main_sz[j] = dmax(free, 0.0) * f / flex
-      }
-    }
-  }
-  if n.dir == Row {
-    for j in 0..<k {
-      let ch = self.nodes[kids[j]]
-      cross_sz[j] = match ch.h {
-        Px(p) => p
-        Fill(_) => ih
-        Auto =>
-          if n.align == AStretch {
-            ih
-          } else {
-            let (_, b) = self.measure(kids[j], main_sz[j])
-            b
-          }
-      }
-    }
-  }
-  let rest = if flex > 0.0 { 0.0 } else { dmax(free, 0.0) }
-  let mut pos = match n.justify {
-    JStart => 0.0
-    JCenter => rest / 2.0
-    JEnd => rest
-    JBetween => 0.0
-  }
-  let step_gap = match n.justify {
-    JBetween => if k > 1 { n.gap + rest / (k - 1).to_double() } else { n.gap }
-    _ => n.gap
-  }
-  for j in 0..<k {
-    let ch = self.nodes[kids[j]]
-    let cross_total = if n.dir == Column { iw } else { ih }
-    let off = match n.align {
-      AStart | AStretch => 0.0
-      ACenter => (cross_total - cross_sz[j]) / 2.0
-      AEnd => cross_total - cross_sz[j]
-    }
-    if n.dir == Column {
-      self.place(
-        kids[j],
-        ix + off + ch.tx,
-        iy + pos + ch.ty,
-        cross_sz[j],
-        main_sz[j],
-      )
-    } else {
-      self.place(
-        kids[j],
-        ix + pos + ch.tx,
-        iy + off + ch.ty,
-        main_sz[j],
-        cross_sz[j],
-      )
-    }
-    pos = pos + main_sz[j] + step_gap
   }
 }
