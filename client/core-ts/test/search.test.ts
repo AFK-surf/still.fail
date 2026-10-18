@@ -101,3 +101,24 @@ test("a_search_shown_again_asks_its_stations_again", async () => {
   assert.equal(v(values, 2).messages.length, 0);
   core.close();
 });
+
+test("a_search_shown_is_asked_again_when_its_station_says_a_chat_changed", async () => {
+  const replies: Record<string, unknown> = { ...base(), "GET /chats": [row("a", 7, "部署页")], "GET /threads": [threadView(7, 0, 0, 0)], "GET /search?q=%E9%83%A8%E7%BD%B2&limit=6": found };
+  const { host, core, push } = await started(replies);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "search", scope: "ws", query: "部署" });
+  await host.settle();
+  await host.time.pass(SEARCH_SETTLE_MS + 10);
+  await host.settle();
+  // Archived on the station: it says so, and finds it so.
+  replies["GET /search?q=%E9%83%A8%E7%BD%B2&limit=6"] = { building: false, groups: [{ kind: "chat", more: false, hits: [{ kind: "chat", key: "c:7", title: "部署页", text: "", at: 9, thread: 7, chat: "a", archived: true }] }] };
+  push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
+  await host.settle();
+  await host.time.pass(SEARCH_SETTLE_MS + 10);
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).items.map((i: J) => [i.id, i.archived ?? false]), [["a", true]]);
+  assert.equal(v(values, 1).messages.length, 0);
+  core.close();
+});

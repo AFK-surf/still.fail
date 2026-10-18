@@ -54,6 +54,8 @@ export const CHANGES_RETRY_MS = 3_600_000;
 export const HISTORY_BATCH = 40;
 
 export const RECHECKING = "等它回来确认";
+/// The station's events that change what a search of it finds.
+const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "chat", "chat-removed", "job", "job-removed"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
 
@@ -327,6 +329,20 @@ export class StationsSync {
         this.onChange(address, "errors", key);
       }
     });
+  }
+
+  /// What the station holds changed (a chat said in, archived, removed; a job): the searches of it shown are asked
+  /// again (what was found shown meanwhile), the rest let go.
+  #searchStale(address: string): void {
+    const link = this.#links.get(address);
+    if (!link) return;
+    for (const key of [...link.memory.keys()]) {
+      if (!key.includes('"stationSearch"')) continue;
+      const topic = JSON.parse(key) as Topic;
+      if (topic.topic !== "stationSearch") continue;
+      if (this.#core.store.inUse(topic)) this.searchShown(topic);
+      else link.memory.delete(key);
+    }
   }
 
   /// A search no longer shown: let go.
@@ -713,6 +729,7 @@ export class StationsSync {
     const data = parseJson(raw);
     if (data === undefined) return;
     const core = this.#core;
+    if (SEARCHED.has(name)) this.#searchStale(address);
     switch (name) {
       case "session":
         return this.#onSession(address, data);
