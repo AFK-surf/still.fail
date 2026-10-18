@@ -252,7 +252,7 @@ class DriveTest {
         h.record("drive-picker-deeper-$tone").end()
         rule.onNodeWithText("主目录").performClick(); h.settle()
         rule.onNodeWithText("文稿").performClick(); h.settle()
-        rule.onNodeWithText("完全磁盘访问权限", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("still.fail Helper", substring = true).assertIsDisplayed()
         h.record("drive-picker-denied-$tone").end()
     }
 
