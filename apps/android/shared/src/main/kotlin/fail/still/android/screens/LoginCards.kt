@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -122,7 +123,8 @@ fun LoginCard(station: String, id: String, modifier: Modifier = Modifier, marked
     val all by rememberTopic<MachineLoginsView>(app.core, Topics.machineLogins(station))
     val login = topic.value ?: return
     val into = remember { BringIntoViewRequester() }
-    LaunchedEffect(marked) { if (marked) into.bringIntoView() }
+    // Once the page under it is laid out (the rows after it too), whole.
+    LaunchedEffect(marked) { if (marked) { withFrameNanos {}; withFrameNanos {}; into.bringIntoView() } }
     // Ended: one quiet line, as an answered decision's (已在 studio 上登录 gh), failed in red; no card.
     if (!login.active) {
         Text(
