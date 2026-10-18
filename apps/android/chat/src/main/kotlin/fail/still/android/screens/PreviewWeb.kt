@@ -133,9 +133,21 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
 
     // ── the page's script calls these (StillFailPreviewNative) ──
 
+    /**
+     * `ported`: the page says and hears everything of this socket on its port (page.js), in order, a binary frame as it
+     * is beside the socket's name ([frame]); else what it hears goes in as script, a binary frame as base64.
+     */
     @JavascriptInterface
-    fun open(sid: String, path: String, protocols: String) {
-        val event = { kind: String, args: String -> js("window.__stillfailSocketEvent&&__stillfailSocketEvent(${q(sid)},${q(kind)}$args)") }
+    fun open(sid: String, path: String, protocols: String, ported: Boolean) {
+        val on = if (ported && binary) fetchPort else null
+        val onPort = { message: WebMessageCompat -> main.post { if (on === fetchPort) on?.postMessage(message) }; Unit }
+        val event = { kind: String, args: List<JsonPrimitive> ->
+            if (on == null) js("window.__stillfailSocketEvent&&__stillfailSocketEvent(${q(sid)},${q(kind)}${args.joinToString("") { ",$it" }})")
+            else onPort(WebMessageCompat(buildJsonObject {
+                put("t", "socket"); put("id", sid); put("kind", kind)
+                args.zip(listOf("a", "b", "c")).forEach { (v, k) -> put(k, v) }
+            }.toString()))
+        }
         val job = scope.launch {
             val closed = try {
                 core.stream("preview.socket", buildJsonObject {
@@ -144,10 +156,12 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
                 }) { v, bytes ->
                     val o = v as? JsonObject ?: return@stream
                     when {
-                        o["open"] is JsonObject -> event("open", ",${q(o["open"]!!.jsonObject["protocol"]?.jsonPrimitive?.content ?: "")}")
-                        o["text"] is JsonPrimitive -> event("text", ",${o["text"]}")
-                        // A binary frame comes beside its value; the page's script takes it as base64.
-                        o["binary"] != null && bytes != null -> event("binary", ",${q(Base64.encodeToString(bytes, Base64.NO_WRAP))}")
+                        o["open"] is JsonObject -> event("open", listOf(JsonPrimitive(o["open"]!!.jsonObject["protocol"]?.jsonPrimitive?.content ?: "")))
+                        o["text"] is JsonPrimitive -> event("text", listOf(o["text"]!!.jsonPrimitive))
+                        // A binary frame comes beside its value.
+                        o["binary"] != null && bytes != null ->
+                            if (on != null) onPort(WebMessageCompat(frame(sid, bytes, 0, bytes.size)))
+                            else event("binary", listOf(JsonPrimitive(Base64.encodeToString(bytes, Base64.NO_WRAP))))
                     }
                 }.jsonObject
             } catch (e: CancellationException) {
@@ -157,7 +171,7 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
             }
             val code = closed?.get("code")?.jsonPrimitive?.intOrNull ?: 1006
             val reason = closed?.get("reason")?.jsonPrimitive?.content ?: ""
-            event("close", ",$code,${q(reason)},${code == 1006}")
+            event("close", listOf(JsonPrimitive(code), JsonPrimitive(reason), JsonPrimitive(code == 1006)))
         }
         sockets[sid] = job
         job.invokeOnCompletion { sockets.remove(sid, job) }
@@ -169,8 +183,11 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
     @JavascriptInterface
     fun sendBinary(sid: String, base64: String) {
         if (!sockets.containsKey(sid)) return
-        val bytes = try { Base64.decode(base64, Base64.DEFAULT) } catch (_: IllegalArgumentException) { return }
-        outgoing.trySend(buildJsonObject { put("socket", sid); put("binary", true) } to bytes)
+        sendBytes(sid, try { Base64.decode(base64, Base64.DEFAULT) } catch (_: IllegalArgumentException) { return })
+    }
+
+    private fun sendBytes(sid: String, bytes: ByteArray) {
+        if (sockets.containsKey(sid)) outgoing.trySend(buildJsonObject { put("socket", sid); put("binary", true) } to bytes)
     }
 
     @JavascriptInterface
@@ -196,10 +213,10 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
     // a message port only the page's top frame holds: its head, then each piece of its body as the station sends it.
     // It can only ask the service at `port` of `station`, like every other request of the page's. Bytes go on the port
     // as they are (an ArrayBuffer message: the fetch's id, then its bytes) where the WebView can (WEB_MESSAGE_ARRAY_BUFFER),
-    // else as base64 in JSON.
+    // else as base64 in JSON. Where it can, the page's WebSockets go on this port too ([open]'s `ported`).
 
     /** The page's port (main thread): one per page, given to it when its script asks (fetchPort). */
-    private var fetchPort: WebMessagePortCompat? = null
+    @Volatile private var fetchPort: WebMessagePortCompat? = null
     /** The page's fetches under way, by the id the page gave each. */
     private val fetches = ConcurrentHashMap<String, Job>()
     /** Whether the page's port carries bytes as they are. */
@@ -224,7 +241,10 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
                 // The port it hears on is a wrapper made anew each time: `mine` is the one kept.
                 override fun onMessage(port: WebMessagePortCompat, message: WebMessageCompat?) {
                     if (mine !== fetchPort || message == null) return
-                    if (message.type == WebMessageCompat.TYPE_ARRAY_BUFFER) { if (binary) framed(message.arrayBuffer)?.let { (id, bytes) -> fetchBodies[id] = bytes } }
+                    // Bytes: a binary frame of a socket's, or a fetch's body.
+                    if (message.type == WebMessageCompat.TYPE_ARRAY_BUFFER) {
+                        if (binary) framed(message.arrayBuffer)?.let { (id, bytes) -> if (sockets.containsKey(id)) sendBytes(id, bytes) else fetchBodies[id] = bytes }
+                    }
                     else fetchSaid(mine, message.data ?: return)
                 }
             })
@@ -243,13 +263,18 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         fetchBodies.clear()
     }
 
-    /** What the page says on its port: `go` (a request), `stop` (one it gave up). Anything else is let go. */
+    /** What the page says on its port: `go` (a request), `stop` (one it gave up), `socket`. Anything else is let go. */
     private fun fetchSaid(port: WebMessagePortCompat, data: String) {
         val o = try { kotlinx.serialization.json.Json.parseToJsonElement(data) as? JsonObject } catch (_: Exception) { null } ?: return
         val id = (o["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotEmpty() && it.length <= 64 && it.all { c -> c.code in 0x21..0x7e } } ?: return
         val sent = fetchBodies.remove(id)
         when ((o["t"] as? JsonPrimitive)?.content) {
             "stop" -> fetches.remove(id)?.cancel()
+            // A socket's text frame or its close (page.js, a socket opened `ported`).
+            "socket" -> {
+                (o["text"] as? JsonPrimitive)?.takeIf { it.isString }?.let { send(id, it.content) }
+                (o["close"] as? JsonArray)?.let { c -> close(id, (c.getOrNull(0) as? JsonPrimitive)?.intOrNull ?: 1000, (c.getOrNull(1) as? JsonPrimitive)?.content ?: "") }
+            }
             "go" -> {
                 val tell = { reply: JsonObject -> main.post { if (port === fetchPort) port.postMessage(WebMessageCompat(reply.toString())) }; Unit }
                 // A piece of the answer's body: as it is beside its id where the port carries bytes, else base64.
@@ -312,7 +337,7 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         }
     }
 
-    /** A fetch's bytes as they go on its port: the length of its id, its id (ASCII), then the bytes. */
+    /** A fetch's or a socket's bytes as they go on the port: the length of its id, its id (ASCII), then the bytes. */
     private fun frame(id: String, bytes: ByteArray, at: Int, n: Int): ByteArray {
         val name = id.toByteArray(Charsets.US_ASCII)
         val out = ByteArray(1 + name.size + n)

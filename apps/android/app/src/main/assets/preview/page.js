@@ -22,17 +22,25 @@
       if (kind === "open") on.open(a);
       else if (kind === "text") on.message(a);
       else if (kind === "binary") on.message(Uint8Array.from(atob(a), (ch) => ch.charCodeAt(0)));
+      else if (kind === "bytes") on.message(a);
       else if (kind === "close") { open.delete(sid); on.close(a, b, c); }
     };
   }
   const base64 = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
+  // Where the top page's port carries bytes as they are (__stillfailSocketPort, set by its script below), a socket says
+  // and hears everything on it, in order, its frames never base64; else through StillFailPreviewNative. It opens once
+  // it is known which (a few seconds at most): nothing is sent on a socket before it is open.
   return (path, protocols, on) => {
     const sid = top.crypto.randomUUID();
     top.__stillfailSockets.set(sid, on);
-    native.open(sid, path, protocols.join(","));
+    let port = null;
+    const opened = Promise.resolve(top.__stillfailSocketPort).then((got) => {
+      port = got || null;
+      native.open(sid, path, protocols.join(","), port !== null);
+    });
     return {
-      send: (data) => (typeof data === "string" ? native.send(sid, data) : native.sendBinary(sid, base64(data))),
-      close: (code, reason) => native.close(sid, code, reason),
+      send: (data) => (port ? port.send(sid, data) : typeof data === "string" ? native.send(sid, data) : native.sendBinary(sid, base64(data))),
+      close: (code, reason) => opened.then(() => (port ? port.close(sid, code, reason) : native.close(sid, code, reason))),
     };
   };
 })();
@@ -207,11 +215,17 @@
             const all = new Uint8Array(data);
             const n = all[0];
             if (!n || all.length < 1 + n) return;
-            waiting.get(String.fromCharCode(...all.subarray(1, 1 + n)))?.({ t: "chunk", bytes: all.subarray(1 + n) });
+            const id = String.fromCharCode(...all.subarray(1, 1 + n));
+            const bytes = all.subarray(1 + n);
+            const fetching = waiting.get(id);
+            // Else a binary frame of a socket's.
+            if (fetching) fetching({ t: "chunk", bytes });
+            else window.__stillfailSocketEvent?.(id, "bytes", bytes);
             return;
           }
           let said;
           try { said = JSON.parse(data); } catch { return; }
+          if (said && said.t === "socket") return void window.__stillfailSocketEvent?.(said.id, said.kind, said.a, said.b, said.c);
           waiting.get(said && said.id)?.(said);
         };
         resolve(got);
@@ -231,6 +245,14 @@
       out.set(bytes, 1 + id.length);
       return out.buffer;
     };
+    // The page's WebSockets (above) on the port too, where it carries bytes: a text frame and a close as JSON, a
+    // binary frame as it is, framed with its socket's id.
+    if (binary) {
+      window.__stillfailSocketPort = port.then((to) => to && {
+        send: (sid, data) => to.postMessage(typeof data === "string" ? JSON.stringify({ t: "socket", id: sid, text: data }) : frame(sid, data)),
+        close: (sid, code, reason) => to.postMessage(JSON.stringify({ t: "socket", id: sid, close: [code, reason] })),
+      });
+    }
     const bytesOf = (text) => { const s = atob(text); const out = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i); return out; };
     const define = (answer, props) => { for (const [k, v] of Object.entries(props)) Object.defineProperty(answer, k, { value: v }); return answer; };
     const go = (to, asked, bytes) => new Promise((resolve, reject) => {
