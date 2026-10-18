@@ -1,14 +1,14 @@
-// The station's search index (docs/search.md): what the station's data puts in it, what a query finds there for whom,
-// and what is indexed again as the data changes.
+// The station's search (docs/search.md): what of the station's data a query finds, as it is then, and for whom.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { zstdCompressSync } from "node:zlib";
 import { after, test } from "node:test";
 import { Store, newMessage } from "../src/store/store.ts";
 import { openStore } from "../src/read/store.ts";
-import { type Asker, SearchIndex, excerpt, terms } from "../src/search/index.ts";
-import { jobDocs, memoryDocs, profileDocs, profilesOf, threadDocs } from "../src/search/sources.ts";
+import { type Asker, excerpt, pick, terms } from "../src/search/match.ts";
+import { historyHits, profileDocs, profilesOf, stationDocs, threadDocs } from "../src/search/sources.ts";
 
 const dirs: string[] = [];
 const closing: { close(): void }[] = [];
@@ -26,9 +26,17 @@ function station() {
   dirs.push(data);
   const store = Store.open(join(data, "stillfail.db"), join(data, "archive"));
   closing.push(store);
-  const index = new SearchIndex(join(data, "search.db"));
-  closing.push(index);
-  return { data, store, index, read: () => openStore(data) };
+  return { data, store, read: () => openStore(data) };
+}
+
+/// What the station's data finds as it is now.
+function find(s: ReturnType<typeof station>, query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number } = {}) {
+  const read = s.read();
+  try {
+    return pick(stationDocs(read, s.data, {}, options.kinds ? new Set(options.kinds) : null), terms(query), asker, options);
+  } finally {
+    read.db.close();
+  }
 }
 
 const home: Asker = { workspace: "W1", home: true, scopes: ["write"] };
@@ -43,37 +51,34 @@ function chat(store: Store, key: string, ws: string | null) {
 
 const say = (store: Store, thread: number, ts: string, text: string, kind: "person" | "agent" = "person") => store.insertMessage(newMessage(thread, ts, kind, kind === "person" ? "a@x" : "agent", text))[0];
 
-const index = (s: ReturnType<typeof station>, thread: number) => {
-  const read = s.read();
-  const found = threadDocs(read, thread, s.index.mark(`t:${thread}`))!;
-  if (found.whole) s.index.replace(`t:${thread}`, found.version, found.docs);
-  else s.index.tx(() => {
-    for (const d of found.docs) s.index.put(d);
-    s.index.setMark(`t:${thread}`, found.version);
-  });
-  read.db.close();
-  return found;
-};
-
 const kinds = (groups: { kind: string; hits: { key: string }[] }[]) => Object.fromEntries(groups.map((g) => [g.kind, g.hits.map((h) => h.key)]));
 
-test("a chat's messages are found by any part of their words, in any script, case aside", () => {
+test("a chat's messages are found by any part of their words, in any script, case aside, as they read now", () => {
   const s = station();
   const t = chat(s.store, "k1", null);
   say(s.store, t, "1", "我们用 DuckDB 做分析");
   say(s.store, t, "2", "sqlite 的全文索引", "agent");
-  index(s, t);
   // The chat too: it is called by what was first said in it.
-  assert.deepEqual(kinds(s.index.search("duckdb", home)), { chat: [`c:${t}`], message: [`m:${t}:1`] });
-  assert.deepEqual(kinds(s.index.search("uckD", home, { kinds: ["message"] })), { message: [`m:${t}:1`] });
-  // Two characters have no trigram: looked for in the text.
-  assert.deepEqual(kinds(s.index.search("索引", home)), { message: [`m:${t}:2`] });
+  assert.deepEqual(kinds(find(s, "duckdb", home)), { chat: [`c:${t}`], message: [`m:${t}:1`] });
+  assert.deepEqual(kinds(find(s, "uckD", home, { kinds: ["message"] })), { message: [`m:${t}:1`] });
+  assert.deepEqual(kinds(find(s, "索引", home)), { message: [`m:${t}:2`] });
   // Every word must be there.
-  assert.deepEqual(kinds(s.index.search("duckdb 索引", home)), {});
-  const [hit] = s.index.search("duckdb", home, { kinds: ["message"] })[0]!.hits;
+  assert.deepEqual(kinds(find(s, "duckdb 索引", home)), {});
+  const [hit] = find(s, "duckdb", home, { kinds: ["message"] })[0]!.hits;
   assert.equal(hit!.chat, "k1");
   assert.equal(hit!.seq, 1);
   assert.equal(hit!.text, "我们用 DuckDB 做分析");
+  // Cased letters beyond ASCII's.
+  say(s.store, t, "3", "Über die ЖУРНАЛ");
+  assert.deepEqual(kinds(find(s, "über журнал", home)), { message: [`m:${t}:3`] });
+  // Edited: found as it reads now.
+  s.store.editMessage("ember", "ember", "k1", "1", "我们改用 ClickHouse");
+  assert.deepEqual(kinds(find(s, "duckdb", home, { kinds: ["message"] })), {});
+  // Archived by hand: found as archived.
+  s.store.setArchived("k1", true, "a@x");
+  const read = s.read();
+  assert.ok(threadDocs(read, t).every((d) => d.ref.archived === true));
+  read.db.close();
 });
 
 test("a member of another workspace finds nothing of this one's chats", () => {
@@ -82,52 +87,27 @@ test("a member of another workspace finds nothing of this one's chats", () => {
   const theirs = chat(s.store, "k2", "W2");
   say(s.store, mine, "1", "deploy the station");
   say(s.store, theirs, "1", "deploy the cloud");
-  index(s, mine);
-  index(s, theirs);
-  assert.deepEqual(kinds(s.index.search("deploy", home)).message, [`m:${mine}:1`]);
-  assert.deepEqual(kinds(s.index.search("deploy", other)).message, [`m:${theirs}:1`]);
-});
-
-test("a thread is indexed again from where it was: what was said since, and what an edit changed", () => {
-  const s = station();
-  const t = chat(s.store, "k1", null);
-  say(s.store, t, "1", "first words");
-  assert.equal(index(s, t).whole, true);
-  say(s.store, t, "2", "second words");
-  s.store.editMessage("ember", "ember", "k1", "1", "first edited");
-  const again = index(s, t);
-  assert.equal(again.whole, false);
-  assert.deepEqual(again.docs.map((d) => d.key).sort(), [`c:${t}`, `m:${t}:1`, `m:${t}:2`]);
-  assert.deepEqual(kinds(s.index.search("edited", home)).message, [`m:${t}:1`]);
-  assert.deepEqual(kinds(s.index.search("first words", home)), {});
-  // Nothing new: nothing written.
-  assert.deepEqual(index(s, t).docs.filter((d) => d.kind === "message"), []);
-  // Archived by hand: found as archived, every message too.
-  s.store.setArchived("k1", true, "a@x");
-  const archived = index(s, t);
-  assert.equal(archived.whole, true);
-  assert.ok(archived.docs.every((d) => d.ref.archived === true));
+  assert.deepEqual(kinds(find(s, "deploy", home)).message, [`m:${mine}:1`]);
+  assert.deepEqual(kinds(find(s, "deploy", other)).message, [`m:${theirs}:1`]);
 });
 
 test("those whose title has the words come first, then the newest", () => {
-  const s = station();
-  s.index.replace("x", "1", [
-    { key: "a", kind: "skill", source: "x", ws: null, title: "deploy notes", body: "old", at: 1, ref: {} },
-    { key: "b", kind: "skill", source: "x", ws: null, title: "other", body: "how to deploy", at: 3, ref: {} },
-    { key: "c", kind: "skill", source: "x", ws: null, title: "another", body: "deploy again", at: 2, ref: {} },
-  ]);
-  assert.deepEqual(kinds(s.index.search("deploy", home)).skill, ["a", "b", "c"]);
-  const [group] = s.index.search("deploy", home, { limit: 2 });
+  const docs = [
+    { key: "a", kind: "skill", ws: null, title: "deploy notes", body: "old", at: 1, ref: {} },
+    { key: "b", kind: "skill", ws: null, title: "other", body: "how to deploy", at: 3, ref: {} },
+    { key: "c", kind: "skill", ws: null, title: "another", body: "deploy again", at: 2, ref: {} },
+  ];
+  assert.deepEqual(kinds(pick(docs, ["deploy"], home)).skill, ["a", "b", "c"]);
+  const [group] = pick(docs, ["deploy"], home, { limit: 2 });
   assert.equal(group!.more, true);
   assert.deepEqual(group!.hits.map((h) => h.key), ["a", "b"]);
-  assert.deepEqual(s.index.search("deploy", home, { limit: 2, offset: 2 })[0]!.hits.map((h) => h.key), ["c"]);
+  assert.deepEqual(pick(docs, ["deploy"], home, { limit: 2, offset: 2 })[0]!.hits.map((h) => h.key), ["c"]);
 });
 
 test("what only a member who may write reaches is not found by a read-only one", () => {
-  const s = station();
-  s.index.replace("f", "1", [{ key: "f:1", kind: "file", source: "f", ws: "*", scope: "write", title: "plan.md", body: "", at: 1, ref: {} }]);
-  assert.deepEqual(kinds(s.index.search("plan", home)).file, ["f:1"]);
-  assert.deepEqual(kinds(s.index.search("plan", { ...home, scopes: [] })), {});
+  const docs = [{ key: "f:1", kind: "file", ws: "*", scope: "write", title: "plan.md", body: "", at: 1, ref: {} }];
+  assert.deepEqual(kinds(pick(docs, ["plan"], home)).file, ["f:1"]);
+  assert.deepEqual(kinds(pick(docs, ["plan"], { ...home, scopes: [] })), {});
 });
 
 test("skills, memory, jobs and profiles are found", () => {
@@ -136,18 +116,14 @@ test("skills, memory, jobs and profiles are found", () => {
   mkdirSync(join(agent, "skills/deploy"), { recursive: true });
   writeFileSync(join(agent, "MEMORY.md"), "the studio has 64 GB\n");
   writeFileSync(join(agent, "skills/deploy/SKILL.md"), "---\nname: deploy\ndescription: 项目记忆：how releases go out\n---\nrun release.sh\n");
-  s.index.replace("k:", "1", memoryDocs(s.data, null).docs);
   const key = "k1";
   chat(s.store, key, null);
   s.store.insertJob({ id: "j1", sessionKey: key, name: "web preview", command: "pnpm dev --port 5173", cwd: "/w/k1", port: 5173, token: "t", state: "running", pgid: null, exitCode: null, startedAt: 5, endedAt: null, restarts: 0, log: "", watch: false });
-  const read = s.read();
-  s.index.replace(`j:${key}`, "1", jobDocs(read, key).docs);
-  read.db.close();
-  s.index.replace("p", "1", profileDocs(profilesOf({ profiles: [{ id: "studio-max", home: "p/cc", runtime: "claude", model: "claude-opus-5-5" }] }, s.data)).docs);
-  assert.deepEqual(kinds(s.index.search("releases", home)), { skill: ["k::deploy"] });
-  assert.deepEqual(kinds(s.index.search("64 GB", home)), { memory: ["k::"] });
-  assert.deepEqual(kinds(s.index.search("5173", home)), { job: ["j:j1"] });
-  assert.deepEqual(kinds(s.index.search("opus", other)), { profile: ["p:studio-max"] });
+  assert.deepEqual(kinds(find(s, "releases", home)), { skill: ["k::deploy"] });
+  assert.deepEqual(kinds(find(s, "64 GB", home)), { memory: ["k::"] });
+  assert.deepEqual(kinds(find(s, "5173", home)), { job: ["j:j1"] });
+  const profiles = profileDocs(profilesOf({ profiles: [{ id: "studio-max", home: "p/cc", runtime: "claude", model: "claude-opus-5-5" }] }, s.data));
+  assert.deepEqual(kinds(pick(profiles, ["opus"], other)), { profile: ["p:studio-max"] });
 });
 
 test("a query's words, and the part of a text that has them", () => {
@@ -157,66 +133,61 @@ test("a query's words, and the part of a text that has them", () => {
   assert.ok(part.startsWith("…") && part.endsWith("…") && part.includes("needle"), part);
 });
 
-test("the station's index thread keeps up with its store, and answers as it does", async () => {
+test("the station's search thread finds what the store has as it is asked; the index of before is let go", async () => {
   const { Search } = await import("../src/search/search.ts");
   const s = station();
+  writeFileSync(join(s.data, "search.db"), "an index of before");
   const t = chat(s.store, "k1", null);
   say(s.store, t, "1", "before the start");
-  const search = new Search({ data: s.data, store: s.store });
+  const search = new Search({ data: s.data });
   search.start();
   try {
-    assert.equal((await search.flushed()).building, false);
+    assert.equal(existsSync(join(s.data, "search.db")), false);
     assert.deepEqual(kinds((await search.query("before", home, { kinds: ["message"] })).groups), { message: [`m:${t}:1`] });
-    // Said after: told by the store, indexed in the background.
     say(s.store, t, "2", "after the start");
-    await search.flushed();
     assert.deepEqual(kinds((await search.query("after", home, { kinds: ["message"] })).groups), { message: [`m:${t}:2`] });
-    // Deleted: found no more.
     s.store.deleteSession("k1");
-    await search.flushed();
     assert.deepEqual((await search.query("after", home)).groups, []);
   } finally {
     await search.stop();
   }
 });
 
-test("an execution history is found, grown from where it was, and one that stopped the index's thread is passed over until it changes", async () => {
-  const { historyDocs, READING, FAILED, Readings } = await import("../src/search/sources.ts");
-  const { appendFileSync } = await import("node:fs");
+test("an execution history is looked through as it is: newest first, numbered as its page numbers it, a file put away too", async () => {
   const s = station();
   const key = "k1";
-  chat(s.store, key, null);
+  const t = chat(s.store, key, null);
   s.store.setRuntimeSessionId(key, "rs1");
-  const home = join(s.data, "p");
-  mkdirSync(join(home, "projects", "w"), { recursive: true });
-  const file = join(home, "projects", "w", "rs1.jsonl");
+  const p = join(s.data, "p");
+  mkdirSync(join(p, "projects", "w"), { recursive: true });
+  const file = join(p, "projects", "w", "rs1.jsonl");
   const said = (text: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-18T08:00:00Z", message: { content: [{ type: "text", text }] } })}\n`;
   writeFileSync(file, said("先跑 pnpm run deploy"));
-  const profiles = [{ id: "cc", home, runtime: "claude" }];
+  appendFileSync(file, said('deploy 完了, "quoted" too'));
+  appendFileSync(file, said("nothing here"));
+  const profiles = [{ id: "cc", home: p, runtime: "claude" }];
+  const now = () => 0;
   const read = s.read();
-  const first = (await historyDocs(read, key, profiles, null))!;
-  assert.deepEqual(first.docs.map((d) => [d.key, d.body]), [[`h:${key}:0`, "先跑 pnpm run deploy"]]);
-  appendFileSync(file, said("deploy 完了"));
-  const grown = (await historyDocs(read, key, profiles, first.version))!;
-  assert.equal(grown.whole, false);
-  assert.deepEqual(grown.docs.map((d) => d.key), [`h:${key}:1`]);
-  // Its reading stopped the thread: passed over, until the file changes.
-  const failed = (await historyDocs(read, key, profiles, READING))!;
-  assert.ok(failed.version.startsWith(FAILED));
-  assert.deepEqual(failed.docs, []);
-  assert.deepEqual((await historyDocs(read, key, profiles, failed.version))!.docs, []);
-  appendFileSync(file, said("again"));
-  assert.equal((await historyDocs(read, key, profiles, failed.version))!.docs.length, 3);
-  // Read on from where it was read to: only what was added is read, at the index it has in the whole.
-  const readings = new Readings();
-  let whole = 0;
-  const all = (await historyDocs(read, key, profiles, null, () => whole++, readings))!;
-  appendFileSync(file, said("one more deploy"));
-  const more = (await historyDocs(read, key, profiles, all.version, () => whole++, readings))!;
-  assert.equal(whole, 1);
-  assert.deepEqual(more.docs.map((d) => [d.key, d.body]), [[`h:${key}:3`, "one more deploy"]]);
+  const look = (q: string, asker: Asker = home, limit = 5) => historyHits(read, profiles, terms(q), asker, { limit, offset: 0, ms: 10_000, now });
+  const found = await look("deploy");
+  assert.deepEqual(found.hits.map((h) => h.key), [`h:${key}:1`, `h:${key}:0`]);
+  assert.deepEqual([found.hits[0]!.chat, found.hits[0]!.thread], [key, t]);
+  assert.equal((await look("deploy", home, 1)).more, true);
+  // As JSON writes it, and in Chinese.
+  assert.deepEqual((await look('"quoted"')).hits.map((h) => h.key), [`h:${key}:1`]);
+  assert.deepEqual((await look("完了")).hits.map((h) => h.key), [`h:${key}:1`]);
+  assert.deepEqual((await look("deploy nowhere")).hits, []);
+  // Another workspace's member sees none of it.
+  assert.deepEqual((await look("deploy", other)).hits, []);
   // Numbered as the history page numbers them (GET /sessions/:key/timeline).
   const { readTimeline } = await import("../src/read/transcript.ts");
-  assert.equal(JSON.parse(more.version).n, readTimeline("claude", file).length);
+  assert.equal(readTimeline("claude", file)[1]!.text, 'deploy 完了, "quoted" too');
+  // Put away: read decompressed.
+  writeFileSync(`${file}.zst`, zstdCompressSync(readFileSync(file)));
+  rmSync(file);
+  assert.deepEqual((await look("deploy")).hits.map((h) => h.key), [`h:${key}:1`, `h:${key}:0`]);
+  // Out of time: what was found, and how many sessions were not looked through.
+  const late = await historyHits(read, profiles, ["deploy"], home, { limit: 5, offset: 0, ms: -1, now });
+  assert.deepEqual([late.hits, late.left], [[], 1]);
   read.db.close();
 });

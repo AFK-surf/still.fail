@@ -2,7 +2,8 @@
 
 One search for everything in a workspace: ⌘K on a computer, the search at the top of the phones' lists, and the agents'
 `search` tool. Each station answers for what is on it; the core asks every station of the workspace at once and puts
-what they find together with what the device holds. Nothing is gathered in still.fail cloud.
+what they find together with what the device holds. Nothing is gathered in still.fail cloud, and nothing is indexed:
+each station looks through its data as it is when asked.
 
 ## What is found, and where it comes from
 
@@ -10,36 +11,35 @@ what they find together with what the device holds. Nothing is gathered in still
 |---|---|---|
 | chat | a chat's title (archived ones too), its agents' titles and models | the device (the sidebar's rows) and its station |
 | message | every message as it reads now (archived chats' too), the names of its files | the device (what it keeps, `said`) and its station |
-| history | an execution history's steps: what the agent said and thought, the calls it made (as a history names them), the start of what they gave | its station |
+| history | an execution history's steps: what the agent said and thought, the calls it made and what they gave. Agents only (`search`): people are not given it | its station |
 | job | services and tasks: name, command, folder, port | its station |
 | skill, memory | the skills (their files too) and MEMORY.md of the workspace on the station | its station |
 | profile | the station's profiles: name, runtime, model, account kind | its station |
 | station | the workspace's stations by name | the device |
 
 Later: the files on the station's machine (macOS through Spotlight, Documents/Desktop/Downloads through still.fail
-Helper; elsewhere an index of its own), the cloud's own (feedback), Slack channels' history.
+Helper; elsewhere looked through as asked), the cloud's own (feedback), Slack channels' history.
 
 ## Station (station/src/search/)
 
-- `search.db` beside `stillfail.db`: a database of its own, made where missing, so it is dropped and built again at
-  will and no version of the station's data depends on it. One table of documents (`docs`: kind, workspace, scope,
-  title, body, time, what opens it) with an FTS5 index over title and body (`tokenize='trigram'`: any part of any word,
-  any script, case aside). A term of fewer than three characters (most Chinese words) has no trigram and is looked for
-  in the text itself (`instr`).
-- Each document belongs to a source (a thread, a session's transcript, a session's jobs, a workspace's memory, the
-  profiles), indexed as a whole and marked with the version indexed (`marks`): a thread from the last entry indexed
-  (what was said since, and what an edit changed), an archived one whole once its file changes; a transcript from the
-  last step indexed while its files only grow.
-- The index is kept by a thread of its own (`search/worker.ts`), on a read-only connection to the store as a reader's:
-  told what changed by the store's changes (`search/search.ts`), and every ten minutes, and at start, it looks over
-  everything for what it was not told (memory an agent wrote, a start after the station was away). It answers what is
-  asked between sources.
-- `GET /search?q=&kinds=&limit=&offset=` → `{groups: [{kind, hits, more}], building}`, as the asker may see: their
+- Nothing is indexed: a thread of the station's own (`search/worker.ts`), on a read-only connection to the store as a
+  reader's, looks through the data as it is when asked (`search/sources.ts`): every chat and message (an archived
+  chat's from its file), the jobs, the workspace's memory and skills, the profiles; every word must be in a thing's
+  title or text, any part of a word, any script, case aside. On ccvm (668 chats, 17k messages) that is about 0.2 s.
+- The execution history only when asked for by name (agents' `search`): the sessions most recently active first, each
+  one's transcript files looked through as bytes (one put away decompressed as a stream) for every word, ASCII's case
+  aside and as JSON writes it; a file that has them all is read and its steps numbered as its history page numbers them,
+  its latest steps that have the words found. It stops at the hits asked for, or after 15 s (`left`: the sessions not
+  looked through). On ccvm a word found in the latest sessions takes 0.1 s; one found nowhere, every file (2.4 GB, and
+  400 MB put away), about 4.5 s.
+- The station before kept an index (`search.db`): removed as the station starts.
+- `GET /search?q=&kinds=&limit=&offset=` → `{groups: [{kind, hits, more}], building}` (people's, so never `history`;
+  `building` always false), as the asker may see: their
   workspace's documents (`ws`; null the home workspace's, `*` every member's), and what only a member who may write
   reaches (`scope: write`) only for them. Those whose title has the first word come first, then the newest.
-  `building` while the first look over everything since the start is not done.
 - Agents: `search` (tools/search.ts) asks every station of the session's workspace (`search.query` over the mesh, as
-  `session.read` is), each answering for its own with its chats' links.
+  `session.read` is), each answering for its own with its chats' links; every kind, the execution history too, when
+  none is named.
 
 ## Core (client/core-ts/src/views/search.ts)
 

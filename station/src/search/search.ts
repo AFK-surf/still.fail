@@ -1,111 +1,68 @@
-// What the station finds for a search (docs/search.md): its index's thread (search/worker.ts) kept as the station's data
-// is, by the store's changes, and asked what a query finds. The thread is started with the station and stays: it holds
-// the index current. One that dies is started again a little later, and looks everything over then.
+// What the station finds for a search (docs/search.md): looked for by a thread of its own (search/worker.ts) in the
+// station's data as it is then; nothing indexed. The thread is started with the station and stays; one that dies is
+// started again when next asked.
 import { Worker } from "node:worker_threads";
+import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
-import type { Store } from "../store/store.ts";
-import type { StoreChange } from "../store/rows.ts";
-import type { Asker, Group } from "./index.ts";
+import type { Asker, Group } from "./match.ts";
 import type { Answered, Told } from "./worker.ts";
 
-/// How often everything is looked over for what the station did not say (memory an agent wrote, the profiles).
-const SWEEP_MS = 10 * 60_000;
-/// How long after a thread failed it is started again.
-const AGAIN_MS = 30_000;
-/// How long a query may take before it is answered with nothing (the thread busy with a large source).
-const QUERY_MS = 10_000;
+/// How long a search may take before it is answered with nothing.
+const QUERY_MS = 30_000;
 
+/// `building`: always false (said to the clients that showed an index still being built).
 export type Found = { groups: Group[]; building: boolean };
 
 export class Search {
   #data: string;
-  #store: Store;
   #worker: Worker | null = null;
   #next = 0;
   #waiting = new Map<number, { resolve: (found: Found) => void; reject: (error: Error) => void; timer: () => void }>();
-  #unsubscribe: (() => void) | null = null;
-  #sweeping: (() => void) | null = null;
-  #again: (() => void) | null = null;
   #closed = false;
 
-  constructor(options: { data: string; store: Store }) {
+  constructor(options: { data: string }) {
     this.#data = options.data;
-    this.#store = options.store;
   }
 
   start(): void {
-    this.#unsubscribe = this.#store.subscribe((change) => this.#changed(change));
+    // The index an earlier station kept: there is none now.
+    for (const f of ["search.db", "search.db-wal", "search.db-shm"]) rmSync(join(this.#data, f), { force: true });
     this.#spawn();
-    const sweep = () => {
-      this.#tell({ type: "sweep" });
-      this.#sweeping = wall.after(SWEEP_MS, sweep);
-    };
-    this.#sweeping = wall.after(SWEEP_MS, sweep);
   }
 
-  #spawn(): void {
-    if (this.#closed) return;
+  #spawn(): Worker | null {
+    if (this.#closed) return null;
     // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/search/worker.js.
     const file = new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./search/worker.js", import.meta.url);
     const worker = new Worker(file, { workerData: { data: this.#data }, resourceLimits: { maxOldGenerationSizeMb: 384 } });
     this.#worker = worker;
     worker.on("message", (answer: Answered) => {
-      if (answer.id < 0) {
-        log.warn("search", "indexing failed", { error: answer.error });
-        return;
-      }
       const waiter = this.#waiting.get(answer.id);
       if (!waiter) return;
       this.#waiting.delete(answer.id);
       waiter.timer();
       if (answer.error !== undefined) waiter.reject(new Error(answer.error));
-      else waiter.resolve({ groups: (answer.groups as Group[]) ?? [], building: answer.building === true });
+      else waiter.resolve({ groups: answer.groups ?? [], building: false });
     });
-    worker.on("error", (error) => log.error("search", "the search index stopped", { error: error.message }));
+    worker.on("error", (error) => log.error("search", "the search's thread stopped", { error: error.message }));
     worker.on("exit", () => {
       if (this.#worker === worker) this.#worker = null;
       for (const [id, waiter] of this.#waiting) {
         waiter.timer();
-        waiter.reject(new Error("the search index stopped"));
+        waiter.reject(new Error("the search stopped"));
         this.#waiting.delete(id);
       }
-      if (!this.#closed) this.#again = wall.after(AGAIN_MS, () => this.#spawn());
     });
-    worker.postMessage({ type: "sweep" } satisfies Told);
+    return worker;
   }
 
-  #tell(told: Told): void {
-    this.#worker?.postMessage(told);
-  }
-
-  #changed(change: StoreChange): void {
-    switch (change.type) {
-      case "thread":
-        this.#tell({ type: "thread", id: change.id });
-        break;
-      case "threadRemoved":
-        this.#tell({ type: "threadRemoved", id: change.id });
-        break;
-      case "session":
-        this.#tell({ type: "session", key: change.key });
-        break;
-      case "sessionRemoved":
-        this.#tell({ type: "sessionRemoved", key: change.key });
-        break;
-      case "job":
-        this.#tell({ type: "job", id: change.id });
-        break;
-      case "jobRemoved":
-        this.#tell({ type: "session", key: change.session });
-        break;
-    }
-  }
-
-  /// What `query` finds for `asker`: by kind, at most `limit` of each (those of `kinds` only, when given).
+  /// What `query` finds for `asker`: by kind, at most `limit` of each (those of `kinds` only, when given; the execution
+  /// history only when asked for by name).
   query(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number } = {}): Promise<Found> {
-    const worker = this.#worker;
-    if (!worker) return Promise.reject(new Error("the search index is starting"));
+    const worker = this.#worker ?? this.#spawn();
+    if (!worker) return Promise.reject(new Error("the search is stopped"));
     const id = this.#next++;
     return new Promise<Found>((resolve, reject) => {
       const timer = wall.after(QUERY_MS, () => {
@@ -117,22 +74,8 @@ export class Search {
     });
   }
 
-  /// Once what the index was told so far is in it (for tests: the store's changes are indexed in the background).
-  flushed(): Promise<Found> {
-    const worker = this.#worker;
-    if (!worker) return Promise.reject(new Error("the search index is starting"));
-    const id = this.#next++;
-    return new Promise<Found>((resolve, reject) => {
-      this.#waiting.set(id, { resolve, reject, timer: () => {} });
-      worker.postMessage({ type: "flush", id } satisfies Told);
-    });
-  }
-
   async stop(): Promise<void> {
     this.#closed = true;
-    this.#unsubscribe?.();
-    this.#sweeping?.();
-    this.#again?.();
     await this.#worker?.terminate();
     this.#worker = null;
   }

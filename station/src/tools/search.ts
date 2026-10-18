@@ -1,7 +1,7 @@
-// The agents' search (docs/search.md): what a few words find in the workspace, on every station of it at once, as people
-// find it with ⌘K: chats, messages, execution history, services and tasks, skills and memory, profiles. Each station
-// answers for its own (`search.query`, asked over the mesh as session.read is), with the links of its chats.
-import type { Asker, Group, Hit } from "../search/index.ts";
+// The agents' search (docs/search.md): what a few words find in the workspace, on every station of it at once: chats,
+// messages, execution history, services and tasks, skills and memory, profiles, looked through as they are then. Each
+// station answers for its own (`search.query`, asked over the mesh as session.read is), with the links of its chats.
+import type { Asker, Group, Hit } from "../search/match.ts";
 import type { Search } from "../search/search.ts";
 import type { Tool } from "./mcp.ts";
 import { wall } from "../ops/fibers.ts";
@@ -9,7 +9,7 @@ import { wall } from "../ops/fibers.ts";
 /// What another station is asked.
 export const SEARCH = "search.query";
 /// How long another station has to answer before it is said not to have.
-const WAIT_MS = 5_000;
+const WAIT_MS = 20_000;
 /// What is said of each kind at most, and of each hit.
 const SHOWN = 5;
 const TEXT_CHARS = 200;
@@ -35,7 +35,9 @@ function linked(groups: Group[], link: (session: string) => string | undefined):
 /// What `request` asks of this station from another (`ws`: the workspace it was asked in; none: the home one).
 export async function searchForPeer(deps: Pick<SearchDeps, "search" | "link">, request: any, ws: string | null, home: string | null): Promise<unknown> {
   const query = typeof request?.query === "string" ? request.query : "";
-  const kinds = Array.isArray(request?.kinds) ? request.kinds.filter((k: unknown): k is string => typeof k === "string") : undefined;
+  const asked = Array.isArray(request?.kinds) ? request.kinds.filter((k: unknown): k is string => typeof k === "string") : [];
+  // All of them, the execution history too, when none is named.
+  const kinds = asked.length > 0 ? asked : KINDS;
   const limit = typeof request?.limit === "number" ? request.limit : SHOWN;
   const asker: Asker = { workspace: ws ?? home ?? "", home: ws === null || ws === home, scopes: ["write"] };
   const found = await deps.search.query(query, asker, { kinds, limit });
@@ -61,10 +63,14 @@ function hitLine(h: Hit): string {
   return `- ${title}${one(h.text)}${at}${where.length > 0 ? ` — ${where.join(", ")}` : ""}`;
 }
 
-function said(name: string, groups: Group[], building: boolean): string {
-  if (groups.length === 0) return `## ${name}\nNothing found.${building ? " (Its index is still being built.)" : ""}`;
-  const parts = groups.map((g) => `### ${g.kind}\n${g.hits.map(hitLine).join("\n")}${g.more ? "\n- … more: ask with kinds=[\"" + g.kind + "\"] and a higher limit" : ""}`);
-  return `## ${name}${building ? " (index still being built: some may be missing)" : ""}\n${parts.join("\n")}`;
+function said(name: string, groups: Group[]): string {
+  if (groups.length === 0) return `## ${name}\nNothing found.`;
+  const parts = groups.map((g) => {
+    const left = g.left ? `\n- … ${g.left} older sessions' history not looked through (out of time): narrow the words, or ask this station alone` : "";
+    const more = g.more && !g.left ? "\n- … more: ask with kinds=[\"" + g.kind + "\"] and a higher limit" : "";
+    return `### ${g.kind}\n${g.hits.map(hitLine).join("\n")}${more}${left}`;
+  });
+  return `## ${name}\n${parts.join("\n")}`;
 }
 
 export function searchTools(deps: SearchDeps): Tool[] {
@@ -72,7 +78,7 @@ export function searchTools(deps: SearchDeps): Tool[] {
     {
       name: "search",
       description:
-        "Search everything in this workspace, on all its stations at once, as people do with ⌘K: chats (titles, archived ones too), every message, agents' execution histories (what they said, thought and ran), services and tasks, skills and memory, profiles. Words are matched anywhere in the text, case aside; every word must match. Results are grouped by station and kind, newest first after title matches, with chat links to give people or read with chat_read and session_history.",
+        "Search everything in this workspace, on all its stations at once: chats (titles, archived ones too), every message, agents' execution histories (what they said, thought and ran, and what it gave), services and tasks, skills and memory, profiles. Looked through as they are now (nothing indexed): the execution histories take a few seconds, the most recently active sessions first. Words are matched anywhere in the text, case aside; every word must match. Results are grouped by station and kind, newest first after title matches, with chat links to give people or read with chat_read and session_history.",
       inputSchema: {
         type: "object",
         properties: {
@@ -88,7 +94,8 @@ export function searchTools(deps: SearchDeps): Tool[] {
         const query = typeof args.query === "string" ? args.query.trim() : "";
         if (query === "") throw new Error("query is required");
         if (query.length > 200) throw new Error("a search is at most 200 characters");
-        const kinds = Array.isArray(args.kinds) ? args.kinds.filter((k): k is string => typeof k === "string") : undefined;
+        const asked = Array.isArray(args.kinds) ? args.kinds.filter((k): k is string => typeof k === "string") : [];
+        const kinds = asked.length > 0 ? asked : KINDS;
         const limit = Math.max(1, Math.min(typeof args.limit === "number" ? Math.floor(args.limit) : SHOWN, 50));
         const place = deps.workspaceOf(session);
         if (place === null) throw new Error("unknown session");
@@ -108,10 +115,10 @@ export function searchTools(deps: SearchDeps): Tool[] {
             try {
               if (s.here) {
                 const found = await deps.search.query(query, { ...place, scopes: ["write"] }, { kinds, limit });
-                return said(name, linked(found.groups, deps.link), found.building);
+                return said(name, linked(found.groups, deps.link));
               }
               const answer = await wall.within(WAIT_MS, deps.ask(s.id, { method: SEARCH, session, query, kinds, limit }), `did not answer within ${WAIT_MS / 1000} s`);
-              return said(name, Array.isArray(answer?.groups) ? answer.groups : [], answer?.building === true);
+              return said(name, Array.isArray(answer?.groups) ? answer.groups : []);
             } catch (error) {
               return `## ${name}\nNot searched: ${(error as Error).message}`;
             }
