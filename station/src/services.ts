@@ -22,7 +22,8 @@ import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
-import { dropFolder } from "./drive/drive.ts";
+import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
+import { ModuleSet } from "./modules/modules.ts";
 import { HelperApp, helperApp } from "./helper/app.ts";
 import { HelperGrants } from "./helper/grants.ts";
 
@@ -195,12 +196,40 @@ export class AdminHost extends Context.Service<AdminHost, Host>()("stillfail/Adm
   );
 }
 
+/// The modules beside the station (docs/station-modules.md): which there are and how each is now, for the admin API
+/// (passed on to them), the overview and modules/live.ts (which starts them). Their changes told as the overview's.
+export class Modules extends Context.Service<Modules, ModuleSet>()("stillfail/Modules") {
+  static readonly layer = Layer.effect(
+    Modules,
+    Effect.gen(function* () {
+      const events = yield* Events;
+      return new ModuleSet((yield* Paths).data, () => events.overviewChanged());
+    }),
+  );
+}
+
+/// The station's drive (drive/drive.ts, docs/drive.md): one, for the admin API's routes and the modules' local API.
+/// Made after the agents' side (the config, the profiles' homes it keeps out, still.fail Helper's way to the folders macOS
+/// protects).
+export class StationDrive extends Context.Service<StationDrive, Drive>()("stillfail/Drive") {
+  static readonly layer = Layer.effect(
+    StationDrive,
+    Effect.gen(function* () {
+      const agents = yield* Agents;
+      return stationDrive(agents.config, () => agents.hub.config().profiles.map((p) => p.home), agents.helperFiles ?? null);
+    }),
+  );
+}
+
 /// The admin API. Made after the agents' side (it runs sessions and jobs for the pages); the agents do not need it.
 export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/AdminApi") {
   static readonly layer = Layer.effect(
     AdminApi,
     Effect.gen(function* () {
-      return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents, screens: yield* ScreenRegistry, helper: yield* Helper, grants: yield* Grants });
+      return new Admin(yield* Readers, {
+        store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents, screens: yield* ScreenRegistry, helper: yield* Helper, grants: yield* Grants,
+        drive: yield* StationDrive, modules: yield* Modules,
+      });
     }),
   );
 }

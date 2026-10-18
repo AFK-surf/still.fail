@@ -58,6 +58,7 @@ launchd / 桌面 app
 | `jobs` | 后台任务、服务、预览、站间任务（回执改进库，不再是 JSON 文件） | jobs.rs、remote.rs 的 JSON 文件和三个轮询 |
 | `updates` | 拆成「运行时安装」和「station 自更新」两块 | updates.rs 1100 行 |
 | `ops` | 配置/设置（原子写、保留未知字段）、`run/*` 文件、端口、日志、错误上报、遥测 | config/settings/ports/telemetry |
+| `modules` | 旁边的独立进程（config.json `modules`）：启动、重启、停止；`/m/<id>/…` 转给它们；它们读 drive 的本机接口（docs/station-modules.md） | （新增，2026-10-19） |
 
 ## 数据层
 

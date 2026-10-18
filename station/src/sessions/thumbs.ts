@@ -3,9 +3,11 @@
 // asking for one kept before), in <data>/thumbs, by the image's path; the image itself stays as it was, for the
 // preview. And each image's ThumbHash, kept with the message: a blurred likeness of it, a few dozen bytes, shown until it
 // loads. Decoding, resizing and encoding are the Rust's own code in the native addon (native/mesh/src/thumbs.rs), off
-// this thread; what is here is which files, where, and what the message keeps.
+// this thread; what is here is which files, where, and what the message keeps. The drive's files have theirs made the
+// same way for the modules (modules/media.ts): those change where they are, so theirs are made again once the file is
+// newer than they are (`since`).
 import { createHash } from "node:crypto";
-import { statSync } from "node:fs";
+import { rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
 import { type Mesh, loadMesh } from "../mesh/native.ts";
@@ -26,14 +28,21 @@ export const wanted = (name: string) => [".png", ".jpg", ".jpeg", ".webp"].some(
 /// The thumbnail's name: the first 16 bytes of the SHA-256 of the image's path, in hex.
 export const idOf = (image: string) => createHash("sha256").update(image).digest().subarray(0, 16).toString("hex");
 
-/// The thumbnail made before, if there is one.
-export function kept(thumbs: string, id: string): Thumbnail | null {
+/// The thumbnail made before, if there is one. `since`: of an image that changes (the drive's), one made before that
+/// time (ms) is of what it was, and is removed.
+export function kept(thumbs: string, id: string, since?: number): Thumbnail | null {
   for (const [ext, type] of [
     ["jpg", "image/jpeg"],
     ["png", "image/png"],
   ] as const) {
     const path = join(thumbs, `${id}.${ext}`);
-    if (statSync(path, { throwIfNoEntry: false })?.isFile()) return { path, type };
+    const st = statSync(path, { throwIfNoEntry: false });
+    if (!st?.isFile()) continue;
+    if (since !== undefined && st.mtimeMs < since) {
+      rmSync(path, { force: true });
+      return null;
+    }
+    return { path, type };
   }
   return null;
 }
@@ -53,12 +62,25 @@ function native(): Codecs | null {
   return codecs;
 }
 
-/// thumbs.rs `thumbnail`: the image's thumbnail and its type, made if it is not there yet; null when the image is shown
-/// itself (small already, or not readable as an image).
-export async function thumbnail(image: string, thumbs: string, using: Codecs | null = native()): Promise<Thumbnail | null> {
+/// thumbs.rs `thumbnail`: the image's thumbnail and its type, made if it is not there yet (or made again when it is
+/// older than `since`, the image's time); null when the image is shown itself (small already, or not readable as an
+/// image).
+export async function thumbnail(image: string, thumbs: string, using: Codecs | null = native(), since?: number): Promise<Thumbnail | null> {
   if (using === null) return null;
+  if (since !== undefined) kept(thumbs, idOf(image), since);
   try {
     return await using.thumbnail(image, thumbs);
+  } catch {
+    return null;
+  }
+}
+
+/// The image's ThumbHash (base64) and its size as seen; null when it is not readable as an image (or there are no
+/// codecs).
+export async function hashOf(image: string, using: Codecs | null = native()): Promise<{ hash: string; width: number; height: number } | null> {
+  if (using === null) return null;
+  try {
+    return await using.thumbhash(image, null);
   } catch {
     return null;
   }
