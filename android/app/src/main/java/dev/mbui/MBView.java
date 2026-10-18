@@ -58,7 +58,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     }
 
     /** Runs r on the GL thread and asks for a frame. */
-    void post(Runnable r) {
+    void toGL(Runnable r) {
         queueEvent(r);
         requestRender();
     }
@@ -78,7 +78,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         final float x = e.getX() / density, y = e.getY() / density;
         final int k = kind;
         if (kind == 0) requestFocus();
-        post(() -> Native.pointer(k, x, y));
+        toGL(() -> Native.pointer(k, x, y));
         return true;
     }
 
@@ -87,13 +87,13 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         int k = keyCode(code);
         if (k != 0) {
             int mods = e.isShiftPressed() ? 1 : 0;
-            post(() -> Native.key(k, mods));
+            toGL(() -> Native.key(k, mods));
             return true;
         }
         int ch = e.getUnicodeChar();
         if (ch != 0 && Host.imeActive) {
             String s = new String(Character.toChars(ch));
-            post(() -> Native.text(0, s, 0, 0));
+            toGL(() -> Native.text(0, s, 0, 0));
             return true;
         }
         return super.onKeyDown(code, e);
@@ -151,9 +151,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             String s = text.toString();
             composing = false;
             if (s.equals("\n")) {
-                view.post(() -> Native.key(7, 0));
+                view.toGL(() -> Native.key(7, 0));
             } else {
-                view.post(() -> Native.text(0, s, 0, 0));
+                view.toGL(() -> Native.text(0, s, 0, 0));
             }
             return true;
         }
@@ -162,7 +162,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         public boolean setComposingText(CharSequence text, int pos) {
             String s = text.toString();
             composing = s.length() > 0;
-            view.post(() -> Native.text(1, s, s.length(), 0));
+            view.toGL(() -> Native.text(1, s, s.length(), 0));
             return true;
         }
 
@@ -170,21 +170,21 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         public boolean finishComposingText() {
             if (composing) {
                 composing = false;
-                view.post(() -> Native.text(2, "", 0, 0));
+                view.toGL(() -> Native.text(2, "", 0, 0));
             }
             return true;
         }
 
         @Override
         public boolean setSelection(int start, int end) {
-            view.post(() -> Native.text(3, "", start, end));
+            view.toGL(() -> Native.text(3, "", start, end));
             return true;
         }
 
         @Override
         public boolean deleteSurroundingText(int before, int after) {
-            if (before > 0) view.post(() -> Native.key(1, 0));
-            if (after > 0) view.post(() -> Native.key(2, 0));
+            if (before > 0) view.toGL(() -> Native.key(1, 0));
+            if (after > 0) view.toGL(() -> Native.key(2, 0));
             return true;
         }
 
@@ -194,20 +194,20 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             int k = keyCode(e.getKeyCode());
             if (k != 0) {
                 int mods = e.isShiftPressed() ? 1 : 0;
-                view.post(() -> Native.key(k, mods));
+                view.toGL(() -> Native.key(k, mods));
                 return true;
             }
             int ch = e.getUnicodeChar();
             if (ch != 0) {
                 String s = new String(Character.toChars(ch));
-                view.post(() -> Native.text(0, s, 0, 0));
+                view.toGL(() -> Native.text(0, s, 0, 0));
             }
             return true;
         }
 
         @Override
         public boolean performEditorAction(int action) {
-            view.post(() -> Native.key(7, 0));
+            view.toGL(() -> Native.key(7, 0));
             return true;
         }
 

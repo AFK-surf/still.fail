@@ -13,8 +13,8 @@ final class Script {
         float d = v.density;
         Host.main.postDelayed(() -> {
             float x = 100, y = v.getHeight() / d - 30;
-            v.post(() -> Native.pointer(0, x, y));
-            v.post(() -> Native.pointer(2, x, y));
+            v.toGL(() -> Native.pointer(0, x, y));
+            v.toGL(() -> Native.pointer(2, x, y));
         }, 2000);
         Host.main.postDelayed(() -> ic(v).setComposingText("ni'hao", 1), 3500);
         Host.main.postDelayed(() -> {
