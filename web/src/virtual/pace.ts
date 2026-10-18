@@ -140,6 +140,18 @@ export class Pace {
       }
       this.rows.set(key, { el, y, closed, shares, drawn: Number.NaN });
     }
+    // An agent's line folded while its avatar flies a message out of it shows nothing but where the avatar goes home
+    // to: it goes with the message come before it, as everything does, not held where it was (it would lie under the
+    // message unfolding there).
+    if (take === "glide") {
+      let before: Row | undefined;
+      for (const [key, el] of shown) {
+        const row = this.rows.get(key);
+        if (!row) continue;
+        if (before && el.hasAttribute("data-away")) row.shares = before.shares.map((s) => ({ ...s }));
+        before = row;
+      }
+    }
     this.draw(this.last);
   }
 
