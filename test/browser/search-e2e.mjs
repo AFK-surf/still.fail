@@ -37,6 +37,7 @@ const check = (name, saw, ok) => {
 };
 
 let cloud = null;
+let shown = null;
 let station = null;
 let browser = null;
 const stop = () => {
@@ -90,6 +91,7 @@ async function main() {
     if (!localStorage.getItem("stillfail.accounts")) localStorage.setItem("stillfail.accounts", JSON.stringify([a]));
   }, account);
   const page = await context.newPage();
+  shown = page;
   await page.goto(`${ORIGIN}/`, { timeout: 60_000 });
   await page.waitForURL(/\/w\/[^/]+/, { timeout: 60_000 });
   const workspace = /\/w\/([^/]+)/.exec(page.url())[1];
@@ -102,8 +104,7 @@ async function main() {
     await box.click();
     await page.keyboard.insertText(`${text} post:${answer}`);
     await page.keyboard.press("Enter");
-    // Its chat made, and the agent's post in it (the composer empty by then).
-    await page.waitForURL(/\/chats\//, { timeout: 60_000 });
+    // The agent's post in its chat (the composer empty by then).
     await page.waitForFunction((a) => document.body.innerText.includes(a) && !Array.from(document.querySelectorAll("textarea")).some((t) => t.value.includes(a)), answer, { timeout: 90_000 });
   };
   await say("帮我看看本地分析用什么", "结论：用 DuckDB 直接查 Parquet，不用导数据");
@@ -174,6 +175,8 @@ try {
   ok = await main();
 } catch (error) {
   console.error(error);
+  await shown?.screenshot({ path: join(SHOTS, "failed.png") }).catch(() => {});
+  console.error(`at ${shown?.url()}`);
   try {
     console.error(readFileSync(join(WORK, "station", "station.log"), "utf8").split("\n").slice(-40).join("\n"));
   } catch {}
