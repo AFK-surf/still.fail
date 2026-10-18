@@ -15,9 +15,25 @@ what they find together with what the device holds. Nothing is gathered in still
 | skill, memory | the skills (their files too) and MEMORY.md of the workspace on the station | its station |
 | profile | the station's profiles: name, runtime, model, account kind | its station |
 | station | the workspace's stations by name | the device |
+| file | the machine's files: names, and what text files say | its station: Spotlight on macOS, its own index elsewhere |
 
-Later: the files on the station's machine (macOS through Spotlight, Documents/Desktop/Downloads through still.fail
-Helper; elsewhere an index of its own), the cloud's own (feedback), Slack channels' history.
+Later: Documents, Desktop and Downloads on macOS through still.fail Helper, the cloud's own (feedback), Slack
+channels' history.
+
+## The machine's files (station/src/search/files.ts)
+
+- macOS: Spotlight asked as a search comes (`mdfind`, at most 3 s, never copied into `search.db`): names under the home,
+  what files there say, and the apps by name, for a member who may write; a read-only member's only in the folders
+  their workspace pinned. What tools make and keep (node_modules, .git, virtual environments, build caches, the home's
+  Library) is passed over; names that have the first word first, an app before a file, then the nearer the home's
+  top, the latest. Documents, Desktop and Downloads are kept from the station by macOS: not found yet.
+- Elsewhere: the home and the folders pinned walked into `search.db` every six hours by the index's thread (names of
+  all, the words of text files up to 256 KB; the same folders passed over), for the same people.
+- Never the station's own (ops/own.ts). The person's own mail, messages, calendars, contacts, notes and photos only
+  where the station's owners and admins say so: `PUT /search/settings {personal}` (config.json `search.personal`,
+  the overview's `search`), a switch on the station's page.
+- A file opens in the drive: a folder entered, a text read, a video or song played, anything else in its folder
+  (web/src/searchOpen.ts, Android screens/Search.kt `fileScreen`).
 
 ## Station (station/src/search/)
 
