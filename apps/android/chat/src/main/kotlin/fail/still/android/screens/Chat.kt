@@ -1253,7 +1253,7 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toP
                 )
             } else if (install != null) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(said, fontSize = 15.sp, lineHeight = 24.75.sp, color = ink, maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                InstallAction(install, station, 15.sp)
+                InstallAction(install, station)
             } else if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
             else Text(
                 plain(said.lineSequence().firstOrNull { it.isNotBlank() } ?: said), fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
@@ -1281,20 +1281,22 @@ private fun BlockedLine(install: fail.still.android.data.RuntimeInstall, station
         val words = install.title + (if (install.state == "installing" && install.percent != null) " ${install.percent}%" else "") +
             (install.note?.takeIf { install.action == null }?.let { " · $it" } ?: "")
         Text(words, fontSize = 10.sp, lineHeight = 16.sp, color = ink, modifier = Modifier.weight(1f, fill = false))
-        InstallAction(install, station, 10.sp)
+        InstallAction(install, station)
     }
 }
 
 /** Installing a runtime the station does not have, a word after what says so (a manager's: core `action`). */
 @Composable
-private fun InstallAction(install: fail.still.android.data.RuntimeInstall, station: String, size: androidx.compose.ui.unit.TextUnit) {
+private fun InstallAction(install: fail.still.android.data.RuntimeInstall, station: String) {
     val app = LocalApp.current
     val action = install.action ?: return
     val busy = app.isDoing("software.update", "station" to station, "id" to install.runtime)
-    Text(" · ", fontSize = size, color = chatMuted())
+    // Under a finger: a capsule big enough to press (the web's on a touch screen), apart from what it follows.
     Text(
-        action, fontSize = size, fontWeight = FontWeight.SemiBold, color = if (busy) chatMuted() else chatInk().text,
-        modifier = Modifier.clickable(enabled = !busy) { app.act(action) { app.api(station).updateSoftware(install.runtime) } },
+        action, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = if (busy) chatMuted() else chatInk().text,
+        modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(50)).background(C.chip)
+            .clickable(enabled = !busy) { app.act(action) { app.api(station).updateSoftware(install.runtime) } }
+            .padding(horizontal = 12.dp, vertical = 4.dp),
     )
 }
 

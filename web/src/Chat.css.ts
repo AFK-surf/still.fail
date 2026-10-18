@@ -86,10 +86,12 @@ export const blocked = style({
   selectors: { "&[data-stuck]": { color: vars.red } },
 });
 export const blockedWords = style({ overflowWrap: "anywhere" });
-export const blockedDot = style({ color: vars.muted });
+export const blockedDot = style({ color: vars.muted, "@media": { "(hover: none)": { display: "none" } } });
+/** Installing: a word on a pointer; under a finger, a capsule big enough to press (no dot before it). */
 export const blockedAction = style({
   padding: "0", border: "0", background: "none", color: vars.text, font: "inherit", fontWeight: "600", cursor: "pointer",
   selectors: { "&:hover:not(:disabled)": { textDecoration: "underline", textUnderlineOffset: "3px" }, "&:disabled": { opacity: ".5", cursor: "default" } },
+  "@media": { "(hover: none)": { marginLeft: "4px", padding: "4px 12px", borderRadius: "999px", background: vars.hover, fontSize: vars.textUi, lineHeight: "20px" } },
 });
 // In a notice (one with none of the viewer's messages waiting for it): apart from its words, in the pill's colour.
 globalStyle(`${msgSystemBox} ${blockedDot}`, { margin: "0 6px", color: "inherit", opacity: ".6" });
