@@ -8,6 +8,7 @@ package fail.still.android.remote
 
 import android.graphics.Bitmap
 import android.os.Handler
+import android.util.Base64
 import android.os.Looper
 import android.view.Surface
 import androidx.compose.runtime.getValue
@@ -115,8 +116,14 @@ class ScreenSession(
     /** Input goes to the station now: it is live and driven by this viewer. */
     val driving: Boolean get() = phase == "live" && state?.control == true
 
-    /** Text pasted from the phone goes to the screen (`screen.clipboard`): driving it, and the station carries text. */
-    val pastes: Boolean get() = driving && state?.clipboard.orEmpty().contains("text")
+    /**
+     * What the screen's clipboard carries both ways (`text`, `png`), while this viewer drives it: none while only looking,
+     * nor from a station (or helper) from before them.
+     */
+    val clipTypes: List<String> get() = if (driving) state?.clipboard.orEmpty() else emptyList()
+
+    /** The phone's clipboard is pasted into the screen (`screen.clipboard`): driving it, and the station carries some. */
+    val pastes: Boolean get() = clipTypes.any { it == "text" || it == "png" }
 
     /** Where a file picked goes on the screen's machine, while driving it (none from a station before files). */
     val dropsTo: ScreenDrop? get() = if (driving) state?.drop else null
@@ -124,11 +131,8 @@ class ScreenSession(
     /** The files picked for its machine, going up or there. */
     val drops = ScreenDrops(core, station, scope)
 
-    /**
-     * A copy made on the screen, on the main thread: its text, or null for a picture (the phone takes text only). The
-     * viewer puts it on the phone's clipboard.
-     */
-    var copied: ((String?) -> Unit)? = null
+    /** A copy made on the screen (its text, or its PNG), on the main thread: the viewer puts it on the phone's clipboard. */
+    var copied: ((Copied) -> Unit)? = null
 
     /** Opens the view (again: after a pause, or 再试一次). */
     fun open() {
@@ -196,6 +200,11 @@ class ScreenSession(
         core.call("screen.clipboard", buildJsonObject { put("view", view); put("text", text); put("paste", true) })
     }
 
+    /** A PNG onto the screen's clipboard and pasted where its focus is (`screen.clipboard`). Throws [CoreException]. */
+    suspend fun pastePng(png: ByteArray) {
+        core.call("screen.clipboard", buildJsonObject { put("view", view); put("png", Base64.encodeToString(png, Base64.NO_WRAP)); put("paste", true) })
+    }
+
     /** A file dropped onto the machine, shown in its file manager (`screen.input` reveal). Throws [CoreException]. */
     suspend fun reveal(path: String) {
         core.call("screen.input", buildJsonObject { put("view", view); put("input", buildJsonObject { put("t", "reveal"); put("path", path) }) })
@@ -236,9 +245,13 @@ class ScreenSession(
             synchronized(lock) { this.kind = kind }
         }
         (o["clipboard"] as? JsonObject)?.let { c ->
-            // Text for the phone's clipboard; a picture (its PNG beside) only said, the phone taking text alone.
-            val text = if ((c["type"] as? JsonPrimitive)?.contentOrNull == "text") (c["text"] as? JsonPrimitive)?.contentOrNull ?: return@let else null
-            main.post { copied?.invoke(text) }
+            // For the phone's clipboard: text, or a picture (its PNG beside, within the bound).
+            val got = when ((c["type"] as? JsonPrimitive)?.contentOrNull) {
+                "text" -> (c["text"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }?.let(Copied::Text)
+                "png" -> bytes?.takeIf { it.size in 1..CLIP_PNG_MAX && isPng(it) }?.let(Copied::Png)
+                else -> null
+            } ?: return@let
+            main.post { copied?.invoke(got) }
         }
         (o["frame"] as? JsonObject)?.let { f ->
             val ts = (f["ts"] as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.toDoubleOrNull()?.toLong() } ?: return@let
