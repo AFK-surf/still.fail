@@ -4194,11 +4194,12 @@ export interface SearchItem {
 	kind: string;
 	/** Unique among all found. */
 	key: string;
+	/** The station it is on (empty: a member). */
 	station: string;
 	stationName: string;
 	stationEmoji?: string;
 	stationIcon?: string;
-	/** What it is called: a service's name, a skill's, the chat of a step of an execution history… */
+	/** What it is called: a file's name, a service's, a station's, a member's… */
 	title: string;
 	/** The part of it that has the words, on one line. */
 	text: string;
@@ -4208,18 +4209,13 @@ export interface SearchItem {
 	chat?: string;
 	chatTitle?: string;
 	thread?: number;
-	/** A step of an execution history: its session (opened at `index`). */
-	session?: string;
-	index?: number;
-	/** The tool a step called. */
-	tool?: string;
 	/** A service or task: its id; `port` a service's. */
 	job?: string;
 	port?: number;
-	skill?: string;
-	profile?: string;
 	/** A file: where it is on its station. */
 	path?: string;
+	/** A member: their email (their place is the workspace's settings). */
+	email?: string;
 	archived?: boolean;
 	createdAt?: number;
 	/** Its times in words, by field (`createdAt`). */
@@ -4227,7 +4223,7 @@ export interface SearchItem {
 }
 
 export interface SearchGroup {
-	/** file | history | job | skill | memory | profile | station */
+	/** file | job | station | member */
 	kind: string;
 	/** Its heading. */
 	title: string;
@@ -4255,13 +4251,13 @@ export interface SearchView {
 	/** More messages than these were found. */
 	messagesMore?: boolean;
 	/**
-	 * What else was found, by kind (files, execution history, services and tasks, skills, memory, profiles,
-	 * stations), in that order; a kind with none is left out.
+	 * What else was found, by kind (files, services and tasks, stations, members), in that order; a kind with
+	 * none is left out.
 	 */
 	groups?: SearchGroup[];
 	/** The stations not answered yet, and those that could not be searched. */
 	wait: ListNote;
-	/** What the list says under it: stations offline or too old to search, an index still being built. */
+	/** What the list says under it: stations offline or too old to search. */
 	note?: string;
 }
 

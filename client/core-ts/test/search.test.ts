@@ -24,8 +24,7 @@ const found = {
         { kind: "message", key: "m:9:3", title: "", text: "部署完了", at: 3000, thread: 9, seq: 3, chat: "old", chatTitle: "旧的部署", authorKind: "agent", author: "old", archived: true },
       ],
     },
-    { kind: "history", more: true, hits: [{ kind: "history", key: "h:a:4", title: "", text: "bash\npnpm run 部署", at: 2000, session: "a", index: 4, chat: "a", chatTitle: "部署页", thread: 7 }] },
-    { kind: "job", more: false, hits: [{ kind: "job", key: "j:j1", title: "部署预览", text: "pnpm dev", at: 10, job: "j1", port: 5173, session: "a", chat: "a" }] },
+    { kind: "job", more: true, hits: [{ kind: "job", key: "j:j1", title: "部署预览", text: "pnpm dev", at: 10, job: "j1", port: 5173, session: "a", chat: "a", thread: 7 }] },
   ],
 };
 
@@ -56,10 +55,10 @@ test("a_search_lists_what_the_device_holds_and_what_its_stations_find_each_once"
   // Newest first, the one both have once.
   assert.deepEqual(view.messages.map((m: J) => [m.thread, m.seq]), [[9, 3], [7, 1]]);
   assert.equal(view.messages[0].chat.title, "旧的部署");
-  assert.deepEqual(view.groups.map((g: J) => [g.kind, g.items.length, g.more]), [["history", 1, true], ["job", 1, false]]);
-  const step = view.groups[0].items[0];
-  assert.deepEqual([step.title, step.session, step.index, step.station], ["部署页", "a", 4, "ws/st"]);
-  assert.deepEqual(step.marks.length > 0, true);
+  assert.deepEqual(view.groups.map((g: J) => [g.kind, g.items.length, g.more]), [["job", 1, true]]);
+  const job = view.groups[0].items[0];
+  assert.deepEqual([job.title, job.job, job.port, job.chat, job.station], ["部署预览", "j1", 5173, "a", "ws/st"]);
+  assert.deepEqual(job.marks.length > 0, true);
   assert.equal(view.wait.reading, false);
   core.close();
 });

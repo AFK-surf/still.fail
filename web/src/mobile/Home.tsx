@@ -23,7 +23,6 @@ import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
-import { openHistory } from "./History.tsx";
 import { ChangelogNews } from "./Changelog.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
@@ -201,27 +200,19 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
   );
 }
 
-/** Where something a search found opens on the phone: its chat (a step of its history, a service), a station's memory or
- *  page, the profiles. */
+/** Where something a search found opens on the phone: its chat (a service), a station's page, the workspace's members. */
 function openFound(app: ReturnType<typeof useApp>, item: SearchItem): void {
   const at = item.station.indexOf("/");
   const id = encodeURIComponent(at < 0 ? item.station : item.station.slice(at + 1));
   const chat = item.chat ? `${stationBase(item.station)}/chats/${encodeURIComponent(item.chat)}` : null;
   switch (item.kind) {
-    case "history":
-      if (item.chat && item.session) return openHistory(app, item.station, item.chat, item.session, item.index ?? undefined);
-      break;
     case "job":
       if (chat && item.job && item.port != null) return app.open(`${chat}/services/${encodeURIComponent(item.job)}`);
       break;
-    case "skill":
-      return app.push(app.at(item.skill ? `/s/${id}/memory/skill/${encodeURIComponent(item.skill)}` : `/s/${id}/memory`));
-    case "memory":
-      return app.push(app.at(`/s/${id}/memory/global`));
-    case "profile":
-      return app.push(app.at("/settings/profiles"));
     case "station":
       return app.push(app.at(`/s/${id}/overview`));
+    case "member":
+      return app.push(app.at("/settings/members"));
   }
   if (chat) app.open(chat);
 }

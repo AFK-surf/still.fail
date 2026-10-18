@@ -171,7 +171,7 @@ function marks(text: string, q: string): { from: number; to: number }[] {
 
 /**
  * ⌘K's and the phone's search (the core's `search`, docs/search.md): the chats whose title has the words, and what the
- * station finds besides, made up from them (a step of a history, a service, a skill) so every kind shows.
+ * station finds besides, made up from them (a file, a service, a member) so every kind shows.
  */
 function searchView(query: string, kind: string | null): SearchView {
   const all = chatsView(chats).days.flatMap((d) => d.items);
@@ -182,17 +182,17 @@ function searchView(query: string, kind: string | null): SearchView {
   const first = items[0] ?? all[0];
   const where = { station: first?.station ?? STATION, stationName: first?.stationName ?? "Studio" };
   const said = (text: string) => ({ text, marks: marks(text, q) });
-  const of = (c: ChatItem | undefined) => (c ? { chat: c.id, chatTitle: c.title, session: c.session } : {});
+  const of = (c: ChatItem | undefined) => (c ? { chat: c.id, chatTitle: c.title } : {});
   const groups: NonNullable<SearchView["groups"]> = [
-    { kind: "history", title: "执行历史", more: true, items: [
-      { kind: "history", key: "h1", ...where, title: first?.title ?? "", ...said(`bash · pnpm run ${q} --filter web`), ...of(first), index: 12, createdAt: Date.now() - 3_600_000 },
-      { kind: "history", key: "h2", ...where, title: all[1]?.title ?? "", ...said(`先确认 ${q} 的配置再改`), ...of(all[1]), index: 4, createdAt: Date.now() - 86_400_000 },
+    { kind: "file", title: "文件", more: true, items: [
+      { kind: "file", key: "f1", ...where, title: `${q}-notes.md`, ...said(`~/Documents/${q}-notes.md`), path: `/Users/me/Documents/${q}-notes.md`, createdAt: Date.now() - 3_600_000 },
+      { kind: "file", key: "f2", ...where, title: `${q}.pdf`, ...said(`~/Downloads/${q}.pdf`), path: `/Users/me/Downloads/${q}.pdf`, createdAt: Date.now() - 86_400_000 },
     ] },
     { kind: "job", title: "服务和任务", more: false, items: [
       { kind: "job", key: "j1", ...where, title: `${q} 预览`, ...said(`pnpm dev --port 5173 · ${q}`), ...of(first), job: "j1", port: 5173 },
     ] },
-    { kind: "skill", title: "Skill", more: false, items: [
-      { kind: "skill", key: "k1", ...where, title: "release", ...said(`项目记忆：${q} 之前先跑完整检查`), skill: "release" },
+    { kind: "member", title: "成员", more: false, items: [
+      { kind: "member", key: "m1", station: "", stationName: "", title: `${q} 组 · 林`, ...said(`lin@example.com`), email: "lin@example.com" },
     ] },
   ];
   const shown = kind ? groups.filter((g) => g.kind === kind) : groups;

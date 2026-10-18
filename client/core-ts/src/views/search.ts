@@ -1,8 +1,8 @@
 // The search (docs/search.md): what a few words find in a workspace, from wherever it is, as ⌘K and the phones' search
 // list it. What the device holds is looked through here (the chats as the sidebar has them, the messages it keeps, the
-// stations); what each station holds it says itself (its `stationSearch`: its chats archived or not, every message, the
-// execution histories, its services and tasks, skills and memory, profiles), each as it answers, the rest shown
-// meanwhile. The messages found here and there are one list, each once.
+// stations, the members); what each station holds it says itself (its `stationSearch`: its chats archived or not, every
+// message, its services and tasks, its files), each as it answers, the rest shown meanwhile. The messages found here and
+// there are one list, each once. The execution histories, skills and memory, profiles are the agents' to search.
 import { t } from "../i18n.ts";
 import { waitNote } from "../looks.ts";
 import * as present from "../present.ts";
@@ -19,7 +19,7 @@ const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 /// The kinds found, in the order they are listed.
-export const KINDS = ["chat", "message", "file", "history", "job", "skill", "memory", "profile", "station"] as const;
+export const KINDS = ["chat", "message", "file", "job", "station", "member"] as const;
 /// How many of each kind the list shows with all of them; one kind alone (`kind`) shows this many.
 export const SHOWN = 5;
 export const ONE_KIND = 50;
@@ -86,7 +86,6 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
   const waiting: string[] = [];
   const failing: { station: string; name: string; message: string }[] = [];
   const older: string[] = [];
-  let building = false;
   const members = arr(get(src.ok({ topic: "workspace", workspace: scope }), "members"));
   const me = src.me(scope);
   for (const s of stations) {
@@ -101,7 +100,6 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
       else failing.push({ station: s.address, name: s.name, message: answer.err.message });
       continue;
     }
-    if (get(answer.ok, "building") === true) building = true;
     const mark = { station: s.address, stationName: s.name, ...(several && s.emoji ? { stationEmoji: s.emoji } : {}), ...(several && s.icon ? { stationIcon: s.icon } : {}) };
     for (const group of arr(get(answer.ok, "groups"))) {
       const k = str(get(group, "kind"));
@@ -138,10 +136,10 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
         }
         const item: J = {
           kind: k, key: `${s.address}\u0001${String(hit.key)}`, ...mark,
-          title: itemTitle(k, hit), ...refs.excerpt(String(hit.text ?? ""), words),
+          title: str(hit.title) ?? "", ...refs.excerpt(String(hit.text ?? ""), words),
         };
-        for (const f of ["chat", "chatTitle", "session", "skill", "profile", "job", "path", "tool"] as const) if (typeof hit[f] === "string" && hit[f] !== "") item[f] = hit[f];
-        for (const f of ["thread", "seq", "index", "port"] as const) if (num(hit[f]) !== null) item[f] = hit[f];
+        for (const f of ["chat", "chatTitle", "job", "path"] as const) if (typeof hit[f] === "string" && hit[f] !== "") item[f] = hit[f];
+        for (const f of ["thread", "seq", "port"] as const) if (num(hit[f]) !== null) item[f] = hit[f];
         if (hit.archived === true) item.archived = true;
         if (num(hit.at) !== null) item.createdAt = hit.at;
         const list = found.get(k) ?? [];
@@ -160,6 +158,20 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
       })));
     }
   }
+  // The workspace's members whose name or email has the words: the device knows them.
+  if (wants("member")) {
+    const named = members.filter((m: J) => {
+      const said = `${str(m.name) ?? ""}\n${str(m.email) ?? ""}`.toLowerCase();
+      return str(m.email) !== null && words.every((w) => said.includes(w));
+    });
+    if (named.length > 0) {
+      found.set("member", named.map((m: J) => {
+        const email = str(m.email)!;
+        const name = str(m.name) || email;
+        return { kind: "member", key: `member\u0001${email}`, station: "", stationName: "", title: name, email, ...refs.excerpt(name === email ? "" : email, words) };
+      }));
+    }
+  }
   // Those whose title has the first word first, then the newest; one list across stations.
   const order = (a: J, b: J) => Number(titled(String(b.title ?? ""), words)) - Number(titled(String(a.title ?? ""), words)) || (num(b.createdAt) ?? 0) - (num(a.createdAt) ?? 0);
   messages.sort((a, b) => (num(b.createdAt) ?? 0) - (num(a.createdAt) ?? 0));
@@ -171,7 +183,6 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
   }
   const notes: string[] = [];
   if (older.length > 0) notes.push(t("core-views.search.older", { names: older.join("、") }));
-  if (building) notes.push(t("core-views.search.building"));
   const offline = stations.filter((s) => !s.online).map((s) => s.name);
   if (offline.length > 0) notes.push(t("core-views.search.offlineStations", { names: offline.join("、") }));
   const shownItems = items.slice(0, kind === "chat" ? limit : kind ? 0 : CHATS_SHOWN);
@@ -187,12 +198,4 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
       ...(notes.length > 0 ? { note: notes.join(" · ") } : {}),
     },
   };
-}
-
-/// What a found thing is called in the list.
-function itemTitle(kind: string, hit: J): string {
-  const title = str(hit.title) ?? "";
-  if (kind === "history") return str(hit.chatTitle) || t("core-views.new_chat");
-  if (kind === "memory") return t("core-views.search.memory");
-  return title;
 }
