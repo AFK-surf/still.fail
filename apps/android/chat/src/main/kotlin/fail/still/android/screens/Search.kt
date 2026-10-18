@@ -275,7 +275,7 @@ private fun ItemRow(item: SearchItem, several: Boolean, onClick: () -> Unit) {
     ) {
         Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
             if (item.kind == "station") StationMark(item.stationEmoji, item.stationIcon, 18.dp, C.muted, none = Icons.Server)
-            else IconIn(kindIcon(item.kind), 18.dp, C.muted)
+            else IconIn(if (item.kind == "file" && item.dir == true) Icons.Folder else kindIcon(item.kind), 18.dp, C.muted)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -303,7 +303,30 @@ internal fun openFound(app: AppState, item: SearchItem) {
         }
         "station" -> app.push(Screen.Station(item.station))
         "member" -> app.push(Screen.Workspace)
+        "file" -> fileScreen(item)?.let(app::push)
         else -> chat?.let(app::push)
+    }
+}
+
+/**
+ * Where a file found opens in its station's files (as the web's searchOpen.ts): a folder entered, a text read, a video or
+ * song played, anything else shown in its folder; under the folder a read-only member's workspace pinned (`root`) when
+ * found there, else from its own folder.
+ */
+internal fun fileScreen(item: SearchItem): Screen? {
+    val path = item.path ?: return null
+    val cut = maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+    val folder = if (cut > 0) path.substring(0, cut) else path
+    val name = if (cut > 0) path.substring(cut + 1) else ""
+    val dir = item.dir == true
+    val root = item.root ?: if (dir) path else folder
+    val rel = if (item.root != null) item.rel ?: "" else if (dir) "" else name
+    val parent = if (rel.contains('/')) rel.substring(0, rel.lastIndexOf('/')) else ""
+    return when (if (dir) "folder" else item.fileKind) {
+        "folder" -> Screen.Drive(item.station, root, rel)
+        "text", "markdown" -> Screen.DriveRead(item.station, root, rel)
+        "video", "audio" -> Screen.DrivePlay(item.station, root, rel)
+        else -> Screen.Drive(item.station, root, parent)
     }
 }
 

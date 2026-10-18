@@ -185,8 +185,8 @@ function searchView(query: string, kind: string | null): SearchView {
   const of = (c: ChatItem | undefined) => (c ? { chat: c.id, chatTitle: c.title } : {});
   const groups: NonNullable<SearchView["groups"]> = [
     { kind: "file", title: "文件", more: true, items: [
-      { kind: "file", key: "f1", ...where, title: `${q}-notes.md`, ...said(`~/Documents/${q}-notes.md`), path: `/Users/me/Documents/${q}-notes.md`, createdAt: Date.now() - 3_600_000 },
-      { kind: "file", key: "f2", ...where, title: `${q}.pdf`, ...said(`~/Downloads/${q}.pdf`), path: `/Users/me/Downloads/${q}.pdf`, createdAt: Date.now() - 86_400_000 },
+      { kind: "file", key: "f1", ...where, title: `${q}-notes.md`, ...said(`~/Documents/${q}`), path: `/Users/me/Documents/${q}/${q}-notes.md`, dir: false, fileKind: "markdown", size: 2048, sizeText: "2 KB", createdAt: Date.now() - 7_200_000 },
+      { kind: "file", key: "f2", ...where, title: q, ...said("~/WebstormProjects"), path: `/Users/me/WebstormProjects/${q}`, dir: true, fileKind: "folder", createdAt: Date.now() - 172_800_000 },
     ] },
     { kind: "job", title: "服务和任务", more: false, items: [
       { kind: "job", key: "j1", ...where, title: `${q} 预览`, ...said(`pnpm dev --port 5173 · ${q}`), ...of(first), job: "j1", port: 5173 },

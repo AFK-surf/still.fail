@@ -3492,6 +3492,14 @@ export interface SoftwareVersion {
 	checkedAt?: number;
 }
 
+/** What a station's search finds of its machine (`Overview.search`). */
+export interface StationSearch {
+	/** spotlight (macOS: Spotlight finds the machine's files) | walk (its folders walked as a search comes) */
+	files: string;
+	/** The machine's person's own mail, messages, calendars, contacts, notes and photos are found too. */
+	personal: boolean;
+}
+
 /** One of a station's grants. */
 export interface StationGrant {
 	/** capture | control | documents | desktop | downloads | removable | network: what `permissions.request` takes. */
@@ -3563,6 +3571,8 @@ export interface Overview {
 	 * than the drive, which then is not offered).
 	 */
 	drive?: DriveRoots;
+	/** What its search finds of the machine (docs/search.md). None from a station older than it. */
+	search?: StationSearch;
 	/**
 	 * What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then
 	 * shows nothing).
@@ -4219,8 +4229,17 @@ export interface SearchItem {
 	/** A service or task: its id; `port` a service's. */
 	job?: string;
 	port?: number;
-	/** A file: where it is on its station. */
+	/** A file: where it is on its station (absolute). */
 	path?: string;
+	/** A file found in a folder pinned (a read-only member's): that folder, `rel` the file under it. */
+	root?: string;
+	rel?: string;
+	/** A file that is a folder. */
+	dir?: boolean;
+	/** What opens a file, as a drive's entry says (`DriveEntry.kind`: folder, video, text…). */
+	fileKind?: string;
+	size?: number;
+	sizeText?: string;
 	/** A member: their email (their place is the workspace's settings). */
 	email?: string;
 	archived?: boolean;

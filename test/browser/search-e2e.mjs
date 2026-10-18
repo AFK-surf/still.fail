@@ -127,15 +127,16 @@ async function main() {
   await say("动效测试（请照做）：先用命令运行 sleep 3，等它结束后再回复一句火烈鸟", "火烈鸟");
   await page.waitForTimeout(3000);
 
-  const switcher = async (words, shot) => {
+  const switcher = async (words, shot, until = null) => {
     await page.keyboard.press("Escape");
     await page.locator("textarea").first().click();
     await page.keyboard.press("ControlOrMeta+k");
     const field = page.getByPlaceholder("搜索全部内容和操作");
     await field.waitFor();
     await field.fill(words);
-    // The device's finds at once, the station's a moment after the words settle.
-    await page.waitForTimeout(2500);
+    // The device's finds at once, the station's a moment after the words settle (`until`: what it waits to see).
+    if (until) await page.locator('[role="listbox"]').getByText(until).first().waitFor({ timeout: 15_000 }).catch(() => {});
+    else await page.waitForTimeout(2500);
     const rows = await page.locator('[role="listbox"]').innerText();
     await page.screenshot({ path: join(SHOTS, `${shot}.png`) });
     return rows;
@@ -166,6 +167,18 @@ async function main() {
   // A member, by their email: opens the workspace's settings.
   const member = await switcher("alice", "desktop-member");
   check("⌘K finds a member by their email", member.replace(/\s+/g, " ").slice(0, 300), /成员/.test(member) && /alice/i.test(member));
+
+  // The machine's files (Spotlight on this Mac, as the station's user): a word its home surely has.
+  const files = await switcher("readme", "desktop-files", "文件");
+  check("⌘K finds the machine's files", files.replace(/\s+/g, " ").slice(0, 300), /文件/.test(files) && /README/i.test(files));
+  // The station's page: what its search finds of the machine, the person's own data off.
+  await page.keyboard.press("Escape");
+  const stationId = JSON.parse(readFileSync(join(data, "mesh/cloud.json"), "utf8")).station;
+  await page.goto(`${ORIGIN}/w/${workspace}/settings/stations/${stationId}`);
+  await page.getByText("搜索个人数据").first().waitFor({ timeout: 30_000 });
+  await page.getByText("搜索个人数据").first().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: join(SHOTS, "desktop-station-search.png") });
+  check("the station's page says whether personal data is searched", "搜索个人数据", true);
 
   // The phone's search.
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: "zh-CN" });

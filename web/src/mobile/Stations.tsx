@@ -35,6 +35,8 @@ import { usePlaceActions } from "./placeActions.tsx";
 import { ScreensCard } from "./Screen.tsx";
 import { PermissionsCard } from "./StationPermissions.tsx";
 import { AgentEnvText, useAgentEnvForm } from "../AgentEnvText.tsx";
+import { useSetPersonal } from "../StationSearch.tsx";
+import * as connectsCss from "./Connects.css.ts";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -310,6 +312,8 @@ export function StationScreen() {
           <ScreensCard station={s.station} />
           {/* What macOS lets its still.fail Helper do (a Mac's station only), each grant asked for from here. */}
           {s.online && s.overview?.permissions && <PermissionsCard station={s.station} permissions={s.overview.permissions} />}
+          {/* What its search finds of the machine (docs/search.md): the person's own data only where its managers say. */}
+          {s.online && s.overview?.search?.files === "spotlight" && <SearchCard station={s.station} personal={s.overview.search.personal} manager={manager} />}
           <Logins station={s.station} marked={login ?? null} />
           {/* The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them. */}
           {s.overview?.agentEnv && <AgentEnv station={s.station} env={s.overview.agentEnv} manager={manager} />}
@@ -547,6 +551,23 @@ function StationMenu({ s }: { s: StationView }) {
           run: () => { app.pop(); return cloud.removeStation(me.sub, app.entry.id, s.id).then(() => app.toast(t("web-mobile.stations.removed"))); },
         })} />
       </div>
+    </>
+  );
+}
+
+/** Whether the station's search finds the machine's person's own mail, messages and the like (the wide page's
+ *  StationSearch.tsx): its managers switch it, others read it. */
+function SearchCard({ station, personal, manager }: { station: string; personal: boolean; manager: boolean }) {
+  const { busy, set } = useSetPersonal(station);
+  return (
+    <>
+      <SectionHeader title={t("web-pages.stations.search.section")} start={24} />
+      <ListCard>
+        <button type="button" className={connectsCss.mSwitchRow} disabled={!manager || busy} onClick={() => void set(!personal)}>
+          <span className={partsCss.mGrow}><b>{t("web-pages.stations.search.personal")}</b><span>{t("web-pages.stations.search.personalLine")}</span></span>
+          {busy ? <Spinner /> : <span className={connectsCss.mSwitch} data-on={personal || undefined} />}
+        </button>
+      </ListCard>
     </>
   );
 }
