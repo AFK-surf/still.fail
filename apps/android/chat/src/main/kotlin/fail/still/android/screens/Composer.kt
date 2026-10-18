@@ -761,6 +761,9 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
 /** How far a composer picture's remove button (20 across) reaches beyond its edges: its centre on the corner's curve. */
 private val PictureRemoveOut = 10.dp - smoothMiddle(concentric(ComposerCorner, ComposerFilesIn))
 
+/** Where ＋'s ink starts in its button (36 across, the 18 icon centred; its line from 4.5 of 24, less half its 1.75 stroke): the opened field's text starts there, the caret over ＋'s left edge. */
+private val PlusInk = 9.dp + 18.dp * ((4.5f - 1.75f / 2) / 24)
+
 /** A link shared in (share/), as a file of the draft: nothing goes up, it is sent as words after the text. */
 internal fun linkPending(link: ComposerLink) = Pending(System.nanoTime(), link.title ?: link.url, 0, null, link = link)
 
@@ -896,7 +899,7 @@ fun ComposerBar(
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Plus, 18.dp, if (locked) C.ink.copy(alpha = 0.35f) else C.ink) }
         Box(
-            Modifier.part(morph, "field").heightIn(min = 36.dp).padding(start = if (expanded) 14.dp else 0.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+            Modifier.part(morph, "field").heightIn(min = 36.dp).padding(start = if (expanded) PlusInk else 0.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             if (draft.text.isEmpty()) Text(placeholder, style = style.copy(color = C.subtle), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.graphicsLayer { alpha = hint() })
