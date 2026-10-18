@@ -1,0 +1,14 @@
+{
+  "name": "@stillfail/media-service",
+  "private": true,
+  "type": "module",
+  "description": "The media service a station runs as its module `media` (docs/media-service.md): the bookshelf",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "check": "tsgo -p tsconfig.json",
+    "test": "node --test --test-timeout=120000 test/*.test.ts"
+  }
+}
