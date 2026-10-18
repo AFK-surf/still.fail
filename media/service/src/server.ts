@@ -1,12 +1,14 @@
 // The media service's HTTP (docs/media-service.md), on the unix socket the station forwards `/admin/api/m/media/…` to:
 // each request comes with its member (`stillfail-viewer`, verified by the station), JSON in and out, refusals as
-// `{error, code}`. Books are the member's workspace's; places and notes the member's own.
+// `{error, code}`. Books are the member's workspace's; places and notes the member's own; the photo library (photos.ts)
+// the station's, for the members who may write.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { MediaError, bad } from "./errors.ts";
 import { importPath } from "./importer.ts";
-import type { StationLink } from "./station.ts";
+import { Library, defaultBackup } from "./photos.ts";
+import { PART, type StationLink } from "./station.ts";
 import { type Note, type Place, type Store, openStore } from "./store.ts";
 
 /// The member a request is for, as the station gives it (`home`: whether its workspace is the station's home
@@ -33,11 +35,38 @@ export function viewerOf(header: string | string[] | undefined): Viewer {
   return { sub: s("sub"), email: s("email"), name: s("name"), role: s("role"), workspace: s("workspace"), home: v.home === true, raw };
 }
 
-type Ctx = { viewer: Viewer; params: string[]; body: () => Promise<Record<string, unknown>>; req: IncomingMessage; res: ServerResponse };
-type Reply = { status?: number; json: unknown } | { bytes: Uint8Array; type: string } | { json: string; raw: true } | null;
-type Route = { method: string; pattern: RegExp; who: "anyone" | "writer"; handle: (c: Ctx) => Promise<Reply> | Reply };
+type Ctx = { viewer: Viewer; params: string[]; query: URLSearchParams; body: () => Promise<Record<string, unknown>>; req: IncomingMessage; res: ServerResponse };
+/// Bytes kept for good (by default: a book's images are named by their content), or as `cache` says, with `headers`.
+type Reply = { status?: number; json: unknown } | { bytes: Uint8Array; type: string; cache?: string; headers?: Record<string, string> } | { json: string; raw: true } | null;
+/// Who may: any member, a member who may write (`writer`: changes to the shelf; `photos`: anything of the photo
+/// library), an owner or admin (`keeper`).
+type Route = { method: string; pattern: RegExp; who: "anyone" | "writer" | "photos" | "keeper"; handle: (c: Ctx) => Promise<Reply> | Reply };
+
+const KEEPERS = new Set(["owner", "admin"]);
 
 const MAX_BODY = 1024 * 1024;
+
+/// A body as it is, `most` bytes at most.
+function readBytes(req: IncomingMessage, most: number): Promise<Buffer> {
+  const tooLarge = () => new MediaError("too_large", `一段最多 ${Math.round(most / 1024 / 1024)} MB`);
+  return new Promise((done, fail) => {
+    if (Number(req.headers["content-length"] ?? 0) > most) {
+      req.resume();
+      return fail(tooLarge());
+    }
+    const parts: Buffer[] = [];
+    let size = 0;
+    req.on("data", (b: Buffer) => {
+      size += b.length;
+      if (size > most) {
+        fail(tooLarge());
+        req.destroy();
+      } else parts.push(b);
+    });
+    req.on("end", () => done(Buffer.concat(parts)));
+    req.on("error", fail);
+  });
+}
 
 function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((done, fail) => {
@@ -84,12 +113,26 @@ const str = (v: unknown, what: string, most: number, optional = false): string |
 
 const NOTE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
-/// Who listens to `/events`: a member's connections, by workspace and account.
-type Listener = { workspace: string; sub: string; res: ServerResponse };
+/// A thumbnail's size: `grid` and `large` are the same one for now (the station's 720×600).
+const thumbSize = (q: URLSearchParams) => {
+  const size = q.get("size") ?? "large";
+  if (size !== "grid" && size !== "large") throw bad("size 只能是 grid 或 large");
+  return size;
+};
 
-export type Service = { server: Server; store: Store; close: () => Promise<void> };
+/// Who listens to `/events`: a member's connections, by workspace, account and role.
+type Listener = { workspace: string; sub: string; role: string; res: ServerResponse };
 
-export type Options = { dir: string; socket: string; station: StationLink };
+export type Service = { server: Server; store: Store; photos: Library; close: () => Promise<void> };
+
+/// `backup`: the photo library's backup folder (MEDIA_BACKUP_DIR, else ~/Pictures/still.fail); `sips`: macOS's sips,
+/// for the thumbnails of HEIC and GIF (and the ThumbHashes of videos' posters), null where there is none.
+export type Options = { dir: string; socket: string; station: StationLink; backup?: string; sips?: string | null };
+
+/// The photo library's changes are told this long after the last one.
+const PHOTOS_SETTLE = 1000;
+/// The most thumbnails asked at once.
+const MOST_THUMBS = 64;
 
 /// Starts the service: opens media.db in `dir`, listens on `socket`.
 export async function startService(o: Options): Promise<Service> {
@@ -103,6 +146,23 @@ export async function startService(o: Options): Promise<Service> {
   const shelfChanged = (workspace: string) => send((l) => l.workspace === workspace, "shelf", {});
   const placeChanged = (v: Viewer, book: string) => send((l) => l.workspace === v.workspace && l.sub === v.sub, "place", { book });
   const notesChanged = (v: Viewer, book: string) => send((l) => l.workspace === v.workspace && l.sub === v.sub, "notes", { book });
+  let photosTimer: NodeJS.Timeout | null = null;
+  const photosChanged = () => {
+    if (photosTimer) clearTimeout(photosTimer);
+    photosTimer = setTimeout(() => {
+      photosTimer = null;
+      send((l) => WRITERS.has(l.role), "photos", {});
+    }, PHOTOS_SETTLE);
+    photosTimer.unref();
+  };
+  const photos = new Library({
+    store,
+    link: o.station,
+    dir: o.dir,
+    backup: o.backup ?? defaultBackup(),
+    sips: o.sips !== undefined ? o.sips : process.platform === "darwin" ? "/usr/bin/sips" : null,
+    changed: photosChanged,
+  });
   const heartbeat = setInterval(() => {
     for (const l of listeners) l.res.write(": ping\n\n");
   }, 25_000);
@@ -271,12 +331,99 @@ export async function startService(o: Options): Promise<Service> {
     },
     {
       method: "GET",
+      pattern: /^\/photos\/folders$/,
+      who: "photos",
+      handle: () => ({ json: photos.view() }),
+    },
+    {
+      method: "PUT",
+      pattern: /^\/photos\/folders$/,
+      who: "keeper",
+      handle: async ({ viewer, body }) => ({ json: await photos.setFolders(viewer, (await body()).folders) }),
+    },
+    {
+      method: "GET",
+      pattern: /^\/photos\/timeline$/,
+      who: "photos",
+      handle: ({ query }) => ({ json: photos.timeline(query) }),
+    },
+    {
+      method: "GET",
+      pattern: /^\/photos\/albums$/,
+      who: "photos",
+      handle: () => ({ json: photos.albums() }),
+    },
+    {
+      method: "GET",
+      pattern: /^\/photos\/items\/([^/]+)$/,
+      who: "photos",
+      handle: ({ params }) => ({ json: photos.item(params[0]!) }),
+    },
+    {
+      method: "GET",
+      pattern: /^\/photos\/thumbs\/([^/]+)$/,
+      who: "photos",
+      handle: async ({ params, query }) => {
+        thumbSize(query);
+        const t = await photos.thumb(params[0]!);
+        if (!t) throw new MediaError("not_found", "这个文件做不出缩略图");
+        return { bytes: t.bytes, type: t.type, cache: "private, no-cache", headers: { "stillfail-width": String(t.w), "stillfail-height": String(t.h), ...(t.hash ? { "stillfail-thumbhash": t.hash } : {}) } };
+      },
+    },
+    {
+      method: "GET",
+      pattern: /^\/photos\/thumbs$/,
+      who: "photos",
+      handle: async ({ query }) => {
+        thumbSize(query);
+        const ids = [...new Set((query.get("ids") ?? "").split(",").filter((x) => x !== ""))];
+        if (ids.length === 0) throw bad("缺少 ids");
+        if (ids.length > MOST_THUMBS) throw bad(`一次最多 ${MOST_THUMBS} 张`);
+        // Four made at a time; one that cannot be made (or is gone) is left out of the index.
+        const made: (Awaited<ReturnType<Library["thumb"]>> | null)[] = new Array(ids.length).fill(null);
+        let next = 0;
+        const worker = async () => {
+          while (next < ids.length) {
+            const i = next++;
+            made[i] = await photos.thumb(ids[i]!).catch((e) => {
+              if (e instanceof MediaError && e.code !== "station") return null;
+              throw e;
+            });
+          }
+        };
+        await Promise.all([worker(), worker(), worker(), worker()]);
+        const index: { id: string; offset: number; length: number; w: number; h: number }[] = [];
+        const parts: Uint8Array[] = [];
+        let offset = 0;
+        made.forEach((t, i) => {
+          if (!t) return;
+          index.push({ id: ids[i]!, offset, length: t.bytes.length, w: t.w, h: t.h });
+          parts.push(t.bytes);
+          offset += t.bytes.length;
+        });
+        return { bytes: Buffer.concat(parts), type: "application/octet-stream", cache: "private, no-cache", headers: { "stillfail-index": JSON.stringify(index) } };
+      },
+    },
+    {
+      method: "GET",
+      pattern: /^\/photos\/has$/,
+      who: "photos",
+      handle: ({ query }) => ({ json: photos.has(query.get("hash")) }),
+    },
+    {
+      method: "POST",
+      pattern: /^\/photos\/upload$/,
+      who: "photos",
+      handle: ({ viewer, query, req }) => photos.upload(viewer, query, () => readBytes(req, PART)),
+    },
+    {
+      method: "GET",
       pattern: /^\/events$/,
       who: "anyone",
       handle: ({ viewer, res }) => {
         res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" });
         res.write(": ok\n\n");
-        const l: Listener = { workspace: viewer.workspace, sub: viewer.sub, res };
+        const l: Listener = { workspace: viewer.workspace, sub: viewer.sub, role: viewer.role, res };
         listeners.add(l);
         res.on("close", () => listeners.delete(l));
         return null;
@@ -306,16 +453,25 @@ export async function startService(o: Options): Promise<Service> {
     const route = matching.find((r) => r.method === req.method);
     if (!route) throw new MediaError("not_found", matching.length > 0 ? "不支持这个请求方法" : "没有这个接口", matching.length > 0 ? 405 : 404);
     if (route.who === "writer" && !WRITERS.has(viewer.role)) throw new MediaError("forbidden", "只读成员不能修改书架");
+    if (route.who === "photos" && !WRITERS.has(viewer.role)) throw new MediaError("forbidden", "只读成员看不到照片");
+    if (route.who === "keeper" && !KEEPERS.has(viewer.role)) throw new MediaError("forbidden", "只有 owner 和 admin 能设置照片库的文件夹");
+    if (route.who === "photos" || route.who === "keeper") photos.noteWriter(viewer);
     let params: string[];
     try {
       params = route.pattern.exec(path)!.slice(1).map((p) => decodeURIComponent(p));
     } catch {
       throw bad("路径无效");
     }
-    const reply = await route.handle({ viewer, params, body: () => readBody(req), req, res });
+    const reply = await route.handle({ viewer, params, query: url.searchParams, body: () => readBody(req), req, res });
     if (reply === null) return;
     if ("bytes" in reply) {
-      res.writeHead(200, { "content-type": reply.type, "content-length": reply.bytes.byteLength, "cache-control": "private, max-age=31536000, immutable", ...(stopping ? { connection: "close" } : {}) });
+      res.writeHead(200, {
+        "content-type": reply.type,
+        "content-length": reply.bytes.byteLength,
+        "cache-control": reply.cache ?? "private, max-age=31536000, immutable",
+        ...reply.headers,
+        ...(stopping ? { connection: "close" } : {}),
+      });
       res.end(reply.bytes);
     } else if ("raw" in reply) answer(res, 200, reply.json);
     else answer(res, reply.status ?? 200, JSON.stringify(reply.json));
@@ -325,6 +481,7 @@ export async function startService(o: Options): Promise<Service> {
     handle(req, res).catch((e) => fail(res, e));
   });
   if (existsSync(o.socket)) unlinkSync(o.socket);
+  photos.start();
   await new Promise<void>((done, failed) => {
     server.once("error", failed);
     server.listen(o.socket, () => {
@@ -337,15 +494,19 @@ export async function startService(o: Options): Promise<Service> {
   return {
     server,
     store,
+    photos,
     close: () =>
       (closed ??= new Promise<void>((done) => {
         stopping = true;
         clearInterval(heartbeat);
+        if (photosTimer) clearTimeout(photosTimer);
         for (const l of listeners) l.res.destroy();
         listeners.clear();
         server.close(() => {
-          store.close();
-          done();
+          photos.close().finally(() => {
+            store.close();
+            done();
+          });
         });
         server.closeIdleConnections();
       })),

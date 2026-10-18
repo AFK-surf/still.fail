@@ -2,9 +2,11 @@
 // serving files from memory, and the service started on sockets of its own with a client for it.
 import { crc32, deflateRawSync } from "node:zlib";
 import { createServer, request, type IncomingMessage } from "node:http";
-import { mkdtempSync } from "node:fs";
+import { type FSWatcher, mkdtempSync, realpathSync, watch as fsWatch } from "node:fs";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
+import { sniff } from "../src/images.ts";
 import { startService, type Service } from "../src/server.ts";
 
 /// A zip of `files` (deflated unless `stored`), as an EPUB wants it when `mimetype` comes first and stored.
@@ -201,15 +203,99 @@ export function gb18030(text: string): Buffer {
 
 export type FakeFile = { bytes: Buffer; mtime: number };
 
-/// A station's local API over a unix socket, serving `files` (paths under the root `/books`) to the right token;
-/// reads answer at most `part` bytes. `reads` counts the reads; `viewers` the viewer headers it was sent.
-export async function fakeStation(dir: string, token: string, part = 4096) {
+/// The poster the fake station makes of every video.
+export const POSTER = () => jpeg(640, 360);
+
+/// A station's local API over a unix socket, serving `files` (paths under the root `/books`) to the right token, and
+/// the disk under `dir` (any root there: the photo library's folders); reads answer at most `part` bytes. `reads`
+/// counts the reads; `viewers` the viewer headers it was sent, `asked` with what for; `thumbs` and `posters` the
+/// pictures it made. A disk folder's watch (as the station's: each asker's kept between its askings) answers false
+/// after `held` ms. `/thumb` answers a png/jpg/jpeg/webp itself with a made-up ThumbHash; `/poster` POSTER.
+export async function fakeStation(dir: string, token: string, part = 4096, held = 2000) {
   const files = new Map<string, FakeFile>();
-  const seen = { reads: 0, viewers: [] as string[] };
+  const seen = { reads: 0, viewers: [] as string[], asked: [] as { route: string; root: string; path: string; viewer: string }[], thumbs: 0, posters: 0 };
   const socket = join(dir, "st.sock");
+  const watches = new Map<string, { watcher: FSWatcher; changed: boolean; waiting: Set<() => void> }>();
   const reply = (res: import("node:http").ServerResponse, status: number, body: unknown) => {
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
+  };
+  const onDisk = async (res: import("node:http").ServerResponse, route: string, root: string, path: string, url: URL) => {
+    const full = join(root, path);
+    const st = await stat(full).catch(() => null);
+    const missing = () => reply(res, 404, { error: "not found", code: "not_found" });
+    const entry = (name: string, s: import("node:fs").Stats) => ({ name, dir: s.isDirectory(), size: s.isDirectory() ? 0 : s.size, mtime: Math.round(s.mtimeMs), type: "" });
+    if (route === "/drive/stat") return st ? reply(res, 200, entry(posix.basename(path), st)) : missing();
+    if (route === "/drive/list") {
+      if (!st?.isDirectory()) return missing();
+      const entries = [];
+      for (const name of await readdir(full)) {
+        const s = await stat(join(full, name)).catch(() => null);
+        if (s) entries.push(entry(name, s));
+      }
+      return reply(res, 200, { path, entries, truncated: false });
+    }
+    if (route === "/drive/read") {
+      if (!st?.isFile()) return missing();
+      seen.reads++;
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const length = Math.min(Number(url.searchParams.get("length") ?? part), part, 8 * 1024 * 1024);
+      const all = await readFile(full);
+      res.writeHead(200, { "content-type": "application/octet-stream", "stillfail-total": String(st.size), "stillfail-mtime": String(Math.round(st.mtimeMs)) });
+      return res.end(all.subarray(offset, offset + length));
+    }
+    if (route === "/drive/watch") {
+      if (!st?.isDirectory()) return missing();
+      const key = `${url.searchParams.get("id")}\0${full}`;
+      let w = watches.get(key);
+      if (!w) {
+        const made = { watcher: fsWatch(full, { persistent: false }, () => {
+          made.changed = true;
+          for (const wake of [...made.waiting]) wake();
+        }), changed: false, waiting: new Set<() => void>() };
+        made.watcher.on("error", () => {});
+        watches.set(key, made);
+        w = made;
+      }
+      const watched = w;
+      if (watched.changed) {
+        watched.changed = false;
+        return reply(res, 200, { changed: true });
+      }
+      const wake = () => {
+        clearTimeout(timer);
+        watched.waiting.delete(wake);
+        watched.changed = false;
+        reply(res, 200, { changed: true });
+      };
+      const timer = setTimeout(() => {
+        watched.waiting.delete(wake);
+        reply(res, 200, { changed: false });
+      }, held);
+      watched.waiting.add(wake);
+      res.on("close", () => {
+        clearTimeout(timer);
+        watched.waiting.delete(wake);
+      });
+      return;
+    }
+    if (route === "/thumb") {
+      if (!st?.isFile()) return missing();
+      if (!/\.(png|jpe?g|webp)$/i.test(path)) return reply(res, 404, { error: "no thumbnail of that file" });
+      seen.thumbs++;
+      const bytes = await readFile(full);
+      const s = sniff(bytes, "image/jpeg");
+      res.writeHead(200, { "content-type": s.type, "stillfail-thumbhash": Buffer.from(`th:${posix.basename(path)}`).toString("base64"), "stillfail-width": String(s.w ?? 1), "stillfail-height": String(s.h ?? 1) });
+      return res.end(bytes);
+    }
+    if (route === "/poster") {
+      if (!st?.isFile()) return missing();
+      if (!/\.(mp4|mov|m4v)$/i.test(path)) return reply(res, 404, { error: "no poster of that file" });
+      seen.posters++;
+      res.writeHead(200, { "content-type": "image/jpeg" });
+      return res.end(POSTER());
+    }
+    reply(res, 404, { error: "no route", code: "not_found" });
   };
   const server = createServer((req: IncomingMessage, res) => {
     const url = new URL(req.url ?? "/", "http://station");
@@ -217,6 +303,11 @@ export async function fakeStation(dir: string, token: string, part = 4096) {
     seen.viewers.push(String(req.headers["stillfail-viewer"]));
     const root = url.searchParams.get("root");
     const path = posix.normalize(url.searchParams.get("path") ?? "").replace(/^\.$|^\/+|\/+$/g, "");
+    seen.asked.push({ route: url.pathname, root: root ?? "", path, viewer: String(req.headers["stillfail-viewer"]) });
+    if (root && (root === dir || root.startsWith(`${dir}/`)) && !path.split("/").includes("..")) {
+      onDisk(res, url.pathname, root, path, url).catch((e) => reply(res, 500, { error: String(e) }));
+      return;
+    }
     if (root !== "/books") return reply(res, 404, { error: "not a root", code: "not_a_root" });
     const file = files.get(path);
     const isDir = path === "" || [...files.keys()].some((k) => k.startsWith(`${path}/`));
@@ -249,7 +340,17 @@ export async function fakeStation(dir: string, token: string, part = 4096) {
     reply(res, 404, { error: "no route", code: "not_found" });
   });
   await new Promise<void>((done) => server.listen(socket, done));
-  return { socket, files, seen, close: () => new Promise<void>((done) => server.close(() => done())) };
+  return {
+    socket,
+    files,
+    seen,
+    close: () =>
+      new Promise<void>((done) => {
+        for (const w of watches.values()) w.watcher.close();
+        server.close(() => done());
+        server.closeAllConnections();
+      }),
+  };
 }
 
 export type Who = { sub: string; role: string; workspace: string; name?: string };
@@ -281,6 +382,194 @@ export function call(socket: string, method: string, path: string, who: Who | nu
     req.on("error", fail);
     req.end(body === undefined ? undefined : JSON.stringify(body));
   });
+}
+
+/// A request with a body of bytes as it is.
+export function callBytes(socket: string, method: string, path: string, who: Who | null, body: Buffer): Promise<Answer> {
+  return new Promise((done, fail) => {
+    const headers: Record<string, string> = { "content-type": "application/octet-stream", "content-length": String(body.length) };
+    if (who) headers["stillfail-viewer"] = header(who);
+    const req = request({ socketPath: socket, method, path, headers }, (res) => {
+      const parts: Buffer[] = [];
+      res.on("data", (b: Buffer) => parts.push(b));
+      res.on("end", () => {
+        const bytes = Buffer.concat(parts);
+        done({ status: res.statusCode ?? 0, headers: res.headers, bytes, json: String(res.headers["content-type"]).startsWith("application/json") ? JSON.parse(bytes.toString("utf8")) : null });
+      });
+    });
+    // The service may answer (refuse) before it took the whole body.
+    req.on("error", (e) => ((e as NodeJS.ErrnoException).code === "EPIPE" || (e as NodeJS.ErrnoException).code === "ECONNRESET" ? undefined : fail(e)));
+    req.end(body);
+  });
+}
+
+// Photos and videos, as small as their headers.
+
+/// A TIFF tag: its number, its type (2 ASCII, 3 SHORT, 4 LONG, 5 RATIONAL as [num, den, …]) and value.
+export type Tag = [tag: number, type: number, value: string | number[]];
+
+/// A TIFF (EXIF's): IFD0, with the Exif and GPS IFDs pointed to from it when given.
+export function tiff(ifd0: Tag[], exif: Tag[] = [], gps: Tag[] = [], le = false): Buffer {
+  const first: Tag[] = [...ifd0];
+  if (exif.length) first.push([0x8769, 4, [0]]);
+  if (gps.length) first.push([0x8825, 4, [0]]);
+  const ifds = [first, exif, gps];
+  const offsets: number[] = [];
+  let at = 8;
+  for (const t of ifds) {
+    offsets.push(t.length ? at : 0);
+    if (t.length) at += 2 + t.length * 12 + 4;
+  }
+  for (const t of first) {
+    if (t[0] === 0x8769) t[2] = [offsets[1]!];
+    if (t[0] === 0x8825) t[2] = [offsets[2]!];
+  }
+  const b = Buffer.alloc(at + 4096);
+  const w16 = (v: number, o: number) => (le ? b.writeUInt16LE(v, o) : b.writeUInt16BE(v, o));
+  const w32 = (v: number, o: number) => (le ? b.writeUInt32LE(v, o) : b.writeUInt32BE(v, o));
+  b.write(le ? "II" : "MM", 0, "latin1");
+  w16(42, 2);
+  w32(8, 4);
+  let data = at;
+  ifds.forEach((tags, k) => {
+    if (!tags.length) return;
+    let p = offsets[k]!;
+    w16(tags.length, p);
+    p += 2;
+    for (const [tag, type, value] of [...tags].sort((x, y) => x[0] - y[0])) {
+      let bytes: Buffer;
+      let count: number;
+      if (type === 2) {
+        bytes = Buffer.from(`${value as string}\0`, "latin1");
+        count = bytes.length;
+      } else {
+        const nums = value as number[];
+        const size = type === 3 ? 2 : 4;
+        bytes = Buffer.alloc(nums.length * size);
+        nums.forEach((n, i) => (size === 2 ? (le ? bytes.writeUInt16LE(n, i * 2) : bytes.writeUInt16BE(n, i * 2)) : le ? bytes.writeUInt32LE(n, i * 4) : bytes.writeUInt32BE(n, i * 4)));
+        count = type === 5 ? nums.length / 2 : nums.length;
+      }
+      w16(tag, p);
+      w16(type, p + 2);
+      w32(count, p + 4);
+      if (bytes.length <= 4) bytes.copy(b, p + 8);
+      else {
+        w32(data, p + 8);
+        bytes.copy(b, data);
+        data += bytes.length + (bytes.length & 1);
+      }
+      p += 12;
+    }
+    w32(0, p);
+  });
+  return b.subarray(0, data);
+}
+
+/// The EXIF of a phone's photo: taken 2024-05-01 10:20:30 +09:00, turned (6), an iPhone's camera and lens, in Tokyo.
+export const PHONE_EXIF = (le = false) =>
+  tiff(
+    [[0x010f, 2, "Apple"], [0x0110, 2, "iPhone 15 Pro"], [0x0112, 3, [6]]],
+    [[0x9003, 2, "2024:05:01 10:20:30"], [0x9011, 2, "+09:00"], [0xa434, 2, "iPhone 15 Pro back camera 6.86mm f/1.78"]],
+    [[1, 2, "N"], [2, 5, [35, 1, 39, 1, 2952, 100]], [3, 2, "E"], [4, 5, [139, 1, 44, 1, 3024, 100]]],
+    le,
+  );
+
+/// A JPEG of `w`×`h` (as stored) with `exif` in an APP1, then whatever `tail` is.
+export function exifJpeg(w: number, h: number, exif: Buffer, tail = Buffer.alloc(0)): Buffer {
+  const app1 = Buffer.alloc(4 + 6);
+  app1.writeUInt16BE(0xffe1, 0);
+  app1.writeUInt16BE(2 + 6 + exif.length, 2);
+  app1.write("Exif\0\0", 4, "latin1");
+  const plain = jpeg(w, h);
+  return Buffer.concat([plain.subarray(0, 2), app1, exif, plain.subarray(2, plain.length - 2), tail, plain.subarray(plain.length - 2)]);
+}
+
+/// An ISO BMFF box (`full`: with version and flags).
+export function box(type: string, body: Buffer | Buffer[], full?: { version: number; flags?: number }): Buffer {
+  const inner = Buffer.concat([...(full ? [Buffer.from([full.version, ((full.flags ?? 0) >> 16) & 255, ((full.flags ?? 0) >> 8) & 255, (full.flags ?? 0) & 255])] : []), ...(Array.isArray(body) ? body : [body])]);
+  const h = Buffer.alloc(8);
+  h.writeUInt32BE(8 + inner.length, 0);
+  h.write(type, 4, "latin1");
+  return Buffer.concat([h, inner]);
+}
+
+const u16 = (v: number) => {
+  const b = Buffer.alloc(2);
+  b.writeUInt16BE(v);
+  return b;
+};
+const u32 = (v: number) => {
+  const b = Buffer.alloc(4);
+  b.writeUInt32BE(v);
+  return b;
+};
+
+/// A HEIC: its primary item (1) of `w`×`h` coded, turned a quarter (irot 1, or `rot`), its Exif item (2) in the mdat
+/// after `pad` bytes of the image's own.
+export function heic(w: number, h: number, exif: Buffer, pad = 0, rot = 1): Buffer {
+  const ftyp = box("ftyp", [Buffer.from("heic", "latin1"), u32(0), Buffer.from("mif1heic", "latin1")]);
+  const exifItem = Buffer.concat([u32(6), Buffer.from("Exif\0\0", "latin1"), exif]);
+  const meta = (imageAt: number, exifAt: number) =>
+    box(
+      "meta",
+      [
+        box("hdlr", [u32(0), Buffer.from("pict", "latin1"), Buffer.alloc(12), Buffer.from("\0")], { version: 0 }),
+        box("pitm", u16(1), { version: 0 }),
+        box("iinf", [u16(2), box("infe", [u16(1), u16(0), Buffer.from("hvc1", "latin1"), Buffer.from("\0")], { version: 2 }), box("infe", [u16(2), u16(0), Buffer.from("Exif", "latin1"), Buffer.from("\0")], { version: 2 })], { version: 0 }),
+        // offset_size 4, length_size 4, base_offset_size 0; two items of one extent each.
+        box("iloc", [Buffer.from([0x44, 0x00]), u16(2), u16(1), u16(0), u16(1), u32(imageAt), u32(pad), u16(2), u16(0), u16(1), u32(exifAt), u32(exifItem.length)], { version: 0 }),
+        box("iprp", [
+          box("ipco", [box("ispe", [u32(w), u32(h)], { version: 0 }), box("irot", Buffer.from([rot]))]),
+          box("ipma", [u32(1), u16(1), Buffer.from([2, 0x81, 0x02])], { version: 0 }),
+        ]),
+      ],
+      { version: 0 },
+    );
+  const metaSize = meta(0, 0).length;
+  const mdatAt = ftyp.length + metaSize;
+  const imageAt = mdatAt + 8;
+  const exifAt = imageAt + pad;
+  return Buffer.concat([ftyp, meta(imageAt, exifAt), box("mdat", [Buffer.alloc(pad), exifItem])]);
+}
+
+/// An MP4 made at `created` (ms), `seconds` long, its video track `w`×`h` turned a quarter; the moov after `pad` bytes of
+/// media data when `pad` is given.
+export function mp4(created: number, seconds: number, w: number, h: number, pad = 0): Buffer {
+  const ftyp = box("ftyp", [Buffer.from("isom", "latin1"), u32(512), Buffer.from("isomiso2mp41", "latin1")]);
+  const when = Math.round(created / 1000) + 2_082_844_800;
+  const mvhd = box("mvhd", [u32(when), u32(when), u32(1000), u32(Math.round(seconds * 1000)), u32(0x10000), u16(0x100), Buffer.alloc(10), Buffer.alloc(36), Buffer.alloc(24), u32(2)], { version: 0 });
+  // A quarter turn: a = 0, b = 1, c = -1, d = 0.
+  const matrix = Buffer.concat([u32(0), u32(0x10000), u32(0), u32(0xffff0000), u32(0), u32(0), u32(0), u32(0), u32(0x40000000)]);
+  const tkhd = box("tkhd", [u32(when), u32(when), u32(1), u32(0), u32(Math.round(seconds * 1000)), Buffer.alloc(8), u16(0), u16(0), u16(0), u16(0), matrix, u32(w * 65536), u32(h * 65536)], { version: 0, flags: 3 });
+  const audio = box("trak", box("tkhd", [u32(when), u32(when), u32(2), u32(0), u32(0), Buffer.alloc(8), u16(0), u16(1), u16(0x100), u16(0), Buffer.alloc(36), u32(0), u32(0)], { version: 0, flags: 3 }));
+  const moov = box("moov", [mvhd, audio, box("trak", tkhd)]);
+  const mdat = box("mdat", Buffer.alloc(pad));
+  return pad ? Buffer.concat([ftyp, mdat, moov]) : Buffer.concat([ftyp, moov, mdat]);
+}
+
+/// A GIF's header of `w`×`h`.
+export function gif(w: number, h: number): Buffer {
+  const b = Buffer.alloc(13);
+  b.write("GIF89a", 0, "latin1");
+  b.writeUInt16LE(w, 6);
+  b.writeUInt16LE(h, 8);
+  return Buffer.concat([b, Buffer.from([0x3b])]);
+}
+
+/// A 24-bit BMP of `w`×`h` of one colour, bottom-up (as sips writes them, but for the row order).
+export function bmp(w: number, h: number, rgb: [number, number, number]): Buffer {
+  const stride = Math.ceil((w * 3) / 4) * 4;
+  const b = Buffer.alloc(54 + stride * h);
+  b.write("BM", 0, "latin1");
+  b.writeUInt32LE(b.length, 2);
+  b.writeUInt32LE(54, 10);
+  b.writeUInt32LE(40, 14);
+  b.writeInt32LE(w, 18);
+  b.writeInt32LE(h, 22);
+  b.writeUInt16LE(1, 26);
+  b.writeUInt16LE(24, 28);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) b.set([rgb[2], rgb[1], rgb[0]], 54 + y * stride + x * 3);
+  return b;
 }
 
 /// The events `/events` sends `who`, as they come; `close` ends the stream, `ended` is when it ended (either side).
@@ -316,15 +605,19 @@ export function listen(socket: string, who: Who) {
 
 export const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/// The service started on a socket of its own, with a fake station; `stop` ends both.
-export async function started(part = 4096) {
-  const dir = mkdtempSync(join(tmpdir(), "media-"));
+/// The service started on a socket of its own, with a fake station; `stop` ends both. The photo library's backup
+/// folder is `<dir>/backup`; `sips` none unless given.
+export async function started(part = 4096, sips: string | null = null) {
+  // Short and real: a unix socket's path is at most 104 bytes on macOS, and the station is asked by real paths.
+  const dir = realpathSync(mkdtempSync(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "media-")));
   const token = "secret-token";
   const station = await fakeStation(dir, token, part);
   const socket = join(dir, "m.sock");
-  const service: Service = await startService({ dir: join(dir, "data"), socket, station: { socket: station.socket, token } });
+  const backup = join(dir, "backup");
+  const service: Service = await startService({ dir: join(dir, "data"), socket, station: { socket: station.socket, token }, backup, sips });
   return {
     dir,
+    backup,
     station,
     socket,
     service,
