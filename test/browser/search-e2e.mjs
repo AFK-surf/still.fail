@@ -126,15 +126,16 @@ async function main() {
   await say("把预览部署到 studio", "已部署，预览在 5173 端口");
   await page.waitForTimeout(3000);
 
-  const switcher = async (words, shot) => {
+  const switcher = async (words, shot, until = null) => {
     await page.keyboard.press("Escape");
     await page.locator("textarea").first().click();
     await page.keyboard.press("ControlOrMeta+k");
     const field = page.getByPlaceholder("搜索全部内容和操作");
     await field.waitFor();
     await field.fill(words);
-    // The device's finds at once, the station's a moment after the words settle.
-    await page.waitForTimeout(2500);
+    // The device's finds at once, the station's a moment after the words settle (`until`: what it waits to see).
+    if (until) await page.locator('[role="listbox"]').getByText(until).first().waitFor({ timeout: 15_000 }).catch(() => {});
+    else await page.waitForTimeout(2500);
     const rows = await page.locator('[role="listbox"]').innerText();
     await page.screenshot({ path: join(SHOTS, `${shot}.png`) });
     return rows;
@@ -161,7 +162,7 @@ async function main() {
   await page.emulateMedia({ colorScheme: "light" });
 
   // The machine's files (Spotlight on this Mac, as the station's user): a word its home surely has.
-  const files = await switcher("readme", "desktop-files");
+  const files = await switcher("readme", "desktop-files", "文件");
   check("⌘K finds the machine's files", files.replace(/\s+/g, " ").slice(0, 300), /文件/.test(files) && /README/i.test(files));
   // The station's page: what its search finds of the machine, the person's own data off.
   await page.keyboard.press("Escape");
