@@ -18,26 +18,20 @@ import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdbShares, AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store } from "../services.ts";
+import { AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store } from "../services.ts";
 import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { permissionsView } from "../api/routes/permissions.ts";
 import { Gpus } from "../jobs/gpu.ts";
 import { Net, measure } from "../jobs/load.ts";
 import { Notifier } from "../cloud/notify.ts";
 import type { Cloud as CloudState } from "../cloud/state.ts";
-import { adbTools } from "../tools/adb.ts";
 import { screenTools } from "../tools/screen.ts";
 import { permissionTools } from "../tools/permissions.ts";
 import { HelperFiles } from "../helper/files.ts";
 import { Places } from "../ops/places.ts";
 import { platform } from "../platform/index.ts";
-import { Browser } from "../browser/service.ts";
-import { browserTools } from "../tools/browser.ts";
 import { Computer, computerTools } from "../tools/computer.ts";
 import { archiveTools } from "../tools/archive.ts";
-import { feedbackTools, tellFixed } from "../tools/feedback.ts";
-import { signedPost } from "../cloud/signed.ts";
-import { version } from "../ops/version.ts";
 import { chatTools } from "../tools/chat.ts";
 import { type AgentsDoor, type PeerRoute, openAgentsDoor } from "../tools/http.ts";
 import { jobTools } from "../tools/jobs.ts";
@@ -105,6 +99,8 @@ export type AgentsParts = {
   /// The station's logins to command-line tools (docs/remote-login.md).
   logins: Logins;
   slack: SlackParts;
+  /// A session's page in the app (`<origin>/o/…`), in still.fail cloud only.
+  pageOf(key: string): string | undefined;
   /// Where the station is in its control plane while in a workspace.
   place(): { origin: string; workspace: string; station: string; name: string } | null;
   /// Where the station stands with its control plane: the workspaces it is in (docs/multi-workspace.md).
@@ -131,10 +127,8 @@ export const AgentsLive = (control: Control) =>
       const readers = yield* Readers;
       const events = yield* Events;
       const key = yield* Key;
-      const shares = yield* AdbShares;
       const screens = yield* ScreenRegistry;
       const grants = yield* Grants;
-      const browser = yield* Browser;
       const host = yield* AdminHost;
       const modules = yield* Modules;
       const own = yield* Own;
@@ -390,10 +384,6 @@ export const AgentsLive = (control: Control) =>
         ...chatTools(hub),
         ...archiveTools(hub),
         ...remoteTools(remote),
-        ...adbTools(() => shares.list(), () => {
-          const s = place();
-          return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}/adb` : null;
-        }),
         ...jobTools(jobs, (key) => store.getSession(key)?.workspace ?? null, hub.places),
         ...screenTools(screens, () => {
           const s = place();
@@ -404,7 +394,6 @@ export const AgentsLive = (control: Control) =>
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
         }),
-        ...browserTools(browser),
         ...computerTools(computer),
         ...forwardTools(forwards),
         ...loginTools({
@@ -459,19 +448,6 @@ export const AgentsLive = (control: Control) =>
       // `stillfail update --beta|--stable` asks a running station by SIGHUP (run/channel-ask).
       control.on("hup", () => updates.answerChannelAsk());
 
-      // Bug reports to the still.fail team, from stations on the stable channel (updates.rs `channel_of`), in still.fail
-      // cloud only: feedback is no part of the control plane (another provider's stations send none).
-      const stable = updates.channel() === "stable" && plane.spec().feedback;
-      const sendReport = async (report: any) => {
-        if (cloud.removed()) throw new Error("this station was removed from its workspace");
-        report.context = { ...(report.context ?? {}), version: version() };
-        return signedPost(cloud, key, "/v1/feedback", "stillfail-station-feedback-v1", report);
-      };
-      const fixed = async (told: string[]) => {
-        if (cloud.removed()) return { fixed: [] };
-        return { ...(await signedPost(cloud, key, "/v1/feedback/fixed", "stillfail-station-feedback-fixed-v1", { told })), station: version() };
-      };
-      if (stable) tools.push(...feedbackTools(store, (k) => pageOf(k) ?? null, () => (cloud.state ? sendReport : null)));
       // Outside a workspace its agents do not reach out of it: their outward tools are refused.
       // So are those of a session of a workspace the station has left (docs/multi-workspace.md).
       const inItsWorkspace = (session: string) => {
@@ -701,16 +677,8 @@ export const AgentsLive = (control: Control) =>
       // What the chats' people hear about while no client of theirs runs: pushed by the control plane.
       const notifier = new Notifier(store, readers, cloud, (notices, ws) => Effect.runPromise(plane.notify(notices, ws)));
 
-      // The bug reports its agents sent that are fixed and out: each session told, a few minutes after the start and
-      // every hour (the cloud has no way to say so as it happens).
-      const tellingFixed = () =>
-        void tellFixed(fixed, (session, text) => hub.notify(session, text)).catch((error) => log.warn("feedback", "fixed bug reports not read", { error: (error as Error).message }));
       // What runs on a clock here (on the hub's): ended at the handover, below.
       const time = new Fibers("station", hub.clock);
-      if (stable) {
-        time.after(300_000, tellingFixed);
-        time.every(3_600_000, tellingFixed);
-      }
 
       // Chats idle long enough go to the archive: looked at when the next one comes due, and every ten minutes for what
       // was idle but not done (a job up, unread, at a block) and is done since, or the setting changed.
@@ -785,6 +753,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, search, updates, accounts, sharing: sharing!, xshare, peers, forwards, logins, slack, overview: view, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, usage, search, updates, accounts, sharing: sharing!, xshare, peers, forwards, logins, slack, overview: view, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

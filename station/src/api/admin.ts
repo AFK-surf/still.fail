@@ -20,7 +20,6 @@ import { routes as slack } from "./routes/slack.ts";
 import { routes as hub, uploadPath } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
 import { routes as agentEnv } from "./routes/agent-env.ts";
-import { routes as links } from "./routes/links.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
 import { routes as machineLogins } from "./routes/logins.ts";
@@ -128,7 +127,7 @@ export class Admin {
       store: deps.store,
       agents: deps.agents,
     };
-    this.routes = [...chats(tools), ...usage(tools), ...search(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...links(), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
+    this.routes = [...chats(tools), ...usage(tools), ...search(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
       ...(deps.agents?.slack && deps.store
         ? slack({
             slack: deps.agents.slack,
