@@ -1,3 +1,4 @@
 import {
   "mbui/host",
+  "mbui/text",
 }

@@ -61,90 +61,19 @@ fn EditorState::insert(self : EditorState, s : String) -> Unit {
 }
 
 ///|
-fn is_hi(c : Int) -> Bool {
-  c >= 0xD800 && c < 0xDC00
-}
-
-///|
-fn is_lo(c : Int) -> Bool {
-  c >= 0xDC00 && c < 0xE000
-}
-
-///|
-fn cu(t : String, i : Int) -> Int {
-  t.at(i).to_int()
-}
-
-///|
-fn step_back(t : String, off : Int) -> Int {
-  if off <= 0 {
-    return 0
-  }
-  let i = off - 1
-  if i > 0 && is_lo(cu(t, i)) && is_hi(cu(t, i - 1)) {
-    i - 1
-  } else {
-    i
-  }
-}
-
-///|
-fn step_fwd(t : String, off : Int) -> Int {
-  let n = t.length()
-  if off >= n {
-    return n
-  }
-  if off + 1 < n && is_hi(cu(t, off)) && is_lo(cu(t, off + 1)) {
-    off + 2
-  } else {
-    off + 1
-  }
-}
-
-///|
-fn is_modifier_at(t : String, i : Int) -> Bool {
-  let c = cu(t, i)
-  if c == 0xFE0F || c == 0x20E3 {
-    return true
-  }
-  // skin tones U+1F3FB..U+1F3FF
-  c == 0xD83C && i + 1 < t.length() && cu(t, i + 1) >= 0xDFFB && cu(t, i + 1) <= 0xDFFF
-}
-
-///|
-/// The previous grapheme boundary, close enough for emoji sequences.
+/// The grapheme cluster boundary before `off` (UAX #29).
 fn prev_boundary(t : String, off : Int) -> Int {
-  let mut i = step_back(t, off)
-  while i > 0 {
-    if is_modifier_at(t, i) {
-      i = step_back(t, i)
-      continue
-    }
-    if cu(t, i - 1) == 0x200D {
-      i = step_back(t, i - 1)
-      continue
-    }
-    break
-  }
-  i
+  @text.prev_grapheme(t, off)
 }
 
 ///|
+/// The grapheme cluster boundary after `off`, which may lie inside a cluster
+/// (an input method can put the caret anywhere).
 fn next_boundary(t : String, off : Int) -> Int {
-  let n = t.length()
-  let mut i = step_fwd(t, off)
-  while i < n {
-    if is_modifier_at(t, i) {
-      i = step_fwd(t, i)
-      continue
-    }
-    if cu(t, i) == 0x200D {
-      i = step_fwd(t, step_fwd(t, i))
-      continue
-    }
-    break
+  if off >= t.length() {
+    return t.length()
   }
-  i
+  @text.next_grapheme(t, @text.prev_grapheme(t, off + 1))
 }
 
 ///|

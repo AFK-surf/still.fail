@@ -1,7 +1,8 @@
 // Text: the host shapes a string into grapheme clusters (with the system's
 // own engine: Core Text on Apple platforms, canvas 2D in browsers) and
-// rasterizes each cluster into its atlas on demand. Line breaking, caret
-// geometry and hit testing are done here, the same on every platform.
+// rasterizes each cluster into its atlas on demand. Line breaking (UAX #14,
+// from mbui/text), caret geometry and hit testing are done here, the same on
+// every platform.
 
 ///|
 struct Shaped {
@@ -10,6 +11,9 @@ struct Shaped {
   adv : Array[Double]
   keys : Array[Int]
   cu : Array[Int]
+  // before each cluster: 0 no line break, 1 a break opportunity, 2 a hard
+  // line break (UAX #14)
+  brk : Array[Int]
   len : Int
 }
 
@@ -111,7 +115,14 @@ fn shape(text : String, size : Double, weight : Int) -> Shaped {
         keys.push(out[i * 4 + 3].to_int())
         cu.push(if st < text.length() { text.at(st).to_int() } else { 0 })
       }
-      let s = { starts, lens, adv, keys, cu, len: text.length() }
+      let brk = Array::make(n, 0)
+      if n > 1 {
+        let b = @text.line_breaks(text)
+        for i in 1..<n {
+          brk[i] = b[starts[i]]
+        }
+      }
+      let s = { starts, lens, adv, keys, cu, brk, len: text.length() }
       text_cache.shapes[key] = s
       s
     }
@@ -141,41 +152,16 @@ fn glyph(key : Int) -> Glyph {
 }
 
 ///|
-fn is_cjk(c : Int) -> Bool {
-  (c >= 0x2E80 && c < 0xD800) ||
-  (c >= 0xF900 && c < 0xFB00) ||
-  (c >= 0xFF00 && c < 0xFFF0) ||
-  (c >= 0xD800 && c < 0xDC00)
+/// Line terminators (Line_Break BK, CR, LF, NL).
+fn is_nl(c : Int) -> Bool {
+  c == 10 || c == 13 || c == 11 || c == 12 || c == 0x85 || c == 0x2028 || c == 0x2029
 }
 
 ///|
-fn no_line_start(c : Int) -> Bool {
-  c == 0xFF0C ||
-  c == 0x3002 ||
-  c == 0x3001 ||
-  c == 0xFF01 ||
-  c == 0xFF1F ||
-  c == 0xFF09 ||
-  c == 0x300D ||
-  c == 0xFF1A ||
-  c == 0xFF1B ||
-  c == 0x2C ||
-  c == 0x2E ||
-  c == 0x21 ||
-  c == 0x3F
-}
-
-///|
-fn can_break_before(s : Shaped, i : Int) -> Bool {
-  let prev = s.cu[i - 1]
-  let cur = s.cu[i]
-  if no_line_start(cur) {
-    false
-  } else if prev == 32 && cur != 32 {
-    true
-  } else {
-    is_cjk(prev) || is_cjk(cur)
-  }
+/// Whether cluster i ends a line by itself: a line terminator followed by a
+/// hard break (not CR before LF, when the host makes them two clusters).
+fn Shaped::hard_end(self : Shaped, i : Int) -> Bool {
+  is_nl(self.cu[i]) && (i + 1 >= self.starts.length() || self.brk[i + 1] == 2)
 }
 
 ///|
@@ -203,7 +189,7 @@ fn layout_text(
   fn finish(start : Int, end : Int) {
     // width without trailing spaces
     let mut e = end
-    while e > start && (s.cu[e - 1] == 32 || s.cu[e - 1] == 10) {
+    while e > start && (s.cu[e - 1] == 32 || is_nl(s.cu[e - 1])) {
       e = e - 1
     }
     let lw = if e > start { xs[e - 1] + s.adv[e - 1] } else { 0.0 }
@@ -217,7 +203,7 @@ fn layout_text(
 
   while i < n {
     let c = s.cu[i]
-    if c == 10 {
+    if s.hard_end(i) {
       xs[i] = x
       line_of[i] = line_start.length()
       finish(ls, i + 1)
@@ -227,7 +213,7 @@ fn layout_text(
       last_break = -1
       continue
     }
-    if i > ls && can_break_before(s, i) {
+    if i > ls && s.brk[i] != 0 {
       last_break = i
     }
     let a = s.adv[i]
@@ -245,7 +231,7 @@ fn layout_text(
     x = x + a
     i = i + 1
   }
-  if ls < n || line_start.length() == 0 || (n > 0 && s.cu[n - 1] == 10) {
+  if ls < n || line_start.length() == 0 || (n > 0 && s.hard_end(n - 1)) {
     finish(ls, n)
   }
   let lines = line_start.length()
@@ -277,7 +263,7 @@ fn TextLayout::caret(self : TextLayout, off : Int) -> (Double, Int) {
   }
   if c >= n {
     let last = n - 1
-    if s.cu[last] == 10 {
+    if s.hard_end(last) {
       return (0.0, self.line_start.length() - 1)
     }
     (self.xs[last] + s.adv[last], self.line_of[last])
@@ -298,7 +284,7 @@ fn TextLayout::offset_at(self : TextLayout, x : Double, y : Double) -> Int {
   let a = self.line_start[line]
   let b = self.line_end[line]
   for c in a..<b {
-    if s.cu[c] == 10 {
+    if is_nl(s.cu[c]) {
       return s.starts[c]
     }
     if x < self.xs[c] + s.adv[c] / 2.0 {
