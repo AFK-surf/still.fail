@@ -36,6 +36,9 @@ test("read positions, names, keeping and dismissing", async () => {
   assert.equal(store.getThread(chat.id)!.title, "named");
   assert.equal((await ask("PUT", `/threads/${slack.id}/title`, { title: "x" }))[0], 400);
   assert.deepEqual(await ask("PUT", `/threads/${chat.id}/keep`), [200, { kept: true }]);
+  assert.deepEqual([...store.keptChats("a@x")], [chat.id]);
+  assert.deepEqual(await ask("DELETE", `/threads/${chat.id}/keep`), [200, { kept: false }]);
+  assert.deepEqual([...store.keptChats("a@x")], []);
   assert.equal((await ask("PUT", `/threads/${chat.id}/dismissed`, { n: 1 }))[0], 404);
   assert.deepEqual(await ask("PUT", `/threads/${chat.id}/dismissed`, { n: 2 }), [200, { dismissed: { thread: chat.id, n: 2 } }]);
   const [n] = store.insertMessage({ ...newMessage(chat.id, "1.4", "agent", "s1", "deploy?"), card: { type: "options", options: [{ label: "no", action: "close" }] } });

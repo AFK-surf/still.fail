@@ -172,6 +172,7 @@
   "core-views.xshare.write": "可发消息",
   "core-views.publish.hidden": "已隐藏 {n} 处",
   "core-views.publish.hiddenAll": "共隐藏 {n} 处疑似机密",
+  "core-views.policy.allDone": "所有 agent 都做完了",
   "core-views.policy.archive": "推荐归档",
   "core-views.policy.byAgent": "{agent}（在「{chat}」里）",
   "core-views.policy.changedBy": "由 {who} 修改",

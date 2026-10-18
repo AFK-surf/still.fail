@@ -34,7 +34,7 @@ export type Call =
   | { kind: "op"; op: ops.Request }
   | { kind: "profileModels"; op: ops.Request; id: string; models: unknown }
   | { kind: "chatArchive"; op: ops.Request; thread: number | null; session: string; archived: boolean }
-  | { kind: "chatChange"; op: ops.Request; thread: number | null; session: string; title: string | null; pinned: boolean | null; keep: boolean }
+  | { kind: "chatChange"; op: ops.Request; thread: number | null; session: string; title: string | null; pinned: boolean | null; keep: boolean | null }
   | { kind: "chatXshare"; station: string; workspace: string | null; session: string; thread: number | null; to: string[]; write: boolean }
   | { kind: "stationJoin"; workspace: string; station: string; name: string | null }
   | { kind: "chatSend"; station: string; thread: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
@@ -845,7 +845,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       session: typeof session === "string" ? session : "",
       title: name === "chat.rename" && title !== "" ? title : null,
       pinned: name === "chat.pin" ? get(p, "pinned") === true : null,
-      keep: name === "chat.keep",
+      keep: name === "chat.keep" ? get(p, "kept") !== false : null,
     };
   }
   const p = orEmpty(params);
