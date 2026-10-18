@@ -59,8 +59,8 @@ fn h_font_metrics(size : Double, weight : Int, out : FixedArray[Double]) -> Unit
 }
 
 ///|
-/// Fake shaping: one cluster per code point (a surrogate pair is one), Latin
-/// half an em wide, everything else a full em.
+/// Fake shaping: one cluster per extended grapheme cluster, as real hosts
+/// make them; Latin half an em wide, everything else a full em.
 fn h_shape(
   text : String,
   size : Double,
@@ -75,10 +75,10 @@ fn h_shape(
       let mut k = 0
       while i < n && k < cap {
         let c = text.at(i).to_int()
-        let len = if is_hi(c) && i + 1 < n { 2 } else { 1 }
+        let len = @text.next_grapheme(text, i) - i
         let adv = if c == 10 {
           0.0
-        } else if c < 0x2E80 && len == 1 {
+        } else if c < 0x2E80 {
           size * 0.5
         } else {
           size

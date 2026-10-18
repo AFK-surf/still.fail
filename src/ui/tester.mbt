@@ -301,3 +301,23 @@ pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
   }
   out
 }
+
+///|
+/// The lines of the first text node whose text contains `s`, as laid out.
+pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
+  let c = g
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.kind == kind_text && n.text.contains(s) {
+      match n.tl {
+        Some(tl) =>
+          return Array::makei(tl.line_start.length(), fn(l) {
+            let (a, b) = tl.line_range(l)
+            n.text.unsafe_substring(start=a, end=b)
+          })
+        None => ()
+      }
+    }
+  }
+  []
+}

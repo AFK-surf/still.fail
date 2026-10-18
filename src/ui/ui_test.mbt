@@ -171,3 +171,62 @@ test "layout snapshot" {
     ),
   )
 }
+
+///|
+fn narrow_text(s : String, w : Double) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      c.column(w=Px(w), fn() { c.text(s, size=10.0) |> ignore }) |> ignore
+    },
+    w=200.0,
+    h=200.0,
+  )
+}
+
+///|
+test "lines wrap at UAX #14 opportunities: after hyphens, not inside brackets" {
+  // the fake host makes Latin 5 px wide and CJK 10 px at this size
+  let t = narrow_text("a well-known word", 50.0)
+  assert_eq(t.lines_of("well"), ["a well-", "known word"])
+  // no line ends with an opening bracket or starts with closing punctuation
+  let t2 = narrow_text("你好世界「引用」", 50.0)
+  assert_eq(t2.lines_of("你好"), ["你好世界", "「引用」"])
+  let t3 = narrow_text("你好，世界。「引用」好", 50.0)
+  assert_eq(t3.lines_of("你好"), ["你好，世", "界。「引", "用」好"])
+  // hard line breaks of every kind
+  let t4 = narrow_text("one\r\ntwo\u{2028}three", 200.0)
+  assert_eq(t4.lines_of("one"), ["one\r\n", "two\u{2028}", "three"])
+}
+
+///|
+test "the caret, backspace and delete move over whole grapheme clusters" {
+  let t = @ui.Tester::new(fn(c) {
+    c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.spacer()
+      c.editor("composer", placeholder="type here") |> ignore
+    })
+    |> ignore
+  })
+  t.tap_text("type here")
+  // a, e + combining acute, a family (zwj sequence), a flag, x
+  t.type_text("ae\u{301}👨\u{200D}👩\u{200D}👧🇯🇵x")
+  let left = 3
+  let right = 4
+  let delete = 2
+  t.key(left)
+  t.key(left)
+  let (_, _, a, _) = t.ime()
+  assert_eq(a, 11)
+  t.key(left)
+  t.key(left)
+  let (_, _, b, _) = t.ime()
+  assert_eq(b, 1)
+  t.key(right)
+  t.backspace()
+  let (_, text, c, _) = t.ime()
+  assert_eq(text, "a👨\u{200D}👩\u{200D}👧🇯🇵x")
+  assert_eq(c, 1)
+  t.key(delete)
+  let (_, text2, _, _) = t.ime()
+  assert_eq(text2, "a🇯🇵x")
+}
