@@ -3,6 +3,7 @@
 // through NSTextInputClient.
 #import <Cocoa/Cocoa.h>
 #import <mach/mach.h>
+#import <Carbon/Carbon.h>
 #import "apple.h"
 
 mb_callbacks mb_cb;
@@ -265,6 +266,65 @@ static void run_script_step(int step) {
         break;
       case 140: shot("06-scrolled"); break;
       case 141: exit(0);
+    }
+    [v requestFrame];
+  } else if (strcmp(script, "realime") == 0) {
+    // Types through the real system input method: selects Pinyin if it is
+    // enabled on this Mac, and posts key events that go through AppKit and the
+    // input method exactly like keystrokes.
+    static TISInputSourceRef saved, pinyin;
+    static const struct { const char *ch; int code; } keys[] = {
+        {"n", 45}, {"i", 34}, {"h", 4}, {"a", 0}, {"o", 31}};
+    switch (step) {
+      case 20: {
+        saved = TISCopyCurrentKeyboardInputSource();
+        NSArray *list = CFBridgingRelease(TISCreateInputSourceList(NULL, false));
+        for (id x in list) {
+          TISInputSourceRef src = (__bridge TISInputSourceRef)x;
+          NSString *sid = (__bridge NSString *)TISGetInputSourceProperty(src, kTISPropertyInputSourceID);
+          fprintf(stdout, "INPUT SOURCE %s\n", sid.UTF8String);
+          if ([sid containsString:@"SCIM.ITABC"] || [sid containsString:@"Pinyin"] || [sid hasSuffix:@"wetype.pinyin"]) pinyin = src;
+        }
+        if (!pinyin) {
+          fprintf(stdout, "REALIME no Pinyin input source enabled\n");
+          exit(3);
+        }
+        CFRetain(pinyin);
+        OSStatus st = TISSelectInputSource(pinyin);
+        fprintf(stdout, "REALIME selected pinyin: %d\n", (int)st);
+        fflush(stdout);
+        mb_cb.pointer(0, 120, s.height - 30, 0);
+        mb_cb.pointer(2, 120, s.height - 30, 0);
+        break;
+      }
+      default:
+        if (step >= 30 && step < 35) {
+          int k = step - 30;
+          NSEvent *e = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0
+                                       timestamp:0 windowNumber:v.window.windowNumber context:nil
+                                      characters:@(keys[k].ch) charactersIgnoringModifiers:@(keys[k].ch)
+                                       isARepeat:NO keyCode:keys[k].code];
+          [NSApp postEvent:e atStart:NO];
+        }
+        if (step == 50) shot("real-01-composing");
+        if (step == 51) {
+          NSEvent *e = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0
+                                       timestamp:0 windowNumber:v.window.windowNumber context:nil
+                                      characters:@" " charactersIgnoringModifiers:@" "
+                                       isARepeat:NO keyCode:49];
+          [NSApp postEvent:e atStart:NO];
+        }
+        if (step == 70) shot("real-02-committed");
+        if (step == 71) {
+          if (saved) TISSelectInputSource(saved);
+          NSEvent *e = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0
+                                       timestamp:0 windowNumber:v.window.windowNumber context:nil
+                                      characters:@"\r" charactersIgnoringModifiers:@"\r"
+                                       isARepeat:NO keyCode:36];
+          [NSApp postEvent:e atStart:NO];
+        }
+        if (step == 100) shot("real-03-sent");
+        if (step == 101) exit(0);
     }
     [v requestFrame];
   } else if (strcmp(script, "shot") == 0) {
