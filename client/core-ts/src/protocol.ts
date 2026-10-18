@@ -141,10 +141,17 @@ function fits(value: unknown, kind: Param): boolean {
 }
 
 /// A topic as the UI said it, or null when it is none (the subscribe is then no message the core knows).
-export function parseTopic(raw: unknown): Topic | null {
+/// `moduleTopic`: whether a name the core does not know is an app's module's topic (module.ts, `<module>.…`): its
+/// params are the module's to check, taken as they come where each is a string, number, boolean or null.
+export function parseTopic(raw: unknown, moduleTopic?: (name: string) => boolean): Topic | null {
   if (!isObject(raw) || typeof raw.topic !== "string") return null;
   const spec = TOPICS[raw.topic];
-  if (!spec) return null;
+  if (!spec) {
+    if (!moduleTopic?.(raw.topic)) return null;
+    const params = Object.entries(raw).filter(([k]) => k !== "topic");
+    if (params.some(([, v]) => v !== null && !["string", "number", "boolean"].includes(typeof v))) return null;
+    return { topic: raw.topic, ...Object.fromEntries(params) };
+  }
   const out: Topic = { topic: raw.topic };
   for (const [name, [kind, how]] of Object.entries(spec)) {
     const value = raw[name];
@@ -185,8 +192,9 @@ export function isView(topic: Topic): boolean {
 }
 
 /// A message from a UI, or why it is none (serde's words, as the native host answers them: `bad_message`). `bytes`:
-/// those a native host handed over beside it; a page's come in it.
-export function parseClientMessage(raw: unknown, bytes?: Uint8Array): ClientMessage | { invalid: string } {
+/// those a native host handed over beside it; a page's come in it. `moduleTopic`: which topics an app's modules have
+/// (parseTopic).
+export function parseClientMessage(raw: unknown, bytes?: Uint8Array, moduleTopic?: (name: string) => boolean): ClientMessage | { invalid: string } {
   const bad = { invalid: "data did not match any variant of untagged enum ClientMessage" };
   if (!isObject(raw)) return bad;
   const id = raw.id;
@@ -197,7 +205,7 @@ export function parseClientMessage(raw: unknown, bytes?: Uint8Array): ClientMess
     return beside === undefined ? { kind: "call", id, call: raw.call, params } : { kind: "call", id, call: raw.call, params, bytes: beside };
   }
   if ("subscribe" in raw) {
-    const topic = parseTopic(raw.subscribe);
+    const topic = parseTopic(raw.subscribe, moduleTopic);
     // `keyed`: the UI applies keyed ops (collections.ts); the Rust core ignores it.
     if (topic) return raw.keyed === true ? { kind: "subscribe", id, subscribe: topic, keyed: true } : { kind: "subscribe", id, subscribe: topic };
   }
