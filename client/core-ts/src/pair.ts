@@ -11,24 +11,25 @@ import { utf8 } from "./util.ts";
 
 /// The protocol a trusted device takes a new one's connection on.
 export const PAIR_ALPN = utf8("stillfail/pair/1");
-/// The code's letters: no 0/O, 1/I (as a device's short code, lock.ts `shortCode`).
-const ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 /// How many wrong codes one connection is allowed.
 export const PAIR_TRIES = 3;
 
-/// A fresh code, as it is shown: `XXX-XXX` (30 bits).
+/// A fresh code: six digits, as a phone's keypad types them (20 bits: each try is one of PAIR_TRIES, each connection
+/// put up on the trusted device), drawn without favouring any.
 export function pairCode(randomBytes: (into: Uint8Array) => void): string {
-  const b = new Uint8Array(6);
-  randomBytes(b);
-  const letters = [...b].map((x) => ALPHABET[x % 32]).join("");
-  return `${letters.slice(0, 3)}-${letters.slice(3)}`;
+  const b = new Uint8Array(4);
+  for (;;) {
+    randomBytes(b);
+    const n = ((b[0]! << 24) | (b[1]! << 16) | (b[2]! << 8) | b[3]!) >>> 0;
+    // Below the largest multiple of a million under 2^32: each code as likely as the next.
+    if (n < 4294000000) return String(n % 1_000_000).padStart(6, "0");
+  }
 }
 
-/// A code as typed, as shown (case, spaces and the dash are the person's); null when it is not one.
+/// A code as typed (spaces and dashes are the person's): its six digits, or null when it is not one.
 export function typedCode(typed: string): string | null {
-  const letters = typed.toUpperCase().replace(/[\s\-–—]/g, "");
-  if (letters.length !== 6 || [...letters].some((c) => !ALPHABET.includes(c))) return null;
-  return `${letters.slice(0, 3)}-${letters.slice(3)}`;
+  const digits = typed.replace(/[\s\-–—]/g, "");
+  return /^[0-9]{6}$/.test(digits) ? digits : null;
 }
 
 const join = (...parts: Uint8Array[]) => {

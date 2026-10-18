@@ -52,8 +52,20 @@ export const waiting = style({ maxWidth: "460px", margin: "110px auto 0", paddin
 export const waitingTitle = style({ margin: "0", fontSize: vars.textHeading, lineHeight: vars.leadingHeading, fontWeight: "600" });
 export const waitingLead = style({ margin: "0", color: vars.muted, fontSize: vars.textBody, lineHeight: vars.leadingBody });
 export const waitingNote = style({ display: "flex", alignItems: "center", gap: "8px", color: vars.muted, fontSize: vars.textMeta });
-/** The code shown on a trusted device, typed here: as large as the code is shown there. */
-export const codeInput = style({ width: "200px", textAlign: "center", fontFamily: vars.fontMono, fontSize: vars.textTitle, letterSpacing: "4px" });
+/** Six boxes for the code a trusted device shows, three and three; one field under them takes the typing. */
+export const codeBoxes = style({ position: "relative", display: "flex", alignItems: "center", gap: "8px", cursor: "text", margin: "4px 0" });
+export const codeField = style({ position: "absolute", inset: "0", width: "100%", height: "100%", opacity: "0", border: "0", padding: "0", fontSize: vars.textInput, color: "transparent", caretColor: "transparent", background: "transparent" });
+export const codeGap = style({ width: "8px" });
+export const codeBox = style({
+  width: "44px", height: "54px", display: "grid", placeItems: "center", border: `1px solid ${vars.lineStrong}`, borderRadius: vars.rField, cornerShape: vars.cornerShape,
+  background: vars.canvas, fontFamily: vars.fontMono, fontSize: vars.textHeading, fontWeight: "600", color: vars.text,
+  transition: `border-color ${vars.dur} ${vars.easeOut}`,
+  selectors: {
+    "&[data-next]": { borderColor: vars.text },
+    [`${codeBoxes}[data-wrong] &`]: { borderColor: vars.red },
+    [`${codeBoxes}[data-disabled] &`]: { color: vars.muted },
+  },
+});
 /** Its request did not go: why, in red. */
 export const waitingFailed = style({ color: vars.red, fontSize: vars.textMeta, lineHeight: vars.leadingBody });
 /** The workspaces a waiting device asks to be let into, first in its prompt: their names, as large as the title's words. */

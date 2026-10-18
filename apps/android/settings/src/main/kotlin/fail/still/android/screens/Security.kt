@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.border
@@ -338,7 +339,7 @@ private fun confirmSheet(app: AppState, ws: String, r: LockRequest, onClose: (()
         SheetHead(t("web-pages.security.confirmTitle", "name" to who))
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(t("web-pages.security.confirmBody", "device" to deviceName(r.kind, r.label), "name" to who), fontSize = 14.sp, color = C.muted)
-            Text(r.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(if (r.code.length == 6) "${r.code.take(3)} ${r.code.drop(3)}" else r.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Note(if (r.kind == "web") t("web-pages.security.confirmWeb") else t("web-pages.security.confirmApp"))
             // One above the other, as wide as the sheet: the words fit in any language.
             Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -370,7 +371,7 @@ private fun pairSheet(app: AppState, r: LockPairing, deny: () -> Unit) {
                 Text(t("web-pages.security.promptFor"), fontSize = 13.sp, color = C.muted)
                 shown.workspaces.forEach { Text(it.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
             }
-            Text(shown.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(if (shown.code.length == 6) "${shown.code.take(3)} ${shown.code.drop(3)}" else shown.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Note(t("web-pages.security.pairNote"))
             WideButton(t("web-pages.security.pairDeny"), primary = false, modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 16.dp)) { app.sheet = null; deny() }
         }
@@ -475,14 +476,13 @@ fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
         when {
             typing -> {
                 Note(t("web-pages.security.pairEnter"))
-                CodeField(code) { code = it.uppercase().take(7) }
-                if (pair?.state == "wrong") Text(t("web-pages.security.pairWrong", "n" to (pair.left ?: 0u).toInt()), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
-                WideButton(t("web-pages.security.check"), primary = true, busy = checking || pair?.state == "checking",
-                    enabled = code.count { it in '0'..'9' || it in 'A'..'Z' } == 6) {
-                    val typed = code
-                    // Turned down (a wrong code, the try over): typed again from nothing; the page says why.
+                val busy = checking || pair?.state == "checking"
+                // Typed wrong: the boxes empty again for the next try, the page says how many are left.
+                CodeField(code, wrong = pair?.state == "wrong" && code.isEmpty(), enabled = !busy, onChange = { code = it }) { typed ->
                     app.scope.launch { runCatching { app.core.call("lock.pairCode", buildJsonObject { put("workspace", ws); put("code", typed) }) }.onFailure { code = "" } }
                 }
+                if (busy) WaitLine(t("web-pages.security.pairChecking"))
+                else if (pair?.state == "wrong") Text(t("web-pages.security.pairWrong", "n" to (pair.left ?: 0u).toInt()), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
             }
             pair?.state == "finding" || asking -> WaitLine(t("web-pages.security.pairFinding"))
             else -> {
@@ -498,21 +498,44 @@ fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
     }
 }
 
-/** The code shown on a trusted device, typed in: monospace, in the middle, as the code is written (`XXX-XXX`). */
+/**
+ * Six digits typed into six boxes (three and three), the keypad up for them: the one to type next marked, a code pasted
+ * whole taken, the last one typed handing it on (`onDone`) at once. One field under the boxes takes the typing.
+ */
 @Composable
-private fun CodeField(value: String, onChange: (String) -> Unit) {
+private fun CodeField(value: String, wrong: Boolean, enabled: Boolean, onChange: (String) -> Unit, onDone: (String) -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    val style = TextStyle(color = C.ink, fontSize = 22.sp, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp, textAlign = TextAlign.Center)
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     BasicTextField(
-        value, onChange, singleLine = true, cursorBrush = SolidColor(C.accent),
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
-        textStyle = style,
-        modifier = Modifier.width(220.dp).onFocusChanged { focused = it.isFocused }
-            .border(1.dp, C.ink.copy(alpha = if (focused) 0.32f else 0.18f), Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 11.dp),
+        value,
+        { typed ->
+            val digits = typed.filter { it in '0'..'9' }.take(6)
+            onChange(digits)
+            if (digits.length == 6) onDone(digits)
+        },
+        enabled = enabled, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword, autoCorrectEnabled = false),
+        textStyle = TextStyle(color = Color.Transparent),
+        cursorBrush = SolidColor(Color.Transparent),
+        modifier = Modifier.focusRequester(focus).onFocusChanged { focused = it.isFocused },
         decorationBox = { inner ->
             Box(contentAlignment = Alignment.Center) {
-                if (value.isEmpty()) Text("XXX-XXX", style = style.copy(color = C.muted))
-                inner()
+                Box(Modifier.size(1.dp)) { inner() }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    for (i in 0 until 6) {
+                        if (i == 3) Spacer(Modifier.width(8.dp))
+                        val next = focused && enabled && i == minOf(value.length, 5)
+                        val edge = when {
+                            wrong -> C.red
+                            next -> C.ink
+                            else -> C.ink.copy(alpha = 0.18f)
+                        }
+                        Box(Modifier.size(width = 42.dp, height = 52.dp).border(1.dp, edge, Smooth(12.dp)), contentAlignment = Alignment.Center) {
+                            Text(value.getOrNull(i)?.toString() ?: "", fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = if (enabled) C.ink else C.muted)
+                        }
+                    }
+                }
             }
         },
     )

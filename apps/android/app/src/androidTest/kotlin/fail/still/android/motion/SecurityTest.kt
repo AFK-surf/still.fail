@@ -146,7 +146,7 @@ class SecurityTest {
     /** A new device asking in two workspaces of the person's, `日常` not the one open, shown this one's code. */
     private fun prompts(): LockPromptsView {
         val r = on().requests.first()
-        val p = LockPairing(device = r.device, email = r.email, name = r.name, kind = r.kind, label = r.label, code = r.code, created_at = r.created_at, time = r.time,
+        val p = LockPairing(device = r.device, email = r.email, name = r.name, kind = r.kind, label = r.label, code = "482913", created_at = r.created_at, time = r.time,
             workspaces = listOf(LockPromptWorkspace(id = ws, name = "Dev"), LockPromptWorkspace(id = "w2", name = "日常")))
         return LockPromptsView(pairing = listOf(p))
     }
@@ -157,7 +157,7 @@ class SecurityTest {
         h.fake.put(Topics.lockPrompts, prompts())
         h.launch(listOf(Screen.Home))
         rule.onNodeWithText("李二的新设备请求批准").assertIsDisplayed()
-        rule.onNodeWithText("K7F-2QX").assertIsDisplayed()
+        rule.onNodeWithText("482 913").assertIsDisplayed()
         rule.onNodeWithText("日常").assertIsDisplayed()
         rule.onNodeWithText("一致", substring = true).assertDoesNotExist()
         picture(h, "security-prompt")
@@ -204,19 +204,17 @@ class SecurityTest {
         h.fake.put(Topics.lock(ws), waiting(LockPair(state = "code", devices = 1u)))
         h.launch(listOf(Screen.Home))
         rule.onNodeWithText("输入你的受信任设备上显示的安全码").assertIsDisplayed()
-        // No code yet: the button does nothing.
-        rule.onNodeWithText("验证").performClick()
-        h.settle()
-        rule.runOnIdle { assertTrue(h.fake.calls.none { it.first == "lock.pairCode" }) }
-        rule.onNode(hasSetTextAction()).performTextInput("K7F2QX")
+        // Five digits: nothing goes yet; the sixth hands it on by itself.
+        rule.onNode(hasSetTextAction()).performTextInput("48291")
         h.settle()
         picture(h, "security-waiting-code")
-        rule.onNodeWithText("验证").performClick()
+        rule.runOnIdle { assertTrue(h.fake.calls.none { it.first == "lock.pairCode" }) }
+        rule.onNode(hasSetTextAction()).performTextInput("3")
         h.settle()
         rule.runOnIdle {
             val call = h.fake.calls.first { it.first == "lock.pairCode" }.second
             assertEquals(ws, call["workspace"]!!.jsonPrimitive.content)
-            assertEquals("K7F2QX", call["code"]!!.jsonPrimitive.content)
+            assertEquals("482913", call["code"]!!.jsonPrimitive.content)
         }
     }
 

@@ -248,7 +248,7 @@ async function main() {
   await phone.call("lock.pair", { workspace: ws });
   const reached = await until(async () => ((await phone.call("lock.state", { workspace: ws })).me.pair?.state === "code" ? true : null), "the owner's device shows a code", 60).catch(() => false);
   const shown = (await owner.call("lockPrompt.state", {})).pairing[0];
-  const wrong = await phone.call("lock.pairCode", { workspace: ws, code: shown?.code === "222-222" ? "333-333" : "222-222" }).then(() => "approved", (e) => `refused: ${e.message}`);
+  const wrong = await phone.call("lock.pairCode", { workspace: ws, code: shown?.code === "222222" ? "333333" : "222222" }).then(() => "approved", (e) => `refused: ${e.message}`);
   const left = (await phone.call("lock.state", { workspace: ws })).me.pair?.left;
   await phone.call("lock.pairCode", { workspace: ws, code: shown?.code ?? "" }).catch((e) => console.log("  pairCode:", e.message));
   const gone = (await owner.call("lockPrompt.state", {})).pairing.length === 0;

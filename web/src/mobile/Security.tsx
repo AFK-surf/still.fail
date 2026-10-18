@@ -7,11 +7,11 @@ import { useDoing } from "../doing.ts";
 import { stamp } from "../api.ts";
 import { ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { t } from "../i18n.ts";
-import { deviceName, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockRequest, type LockView } from "../cloud/Security.tsx";
+import { CodeEntry, deviceName, spacedCode, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockRequest, type LockView } from "../cloud/Security.tsx";
 import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
 import { useApp } from "./app.tsx";
-import { Button, Field, LargeTitle, ListCard, ListRow, PickRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Button, LargeTitle, ListCard, ListRow, PickRow, SectionHeader, TopBack } from "./parts.tsx";
 import { Spinner, Waiting } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -198,7 +198,7 @@ function PairSheet({ r }: { r: LockPairing }) {
         <span className={partsCss.mSubtle}>{t("web-pages.security.promptFor")}</span>
         {r.workspaces.map((w) => <span key={w.id} className={css.mPlace}>{marked(w) && <WorkspaceMark w={w} size={16} />}{w.name}</span>)}
       </div>
-      <div className={css.mBigCode}>{r.code}</div>
+      <div className={css.mBigCode}>{spacedCode(r.code)}</div>
       <span className={css.mNote}>{t("web-pages.security.pairNote")}</span>
       <div className={`${css.mPair} ${css.mStack}`}>
         <Button primary={false} label={t("web-pages.security.pairDeny")} onClick={() => { app.sheet(null); void call("lockPrompt.deny", { device: r.device }); }} />
@@ -285,7 +285,8 @@ export function SecurityWaitingScreen({ lock }: { lock: LockView }) {
   const [code, setCode] = useState("");
   const pair = lock.me?.pair ?? null;
   const typing = pair !== null && (pair.state === "code" || pair.state === "wrong" || pair.state === "checking");
-  const prove = () => void call("lock.pairCode", { workspace: ws, code }).catch(() => setCode(""));
+  // Typed wrong: the boxes empty again for the next try, the page says how many are left.
+  const prove = (typed: string) => void call("lock.pairCode", { workspace: ws, code: typed }).catch(() => setCode(""));
   return (
     <div className={css.mWaiting}>
       <ShieldCheck size={44} strokeWidth={1.4} />
@@ -293,9 +294,9 @@ export function SecurityWaitingScreen({ lock }: { lock: LockView }) {
       <span className={partsCss.mSubtle}>{t("web-pages.security.waitingLead", { name: app.entry.name })}</span>
       {typing ? <>
         <span className={css.mNote}>{t("web-pages.security.pairEnter")}</span>
-        <div className={css.mCodeField}><Field value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder="XXX-XXX" mono /></div>
-        {pair.state === "wrong" && <span className={css.mFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</span>}
-        <Button primary busy={checking || pair.state === "checking"} enabled={code.replace(/[^0-9A-Z]/gi, "").length === 6} label={t("web-pages.security.check")} onClick={prove} />
+        <CodeEntry value={code} onChange={setCode} onDone={prove} wrong={pair.state === "wrong" && code === ""} disabled={checking || pair.state === "checking"} label={t("web-pages.security.pairEnter")} />
+        {checking || pair.state === "checking" ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairChecking")}</span>
+          : pair.state === "wrong" && <span className={css.mFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</span>}
       </> : pair?.state === "finding" || asking ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairFinding")}</span>
         : <>
           <span className={pair?.state === "failed" || lock.me?.failed ? css.mFailed : css.mNote}>

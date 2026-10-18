@@ -28,7 +28,7 @@ const withLock = {
 };
 // Asking into two workspaces of the person's: 日常 is not the one open.
 const request = {
-  device: 'cc'.repeat(32), email: 'lier@example.com', name: '李二', kind: 'app', label: 'still.fail 安卓版 · Pixel 8', code: 'K7F-2QX', created_at: Math.floor(Date.now() / 1000) - 60,
+  device: 'cc'.repeat(32), email: 'lier@example.com', name: '李二', kind: 'app', label: 'still.fail 安卓版 · Pixel 8', code: '482913', created_at: Math.floor(Date.now() / 1000) - 60,
   workspaces: [{ id: 'w1', name: '3720' }, { id: 'w2', name: '日常', emoji: '☀️' }],
 };
 const lock = (pairing) => ({ pairing });
@@ -70,7 +70,7 @@ createRoot(root).render(<DemoApp phone={location.search.includes('phone')} />);
       throw e;
     });
     await page.waitForTimeout(600);
-    assert.ok(await page.getByText('K7F-2QX', { exact: true }).isVisible(), 'it shows the code to type there');
+    assert.ok(await page.getByText('482 913', { exact: true }).isVisible(), 'it shows the code to type there');
     // Its mark (an emoji) beside its name.
     for (const name of ['3720', '☀️日常']) assert.ok(await page.getByText(name, { exact: true }).isVisible(), `it names ${name}`);
     assert.equal(await page.getByRole('button', { name: /批准/ }).count(), 0, 'nothing here approves it');

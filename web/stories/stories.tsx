@@ -633,6 +633,7 @@ export const stories: Story[] = [
   { id: "security-waiting", group: "设置", title: "安全 · 等待批准此设备", app: true, demo: lockDemo("waiting") },
   { id: "security-waiting-finding", group: "设置", title: "安全 · 正在联系受信任设备", app: true, demo: lockDemo("finding") },
   { id: "security-waiting-code", group: "设置", title: "安全 · 输入受信任设备上的安全码", app: true, demo: lockDemo("code") },
+  { id: "security-waiting-code-typed", group: "设置", title: "安全 · 安全码输入到一半", app: true, demo: lockDemo("code"), steps: [{ click: '[aria-label="输入你的受信任设备上显示的安全码"]' }, { key: "4" }, { key: "8" }, { key: "2" }, { key: "9" }] },
   { id: "security-waiting-wrong", group: "设置", title: "安全 · 安全码不对", app: true, demo: lockDemo("wrong") },
   { id: "security-waiting-none", group: "设置", title: "安全 · 未找到在线的受信任设备", app: true, demo: lockDemo("none") },
   { id: "security-waiting-failed", group: "设置", title: "安全 · 批准请求未能提交", app: true, demo: lockDemo("failed") },
@@ -640,6 +641,7 @@ export const stories: Story[] = [
   { id: "security-prompt-two-workspaces", group: "设置", title: "安全 · 新设备请求批准（显示安全码）", app: true, demo: lockDemo("prompt") },
   { id: "phone-security-prompt-two-workspaces", group: "设置", title: "手机 · 安全 · 新设备请求批准（显示安全码）", app: true, phone: true, demo: lockDemo("prompt") },
   { id: "phone-security-waiting-code", group: "设置", title: "手机 · 安全 · 输入受信任设备上的安全码", app: true, phone: true, demo: lockDemo("code") },
+  { id: "phone-security-waiting-code-typed", group: "设置", title: "手机 · 安全 · 安全码输入到一半", app: true, phone: true, demo: lockDemo("code"), steps: [{ click: '[aria-label="输入你的受信任设备上显示的安全码"]' }, { key: "4" }, { key: "8" }, { key: "2" }, { key: "9" }] },
   { id: "phone-security-waiting-wrong", group: "设置", title: "手机 · 安全 · 安全码不对", app: true, phone: true, demo: lockDemo("wrong") },
   { id: "phone-settings-security-no-stations", group: "设置", title: "手机 · 安全 · 暂无 station", app: true, phone: true, demo: lockDemo("noStations"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "安全" }] },
 

@@ -43,7 +43,7 @@ function prompts(story: LockStory): LockPromptsView {
   if (story !== "prompt") return { pairing: [] };
   return {
     pairing: [{
-      device: "d_phone", email: "li@acme.dev", name: "李二", kind: "app", label: "still.fail 安卓版 · Pixel 8", code: "K7F-2QX",
+      device: "d_phone", email: "li@acme.dev", name: "李二", kind: "app", label: "still.fail 安卓版 · Pixel 8", code: "482913",
       created_at: 1_760_000_000, workspaces: [{ id: "w_acme", name: "Acme" }, { id: "w_daily", name: "日常", emoji: "☀️" }],
     }],
   };

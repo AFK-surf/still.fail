@@ -1,7 +1,7 @@
 // The workspace's security mode (its lock, docs/workspace-lock.md) in the settings: whether it is on, turning it on,
 // the devices waiting to be confirmed, and what a device waiting itself shows. All of it is the core's (`lock`,
 // `lockDraft` topics, `lock.*` calls, client/core-ts/src/views/lock.ts): this only draws.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Close, Devices, Key, Monitor, Server, ShieldCheck, Web } from "@stillfail/ui/icons.tsx";
 import { useCall, useTopic } from "../core/react.ts";
@@ -243,10 +243,39 @@ export function SecurityPrompt() {
       footer={r && <Button variant="ghost" onClick={deny}>{t("web-pages.security.pairDeny")}</Button>}>
       {r && <>
         <PromptPlaces r={r} />
-        <div className={css.bigCode}>{r.code}</div>
+        <div className={css.bigCode}>{spacedCode(r.code)}</div>
         <p className={css.note} style={{ textAlign: "center" }}>{t("web-pages.security.pairNote")}</p>
       </>}
     </Dialog>
+  );
+}
+
+/** A face-to-face code as shown: its six digits three and three. */
+export const spacedCode = (code: string) => (code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code);
+
+/** Six digits typed into six boxes (three and three): the one to type next marked, a code pasted whole taken, the last
+ * one typed handing it on (`onDone`) at once. The phone's keypad comes up for it. One field under the boxes takes the
+ * typing, so pasting, deleting and the system's own code fill all work as in any field. */
+export function CodeEntry({ value, onChange, onDone, wrong = false, disabled = false, label }: {
+  value: string; onChange(v: string): void; onDone(v: string): void; wrong?: boolean; disabled?: boolean; label: string;
+}) {
+  const field = useRef<HTMLInputElement>(null);
+  const [focused, setFocused] = useState(false);
+  const digits = value.replace(/[^0-9]/g, "").slice(0, 6);
+  const box = (i: number) => (
+    <span key={i} className={css.codeBox} data-next={(focused && !disabled && i === Math.min(digits.length, 5)) || undefined} data-filled={i < digits.length || undefined}>{digits[i] ?? ""}</span>
+  );
+  return (
+    <div className={css.codeBoxes} data-wrong={wrong || undefined} data-disabled={disabled || undefined} onClick={() => field.current?.focus()}>
+      <input ref={field} className={css.codeField} value={digits} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6} autoFocus disabled={disabled}
+        aria-label={label} spellCheck={false} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        onChange={(e) => {
+          const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 6);
+          onChange(next);
+          if (next.length === 6) onDone(next);
+        }} />
+      {[0, 1, 2].map(box)}<span className={css.codeGap} />{[3, 4, 5].map(box)}
+    </div>
   );
 }
 
@@ -345,7 +374,8 @@ export function SecurityWaiting({ entry, lock }: { entry: WorkspaceEntry; lock: 
   const [code, setCode] = useState("");
   const pair = lock.me?.pair ?? null;
   const ask = () => act(call("lock.pair", { workspace: entry.id }), t("web-pages.security.request"));
-  const prove = () => { if (code.trim()) void call("lock.pairCode", { workspace: entry.id, code }).catch(() => setCode("")); };
+  // Typed wrong: the boxes empty again for the next try, the page says how many are left.
+  const prove = (typed: string) => void call("lock.pairCode", { workspace: entry.id, code: typed }).catch(() => setCode(""));
   const typing = pair !== null && (pair.state === "code" || pair.state === "wrong" || pair.state === "checking");
   return (
     <div className={css.waiting}>
@@ -354,11 +384,9 @@ export function SecurityWaiting({ entry, lock }: { entry: WorkspaceEntry; lock: 
       <p className={css.waitingLead}>{t("web-pages.security.waitingLead", { name: entry.name })}</p>
       {typing ? <>
         <div className={css.waitingNote}>{t("web-pages.security.pairEnter")}</div>
-        <input className={`${controlsCss.input} ${css.codeInput}`} value={code} autoFocus autoComplete="one-time-code" spellCheck={false} maxLength={7} placeholder="XXX-XXX"
-          aria-label={t("web-pages.security.pairEnter")} onChange={(e) => setCode(e.target.value.toUpperCase())}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) prove(); }} />
-        {pair.state === "wrong" && <div className={css.waitingFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</div>}
-        <Button variant="primary" busy={checking || pair.state === "checking"} disabled={code.replace(/[^0-9A-Z]/gi, "").length !== 6} onClick={prove}>{t("web-pages.security.check")}</Button>
+        <CodeEntry value={code} onChange={setCode} onDone={prove} wrong={pair.state === "wrong" && code === ""} disabled={checking || pair.state === "checking"} label={t("web-pages.security.pairEnter")} />
+        {checking || pair.state === "checking" ? <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.pairChecking")}</div>
+          : pair.state === "wrong" && <div className={css.waitingFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</div>}
       </> : pair?.state === "finding" || asking ? <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.pairFinding")}</div>
         : <>
           <div className={pair?.state === "failed" || lock.me?.failed ? css.waitingFailed : css.waitingNote}>

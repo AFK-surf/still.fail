@@ -21,8 +21,10 @@ const random = (b: Uint8Array) => {
 
 test("the exchange: the same code and the same two ends make the same key; another code, or another end, does not", () => {
   const code = pairCode(random);
-  assert.equal(typedCode(code.toLowerCase().replace("-", " ")), code);
+  assert.match(code, /^[0-9]{6}$/);
+  assert.equal(typedCode(`${code.slice(0, 3)} ${code.slice(3)}`), code);
   assert.equal(typedCode("12345"), null);
+  assert.equal(typedCode("12a456"), null);
   const session = pairSession("aa", "bb", ["ws"]);
   const n = pakeStart(code, session, random), tr = pakeStart(code, session, random);
   const kn = pakeKeys(n, tr.share, "new")!, kt = pakeKeys(tr, n.share, "trusted")!;
@@ -98,7 +100,7 @@ test("typed wrong: tries left said, the right one still signs it in; PAIR_TRIES 
   const m = await met();
   await m.hello();
   const code = (await m.prompts()).pairing[0].code;
-  const wrong = code === "222-222" ? "333-333" : "222-222";
+  const wrong = code === "222222" ? "333333" : "222222";
   assert.deepEqual(await m.prove(wrong), { ok: { left: PAIR_TRIES - 1 } });
   const done = await m.prove(code);
   assert.ok("ok" in done && "approved" in done.ok);
@@ -106,7 +108,7 @@ test("typed wrong: tries left said, the right one still signs it in; PAIR_TRIES 
   const n = await met();
   await n.hello();
   const theirs = (await n.prompts()).pairing[0].code;
-  const bad = theirs === "222-222" ? "333-333" : "222-222";
+  const bad = theirs === "222222" ? "333333" : "222222";
   for (let i = 1; i < PAIR_TRIES; i++) assert.deepEqual(await n.prove(bad), { ok: { left: PAIR_TRIES - i } });
   assert.ok("err" in (await n.prove(bad)), "out of tries");
   assert.deepEqual(n.cloud.posted, []);
