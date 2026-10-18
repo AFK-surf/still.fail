@@ -68,7 +68,7 @@ export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: React
 }
 
 /** A station in the sidebar: its mark and name, how it is at the end of that line (its agents at work, when it was last
- * seen while away); what the machine is under them; then, while it is up, what is left of its CPU, memory and disk in
+ * seen while away); where it is from, if another workspace lent it; then, while it is up, what is left of its CPU, memory and disk in
  * small boxes (as in a chat's bar: their edge in their level's colour), and how this device reaches it, a newer version
  * there said too. Nothing in colour but what is off. */
 function StationRow({ s, to }: { s: StationView; to: string }) {
@@ -79,7 +79,8 @@ function StationRow({ s, to }: { s: StationView; to: string }) {
     <NavItem to={to} title={s.name}
       mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={16} />}
       end={<><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</>}>
-      <NavLine><span className={navFill}>{/* Where it is from first: the machine's line is long, and the narrow row cuts it short at its end. */}{[joinedText(s), s.host?.identity ?? (s.online ? t("common.connecting") : t("web-pages.stations.offline"))].filter(Boolean).join(" · ")}</span></NavLine>
+      {/* Where it is from, for one another workspace lent (what the machine is, its page says). */}
+      {joinedText(s) && <NavLine><span className={navFill}>{joinedText(s)}</span></NavLine>}
       {meters.length > 0 && (
         <span className={css.rowMeters}>
           {meters.map((m) => <MeterChip key={m.label} meter={m} brief bare />)}
