@@ -59,6 +59,7 @@ export const PARAMS: Record<string, string> = {
   "tools.access": "",
   "tools.setAccess": "access:string",
   "agentEnv.set": "env?:json text?:string",
+  "search.setPersonal": "personal:boolean",
   "session.warm": "key:string",
   "session.evict": "key:string",
   "session.delete": "key:string",
@@ -259,6 +260,10 @@ function stationOp(name: string, params: unknown): Request | null {
     // owners and admins: `text`, all of them as `NAME=value` lines; or `env`, a patch (a string sets one, null removes it).
     case "agentEnv.set":
       return op("PUT", () => "/agent-env", p.pick(["env", "text"]), OVERVIEW);
+    // Whether the station's search finds its machine's person's own mail, messages and the like too (docs/search.md);
+    // set by the workspace's owners and admins.
+    case "search.setPersonal":
+      return op("PUT", () => "/search/settings", p.pick(["personal"]), OVERVIEW);
     case "session.stop":
       return op("POST", () => `/sessions/${p.at("key")}/stop`, null, process("key"));
     case "session.warm":

@@ -137,6 +137,9 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // The variables everything it starts for its agents runs with (ops/agent-env.ts): a proxy, mostly.
     agentEnv: agentEnvView(raw),
     drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map((p) => (d.rootView ?? rootView)(p)), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
+    // What its search finds of the machine (docs/search.md): its files through Spotlight (macOS) or walked as asked, and
+    // whether the person's own mail, messages and the like too.
+    search: { files: platform.hasSpotlight ? "spotlight" : "walk", personal: raw?.search?.personal === true },
     // macOS's grants to still.fail Helper (a Mac's station only; a station from before them says none: not shown).
     ...withPermissions(d, viewer),
   };

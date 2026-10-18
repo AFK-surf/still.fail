@@ -15,12 +15,29 @@ each station looks through its data as it is when asked.
 | job | services and tasks: name, command, folder, port | its station |
 | station | the workspace's stations by name | the device |
 | member | the workspace's members by name and email | the device |
+| file | the machine's files: names, and what text files say | its station: Spotlight on macOS, looked through as asked elsewhere |
 | history | an execution history's steps: what the agent said and thought, the calls it made and what they gave. Agents only | its station |
 | skill, memory | the skills (their files too) and MEMORY.md of the workspace on the station. Agents only | its station |
 | profile | the station's profiles: name, runtime, model, account kind. Agents only | its station |
 
-Later: the files on the station's machine (macOS through Spotlight, Documents/Desktop/Downloads through still.fail
-Helper; elsewhere looked through as asked), the cloud's own (feedback), Slack channels' history.
+Later: Documents, Desktop and Downloads on macOS through still.fail Helper, the cloud's own (feedback), Slack
+channels' history.
+
+## The machine's files (station/src/search/files.ts)
+
+- macOS: Spotlight asked as a search comes (`mdfind`, at most 3 s): names under the home, what files there say, and the
+  apps by name, for a member who may write; a read-only member's only in the folders their workspace pinned. What
+  tools make and keep (node_modules, .git, virtual environments, build caches, the home's Library) is passed over;
+  names that have the first word first, an app before a file, then the nearer the home's top, the latest. Documents,
+  Desktop and Downloads are kept from the station by macOS: not found yet.
+- Elsewhere: the home (or the folders pinned) walked as a search comes, a folder at a time, nearest the top first, for
+  at most 3 s: names of all, the words of text files up to 256 KB; the same folders passed over. What was not reached
+  in time is said (`left`).
+- Never the station's own (ops/own.ts). The person's own mail, messages, calendars, contacts, notes and photos only
+  where the station's owners and admins say so: `PUT /search/settings {personal}` (config.json `search.personal`,
+  the overview's `search`), a switch on the station's page.
+- A file opens in the drive: a folder entered, a text read, a video or song played, anything else in its folder
+  (web/src/searchOpen.ts, Android screens/Search.kt `fileScreen`).
 
 ## Station (station/src/search/)
 

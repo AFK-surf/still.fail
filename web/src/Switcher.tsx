@@ -12,10 +12,11 @@ import { jumpTo } from "./jumpTo.ts";
 import { Mark, useAppUpdate } from "./brand.tsx";
 import { commands, useCommands, type Command } from "./commands.ts";
 import { webUpdates } from "./core/webUpdates.ts";
-import { Archive, ArrowLeft, Command as CommandIcon, Compose, Download, File, More, PanelOpen, Refresh, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowLeft, Command as CommandIcon, Compose, Download, File, Folder, More, PanelOpen, Refresh, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
 import { ACTIONS, availableActions, labelOf, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { stationBase } from "./station.tsx";
+import { fileOpen } from "./searchOpen.ts";
 import { ModelLogo, Time } from "./ui.tsx";
 import { StationMark } from "./StationMark.tsx";
 import * as markCss from "./StationMark.css.ts";
@@ -305,11 +306,11 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
   );
 }
 
-const KIND_ICON: Record<string, ComponentType<IconProps>> = { file: File, job: Web, station: Server, member: User };
+const KIND_ICON: Record<string, ComponentType<IconProps>> = { folder: Folder, file: File, job: Web, station: Server, member: User };
 
 /** Something found besides a chat or a message: what it is, where (its station, when), and its line that has the words. */
 function ItemRow({ item, ...rest }: { item: SearchItem } & Record<string, unknown>) {
-  const Icon = KIND_ICON[item.kind] ?? CommandIcon;
+  const Icon = KIND_ICON[item.kind === "file" && item.dir ? "folder" : item.kind] ?? CommandIcon;
   return (
     <div className={`${css.row} ${css.said}`} {...rest}>
       <span className={`${css.picture} ${css.actionMark}`} aria-hidden="true">
@@ -341,10 +342,13 @@ export function openOf(item: SearchItem, settings: string): string | null {
       return `${settings}/stations/${id}`;
     case "member":
       return `${settings}/workspace`;
+    case "file":
+      return item.path ? fileOpen(stationBase(item.station), item) : null;
     default:
       return chat;
   }
 }
+
 
 function ChatPicture({ item }: { item: ChatItem }) {
   return (

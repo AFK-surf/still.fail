@@ -3,6 +3,8 @@
 // stations, the members); what each station holds it says itself (its `stationSearch`: its chats archived or not, every
 // message, its services and tasks, its files), each as it answers, the rest shown meanwhile. The messages found here and
 // there are one list, each once. The execution histories, skills and memory, profiles are the agents' to search.
+import * as format from "../format.ts";
+import { kindOf } from "../drive.ts";
 import { t } from "../i18n.ts";
 import { waitNote } from "../looks.ts";
 import * as present from "../present.ts";
@@ -157,7 +159,15 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
           kind: k, key: `${s.address}\u0001${String(hit.key)}`, ...mark,
           title: str(hit.title) ?? "", ...refs.excerpt(String(hit.text ?? ""), words),
         };
-        for (const f of ["chat", "chatTitle", "job", "path"] as const) if (typeof hit[f] === "string" && hit[f] !== "") item[f] = hit[f];
+        for (const f of ["chat", "chatTitle", "job", "path", "root", "rel"] as const) if (typeof hit[f] === "string" && hit[f] !== "") item[f] = hit[f];
+        if (k === "file") {
+          item.dir = hit.dir === true;
+          item.fileKind = hit.dir === true ? "folder" : kindOf(String(hit.title ?? ""));
+          if (num(hit.size) !== null && hit.dir !== true) {
+            item.size = hit.size;
+            item.sizeText = format.bytes(hit.size);
+          }
+        }
         for (const f of ["thread", "seq", "port"] as const) if (num(hit[f]) !== null) item[f] = hit[f];
         if (hit.archived === true) item.archived = true;
         if (num(hit.at) !== null) item.createdAt = hit.at;

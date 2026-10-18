@@ -24,6 +24,7 @@ import type { EnvVar } from "../core/shapes.ts";
 import { AgentEnvText, useAgentEnvForm } from "../AgentEnvText.tsx";
 import { ScreensSection } from "../screen/ScreenList.tsx";
 import { PermissionsSection } from "../StationPermissions.tsx";
+import { SearchSection } from "../StationSearch.tsx";
 import { LoginsSection } from "../MachineLogins.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
@@ -265,6 +266,8 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
       )}
       {/* The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them. */}
       {o?.agentEnv && <AgentEnv station={s.station} env={o.agentEnv} manager={manager} />}
+      {/* What its search finds of the machine (docs/search.md): the person's own data only where its managers say. */}
+      {s.online && o?.search && <SearchSection station={s.station} search={o.search} manager={manager} />}
       {manager && <Workspaces s={s} />}
       {/* Its updates are its home workspace's managers' to make (docs/multi-workspace.md). */}
       <Section title={t("web-pages.stations.software")}>

@@ -3498,6 +3498,15 @@ data class SoftwareVersion (
 	val checkedAt: Long? = null
 )
 
+/// What a station's search finds of its machine (`Overview.search`).
+@Serializable
+data class StationSearch (
+	/// spotlight (macOS: Spotlight finds the machine's files) | walk (its folders walked as a search comes)
+	val files: String,
+	/// The machine's person's own mail, messages, calendars, contacts, notes and photos are found too.
+	val personal: Boolean
+)
+
 /// One of a station's grants.
 @Serializable
 data class StationGrant (
@@ -3562,6 +3571,8 @@ data class Overview (
 	/// Its files: the folders pinned, and whether the viewer browses every folder (none from a station older
 	/// than the drive, which then is not offered).
 	val drive: DriveRoots? = null,
+	/// What its search finds of the machine (docs/search.md). None from a station older than it.
+	val search: StationSearch? = null,
 	/// What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then
 	/// shows nothing).
 	val permissions: StationPermissions? = null
@@ -4179,8 +4190,17 @@ data class SearchItem (
 	/// A service or task: its id; `port` a service's.
 	val job: String? = null,
 	val port: UInt? = null,
-	/// A file: where it is on its station.
+	/// A file: where it is on its station (absolute).
 	val path: String? = null,
+	/// A file found in a folder pinned (a read-only member's): that folder, `rel` the file under it.
+	val root: String? = null,
+	val rel: String? = null,
+	/// A file that is a folder.
+	val dir: Boolean? = null,
+	/// What opens a file, as a drive's entry says (`DriveEntry.kind`: folder, video, text…).
+	val fileKind: String? = null,
+	val size: Double? = null,
+	val sizeText: String? = null,
 	/// A member: their email (their place is the workspace's settings).
 	val email: String? = null,
 	val archived: Boolean? = null,
