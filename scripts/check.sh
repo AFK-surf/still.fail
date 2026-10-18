@@ -296,6 +296,13 @@ if part ts; then
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
   # What makes the views writes only on what it made, never on what it was given (docs/core-ts.md「谁能改什么」).
   if touches '^client/core-ts/(src|scripts)/'; then prep core deps client/core-ts; step "core writes on its own" after core node client/core-ts/scripts/writes.ts --check; fi
+  # The media app's service and its module of the core (media/, docs/media-service.md, docs/core-modules.md).
+  if touches '^media/'; then
+    prep root deps .
+    prep core deps client/core-ts
+    prep media-core deps media/core
+    step "typecheck: media" after root after core after media-core sh -c 'pnpm exec tsgo -p media/service/tsconfig.json && cd media/core && ../../node_modules/.bin/tsgo -p tsconfig.json'
+  fi
 
 fi
 
@@ -340,6 +347,15 @@ if [ $full = 1 ]; then
     # The station's time is its Clock's (docs/station-ts.md, 写法): the machine's only through ops/fibers.ts' wall.
     step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts"'
     remembered "tests: station" "station client/i18n vendor scripts/native.ts" after station sh -c 'cd station && pnpm test'
+  fi
+  # The media app's (media/): its service's tests, its core module's, and the two end to end beside the station's module
+  # layer (media/test): whenever it, the core or the station changed.
+  if part station && touches '^media/|^client/core-ts/src/|^station/src/|^scripts/native\.ts$'; then
+    prep station deps station
+    prep core deps client/core-ts
+    prep media-core deps media/core
+    prep media-test deps media/test
+    remembered "tests: media" "media client/core-ts station/src scripts/native.ts" after station after core after media-core after media-test sh -c 'cd media/service && node --test --test-timeout=120000 test/*.test.ts && cd ../core && pnpm test && cd ../test && pnpm test'
   fi
   # The native parts' own tests, where their Rust changed (the mesh addon's: the vendored crates it patches in, too).
   for crate in launcher runner mesh; do
