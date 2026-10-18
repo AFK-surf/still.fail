@@ -110,7 +110,13 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
         const row = thread === null ? undefined : rows.get(`${s.address}\u0001${thread}`);
         if (k === "chat") {
           const id = str(row?.id) ?? str(hit.chat);
-          if (id === null || seenChats.has(`${s.address}\u0001${id}`)) continue;
+          if (id === null) continue;
+          if (seenChats.has(`${s.address}\u0001${id}`)) {
+            // The device's row of it, archived meanwhile (its station says so before the list does): said archived.
+            const at = hit.archived === true ? items.findIndex((i) => i.station === s.address && i.id === id) : -1;
+            if (at >= 0 && items[at].archived !== true) items[at] = { ...items[at], archived: true };
+            continue;
+          }
           seenChats.add(`${s.address}\u0001${id}`);
           items.push(row ?? chatRow(hit, s, str(hit.title) ?? ""));
           continue;
