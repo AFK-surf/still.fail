@@ -3,11 +3,11 @@
 // the endpoint and every connection and loop it started.
 import { Cause, Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Own, Previous, ScreenRegistry, Store, Up } from "../services.ts";
+import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Own, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { Agents } from "../sessions/agents.ts";
-import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
+import { PEER_ALPN, peerCall, servePeer } from "./peer.ts";
 import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
 import { followLock } from "./lock-sync.ts";
 import { Traces } from "./traces.ts";
@@ -31,6 +31,8 @@ export const MeshLive = Layer.effectDiscard(
     const agents = yield* Agents;
     const own = yield* Own;
     const previous = yield* Previous;
+    const peers = yield* Peers;
+    const config = yield* StationConfig;
     const shares = yield* AdbShares;
     const screens = yield* ScreenRegistry;
     const run = Effect.gen(function* () {
@@ -62,7 +64,7 @@ export const MeshLive = Layer.effectDiscard(
       // The workspace's other stations: asked through this endpoint, their tasks stopped once they are not in it.
       // And the stations of other workspaces chats are shared with or from (xshare/index.ts).
       const call = peerCall(endpoint, cloud.state, undefined, agents.xshare);
-      agents.remote.attach(call);
+      peers.attach(call);
       // The agents' door's way to the other stations' web services (peer-http.ts).
       yield* Effect.acquireRelease(
         Effect.sync(() => {
@@ -80,14 +82,10 @@ export const MeshLive = Layer.effectDiscard(
         Effect.sync(() => followLock(cloud.state, call)),
         (stop) => Effect.sync(stop),
       );
-      yield* Effect.acquireRelease(
-        Effect.sync(() => followRoster(cloud.state, agents.remote, agents.config)),
-        (stop) => Effect.sync(stop),
-      );
       const connections = yield* FiberSet.make();
       // The mesh's spans, when the config turns traces on (read at start, as the Rust does).
       const traces = yield* Effect.acquireRelease(
-        Effect.sync(() => new Traces(agents.config.raw()?.telemetry?.traces === true)),
+        Effect.sync(() => new Traces(config.raw()?.telemetry?.traces === true)),
         (traces) => Effect.promise(() => traces.close()),
       );
       if (traces.enabled) traces.exportTo((spans) => Effect.runPromise(plane.traces(spans)));
@@ -110,7 +108,7 @@ export const MeshLive = Layer.effectDiscard(
         ),
         (tools) => Effect.sync(() => tools.close()),
       );
-      const gateways = { cloud: cloud.state, tools: device, access: () => accessOf(agents.config.raw()), enabled: () => plane.spec().tools };
+      const gateways = { cloud: cloud.state, tools: device, access: () => accessOf(config.raw()), enabled: () => plane.spec().tools };
       // The same tools for requests Comma pushes on the presence socket.
       cloud.state.toolCalls = presenceTools(gateways);
       yield* Effect.addFinalizer(() => Effect.sync(() => (cloud.state.toolCalls = null)));
@@ -125,7 +123,7 @@ export const MeshLive = Layer.effectDiscard(
         yield* FiberSet.run(
           connections,
           Effect.tryPromise(() =>
-            conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, agents.remote)
+            conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
             : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => agents.forwards?.forwarded(port) === true })
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
             : conn.alpn().equals(GUEST_ALPN) ? guests.serve(conn)

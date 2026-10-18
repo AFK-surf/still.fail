@@ -28,7 +28,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, Modules, Own, Paths, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, Modules, Own, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
 import { ModulesLive } from "./modules/live.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
@@ -143,6 +143,8 @@ function run() {
     Layer.provideMerge(Own.layer),
     Layer.provideMerge(StationConfig.layer),
     Layer.provideMerge(Previous.layer),
+    // The requests between the stations of the workspace (mesh/bus.ts): the mesh attaches them, the parts answer.
+    Layer.provideMerge(Peers.layer),
     Layer.provideMerge(parts),
   );
   const main = Effect.gen(function* () {

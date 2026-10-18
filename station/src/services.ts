@@ -30,6 +30,8 @@ import { HelperFiles } from "./helper/files.ts";
 import { ConfigFile } from "./ops/config.ts";
 import { Own as OwnPaths } from "./ops/own.ts";
 import { previousGone } from "./ops/previous.ts";
+import { PeerBus } from "./mesh/bus.ts";
+import { wall } from "./ops/fibers.ts";
 
 /// Where the station keeps its data, and the release it runs from.
 export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string }>()("stillfail/Paths") {}
@@ -242,6 +244,12 @@ export class Previous extends Context.Service<Previous, { readonly gone: Promise
       return { gone: previousGone(join((yield* Paths).data, "run")) };
     }),
   );
+}
+
+/// The station's requests to and from the other stations of its workspace (mesh/bus.ts): the mesh attaches the
+/// transport, the parts say what they answer.
+export class Peers extends Context.Service<Peers, PeerBus>()("stillfail/Peers") {
+  static readonly layer = Layer.sync(Peers, () => new PeerBus({ sleep: (ms) => wall.sleep(ms) }));
 }
 
 /// The folders macOS protects (Documents, Desktop, Downloads, disks) through still.fail Helper (helper/files.ts): the

@@ -13,12 +13,12 @@ import { ClaudeDriver } from "../agents/claude.ts";
 import { CodexDriver } from "../agents/codex.ts";
 import { DshDriver } from "../agents/dsh.ts";
 import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
-import { Remote } from "../jobs/remote.ts";
+import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdbShares, AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, Modules, Own, Paths, Previous, Readers, ScreenRegistry, StationConfig, Store } from "../services.ts";
+import { AdbShares, AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, Modules, Own, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store } from "../services.ts";
 import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { permissionsView } from "../api/routes/permissions.ts";
 import { Gpus } from "../jobs/gpu.ts";
@@ -211,7 +211,12 @@ export const AgentsLive = (control: Control) =>
           return page ? `${page}?service=${encode(job)}` : null;
         },
       });
-      const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places });
+      const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places, bus: yield* Peers });
+      // Tasks of stations no longer in the workspace, or no longer allowed, stop: once the mesh is up, and as the roster
+      // or the config changes.
+      let roster: (() => void) | null = null;
+      remote.bus.whenAttached(() => void (roster = followRoster(cloud, remote, config)));
+      yield* Effect.addFinalizer(() => Effect.sync(() => roster?.()));
       hub.setJobs(jobs);
       // Ports of other stations forwarded here (mesh/peer-forward.ts), each its session's: through the mesh's way, once
       // it is up (`peers`, below).

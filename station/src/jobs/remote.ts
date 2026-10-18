@@ -21,24 +21,17 @@ import { platform } from "../platform/index.ts";
 import { isDeepStrictEqual } from "node:util";
 import { Clock, Duration, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
+import type { Cloud } from "../cloud/state.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
 import { detailed, summary } from "./load.ts";
+import { type Inbox, MESH_WAIT_MS, type PeerCall, PeerBus, Refused } from "../mesh/bus.ts";
 import { LINK, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
 
-/// The answer of a peer that refused a request (its `{"error": …}`): final, unlike a request that did not get through.
-export class Refused extends Error {}
+// The requests between stations are the platform's bus (mesh/bus.ts); its types, here as they always were.
+export { type Inbox, MESH_WAIT_MS, type PeerCall, Refused } from "../mesh/bus.ts";
 /// A request that did not get through (asked again later).
 class Unreached extends Error {}
-
-/// A request to another station of the workspace over the station transport: its result, a Refused when that station
-/// answered with an error, any other error when it could not be asked (or the answer did not come). `workspace` is the
-/// request's (null for `peers` and `describe`, which the transport answers or checks against its own). Station "" with
-/// method `peers` is the transport's roster: {workspace, stations, current}.
-export type PeerCall = (station: string, workspace: string | null, request: Json) => Promise<Json>;
-/// Takes a message a session of another station sent here (the hub's from_peer): from which station, the request.
-/// `workspace`: which of this station's workspaces the request was made in, when the transport knows it.
-export type Inbox = (peer: string, request: Json, workspace?: string) => Promise<Json>;
 /// Tells a session's agent something; a throw (or rejection) is "not told" (it is told again later).
 export type RemoteNotify = (session: string, text: string) => void | Promise<void>;
 
@@ -65,15 +58,13 @@ export type RemoteOptions = {
   clock?: Clock.Clock;
   /// How long a request made before the mesh is up waits for it (MESH_WAIT_MS; tests shorten it).
   meshWaitMs?: number;
+  /// The station's requests to and from the others (mesh/bus.ts); one of its own when none is given (tests).
+  bus?: PeerBus;
   /// How a task's `dir` is looked at (ops/places.ts): the station syncs it itself, so in a folder macOS protects it
   /// must reach it itself, looked at off its thread. Default: without still.fail Helper.
   places?: Places;
 };
 
-/// A request asked before the transport is attached (a chat taken up as the station starts, its subscription borrowed
-/// from another station) waits for it this long: the mesh is up within a second, or ~15 s when it waits for a relay
-/// (mesh/mesh.ts), before it is attached.
-export const MESH_WAIT_MS = 30_000;
 /// station_list asks every station of the workspace at once and lists one that has not answered within this as offline.
 export const LIST_WAIT_MS = 2000;
 /// A station asked how busy it is (`describe`'s `load`) says it does not know when measuring takes longer than this.
@@ -166,15 +157,9 @@ export class Remote {
   private data: string;
   private jobs: Jobs;
   private notify: RemoteNotify;
-  private call: PeerCall | null = null;
-  /// Settled once the transport is attached; requests made before wait on it (MESH_WAIT_MS).
-  private attached: Promise<void>;
-  private markAttached!: () => void;
-  private meshWaitMs: number;
+  /// The requests to and from the other stations: what this answers is said on it (`describe`, the tasks).
+  readonly bus: PeerBus;
   private places: Places;
-  private inbox: Inbox | null = null;
-  private shares: Inbox | null = null;
-  private xshare: { inside: Inbox; outside: Inbox } | null = null;
   /// How busy this station is, told to the others in `describe` (load.ts); none: `describe` says nothing of it.
   private load: (() => Promise<Json>) | null = null;
   /// Target-side requests, the sweep and withdrawals, one at a time.
@@ -189,20 +174,26 @@ export class Remote {
     this.store = options.store;
     this.jobs = options.jobs;
     this.notify = options.notify;
-    this.meshWaitMs = options.meshWaitMs ?? MESH_WAIT_MS;
     this.places = options.places ?? new Places();
-    this.attached = new Promise((resolve) => (this.markAttached = resolve));
     this.root = join(options.data, "remote");
     for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
+    this.bus = options.bus ?? new PeerBus({ waitMs: options.meshWaitMs ?? MESH_WAIT_MS, sleep: (ms) => this.run(Effect.sleep(Duration.millis(ms))).catch(() => undefined) });
+    // What this answers: how this station is and what it takes, and the tasks (whatever no other part answers).
+    this.bus.on("describe", () => this.describe());
+    this.bus.otherwise((peer, request, workspace) => this.serially(() => this.task(workspace ?? "", peer, text(request, "method"), request)));
+    this.bus.whenAttached(() => this.started());
   }
 
-  /// The transport is there: follow the tasks started from here and the sessions closing, sweep now and hourly.
+  /// The transport is there (the bus's, mesh/mesh.ts; a test's).
   attach(call: PeerCall): void {
-    this.call = call;
-    this.markAttached();
+    this.bus.attach(call);
+  }
+
+  /// Follows the tasks started from here and the sessions closing; sweeps now and hourly.
+  private started(): void {
     for (const name of this.list(join(this.root, "outgoing")).filter((n) => n.endsWith(".json"))) this.watch(join(this.root, "outgoing", name));
     for (const name of this.list(join(this.root, "used")).filter((n) => n.endsWith(".json"))) {
       const path = join(this.root, "used", name);
@@ -470,20 +461,21 @@ export class Remote {
   /// Where messages from other stations' sessions go (session.message): any station of the workspace may send them,
   /// trusted for tasks or not.
   setInbox(inbox: Inbox): void {
-    this.inbox = inbox;
+    this.bus.on(["session.message", "session.read", "session.file", "session.put", "session.create", "session.notice"], inbox);
   }
 
   /// Where requests about what stations share go (share.*, share/index.ts): any station of the workspace may ask;
   /// what each share allows is checked there.
   setShares(shares: Inbox): void {
-    this.shares = shares;
+    this.bus.on("share.", shares);
   }
 
   /// Where requests about chats shared across workspaces go (xshare.*, xshare/index.ts): `inside` those of this
   /// workspace's stations, `outside` every request of a station that is not of it (the transport lets those through
   /// only while there is one).
   setOutside(handlers: { inside: Inbox; outside: Inbox }): void {
-    this.xshare = handlers;
+    this.bus.on("xshare.", handlers.inside);
+    this.bus.outside(handlers.outside);
   }
 
   /// How this station's load is measured (load.ts `measure`), for `describe`.
@@ -543,50 +535,22 @@ export class Remote {
 
   /// Whether stations of other workspaces are heard at all.
   hearsOutside(): boolean {
-    return this.xshare !== null;
+    return this.bus.hearsOutside();
   }
 
   /// A request of a station that is not of this workspace (the transport checked it names this workspace).
-  async handleOutside(peer: string, request: Json, workspace?: string): Promise<Json> {
-    const xshare = this.xshare;
-    if (!xshare) throw new Error("station is starting");
-    return xshare.outside(peer, request, workspace);
+  handleOutside(peer: string, request: Json, workspace?: string): Promise<Json> {
+    return this.bus.handleOutside(peer, request, workspace);
   }
 
   /// A request to another station of the workspace (session_send's messages, and this module's own).
-  async ask(station: string, request: Json): Promise<Json> {
-    if (!this.call) {
-      const attached = this.attached;
-      await this.run(Effect.race(Effect.promise(() => attached), Effect.sleep(Duration.millis(this.meshWaitMs)))).catch(() => undefined);
-    }
-    const call = this.call;
-    if (!call) throw new Error("station mesh is not ready");
-    const workspace = typeof request?.workspace === "string" ? request.workspace : null;
-    return call(station, workspace, request);
+  ask(station: string, request: Json): Promise<Json> {
+    return this.bus.ask(station, request);
   }
 
   /// Called only after the transport authenticates the source station and checks current workspace membership.
-  async handle(workspace: string, peer: string, request: Json): Promise<Json> {
-    const method = text(request, "method");
-    if (method === "describe") return this.describe();
-    if (method.startsWith("xshare.")) {
-      const xshare = this.xshare;
-      if (!xshare) throw new Error("station is starting");
-      return xshare.inside(peer, request, workspace);
-    }
-    if (method.startsWith("share.")) {
-      const shares = this.shares;
-      if (!shares) throw new Error("station is starting");
-      return shares(peer, request, workspace);
-    }
-    // A message (and the files it takes along), a chat read (and its attachments), a chat opened or how one went, not
-    // execution: workspace membership (checked by the transport) is enough, as it is for the chats' pages.
-    if (["session.message", "session.read", "session.file", "session.put", "session.create", "session.notice"].includes(method)) {
-      const inbox = this.inbox;
-      if (!inbox) throw new Error("station is starting");
-      return inbox(peer, request, workspace);
-    }
-    return this.serially(() => this.task(workspace, peer, method, request));
+  handle(workspace: string, peer: string, request: Json): Promise<Json> {
+    return this.bus.handle(workspace, peer, request);
   }
 
   private async task(workspace: string, peer: string, method: string, request: Json): Promise<Json> {
@@ -1254,4 +1218,19 @@ export async function answerPeer(remote: Remote, workspace: string, peer: string
   } catch (error) {
     return { error: (error as Error).message };
   }
+}
+
+/// Tasks of peers no longer in the workspace, or no longer allowed, stop: looked at whenever the roster or the config
+/// changes.
+export function followRoster(cloud: Cloud, remote: Remote, config: { listen(f: () => void): () => void }): () => void {
+  const look = () => {
+    const rosters = cloud.memberships().map((m) => ({ workspace: m.workspace, peers: m.peers.flatMap((p) => (typeof p?.id === "string" ? [p.id as string] : [])) }));
+    void remote
+      .revoke(rosters, cloud.peersCurrent)
+      .catch((error) => log.warn("peer", "revoking tasks failed", { error: (error as Error).message }));
+  };
+  look();
+  const unlisten = cloud.listen(look);
+  const unconfig = config.listen(look);
+  return () => (unlisten(), unconfig());
 }
