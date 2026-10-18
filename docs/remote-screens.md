@@ -81,7 +81,11 @@ JPEG frames are all key frames and their config has no `description`.
   agent's), and is not looked at while no such view is open.
   Anyone else may drive. Every active view shows in `controlledBy` / `viewers`, so people and the agent see who is on it.
 - Ending: either side finishes the stream (the station says `ended` first). When the stream or its connection breaks,
-  the view ends with it; the source's capture stops either way.
+  the view ends with it; the source's capture stops either way. A client killed with a view open (Android's force
+  stop) says nothing as it goes: when its endpoint connects again, the station asks its older connections whether
+  their other end is still there and closes those that do not answer within 3 s, so the dead view leaves the screen
+  then rather than at QUIC's idle timeout, half a minute on (station/src/mesh/superseded.ts). Another live client
+  with the same key (a tab of Chrome on Android) answers and keeps its own.
 
 ### The desktop (station/src/screens/desktop.ts, station/native/helper)
 
