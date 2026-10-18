@@ -1,0 +1,6 @@
+_build/
+target/
+.mooncakes/
+dist/
+*.o
+out/
