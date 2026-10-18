@@ -22,8 +22,8 @@ import type { Doc } from "./index.ts";
 type Ws = string | null;
 
 /// How much of what a call gave, and of a thought, the index keeps.
-const RESULT_CHARS = 600;
-const THOUGHT_CHARS = 2000;
+const RESULT_CHARS = 300;
+const THOUGHT_CHARS = 1000;
 
 const one = (s: Store, sql: string, ...args: any[]): any => s.db.prepare(sql).get(...args);
 const all = (s: Store, sql: string, ...args: any[]): any[] => s.db.prepare(sql).all(...args);
