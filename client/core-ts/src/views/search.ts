@@ -45,6 +45,22 @@ export function stationTopic(station: string, view: Topic): Topic {
   return { topic: "stationSearch", station, q, ...(kind ? { kind } : {}), limit: kind ? ONE_KIND : SHOWN + 1 };
 }
 
+/// How far into a chat's title the words may be and still be seen where it is listed.
+const SEEN_CHARS = 12;
+
+/// A chat found by words its title shows late (cut where it is listed) or not at all: the part of it that has them
+/// (what its station said of it, else its title) as its second line, so chats alike are told apart by why they were found.
+function foundChat(item: J, said: string | undefined, words: string[]): J {
+  const title = String(item.title ?? "");
+  const at = title.toLowerCase().indexOf(words[0] ?? "");
+  if (at >= 0 && at <= SEEN_CHARS) return item;
+  const source = said ?? title;
+  if (!words.every((w) => source.toLowerCase().includes(w))) return item;
+  const found = refs.excerpt(source, words);
+  if (found.text === "") return item;
+  return { ...item, foundText: found.text, foundMarks: found.marks, stateText: item.archived === true ? `${t("core-views.search.archived")} · ${found.text}` : found.text };
+}
+
 /// A chat found archived: marked so, its second line saying so where a list's says where it stands.
 const archived = () => ({ archived: true, stateText: t("core-views.search.archived") });
 
@@ -78,6 +94,8 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
   const rows = new Map<string, J>();
   for (const item of arr(get(chats, "days")).flatMap((d) => arr(get(d, "items")))) if (typeof item.thread === "number") rows.set(`${item.station}\u0001${item.thread}`, item);
   const items: J[] = wants("chat") ? [...arr(local.items)] : [];
+  // What each station said of a chat it found: where its words are.
+  const saidOf = new Map<string, string>();
   const seenChats = new Set(items.map((i) => `${i.station}\u0001${i.id}`));
   const messages: J[] = wants("message") ? src.foundMessages(chats, { ...view, messages: limit }) : [];
   const seenMessages = new Set(messages.map((m) => `${m.station}\u0001${m.thread}\u0001${m.seq}`));
@@ -112,6 +130,7 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
         if (k === "chat") {
           const id = str(row?.id) ?? str(hit.chat);
           if (id === null) continue;
+          if (typeof hit.text === "string" && hit.text !== "") saidOf.set(`${s.address}\u0001${id}`, hit.text);
           if (seenChats.has(`${s.address}\u0001${id}`)) {
             // The device's row of it, archived meanwhile (its station says so before the list does): said archived.
             const at = hit.archived === true ? items.findIndex((i) => i.station === s.address && i.id === id) : -1;
@@ -185,7 +204,7 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
   if (older.length > 0) notes.push(t("core-views.search.older", { names: older.join("、") }));
   const offline = stations.filter((s) => !s.online).map((s) => s.name);
   if (offline.length > 0) notes.push(t("core-views.search.offlineStations", { names: offline.join("、") }));
-  const shownItems = items.slice(0, kind === "chat" ? limit : kind ? 0 : CHATS_SHOWN);
+  const shownItems = items.slice(0, kind === "chat" ? limit : kind ? 0 : CHATS_SHOWN).map((item) => foundChat(item, saidOf.get(`${item.station}\u0001${item.id}`), words));
   return {
     ok: {
       items: shownItems,

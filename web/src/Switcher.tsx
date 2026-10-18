@@ -268,15 +268,33 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
             );
           }
           const item = pick.chat;
+          const meta = (
+            <span className={css.meta}>
+              {item.archived && <span>{t("web-main.switcher.archived")}</span>}
+              <span>{(item.stationEmoji || item.stationIcon) && <StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={12} className={markCss.inline} />}{item.stationName}</span>
+              <Time stamp={item.time?.lastActiveAt} fixed />
+            </span>
+          );
+          // Found by words its title shows late or not at all: the part of it that has them under it.
+          if (item.foundText) {
+            return (
+              <div key={line.key} className={`${css.row} ${css.said}`} {...option(i)}>
+                <ChatPicture item={item} />
+                <span className={css.saidBody}>
+                  <span className={css.saidHead}>
+                    <span className={css.saidChat} data-unread={item.unread || undefined}>{item.title}</span>
+                    {meta}
+                  </span>
+                  <span className={css.saidText}><Marked text={item.foundText} marks={item.foundMarks ?? []} className={css.hit} /></span>
+                </span>
+              </div>
+            );
+          }
           return (
             <div key={line.key} className={css.row} {...option(i)}>
               <ChatPicture item={item} />
               <span className={css.title} data-unread={item.unread || undefined}>{item.title}</span>
-              <span className={css.meta}>
-                {item.archived && <span>{t("web-main.switcher.archived")}</span>}
-                <span>{(item.stationEmoji || item.stationIcon) && <StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={12} className={markCss.inline} />}{item.stationName}</span>
-                <Time stamp={item.time?.lastActiveAt} fixed />
-              </span>
+              {meta}
             </div>
           );
         })}

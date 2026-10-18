@@ -14,7 +14,11 @@ const said = (thread: number, n: number, text: string, at: number) => ({ thread,
 const found = {
   building: false,
   groups: [
-    { kind: "chat", more: false, hits: [{ kind: "chat", key: "c:9", title: "旧的部署", text: "", at: 50, thread: 9, chat: "old", archived: true }] },
+    { kind: "chat", more: false, hits: [
+      { kind: "chat", key: "c:9", title: "旧的部署", text: "", at: 50, thread: 9, chat: "old", archived: true },
+      // Its words late in its title: said where they are.
+      { kind: "chat", key: "c:11", title: "动效测试（请照做）：先用命令运行 sleep 3，然后部署", text: "动效测试（请照做）：先用命令运行 sleep 3，然后部署", at: 40, thread: 11, chat: "motion", archived: true },
+    ] },
     {
       kind: "message",
       more: false,
@@ -51,7 +55,12 @@ test("a_search_lists_what_the_device_holds_and_what_its_stations_find_each_once"
   apply(host, values);
   const view = v(values, 1);
   // The archived chat a station found, after the device's.
-  assert.deepEqual(view.items.map((i: J) => [i.id, i.archived ?? false]), [["a", false], ["old", true]]);
+  assert.deepEqual(view.items.map((i: J) => [i.id, i.archived ?? false]), [["a", false], ["old", true], ["motion", true]]);
+  // A title with the words first says nothing more; one with them late, where they are.
+  assert.equal(view.items[1].foundText, undefined);
+  assert.match(view.items[2].foundText, /部署$/);
+  assert.ok(view.items[2].foundMarks.length > 0);
+  assert.match(view.items[2].stateText, /^已归档 · /);
   // Newest first, the one both have once.
   assert.deepEqual(view.messages.map((m: J) => [m.thread, m.seq]), [[9, 3], [7, 1]]);
   assert.equal(view.messages[0].chat.title, "旧的部署");
