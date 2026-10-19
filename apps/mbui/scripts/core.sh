@@ -34,6 +34,11 @@ deps() {
   (cd $CORE_TS && pnpm install --frozen-lockfile --prefer-offline 2>&1 | tail -5)
 }
 
+# deps, when this checkout has not had them (a fresh worktree: esbuild and Babel missing from core-ts's node_modules)
+have_deps() {
+  [ -x $CORE_TS/node_modules/.bin/esbuild ] && [ -d $CORE_TS/node_modules/@babel/core ] || deps
+}
+
 # libstillfail_shell.a for TARGET: the crate is a cdylib + lib; `cargo rustc --crate-type staticlib` makes the
 # archive without touching ember's Cargo.toml. What it needs from the system goes to out/core/shell-<target>.libs.
 shell() {
@@ -55,6 +60,7 @@ shell() {
 # Not ember's scripts/hermes-bundle.ts: its Babel pass (classes as functions) is Hermes's need, and it resolves imports
 # only from inside ember; JavaScriptCore runs classes as they are.
 bundle() {
+  have_deps
   local t0=$(now)
   # what an app's modules import from npm (media/core's effect) found in the core's own node_modules
   NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild ${ENTRY:-$ROOT/core/jsc.ts} --bundle --format=iife --platform=neutral \
@@ -103,6 +109,7 @@ PY
 }
 
 hermes() {
+  have_deps
   local t0=$(now)
   local hc="$(hermesc)"
   # the same inputs as the last build's: that build's core.hbc

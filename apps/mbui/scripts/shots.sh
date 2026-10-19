@@ -33,6 +33,19 @@ SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
 fi
+# A golden and its new shot compared (mbui's imgdiff.mjs). Now and then node sits there at no CPU, never ending (half
+# an hour seen): given 90 s (perl's alarm, which outlives its exec), then once more, then a failure said as such.
+imgdiff() {
+  local k
+  for k in 1 2; do
+    NODE_PATH=$PWD/out/node/node_modules perl -e 'alarm shift; exec @ARGV' 90 node "$MBUI_DIR/scripts/imgdiff.mjs" "$@"
+    local r=$?
+    [ $r = 142 ] || return $r
+    echo "$(basename "$2"): imgdiff stuck 90 s (try $k)" >&2
+  done
+  echo "$(basename "$2"): not compared (imgdiff stuck twice)"
+  return 1
+}
 fail=0
 for p in $PLATFORMS; do
   names=$p
@@ -283,7 +296,7 @@ for p in $PLATFORMS; do
     if [ "${UPDATE:-}" = 1 ]; then
       cp out/shots/$p.png goldens/$p.png && echo "$p: golden updated"
     elif [ -f goldens/$p.png ]; then
-      NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/imgdiff.mjs" goldens/$p.png out/shots/$p.png out/shots/$p-review.png || fail=1
+      imgdiff goldens/$p.png out/shots/$p.png out/shots/$p-review.png || fail=1
     else
       echo "$p: no golden yet (UPDATE=1 to accept)"
     fi
