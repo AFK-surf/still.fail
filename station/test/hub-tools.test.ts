@@ -295,8 +295,8 @@ test("options are refused in a Slack thread", async () => {
   await r.accept(m);
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
-  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "选哪个？", kind: "need_decision", options: [{ label: "A" }] })).includes("only in still.fail chats"));
-  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "key？", card: { type: "text" } })).includes("only in still.fail chats"));
+  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "选哪个？", kind: "need_decision", options: [{ label: "A" }] })).includes("only in still.fail and Feishu chats"));
+  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "key？", card: { type: "text" } })).includes("only in still.fail and Feishu chats"));
   await r.close();
 });
 
