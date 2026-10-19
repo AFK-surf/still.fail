@@ -61,6 +61,44 @@ test("a peer's request is answered by the other station's remote tasks", async (
   }
 });
 
+test("a slow request holds up no other on the same connection", async () => {
+  // Answered one after another, one slow request (a sync on a loaded station) held up all the caller's others: every
+  // chat of a station asking another shares one connection, and each timed out (2026-10-20, ccvm to Studio).
+  const mesh = memoryMesh();
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const [source, target] = await Promise.all([bind(), bind()]);
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  const remote: any = {
+    handle: async (_workspace: string, _peer: string, request: any) => {
+      if (request.method === "slow") await released;
+      return { ok: request.method };
+    },
+  };
+  const conns: any[] = [];
+  void (async () => {
+    for (;;) {
+      const conn = await target.accept();
+      if (!conn) return;
+      conns.push(conn);
+      void servePeer(conn, cloudOf(target.id(), [source.id()]), remote).catch(() => {});
+    }
+  })();
+  const port = target.sockets()[0]!.split(":").at(-1);
+  const call = peerCall(source, cloudOf(source.id(), [target.id()]), (id) => ({ id, ips: [`127.0.0.1:${port}`] }));
+  try {
+    assert.deepEqual(await call(target.id(), "ws", { method: "describe" }), { ok: "describe" });
+    const slow = call(target.id(), "ws", { method: "slow" });
+    const quick = await Promise.race([call(target.id(), "ws", { method: "task.get" }), slow.then(() => "slow first")]);
+    assert.deepEqual(quick, { ok: "task.get" });
+    release();
+    assert.deepEqual(await slow, { ok: "slow" });
+    assert.equal(conns.length, 1, "all on the one connection");
+  } finally {
+    await Promise.all([source.close(), target.close()]);
+  }
+});
+
 test("a station of another workspace is asked only when chats are shared with it, and heard only for them", async () => {
   const mesh = memoryMesh();
   const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
