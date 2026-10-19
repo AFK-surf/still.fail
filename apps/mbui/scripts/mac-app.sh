@@ -41,7 +41,7 @@ sign() {
   # signed: still.fail's identity (as its desktop app: no hardened runtime, not notarized), else ad hoc
   codesign --force --sign "${MAC_SIGN_IDENTITY:--}" --timestamp=none "$APPDIR"
   codesign --verify --deep --strict --verbose=2 "$APPDIR" 2>&1 | sed 's/^/codesign: /'
-  codesign -dv "$APPDIR" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Signature|Format)=' | sed 's/^/codesign: /'
+  codesign -dvv "$APPDIR" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Signature|Format)=' | sed 's/^/codesign: /'
   spctl --assess --type execute -vv "$APPDIR" 2>&1 | sed 's/^/spctl: /' || true
   rm -f "$ZIP"
   (cd "$OUT" && ditto -c -k --sequesterRsrc --keepParent "$NAME.app" "$(basename "$ZIP")")
