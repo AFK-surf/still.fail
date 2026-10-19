@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useConnects, useOverview, useStationCall, useStations, type Connect, type ConnectItem, type ConnectMode, type MadeSlackApp, type ModelOption, type RuntimeKind, type SlackAppSettings, type SlackIdentity } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
-import { MODE, RUNTIME_LABEL } from "../format.ts";
+import { kindKey, modeOf, RUNTIME_LABEL } from "../format.ts";
 import { illustrationUrl } from "../brand.tsx";
 import { ChevronRight, More } from "@stillfail/ui/icons.tsx";
 import { usePick } from "../pick.ts";
@@ -237,8 +237,8 @@ function ConnectPage({ item }: { item: ConnectItem }) {
           <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <ModeSheet item={item} /> })}>
             <span className={historyCss.mRunLabel}>{t("web-mobile.connects.session")}</span>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-              <span className={listsCss.mRowTitle}>{MODE[connect.mode].label}</span>
-              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{MODE[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? t("web-mobile.connects.mentionOnly") : t("web-mobile.connects.everyMessage"))}</span>
+              <span className={listsCss.mRowTitle}>{modeOf(connect.kind)[connect.mode].label}</span>
+              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{modeOf(connect.kind)[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? t("web-mobile.connects.mentionOnly") : t("web-mobile.connects.everyMessage"))}</span>
             </span>
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
@@ -256,12 +256,16 @@ function ConnectPage({ item }: { item: ConnectItem }) {
             <SectionHeader title={t("web-mobile.connects.feishu.section")} start={24} />
             <ListCard>
               <ListRow>
-                <span className={historyCss.mRunLabel}>App ID</span>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${settingsCss.mWrap}`}>{connect.feishu.appId}</span>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                  <span className={listsCss.mRowTitle}>App ID</span>
+                  <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{connect.feishu.appId}</span>
+                </span>
               </ListRow>
               <ListRow onClick={() => openSecret(app, connect)}>
-                <span className={historyCss.mRunLabel}>Secret</span>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{connect.feishu.appSecret || "••••••••"}</span>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                  <span className={listsCss.mRowTitle}>App Secret</span>
+                  <span className={listsCss.mRowNote}>{connect.feishu.appSecret || "••••••••"}</span>
+                </span>
                 <span className={partsCss.mLink}>{t("web-mobile.connects.feishu.replaceShort")}</span>
               </ListRow>
             </ListCard>
@@ -269,7 +273,7 @@ function ConnectPage({ item }: { item: ConnectItem }) {
         )}
         <SectionHeader title={t("web-mobile.app.recent")} start={24} />
         <ListCard>
-          {sessions.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.connects.noSessions", { name: connect.name })}</span></ListRow>}
+          {sessions.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t(kindKey("web-mobile.connects.noSessions", connect.kind), { name: connect.name })}</span></ListRow>}
           {sessions.map((s) => (
             <ListRow key={s.key} onClick={() => app.push(`${stationBase(station.address)}/chats/${encodeURIComponent(s.key)}`)}>
               <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{s.titleText}</span>
@@ -374,7 +378,7 @@ function ModeSheet({ item }: { item: ConnectItem }) {
       <SheetGrab />
       <SheetHead title={t("web-mobile.connects.mode")} />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        <ModeChoices value={next} onChange={setNext} />
+        <ModeChoices value={next} onChange={setNext} kind={connect.kind} />
         {effects.length > 0 && <div className={settingsCss.mCallout}><b>{t("web-mobile.connects.afterChange")}</b><ul>{effects.map((e) => <li key={e}>{e}</li>)}</ul></div>}
         <div className={sheetsCss.mFormActions}>
           <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
@@ -386,7 +390,8 @@ function ModeSheet({ item }: { item: ConnectItem }) {
   );
 }
 
-function ModeChoices({ value, onChange }: { value: { mode: ConnectMode; requireMention: boolean }; onChange: (v: { mode: ConnectMode; requireMention: boolean }) => void }) {
+function ModeChoices({ value, onChange, kind }: { value: { mode: ConnectMode; requireMention: boolean }; onChange: (v: { mode: ConnectMode; requireMention: boolean }) => void; kind?: string }) {
+  const MODE = modeOf(kind);
   return (
     <div className={css.mChoices}>
       {(["multi-session", "single-session"] as const).map((m) => (
@@ -397,7 +402,7 @@ function ModeChoices({ value, onChange }: { value: { mode: ConnectMode; requireM
       ))}
       {value.mode === "single-session" && (
         <button type="button" className={css.mSwitchRow} onClick={() => onChange({ ...value, requireMention: !value.requireMention })}>
-          <span className={partsCss.mGrow}><b>{t("web-mobile.connects.mentionTitle")}</b><span>{value.requireMention ? t("web-mobile.connects.mentionOn") : t("web-mobile.connects.mentionOff")}</span></span>
+          <span className={partsCss.mGrow}><b>{t("web-mobile.connects.mentionTitle")}</b><span>{value.requireMention ? t(kindKey("web-mobile.connects.mentionOn", kind)) : t(kindKey("web-mobile.connects.mentionOff", kind))}</span></span>
           <span className={css.mSwitch} data-on={value.requireMention || undefined} />
         </button>
       )}
@@ -628,7 +633,7 @@ export function NewConnectScreen() {
       <NavBar back={view.back === "close" ? t("common.cancel") : t("web-mobile.connects.previous")} onBack={back} title={t("web-mobile.connects.add")} sub={<span className={barsCss.mNavbarNote}>{view.title} · {view.number} / {view.total}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
         {FEISHU_STEPS.includes(step) && !(step === "platform" && noProfile) && view.feishu && (step !== "done" || view.platform === "feishu") && (
-          <FeishuSteps view={view} flow={flow} mode={<ModeChoices value={mode} onChange={setMode} />} />
+          <FeishuSteps view={view} flow={flow} mode={<ModeChoices value={mode} onChange={setMode} kind="feishu" />} />
         )}
         {(step === "team" || step === "platform") && noProfile ? (
           <div className={newChatCss.mNewNone}>

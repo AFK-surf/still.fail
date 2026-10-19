@@ -7,7 +7,7 @@ import { CheckCircle, External, Key, Plus, Power, Refresh, Trash, User } from "@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type ConnectMode, type Connect, type ModelOption, type Overview, type MadeSlackApp } from "../api.ts";
-import { MODE } from "../format.ts";
+import { kindKey, modeOf } from "../format.ts";
 import { AppFields, ConfigTokenForm, NEW_APP, SlackAppSection } from "./SlackApp.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
@@ -29,6 +29,7 @@ import * as shellCss from "../styles/shell.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+const tr = t;
 export function ConnectPage() {
   const { id } = useParams();
   const station = useStation();
@@ -190,15 +191,16 @@ function TokenDialog({ connect, onClose }: { connect: Connect; onClose(): void }
 }
 
 /** The mode picker, shared by the connect page and the new-connect dialog. */
-export function ModeChoices({ mode, requireMention, onChange, disabled }:
-  { mode: ConnectMode; requireMention: boolean; onChange(next: { mode: ConnectMode; requireMention: boolean }): void; disabled?: boolean | undefined }) {
+export function ModeChoices({ mode, requireMention, onChange, disabled, kind }:
+  { mode: ConnectMode; requireMention: boolean; onChange(next: { mode: ConnectMode; requireMention: boolean }): void; disabled?: boolean | undefined; kind?: string | undefined }) {
+  const MODE = modeOf(kind);
   return (
     <Choices label={t("web-pages.connect.mode")} value={mode} onChange={(m) => onChange({ mode: m, requireMention: m === "multi-session" ? true : requireMention })}
       options={(["multi-session", "single-session"] as const).map((m) => ({
         value: m, title: MODE[m].label, description: MODE[m].description, disabled,
         extra: m === "single-session" ? (
           <SwitchRow title={t("web-pages.connect.mentionOnly")} checked={requireMention} disabled={disabled}
-            description={requireMention ? t("web-pages.connect.mentionOn") : t("web-pages.connect.mentionOff")}
+            description={requireMention ? t(kindKey("web-pages.connect.mentionOn", kind)) : t(kindKey("web-pages.connect.mentionOff", kind))}
             onChange={(v) => onChange({ mode, requireMention: v })} />
         ) : undefined,
       }))} />
@@ -235,8 +237,8 @@ function RunSection({ item }: { item: ConnectItem }) {
         <div className={css.runCardRow}>
           <span className={css.runCardLabel}>{t("web-pages.connect.session")}</span>
           <span className={css.runCardText}>
-            <strong>{MODE[connect.mode].label}</strong>
-            <span className={shellCss.muted}>{MODE[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? t("web-pages.connect.mentionOnlySentence") : t("web-pages.connect.everyMessageSentence"))}</span>
+            <strong>{modeOf(connect.kind)[connect.mode].label}</strong>
+            <span className={shellCss.muted}>{modeOf(connect.kind)[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? t("web-pages.connect.mentionOnlySentence") : t("web-pages.connect.everyMessageSentence"))}</span>
           </span>
           <button type="button" className={chatCss.textButton} onClick={() => setChangingMode(true)}>{t("web-pages.connect.change")}</button>
         </div>
@@ -264,6 +266,8 @@ function RunSection({ item }: { item: ConnectItem }) {
 /** What switching to `next` does to this connect's conversations, in plain words. */
 export function consequences(connect: Connect, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
   const out: string[] = [];
+  // A Feishu connect's groups in place of Slack's threads and channels.
+  const t = (key: string, o?: Record<string, unknown>) => tr(["toSingle", "toMulti", "threadsRestart", "mentionOnly", "noMention"].some((k) => key.endsWith(`.${k}`)) ? kindKey(key, connect.kind) : key, o);
   if (connect.mode === "multi-session" && next.mode === "single-session") {
     out.push(t("web-pages.connect.effects.toSingle"));
     out.push(connect.session ? t("web-pages.connect.effects.resumeSingle") : t("web-pages.connect.effects.newSingle"));
@@ -298,7 +302,7 @@ function ModeDialog({ connect, running, onClose }: { connect: Connect; running: 
           {next.mode === connect.mode ? t("web-pages.connect.confirmChange") : next.mode === "single-session" ? t("web-pages.connect.toSingle") : t("web-pages.connect.toMulti")}
         </Button>
       </>}>
-      <ModeChoices mode={next.mode} requireMention={next.requireMention} onChange={setNext} />
+      <ModeChoices mode={next.mode} requireMention={next.requireMention} onChange={setNext} kind={connect.kind} />
       {effects.length > 0 && (
         <div className={additionsCss.callout} data-tone="amber" role="note">
           <strong>{t("web-pages.connect.afterChange")}</strong>
@@ -354,7 +358,7 @@ function ConnectSessions({ item }: { item: ConnectItem }) {
   const shown = all ? sessions : sessions.slice(0, SESSIONS_SHOWN);
   return (
     <Section title={t("web-pages.connect.recent")}>
-      {sessions.length === 0 ? <p className={shellCss.muted}>{t("web-pages.connect.recentNone", { name: connect.name })}</p> : (
+      {sessions.length === 0 ? <p className={shellCss.muted}>{t(kindKey("web-pages.connect.recentNone", connect.kind), { name: connect.name })}</p> : (
         <ul className={pagesCss.list}>
           {shown.map((s) => {
             const row = (
@@ -426,7 +430,7 @@ function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClos
   // Only the input's immediate echo belongs to React; all decisions use the core's view.
   const [echo, setEcho] = useState<SlackAppSettings | null>(null);
   // The platform first, then Feishu's own steps (./FeishuConnect.tsx).
-  const other = useFeishuStep(flow.view, flow, onClose, (v) => <ModeChoices mode={v.mode} requireMention={v.requireMention} onChange={(m) => flow.edit(m)} />);
+  const other = useFeishuStep(flow.view, flow, onClose, (v) => <ModeChoices mode={v.mode} requireMention={v.requireMention} onChange={(m) => flow.edit(m)} kind="feishu" />);
   if (flow.unsupported) return <LegacyNewConnectDialog open={open} onClose={onClose} resume={resume} />;
   const view = flow.view;
   if (!view) return <Dialog open={open} onClose={onClose} title={t("web-pages.connects.add")}><WaitLine /></Dialog>;

@@ -8,6 +8,18 @@ export const MODE: Record<ConnectMode, { label: string; description: string }> =
   "single-session": { get label() { return t("web-main.mode.single.label"); }, get description() { return t("web-main.mode.single.description"); } },
 };
 
+/** A Feishu connect's: a group (or chat) is a conversation, not a thread (docs/feishu.md). */
+const FEISHU_MODE: Record<ConnectMode, { label: string; description: string }> = {
+  "multi-session": { get label() { return t("web-main.mode.feishu.multi.label"); }, get description() { return t("web-main.mode.feishu.multi.description"); } },
+  "single-session": { get label() { return t("web-main.mode.feishu.single.label"); }, get description() { return t("web-main.mode.feishu.single.description"); } },
+};
+
+/** The modes as a connect of `kind` has them. */
+export const modeOf = (kind: string | null | undefined) => (kind === "feishu" ? FEISHU_MODE : MODE);
+
+/** A key of words that differ for a Feishu connect (its `.feishu` twin) as `kind` has it. */
+export const kindKey = (key: string, kind: string | null | undefined) => (kind === "feishu" ? `${key}.feishu` : key);
+
 export const RUNTIME_LABEL: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build" };
 
 export const ACCESS: Record<AccessKind, { label: string; description: string }> = {

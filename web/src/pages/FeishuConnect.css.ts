@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { DIALOG_INNER } from "@stillfail/ui/parts.css.ts";
 
@@ -16,3 +16,4 @@ export const scanOpen = style({ display: "flex", width: "max-content" });
 /** The app's rows: their labels are wider than the run card's. */
 export const appLabel = style({ width: "84px" });
 export const mono = style({ fontFamily: vars.fontMono, overflowWrap: "anywhere" });
+globalStyle(`${scanText} p`, { margin: "0" });
