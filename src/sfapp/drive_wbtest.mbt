@@ -199,8 +199,9 @@ test "deleted to the station's trash, said so; a new folder made" {
 test "a picture goes to the preview, read by drive.read" {
   let t = drive_tester("drive")
   t.settle() |> ignore
-  let log = t.drive("tap 首页截图.png\nuntil %\n")
+  let log = t.drive("tap 首页截图.png\n")
   assert_true(log.contains("EXIT 0"))
+  t.settle() |> ignore
   let v = viewer.val.unwrap()
   assert_eq(v.file.name, "首页截图.png")
   assert_true(v.drive is Some(_))
