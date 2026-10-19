@@ -416,18 +416,18 @@ need); the station starts with what the shell has of the machine's own station (
   emulator's 127.0.0.1, the files to attach go into the app's own files, MBUI_PICK_FILES answers the pickers, each
   flow recorded with screenrecord). `down` stops all of it.
 
-Found by flow 25 (not the app's): a chat made on another device while the app runs can come into Home's list as a
-row with no title (（暂无消息）) and stay so. Probed on main's own build (0d96fb8, no slice 8 in it), five runs on a fresh
-station, each making a chat of its own (e2e/peer.ts) and the app dumping its `chats` view (MBUI_CORE_DUMP=1) for 45 s:
-run 1 the row came titled with its answer; runs 2–5 it came as （暂无消息） in the second or third value and no later
-message changed it. The station had threads 3 and 4 (runs 2, 3) with both their entries and their titles, while the
-app's core never sent the change; threads 5–7 (runs 4, 5, and one more the other device made) had no entries at all:
-the other device's process had ended with its first words still in its core's outbox (its row shows them from there),
-so they never reached the station. A new subscription in the same core (the filter switched) got the placeholder too;
-only a new core (the app started again) reads the chat whole. e2e/peer.ts now waits for the station to have the words
-(the chat's messages, not the outbox) before it ends, and flow 25 makes its chat before the app starts (`#before`) and
-waits for the station to have it (`scripts/e2e-local.sh wait-chat`). Flow 02 makes one while the app runs and may meet
-the first half of it.
+Found by flow 25, and not a bug of the app's or of still.fail's core: a chat made on another device while the app ran
+came into Home's list as a row with no title (（暂无消息）) and stayed so. The probe's own dumps (runs 1–5) show why: each
+chat's words reached the station a run late. The old e2e/peer.ts ended as soon as its own row showed the words, which
+is while they are still in its core's outbox (chat.send answers with the outbox's id, not the station's), and its data
+(E2E_PEER_DATA) was the same from run to run, so the next run's peer sent the last one's words; the app's core put them
+in the row the moment the station had them. Rerun on still.fail main (2026-10-19, dev cloud, a station, two real cores:
+5 runs with the app up throughout, 8 with the app started anew each run, 8 more with the old peer's ways) every row came
+with its title and its last words. e2e/peer.ts now waits for the station to have the words (the chat's messages, not
+the outbox) before it ends, and flow 25 makes its chat before the app starts (`#before`) and waits for the station to
+have it (`scripts/e2e-local.sh wait-chat`). Two orderings that could leave a row stale were read in the code and never
+met: core-ts `station/sync.ts` `#read`/`#whole` (a /chats read answered before a later `chat` event but arriving after
+it), and the station's `api/events.ts` `open()`/`flush()` reading rows on two readers at once.
 
 Slice 8 (branch decisions) added flows 22–28 and e2e/fake/claude.mjs, put first on the test station's PATH: ember's
 fake claude for everything it knows, and beside it `card:<question>|<label>|<label>*|<label>!` (chat_post with an
