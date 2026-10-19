@@ -580,7 +580,7 @@ pub fn Ctx::rich(
       on_link(r.link)
     }
   }
-  let i = self.alloc(kind_rich)
+  let i = self.alloc_part(kind_rich, true, false)
   let n = self.nodes[i]
   n.text = text
   n.font_size = size

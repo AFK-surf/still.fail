@@ -272,9 +272,25 @@ pub fn Ctx::scope(self : Ctx, key : Int, body : () -> Unit) -> Unit {
 
 ///|
 fn Ctx::alloc(self : Ctx, kind : Int) -> Int {
+  self.alloc_part(kind, true, true)
+}
+
+///|
+/// A node of `kind` under the current one; its look and its words reset
+/// only when asked: a box sets all of its look, a text all of its words,
+/// and only texts, rich text and editors read words (an image only its
+/// source, which it sets).
+fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool) -> Int {
   let i = self.count
   if i < self.nodes.length() {
-    self.nodes[i].reset()
+    let n = self.nodes[i]
+    n.reset_rest()
+    if look {
+      n.reset_look()
+    }
+    if words {
+      n.reset_words()
+    }
   } else {
     self.nodes.push(Node::new())
   }
@@ -337,7 +353,7 @@ pub fn Ctx::box(
   id? : Int = 0,
   body : () -> Unit,
 ) -> Int {
-  let i = self.alloc(kind_box)
+  let i = self.alloc_part(kind_box, false, false)
   let n = self.nodes[i]
   n.dir = dir
   n.w = w
@@ -454,7 +470,7 @@ pub fn Ctx::layer(
 
 ///|
 pub fn Ctx::spacer(self : Ctx) -> Unit {
-  let i = self.alloc(kind_box)
+  let i = self.alloc_part(kind_box, true, false)
   self.nodes[i].w = Fill(1.0)
   self.nodes[i].h = Fill(1.0)
 }
@@ -471,7 +487,7 @@ pub fn Ctx::text(
   line? : Double = 0.0,
   center? : Bool = false,
 ) -> Int {
-  let i = self.alloc(kind_text)
+  let i = self.alloc_part(kind_text, true, false)
   let n = self.nodes[i]
   n.center = center
   n.line_h = line

@@ -227,7 +227,7 @@ pub fn Ctx::image(
   bg? : Int64 = 0xE5E5EAFFL,
   fade? : Bool = true,
 ) -> Int {
-  let i = self.alloc(kind_image)
+  let i = self.alloc_part(kind_image, true, false)
   let n = self.nodes[i]
   n.fade = fade
   n.text = src

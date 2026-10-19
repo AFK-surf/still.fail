@@ -152,7 +152,7 @@ pub fn Ctx::list(
   st.seed = self.id_seed
   st.owner = self.owner
   self.step_scroll(st)
-  let i = self.alloc(kind_list)
+  let i = self.alloc_part(kind_list, true, false)
   let n = self.nodes[i]
   n.id = id
   n.w = w

@@ -240,14 +240,30 @@ fn Node::new() -> Node {
 }
 
 ///|
-fn Node::reset(self : Node) -> Unit {
-  self.kind = 0
+/// A node reused for the next frame is reset in three parts (alloc sets
+/// its kind and parent; Ctx::alloc_part), and a builder that sets a part
+/// itself skips it: a box its look, a text its words. This part, what no
+/// builder sets all of: its place in the tree, what few nodes use.
+fn Node::reset_rest(self : Node) -> Unit {
   self.id = 0
   self.hit = false
-  self.parent = -1
   self.first = -1
   self.last = -1
   self.next = -1
+  self.slide = 0.0
+  self.fit = FitCover
+  self.fade = true
+  self.pages = None
+  self.page_no = -1
+  self.pager = 0
+  self.layer = false
+  self.rich = None
+  self.item = -1
+}
+
+///|
+/// What Ctx::box sets, all of it.
+fn Node::reset_look(self : Node) -> Unit {
   self.dir = Column
   self.w = Auto
   self.h = Auto
@@ -272,8 +288,12 @@ fn Node::reset(self : Node) -> Unit {
   self.clip = false
   self.tx = 0.0
   self.ty = 0.0
-  self.slide = 0.0
   self.opacity = 1.0
+}
+
+///|
+/// What Ctx::text sets, all of it.
+fn Node::reset_words(self : Node) -> Unit {
   self.text = ""
   self.font_size = 14.0
   self.weight = 400
@@ -281,14 +301,6 @@ fn Node::reset(self : Node) -> Unit {
   self.wrap = true
   self.center = false
   self.line_h = 0.0
-  self.fit = FitCover
-  self.fade = true
-  self.pages = None
-  self.page_no = -1
-  self.pager = 0
-  self.layer = false
-  self.rich = None
-  self.item = -1
 }
 
 ///|
