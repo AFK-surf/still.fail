@@ -34,6 +34,8 @@ priv struct Md {
   /// the words' colour (a quote's are muted)
   mut ink : Int64
   on_link : (String) -> Unit
+  /// a link held: its menu (ui/Links.kt linkHold)
+  on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?
   /// a scope for ids: the n-th paragraph of the message
   mut n : Int
   /// a placed file's drawing, by the file's name
@@ -249,6 +251,7 @@ pub fn markdown(
   size? : Double = 0.0,
   ink? : Int64 = 0L,
   on_link? : (String) -> Unit = fn(_) {  },
+  on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
   files? : (String) -> (() -> Unit)? = fn(_) { None },
 ) -> Int {
   let t = theme()
@@ -257,6 +260,7 @@ pub fn markdown(
     size: if size > 0.0 { size } else { t.t.body },
     ink: if ink != 0L { ink } else { t.p.text },
     on_link,
+    on_link_hold,
     n: 0,
     files,
   }
@@ -359,6 +363,7 @@ fn Md::piece(self : Md, b : @md.Block, tight : Bool, task : Bool?) -> Array[Piec
     CodeBlock(lang, code) => [
       { top: 0.0, bottom: 8.0, draw: fn() { code_block(c, code, lang) } },
     ]
+    Table(t) => [{ top: 0.0, bottom: 8.0, draw: fn() { self.table(t) } }]
     Rule => [
       {
         top: s / 2.0,
@@ -592,7 +597,8 @@ fn Md::words(
   let c = self.c
   let p = theme().p
   let runs = []
-  runs_of(xs, runs, weight > 0, false, false, "", p.accent)
+  // bold for a heading's 700; a table's head's 500 (medium) is the paragraph's own weight
+  runs_of(xs, runs, weight >= 600, false, false, "", p.accent)
   self.n = self.n + 1
   c.rich(
     runs,
@@ -607,6 +613,7 @@ fn Md::words(
     code_bg=0L,
     code_scale=0.9,
     on_link=self.on_link,
+    on_link_hold=self.on_link_hold,
   )
   |> ignore
 }
@@ -677,9 +684,11 @@ fn runs_of(
 let copied_at : Map[Int, Double] = {}
 
 ///|
-/// A code block as the web phone draws it: a quiet tinted block with no
-/// frame; above the code, on a row of its own, its language and a copy
-/// button; the code in the code face, 12 on 18 lines, not wrapped.
+/// A code block as the web phone draws it (Markdown.kt CodeBlock): a quiet
+/// tinted block with no frame; above the code, on a row of its own, its
+/// language and a copy button; the code in the code face, 12 on 18 lines,
+/// highlighted when its language is named, scrolled sideways rather than
+/// wrapped.
 pub fn code_block(c : @ui.Ctx, code : String, lang : String) -> Unit {
   let t = theme()
   let w = web()
@@ -743,9 +752,13 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String) -> Unit {
       },
     )
     |> ignore
-    c.box(w=Fill(1.0), padx=14.0, pady=12.0, clip=true, fn() {
+    // highlighted when its language is named (Highlight.kt), scrolled sideways rather than wrapped
+    c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() {
       c.rich(
-        [@ui.span(code, mono=true)],
+        match highlight(code, lang, t.dark) {
+          Some(runs) => runs
+          None => [@ui.span(code, mono=true)]
+        },
         size=12.0,
         line=18.0,
         wrap=false,
@@ -753,6 +766,151 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String) -> Unit {
       )
       |> ignore
     })
+    |> ignore
+  })
+  |> ignore
+}
+
+// ── tables ──────────────────────────────────────────────────────────────
+
+///|
+/// A table's ground (Markdown.kt tableGround).
+fn table_ground() -> Int64 {
+  if theme().dark {
+    0x232427FFL
+  } else {
+    0xFAFAFAFFL
+  }
+}
+
+///|
+/// The narrowest a word of `s` lets it be and its width on one line, at `size` and `weight` (a browser's min- and
+/// max-content: a cell wraps between words, Chinese between any two characters).
+fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
+  let whole = @ui.text_advance(s, size~, weight~)
+  let mut least = 0.0
+  let mut start = 0
+  let n = s.length()
+  let piece = fn(a : Int, b : Int) {
+    if b > a {
+      let w = @ui.text_advance(s.view(start_offset=a, end_offset=b).to_string(), size~, weight~)
+      if w > least {
+        least = w
+      }
+    }
+  }
+  for i in 0..<n {
+    let u = s.at(i).to_int()
+    if u == 32 || u == 10 {
+      piece(start, i)
+      start = i + 1
+    } else if u >= 0x2E80 && u < 0xFF00 {
+      // a CJK character breaks either side
+      piece(start, i)
+      piece(i, i + 1)
+      start = i + 1
+    }
+  }
+  piece(start, n)
+  (least, whole)
+}
+
+///|
+/// A table as the web draws it (Markdown.kt Table): in a card's frame (20 round, a line round it, a faint ground),
+/// small type (13), the head's row tinted and its words muted (12, medium), rows ruled between them only, each cell
+/// 12 and 7 in, middle-aligned, at least 4em wide. Columns are as wide as their content until the message is full (the
+/// browser's automatic layout), then share what is left by how much more they would take; past what their words
+/// allow, it scrolls sideways within the message.
+fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
+  let c = self.c
+  let cols = t.head.length()
+  if cols == 0 {
+    return
+  }
+  let rows = [t.head]
+  rows.append(t.rows)
+  let w = web()
+  self.n = self.n + 1
+  let key = "sf-md/table\{self.n}"
+  let id = c.id(key)
+  // as wide as the message last laid it out (the frame's line either side taken off)
+  let avail = match c.rect_of(id) {
+    Some((_, _, rw, _)) => rw - 2.0
+    None => c.width - 2.0
+  }
+  let least = 4.0 * 13.0 + 24.0
+  let mins = Array::make(cols, least)
+  let maxs = Array::make(cols, least)
+  for r, row in rows {
+    for k in 0..<cols {
+      let (size, weight) = if r == 0 { (12.0, 500) } else { (13.0, 400) }
+      let (lo, hi) = cell_widths(@md.plain(row[k]), size, weight)
+      if lo + 24.0 > mins[k] {
+        mins[k] = lo + 24.0
+      }
+      if hi + 24.0 > maxs[k] {
+        maxs[k] = hi + 24.0
+      }
+    }
+  }
+  let mut sum_min = 0.0
+  let mut sum_max = 0.0
+  for k in 0..<cols {
+    sum_min = sum_min + mins[k]
+    sum_max = sum_max + maxs[k]
+  }
+  let widths = if sum_max <= avail {
+    maxs
+  } else if sum_min >= avail {
+    mins
+  } else {
+    Array::makei(cols, fn(k) {
+      (mins[k] + (maxs[k] - mins[k]) * (avail - sum_min) / (sum_max - sum_min)).round()
+    })
+  }
+  let mut total = 0.0
+  for x in widths {
+    total = total + x
+  }
+  c.box(dir=Row, w=Fill(1.0), fn() {
+    c.box(
+      w=Px(dmin(total + 2.0, dmax(avail + 2.0, 0.0))),
+      radius=20.0,
+      border=1.0,
+      border_color=w.line,
+      bg=table_ground(),
+      pad=1.0,
+      clip=true,
+      id~,
+      fn() {
+        c.sideways(key, fn() {
+          c.box(fn() {
+            for r, row in rows {
+              let head = r == 0
+              c.box(dir=Row, align=AStretch, bg=if head { theme().p.code_ground } else { 0L }, fn() {
+                for k in 0..<cols {
+                  c.box(w=Px(widths[k]), padx=12.0, pady=7.0, justify=JCenter, fn() {
+                    if head {
+                      self.words(row[k], 12.0, 500, w.muted, None)
+                    } else {
+                      self.words(row[k], 13.0, 0, self.ink, None)
+                    }
+                  })
+                  |> ignore
+                }
+              })
+              |> ignore
+              // a rule under every row but the last
+              if r < rows.length() - 1 {
+                c.box(w=Px(total), h=Px(1.0), bg=w.line, fn() {  }) |> ignore
+              }
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+      },
+    )
     |> ignore
   })
   |> ignore

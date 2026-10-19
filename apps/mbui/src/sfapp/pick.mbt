@@ -27,6 +27,8 @@ priv struct Pick {
   mut grab_y : Double
   /// the press that picked it (its lifting is not a tap that lets go)
   mut picked_at : Double
+  /// frames its words were not laid out
+  mut missing : Int
 }
 
 ///|
@@ -44,6 +46,7 @@ let pk : Pick = {
   grab_x: 0.0,
   grab_y: 0.0,
   picked_at: -1.0,
+  missing: 0,
 }
 
 ///|
@@ -53,6 +56,7 @@ fn pick_clear() -> Unit {
   pk.key = ""
   pk.widening = false
   pk.handle = 0
+  pk.missing = 0
 }
 
 ///|
@@ -98,6 +102,7 @@ fn pickable(
     pk.handle == 0 &&
     !(mine && pk.widening) &&
     pk.picked_at != cui.down_at &&
+    link_menu.at != cui.down_at &&
     words.trim(chars=" \n\t") != "" {
     let held = c.now() - cui.down_at
     if held >= long_press_ms {
@@ -157,10 +162,18 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     return
   }
   let words = match c.words_of(pk.key) {
-    Some(w) => w
-    // scrolled far off, gone: what was picked in it goes too
+    Some(w) => {
+      pk.missing = 0
+      w
+    }
+    // scrolled far off, gone: what was picked in it goes too (not before it was first laid out)
     None => {
-      pick_clear()
+      pk.missing += 1
+      if pk.missing > 2 {
+        pick_clear()
+      } else {
+        c.request_frame()
+      }
       return
     }
   }

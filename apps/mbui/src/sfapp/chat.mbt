@@ -259,6 +259,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         flight_waiting(c, draft_key(r))
         // a passage picked: its handles and its bar over the list (pick.mbt)
         pick_layer(c, src, r)
+        // a link held: its menu (link_menu.mbt)
+        link_menu_layer(c)
       }
     }
   })

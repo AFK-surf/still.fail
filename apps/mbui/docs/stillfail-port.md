@@ -46,9 +46,12 @@ Done (branch fw-richtext-nav, 2026-10-19):
   (UAX #14 over the whole paragraph). Hosts shape and measure by run: a
   `style` (italic, mono) beside size and weight on every host. The layout
   answers offsets, carets and a range's rects, for selection later.
-  src/md parses Markdown; `@sf.markdown` draws it as a message does
-  (Markdown.kt). Not yet: tables, code highlighting, a code block's sideways
-  scroll, a link's long-press menu, selection itself.
+  src/md parses Markdown (GFM's tables too); `@sf.markdown` draws it as a message does
+  (Markdown.kt): tables in a card's frame, their columns as wide as their words allow up to the message's width,
+  then scrolled sideways; code highlighted as the web's Shiki (vitesse light and dark, src/sf/highlight.mbt from
+  Highlight.kt) and scrolled sideways rather than wrapped (mbui's `Ctx::sideways`: a finger moving sideways first
+  drags it, up or down first the list); a link held is its menu (打开链接, 复制链接; src/sfapp/link_menu.mbt, Links.kt
+  linkHold over mbui's `on_link_hold`). Selection: slice 5's picking.
 - 2, the page stack: `Nav[P]` and `Ctx::nav` (src/ui/nav.mbt), App.kt's
   Pages: push/pop sliding side by side (300 ms, standard curve), the left
   edge's swipe and the system's back gesture (`@host.set_back`; Android's
@@ -385,11 +388,13 @@ OpenJobs.kt, History.kt, ui/ToolStep.kt, ui/Sheet.kt):
   chat-agent | chat-jobs | chat-job | home-jobs` (src/sfapp/decide_fixture.mbt): `scripts/shots.sh decide web-decide`
   compares them with goldens/mac-decide-*.png and web-decide-*.png.
 
-Not yet, against the current app: code highlighting in tool steps (code is drawn in the code face, in the ink) and a
-capped block's own scroll (it is cut at its height); the run settings page (RunSettings: its rows are shown, not
+Tool steps' code is highlighted by its language (a command as shell, a file by its extension: ToolStep.kt Block) and
+a capped block scrolls within its height (mbui's `Ctx::capped`: a finger up or down moves it while it can go that way,
+else the page), branch mbui-chat-complete.
+
+Not yet, against the current app: the run settings page (RunSettings: its rows are shown, not
 opened); the station's card from an agent's; sharing the chat with other
-workspaces and making it public (their rows are shown); a watched chat's question before archiving; opening a login's
-page in the browser (there is no URL hand-off on the hosts yet: its pill copies the link or the code and says so); the
+workspaces and making it public (their rows are shown); a watched chat's question before archiving; the
 reply on the 奏 page takes words only (no files, quotes or its own draft kept by the core) and its card neither tilts
 nor shrinks as it goes (boxes have no rotation or scale yet); a sheet dragged by its grabber; the segmented control's
 sliding thumb; a history opened at an entry; a Slack user's 这是我.

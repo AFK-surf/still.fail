@@ -5,6 +5,8 @@
 //   card:<question>|<label>|<label>*|<label>!   chat_post with an options card ending the turn need_human: the
 //                                               question, then the options (`*` recommended, `!` action close)
 //   text-card:<question>|<placeholder>          the same with a text card
+//   md:<words>                                  chat_post all done: <words>, then a table, a TypeScript block with a long
+//                                               line and a bare address (…/e2e/<the words' last word>)
 //   steps:<words>                               a turn with tool calls in its transcript (a command and its output, an
 //                                               edit), then chat_post <words> ending it all_done
 //   serve:<name>|<port>|<words>                 job_start a web service <name> on <port> (a page of two, served by
@@ -100,6 +102,21 @@ async function turn(text) {
       return o;
     });
     said = await post(to, { text: question, kind: "need_human", need: question, card: { type: "options", options } });
+  } else if (/(^|\s)md:/.test(text)) {
+    // Markdown as an agent writes it: a table, code with a line too long for the message, a bare address
+    const words = line("md:");
+    const md = [
+      words, "",
+      "| 页面 | 状态 | 耗时 |", "|:--|:-:|--:|", "| 首页 | 完成 | 1.2 s |", "| 聊天页的列表和输入框 | 进行中 | 3.4 s |", "",
+      "```ts",
+      "export function placeRows(rows: Row[], from: number): number {",
+      "  const visible = rows.filter((r) => r.top >= from && r.top < from + window.innerHeight * 2) // only the rows near the screen",
+      "  return visible.length",
+      "}",
+      "```", "",
+      `详见 https://example.com/e2e/${encodeURIComponent(words.split(" ").pop() ?? "x")}`,
+    ].join("\n");
+    said = await post(to, { text: md, kind: "all_done", done: "answered the question that was asked" });
   } else if (text.includes("serve:")) {
     const [name, port, words] = line("serve:").split("|");
     const dir = path.join(process.cwd(), `e2e-site-${port}`);
@@ -127,7 +144,7 @@ async function turn(text) {
   say({ type: "result", subtype: "success", is_error: false, duration_ms: 1, num_turns: 1, session_id: sessionId, result: said });
 }
 
-const ours = (text) => /(^|\s)(card:|text-card:|steps:|serve:)/.test(text);
+const ours = (text) => /(^|\s)(card:|text-card:|steps:|serve:|md:)/.test(text);
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
   let msg = null;
   try {

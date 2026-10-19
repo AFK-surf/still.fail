@@ -542,7 +542,8 @@ fn person_words(c : @ui.Ctx, words : String, ts : String) -> Unit {
     line=23.0,
     link_color=t.p.blue,
     pressed_bg=@sf.alpha(t.p.blue, 0.14),
-    on_link=fn(h) { open_link(h) },
+    on_link=fn(h) { open_link(c, h) },
+    on_link_hold=Some(link_held),
   )
   |> ignore
 }
@@ -570,7 +571,8 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
       line=21.0,
       link_color=t.p.blue,
       pressed_bg=@sf.alpha(t.p.blue, 0.14),
-      on_link=fn(h) { open_link(h) },
+      on_link=fn(h) { open_link(c, h) },
+      on_link_hold=Some(link_held),
     )
     |> ignore
   })
@@ -581,9 +583,9 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
 }
 
 ///|
-/// A link tapped in a message: one to another chat opens it here (AppState.openLink); the rest are not opened from
-/// this slice.
-fn open_link(href : String) -> Unit {
+/// A link tapped in a message: one to another chat opens it here (AppState.openLink); the rest are not opened yet.
+fn open_link(c : @ui.Ctx, href : String) -> Unit {
+  ignore(c)
   match chat_of_link(href) {
     Some(r) => app.nav.push(Chat(r))
     None => ()
@@ -630,7 +632,8 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
         key="md/" + m.ts,
         size=15.0,
         ink=ink().text,
-        on_link=fn(h) { open_link(h) },
+        on_link=fn(h) { open_link(c, h) },
+        on_link_hold=Some(link_held),
         files=fn(name) {
           match placed.get(name) {
             Some(a) => Some(fn() { files(c, src, here, [a], false) })

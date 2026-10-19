@@ -373,7 +373,7 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         Some(kept_chat("long", fn() { long_chat(3000) }))
       } else if session == "s-c1" {
         let base = kept_chat("rich/\{f.older}/\{f.mode}", fn() {
-          let v = rich_chat(f.older)
+          let v = if f.mode == "chat-md" { with_md_message(rich_chat(f.older)) } else { rich_chat(f.older) }
           match (v, seeded_outbox(f.mode)) {
             (Object(m), out) if out.length() > 0 => {
               let o = m.copy()
@@ -829,11 +829,75 @@ fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, 
 }
 
 ///|
-/// What the modes of the cards set going as the chat opens: chat-answering's option under way, chat-cards' 保留 failed.
+/// What the modes of the cards and words set going as the chat opens: chat-answering's option under way, chat-cards' 保留
+/// failed, chat-pick's word picked, chat-link-menu's link held.
 pub fn open_cards_fixture(mode : String) -> Unit {
   match mode {
     "chat-answering" => dui.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
     "chat-cards" => dui.failed["keep/ws1/st1/7"] = -1.0
+    // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
+    "chat-pick" => {
+      pk.ts = "ts11"
+      pk.key = "pick/ts11"
+      pk.author = "Claude"
+      pk.role = "agent"
+      pk.a = 4
+      pk.b = 6
+    }
+    // the bare address in the long answer held: its menu (link_menu.mbt)
+    "chat-link-menu" => {
+      link_menu.href = "https://example.com/bench/list"
+      link_menu.x = 220.0
+      link_menu.top = 360.0
+      link_menu.bottom = 383.0
+      link_menu.open = true
+    }
     _ => ()
+  }
+}
+
+// ── Markdown's tables and code (MBUI_FIXTURE=chat-md) ───────────────────
+
+///|
+/// An agent's answer with a table, highlighted code (one line too long for the message: it scrolls sideways) and a
+/// command, at the end of the first row's chat.
+let md_answer : String =
+  #|对比了三种做法，结果如下：
+  #|
+  #|| 做法 | 首帧耗时 | 内存 | 结论 |
+  #||:--|--:|--:|:-:|
+  #|| 全量重排 | 4.2 ms | 18 MB | 太慢 |
+  #|| 按行缓存 | 1.1 ms | 22 MB | 可以 |
+  #|| 只排可见的行，其余按估计高度占位 | 0.6 ms | 12 MB | 采用 |
+  #|
+  #|```ts
+  #|export function placeRows(rows: Row[], from: number): number {
+  #|  const visible = rows.filter((r) => r.top >= from && r.top < from + window.innerHeight * 2) // 只排屏幕附近的行
+  #|  return visible.length
+  #|}
+  #|```
+  #|
+  #|```sh
+  #|pnpm test --filter list -- --reporter dot
+  #|```
+
+///|
+fn with_md_message(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), md_answer, "1 分钟前", {
+          "ending": "all_done",
+        }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
   }
 }

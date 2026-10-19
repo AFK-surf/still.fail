@@ -12,7 +12,8 @@
 # gives mac-chat (at its end), mac-chat-up (scrolled up: the way to the newest over it) and mac-chat-loading (being
 # read), its dark look (mac-chat-dark), a picture under the bar's glass (mac-chat-glass) and its glass drawn solid
 # (mac-chat-solid). `composer` and `web-composer` are its composer's states (MBUI_FIXTURE=chat-compose|attach|quote|
-# sending|failed); `cards` and `web-cards` its cards answered from it (MBUI_FIXTURE=chat-cards|answering). `drive` and `web-drive` the drive's pages over a made-up drive (src/sfapp/drive_fixture.mbt);
+# sending|failed); `cards` and `web-cards` its cards answered from it, Markdown's tables and code, picking words, a link's menu
+# (MBUI_FIXTURE=chat-cards|answering|md|pick|link-menu). `drive` and `web-drive` the drive's pages over a made-up drive (src/sfapp/drive_fixture.mbt);
 # `decide` and `web-decide` src/sfapp/decide_fixture.mbt's modes; `settings` and `web-settings` the settings' pages
 # (src/sfapp/settings/fixture.mbt); `glass` and `web-glass` frosted and liquid glass over bands of colour (APP=sfkit
 # MBUI_SCREEN=glass), light and dark; `newchat` and `web-newchat` a new chat, its sheets, the bottom bar's panel and a
@@ -128,11 +129,12 @@ shoot() {
       done ;;
     cards)
       # the chat's cards as answered from it (src/sfapp/chat_fixture.mbt's modes): the card answered (你 选择了「…」) and
-      # 保留 failed a moment ago (its red mark); an option under way (its spinner)
+      # 保留 failed a moment ago (its red mark); an option under way (its spinner); an answer with a table and
+      # highlighted code (md); a word picked, its handles and bar (pick); a link held, its menu (link-menu)
       APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
       rm -rf out/shot-cards; mkdir -p out/shot-cards
       names=
-      for m in cards answering; do
+      for m in cards answering md pick link-menu; do
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-cards ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-cards/$m.png out/shots/mac-chat-$m.png
         names="$names mac-chat-$m"
@@ -301,7 +303,7 @@ shoot() {
     web-cards)
       APP=sffix bash scripts/web.sh build >/dev/null
       names=
-      for m in cards answering; do
+      for m in cards answering md pick link-menu; do
         QUERY=MBUI_FIXTURE=chat-$m NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/web-shot.mjs" out/shots/web-chat-$m.png
         names="$names web-chat-$m"
       done ;;
