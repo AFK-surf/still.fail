@@ -430,8 +430,8 @@ src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, S
   90); Home lists it at once (the core's row). Refused, the words come back and why is said.
 - `APP=sffix MBUI_FIXTURE=newchat|newchat-station|newchat-model|home-bars|place` (src/sfapp/newchat_fixture.mbt):
   `scripts/shots.sh newchat web-newchat` compares them with goldens/mac-newchat-*.png and web-newchat-*.png. Home's
-  goldens (mac-home, mac-home-sheet, mac-home-swipe, web-home) changed on purpose: the bar on Home, the workspaces'
-  sheet in the new sheet.
+  goldens (mac-home, mac-home-dark, mac-home-sheet, mac-home-swipe, web-home, and slice 8's mac-decide-home-jobs and
+  web-decide-home-jobs) changed on purpose: the bar on Home, the workspaces' sheet in the new sheet.
 - MBUI_DRIVE has `drag X Y DX DY [MS]` and `dragon DX DY MS TEXT` (a finger moved a frame at a time, then lifted).
 
 Not yet, against the current app: the bar's and the sheets' frosted glass (see above), the bar chosen in the panel sliding
