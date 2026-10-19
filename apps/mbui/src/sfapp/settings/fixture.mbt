@@ -407,6 +407,9 @@ fn fx_memory() -> Json {
 ///|
 /// A made-up settings topic, None for one these do not make.
 pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -> Json? {
+  if name == "lock" && mode.has_prefix("lock-") {
+    return Some(waiting_lock(mode))
+  }
   let me : Json = obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner"))])
   match name {
     "workspace" =>
@@ -679,4 +682,64 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     "profile.quota" | "profile.check" | "profile.put" => Some(Ok(obj([])))
     _ => None
   }
+}
+
+///|
+/// The lock as a device not confirmed in it has it (MBUI_FIXTURE=lock-waiting, lock-finding, lock-code, lock-wrong,
+/// lock-security: its waiting page asking, finding, the code being typed, typed wrong; its security page): this device
+/// waiting (its own request among the workspace's), not a signer.
+fn waiting_lock(mode : String) -> Json {
+  let pair = match mode {
+    "lock-finding" => obj([("state", str("finding"))])
+    "lock-code" => obj([("state", str("code")), ("left", Json::number(3.0))])
+    "lock-wrong" => obj([("state", str("wrong")), ("left", Json::number(2.0))])
+    _ => Json::null()
+  }
+  obj([
+    ("available", Json::boolean(true)),
+    ("locked", Json::boolean(true)),
+    ("notice", Json::boolean(false)),
+    ("role", str("owner")),
+    ("manages", Json::boolean(true)),
+    ("owner", Json::boolean(true)),
+    ("canSign", Json::boolean(true)),
+    ("signs", Json::boolean(false)),
+    ("signers", Json::number(5.0)),
+    ("protected", Json::number(4.0)),
+    ("attention", Json::number(2.0)),
+    (
+      "me",
+      obj([
+        ("device", str("d-me")),
+        ("code", str("Q4K-7PM")),
+        ("kind", str("app")),
+        ("confirmed", Json::boolean(false)),
+        ("asked", Json::boolean(true)),
+        ("waiting", Json::boolean(true)),
+        ("pair", pair),
+      ]),
+    ),
+    (
+      "requests",
+      [
+        obj([("device", str("d-me")), ("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("kind", str("app")), ("label", str("still.fail mbui Android · OPPO PLP110")), ("code", str("Q4K-7PM")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(true)), ("time", obj([("created_at", stamp_of("1 分钟前"))]))]),
+        obj([("device", str("d9")), ("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("kind", str("app")), ("label", str("Pixel 9")), ("code", str("482 917")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(false)), ("time", obj([("created_at", stamp_of("2 分钟前"))]))]),
+      ],
+    ),
+    (
+      "members",
+      [
+        obj([
+          ("sub", str("u1")),
+          ("email", str("lin@example.com")),
+          ("name", str("林")),
+          ("role", str("owner")),
+          ("you", Json::boolean(true)),
+          ("devices", [obj([("id", str("d1")), ("kind", str("app")), ("label", str("still.fail Android · OPPO PLP110")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false))])]),
+        ]),
+      ],
+    ),
+    ("stations", []),
+    ("renew", []),
+  ])
 }

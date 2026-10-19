@@ -36,6 +36,16 @@ import javax.crypto.spec.GCMParameterSpec;
  * {@link #complete}. One per running core.
  */
 final class CoreHost {
+    // The device as the core names it to the people who approve it (sfcore's `client.device`, as still.fail's Android
+    // app tells it: maker and model), in the environment before the first core starts.
+    static {
+        try {
+            Os.setenv("MBUI_DEVICE_MODEL", android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL, true);
+        } catch (Exception e) {
+            Host.log("device model: " + e);
+        }
+    }
+
     /** Off the core's thread: the Keystore takes its time. */
     private static final ExecutorService calls = Executors.newSingleThreadExecutor();
     private static final ExecutorService listenCalls = Executors.newSingleThreadExecutor();

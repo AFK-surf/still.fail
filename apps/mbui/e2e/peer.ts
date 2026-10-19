@@ -17,6 +17,11 @@
 //   node e2e/peer.ts station-name [NAME]   the test station's name as still.fail cloud says it (the workspace topic):
 //                                          STATION <name>; with NAME, once it is that (or the time is up)
 //   node e2e/peer.ts members               the workspace's people as the cloud has them: MEMBER <email> <role>, a line each
+//   node e2e/peer.ts lock-on               safe mode turned on by this device (the owner's, a signer), every other device
+//                                          left out (the app's among them): LOCK ON <entry>
+//   node e2e/peer.ts lock-await [SECONDS]  this device online for that long (60) to be met face to face: the first new
+//                                          device showing its code, PAIRING <code>\t<person>\t<its label> (then 12 s more)
+//   node e2e/peer.ts lock-off              safe mode turned off again: LOCK OFF
 //
 // E2E_EMBER (the ember checkout), E2E_ORIGIN (the dev cloud), E2E_PEER_DATA (this core's own data directory).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -224,6 +229,28 @@ try {
       console.error(String(e));
     }
     console.log(`STATION ${name}`);
+  } else if (cmd === "lock-on") {
+    const draft = await until({ topic: "lockDraft", workspace }, (v) => (v?.ready ? v : undefined), 120_000);
+    for (const d of draft.devices ?? []) if (!d.current) await call("lock.toggle", { workspace, id: d.id });
+    const opened = await call("lock.open", { workspace });
+    console.log(`LOCK ON ${opened?.head?.seq ?? "?"}`);
+  } else if (cmd === "lock-await") {
+    // (online until the code has been met and a while after it, for the new device's tries: then gone, so that
+    // another of these commands may take this device's data)
+    let end = Date.now() + Number(rest[0] ?? 60) * 1000;
+    let said = false;
+    while (Date.now() < end) {
+      const p = (await call("lockPrompt.state", {}))?.pairing?.[0];
+      if (p && !said) {
+        console.log(`PAIRING ${p.code}\t${p.name || p.email}\t${p.label}`);
+        said = true;
+        end = Math.min(end, Date.now() + 12_000);
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  } else if (cmd === "lock-off") {
+    await call("lock.disable", { workspace });
+    console.log("LOCK OFF");
   } else if (cmd === "members") {
     const v = await until({ topic: "workspace", workspace }, (v) => (v?.members ?? []).length > 0 ? v : undefined);
     for (const m of v.members) console.log(`MEMBER ${m.email} ${m.role}`);

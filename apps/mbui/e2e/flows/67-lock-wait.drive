@@ -1,0 +1,21 @@
+#before peer lock-on
+# Safe mode turned on by alice's other device (the owner's, a signer) with this app's device left out: in Home's place
+# the app shows that it waits to be approved (not its stations offline); 发送批准请求 reaches the other device, which
+# shows a code for it under this app's own name (still.fail mbui); a wrong code typed says how many tries are left.
+# Safe mode off again after: Home comes back. (Last of the flows: the others run with safe mode off.)
+timeout 120000
+until 等待批准此设备
+until 发送批准请求
+shot 1-waiting
+log do: peer lock-await 60
+wait 3000
+tap 发送批准请求
+until 输入你的受信任设备上显示的安全码
+shot 2-code
+type 000000
+until 安全码不对
+shot 3-wrong
+wait 15000
+log do: peer lock-off
+until 端到端测试
+shot 4-home

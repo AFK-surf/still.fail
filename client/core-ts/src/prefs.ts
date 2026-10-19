@@ -211,7 +211,8 @@ export function inviteUsed(data: Data): void {
   }
 }
 
-/// What the device is, from what its host says (`client.device`).
+/// What the device is, from what its host says (`client.device`: app, build, userAgent, model, locale, and `client`, the
+/// name of an app other than still.fail's own that runs this core).
 export function device(data: Data, facts: unknown): void {
   const said = (k: string) => {
     const v = isObject(facts) ? facts[k] : undefined;
@@ -235,7 +236,10 @@ export function device(data: Data, facts: unknown): void {
   if (locale !== "") told.locale = locale;
   prefs.device = told;
   const lang = withLang(prefs);
-  const name = brand.name();
+  // `client`: an app of its own that runs this core, named so (still.fail mbui), told apart from still.fail's own
+  // where devices are listed and approved; else the brand's
+  const client = said("client").slice(0, 40);
+  const name = client !== "" ? client : brand.name();
   let deviceName: string;
   if (app === "android") deviceName = tr(lang, "core-misc.device.android", { brand: name, more: withMore(model) });
   else if (app === "desktop") deviceName = tr(lang, "core-misc.device.desktop", { brand: name, more: withMore(os) });

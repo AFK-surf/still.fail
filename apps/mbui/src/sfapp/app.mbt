@@ -281,8 +281,11 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // what another app shared in (share.mbt)
       share_in_frame(c)
       if wide_on.val {
-        // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them
-        wide_frame(c, src, w, all, invited)
+        // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them; a device waiting
+        // to be confirmed in the workspace's safe mode, only what it waits on
+        if lock_gate(c, src, w) {
+          wide_frame(c, src, w, all, invited)
+        }
         wide_overlays(c, src, w)
         preview(c, src)
       } else {
@@ -370,7 +373,12 @@ fn page_view(
     opacity=e,
     fn() {
       match page {
-        Home => home_page(c, src, w, all, invited)
+        // a device waiting to be confirmed in the workspace's safe mode sees that instead of the chats (its
+        // stations refuse it: Security.kt LockGate); its settings stay
+        Home =>
+          if lock_gate(c, src, w) {
+            home_page(c, src, w, all, invited)
+          }
         Chat(r) => {
           chat_page(c, src, w, r)
           new_chat_leaving(c, src, w, r)
@@ -443,6 +451,18 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -
   let pages = app.nav.pages()
   @settings.wide_deep.val = pages.length() >= 2 && pages[pages.length() - 2] is Setting(_)
   @settings.page(c, core, @settings.here_of(core, w.id, w.name), r)
+}
+
+///|
+/// The workspace's safe mode in its chats' place while this device waits to be confirmed in it (the settings'
+/// lock_wait.mbt): true when there is nothing to wait for, and the page is the caller's to draw.
+fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
+  let core = settings_core(src, w)
+  if !@settings.lock_waiting(core, w.id) {
+    return true
+  }
+  @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+  false
 }
 
 ///|
