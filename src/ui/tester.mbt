@@ -67,6 +67,12 @@ fn reset_globals() -> Unit {
   image_cache.clear()
   pagers.clear()
   image_data.clear()
+  open_views.clear()
+  native_nodes.clear()
+  picture_at.clear()
+  wheels.clear()
+  captures.clear()
+  second_ptr[2] = 0.0
   bench.mode = 0
 }
 
@@ -101,6 +107,8 @@ pub fn Tester::new(
     image_loads: [],
     images: {},
     bold: 0.0,
+    views: [],
+    view_ids: 0,
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
@@ -277,6 +285,27 @@ pub fn Tester::clipboard(self : Tester) -> String {
 ///|
 pub fn Tester::instances(self : Tester) -> Int {
   self.fake.instances
+}
+
+///|
+/// What the fake host was asked of its native views and PDFs, a line each ("open 1 1 9", "place 1 0 0 390 220 in 0 0
+/// 390 844", "control 1 1 0", "close 1", "pdf 2400"…), in order.
+pub fn Tester::views(self : Tester) -> Array[String] {
+  self.fake.views
+}
+
+///|
+/// The holes (kind 9: where a native view shows) in the last frame, as (x, y, w, h).
+pub fn Tester::holes(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  ignore(self)
+  let out = []
+  for i in 0..<g.ninst {
+    let b = i * inst_size
+    if g.inst[b + 5] == 9.0 {
+      out.push((g.inst[b], g.inst[b + 1], g.inst[b + 2], g.inst[b + 3]))
+    }
+  }
+  out
 }
 
 ///|

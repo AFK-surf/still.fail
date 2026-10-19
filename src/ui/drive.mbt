@@ -6,7 +6,8 @@
 //
 //   # a comment                 wait MS                   timeout MS (for until/gone/field after it; 20000 to start)
 //   until TEXT                  words containing TEXT on screen (a text, rich text, a field's placeholder, or
-//                               icon:NAME, an @sf icon), within the timeout; else the run fails
+//                               icon:NAME, an @sf icon; img:NAME an image whose source has NAME in it), within the
+//                               timeout; else the run fails
 //                               (=TEXT: words that are TEXT exactly)
 //   untiln N TEXT               N or more of them on screen
 //   gone TEXT                   no longer on screen
@@ -95,6 +96,9 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
   let found = []
   let icon = if what.has_prefix("icon:") {
     Some("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
+  } else if what.has_prefix("img:") {
+    // an image by its source (a chat's file: its key ends with the file's name)
+    Some(what.unsafe_substring(start=4, end=what.length()))
   } else {
     None
   }

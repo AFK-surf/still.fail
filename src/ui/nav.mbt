@@ -384,3 +384,15 @@ pub fn Ctx::back(self : Ctx) -> Bool {
     None => false
   }
 }
+
+///|
+/// Back taken by what is drawn over the stack (a viewer, a sheet), on the frames it calls this, after the stack is
+/// drawn: the system's back, a back button (Ctx::back) call `f` once let go; no edge swipe of its own.
+pub fn Ctx::take_back(self : Ctx, f : () -> Unit) -> Unit {
+  self.back_next = Some(fn(kind, _x, _w, _t) {
+    if kind == 2 || kind == 4 {
+      f()
+    }
+  })
+  self.back_node_next = -1
+}

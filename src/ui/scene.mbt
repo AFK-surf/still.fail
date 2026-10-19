@@ -6,7 +6,8 @@
 // kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow (12 > 0: only
 // outside its box, which is 13 above it), 3 color glyph, 4 image (12-15 its
 // uv rect, 0-1), 5 frosted glass, 6 liquid glass, 7 a glyph in liquid glass
-// inked by what is under it (glass.mbt).
+// inked by what is under it (glass.mbt), 9 a hole where a native view shows
+// (written transparent, without blending: native.mbt).
 
 ///|
 let inst_size = 24
@@ -252,14 +253,22 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     return
   }
   if n.kind == kind_image {
-    self.paint_image(n, alpha)
+    self.paint_image(i, n, alpha)
+    return
+  }
+  if n.kind == kind_native {
+    self.paint_native(i, n)
     return
   }
   if n.kind == kind_page {
     self.paint_page(n, alpha)
     return
   }
-  if n.kind == kind_list || (n.id != 0 && (pagers.contains(n.id) || drags.contains(n.id))) {
+  if n.kind == kind_list ||
+    (
+      n.id != 0 &&
+      (pagers.contains(n.id) || drags.contains(n.id) || captures.contains(n.id))
+    ) {
     self.next_scroll_ids.push(n.id)
     self.next_scroll_rects.push(dmax(n.x, cx0))
     self.next_scroll_rects.push(dmax(n.y, cy0))

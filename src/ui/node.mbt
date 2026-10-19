@@ -56,6 +56,10 @@ let kind_page = 6
 let kind_rich = 7
 
 ///|
+/// where a native view shows (native.mbt)
+let kind_native = 8
+
+///|
 struct Node {
   mut kind : Int
   mut id : Int

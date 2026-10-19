@@ -138,6 +138,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.next_scroll_rects.clear()
   c.glass_frame()
   c.paint(root, 1.0)
+  c.sync_views()
   // back goes where the stack drawn now says (Ctx::nav, while building)
   c.back = c.back_next
   c.back_node = c.back_node_next
@@ -264,6 +265,11 @@ let track_y : Tracker = Tracker::new()
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
   let c = g
+  // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
+  if kind >= 4 && kind <= 6 {
+    on_second(kind, x, y)
+    return
+  }
   c.px = x
   c.py = y
   // the event's own time: events handled together happened apart
@@ -350,7 +356,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
           c.dragging = true
           c.active = 0
         }
-      } else if c.drag_scroll != 0 {
+      } else if c.drag_scroll != 0 && !captures.contains(c.drag_scroll) {
         // a pager follows the finger sideways, a list up and down
         let pager = pagers.contains(c.drag_scroll)
         if !c.dragging {
@@ -418,6 +424,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
     c.dragging = false
     c.active = 0
     c.editor_drag = false
+    second_ptr[2] = 0.0
   } else {
     if c.edge == 2 {
       c.back_gesture(3, x, t)
@@ -438,6 +445,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
     c.down = false
     c.dragging = false
     c.active = 0
+    second_ptr[2] = 0.0
   }
   h_request_frame()
 }
@@ -536,6 +544,12 @@ fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
 fn on_wheel(x : Double, y : Double, _dx : Double, dy : Double, _phase : Int) -> Unit {
   let c = g
   let target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
+  if captures.contains(target) {
+    // a box that takes the pointer keeps the wheel (native.mbt `wheel`)
+    wheels[target] = wheels.get(target).unwrap_or(0.0) + dy
+    h_request_frame()
+    return
+  }
   if target != 0 {
     match c.lists.get(target) {
       Some(st) => st.stop()

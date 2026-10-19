@@ -122,7 +122,12 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   if good is None && !pending && !failed {
     let id = match image_data.get(src) {
       Some(d) => h_image_load_bytes(d, want)
-      None => h_image_load(src, want)
+      None =>
+        if src.has_prefix("pdf:") {
+          pdf_page_load(src, want)
+        } else {
+          h_image_load(src, want)
+        }
     }
     let e = {
       id,
@@ -276,18 +281,35 @@ fn image_leaf_size(
 }
 
 ///|
-fn Ctx::paint_image(self : Ctx, n : Node, alpha : Double) -> Unit {
-  self.draw_image(
-    n.text,
-    n.x,
-    n.y,
-    n.fw,
-    n.fh,
-    n.fit,
-    n.radius,
-    alpha,
-    fade=n.fade,
-  )
+fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
+  match picture_at.get(i) {
+    // drawn at a rect of its own (Ctx::picture)
+    Some((x, y, w, h, max_px)) =>
+      self.draw_image(
+        n.text,
+        n.x + x,
+        n.y + y,
+        w,
+        h,
+        FitFill,
+        n.radius,
+        alpha,
+        fade=n.fade,
+        max_px~,
+      )
+    None =>
+      self.draw_image(
+        n.text,
+        n.x,
+        n.y,
+        n.fw,
+        n.fh,
+        n.fit,
+        n.radius,
+        alpha,
+        fade=n.fade,
+      )
+  }
 }
 
 ///|
@@ -304,10 +326,11 @@ fn Ctx::draw_image(
   radius : Double,
   alpha : Double,
   fade? : Bool = true,
+  max_px? : Int = 8192,
 ) -> Unit {
   // a side still 0 waits for the image's proportions: load it anyway,
   // small if it has no size yet at all
-  let px = dmax(bw, bh) * self.scale
+  let px = dmin(dmax(bw, bh) * self.scale, max_px.to_double())
   let px = if px <= 0.0 { 256.0 } else { px }
   let e = match self.image_for(src, px) {
     Some(e) => e

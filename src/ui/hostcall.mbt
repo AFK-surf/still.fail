@@ -28,6 +28,9 @@ struct FakeHost {
   // what bold adds to a cluster's advance, in ems (0 by default: weight
   // changes nothing)
   mut bold : Double
+  // native views: what was asked of them, a line each ("open 1 video/mp4", "place 1 0 0 390 220 shown"…)
+  views : Array[String]
+  mut view_ids : Int
 }
 
 ///|
@@ -340,5 +343,148 @@ fn h_image_free(id : Int) -> Unit {
   match fake.val {
     Some(f) => f.images.remove(id)
     None => @host.image_free(id)
+  }
+}
+
+// Native views (native.mbt): the fake host has views of every kind, ready at once, 10 s long and 640 × 360, that
+// never ask to read; it notes what is asked of them (FakeHost.views).
+
+///|
+fn h_view_open(kind : Int, arg : String) -> Int {
+  match fake.val {
+    Some(f) => {
+      f.view_ids += 1
+      f.views.push("open \{f.view_ids} \{kind} \{arg.length()}")
+      f.view_ids
+    }
+    None => @host.view_open(kind, arg)
+  }
+}
+
+///|
+fn h_view_place(
+  id : Int,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  cx0 : Double,
+  cy0 : Double,
+  cx1 : Double,
+  cy1 : Double,
+  shown : Bool,
+) -> Unit {
+  match fake.val {
+    Some(f) =>
+      f.views.push(
+        "place \{id} \{x} \{y} \{w} \{h} in \{cx0} \{cy0} \{cx1} \{cy1}" +
+        (if shown { "" } else { " hidden" }),
+      )
+    None => @host.view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, shown)
+  }
+}
+
+///|
+fn h_view_close(id : Int) -> Unit {
+  match fake.val {
+    Some(f) => f.views.push("close \{id}")
+    None => @host.view_close(id)
+  }
+}
+
+///|
+fn h_view_control(id : Int, op : Int, value : Double) -> Unit {
+  match fake.val {
+    Some(f) => f.views.push("control \{id} \{op} \{value}")
+    None => @host.view_control(id, op, value)
+  }
+}
+
+///|
+fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
+  match fake.val {
+    Some(_) => {
+      out[0] = 10000.0
+      out[1] = 0.0
+      out[2] = 0.0
+      out[3] = 640.0
+      out[4] = 360.0
+      out[5] = 0.0
+      out[6] = 1.0
+      out[7] = 0.0
+      ignore(id)
+      1
+    }
+    None => @host.view_info(id, out)
+  }
+}
+
+///|
+fn h_view_read_next(id : Int, out : FixedArray[Double]) -> Int {
+  match fake.val {
+    Some(_) => 0
+    None => @host.view_read_next(id, out)
+  }
+}
+
+///|
+fn h_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
+  match fake.val {
+    Some(_) => ()
+    None => @host.view_read_answer(id, req, data, total)
+  }
+}
+
+// PDFs (native.mbt Pdf): the fake host's every PDF has 3 pages of 612 × 792 points; a page drawn is an image of that
+// shape.
+
+///|
+fn h_pdf_open(data : Bytes) -> Int {
+  match fake.val {
+    Some(f) => {
+      f.views.push("pdf \{data.length()}")
+      7
+    }
+    None => @host.pdf_open(data)
+  }
+}
+
+///|
+fn h_pdf_pages(doc : Int) -> Int {
+  match fake.val {
+    Some(_) => if doc == 7 { 3 } else { -1 }
+    None => @host.pdf_pages(doc)
+  }
+}
+
+///|
+fn h_pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
+  match fake.val {
+    Some(_) => {
+      ignore(doc)
+      ignore(page)
+      out[0] = 612.0
+      out[1] = 792.0
+    }
+    None => @host.pdf_page_size(doc, page, out)
+  }
+}
+
+///|
+fn h_pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
+  match fake.val {
+    Some(f) => {
+      f.image_loads.push(("pdf:\{doc}/\{page}", max_px))
+      fake_image(f, 1224, 1584, max_px)
+    }
+    None => @host.pdf_page_load(doc, page, max_px)
+  }
+}
+
+///|
+fn h_pdf_close(doc : Int) -> Unit {
+  match fake.val {
+    Some(f) => f.views.push("pdf close \{doc}")
+    None => @host.pdf_close(doc)
   }
 }
