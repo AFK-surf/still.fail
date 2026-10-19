@@ -85,7 +85,7 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 | 忽略 goes | dismissed | alpha, scale → .85 (top left), height → 0 | tween(280, ArchiveEase) | chat/Chat.kt:956-961 | yes (`ask_dismiss` over decide.mbt `under_post`) |
 | 保留 / 归档此对话 under the last post | offered, taken | alpha, scale .85 (top centre), height | tween(280, ArchiveEase) | chat/Chat.kt:1164-1170 | yes (`archive_under_post`) |
 | A quoted message flashes | a quote tapped (a jump) | the accent's ground: 0 → 1 in 160 ms (Ease.Out), held to 900, → 0 by 1700 (Standard); a passage marked to .24 by 160, held to 1400, gone by 2400 | keyframes | chat/ChatMotion.kt:254-335 | not yet (no quote jumps) |
-| A passage picked (long press) | a hold on a message's words | the picked ground (accent 26%), the handles and the bar (引用 / 复制) | none: there at once, gone at once | chat/MessagePick.kt; ui/Pick.kt:143 | the same (no motion, as the app) |
+| A passage picked (long press) | a hold on a message's words | the picked ground (accent 26%), the handles and the bar (引用 / 复制) | none: there at once, gone at once | chat/MessagePick.kt; ui/Pick.kt:143 | the same (no motion, as the app; src/sfapp/pick.mbt) |
 | Quotes in the composer | a quote taken into the draft, or dropped | the composer's capsule changes shape round it | the morph (below) | chat/Composer.kt | yes (the morph) |
 | A search's words drawn in | opened from a search | strokes under the words | 520 ms each, 180 apart, Standard | chat/ChatMotion.kt:289-295; ui/TextMark.kt:47-48, 108 | not yet |
 

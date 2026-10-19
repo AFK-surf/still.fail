@@ -157,7 +157,7 @@ ChatFiles.kt, Decisions.kt, LoginCards.kt, Follow.kt):
   3000 messages): `scripts/shots.sh chat web-chat` compares it with
   goldens/mac-chat*.png and web-chat.png.
 
-Not yet, against the current app: the long-press menu and picking words;
+Not yet, against the current app:
 the file preview (slice 11) and opening links outside the app; tables and
 code highlighting in Markdown, a code block's sideways scroll; the messages'
 motion (rising in, coming out of an agent's avatar, the activity's glide and
@@ -208,9 +208,15 @@ PastedText.kt; SendText.kt; MessagePick.kt):
   TakePicturePreview). Not yet (the same tiles, a toast saying so): the
   recent photos (they need the gallery's permission and its thumbnails),
   Station 文件 (slice 12's drive), any picker on iOS, Windows and the web.
-- Quoting: a message's words held still half a second are picked (all of
-  them: the Android app picks a word and widens it by words, with handles),
-  a bar over them with 引用 (into the draft as a quote) and 复制.
+- Quoting: a message's words held still a long press's time (400 ms) pick the word under the finger, widened by
+  words as it slides on (the list holds still meanwhile: `Ctx::take_press`), the passage drawn behind the words in the
+  accent at 26%; lifted, handles at its ends (a line down its side with a knob, the finger's room 36 round it) move
+  them, and a bar over it (under it when the top bar is too near; gone while it changes or the list moves) has 引用
+  (into the draft as a quote), 复制 (已复制) and 全选. A tap anywhere else, or back, lets go (src/sfapp/pick.mbt,
+  MessagePick.kt, ui/Pick.kt). The words are mbui's (`Ctx::words`: a box's rich paragraphs as one text, kept as laid
+  out, their offsets, rects and the passage drawn behind them; `@ui.word_at`: the host's word boundaries, Android's
+  ICU BreakIterator, Apple's CFStringTokenizer, the browser's Intl.Segmenter, else letters and digits together and a
+  Han character alone, as on Windows and in the tests).
 - The soft keyboard (Android): MainActivity follows its insets as they move
   (WindowInsetsAnimation), MBView lays the app out above it without
   resizing the surface, so the composer rides on the keyboard as it comes and
@@ -232,7 +238,8 @@ other chats and pasted chat links as marks (chat.ref, chatSearch), sharing
 what they refer to before sending, the recent photos' strip, Station 文件 (slice 12's drive, below), a
 picture's preview from its tile, files pasted or sent by the keyboard (only
 words are), the text toolbar of the field
-(select, cut, copy by touch; the keyboard's own paste works), a new chat
+(select, cut, copy by touch; the keyboard's own paste works), links drawn but not tapped while words are picked (a tap
+on one lets go of the pick and follows it), the long press's haptic tick (no host haptics yet), a new chat
 (slice 6).
 
 Slice 12 without the player, the drive and the reader (branch drive, 2026-10-19; ember apps/android drive/Files.kt,
@@ -899,6 +906,7 @@ while the card moved the list):
 | 70 card-motion | an options card answered in the chat (the options go, 你 选择了「…」 comes in their place), another let go with 忽略 | alice's answer quoting the post; `dismissed` has alice's row for the second, nothing answered; the motion log has the options going (to 90%, their room closing), the line coming, 忽略 going (to 85%) |
 | 71 card-keep | a chat ended all done (made by the other device before the app starts): 保留 under its last post; 已保留…; the buttons and the bar's 归档 go | the station's `kept_chats` has alice's row for that chat's thread; the motion log has the buttons and the bar's 归档 going |
 | 72 bar-archive | the same kind of chat archived from its bar's 归档: Home at once, 已归档 | the session archived by hand at the station; the test chat not |
+| 73 pick-words | held still on the agent's words: a word picked, 复制 (已复制); held again, 引用, sent with words (flow 11 now takes 全选 first) | alice's message quotes a passage of the agent's words, not all of them; on macOS the pasteboard holds just a word of them |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once

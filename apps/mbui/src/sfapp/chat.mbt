@@ -257,7 +257,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         |> ignore
         // words sent, as typed, until their row is in the list (flight.mbt)
         flight_waiting(c, draft_key(r))
-        pick_bar(c, src, r)
+        // a passage picked: its handles and its bar over the list (pick.mbt)
+        pick_layer(c, src, r)
       }
     }
   })
