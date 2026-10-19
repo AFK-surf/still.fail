@@ -937,7 +937,9 @@
       const c = e.key.length === 1 ? e.key.toLowerCase() : '';
       if (!c) return;
       if ((e.metaKey || e.ctrlKey) && browsers.has(c)) return;
-      cb.key(1000 + c.charCodeAt(0), mods);
+      // select all, copy (the words picked with the pointer), cut: the editor's codes
+      const own = (e.metaKey || e.ctrlKey) ? { a: 12, c: 13, x: 14 }[c] : undefined;
+      cb.key(own ?? 1000 + c.charCodeAt(0), mods);
       e.preventDefault();
     });
     ta.addEventListener('input', (e) => {

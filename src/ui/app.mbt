@@ -301,6 +301,10 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       h_window_drag()
       return
     }
+    // words picked with the pointer (desktop.mbt), not in a field
+    if !c.editors.contains(target) {
+      select_press(x, y)
+    }
     c.down = true
     c.active = target
     c.press_x = x
@@ -370,6 +374,9 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       track_y.add(t, y)
       if c.edge > 0 && c.edge_move(x, y, t) {
         ()
+      } else if select_move(x, y) {
+        // picking words: the press is no tap
+        c.active = 0
       } else if c.editor_drag {
         match c.editors.get(c.active) {
           Some(st) =>
@@ -453,6 +460,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     c.dragging = false
     c.active = 0
     c.editor_drag = false
+    picked.dragging = false
     second_ptr[2] = 0.0
   } else {
     if c.edge == 2 {
@@ -600,6 +608,11 @@ fn on_key(code : Int, mods : Int) -> Unit {
   let c = g
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
   desk_key(code, mods, c.editors.contains(c.focus) && code < key_escape)
+  // ⌘C with no field focused: the words picked with the pointer
+  if code == key_copy && !c.editors.contains(c.focus) && selected_words() != "" {
+    h_clipboard_set(selected_words())
+    return
+  }
   if code >= key_escape {
     h_request_frame()
     return

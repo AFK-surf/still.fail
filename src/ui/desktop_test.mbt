@@ -212,3 +212,30 @@ test "desktop: a script hovers, right clicks, presses keys and resizes the windo
   assert_true(seen.contains("alt-down"))
   assert_true(seen.contains("w 900"))
 }
+
+///|
+test "desktop: words of a selectable paragraph are picked by a drag and copied; a press elsewhere lets them go" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.mouse_drags_lists(false)
+      c.column(w=Fill(1.0), fn() {
+        c.selectable(fn() { c.rich([@ui.plain("hello wide world")], size=15.0) |> ignore })
+        c.box(h=Px(40.0), fn() {  }) |> ignore
+        c.rich([@ui.plain("not this one")], size=15.0) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  let (_, y, _, h) = t.rect_of("hello wide world").unwrap()
+  t.move(2.0, y + h / 2.0)
+  assert_eq(t.cursor(), IBeam)
+  t.drag(1.0, y + h / 2.0, 200.0, y + h / 2.0)
+  assert_eq(t.ctx().selected_text(), "hello wide world")
+  t.key(13, mods=8)
+  assert_eq(t.clipboard(), "hello wide world")
+  let (_, y2, _, h2) = t.rect_of("not this one").unwrap()
+  t.tap(10.0, y2 + h2 / 2.0)
+  assert_eq(t.ctx().selected_text(), "")
+}

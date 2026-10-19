@@ -112,6 +112,8 @@ struct Rich {
   code_scale : Double
   // the id its links' ids come from
   base : Int
+  // its words picked with the pointer (Ctx::selectable: a desktop's page)
+  select : Bool
 }
 
 ///|
@@ -649,6 +651,7 @@ pub fn Ctx::rich(
     code_bg,
     code_scale,
     base,
+    select: desk.selecting,
   })
   i
 }
@@ -686,6 +689,13 @@ fn Ctx::paint_rich(self : Ctx, n : Node, alpha : Double) -> Unit {
   let cy0 = clip_stack[k + 1]
   let cx1 = clip_stack[k + 2]
   let cy1 = clip_stack[k + 3]
+  // its words picked with the pointer: where it is for the next press, what of it is picked under its words
+  if r.select {
+    selectable_painted(r.base, lay, n.text, ox, oy, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
+    for rect in selected_rects(r.base, lay) {
+      self.emit_rect(ox + rect.0, oy + rect.1, rect.2, rect.3, 0.0, desk.sel_color, 0.0, 0L, alpha)
+    }
+  }
   let sc = self.scale
   let colors = Array::makei(r.runs.length(), fn(k) {
     let run = r.runs[k]

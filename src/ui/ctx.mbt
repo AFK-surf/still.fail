@@ -60,6 +60,8 @@ struct ListState {
   // the size its rows are built for: the Ctx's as the list was (Ctx::sized), its rows built later, as it is laid out
   mut vw : Double
   mut vh : Double
+  // whether its rows' words are picked with the pointer (Ctx::selectable), as where the list was
+  mut sel : Bool
 }
 
 ///|

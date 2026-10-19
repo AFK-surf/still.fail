@@ -226,6 +226,7 @@ pub fn Ctx::list(
         ease: 0.0,
         vw: 0.0,
         vh: 0.0,
+        sel: false,
       }
       self.lists[id] = s
       self.own(id)
@@ -244,6 +245,7 @@ pub fn Ctx::list(
   st.owner = self.owner
   st.vw = self.width
   st.vh = self.height
+  st.sel = desk.selecting
   self.step_ease(st)
   self.step_scroll(st)
   // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was
@@ -272,6 +274,8 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let saved_seed = self.id_seed
   let saved_owner = self.owner
   let (saved_w, saved_h) = (self.width, self.height)
+  let saved_sel = desk.selecting
+  desk.selecting = st.sel
   self.cur = li
   self.id_seed = st.seed
   self.owner = st.owner
@@ -289,6 +293,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   self.owner = saved_owner
   self.width = saved_w
   self.height = saved_h
+  desk.selecting = saved_sel
   r
 }
 

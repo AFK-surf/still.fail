@@ -88,7 +88,42 @@ priv struct Desk {
   mut drags : Array[Int]
   /// lists dragged by the mouse as a finger drags them (true unless the app says not)
   mut mouse_drags : Bool
+  /// rich text built now is picked with the pointer (Ctx::selectable), and in what colour picked words are grounded
+  mut selecting : Bool
+  mut sel_color : Int64
+  /// the paragraphs that can be picked, as this frame paints them and as the last one did: their id, layout, words,
+  /// where their text starts, the part of them shown (x0, y0, x1, y1)
+  next_sels : Array[SelTarget]
+  mut sels : Array[SelTarget]
 }
+
+///|
+priv struct SelTarget {
+  base : Int
+  lay : RichLayout
+  text : String
+  ox : Double
+  oy : Double
+  x0 : Double
+  y0 : Double
+  x1 : Double
+  y1 : Double
+}
+
+///|
+/// What is picked with the pointer: in which paragraph (0: nothing), from its anchor to where the pointer took it, and
+/// whether the pointer is still taking it.
+priv struct Picked {
+  mut base : Int
+  mut a : Int
+  mut b : Int
+  mut dragging : Bool
+  mut text : String
+  mut target : SelTarget?
+}
+
+///|
+let picked : Picked = { base: 0, a: 0, b: 0, dragging: false, text: "", target: None }
 
 ///|
 let desk : Desk = {
@@ -102,6 +137,10 @@ let desk : Desk = {
   next_drags: [],
   drags: [],
   mouse_drags: true,
+  selecting: false,
+  sel_color: 0x3B82F64DL,
+  next_sels: [],
+  sels: [],
 }
 
 ///|
@@ -116,6 +155,12 @@ fn desk_reset() -> Unit {
   desk.next_drags.clear()
   desk.drags.clear()
   desk.mouse_drags = true
+  desk.selecting = false
+  desk.next_sels.clear()
+  desk.sels = []
+  picked.base = 0
+  picked.dragging = false
+  picked.target = None
 }
 
 ///|
@@ -133,6 +178,8 @@ fn desk_frame_start() -> Unit {
   desk.mutable_keys.clear()
   desk.next_cursors.clear()
   desk.next_drags.clear()
+  desk.next_sels.clear()
+  desk.selecting = false
 }
 
 ///|
@@ -143,6 +190,7 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
   desk.cursors = desk.next_cursors.copy()
   cs.clear()
   desk.drags = desk.next_drags.copy()
+  desk.sels = desk.next_sels.copy()
   if !self.down && self.px >= 0.0 {
     self.hover = hit_in(self.hit_ids, self.hit_rects, self.px, self.py)
   }
@@ -157,6 +205,9 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
     Some(k) => k
     None =>
       if target != 0 && self.editors.contains(target) {
+        Cursor::IBeam.code()
+      } else if sel_at(self.px, self.py) is Some(_) {
+        // words that are picked with the pointer
         Cursor::IBeam.code()
       } else {
         0
@@ -313,4 +364,123 @@ pub fn Ctx::sized(self : Ctx, w : Double, h : Double, body : () -> Unit) -> Unit
   body()
   self.width = sw
   self.height = sh
+}
+
+///|
+/// The rich text `body` builds (and its lists' rows) is picked with the pointer: pressed and dragged over, its words
+/// are selected (in `color`), ⌘C (Ctrl+C) copies them; a press elsewhere lets them go. A desktop's page, where the
+/// mouse drags no list (Ctx::mouse_drags_lists false).
+pub fn Ctx::selectable(self : Ctx, body : () -> Unit, color? : Int64 = 0x3B82F64DL) -> Unit {
+  ignore(self)
+  let saved = desk.selecting
+  desk.selecting = true
+  desk.sel_color = color
+  body()
+  desk.selecting = saved
+}
+
+///|
+/// The words picked with the pointer ("" none).
+pub fn Ctx::selected_text(self : Ctx) -> String {
+  ignore(self)
+  selected_words()
+}
+
+///|
+fn selected_words() -> String {
+  if picked.base == 0 || picked.a == picked.b {
+    return ""
+  }
+  let (a, b) = if picked.a < picked.b { (picked.a, picked.b) } else { (picked.b, picked.a) }
+  let n = picked.text.length()
+  let a = if a > n { n } else { a }
+  let b = if b > n { n } else { b }
+  picked.text.unsafe_substring(start=a, end=b)
+}
+
+///|
+/// A paragraph that can be picked, as painted (rich.mbt paint_rich).
+fn selectable_painted(
+  base : Int,
+  lay : RichLayout,
+  text : String,
+  ox : Double,
+  oy : Double,
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+) -> Unit {
+  let t = { base, lay, text, ox, oy, x0, y0, x1, y1 }
+  desk.next_sels.push(t)
+  // the paragraph picked from moves with what moves it (the list scrolled): its place is this frame's
+  if picked.base == base {
+    picked.target = Some(t)
+    picked.text = text
+  }
+}
+
+///|
+/// What of paragraph `base` is picked: a rectangle a line, in its text's terms.
+fn selected_rects(base : Int, lay : RichLayout) -> Array[(Double, Double, Double, Double)] {
+  if picked.base != base || picked.a == picked.b {
+    return []
+  }
+  let (a, b) = if picked.a < picked.b { (picked.a, picked.b) } else { (picked.b, picked.a) }
+  lay.rects(a, b)
+}
+
+///|
+/// The paragraph that can be picked under (x, y), the topmost.
+fn sel_at(x : Double, y : Double) -> SelTarget? {
+  if desk.mouse_drags || x < 0.0 {
+    return None
+  }
+  let mut k = desk.sels.length() - 1
+  while k >= 0 {
+    let t = desk.sels[k]
+    if x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1 {
+      return Some(t)
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// A primary press at (x, y): on words that are picked with the pointer, picking starts there; elsewhere what was
+/// picked is let go.
+fn select_press(x : Double, y : Double) -> Unit {
+  match sel_at(x, y) {
+    Some(t) => {
+      let off = t.lay.offset_at(x - t.ox, y - t.oy)
+      picked.base = t.base
+      picked.a = off
+      picked.b = off
+      picked.dragging = true
+      picked.text = t.text
+      picked.target = Some(t)
+    }
+    None => {
+      picked.base = 0
+      picked.dragging = false
+      picked.target = None
+    }
+  }
+}
+
+///|
+/// The pointer moved while picking: the picked words go to it. True once some are (the press is no tap then).
+fn select_move(x : Double, y : Double) -> Bool {
+  if !picked.dragging {
+    return false
+  }
+  match picked.target {
+    Some(t) => {
+      picked.b = t.lay.offset_at(x - t.ox, y - t.oy)
+      h_request_frame()
+      picked.a != picked.b
+    }
+    None => false
+  }
 }
