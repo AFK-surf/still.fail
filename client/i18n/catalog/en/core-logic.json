@@ -587,6 +587,7 @@
   "core-logic.machineLogin.comingBack": "Waiting for the browser to come back",
   "core-logic.machineLogin.openBrowser": "Open the browser to log in",
   "core-logic.machineLogin.finishInBrowser": "Finish logging in in the browser",
+  "core-logic.machineLogin.paste": "Sign in in the browser, then paste the code the page gives",
   "core-logic.machineLogin.starting": "Starting the login command",
   "core-logic.machineLogin.title": "Log in with {name} on {station}",
   "core-logic.machineLogin.cannotRelay": "This page can't take the login's callback: open this login in the still.fail desktop or Android app",

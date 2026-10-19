@@ -142,6 +142,7 @@ export const PARAMS: Record<string, string> = {
   "drive.stage": "root:string path:string zip?:boolean",
   "software.auto": "on?:boolean",
   "machineLogin.cancel": "id:string",
+  "machineLogin.answer": "id:string text:string",
   "workspace.create": "name?:string invite_code?:string",
   "workspace.rename": "workspace:string name?:string emoji?:string icon?:string",
   "workspace.setRelays": "workspace:string relays?:strings",
@@ -470,6 +471,9 @@ function stationOp(name: string, params: unknown): Request | null {
     // their commands; how each stands comes on the station's stream (`machineLogins`).
     case "machineLogin.cancel":
       return op("DELETE", () => `/machine-logins/${p.at("id")}`, null, { kind: "machineLogins" });
+    // What a login's page gave (a code), entered by the person from its card: the station types it into the command.
+    case "machineLogin.answer":
+      return op("POST", () => `/machine-logins/${p.at("id")}/answer`, p.pick(["text"]), { kind: "machineLogins" });
     default:
       return null;
   }

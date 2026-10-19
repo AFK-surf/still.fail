@@ -153,6 +153,42 @@ echo "Logged in as octocat"
   }
 });
 
+test("a login whose page gives a code to paste back (gcloud --no-launch-browser): the person's to enter from the card, not its agent's, typed with Enter", { skip: skipped }, async () => {
+  const m = machine();
+  const page = "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=1.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fsdk.cloud.google.com%2Fauthcode.html&state=s1";
+  script(join(m.bin, "fakegcloud"), `#!/bin/sh
+echo "Go to the following link in your browser, and complete the sign-in prompts:"
+echo
+echo "    ${page}"
+echo
+printf "Once finished, enter the verification code provided in your browser: "
+read code
+echo "got [$code]"
+echo "You are now logged in as [a@x.com]."
+`);
+  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1" }), link: (_s, id) => `https://still.fail/w/w1/s/st/login/${id}` });
+  try {
+    const started = await m.logins.start("fakegcloud auth login --no-launch-browser", m.by);
+    // Not before it asks: nothing is to be entered yet.
+    assert.throws(() => m.logins.answer(started.id, "4/abc"), /does not wait for a code/);
+    await m.quietAt(started.id, "enter the verification code");
+    const asks = await m.until(started.id, (l) => l.paste === true, "paste");
+    assert.deepEqual([asks.step, asks.url, asks.waiting], ["open", page, true]);
+    // Its agent is told the card takes it, not to answer the prompt.
+    const told = await tool!.run("ember:c-1", { id: started.id });
+    assert.match(told, /enter what it gives \(a code\) in the login card/);
+    assert.match(told, /do not answer this prompt yourself/);
+    assert.throws(() => m.logins.answer(started.id, "  "), /text/);
+    assert.throws(() => m.logins.answer(started.id, "a\nb"), /one line/);
+    const answered = m.logins.answer(started.id, " 4/0AXlq-code ", { email: "b@x.com", name: "李四" });
+    assert.equal(answered.doneBy?.name, "李四");
+    await m.until(started.id, (l) => l.state === "done", "done");
+    assert.ok(m.screen(started.id).includes("got [4/0AXlq-code]"), m.screen(started.id));
+  } finally {
+    await m.logins.close();
+  }
+});
+
 test("the agent drives the command through its tool: it sees the screen without the page or code, answers the Y/n itself, and is told when the person's step is ready", { skip: skipped }, async () => {
   const m = machine();
   const approved = approval(m.home);
@@ -508,12 +544,12 @@ test("the logins done here are kept: command, who, when and how each ended, with
   }
 });
 
-test("the routes: a read-only member's list has no pages or codes; no route starts a login or types into one", { skip: skipped }, async () => {
+test("the routes: a read-only member's list has no pages or codes; no route starts a login, or types into one but a page's code while it waits for one", { skip: skipped }, async () => {
   const m = machine();
   script(join(m.bin, "fakecode"), `#!/bin/sh\necho "Open https://example.com/device and enter WXYZ-1234"\nread forever\n`);
   const all = routes(() => m.logins);
-  assert.deepEqual(all.map((r) => r.method), ["GET", "GET", "DELETE", "POST"], "list, one, cancel, callback: starting one is an agent's");
-  const [list, , cancel] = all;
+  assert.deepEqual(all.map((r) => r.method), ["GET", "GET", "DELETE", "POST", "POST"], "list, one, cancel, a page's code, callback: starting one is an agent's");
+  const [list, , cancel, answer] = all;
   const ask = (route: (typeof list), role: string, body: Json = {}, args: string[] = []) =>
     route!.handle({ method: route!.method, path: "/machine-logins", query: [], headers: {}, body: Buffer.from(JSON.stringify(body)), viewer: { sub: "s", email: "a@x.com", name: "张三", role, workspace: "w1", device: "d" }, lang: "zh" }, args);
   const read = async (answer: Promise<{ status: number; body: unknown }>) => {
@@ -529,6 +565,10 @@ test("the routes: a read-only member's list has no pages or codes; no route star
     const theirs = viewer.body.logins.find((l: Json) => l.id === started.id);
     assert.deepEqual([mine.code, mine.url], ["WXYZ-1234", "https://example.com/device"]);
     assert.deepEqual([theirs.code, theirs.url, theirs.step, theirs.domain], [undefined, undefined, "device", "example.com"]);
+    // A page's code: not a read-only member's, and only while it waits for one (this one waits for nothing typed).
+    assert.equal((await read(ask(answer!, "viewer", { text: "x" }, [started.id]))).status, 403);
+    const typed = await read(ask(answer!, "member", { text: "x" }, [started.id]));
+    assert.deepEqual([typed.status, typed.body.error], [409, "this login does not wait for a code from its page"]);
     const cancelled = (await read(ask(cancel!, "member", {}, [started.id]))).body;
     assert.deepEqual([cancelled.state, cancelled.doneBy], ["cancelled", { email: "a@x.com", name: "张三" }], "who finished it: who cancelled it");
   } finally {

@@ -180,6 +180,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** A profile on the machine's own login of `runtime` (one kept in a file); answers its id. */
     /** Ends a login an agent started here (docs/remote-login.md): its command stopped, its card a line saying so. */
     suspend fun cancelMachineLogin(id: String) { ops.machineLoginCancel(id) }
+    /** What a login's page gave (a code), sent to its command (`paste`). */
+    suspend fun answerMachineLogin(id: String, text: String) { ops.machineLoginAnswer(id, text) }
 
     suspend fun useMachineLogin(runtime: String): String =
         ops.profileUseMachineLogin() { this.runtime = runtime }.jsonObject["id"]!!.jsonPrimitive.content

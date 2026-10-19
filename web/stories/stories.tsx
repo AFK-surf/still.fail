@@ -604,6 +604,8 @@ export const stories: Story[] = [
   { id: "login-card-loopback-listening", group: "登录", title: "卡片 · 回环 · 等浏览器回来", render: loginCard("listening"), demo: logins() },
   { id: "login-card-loopback-taken", group: "登录", title: "卡片 · 回环 · 本机端口被占用", render: loginCard("taken"), demo: logins() },
   { id: "login-card-device", group: "登录", title: "卡片 · 设备码", render: loginCard("device"), demo: logins() },
+  { id: "login-card-paste", group: "登录", title: "卡片 · 打开网址，再贴回页面给的码", render: loginCard("paste"), demo: logins() },
+  { id: "login-card-paste-phone", group: "登录", title: "卡片 · 贴码 · 手机", phone: true, render: loginCard("paste", 12), demo: logins() },
   { id: "login-card-question", group: "登录", title: "卡片 · agent 在回答命令的问题", render: loginCard("question"), demo: logins() },
   { id: "logins-section-past", group: "登录", title: "station 页 · 登录（只有做过的）", render: loginsSection, demo: logins({ listed: ["done", "failed", "cancelled"] }) },
   { id: "login-card-open", group: "登录", title: "卡片 · 打开网址", render: loginCard("open"), demo: logins() },

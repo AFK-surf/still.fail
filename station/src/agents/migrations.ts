@@ -56,6 +56,7 @@ export const NOTES: [number, string][] = [
   [49, "chat_create without a model no longer takes yours: it runs the model the person it goes to uses most on that station, when that one is used at least twice as often as any other; when not, it opens nothing and names them: ask the person which, then call again with model (and runtime)."],
   [50, "A week after a chat is archived (the station's setting), its workspace keeps only the files sent in the chat; its history stays. Push or move elsewhere what must outlive the chat."],
   [51, "A fourth runtime, Grok Build (runtime grok, on SuperGrok or an xAI key): chat_create takes runtime \"grok\"."],
+  [52, "Before a login {command}, read the stillfail-login skill: which command each common CLI (gh, gcloud, aws, az, npm, docker…) takes so the card can finish it. A command that prints a page and then asks for its code (gcloud --no-launch-browser) is the person's to paste on the login card: do not answer that prompt yourself."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

@@ -67,6 +67,9 @@ export class LoginRun {
   code: string | null = null;
   codeUrl: string | null = null;
   waiting = false;
+  /// It waits on a prompt after giving a page to open (gcloud --no-launch-browser's "enter the verification code"): what
+  /// the page gives is the person's to enter, from their card, not its agent's.
+  paste = false;
   echo = true;
   error: string | null = null;
   endedAt: number | null = null;
@@ -223,6 +226,7 @@ export class LoginRun {
       // Saying more, it no longer waits on what it asked (whether it waits now is asked once it is quiet again).
       if (this.waiting) {
         this.waiting = false;
+        this.paste = false;
         this.#o.changed();
       }
       this.#read();
@@ -312,8 +316,12 @@ export class LoginRun {
       echo = told ?? !secretAsked(line);
       if (!this.active) return;
     }
-    const changed = waiting !== this.waiting || (waiting && this.step === null);
+    // A page given and opened by nobody yet, then a prompt typed with echo: what it asks for is what the page gives (a
+    // code to paste back), the person's, whatever the prompt's words.
+    const paste = waiting && echo && this.step === "open" && this.url !== null;
+    const changed = waiting !== this.waiting || paste !== this.paste || (waiting && this.step === null);
     this.waiting = waiting;
+    this.paste = paste;
     if (waiting && this.step === null) {
       this.step = "terminal";
       this.state = "input";

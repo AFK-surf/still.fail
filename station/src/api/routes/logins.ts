@@ -60,6 +60,16 @@ export const routes = (logins: () => Logins | undefined): Route[] => {
       handle: (r, [login]) => answer((l) => ok(l.cancel(id(login!), { email: r.viewer.email, name: r.viewer.name }))),
     },
     {
+      // What the login's page gave (a code), entered by the person: `{text}` → the login.
+      method: "POST",
+      pattern: /^\/machine-logins\/+([^/]+)\/+answer\/*$/,
+      handle: (r, [login]) =>
+        answer((l) => {
+          if (readOnly(r.viewer)) throw new Refused(403, "read-only");
+          return ok(seen(r, l.answer(id(login!), input(r).text, { email: r.viewer.email, name: r.viewer.name })));
+        }),
+    },
+    {
       // The browser's callback, from the client it came back to: `{method, path, headers, body?}` (the body base64) →
       // the command's answer `{status, headers, body}` (base64).
       method: "POST",

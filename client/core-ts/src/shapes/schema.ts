@@ -2126,6 +2126,7 @@ export const SHAPES: Record<string, Shape> = {
     ["codeUrl", opt("String"), { doc: "The page with the code already in it, where the service gives one." }],
     ["port", opt("u32"), { doc: "Loopback: the port its callback comes to." }],
     ["waiting", "bool", { doc: "The command waits on a prompt: its agent answers it (等 agent 回答命令的问题)." }],
+    ["paste", opt("bool"), { doc: "Open: after its page, the command waits for what the page gives (gcloud --no-launch-browser's verification code):\nthe person enters it on the card (`machineLogin.answer`). Then `waiting` is false." }],
     ["listening", "bool", { doc: "This device listens for its loopback callback now (opened here, in the desktop or Android app): 等浏览器回来." }],
     ["relayText", opt("String"), { doc: "Loopback: why this device could not listen for its callback when it was last opened here (本机 8085 端口被占用),\nsaid on its card until it is opened again." }],
     ["statusText", "String", { doc: "How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 登录完成, 超时了…" }],
