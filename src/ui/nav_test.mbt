@@ -130,3 +130,26 @@ test "the system's back gesture (predictive back) follows, then goes or not" {
   t.back()
   assert_eq(nav.depth(), 1)
 }
+
+///|
+test "nav_flat: the top page alone, in place; a page left is forgotten and told" {
+  let left : Array[String] = []
+  let nav = @ui.Nav::new("home", on_leave=fn(p) { left.push(p) })
+  let shown : Array[String] = []
+  let t = @ui.Tester::new(fn(c) {
+    c.nav_flat(nav, fn(p) {
+      shown.push(p)
+      c.text(p, wrap=false) |> ignore
+    })
+    |> ignore
+  })
+  nav.push("chat")
+  t.frame()
+  assert_true(t.find("chat") is Some(_))
+  assert_true(t.find("home") is None)
+  nav.pop() |> ignore
+  t.frame()
+  t.frame()
+  assert_eq(left, ["chat"])
+  assert_true(t.find("home") is Some(_))
+}

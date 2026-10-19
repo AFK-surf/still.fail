@@ -396,3 +396,25 @@ pub fn Ctx::take_back(self : Ctx, f : () -> Unit) -> Unit {
   })
   self.back_node_next = -1
 }
+
+///|
+/// The top page of `nav` alone, in place, nothing sliding and nothing swiped back: a desktop's pane beside a sidebar,
+/// whose pages are the same stack as a phone's (Ctx::nav draws it so on a narrow window). A page gone is forgotten
+/// (its widgets' state, `on_leave` told) as Ctx::nav forgets it; one moving is put where it was going.
+pub fn[P] Ctx::nav_flat(self : Ctx, nav : Nav[P], page : (P) -> Unit, bg? : Int64 = 0L) -> Int {
+  for e in nav.gone {
+    self.forget(e.serial)
+    (nav.on_leave)(e.page)
+  }
+  nav.gone.clear()
+  if nav.mode != 0 || nav.leaving is Some(_) {
+    nav.settle()
+  }
+  let top = nav.pages[nav.pages.length() - 1]
+  self.box(w=Fill(1.0), h=Fill(1.0), clip=true, bg~, fn() {
+    let saved = self.owner
+    self.owner = top.serial
+    self.scope(top.serial, fn() { page(top.page) })
+    self.owner = saved
+  })
+}

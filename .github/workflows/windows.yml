@@ -8,6 +8,11 @@ on:
     branches: [main, windows, images-android-win]
   pull_request:
   workflow_dispatch:
+    inputs:
+      stillfail_ref:
+        description: "also build still.fail's apps/mbui sffix (AFK-surf/still.fail at this ref) and shoot its wide frame"
+        required: false
+        default: ""
 
 jobs:
   demo:
@@ -60,4 +65,50 @@ jobs:
             out/ime/
             out/photos/
             out/textdiff/
+          if-no-files-found: warn
+
+  # still.fail's app over made-up data (its apps/mbui sffix, against this mbui), asked for by a run's stillfail_ref:
+  # its wide frame (a desktop's window) and a phone's page, light and dark, for comparing with macOS's.
+  stillfail:
+    if: github.event_name == 'workflow_dispatch' && inputs.stillfail_ref != ''
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: AFK-surf/still.fail
+          ref: ${{ inputs.stillfail_ref }}
+          path: sf
+          sparse-checkout: apps/mbui
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Install MoonBit
+        shell: pwsh
+        run: |
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$env:USERPROFILE\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Build sffix
+        run: MBUI_APP_MOD=sf/apps/mbui APP=sffix scripts/win.sh build
+      - name: Screenshots
+        run: |
+          mkdir -p out/shot-sf
+          D=$(cygpath -w "$PWD/out/shot-sf")
+          EXE=$(ls out/win/app/_build/native/release/build/*/sffix/sffix.exe)
+          for m in home chat settings-appearance files; do
+            for d in 0 1; do
+              n=win-wide-$m$([ $d = 1 ] && echo -dark || true)
+              MBUI_BENCH=-1 MBUI_WIN=1280x800 MBUI_DARK=$d MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$n MBUI_SHOT_DIR="$D" ./$EXE
+            done
+          done
+          MBUI_BENCH=-1 MBUI_WIN=1440x900 MBUI_FIXTURE=chat MBUI_SCRIPT=shot MBUI_SHOT_NAME=win-wide-chat-1440 MBUI_SHOT_DIR="$D" ./$EXE
+          MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_NAME=win-phone-home MBUI_SHOT_DIR="$D" ./$EXE
+          ls -la out/shot-sf
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stillfail-windows-shots
+          path: out/shot-sf/
           if-no-files-found: warn
