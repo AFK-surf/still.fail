@@ -525,45 +525,32 @@ fn close_sheet(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// A sheet from the bottom (Sheet.kt SheetHost): the scrim (black at 28%) closing it when tapped; the sheet `tall`
-/// high (its share of the screen, or as tall as what it shows, at most 90%), its top corners 26 round, frosted over
-/// the page and the scrim (sheet.mbt `sheet_glass`); it comes up in 300 ms and goes down the same way, drawn only as
-/// it goes (a tap meanwhile is what is under it's).
+/// A sheet from the bottom (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%) closing it when tapped;
+/// the sheet `tall` high (its share of the screen, or as tall as what it shows, at most 90%), its top corners 26
+/// round, frosted over the page and the scrim (@sf.sheet_look); it rises and sinks on the sheet's spring, drawn only
+/// as it goes (a tap meanwhile is what is under it's). The decisions' sheets are one sheet: one asked in place of
+/// another goes to its height.
 fn sheet_frame(c : @ui.Ctx, key : String, tall : Double, body : () -> Unit) -> Unit {
+  ignore(key)
   let leaving = dui.sheet is None
-  let p = if leaving {
-    1.0 - opening(c, dui.leave_at, 260.0)
-  } else {
-    opening(c, dui.sheet_at, 300.0)
+  let r = @kit.sheet(
+    c,
+    "decide-sheet",
+    !leaving,
+    h=dmin(tall, c.height * 0.9),
+    scrim=@sf.sheet_scrim,
+    look=@sf.sheet_look(),
+    fn() {
+      sheet_grab(c)
+      body()
+    },
+  )
+  if !leaving && !r.open {
+    close_sheet(c)
   }
-  if leaving && p <= 0.0 {
+  if leaving && !r.shown {
     dui.leaving = None
-    return
   }
-  let h = dmin(tall, c.height * 0.9)
-  scrim(c, key + "/scrim", p, open=!leaving, fn() { close_sheet(c) })
-  let sheet = c.layer(fn() {
-    c.spacer()
-    c.box(
-      w=Fill(1.0),
-      h=Px(h + 26.0),
-      ty=26.0 + (1.0 - p) * (h + 26.0),
-      radius=26.0,
-      glass=sheet_glass(p),
-      shadow=24.0,
-      clip=true,
-      id=c.id(key + "/sheet"),
-      fn() {
-        c.box(w=Fill(1.0), h=Px(h), fn() {
-          sheet_grab(c)
-          body()
-        })
-        |> ignore
-      },
-    )
-    |> ignore
-  })
-  @motion.leaving(c, sheet, !leaving)
 }
 
 ///|

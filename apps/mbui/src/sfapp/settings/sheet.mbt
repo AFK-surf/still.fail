@@ -80,57 +80,28 @@ pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
     Some(d) => d
     None => return
   }
-  let h = c.height * sheet.height
-  // up from below and back down on the sheet's spring (Motion.kt SheetSpring), the scrim in and out (300 ms, CSS's
-  // ease): Sheet.kt SheetHost
-  let off = @motion.animate(
+  // up from below and back down on the sheet's spring, the scrim in and out (300 ms, CSS's ease): mbui's @kit.sheet
+  // (Sheet.kt SheetHost); the page under it, darkened, closes it when tapped
+  let r = @kit.sheet(
     c,
-    "settings-sheet/offset",
-    if up { 0.0 } else { h + 26.0 },
-    spec=@motion.sheet_spring,
-    from=h + 26.0,
+    "settings-sheet",
+    up,
+    share=sheet.height,
+    scrim=@sf.sheet_scrim,
+    look=@sf.sheet_look(),
+    fn() {
+      c.scope(sheet.serial, fn() {
+        sheet_grab(c)
+        c.box(w=Fill(1.0), h=Fill(1.0), fn() { draw(c, core) }) |> ignore
+      })
+    },
   )
-  let shown = @motion.animate(c, "settings-sheet/scrim", if up { 1.0 } else { 0.0 }, spec=@motion.tween(300.0, ease=Css))
-  if !up && off >= h + 26.0 - 0.5 && shown <= 0.0 {
-    sheet.last = None
-    return
-  }
-  // the page under it, darkened: a tap there closes it
-  let scrim = c.id("settings-sheet-scrim")
-  if up && hit(c, scrim) {
+  if up && !r.open {
     close()
   }
-  let dim = c.layer(fn() {
-    c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(0x000000FFL, 0.28 * shown), id=scrim, fn() {  })
-    |> ignore
-  })
-  let t = @sf.theme()
-  let body = c.layer(fn() {
-    c.spacer()
-    c.box(
-      w=Fill(1.0),
-      h=Px(h + 26.0),
-      ty=26.0 + off,
-      radius=26.0,
-      glass={
-        ..@sf.glass_sheet(),
-        solid: @sf.over(@sf.over(t.p.bg, @sf.alpha(0x000000FFL, 0.28 * shown)), @sf.alpha(t.p.card, 0.8)),
-      },
-      shadow=24.0,
-      clip=true,
-      id=c.id("settings-sheet"),
-      fn() {
-        c.scope(sheet.serial, fn() {
-          sheet_grab(c)
-          c.box(w=Fill(1.0), h=Fill(1.0), pb=26.0, fn() { draw(c, core) }) |> ignore
-        })
-      },
-    )
-    |> ignore
-  })
-  // gone down, only drawn
-  @motion.leaving(c, dim, up)
-  @motion.leaving(c, body, up)
+  if !up && !r.shown {
+    sheet.last = None
+  }
 }
 
 ///|

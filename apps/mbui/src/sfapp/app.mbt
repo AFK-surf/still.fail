@@ -133,7 +133,6 @@ fn reset() -> Unit {
   app.filters.clear()
   sheet_host.kind = NoSheet
   sheet_host.shown = NoSheet
-  sheet_host.scrim = 0.0
   bar_reset()
   fresh.became = None
   fresh.made = ""

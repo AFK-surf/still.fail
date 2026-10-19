@@ -394,10 +394,10 @@ fn dv_fit(rows : Int) -> Double {
 }
 
 ///|
-/// A sheet from the bottom over the page (Sheet.kt SheetHost): the scrim (black at 28%, a tap beside it closes it),
-/// top corners of 26, frosted over the page and the scrim (sheet.mbt `sheet_glass`; `ground`: on that instead), only
-/// drawn while it closes; `h` tall (most of the screen at most). Its
-/// grabber (SheetGrab) and head (SheetHead), then `body`.
+/// A sheet from the bottom over the page (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%, a tap beside
+/// it closes it), top corners of 26, frosted over the page and the scrim (@sf.sheet_look; `ground`: on that instead),
+/// only drawn while it closes; `h` tall (most of the screen at most). Its grabber (SheetGrab) and head (SheetHead), then
+/// `body`. The drive's sheets are one sheet, the reader's panels (`at` given) another.
 fn dv_sheet_frame(
   c : @ui.Ctx,
   title : String,
@@ -409,52 +409,33 @@ fn dv_sheet_frame(
   ground? : Int64 = 0L,
 ) -> Unit {
   let t = @sf.theme()
-  let at = if at >= 0.0 {
-    at
-  } else if closing {
-    dv.closed_at
-  } else {
-    dv.sheet_at
-  }
-  let k = opening(c, at, 300.0)
-  let shown = if closing { 1.0 - k } else { k }
-  // closing, the scrim and the sheet are only drawn: a tap meanwhile is what is under them's
-  scrim(c, "dv-scrim", shown, open=!closing, fn() {
+  let r = @kit.sheet(
+    c,
+    if at >= 0.0 { "dv-reader-sheet" } else { "dv-sheet" },
+    !closing,
+    h=dmin(h, c.height * 0.9),
+    scrim=@sf.sheet_scrim,
+    look=@sf.sheet_look(ground~),
+    fn() {
+      c.box(w=Fill(1.0), pt=12.0, pb=8.0, align=ACenter, fn() {
+        c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
+      })
+      |> ignore
+      if title != "" {
+        c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, fn() {
+          c.text(title, size=17.0, weight=700, color=t.p.text, wrap=false) |> ignore
+        })
+        |> ignore
+      }
+      c.box(w=Fill(1.0), h=Fill(1.0), clip=true, body) |> ignore
+    },
+  )
+  if !closing && !r.open {
     match close {
       Some(f) => f()
       None => dv_close(c)
     }
-  })
-  let h = dmin(h, c.height * 0.9)
-  let sheet = c.layer(fn() {
-    c.spacer()
-    c.box(
-      w=Fill(1.0),
-      h=Px(h + 26.0),
-      ty=26.0 + (1.0 - shown) * (h + 26.0),
-      radius=26.0,
-      bg=ground,
-      glass?=if ground != 0L { None } else { Some(sheet_glass(shown)) },
-      shadow=24.0,
-      clip=true,
-      id=c.id("dv-sheet"),
-      fn() {
-        c.box(w=Fill(1.0), pt=12.0, pb=8.0, align=ACenter, fn() {
-          c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
-        })
-        |> ignore
-        if title != "" {
-          c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, fn() {
-            c.text(title, size=17.0, weight=700, color=t.p.text, wrap=false) |> ignore
-          })
-          |> ignore
-        }
-        c.box(w=Fill(1.0), h=Fill(1.0), pb=26.0, clip=true, body) |> ignore
-      },
-    )
-    |> ignore
-  })
-  @motion.leaving(c, sheet, !closing)
+  }
 }
 
 ///|

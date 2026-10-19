@@ -879,14 +879,9 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
       }
     None => ()
   }
-  // ＋'s sheet: up from below and back down on the sheet's spring, the scrim in and out (Sheet.kt SheetHost);
-  // drawn until it has gone
-  let sheet_h = attach_h + 26.0
-  let off = @motion.animate(c, "attach/offset", if cui.attach { 0.0 } else { sheet_h }, spec=@motion.sheet_spring, from=sheet_h)
-  let dim = @motion.animate(c, "attach/scrim", if cui.attach { 1.0 } else { 0.0 }, spec=@motion.tween(300.0, ease=Css))
-  if cui.attach || off < sheet_h || dim > 0.0 {
-    attach_sheet(c, src, r, d, off, dim)
-  }
+  // ＋'s sheet: up from below and back down on the sheet's spring, the scrim in and out (Sheet.kt SheetHost, mbui's
+  // @kit.sheet); drawn until it has gone
+  attach_sheet(c, src, r, d)
   // ＋'s Station 文件 (station_files.mbt)
   station_files_sheet(c, src, workspace_of(r.station), d.key)
 }
@@ -1487,12 +1482,8 @@ fn attach_sheet(
   src : Source,
   r : ChatRef,
   d : Draft,
-  offset : Double,
-  dim : Double,
 ) -> Unit {
   let t = @sf.theme()
-  scrim(c, "attach-scrim", dim, open=cui.attach, fn() { cui.attach = false })
-  let h = attach_h
   let ask = fn(kind : @host.PickKind) {
     cui.attach = false
     match @host.pick(kind) {
@@ -1535,16 +1526,15 @@ fn attach_sheet(
     cui.attach = false
     station_files_open(c, d.key)
   }
-  let sheet = c.layer(fn() {
-    c.spacer()
-    c.box(
-      w=Fill(1.0),
-      h=Px(h + 26.0),
-      ty=26.0 + offset,
-      radius=26.0,
-      glass=sheet_glass(dim),
-      shadow=24.0,
-      clip=true,
+  let sheet = @kit.sheet(
+    c,
+    "attach-sheet",
+    cui.attach,
+    h=attach_h,
+    scrim=@sf.sheet_scrim,
+    look=@sf.sheet_look(),
+    fn() {
+      c.box(
       fn() {
         // the grabber
         c.box(w=Fill(1.0), pt=12.0, pb=8.0, align=ACenter, fn() {
@@ -1569,7 +1559,7 @@ fn attach_sheet(
           })
         })
         |> ignore
-        c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pb=18.0 + 26.0, gap=8.0, fn() {
+        c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pb=18.0, gap=8.0, fn() {
           for item in [
             (photos, tr("android-chat.attach.photos"), "photo"),
             (files, tr("android-chat.attach.files"), "file"),
@@ -1595,12 +1585,13 @@ fn attach_sheet(
           }
         })
         |> ignore
-      },
-    )
-    |> ignore
-  })
-  // going down once let go of, only drawn: what is tapped meanwhile is the composer under it
-  @motion.leaving(c, sheet, cui.attach)
+      })
+      |> ignore
+    },
+  )
+  if cui.attach && !sheet.open {
+    cui.attach = false
+  }
 }
 
 ///|
