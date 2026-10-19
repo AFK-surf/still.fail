@@ -19,7 +19,8 @@ EXE=$M/_build/native/$MODE/build/$PKG/$PKG.exe
 sync() {
   mkdir -p $M/src
   cp -p moon.mod $M/
-  cp -rp src/. $M/src/
+  # exactly src/: a file gone from it goes from the copy too (then the copy's own files, after; Git Bash has no rsync)
+  if command -v rsync >/dev/null; then rsync -a --delete src/ $M/src/; else rm -rf $M/src && cp -rp src $M/src; fi
   sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp", "win_image.cpp" ]/' \
       -e 's/-fobjc-arc *//' src/host/moon.pkg > $M/src/host/moon.pkg
   # every app (demo, photos…) links no Apple frameworks
@@ -43,7 +44,17 @@ shot_dir() {
 case "${1:-build}" in
   build)
     sync
-    (cd $M && time moon build --target native $FLAG src/$PKG)
+    # moon's build, with the C that moonc generates split and compiled by cl in parallel, moonbit_init at /O1
+    # (scripts/mbc.py: a cl.exe first on PATH, every other command passed to the real one; MBC_SPLIT=0 compiles it
+    # whole). Windows' python is `python`.
+    PY=$(command -v python || command -v python3)
+    SHIM=$(cygpath -u "$("$PY" "$D/mbc.py" shim "$(cygpath -w "$PWD/out/mbc/win")" | tr -d '\r')")
+    rm -f out/mbc.log
+    LOG=$(cygpath -w "$PWD/out/mbc.log")
+    code=0
+    (cd $M && export PATH="$SHIM:$PATH" MBC_LOG="$LOG" MBC_VERBOSE=1 && time moon build --target native $FLAG src/$PKG) || code=$?
+    cat out/mbc.log 2>/dev/null || echo "win.sh: moon ran no command through scripts/mbc.py (out/mbc/win)"
+    [ $code = 0 ] || exit $code
     ls -la $EXE ;;
   run)
     ./$EXE ;;
