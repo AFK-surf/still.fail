@@ -250,6 +250,14 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     self.next_hit_rects.push(dmin(n.x + n.fw, cx1))
     self.next_hit_rects.push(dmin(n.y + n.fh, cy1))
   }
+  // a modal's ground: the wheel stops at it too (overlay.mbt)
+  if n.blocks && n.id != 0 {
+    self.next_scroll_ids.push(n.id)
+    self.next_scroll_rects.push(dmax(n.x, cx0))
+    self.next_scroll_rects.push(dmax(n.y, cy0))
+    self.next_scroll_rects.push(dmin(n.x + n.fw, cx1))
+    self.next_scroll_rects.push(dmin(n.y + n.fh, cy1))
+  }
   if n.kind == kind_text {
     match n.tl {
       Some(tl) =>

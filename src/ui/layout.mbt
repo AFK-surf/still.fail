@@ -74,7 +74,7 @@ fn leaf_size(
     }
   } else if n.kind == kind_editor {
     // an editor takes the width it is offered
-    let s = g.editor_display(n)
+    let s = g().editor_display(n)
     let tl = layout_text(s, n.font_size, n.weight, max_w, true, line=n.line_h)
     (if wm == Undefined { tl.w } else { w }, tl.h)
   } else if n.kind == kind_image {
@@ -180,7 +180,15 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   }
   n.lk_epoch = self.epoch
   n.lk_kind = n.kind
-  let dir : @flex.FlexDirection = if n.dir == Row { Row } else { Column }
+  let dir : @flex.FlexDirection = if n.dir == Row {
+    if n.rtl {
+      RowReverse
+    } else {
+      Row
+    }
+  } else {
+    Column
+  }
   if s.direction != dir {
     s.direction = dir
     ch = true
@@ -220,6 +228,10 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       ch = true
     }
     None => ()
+  }
+  if s.aspect != n.aspect {
+    s.aspect = n.aspect
+    ch = true
   }
   let ai : @flex.Align = match n.align {
     AStart => FlexStart

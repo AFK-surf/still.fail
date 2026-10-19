@@ -655,7 +655,7 @@ fn NativeView::take_site(self : NativeView, serve : (SiteRequest, SiteReply) -> 
           _ => ()
         }
         if was != (v.path, v.can_back, v.can_forward, v.loading, v.title) {
-          g.wants_frame = true
+          g().wants_frame = true
         }
       }
       _ => ()
@@ -814,7 +814,7 @@ pub fn image_state(src : String) -> Int {
     Some(list) => {
       let mut failed = list.length() > 0
       for e in list {
-        e.poll(g.now)
+        e.poll(g().now)
         if e.state == 1 {
           return 1
         }

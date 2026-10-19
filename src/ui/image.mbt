@@ -165,7 +165,7 @@ fn image_size(src : String) -> (Double, Double)? {
   match image_cache.get(src) {
     Some(list) => {
       for e in list {
-        e.poll(g.now)
+        e.poll(g().now)
         if e.state == 1 {
           return Some((e.ow, e.oh))
         }
@@ -266,8 +266,8 @@ fn image_leaf_size(
     (h * ratio, h)
   } else {
     // its pixels at the screen's scale, no bigger than the room given
-    let mut iw = ow / g.scale
-    let mut ih = oh / g.scale
+    let mut iw = ow / g().scale
+    let mut ih = oh / g().scale
     if wm == AtMost && iw > w {
       ih = ih * w / iw
       iw = w

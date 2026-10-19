@@ -327,6 +327,9 @@ pub fn Ctx::editor(
   st.sel_color = (caret_color & 0xFFFFFF00L) | 0x40L
   let focused = self.focus == id
   let i = self.alloc(kind_editor)
+  // in Tab's order (focus.mbt); its keys are its own
+  self.focusable(id, node=i, keys=0, on_press=true)
+  self.semantics(i, TextField, id~, label=placeholder, value=if secret { "" } else { st.text })
   let n = self.nodes[i]
   let (_, _, own_lh) = font_metrics(font_size, 400)
   let lh = if line > 0.0 { line } else { own_lh }

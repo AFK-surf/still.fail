@@ -1,6 +1,8 @@
 #!/bin/bash
 # Screenshots of the demo on every platform, compared with goldens/.
-#   scripts/shots.sh [mac web ios android | windows]   UPDATE=1 accepts them as goldens
+#   scripts/shots.sh [mac web ios android | windows | kit]   UPDATE=1 accepts them as goldens
+# `kit` is the components' gallery (APP=kitdemo, docs/components.md) on macOS, a page a shot (KIT_PAGES, all by
+# default), the light theme beside the dark one: goldens/mac-kit-<page>.png.
 # Writes out/shots/<name>.png and, where a golden exists, out/shots/<name>-review.png (golden | new | differences).
 # (still.fail's screens in mbui, and their goldens, are in still.fail's repository: apps/mbui/scripts/shots.sh.)
 D="$(cd "$(dirname "$0")" && pwd)"
@@ -20,6 +22,16 @@ for p in $PLATFORMS; do
       rm -rf out/shot-mac; mkdir -p out/shot-mac
       MBUI_BENCH=-1 MBUI_SCRIPT=shot MBUI_SHOT_DIR=$PWD/out/shot-mac ./_build/native/release/build/demo/demo.exe >/dev/null
       cp out/shot-mac/main.png out/shots/mac.png ;;
+    kit)  # not part of the default set
+      APP=kitdemo MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-kit; mkdir -p out/shot-kit
+      names=""
+      for s in ${KIT_PAGES:-foundation}; do
+        MBUI_BENCH=-1 MBUI_SCREEN=$s MBUI_WIN=960x720 MBUI_SCRIPT=shot MBUI_SHOT_NAME=$s MBUI_SHOT_DIR=$PWD/out/shot-kit \
+          ./_build/native/release/build/kitdemo/kitdemo.exe >/dev/null
+        cp out/shot-kit/$s.png out/shots/mac-kit-$s.png
+        names="$names mac-kit-$s"
+      done ;;
     windows)  # on Windows (Git Bash), not part of the default set
       MODE=release bash scripts/win.sh build >/dev/null
       MODE=release bash scripts/win.sh shot >/dev/null

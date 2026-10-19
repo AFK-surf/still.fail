@@ -188,7 +188,7 @@ pub fn paginate(
           })
       }
       Picture(_, pw, ph) => {
-        let mut w = dmin(inner_w, pw / g.scale)
+        let mut w = dmin(inner_w, pw / g().scale)
         let mut h = if pw > 0.0 { w * ph / pw } else { 0.0 }
         let room = bottom - top
         if h > room {

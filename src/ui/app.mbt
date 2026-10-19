@@ -1,7 +1,14 @@
 // The window's loop: the host calls these functions for frames and input.
 
 ///|
-let g : Ctx = Ctx::new()
+/// The window's context: one for the window's life; a Tester makes a fresh one each (nothing a test left in it is
+/// seen by the next).
+let the_ctx : Ref[Ctx] = Ref(Ctx::new())
+
+///|
+fn g() -> Ctx {
+  the_ctx.val
+}
 
 ///|
 let g_view : Ref[(Ctx) -> Unit] = { val: fn(_c) { () } }
@@ -52,7 +59,7 @@ pub fn run(title : String, view : (Ctx) -> Unit) -> Unit {
 
 ///|
 fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
-  let c = g
+  let c = g()
   let t0 = frame_body(c, w, h, scale, t)
   let t3 = h_now()
   h_present(c.inst, c.ninst)
@@ -83,8 +90,8 @@ pub fn frame_offscreen(
   t : Double,
 ) -> Ctx {
   g_view.val = view
-  frame_body(g, w, h, scale, t) |> ignore
-  g
+  frame_body(g(), w, h, scale, t) |> ignore
+  g()
 }
 
 ///|
@@ -119,6 +126,14 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   fx_frame_start(c)
   drawing_begin()
   desk_frame_start()
+  // the keys and presses since the last frame that move the focus, press what has it, dismiss a layer (focus.mbt,
+  // overlay.mbt), before the view builds
+  c.focus_frame_start()
+  c.sems.clear()
+  c.sem_hide = 0
+  c.sem_hidden.clear()
+  c.layer_cur = 0
+  c.group_cur = 0
   c.count = 0
   c.cur = -1
   c.back_next = None
@@ -127,6 +142,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.nodes[root].w = Px(w)
   c.nodes[root].h = Px(h)
   c.with_parent(root, fn() { (g_view.val)(c) })
+  // what lies over the page over everything else (overlay.mbt)
+  c.raise_layers()
   let t1 = h_now()
   // lists build their rows while laid out, and those see clicks too
   c.layout(root, 0.0, 0.0, w, h) |> ignore
@@ -175,6 +192,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let sr = c.scroll_rects
   c.scroll_rects = c.next_scroll_rects
   c.next_scroll_rects = sr
+  c.layers_frame_end()
+  c.focus_frame_end()
   c.desk_frame_end()
   c.sync_ime()
   fx_frame_end(c)
@@ -278,7 +297,7 @@ let track_y : Tracker = Tracker::new()
 
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
-  let c = g
+  let c = g()
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
   if kind >= 4 && kind <= 6 {
     on_second(kind, x, y)
@@ -313,6 +332,9 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     if !c.editors.contains(target) {
       select_press(x, y)
     }
+    // what lies over the page sees it (overlay.mbt); the focus goes as a press moves it (focus.mbt)
+    c.press_down = Some((x, y))
+    c.focus_on_press(target)
     c.down = true
     c.active = target
     c.press_x = x
@@ -588,7 +610,7 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 /// from the edge it came from), let go to go back, called off; or a back
 /// with no gesture.
 fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
-  let c = g
+  let c = g()
   let t = h_now()
   // from the right edge, the finger's way is mirrored
   let from_left = if edge == 1 { c.width - x } else { x }
@@ -603,7 +625,7 @@ fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
 
 ///|
 fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
-  let c = g
+  let c = g()
   let mut target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
   // over what scrolls sideways: its sideways part moves it, the rest goes to the list it lies in
   if sideways.contains(target) {
@@ -637,7 +659,7 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
 
 ///|
 fn on_key(code : Int, mods : Int) -> Unit {
-  let c = g
+  let c = g()
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
   desk_key(code, mods, c.editors.contains(c.focus) && code < key_escape)
   // ⌘C with no field focused: the words picked with the pointer
@@ -656,7 +678,10 @@ fn on_key(code : Int, mods : Int) -> Unit {
     }
     None => {
       let target = hit_in(c.scroll_ids, c.scroll_rects, c.px, c.py)
-      if target != 0 && (c.list_key(target, code) || c.pager_key(target, code)) {
+      // a key the focused widget takes (focus.mbt) scrolls nothing under the pointer
+      if target != 0 &&
+        !c.focus_takes(code) &&
+        (c.list_key(target, code) || c.pager_key(target, code)) {
         h_request_frame()
       }
     }
@@ -665,7 +690,7 @@ fn on_key(code : Int, mods : Int) -> Unit {
 
 ///|
 fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
-  let c = g
+  let c = g()
   match c.editors.get(c.focus) {
     Some(st) => {
       st.text_input(kind, s, a, b, h_now())

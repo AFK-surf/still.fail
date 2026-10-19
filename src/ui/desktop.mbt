@@ -324,6 +324,8 @@ fn Ctx::secondary_press(self : Ctx, x : Double, y : Double) -> Unit {
     k = k - 1
   }
   desk.mutable_menus.push((under, x, y))
+  // a press all the same for what lies over the page (overlay.mbt)
+  self.press_down = Some((x, y))
   self.px = x
   self.py = y
   h_request_frame()

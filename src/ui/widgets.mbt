@@ -9,15 +9,17 @@ fn shade(c : Int64, f : Double) -> Int64 {
 }
 
 ///|
-/// A button; returns true on the frame after it was clicked.
+/// A button, in the theme's accent unless `bg`; returns true on the frame after it was clicked.
 pub fn Ctx::button(
   self : Ctx,
   label : String,
   key? : String = "",
-  bg? : Int64 = 0x0A84FFFFL,
-  color? : Int64 = 0xFFFFFFFFL,
+  bg? : Int64,
+  color? : Int64,
   w? : Size = Auto,
 ) -> Bool {
+  let bg = bg.unwrap_or(self.theme.accent)
+  let color = color.unwrap_or(self.theme.on_accent)
   let id = self.id(if key == "" { label } else { key })
   let pressed = self.pressed(id)
   let fill = if pressed {
@@ -66,7 +68,7 @@ pub fn Ctx::segmented(
   self.box(
     dir=Row,
     pad=3.0,
-    bg=0xE3E3E8FFL,
+    bg=self.theme.faint,
     radius=10.0,
     fn() {
       // the indicator sits in a zero-width box, under the tabs that follow
@@ -77,7 +79,7 @@ pub fn Ctx::segmented(
           self.box(
             w=Px(item_w),
             h=Px(30.0),
-            bg=0xFFFFFFFFL,
+            bg=if self.theme.dark { 0x636366FFL } else { 0xFFFFFFFFL },
             radius=8.0,
             shadow=6.0,
             tx=x,

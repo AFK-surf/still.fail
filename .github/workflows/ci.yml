@@ -23,8 +23,8 @@ jobs:
           echo "$MOON_HOME/bin" >> $GITHUB_PATH
       - name: Check
         run: moon version --all && moon check --target js --output-json 2>&1 | python3 scripts/errs.py
-      - name: ui, motion and Markdown tests
-        run: moon test --target js -p mbui/ui -p mbui/motion -p mbui/md 2>&1 | tail -3
+      - name: ui, motion, the components and Markdown tests
+        run: moon test --target js -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/md 2>&1 | tail -3
       - name: "effect.mb on native and JS, and the demo of a screen and its logic on one clock over seeds (SEED=<n> replays a failure)"
         run: |
           set -o pipefail
@@ -49,12 +49,12 @@ jobs:
           echo "$MOON_HOME/bin" >> $GITHUB_PATH
       - name: macOS apps
         run: |
-          for app in demo textdiff; do
+          for app in demo textdiff kitdemo; do
             /usr/bin/time -p env APP=$app scripts/mac.sh build 2>&1 | tail -4
           done
       - name: Screenshot against the golden
         continue-on-error: true
-        run: scripts/shots.sh mac
+        run: scripts/shots.sh mac kit
       - name: "Text against Core Text's own (scripts/textdiff.sh mac; Studio's run is the one that gates)"
         continue-on-error: true
         run: |

@@ -11,55 +11,18 @@ pub struct Tester {
 }
 
 ///|
+/// What a test leaves behind forgotten before the next starts: the window's context made anew (every field of it as a
+/// window's first frame has it, by construction), and the state kept outside it (the package's own tables, those of
+/// the packages over it: on_reset) emptied; then checked (leaked_state), so that what is added later and not
+/// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
-  let c = g
+  the_ctx.val = Ctx::new()
   desk_reset()
   tester_size.val = None
   app_state.val = 3
   driver.val = None
-  c.count = 0
-  c.cur = -1
-  c.id_seed = 17
-  c.id_stack.clear()
-  c.now = 0.0
-  c.dt = 16.0
-  c.last_now = -1.0
-  c.frame_no = 0
-  // nothing laid out by an earlier test is reused
-  c.epoch = c.epoch + 1
-  c.wants_frame = false
-  c.wake_at = -1.0
-  c.hit_ids.clear()
-  c.hit_rects.clear()
-  c.scroll_ids.clear()
-  c.scroll_rects.clear()
-  c.px = -1.0
-  c.py = -1.0
-  c.down = false
-  c.hover = 0
-  c.active = 0
-  c.focus = 0
-  c.clicked.clear()
-  c.drag_scroll = 0
-  c.dragging = false
-  c.vel = 0.0
   track_x.reset()
   track_y.reset()
-  c.editor_drag = false
-  c.lists.clear()
-  c.editors.clear()
-  c.springs.clear()
-  c.owner = 0
-  c.owned.clear()
-  c.back = None
-  c.back_node = -1
-  c.back_next = None
-  c.back_node_next = -1
-  c.back_told = false
-  c.edge = 0
-  c.ninst = 0
-  c.ime_sig = ""
-  c.bench_list = 0
   reset_glass()
   clear_shapes()
   text_cache.fonts.clear()
@@ -76,9 +39,47 @@ fn reset_globals() -> Unit {
   picture_at.clear()
   wheels.clear()
   captures.clear()
+  drags.clear()
+  sideways.clear()
+  words_marks.clear()
+  words_kept.clear()
+  words_sel.clear()
+  list_counts.clear()
+  // (nav_serial goes on counting: a Nav made before its Tester holds pages numbered already)
   second_ptr[2] = 0.0
   bench.mode = 0
   reset_drawing()
+  let left = leaked_state()
+  if left.length() > 0 {
+    abort("state kept from an earlier test: " + left.join(", "))
+  }
+}
+
+///|
+/// The tables kept outside the context that still hold something (a Tester starts with all of them empty).
+fn leaked_state() -> Array[String] {
+  let out = []
+  let check = fn(name : String, n : Int) { if n > 0 { out.push(name) } }
+  check("desk.menus", desk.menus.length() + desk.mutable_menus.length())
+  check("desk.keys", desk.keys.length() + desk.mutable_keys.length())
+  check("desk.cursors", desk.cursors.length() + desk.next_cursors.length())
+  check("desk.sels", desk.sels.length() + desk.next_sels.length())
+  check("picked", picked.base)
+  check("image_cache", image_cache.length())
+  check("image_data", image_data.length())
+  check("pagers", pagers.length())
+  check("code_fields", code_fields.length() + code_clears.length())
+  check("open_views", open_views.length())
+  check("native_nodes", native_nodes.length())
+  check("picture_at", picture_at.length())
+  check("wheels", wheels.length())
+  check("captures", captures.length())
+  check("drags", drags.length())
+  check("sideways", sideways.length())
+  check("words", words_marks.length() + words_kept.length() + words_sel.length())
+  check("list_counts", list_counts.length())
+  check("drawing", dr.entries.length() + dr.overlay.length() + dr.carry.length())
+  out
 }
 
 ///|
@@ -163,7 +164,7 @@ pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
 /// re-layouts have finished); returns how many it took.
 pub fn Tester::settle(self : Tester, max? : Int = 600) -> Int {
   let mut n = 0
-  while n < max && (g.wants_frame || self.fake.wants) {
+  while n < max && (g().wants_frame || self.fake.wants) {
     self.frame()
     n = n + 1
   }
@@ -249,7 +250,7 @@ pub fn Tester::backspace(self : Tester) -> Unit {
 ///|
 /// The centre of the first text node (or editor placeholder) containing `s`.
 pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
-  let c = g
+  let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
     if (n.kind == kind_text || n.kind == kind_editor || n.kind == kind_rich) &&
@@ -264,7 +265,7 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
 /// The centre of the last text node containing `s` (drawn last: what lies over the others, a sheet's).
 pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
   ignore(self)
-  let c = g
+  let c = g()
   let mut found = None
   for i in 0..<c.count {
     let n = c.nodes[i]
@@ -320,7 +321,7 @@ pub fn Tester::views(self : Tester) -> Array[String] {
 /// taken on the next frame.
 pub fn Tester::site_says(self : Tester, event : String) -> Unit {
   self.fake.site.push(event)
-  g.wants_frame = true
+  g().wants_frame = true
 }
 
 ///|
@@ -328,10 +329,10 @@ pub fn Tester::site_says(self : Tester, event : String) -> Unit {
 pub fn Tester::holes(self : Tester) -> Array[(Double, Double, Double, Double)] {
   ignore(self)
   let out = []
-  for i in 0..<g.ninst {
+  for i in 0..<g().ninst {
     let b = i * inst_size
-    if g.inst[b + 5] == 9.0 {
-      out.push((g.inst[b], g.inst[b + 1], g.inst[b + 2], g.inst[b + 3]))
+    if g().inst[b + 5] == 9.0 {
+      out.push((g().inst[b], g().inst[b + 1], g().inst[b + 2], g().inst[b + 3]))
     }
   }
   out
@@ -353,7 +354,7 @@ pub fn Tester::dump(self : Tester) -> String {
 
 ///|
 fn dump_node(sb : StringBuilder, i : Int, depth : Int) -> Unit {
-  let c = g
+  let c = g()
   if i >= c.count {
     return
   }
@@ -409,7 +410,7 @@ fn dump_node(sb : StringBuilder, i : Int, depth : Int) -> Unit {
 ///|
 /// The rectangle of the first node whose text contains `s` (x, y, w, h).
 pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Double)? {
-  let c = g
+  let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
     if (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
@@ -423,7 +424,7 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
 ///|
 /// Visible list rows: (item, y, height), top to bottom.
 pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
-  let c = g
+  let c = g()
   let out = []
   for i in 0..<c.count {
     if c.nodes[i].kind == kind_list {
@@ -441,7 +442,7 @@ pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
 ///|
 /// The lines of the first text node whose text contains `s`, as laid out.
 pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
-  let c = g
+  let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
     if n.kind == kind_text && n.text.contains(s) {
@@ -478,7 +479,7 @@ pub fn Tester::move(self : Tester, x : Double, y : Double) -> Unit {
 ///|
 fn Tester::list_state(self : Tester) -> ListState {
   ignore(self)
-  let c = g
+  let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
     if n.kind == kind_list {
@@ -496,7 +497,7 @@ fn Tester::list_state(self : Tester) -> ListState {
 /// call on it while building, as Ctx::list_moved).
 pub fn Tester::ctx(self : Tester) -> Ctx {
   ignore(self)
-  g
+  g()
 }
 
 ///|
@@ -527,7 +528,7 @@ pub fn Tester::at_end(self : Tester) -> Bool {
 /// Where row `item` of the list is (x, y, w, h), if built.
 pub fn Tester::row(self : Tester, item : Int) -> (Double, Double, Double, Double)? {
   ignore(self)
-  let c = g
+  let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
     if n.item == item && n.parent >= 0 && c.nodes[n.parent].kind == kind_list {
@@ -576,7 +577,7 @@ pub fn Tester::check_rows(self : Tester, top : Double, bottom : Double) -> Unit 
 
 ///|
 /// A key by name: Home, End, PageUp, PageDown, Up, Down, Left, Right,
-/// Enter, Backspace, Delete.
+/// Enter, Backspace, Delete, Escape, Tab, Space, or a character ("a").
 pub fn Tester::press(self : Tester, name : String) -> Unit {
   let code = match name {
     "Home" => key_home
@@ -590,7 +591,15 @@ pub fn Tester::press(self : Tester, name : String) -> Unit {
     "Enter" => key_enter
     "Backspace" => key_backspace
     "Delete" => key_delete
-    _ => abort("no key \{name}")
+    "Escape" => key_escape
+    "Tab" => key_tab
+    "Space" => key_space
+    _ =>
+      if name.length() == 1 {
+        key_of_char(name.iter().next().unwrap())
+      } else {
+        abort("no key \{name}")
+      }
   }
   self.key(code)
 }
@@ -724,7 +733,7 @@ pub fn Tester::set_reduce_transparency(self : Tester, on : Bool) -> Unit {
 /// liquid), the capture it shares (1, 2, …)).
 pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Double, Int, Int)] {
   ignore(self)
-  let c = g
+  let c = g()
   let out = []
   for k in 0..<c.ninst {
     let b = k * inst_size
@@ -750,7 +759,7 @@ pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Doub
 /// glass), its top, its circle's middle below the top, its radius, its fillets').
 pub fn Tester::drawn_notches(self : Tester) -> Array[(Int, Double, Double, Double, Double)] {
   ignore(self)
-  let c = g
+  let c = g()
   let out = []
   for k in 0..<c.ninst {
     let b = k * inst_size
@@ -766,7 +775,7 @@ pub fn Tester::drawn_notches(self : Tester) -> Array[(Int, Double, Double, Doubl
 /// How many glyphs of the last frame are inked by the glass under them.
 pub fn Tester::adaptive_glyphs(self : Tester) -> Int {
   ignore(self)
-  let c = g
+  let c = g()
   let mut n = 0
   for k in 0..<c.ninst {
     if c.inst[k * inst_size + 5] == 7.0 {
@@ -781,7 +790,7 @@ pub fn Tester::adaptive_glyphs(self : Tester) -> Int {
 /// RRGGBBAA with its opacity applied).
 pub fn Tester::drawn_rects(self : Tester) -> Array[(Double, Double, Double, Double, Int64)] {
   ignore(self)
-  let c = g
+  let c = g()
   let out = []
   for k in 0..<c.ninst {
     let b = k * inst_size
@@ -801,7 +810,7 @@ pub fn Tester::drawn_rects(self : Tester) -> Array[(Double, Double, Double, Doub
 /// The glyphs drawn in the last frame: (x, y, colour).
 pub fn Tester::drawn_glyphs(self : Tester) -> Array[(Double, Double, Int64)] {
   ignore(self)
-  let c = g
+  let c = g()
   let out = []
   for k in 0..<c.ninst {
     let b = k * inst_size
@@ -822,7 +831,7 @@ pub fn Tester::drawn_glyphs(self : Tester) -> Array[(Double, Double, Int64)] {
 /// is (its content's top left).
 pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double)? {
   ignore(self)
-  let c = g
+  let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
     if n.kind == kind_rich && n.text.contains(s) {
@@ -887,7 +896,7 @@ pub fn Tester::images_kept(self : Tester) -> Int {
 /// dv, opacity).
 pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
   ignore(self)
-  let c = g
+  let c = g()
   let out = []
   for k in 0..<c.ninst {
     let b = k * inst_size
@@ -927,7 +936,7 @@ pub fn Tester::bold_wider(self : Tester, em : Double) -> Unit {
 /// (draw.mbt).
 pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
   ignore(self)
-  let c = g
+  let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
     if (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
@@ -986,4 +995,87 @@ pub fn Tester::cursor(self : Tester) -> Cursor {
 /// How often a press asked the host to drag the window.
 pub fn Tester::window_drags(self : Tester) -> Int {
   self.fake.window_drags
+}
+
+///|
+/// Tab (Shift+Tab when `back`): the focus to the next stop (focus.mbt).
+pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
+  self.key(key_tab, mods=if back { mod_shift_key } else { 0 })
+}
+
+///|
+/// The semantics tree of the last frame (Ctx::semantics_tree).
+pub fn Tester::semantics(self : Tester) -> Array[SemNode] {
+  ignore(self)
+  g().semantics_tree()
+}
+
+///|
+/// The semantics tree as text, hidden nodes left out (Ctx::semantics_dump).
+pub fn Tester::semantics_dump(self : Tester) -> String {
+  ignore(self)
+  g().semantics_dump()
+}
+
+///|
+/// The nodes of `role` not hidden (under a modal, in a hidden part), labelled `label` exactly unless it is "".
+pub fn Tester::all(self : Tester, role : Role, label? : String = "") -> Array[SemNode] {
+  self.semantics().filter(fn(s) { s.role == role && !s.hidden && (label == "" || s.label == label) })
+}
+
+///|
+/// The node of `role` labelled `label` (Testing Library's getByRole with its name, Compose's onNode): the one not
+/// hidden; the test fails when there is none, or more than one.
+pub fn Tester::get(self : Tester, role : Role, label? : String = "") -> SemNode raise {
+  let found = self.all(role, label~)
+  if found.length() == 1 {
+    return found[0]
+  }
+  let what = if label == "" { "\{role}" } else { "\{role} \{label.escape()}" }
+  if found.is_empty() {
+    fail("no \{what} in the semantics tree:\n\{self.semantics_dump()}")
+  }
+  fail("\{found.length()} of \{what} in the semantics tree:\n\{self.semantics_dump()}")
+}
+
+///|
+/// The node of `role` labelled `label`, if there is one not hidden (the first).
+pub fn Tester::query(self : Tester, role : Role, label? : String = "") -> SemNode? {
+  let found = self.all(role, label~)
+  if found.is_empty() {
+    None
+  } else {
+    Some(found[0])
+  }
+}
+
+///|
+/// A tap on the middle of the node of `role` labelled `label` (Tester::get), settled.
+pub fn Tester::click(self : Tester, role : Role, label? : String = "") -> Unit raise {
+  let s = self.get(role, label~)
+  let (x, y, w, h) = s.rect
+  self.tap(x + w / 2.0, y + h / 2.0)
+}
+
+///|
+/// `action` asked of the node of `role` labelled `label` (as a screen reader asks it), settled.
+pub fn Tester::act(self : Tester, role : Role, action : Action, label? : String = "") -> Unit raise {
+  let s = self.get(role, label~)
+  if s.id == 0 {
+    fail("\{s.describe()} takes no action")
+  }
+  g().ask_action(s.id, action)
+  self.frame()
+  self.settle() |> ignore
+}
+
+///|
+/// The node that has the keyboard's focus, if it says something.
+pub fn Tester::focused(self : Tester) -> SemNode? {
+  for s in self.semantics() {
+    if s.focused {
+      return Some(s)
+    }
+  }
+  None
 }

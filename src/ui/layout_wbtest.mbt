@@ -63,7 +63,7 @@ fn same_both_ways(name : String, scenario : () -> Unit) -> Int raise {
   for pass in 0..<2 {
     layout_reuse.val = pass == 0
     let out = frames[pass]
-    frame_hook.val = Some(fn() { out.push(snap(g)) })
+    frame_hook.val = Some(fn() { out.push(snap(g())) })
     scenario()
     frame_hook.val = None
   }
@@ -860,16 +860,16 @@ test "a slot taken by another builder starts afresh" {
     h=300.0,
   )
   assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == 0x336699FFL }))
-  assert_eq(g.scroll_ids.length(), 1)
+  assert_eq(g().scroll_ids.length(), 1)
   flip.val = true
   t.frame()
   // nothing drawn: no colour, no words, no pager to drag
   assert_eq(t.drawn_rects().length(), 0)
   assert_eq(t.drawn_glyphs().length(), 0)
-  assert_eq(g.scroll_ids.length(), 0)
-  assert_eq(g.hit_ids.length(), 0)
+  assert_eq(g().scroll_ids.length(), 0)
+  assert_eq(g().hit_ids.length(), 0)
   // the spacer has no padding, no colour, no id (words it may keep: only
   // texts read them)
-  let n = g.nodes[3]
+  let n = g().nodes[3]
   assert_eq((n.pad_l, n.pad_t, n.bg, n.id), (0.0, 0.0, 0L, 0))
 }

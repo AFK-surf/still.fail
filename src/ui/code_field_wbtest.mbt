@@ -2,9 +2,9 @@
 /// The digits the code field's boxes show, first to last.
 fn code_boxes() -> String {
   let b = StringBuilder()
-  for i in 0..<g.count {
-    if g.nodes[i].kind == kind_rich {
-      b.write_string(g.nodes[i].text)
+  for i in 0..<g().count {
+    if g().nodes[i].kind == kind_rich {
+      b.write_string(g().nodes[i].text)
     }
   }
   b.to_string()
@@ -14,8 +14,8 @@ fn code_boxes() -> String {
 /// The code field's boxes (those edged), as (x, edge colour), first to last.
 fn code_edges() -> Array[(Double, Int64)] {
   let out = []
-  for i in 0..<g.count {
-    let n = g.nodes[i]
+  for i in 0..<g().count {
+    let n = g().nodes[i]
     if n.kind == kind_box && n.border_w > 0.0 {
       out.push((n.x, n.border_c))
     }

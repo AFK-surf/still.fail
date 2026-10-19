@@ -808,5 +808,5 @@ pub fn Ctx::field_words(
 ///|
 /// The frame being made's context (the one the app runs in).
 pub fn current() -> Ctx {
-  g
+  g()
 }

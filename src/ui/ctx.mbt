@@ -177,6 +177,33 @@ pub struct Ctx {
   mut back_edge_next : Double
   mut back_told : Bool
   mut edge : Int
+  // the theme and the direction in force where the view builds (theme.mbt)
+  mut theme : Theme
+  mut direction : Direction
+  // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
+  // builds; the actions asked of them (by the host's accessibility, a test) for the next frame, and this frame's
+  sems : Array[Sem]
+  mut sem_hide : Int
+  sem_hidden : Array[(Int, Int)]
+  asked_actions : Array[(Int, Action)]
+  actions : Array[(Int, Action)]
+  // the keyboard's focus beyond a field's (focus.mbt): whether it shows (it came by the keyboard), what had it as the
+  // frame started; what can take it, as this frame builds it and as the last one did; roving groups' state, and the
+  // group being built
+  mut focus_visible : Bool
+  mut focus_before : Int
+  mut focusables : Array[Focusable]
+  mut last_focusables : Array[Focusable]
+  groups : Map[Int, Group]
+  mut group_cur : Int
+  // what lies over the page (overlay.mbt): its layers as this frame builds them and as the last one did, the one
+  // being built, the dismissals asked for since, where a press went down since the last frame
+  mut layers : Array[Layer]
+  mut last_layers : Array[Layer]
+  mut layer_cur : Int
+  dismissals : Map[Int, Dismiss]
+  layer_return : Map[Int, Int]
+  mut press_down : (Double, Double)?
   // output
   mut inst : FixedArray[Double]
   mut ninst : Int
@@ -249,6 +276,25 @@ fn Ctx::new() -> Ctx {
     back_edge_next: 20.0,
     back_told: false,
     edge: 0,
+    theme: Theme::light(),
+    direction: Ltr,
+    sems: [],
+    sem_hide: 0,
+    sem_hidden: [],
+    asked_actions: [],
+    actions: [],
+    focus_visible: false,
+    focus_before: 0,
+    focusables: [],
+    last_focusables: [],
+    groups: Map::new(),
+    group_cur: 0,
+    layers: [],
+    last_layers: [],
+    layer_cur: 0,
+    dismissals: Map::new(),
+    layer_return: Map::new(),
+    press_down: None,
     inst: FixedArray::make(24 * 4096, 0.0),
     ninst: 0,
     ime_sig: "",
@@ -345,7 +391,9 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 ///|
 /// A box laying out its children in a row or a column, flexbox style. `notch_r` > 0 cuts a notch into its top edge
 /// (its ground, border and glass alike): a circle of that radius about the middle of its top, `notch_y` below the edge
-/// (above it when negative), met by the edge through fillets of `notch_fillet` (Bar.kt's notch).
+/// (above it when negative), met by the edge through fillets of `notch_fillet` (Bar.kt's notch). `aspect` > 0: its
+/// width over its height, the side not said following the other (CSS's aspect-ratio). Built where the direction is
+/// right to left (Ctx::rtl), a row runs from the right and its left and right padding swap.
 pub fn Ctx::box(
   self : Ctx,
   dir? : Dir = Column,
@@ -381,12 +429,15 @@ pub fn Ctx::box(
   notch_y? : Double = 0.0,
   notch_r? : Double = 0.0,
   notch_fillet? : Double = 0.0,
+  aspect? : Double = 0.0,
   id? : Int = 0,
   body : () -> Unit,
 ) -> Int {
   let i = self.alloc_part(kind_box, false, false)
   let n = self.nodes[i]
   n.dir = dir
+  n.rtl = self.direction == Rtl
+  n.aspect = aspect
   n.w = w
   n.h = h
   let px = if padx >= 0.0 { padx } else { pad }
@@ -394,6 +445,12 @@ pub fn Ctx::box(
   // one side said on its own wins over both sides
   n.pad_l = if pl >= 0.0 { pl } else { px }
   n.pad_r = if pr >= 0.0 { pr } else { px }
+  // right to left, the start (left said) is the right
+  if n.rtl {
+    let l = n.pad_l
+    n.pad_l = n.pad_r
+    n.pad_r = l
+  }
   n.pad_t = if pt >= 0.0 { pt } else { py }
   n.pad_b = if pb >= 0.0 { pb } else { py }
   n.min_w = min_w
@@ -512,17 +569,19 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 }
 
 ///|
+/// Words, in the theme's colour unless `color`.
 pub fn Ctx::text(
   self : Ctx,
   s : String,
   size? : Double = 15.0,
   weight? : Int = 400,
-  color? : Int64 = 0x1D1D1FFFL,
+  color? : Int64,
   wrap? : Bool = true,
   w? : Size = Auto,
   line? : Double = 0.0,
   center? : Bool = false,
 ) -> Int {
+  let color = color.unwrap_or(self.theme.fg)
   let i = self.alloc_part(kind_text, true, false)
   let n = self.nodes[i]
   n.center = center

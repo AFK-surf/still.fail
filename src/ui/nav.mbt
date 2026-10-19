@@ -212,7 +212,7 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
 ///|
 /// A frame, for what changed outside of one (or within one, after it).
 fn wake() -> Unit {
-  g.wants_frame = true
+  g().wants_frame = true
   h_request_frame()
 }
 

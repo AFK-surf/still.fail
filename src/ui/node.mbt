@@ -126,6 +126,14 @@ struct Node {
   mut pager : Int
   // laid over its parent rather than beside its siblings
   mut layer : Bool
+  // a row laid out right to left (built where Ctx::rtl)
+  mut rtl : Bool
+  // its width over its height, its height following its width (0: none; Ctx::box `aspect`)
+  mut aspect : Double
+  // laid over the whole window, drawn and tapped over everything built outside one (overlay.mbt), and in it, what
+  // takes every press and wheel that what lies over it does not (a modal's ground)
+  mut portal : Bool
+  mut blocks : Bool
   // what it holds laid out as wide as it is, scrolled sideways inside it (Ctx::sideways)
   mut sideways : Bool
   // layout results, absolute, in logical pixels, kept from frame to frame
@@ -228,6 +236,10 @@ fn Node::new() -> Node {
     page_no: -1,
     pager: 0,
     layer: false,
+    rtl: false,
+    aspect: 0.0,
+    portal: false,
+    blocks: false,
     sideways: false,
     x: 0.0,
     y: 0.0,
@@ -279,6 +291,8 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.page_no = -1
   self.pager = 0
   self.layer = false
+  self.portal = false
+  self.blocks = false
   self.sideways = false
   self.rich = None
   self.item = -1
@@ -288,6 +302,8 @@ fn Node::reset_rest(self : Node) -> Unit {
 /// What Ctx::box sets, all of it.
 fn Node::reset_look(self : Node) -> Unit {
   self.dir = Column
+  self.rtl = false
+  self.aspect = 0.0
   self.w = Auto
   self.h = Auto
   self.min_h = 0.0

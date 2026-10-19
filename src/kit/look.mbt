@@ -1,0 +1,52 @@
+// What the default looks share: the focus ring, the tints of what is pointed at and pressed, the look of what is
+// disabled. A component's look is a function of its state (docs/components.md, rule 1): an app passes its own.
+
+///|
+/// The ring round what has the keyboard's focus (when `shown`), `radius` the corner of what it rings, as wide and as
+/// far out as the theme says. Built last in the box it rings (laid over it, its size the box's last frame: `rect`).
+pub fn focus_ring(c : @ui.Ctx, shown : Bool, rect : (Double, Double, Double, Double), radius : Double) -> Unit {
+  let (_, _, w, h) = rect
+  if !shown || w <= 0.0 {
+    return
+  }
+  let t = c.theme()
+  let out = t.focus_gap + t.focus_w
+  c.layer(fn() {
+    c.box(
+      w=Px(w + 2.0 * out),
+      h=Px(h + 2.0 * out),
+      tx=-out,
+      ty=-out,
+      radius=radius + out,
+      border=t.focus_w,
+      border_color=t.focus,
+      fn() {  },
+    )
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// `ground` as it shows pointed at (`hovered`) or held (`pressed`): the theme's tint over it, twice when held.
+pub fn tinted(c : @ui.Ctx, ground : Int64, hovered : Bool, pressed : Bool) -> Int64 {
+  let t = c.theme()
+  if pressed {
+    @ui.over(@ui.over(ground, t.hover), t.hover)
+  } else if hovered {
+    @ui.over(ground, t.hover)
+  } else {
+    ground
+  }
+}
+
+///|
+/// How opaque what is disabled is drawn.
+pub let disabled_alpha : Double = 0.4
+
+///|
+/// A tint twice as strong (its alpha doubled, at most opaque): what is held, over nothing.
+pub fn doubled(tint : Int64) -> Int64 {
+  let a = (tint & 0xFFL) * 2L
+  (tint & 0xFFFFFF00L) | (if a > 255L { 255L } else { a })
+}

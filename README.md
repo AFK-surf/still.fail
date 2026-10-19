@@ -31,8 +31,16 @@ src/ui      the framework (MoonBit, target independent)
   editor.mbt  multi-line text field with input-method composition
   code_field.mbt  a one-time code typed into boxes, handed on once
   widgets.mbt button, segmented control with a spring indicator
+  theme.mbt   the theme (colours, corners, sizes) and the direction, in the Ctx
+  response.mbt what happened to a widget (clicked, focused, changed…)
+  semantics.mbt the semantics tree: roles, labels, states, actions
+  focus.mbt   the keyboard's focus: Tab, roving groups, Enter and Space
+  overlay.mbt layers over the page: stacked, dismissed, the focus trapped; Popper
   scene.mbt   paint: one flat array of 24-float instances
   app.mbt     frame loop, input dispatch, bench mode
+src/kit     the components (Radix Primitives' set, docs/components.md): behaviour,
+            semantics and a default look from the theme; the time they keep
+src/kitdemo their gallery, light beside dark (APP=kitdemo, MBUI_SCREEN=<page>)
 src/md      a small Markdown parser (blocks, inlines)
 src/text    Unicode text segmentation (target independent, no host calls)
   grapheme.mbt   extended grapheme clusters, UAX #29 (caret, backspace)

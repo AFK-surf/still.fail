@@ -1,5 +1,5 @@
 #!/bin/bash
-# UI tests against the fake host (no window), the motion package, the Markdown parser;
+# UI tests against the fake host (no window), the motion package, the components (kit), the Markdown parser;
 # mbui/text's (UAX #29, #14 and #9 against Unicode's own test files); then mbui's text against the
 # platform's own drawing on macOS and in a browser (scripts/textdiff.sh mac web: fails on a string that differs and
 # did not before; TEXTDIFF=0 skips it). UPDATE=1 refreshes snapshots.
@@ -7,7 +7,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
-moon test --target js -p mbui/ui -p mbui/motion -p mbui/md ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
+moon test --target js -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/md ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
 code=${PIPESTATUS[0]}
 moon test --target native -p mbui/text 2>&1 | grep -v "$F" | tail -8
 [ ${PIPESTATUS[0]} = 0 ] || code=1
