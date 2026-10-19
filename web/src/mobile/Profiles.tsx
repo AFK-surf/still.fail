@@ -792,7 +792,7 @@ function InstallStep({ install }: { install: RuntimeInstall }) {
   const api = useApi();
   const act = useAct();
   return (
-    <div className={`${listsCss.mCard} ${settingsCss.mFormGroup} ${css.mSignIn}`}>
+    <div className={`${listsCss.mCard} ${settingsCss.mFormGroup} ${css.mSignIn} ${css.mFlowCard}`}>
       <b className={listsCss.mRowTitle}>{install.title}</b>
       {install.detail ? <p className={partsCss.mError}>{install.detail}</p> : <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{install.note ?? t("web-pages.profiles.installThenSignIn")}</p>}
       {install.state === "installing" && <Progress part={install.percent != null ? install.percent / 100 : null} label={install.title} />}
