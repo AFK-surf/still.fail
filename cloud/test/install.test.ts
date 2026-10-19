@@ -75,6 +75,12 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   for (const file of ["modules/media/books.json", "modules/media/books-0.1.3600.tar.gz", "modules/media/media-0.1.3600-other.tar.gz", "modules/media/media-1.tar.gz", "modules/my-mod/my-mod.json", "modules/media/x/media.json", "modules/media.json"]) {
     assert.equal(releaseType(file), null, file);
   }
+  // The prebuilt native parts (scripts/native.ts prebuild), by part, target and key.
+  assert.equal(releaseType("natives/shell-win32-x64-e873ee4f2e77b28f78c16a38.tar.gz"), "application/gzip");
+  assert.equal(releaseType("natives/engine-win32-x64-95311552b24140105c1a54aa.tar.gz"), "application/gzip");
+  for (const file of ["natives/shell-win32-x64-e873.tar.gz", "natives/shell-other-e873ee4f2e77b28f78c16a38.tar.gz", "natives/../station.json", "natives/x/shell-win32-x64-e873ee4f2e77b28f78c16a38.tar.gz"]) {
+    assert.equal(releaseType(file), null, file);
+  }
   assert.equal(releaseType("android/latest.json"), "application/json");
   assert.equal(releaseType("station.json"), "application/json");
   assert.equal(releaseType("android/stillfail-1124.apk"), "application/vnd.android.package-archive");

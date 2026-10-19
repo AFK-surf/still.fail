@@ -218,7 +218,10 @@ fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
   @core.call("auth.begin", params=Json::object(params), on_done=fn(r) {
     let url = match r {
       Ok(ok) => str(Some(ok), "url")
-      Err(_) => ""
+      Err(e) => {
+        @host.log("auth.begin failed: " + e.stringify())
+        ""
+      }
     }
     if url == "" {
       l.end()

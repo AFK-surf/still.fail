@@ -1,9 +1,23 @@
 // mbui/core's native side: the engine's messages, which come on the core's own thread, copied into a queue that the
 // UI thread drains (core.mbt `pump`). On Apple's systems the main queue is woken to drain it, once per run of messages
 // (`scheduled`); elsewhere the engine asks the host for a frame and the host calls mbc_frame as each begins (Android's
-// GL thread: android_host.c), which drains it when something came. The engine itself is the app's (core_client.h, mbc_use).
+// GL thread: android_host.c; Windows' message loop: win_app.c), which drains it when something came. The engine itself is
+// the app's (core_client.h, mbc_use).
+#ifdef _WIN32
+// (MSVC's C has neither pthreads nor, by default, C11's atomics: a slim lock and an interlocked flag instead)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+typedef SRWLOCK pthread_mutex_t;
+#define PTHREAD_MUTEX_INITIALIZER SRWLOCK_INIT
+#define pthread_mutex_lock(m) AcquireSRWLockExclusive(m)
+#define pthread_mutex_unlock(m) ReleaseSRWLockExclusive(m)
+typedef volatile LONG atomic_int;
+#define atomic_store(p, v) InterlockedExchange((p), (v))
+#define atomic_exchange(p, v) InterlockedExchange((p), (v))
+#else
 #include <pthread.h>
 #include <stdatomic.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -236,6 +250,22 @@ int32_t mbc_web_auth(int32_t token, moonbit_string_t url, moonbit_string_t schem
   return 1;
 }
 
+#ifdef _WIN32
+double mbc_wall_ms(void) {
+  FILETIME ft;
+  GetSystemTimePreciseAsFileTime(&ft);
+  uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;  // 100 ns since 1601
+  return (double)(t - 116444736000000000ULL) / 10000.0;
+}
+
+double mbc_now_ms(void) {
+  static LARGE_INTEGER freq;
+  LARGE_INTEGER t;
+  if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+  QueryPerformanceCounter(&t);
+  return (double)t.QuadPart * 1000.0 / (double)freq.QuadPart;
+}
+#else
 double mbc_wall_ms(void) {
   struct timespec t;
   clock_gettime(CLOCK_REALTIME, &t);
@@ -247,3 +277,4 @@ double mbc_now_ms(void) {
   clock_gettime(CLOCK_MONOTONIC, &t);
   return (double)t.tv_sec * 1000.0 + (double)t.tv_nsec / 1e6;
 }
+#endif

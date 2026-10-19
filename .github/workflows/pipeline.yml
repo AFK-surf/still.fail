@@ -9,7 +9,9 @@
 # The native parts (scripts/native.ts: the station's mesh addon, launcher and runner, the web's iroh, Android's shell
 # and engine, the desktop's dock, the media service's ffmpeg) are prebuilt: the natives job builds those whose key the release
 # native-artifacts lacks, on mini1, and on main publishes them there; every other job gets them from the release (a
-# branch's: from its natives job's run artifact), so a change that is not to a native part compiles no Rust.
+# branch's: from its natives job's run artifact), so a change that is not to a native part compiles no Rust. The mbui
+# app's Windows shell and engine are prebuilt on a development Mac instead (node scripts/native.ts prebuild: cross-built,
+# put in the releases bucket by their keys) and never built here: windows-natives fetches them and runs the shell's tests.
 # Stable: the manual Publish stable workflow. Relay remains manual (deploying it drops every connection).
 name: pipeline
 on:
@@ -54,6 +56,7 @@ jobs:
       desktop_web: ${{ steps.plan.outputs.desktop_web }}
       windows: ${{ steps.plan.outputs.windows }}
       natives: ${{ steps.natives.outputs.natives }}
+      windows_natives: ${{ steps.plan.outputs.windows_natives }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true }
@@ -113,6 +116,10 @@ jobs:
           # the app's code and its iroh addon (a change to the web app it carries is the Mac app's check too).
           windows=false
           if has '^(apps/desktop/|station/native/mesh/|vendor/|scripts/native\.ts$|\.github/windows-smoke\.ps1$)'; then windows=true; fi
+          # The mbui app's Windows shell and engine, prebuilt: fetched and the shell's tests run (windows-natives), for a
+          # change to what they are made of.
+          windows_natives=false
+          if has '^(client/shell/|client/Cargo\.(toml|lock)$|vendor/|apps/mbui/engine/|scripts/native\.ts$)'; then windows_natives=true; fi
           {
             echo "range=$range"
             echo "parts=${static[*]}"
@@ -126,6 +133,7 @@ jobs:
             echo "desktop=$desktop"
             echo "desktop_web=$desktop_web"
             echo "windows=$windows"
+            echo "windows_natives=$windows_natives"
           } >> "$GITHUB_OUTPUT"
           echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay"
 
@@ -167,6 +175,49 @@ jobs:
       - if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
+
+  # The mbui app's Windows shell and engine (scripts/native.ts `msvc`) are prebuilt on a development Mac, cross-built
+  # (node scripts/native.ts prebuild), and put in the releases bucket by their keys; CI never builds them. Here, on
+  # GitHub's Windows (no runner of ours is), for a change to what they are made of: both fetched (a key not there fails,
+  # saying how to prebuild it), and the shell's tests, built with it, run where it runs.
+  windows-natives:
+    needs: plan
+    if: needs.plan.outputs.windows_natives == 'true'
+    runs-on: windows-2025
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # the keys are git's blobs: the checkout as git has it
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      - name: The Windows engine and shell, prebuilt; the shell's tests
+        run: |
+          node scripts/native.ts fetch engine win32-x64
+          shell=$(node scripts/native.ts fetch shell win32-x64)
+          for t in "$shell"/tests/*.exe; do echo "== $(basename "$t")"; "$t" --test-threads=2 || exit 1; done
+
+  # main: the prebuilt Windows natives in the releases bucket's natives/ (what `prebuild --release` put in the release
+  # native-artifacts from a development Mac, copied over: nothing is built here), once the API (which serves natives/)
+  # is out. Seconds when the store has them.
+  natives-store:
+    needs: [plan, api]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Copy what the store lacks from the release
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/native.ts store-sync
 
   # mini1-5 (label quick, on mini1 too) takes only the short jobs everything else waits on: natives (what a run's
   # builds and checks need), and main's done and station-update. Behind the builds in mini1's four, natives waited

@@ -193,6 +193,35 @@ it, not in one of ours.
 - The moon build of the Android copy still links a macOS program, which nothing runs: android.sh links the copy's
   coredemo with `-undefined dynamic_lookup` instead of the Apple shell, so it needs no `scripts/core.sh shell`.
 
+## Windows
+
+Built (`apps/mbui/scripts/win.sh build`, Git Bash with MSVC's environment and MoonBit; CI: mbui.yml's `windows` job on
+GitHub's Windows): the core in Hermes 0.81.4, in-process, on the Rust shell, as on Android (the decision and its
+measurements: core-engine-pc.md of the session that made it; Hermes starts 4–5× sooner than Node in a quarter of the
+memory).
+
+- **Engine**: `apps/mbui/engine` (engine.cpp, Android's engine.cpp without JNI, behind a C API, engine.h), built with
+  clang-cl in Hermes's own CMake tree from facebook/hermes at the tag React Native 0.81.4's Hermes is (MSVC fails on
+  Hermes at that tag), Hermes static in `stillfail_engine.dll`; the shell `stillfail_shell.dll` (client/shell for
+  `x86_64-pc-windows-msvc`). Both are this repository's native parts (`node scripts/native.ts fetch engine|shell
+  win32-x64`), prebuilt on a Mac (Studio: `node scripts/native.ts prebuild`, cross-built with cargo-xwin and clang-cl
+  on xwin's SDK) into the releases bucket by their keys; CI only fetches them, nothing is committed. win.sh puts them
+  and `core.hbc` beside the app's .exe.
+- **Script**: `scripts/core.sh hermes` with the engine's own hermesc (`hermesc.exe` in the engine part).
+- **Host** (`src/host/win_core.c`, included by `src/sfcore/win_engine.c`, which mbui's win.sh puts in place of the
+  app's Apple stub): `mb_core_start` hands the engine the bytecode, the data directory and the host's calls; what the
+  core says goes into core_native.c's queue and asks for a frame, which win_app.c drains as it begins (`mbc_frame`).
+- **`secure.*`**: sealed with DPAPI for the Windows user (CryptProtectData, never a prompt), a file per value in
+  `<data>\secure`. `secure.ask` and `user: true` (Windows Hello) answer `"unsupported"`. `MBUI_SECURE_TEST=1` round-trips
+  it once as the core starts (`SECURE_TEST …` on stderr).
+- **`listen.*`** and **sign-in**: on mbui's win_listen.c (Winsock); the app signs in on `@host.browser_login`
+  (win_browser_login.c: `$BROWSER`, else the system's browser), the CLI's loopback redirect, as on Android.
+- **Data**: `%LOCALAPPDATA%\fail.still.mbui\core` (`MBUI_CORE_DATA` instead).
+- **End to end**: `apps/mbui/e2e/win.sh` signs the app in against a local cloud (cloud/test/dev.ts) through
+  `e2e/win/browser.cmd`, a browser standing in for the person (Google's page answered by the dev cloud's
+  `/__dev/google`), then starts it again on its files. No station there yet: Home has no chat.
+- Not yet: packaging (an installer), code signing, updates, Windows Hello for `secure.ask`, arm64.
+
 ## Login
 
 `auth.begin {redirect_uri, return_to, device_name?}` answers `{url}`: still.fail cloud's login page (Google), with

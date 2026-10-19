@@ -11,6 +11,11 @@ cd "$D/.."
 ROOT=$PWD
 EMBER=${EMBER:-$(cd "$TOOLS/.." && pwd)/ember-src}
 OUT=$ROOT/out/core
+# (Git Bash on Windows: paths as D:/…, which both its shell and Windows' programs take)
+if [ "${OSTYPE:-}" = msys ] || [ "${OSTYPE:-}" = cygwin ]; then
+  ROOT=$(cygpath -m "$ROOT")
+  EMBER=$(cygpath -m "$EMBER")
+fi
 CORE_TS=$EMBER/client/core-ts
 # The shell's intermediate build lives outside the checkout (and outside this repo): only the .a is kept in out/core.
 CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$(cd "$TOOLS/.." && pwd)/core-target}
@@ -19,8 +24,10 @@ export CARGO_TARGET_DIR
 [ -x "$HOME/.cargo/bin/cargo" ] && export PATH=$HOME/.cargo/bin:$PATH
 mkdir -p $OUT
 
-now() { python3 -c 'import time;print(time.time())'; }
-since() { python3 -c "print(round($(now)-$1,2))"; }
+# (Windows' Python is `python`)
+PY=$(command -v python3 || command -v python)
+now() { "$PY" -c 'import time;print(time.time())'; }
+since() { "$PY" -c "print(round($(now)-$1,2))"; }
 
 deps() {
   [ -d "$CORE_TS" ] || { echo "no ember checkout at $EMBER (EMBER=...)"; exit 1; }
@@ -78,7 +85,7 @@ hermesc() {
 
 # core.hbc's stamp: the bundle's inputs (esbuild's metafile), the entry and hermesc, by mtime and size
 hbc_stamp() {
-  python3 - "$OUT/core-hermes.meta.json" "${ENTRY:-$ROOT/core/hermes.ts}" "$1" <<'PY'
+  "$PY" - "$OUT/core-hermes.meta.json" "${ENTRY:-$ROOT/core/hermes.ts}" "$1" <<'PY'
 import json, os, sys
 meta, entry, hermesc = sys.argv[1:4]
 try:
