@@ -168,30 +168,6 @@ export function sentFrom(text: string): [string, string, string] | null {
   return [title, link, rest];
 }
 
-/// A notice that the station does not have a chat's runtime installed: installing it there, as the station's updates
-/// (`updates`, its overview's) say it stands, and whether the viewer may (`manages`: the workspace's owner or an admin),
-/// in a line (`title`: not installed, installing, could not, installed). Nothing offered by a station older than its
-/// updates.
-export function installView(runtime: string, updates: J[], manages: boolean): J | null {
-  const v = updates.find((u) => get(u, "id") === runtime);
-  if (v === undefined) return null;
-  const name = str(v.name) ?? runtime;
-  if (v.state === "updating") {
-    const percent = u64(v.percent);
-    return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(percent !== null ? { percent } : {}) };
-  }
-  if (v.installed === true) return { runtime, state: "installed", title: t("core-views.install.installed", { name }) };
-  const can = manages && v.updatable === true;
-  if (v.state === "failed") {
-    const why = str(v.message);
-    return { runtime, state: "failed", title: t("core-views.install.failed", { name }), ...(why ? { detail: why } : {}), ...(can ? { action: t("core-views.install.retry") } : {}) };
-  }
-  const title = t("core-views.install.missing", { name });
-  if (can) return { runtime, state: "missing", title, action: t("core-views.install.action") };
-  const why = str(v.note) ?? (manages ? null : t("core-views.install.managers_only"));
-  return { runtime, state: "missing", title, ...(why !== null ? { note: why } : {}) };
-}
-
 /// The notices that a runtime is not installed, said where they matter: under the viewer's message that waits for it
 /// (its `blocked`, the last such before them) rather than as notices of their own; once it is installed they are gone
 /// (what waited went on). One with none of the viewer's waiting before it stays a notice, with installing it.
@@ -1313,7 +1289,7 @@ export class Views implements Owner {
     for (let i = 0; i < messages.length; i++) {
       const m = shownMessage(messages[i], agents, viewer, slackUsers, members_, bots, thread.creator);
       messages[i] = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
-      const install = m.system === true && typeof m.runtime === "string" ? installView(m.runtime, updates, manages) : null;
+      const install = m.system === true && typeof m.runtime === "string" ? present.installView(m.runtime, updates, manages) : null;
       if (install !== null) messages[i].install = install;
       else if (reports && m.system === true && u64(m.seq) !== null && (str(m.text) ?? "").startsWith("⚠️")) messages[i].reportable = true;
     }

@@ -14,6 +14,7 @@ import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
 import type { Store, Value, Watch } from "./store.ts";
 import { equal, get as getU, isObject } from "./util.ts";
+import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -700,7 +701,7 @@ function supportedOf(overview: J): string[] | null {
 const findTile = (gs: J[], id: string): J => gs.flatMap((g) => arr(g.providers)).find((p) => p.id === id);
 const blank = () => ({ provider: "", method: "", endpoint: "", protocol: "", region: "", key: "", error: null, pending: false });
 
-function profileView(station: string, draft: J, overview: J): J {
+function profileView(station: string, draft: J, overview: J, manages = false): J {
   const runtimes = stationRuntimes(overview);
   const gs = groups(supportedOf(overview), runtimes, consoleOf(overview));
   const tile = typeof draft.provider === "string" ? findTile(gs, draft.provider) : undefined;
@@ -734,8 +735,11 @@ function profileView(station: string, draft: J, overview: J): J {
       out.usesLine = t("core-views.flow.uses", { uses: usesTextOf(arr(tile.uses).filter((u: unknown) => u !== "decision")) });
       return out;
     }
-    out.signIn = { runtime, provider: planOf(runtime).provider };
     out.usesLine = t("core-views.flow.uses", { uses: runtimeName(runtime) });
+    // Signed in with the runtime's own command: one the station does not have is installed first, the sign-in after.
+    const install = present.installView(runtime, arr(get(overview, "updates")), manages);
+    if (install !== null && install.state !== "installed") out.install = install;
+    else out.signIn = { runtime, provider: planOf(runtime).provider };
     return out;
   }
   if (kind === "env") {
@@ -796,7 +800,8 @@ export class ProfileFlows {
     const d = this.#drafts.get(topicKey(topic));
     if (!d) return null;
     const station = topic.station as string;
-    return profileView(station, d.value, overviewOf(this.#store, station));
+    const role = get(this.#store.value({ topic: "workspace", workspace: ofAddress(station) }), "ok")?.role;
+    return profileView(station, d.value, overviewOf(this.#store, station), role === "owner" || role === "admin");
   }
 
   change(topic: Topic, owner: ClientId, action: string, patch: J): J {

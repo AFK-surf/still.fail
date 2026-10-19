@@ -14,7 +14,8 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, blockedUnder, chatDerive, down, installView, shownMessage } from "../src/views/views.ts";
+import { Views, betaOffered, blockedUnder, chatDerive, down, shownMessage } from "../src/views/views.ts";
+import { installView } from "../src/present.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any

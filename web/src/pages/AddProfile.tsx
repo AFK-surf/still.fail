@@ -11,7 +11,7 @@ import { useProfileFlow } from "../profileFlow.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { BackLink, Button, Field, ProviderLogo, Segmented, Select, Waiting } from "../ui.tsx";
 import type { ApiProvider, ProfileFlowView } from "../core/shapes.ts";
-import { MachineLoginOffers, LoginSteps } from "./Accounts.tsx";
+import { InstallStep, MachineLoginOffers, LoginSteps } from "./Accounts.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -77,7 +77,8 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
   const start = useAction(() => api.newLogin(runtime, d?.signIn?.access), ({ id }) => setLogin(id));
   const send = useAction(() => api.newLoginCode(login!, code), () => setCode(""));
   const started = useRef(false);
-  const planning = d?.step === "connect" && d.method === "plan";
+  // A station without the runtime it signs in with installs it first (core `install`): the sign-in starts after.
+  const planning = d?.step === "connect" && d.method === "plan" && !d.install;
   useEffect(() => {
     if (planning && !started.current) { started.current = true; void start.run(); }
     if (!planning && started.current) { started.current = false; if (login && !pending?.created) void api.dropLogin(login).catch(() => undefined); setLogin(null); setCode(""); }
@@ -131,7 +132,8 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
           ))}
         </div>
       ) : d.method === "plan" ? (
-        pending?.error || pending?.job?.state === "failed" || pending?.job?.state === "cancelled"
+        d.install ? <div className={css.form}><InstallStep install={d.install} /></div>
+        : pending?.error || pending?.job?.state === "failed" || pending?.job?.state === "cancelled"
           ? <div className={css.form}><p className={controlsCss.fieldError}>{pending?.error ?? pending?.job?.error ?? t("web-pages.profiles.signInUnfinished")}</p><Button onClick={() => { if (login) void api.dropLogin(login).catch(() => undefined); setLogin(null); void start.run(); }}>{t("web-pages.profiles.restart")}</Button></div>
           : <div className={css.form}><LoginSteps job={pending?.job ?? null} provider={signInTo} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} /></div>
       ) : (

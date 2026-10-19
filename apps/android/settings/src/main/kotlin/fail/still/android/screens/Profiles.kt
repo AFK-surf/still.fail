@@ -63,6 +63,7 @@ import fail.still.android.data.LoginJob
 import fail.still.android.data.MachineLogin
 import fail.still.android.data.Overview
 import fail.still.android.data.RUNTIME_LABEL
+import fail.still.android.data.RuntimeInstall
 import fail.still.android.data.ProfileFlowView
 import fail.still.android.data.Profile
 import fail.still.android.data.ProfilesView
@@ -860,6 +861,23 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
 }
 
 /**
+ * A plan's sign-in on a station without the runtime it signs in with (core `install`; web Profiles.tsx InstallStep):
+ * installing it first, how that stands, and its button when the viewer may (`software.update`). The sign-in starts once
+ * it is installed.
+ */
+@Composable
+private fun InstallStep(install: RuntimeInstall, station: String) {
+    val app = LocalApp.current
+    val action = install.action
+    val busy = app.isDoing("software.update", "station" to station, "id" to install.runtime)
+    if (install.state == "installing") WaitLine(install.title + (install.percent?.let { " $it%" } ?: ""))
+    else Text(install.title, fontSize = 13.sp, color = C.muted)
+    install.detail?.let { Text(it, fontSize = 13.sp, color = C.red) }
+    install.note?.let { Text(it, fontSize = 13.sp, color = C.muted) }
+    if (action != null) Button(action, primary = true, busy = busy, modifier = Modifier.fillMaxWidth()) { app.act(action) { app.api(station).updateSoftware(install.runtime) } }
+}
+
+/**
  * What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude), or copy
  * the code and open the page (Codex, Grok).
  */
@@ -997,8 +1015,9 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     val runtime = d?.signIn?.runtime ?: d?.tile?.runtime?.takeIf { it == "codex" || it == "grok" } ?: "claude"
     val provider = d?.signIn?.provider ?: when (runtime) { "claude" -> "Claude"; "grok" -> "Grok"; else -> "ChatGPT" }
     val access = d?.signIn?.access
-    // A plan's sign-in starts when it is chosen; leaving before it made its profile leaves nothing behind.
-    val planning = d?.step == "connect" && d.method == "plan"
+    // A plan's sign-in starts when it is chosen; leaving before it made its profile leaves nothing behind. A station without
+    // the runtime it signs in with installs it first (core `install`): the sign-in starts after.
+    val planning = d?.step == "connect" && d.method == "plan" && d.install == null
     LaunchedEffect(planning) {
         if (planning) { error = null; try { login = api.newLogin(runtime, access) } catch (e: CoreException) { error = e.message } }
     }
@@ -1039,7 +1058,9 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                 }
                 d.method == "plan" -> {
                     val l = login
-                    if (error != null || job?.state == "failed" || job?.state == "cancelled") {
+                    val install = d.install
+                    if (install != null) InstallStep(install, address)
+                    else if (error != null || job?.state == "failed" || job?.state == "cancelled") {
                         Text(error ?: job?.error ?: t("android-settings.login.unfinished"), fontSize = 13.sp, color = C.red)
                         Button(t("android-settings.login.restart"), primary = false) { dropLogin(); error = null; scope.launch { try { login = api.newLogin(runtime, access) } catch (e: CoreException) { error = e.message } } }
                     } else LoginSteps(job, provider) { code -> api.newLoginCode(l ?: return@LoginSteps, code) }

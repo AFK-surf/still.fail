@@ -1608,8 +1608,8 @@ data class ChatJobsView (
 	val hiddenText: String
 )
 
-/// A runtime a chat's notice says is not installed, and installing it there (core views.ts `installView`): once
-/// installed, the station gives the chat's waiting messages to the agent.
+/// A runtime the station does not have (a chat's notice says so, or a plan's sign-in needs it), and installing it there
+/// (core present.ts `installView`): once installed, the station gives the chat's waiting messages to the agent.
 @Serializable
 data class RuntimeInstall (
 	/// claude | codex | dsh | grok: what `software.update` installs ({station, id: runtime}).
@@ -4003,8 +4003,11 @@ data class ProfileFlowView (
 	val submitLabel: String,
 	/// What the profile will be usable for, in words (the line under the page).
 	val usesLine: String,
-	/// At a plan's connect step: the sign-in to start.
-	val signIn: FlowSignIn? = null
+	/// At a plan's connect step: the sign-in to start. Absent while its runtime is to be installed (`install`).
+	val signIn: FlowSignIn? = null,
+	/// At a plan's connect step on a station without the runtime it signs in with: installing it there; the sign-in
+	/// starts once it is installed. Absent otherwise.
+	val install: RuntimeInstall? = null
 )
 
 /// One station's copy of an account in the workspace's list.

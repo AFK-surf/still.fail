@@ -1043,3 +1043,27 @@ export function archiveCheck(v: J): J | null {
   const what = recommended ? t("core-views.policy.archive") : v.archive === true ? t("core-views.policy.unsure") : t("core-views.policy.keep");
   return { text: `${name} · ${what}`, recommended, failed: false };
 }
+
+/// A runtime the station does not have (a chat's notice says so, or a plan's sign-in runs its command): installing it
+/// there, as the station's updates (`updates`, its overview's) say it stands, and whether the viewer may (`manages`: the
+/// workspace's owner or an admin), in a line (`title`: not installed, installing, could not, installed). Nothing offered
+/// by a station older than its updates.
+export function installView(runtime: string, updates: J[], manages: boolean): J | null {
+  const v = updates.find((u) => get(u, "id") === runtime);
+  if (v === undefined) return null;
+  const name = str(v.name) ?? runtime;
+  if (v.state === "updating") {
+    const percent = u64(v.percent);
+    return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(percent !== undefined ? { percent } : {}) };
+  }
+  if (v.installed === true) return { runtime, state: "installed", title: t("core-views.install.installed", { name }) };
+  const can = manages && v.updatable === true;
+  if (v.state === "failed") {
+    const why = str(v.message);
+    return { runtime, state: "failed", title: t("core-views.install.failed", { name }), ...(why ? { detail: why } : {}), ...(can ? { action: t("core-views.install.retry") } : {}) };
+  }
+  const title = t("core-views.install.missing", { name });
+  if (can) return { runtime, state: "missing", title, action: t("core-views.install.action") };
+  const why = str(v.note) ?? (manages ? null : t("core-views.install.managers_only"));
+  return { runtime, state: "missing", title, ...(why !== null ? { note: why } : {}) };
+}

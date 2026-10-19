@@ -1,4 +1,4 @@
-import type { MachineLogin } from "../core/shapes.ts";
+import type { MachineLogin, RuntimeInstall } from "../core/shapes.ts";
 import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
 import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "@stillfail/ui/icons.tsx";
 import { useEffect, useRef, useState } from "react";
@@ -601,6 +601,28 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
       {job.state === "needs_approval" && job.url && job.userCode && <DeviceCode url={job.url} code={job.userCode} provider={provider} />}
       {job.state === "verifying" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.finishing")}</p>}
       {job.state === "done" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.adding")}</p>}
+    </>
+  );
+}
+
+/**
+ * A plan's sign-in on a station without the runtime it signs in with (core `install`): installing it first, how that
+ * stands, and its button when the viewer may (`software.update`). The sign-in starts once it is installed.
+ */
+export function InstallStep({ install }: { install: RuntimeInstall }) {
+  const station = useStation().address;
+  const busy = useDoing("software.update", { station, id: install.runtime });
+  const api = useApi();
+  const act = useAct();
+  return (
+    <>
+      <p className={shellCss.muted}>
+        {install.state === "installing" && <span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />}
+        {install.title}{install.state === "installing" && install.percent != null && ` ${install.percent}%`}
+      </p>
+      {install.detail && <p className={controlsCss.fieldError} role="alert">{install.detail}</p>}
+      {install.note && <p className={shellCss.muted}>{install.note}</p>}
+      {install.action && <Button variant="primary" busy={busy} onClick={() => act(api.updateSoftware(install.runtime), install.action!)}>{install.action}</Button>}
     </>
   );
 }

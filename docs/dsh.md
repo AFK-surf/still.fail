@@ -27,7 +27,7 @@ dsh speaks every protocol the providers do, so an API provider's profile runs it
 
 ## Not installed
 
-dsh comes with no subscription, so a station may well not have it while its profiles offer it. A runtime is not looked for before a chat picks it: the start finds it. The runner's program is looked for on its PATH first (agents/runner.ts `CommandMissing`, for every runtime): one not there ends the start with the notice `无法启动 agent：此 station 尚未安装 {name}`, recorded with the runtime (`entries.runtime`), and the person's message stays pending. The core puts installing it under the notice (views.ts `installView`, from the station's updates: a manager's button that is `software.update {id}`, how far it is, why it failed); once the install ends with it on PATH, the hub gives that runtime's sessions what waits (`Hub.installed`).
+dsh comes with no subscription, so a station may well not have it while its profiles offer it. A runtime is not looked for before a chat picks it: the start finds it. The runner's program is looked for on its PATH first (agents/runner.ts `CommandMissing`, for every runtime): one not there ends the start with the notice `无法启动 agent：此 station 尚未安装 {name}`, recorded with the runtime (`entries.runtime`), and the person's message stays pending. The core puts installing it under the notice (present.ts `installView`, from the station's updates: a manager's button that is `software.update {id}`, how far it is, why it failed); once the install ends with it on PATH, the hub gives that runtime's sessions what waits (`Hub.installed`).
 
 ## History and usage
 
