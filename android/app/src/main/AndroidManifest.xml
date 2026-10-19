@@ -27,6 +27,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- What another app shares (a link, some text: the system's share sheet), into a chat (Shares.java) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
             <!-- A browser login's page, once the browser has come back, links here: <package>://back -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -35,6 +41,8 @@
                 <data android:scheme="${applicationId}" android:host="back" />
             </intent-filter>
         </activity>
+        <!-- Shares: a file handed to another app, read only (the cache's shared/) -->
+        <provider android:name=".Shares$Files" android:authorities="${applicationId}.shared" android:exported="false" android:grantUriPermissions="true" />
         <!-- Updates: what the installer says of a newer build handed to it -->
         <receiver android:name=".Updates$InstallResult" android:exported="false" />
         <service android:name=".LoginService" android:exported="false" android:foregroundServiceType="specialUse">

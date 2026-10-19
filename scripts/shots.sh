@@ -34,16 +34,19 @@
 # `player` and `web-player` are the drive's player over made-up films (MBUI_FIXTURE=player-video|audio|ended|opening,
 # src/sfapp/play_fixture.mbt): mac-player-<what>, web-player-<what>. `service` and `web-service` are a web service's
 # page over the first row's chat (MBUI_FIXTURE=service|service-sized|service-restart|service-stopped,
-# src/sfapp/service_fixture.mbt; the browser draws no site view): mac-<mode>, web-<mode>.
+# src/sfapp/service_fixture.mbt; the browser draws no site view): mac-<mode>, web-<mode>. `share` and `web-share` are
+# what another app shares in, its sheet over Home (MBUI_FIXTURE=share-in|share-in-stations, src/sfapp/share_fixture.mbt):
+# mac-<mode>, web-<mode>.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat preview player service settings notify web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-player web-service web-settings web-notify ios android}
+PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat preview player service share settings notify web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-player web-service web-share web-settings web-notify ios android}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
 PLAYER_MODES="video audio ended opening"
 SERVICE_MODES="service service-sized service-restart service-stopped"
+SHARE_MODES="share-in share-in-stations"
 SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security vault stations station profiles profile connects memory memory-doc usage archive}
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
@@ -218,6 +221,23 @@ for p in $PLATFORMS; do
       APP=sffix bash scripts/web.sh build >/dev/null
       names=
       for m in $SERVICE_MODES; do
+        QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-$m.png
+        names="$names web-$m"
+      done ;;
+    share)
+      # what another app shares in: the sheet of chats over Home, its stations' choice opened
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-share; mkdir -p out/shot-share
+      names=
+      for m in $SHARE_MODES; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_AT=60 MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-share ./_build/native/release/build/sffix/sffix.exe >/dev/null
+        cp out/shot-share/$m.png out/shots/mac-$m.png
+        names="$names mac-$m"
+      done ;;
+    web-share)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in $SHARE_MODES; do
         QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-$m.png
         names="$names web-$m"
       done ;;

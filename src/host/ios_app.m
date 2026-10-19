@@ -472,6 +472,13 @@ int32_t mb_host_system_dark(void) {
   return UIScreen.mainScreen.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark ? 1 : 0;
 }
 
+// Sharing (@host.share, @host.shared_in): no share sheet here yet; nothing comes in.
+int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
+  (void)text; (void)name; (void)mime; (void)data;
+  return 0;
+}
+moonbit_string_t mb_host_shared_in(void) { return moonbit_make_string_raw(0); }
+
 // Updates (@host.app_version, update_install, update_state): this app does not update itself here.
 int32_t mb_host_app_version(void) { return 0; }
 void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {

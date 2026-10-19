@@ -421,6 +421,7 @@ pub fn open_drive_fixture(mode : String) -> Unit {
     _ => {
       open_play_fixture(mode)
       open_service_fixture(mode)
+      open_share_fixture(mode)
     }
   }
 }

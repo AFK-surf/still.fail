@@ -213,7 +213,8 @@ fn entry_sheet(
       if dv_pick_row(c, "entry/share", tr("android-misc.drive.share"), icon="external") {
         dv_close(c)
         done()
-        say(c, "这个版本还不能把文件分享给其他应用")
+        // read whole through the core, then the system's share sheet (share.mbt)
+        share_drive_file(c, src, at, e)
       }
     } else if zip &&
       dv_pick_row(c, "entry/zip", tr("web-pages.drive.downloadZip"), icon="download") {

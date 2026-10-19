@@ -19,6 +19,8 @@ priv enum SheetKind {
   LoadOf(String, Int)
   /// a service's page's sizes (Preview.kt openViewportSheet), by the service's key: 62%
   PageSizes(String)
+  /// what another app shares in, to a chat (ShareSheet.kt): 72%, draggable
+  ShareSheet
 } derive(Eq)
 
 ///|
@@ -29,6 +31,7 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
     PickStation(_) => (0.5, false)
     RunPicker(_) => (0.66, false)
     LoadOf(_, _) | PageSizes(_) => (0.62, false)
+    ShareSheet => (0.72, true)
     NoSheet => (0.5, false)
   }
 }

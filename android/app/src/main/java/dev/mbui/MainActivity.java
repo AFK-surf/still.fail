@@ -54,6 +54,8 @@ public class MainActivity extends Activity {
         }
         Host.script = hooks ? getIntent().getStringExtra("script") : null;
         Host.bench = hooks ? getIntent().getIntExtra("bench", 0) : 0;
+        // what another app shared into this one (ACTION_SEND of text), for the app to take
+        Shares.take(getIntent());
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(245, 245, 247));
         MBView view = new MBView(this);
@@ -144,6 +146,7 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         Notices.from(intent);
+        Shares.take(intent);
         Host.log("activity onNewIntent " + (intent.getData() != null ? intent.getData().getScheme() + "://" + intent.getData().getHost() : "(in front again)"));
         Host.requestFrame();
     }

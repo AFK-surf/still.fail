@@ -296,6 +296,21 @@ pub fn set_sideways(on : Bool) -> Unit {
 
 
 ///|
+/// Shared out (see host_native.mbt): the browser's page here has no share sheet of its own.
+pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
+  ignore(text)
+  ignore(name)
+  ignore(mime)
+  ignore(data)
+  false
+}
+
+///|
+pub fn shared_in() -> String {
+  ""
+}
+
+///|
 /// This build's version code (see host_native.mbt): a page does not update itself.
 pub fn app_version() -> Int {
   0

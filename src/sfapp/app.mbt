@@ -160,6 +160,9 @@ fn reset() -> Unit {
   play_srcs.clear()
   service_pages.clear()
   svc_viewports.clear()
+  share_in.shared = None
+  share_in.raised = false
+  share_in.env_taken = true
   update.available = None
   update.asked = false
   update.source = None
@@ -271,6 +274,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       notices_frame(src, w)
       // a newer build of the app asked for once (updates.mbt)
       update_first(src)
+      // what another app shared in (share.mbt)
+      share_in_frame(c)
       c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
       |> ignore
       // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
@@ -292,6 +297,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
           RunPicker(station) => run_picker_sheet(c, src, station)
           LoadOf(station, port) => load_sheet(c, src, station, port)
           PageSizes(key) => page_sizes_sheet(c, key)
+          ShareSheet => share_in_sheet(c, src, w)
           NoSheet => ()
         }
       })

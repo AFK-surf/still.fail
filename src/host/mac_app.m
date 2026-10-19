@@ -616,6 +616,31 @@ int32_t mb_host_system_dark(void) {
   return [n isEqualToString:NSAppearanceNameDarkAqua] ? 1 : 0;
 }
 
+// Sharing out (@host.share): the system's sharing picker over the window, the words or the file (kept in a folder
+// of the app's own in the temporary directory); nothing comes in on macOS (shared_in "").
+int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
+  (void)mime;
+  MBView *v = the_view;
+  if (!v) return 0;
+  id item = mb_ns_from_string(text);
+  int32_t n = Moonbit_array_length(data);
+  NSString *file = mb_ns_from_string(name).lastPathComponent;
+  if (n > 0 && file.length) {
+    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"mbui-shared"];
+    [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *p = [dir stringByAppendingPathComponent:file];
+    if (![[NSData dataWithBytes:data length:n] writeToFile:p atomically:YES]) return 0;
+    item = [NSURL fileURLWithPath:p];
+  }
+  NSSharingServicePicker *picker = [[NSSharingServicePicker alloc] initWithItems:@[ item ]];
+  NSRect r = v.bounds;
+  [picker showRelativeToRect:NSMakeRect(NSMidX(r) - 1, NSMidY(r) - 1, 2, 2) ofView:v preferredEdge:NSRectEdgeMinY];
+  fprintf(stdout, "share: %s to the system's sharing picker\n", n > 0 ? "a file" : "words");
+  fflush(stdout);
+  return 1;
+}
+moonbit_string_t mb_host_shared_in(void) { return moonbit_make_string_raw(0); }
+
 // Updates (@host.app_version, update_install, update_state): this app does not update itself here.
 int32_t mb_host_app_version(void) { return 0; }
 void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {

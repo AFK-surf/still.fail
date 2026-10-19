@@ -409,7 +409,8 @@ the draft), its page script (assets/preview/page.js: WebSockets, request bodies 
 sockets (a dev server's hot reload), the sized page moved and pinched on its canvas, typing a size of one's own (自定义
 lists the sizes), the size and the toolbar's folding kept on the device (kept while the app runs), a visualization's
 page (PreviewFileScreen), a link elsewhere opened in the browser (no URL hand-off on the hosts: it is copied and said
-so), document.cookie (the cookies are the app's, not the web view's), the opening and closing motion of the page's own.
+so), document.cookie (the cookies are the app's, not the web view's), the opening and closing motion of the page's own,
+the sized page's screen corners (a native view is clipped to a rectangle: its shadow and square corners on the canvas).
 
 Slice 14's updates (branch player-share, 2026-10-19; ember apps/android app/Updates.kt, shared/Install.kt, Home.kt's
 update button, SettingsHome.kt Version): the app keeping itself current (src/sfapp/updates.mbt, Updates.java).
@@ -433,6 +434,31 @@ update button, SettingsHome.kt Version): the app keeping itself current (src/sfa
 Not yet, against the current app: checking again as the app comes back to the front (only at its start), an APK of a
 chat installed from the file preview (安装), a source for the mbui build's own release (it is to publish a latest.json
 in the AppRelease shape beside its APK; no host here reads a JSON from a URL of its own yet).
+
+Slice 14's share sheet (branch player-share, 2026-10-19; ember apps/android app/share/ShareActivity.kt, ShareSheet.kt,
+drive/DriveScreen.kt hand; docs/share-in.md): src/sfapp/share.mbt, Shares.java.
+
+- In: another app's share sheet hands still.fail a link or some text (Android's ACTION_SEND of text/plain, taken by
+  MainActivity: @host.shared_in; MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs). One sheet (72%, draggable): what
+  is shared (a link's mark or text's, its title bold: the app's subject or its first line, its first line under a
+  subject), 发到 the chats it can go to (the core's `shareIn` view: the one a thing from the same site went to last first,
+  saying so; 搜索 from six chats, its field 找 chat), 新 chat last (在 Studio 上开; with several stations up, which one). A
+  tap: `shareIn.open` puts it in that chat's composer (a link as a card among its files: its title, its site; the words
+  around it after what is written) and the chat opens (a new chat rises on that station), where it is added to and sent:
+  the composer reads the draft anew, keeps the links with it (the core's DraftView `links`) and sends them as words
+  after what is written (its title on a line, then the link), as the core's composer does. 没能打开：… in red when it
+  fails.
+- Out: a file of a drive (its sheet's 分享) read whole through the core (`drive.read`), then handed to the system's share
+  sheet (@host.share: Android's chooser, the file in the cache's shared/ read through a provider of the app's own,
+  Shares.Files, that lets another app read only what was handed to it; macOS's sharing picker over the window); 本机没有
+  可打开此文件的应用 when none takes it. Words can go the same way (`share(text, …)`).
+- `APP=sffix MBUI_FIXTURE=share-in|share-in-stations` (src/sfapp/share_fixture.mbt): `scripts/shots.sh share web-share`.
+
+Not yet, against the current app: the sheet over the app it came from (Android's ShareActivity is an activity of its own,
+translucent over that app; here still.fail comes to the front and shows it over itself), signing in first from the sheet
+(signed out, the app's sign-in page shows and the share waits), a file shared in (only text and links, as the Android
+app takes), how far a drive's file has come while it is read for sharing (its row's progress), downloading a drive's
+file to the device, sharing on iOS, Windows and the web (no share sheet there yet).
 
 Glass (branch glass, 2026-10-19): frosted glass and liquid glass, a pass of every renderer (Metal on macOS and iOS,
 GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
@@ -842,6 +868,11 @@ while the card moved the list):
 | 42 notice-looking | the test chat open while the other device asks for a card in it: no notice, the card comes in the chat | the card at the station; no NOTICE for it; the app told the core it shows the chat (client.focus) |
 | 43 notify-off | settings → 通知 off (不接收通知); a card asked meanwhile shows no notice; on again | notify.set answered on false, then on true; push.unregister called; no NOTICE for the card; the card at the station; the core's store on the device keeps notifications on |
 | 44 notice-cancel | a notice shown on Home; the chat then opened from its row: its notification goes | the test chat's NOTICE, then its NOTICE CANCEL |
+| 45 drive-play | 影音 put in the lent folder (drive-media: two episodes with a subtitle, a song); the first episode played (2 / 3, its subtitle's words), left at 3 s, opened again; 15 s on to its end, 下一个 tapped; the song | drive.read a part at a time; the first frame and the subtitle; drive.place about 3 s of 8 kept on the device and played on from there; kept as seen at its end; the next and the song read and ready |
+| 46 chat-audio | a song sent in a chat by the other device; its card opened: the preview's small player, its time going on | the station's entry has the song; station.file.part reads; the player ready |
+| 47 service-page | the agent starts a web service (e2e/fake: serve:); the chat's jobs sheet → its row: the page; /b.html typed in the bar; back in its history; 手机 | the station's job has the port; station.preview for the page, its stylesheet and what its script fetched; the site view loaded each page |
+| 48 share | a link shared in (MBUI_SHARE_TEXT): the sheet, the test chat tapped, the link a card in its composer, sent; a drive's file 分享 | shareIn.open; alice's entry has the title and the link; the file handed to the system's share sheet; on Android an ACTION_SEND intent taken in |
+| 49 update | (Android only: `#only`) settings' row says 更新到 0.1.1 (release-seed: the APK as built in the local cloud's releases); tapped | app.update found it; downloaded with the feed's sha256; handed to the installer, whose confirmation shows |
 | 50 bar-glass | the bar of glass: 文件 and back (the notch's icon swapping between 令 and ＋), the panel drawn up and let go on 奏 (that bar sliding down into the bar's place), 用量 tapped on it as it lands (its page at once), the chats again from the panel | the swap and the landing in the motion log; 用量's page; the bar chosen kept on the device (`prefs.set {barsBy}`) |
 | 51 sheets-sinking | the workspaces' sheet let go of, the bar's 文件 tapped under it as it sinks; the chat's own sheet let go of, the composer tapped through it as it goes down, words typed and sent | 文件 opened; the words at the station, once, alice's; no pin of alice's at the station |
 | 52 drive-sheet-closing | a file held, ⋯ → its sheet, the scrim tapped, the sheet's rows tapped where they are drawn as it closes | no rename asked; the station keeps the file, its name and words |

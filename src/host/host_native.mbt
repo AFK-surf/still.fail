@@ -114,6 +114,13 @@ extern "C" fn ffi_set_sideways(on : Int) -> Unit = "mb_host_set_sideways"
 
 
 ///|
+#borrow(text, name, mime, data)
+extern "C" fn ffi_share(text : String, name : String, mime : String, data : Bytes) -> Int = "mb_host_share"
+
+///|
+extern "C" fn ffi_shared_in() -> String = "mb_host_shared_in"
+
+///|
 extern "C" fn ffi_app_version() -> Int = "mb_host_app_version"
 
 ///|
@@ -348,6 +355,20 @@ pub fn set_sideways(on : Bool) -> Unit {
   ffi_set_sideways(if on { 1 } else { 0 })
 }
 
+
+///|
+/// Words (`text`), or a file of `data` named `name` (`mime`), handed to another app through the system's share sheet
+/// (Android's chooser, macOS's sharing picker); false where there is none (or no app takes it).
+pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
+  ffi_share(text, name, mime, data) != 0
+}
+
+///|
+/// What another app shared into this one since last asked (Android's ACTION_SEND of text), as JSON text
+/// `{"text","title"}`; "" when nothing was.
+pub fn shared_in() -> String {
+  ffi_shared_in()
+}
 
 ///|
 /// This build's version code, as the system has it (Android's); 0 where the app does not update itself.

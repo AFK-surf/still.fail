@@ -39,8 +39,8 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways;
-static jclass updates_cls;
-static jmethodID m_up_version, m_up_install, m_up_state;
+static jclass updates_cls, shares_cls;
+static jmethodID m_up_version, m_up_install, m_up_state, m_sh_share, m_sh_in;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -82,6 +82,9 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_up_version = (*env)->GetStaticMethodID(env, updates_cls, "versionCode", "()I");
   m_up_install = (*env)->GetStaticMethodID(env, updates_cls, "install", "(Ljava/lang/String;Ljava/lang/String;DLjava/lang/String;)V");
   m_up_state = (*env)->GetStaticMethodID(env, updates_cls, "state", "()Ljava/lang/String;");
+  shares_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Shares"));
+  m_sh_share = (*env)->GetStaticMethodID(env, shares_cls, "share", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[B)Z");
+  m_sh_in = (*env)->GetStaticMethodID(env, shares_cls, "sharedIn", "()Ljava/lang/String;");
   m_metrics = (*env)->GetStaticMethodID(env, text_cls, "fontMetrics", "(DII[D)V");
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
@@ -143,6 +146,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
 static jstring jstr(JNIEnv *env, moonbit_string_t s) {
   return (*env)->NewString(env, (const jchar *)s, Moonbit_array_length(s));
 }
+
+static jbyteArray jbytes(JNIEnv *env, moonbit_bytes_t data);
 
 static moonbit_string_t mstr(JNIEnv *env, jstring s) {
   jsize n = (*env)->GetStringLength(env, s);
@@ -819,6 +824,27 @@ void mb_host_set_dark(int32_t dark) {
 void mb_host_set_sideways(int32_t on) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_set_sideways, (jboolean)(on != 0));
+}
+
+// Sharing (Shares.java): words or a file to the system's share sheet; what another app shared in.
+int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
+  JNIEnv *env = env_();
+  jstring t = jstr(env, text), n = jstr(env, name), m = jstr(env, mime);
+  jbyteArray b = jbytes(env, data);
+  jboolean ok = (*env)->CallStaticBooleanMethod(env, shares_cls, m_sh_share, t, n, m, b);
+  (*env)->DeleteLocalRef(env, t);
+  (*env)->DeleteLocalRef(env, n);
+  (*env)->DeleteLocalRef(env, m);
+  (*env)->DeleteLocalRef(env, b);
+  return ok ? 1 : 0;
+}
+
+moonbit_string_t mb_host_shared_in(void) {
+  JNIEnv *env = env_();
+  jstring j = (jstring)(*env)->CallStaticObjectMethod(env, shares_cls, m_sh_in);
+  moonbit_string_t out = j ? mstr(env, j) : moonbit_make_string_raw(0);
+  if (j) (*env)->DeleteLocalRef(env, j);
+  return out;
 }
 
 // Updates (Updates.java): this build's version code, a newer one installed, how that goes.

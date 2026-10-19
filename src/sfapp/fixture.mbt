@@ -307,6 +307,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
       })
     }
     "job" | "previewLoad" => fixture_service_topic(f, name, params)
+    "shareIn" => fixture_share_topic(params)
     "chats" => fixture_chats(f, params)
     "workspaceMarks" =>
       Some({
@@ -424,6 +425,7 @@ pub fn fixture(mode : String) -> Source {
         _ =>
           match fixture_new_call(f, name, params) {
             Some(r) => done(r)
+            None if name == "shareIn.open" => done(fixture_share_call(name, params).unwrap())
             None =>
               match fixture_chat_call(f, name, params) {
                 Some(r) => done(r)
