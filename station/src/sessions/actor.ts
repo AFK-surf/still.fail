@@ -8,7 +8,7 @@
 import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
@@ -85,6 +85,8 @@ export type SessionDeps = {
   runOn(key: string): Profile & { spelling?(model: string): string | null };
   /// A turn ran into its profile's allowance: the profile left and the one moved to, when it moved.
   spend(key: string): [string, string] | null;
+  /// When session `key`'s profile, its allowance run out, is expected to run again (absent: in an hour).
+  refillsAt?(key: string): number;
   mcpUrl(): string;
   reposDir(): string;
   /// Session `key`'s MEMORY.md: its workspace's (agent-home.ts `workspaceAgentHome`).
@@ -141,6 +143,9 @@ export type Snapshot = {
   waitingSeconds: number;
   nudges: number;
   stopRequested: boolean;
+  /// Its allowance ran out with no account to move to: how long until it goes on (optional: a station from before
+  /// it does not say).
+  refillMs?: number | null;
   /// Changed while busy (optional: a station from before it does not say).
   stale?: boolean;
   /// What it was changed in needs a new process, not one retuned (optional: a station from before it does not say).
@@ -199,6 +204,12 @@ export class SessionActor {
   private waits = 0;
   private waitingUntil = 0;
   private waitingSeconds = 0;
+  /// Its last turn ran into its account's allowance and no other could take it on: when it goes on by itself, and its
+  /// number (a newer one voids an older one's timer). Till then a job's notice waits with it; a person's message is
+  /// tried at once.
+  private refill: number | null = null;
+  private refills = 0;
+  private refillAt = 0;
   /// Messages given to the running turn while it ran: the runtime may not have read them yet (suspend).
   private steered: [number, number][] = [];
   private queued = 0;
@@ -269,7 +280,7 @@ export class SessionActor {
   }
 
   holdsState(): boolean {
-    return this.notices.length > 0 || this.waiting !== null;
+    return this.notices.length > 0 || this.waiting !== null || this.refill !== null;
   }
 
   /// Delivers any pending messages.
@@ -365,6 +376,7 @@ export class SessionActor {
   goOn(): Promise<void> {
     return this.enqueue(async () => {
       if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
+      this.refill = null;
       if (this.deps.store.pendingMessages(this.key).length > 0) return this.pump();
       await this.startTurn("resume", GO_ON_AFTER_SPENT);
     });
@@ -476,6 +488,7 @@ export class SessionActor {
       waitingSeconds: this.waitingSeconds,
       nudges: this.nudges,
       stopRequested: this.stopRequested,
+      refillMs: this.refill !== null ? Math.max(0, this.refillAt - this.now()) : null,
       stale: this.stale,
       restart: this.restart,
     };
@@ -503,6 +516,7 @@ export class SessionActor {
     this.restart = snap.restart ?? false;
     this.idleSince = this.now();
     if (snap.waitingMs !== null) this.waitMs(snap.waitingSeconds, snap.waitingMs);
+    if (typeof snap.refillMs === "number") this.awaitRefill(this.now() + snap.refillMs);
   }
 
   /// The events of the runtime session opened (or adopted) as `generation`, as a driver gives them.
@@ -545,6 +559,8 @@ export class SessionActor {
       this.notices = [];
       return;
     }
+    // Its account spent: a turn for them would run into it again; they wait for the refill.
+    if (this.refill !== null && !this.agent?.session.busy()) return;
     if (this.agent?.session.busy()) {
       const text = this.takeNotices();
       if (text === null) return;
@@ -908,7 +924,9 @@ export class SessionActor {
       log.info("session", "Claude authentication failed; reopening and continuing once", { session: this.key });
       return this.startTurn("auth_retry", GO_ON_AFTER_AUTH, turn.by);
     }
-    if (outcome.kind === "failed" && outcome.reason === "rate_limit") {
+    const spent = outcome.kind === "failed" && outcome.reason === "rate_limit";
+    if (!spent) this.refill = null;
+    if (spent) {
       this.nudges = 0;
       // Left to the station, it moves to another account and goes on there; otherwise it waits for a change.
       let moved: [string, string] | null = null;
@@ -923,10 +941,13 @@ export class SessionActor {
         this.agent = null;
         await agent?.session.dispose();
         log.info("session", "allowance ran out; going on on another profile", { session: this.key, from: moved[0], to: moved[1] });
+        this.refill = null;
         if (store.pendingMessages(this.key).length > 0) return this.pump();
         return this.startTurn("resume", GO_ON_AFTER_SPENT);
       }
-      await this.notice(failureNotice(outcome), this.profile);
+      // Said once: what wakes it meanwhile (a job's notice, a wait over) would only run into it again.
+      if (!this.saidLast((said) => said.startsWith(SPENT_NOTICE()))) await this.notice(failureNotice(outcome), this.profile);
+      this.awaitRefill(this.deps.refillsAt?.(this.key) ?? this.now() + REFILL_FALLBACK_MS);
     } else if (outcome.kind === "failed") {
       this.nudges = 0;
       // A sign-in that failed is its profile's, as is a refused request (its environment is where a proxy goes): the
@@ -1074,10 +1095,34 @@ export class SessionActor {
   }
 
   /// Whether the thread people spoke in last ends with these very words of the station's: nothing said since.
-  private saidLast(text: string): boolean {
+  private saidLast(text: string | ((said: string) => boolean)): boolean {
     const latest = this.deps.store.latestThread(this.key);
     const last = latest ? this.deps.store.entriesBefore(latest.thread.id, null, 1).at(-1) : undefined;
-    return last !== undefined && last.authorKind === "ember" && last.text === text;
+    return last !== undefined && last.authorKind === "ember" && (typeof text === "string" ? last.text === text : text(last.text));
+  }
+
+  /// Its account spent with none to move to: at `at` it goes on there by itself, with what waited meanwhile.
+  private awaitRefill(at: number) {
+    const refill = ++this.refills;
+    this.refill = refill;
+    this.refillAt = at;
+    void this.run(
+      Effect.sleep(Math.max(0, at - this.now())).pipe(
+        Effect.andThen(
+          Effect.promise(() =>
+            this.enqueue(async () => {
+              if (this.refill !== refill) return;
+              this.refill = null;
+              // Held, it goes on when released (its notices); a running turn ends as it will.
+              if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
+              log.info("session", "its allowance should have refilled; going on", { session: this.key });
+              if (this.deps.store.pendingMessages(this.key).length > 0) return this.pump();
+              await this.startTurn("resume", GO_ON_AFTER_REFILL);
+            }),
+          ),
+        ),
+      ),
+    ).catch(() => undefined);
   }
 
   /// The station's own words (not the agent's) go to the thread people spoke in last, and are recorded there; one about
@@ -1118,6 +1163,12 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
     route: row.key,
   };
 }
+
+/// How long a spent account is waited on when it refills is not known.
+const REFILL_FALLBACK_MS = 60 * 60 * 1000;
+
+/// The start of the notice that its account is spent, whatever the runtime said.
+const SPENT_NOTICE = () => `⚠️ ${t("station.notice.rateLimit", { error: "" })}`;
 
 function failureNotice(outcome: TurnOutcome): string {
   if (outcome.kind !== "failed") return "";

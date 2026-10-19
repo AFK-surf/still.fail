@@ -910,6 +910,7 @@ export class Hub {
       driver: (runtime) => this.sessionDriver(runtime),
       runOn: (key) => this.accounts.runOn(key),
       spend: (key) => this.accounts.spend(key),
+      refillsAt: (key) => this.accounts.refillsAt(key),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
       reposDir: () => this.reposDir(),
       memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],

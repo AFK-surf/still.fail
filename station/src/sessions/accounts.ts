@@ -7,7 +7,7 @@ import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
-import { availableEfforts, commonEfforts, type ProfileHealth, pickProfile, serves, usable } from "./pool.ts";
+import { availableEfforts, commonEfforts, type ProfileHealth, pickProfile, serves, usable, windowsOf } from "./pool.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
@@ -122,6 +122,17 @@ export class Accounts {
     log.info("hub", "allowance ran out; session taken on by another profile", { session: key, from: row.profile, to: next.id });
     const from = config.profiles.find((p) => p.id === row.profile)?.name ?? row.profile;
     return [from, next.name];
+  }
+
+  /// When the profile of session `key`, which ran into its allowance, is expected to run again: the last refill of its
+  /// used-up windows, or, none known, when it stops being passed over.
+  refillsAt(key: string): number {
+    const row = this.deps.store.getSession(key);
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    if (!row) return now + SPENT_FOR_MS;
+    const full = windowsOf(this.health(row.profile).quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
+    if (full.length > 0) return Math.max(...full.map((w) => w.resetsAt as number));
+    return (this.spent.get(row.profile) ?? now) + SPENT_FOR_MS;
   }
 
   /// The reasoning levels every eligible account offers for a model (a pinned account may offer more): automatic

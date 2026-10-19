@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
@@ -1550,6 +1550,59 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   await configure(r.hub, key, { profile: null });
   await settle();
   assert.equal(r.claude.count(), 3);
+  await r.close();
+});
+
+test("an account spent with none to move to is said once; what wakes it waits for the refill, a person is tried at once", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  const HOUR = 60 * 60 * 1000;
+  const now = time.clock.currentTimeMillisUnsafe();
+  r.hub.accounts.setHealth(() => ({ quota: { state: "ok", windows: [{ label: "5h", usedPercent: 100, resetsAt: now + 2 * HOUR, minutes: 300 }], detail: null, checkedAt: now } }));
+  const spent = { kind: "failed" as const, reason: classifyResult("usage limit reached"), message: "You've hit your limit · resets 5pm" };
+  const said = () => r.chat.texts().filter((t) => t.includes("已达到额度或速率限制"));
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const agent = r.claude.last();
+  const key = agent.options.route;
+  agent.end(spent);
+  await settle();
+  assert.equal(said().length, 1);
+  assert.ok(matches(said()[0]!, ["没有其他可用账号", "You've hit your limit"]), said()[0]);
+  // Jobs' notices meanwhile: no turn for them (it would run into the allowance again), nothing said again.
+  r.hub.notify(key, "a job ended");
+  r.hub.notify(key, "another job ended");
+  await settle();
+  assert.equal(agent.prompts.length, 1, "no turn while its account is spent");
+  assert.equal(said().length, 1);
+  // At the refill: it goes on by itself; the notices follow that turn.
+  await time.adjust(2 * HOUR);
+  await settle();
+  assert.equal(agent.prompts.length, 2);
+  assert.equal(agent.prompts[1], GO_ON_AFTER_REFILL);
+  // Spent again (the refill read wrong): still said only once, and it waits again (an hour, none known now).
+  r.hub.accounts.setHealth(() => ({}));
+  agent.end(spent);
+  await settle();
+  assert.equal(said().length, 1, "the thread ends with it already");
+  assert.equal(agent.prompts.length, 2);
+  // A person's message is tried at once, and its failure told them.
+  await r.accept(reply(m, "9999.3", "<@UBOT> 还在吗", { addressed: true }));
+  await settle();
+  assert.equal(agent.prompts.length, 3);
+  assert.ok(agent.prompts[2]!.includes("还在吗"));
+  agent.end(spent);
+  await settle();
+  assert.equal(said().length, 2, "told the person who asked");
+  await time.adjust(HOUR);
+  await settle();
+  assert.equal(agent.prompts[3], GO_ON_AFTER_REFILL);
+  // A turn that ends well: what waited is given.
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  agent.complete();
+  await settle();
+  assert.ok(matches(agent.prompts[4]!, ["a job ended", "another job ended"]), agent.prompts[4]);
   await r.close();
 });
 

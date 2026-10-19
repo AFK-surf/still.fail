@@ -28,7 +28,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /// A short window this full puts its profile last: a session sent there would soon run into it.
 const CROWDED_PERCENT = 80;
 
-const windowsOf = (quota: Json | null | undefined): Json[] => (quota && quota.state === "ok" && Array.isArray(quota.windows) ? quota.windows : []);
+export const windowsOf = (quota: Json | null | undefined): Json[] => (quota && quota.state === "ok" && Array.isArray(quota.windows) ? quota.windows : []);
 
 /// How much of its tightest window a profile has used, 0–100; unknown counts as half.
 function used(quota: Json | null | undefined): number {
