@@ -1640,5 +1640,6 @@
   "web-pages.stations.search.section": "搜索",
   "web-pages.stations.search.personal": "搜索个人数据",
   "web-pages.stations.search.personalLine": "workspace 成员也可搜索邮件、信息、日历、通讯录、备忘录和照片",
-  "web-pages.stations.search.what": "更改搜索设置"
+  "web-pages.stations.search.what": "更改搜索设置",
+  "web-pages.profiles.installThenSignIn": "安装完成后开始登录"
 }

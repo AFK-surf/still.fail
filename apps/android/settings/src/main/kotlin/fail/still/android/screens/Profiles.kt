@@ -82,6 +82,7 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
+import fail.still.android.ui.Progress
 import fail.still.android.ui.WaitLine
 import fail.still.android.ui.WaitShape
 import fail.still.android.ui.Waiting
@@ -870,11 +871,14 @@ private fun InstallStep(install: RuntimeInstall, station: String) {
     val app = LocalApp.current
     val action = install.action
     val busy = app.isDoing("software.update", "station" to station, "id" to install.runtime)
-    if (install.state == "installing") WaitLine(install.title + (install.percent?.let { " $it%" } ?: ""))
-    else Text(install.title, fontSize = 13.sp, color = C.muted)
-    install.detail?.let { Text(it, fontSize = 13.sp, color = C.red) }
-    install.note?.let { Text(it, fontSize = 13.sp, color = C.muted) }
-    if (action != null) Button(action, primary = true, busy = busy, modifier = Modifier.fillMaxWidth()) { app.act(action) { app.api(station).updateSoftware(install.runtime) } }
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(install.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+            Text(install.detail ?: install.note ?: t("web-pages.profiles.installThenSignIn"), fontSize = 13.sp, color = if (install.detail != null) C.red else C.muted)
+            if (install.state == "installing") Progress(install.percent?.let { it / 100f }, Modifier.fillMaxWidth())
+            if (action != null) Button(action, primary = true, busy = busy, modifier = Modifier.fillMaxWidth()) { app.act(action) { app.api(station).updateSoftware(install.runtime) } }
+        }
+    }
 }
 
 /**

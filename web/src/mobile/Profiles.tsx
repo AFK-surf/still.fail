@@ -16,7 +16,7 @@ import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type SheetSpec } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
 import { Button, failedIn, FailedMark, Field, Gone, LinkButton, ListCard, ListRow, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, ProviderMark, QuotaRings, SectionHeader, SlackMark, tNodes } from "./parts.tsx";
-import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import { Progress, Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
@@ -792,14 +792,12 @@ function InstallStep({ install }: { install: RuntimeInstall }) {
   const api = useApi();
   const act = useAct();
   return (
-    <>
-      {install.state === "installing"
-        ? <WaitLine text={`${install.title}${install.percent != null ? ` ${install.percent}%` : ""}`} />
-        : <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{install.title}</p>}
-      {install.detail && <p className={partsCss.mError}>{install.detail}</p>}
-      {install.note && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{install.note}</p>}
+    <div className={`${listsCss.mCard} ${settingsCss.mFormGroup} ${css.mSignIn} ${css.mFlowCard}`}>
+      <b className={listsCss.mRowTitle}>{install.title}</b>
+      {install.detail ? <p className={partsCss.mError}>{install.detail}</p> : <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{install.note ?? t("web-pages.profiles.installThenSignIn")}</p>}
+      {install.state === "installing" && <Progress part={install.percent != null ? install.percent / 100 : null} label={install.title} />}
       {install.action && <Button label={install.action} primary busy={busy} onClick={() => act(api.updateSoftware(install.runtime), install.action!)} />}
-    </>
+    </div>
   );
 }
 

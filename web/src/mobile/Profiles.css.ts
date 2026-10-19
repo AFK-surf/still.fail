@@ -25,6 +25,8 @@ export const mQuotaDials = style({ padding: "16px 16px 14px" });
 /** A subscription's sign-in card: its buttons the card's width, their words centred; cancelling a sign-in under way is
  *  words under them, centred and grey, not one more button as loud. */
 export const mSignIn = style({});
+/** On the add pages, whose body already keeps 18 from the sides: the card to them, as their lists are. */
+export const mFlowCard = style({ width: "100%", margin: "0" });
 globalStyle(`${mSignIn} > ${mButton}`, { justifyContent: "center" });
 globalStyle(`${mSignIn} > ${mDeviceCode}`, { alignSelf: "stretch", textAlign: "center" });
 export const mSignInCancel = style({

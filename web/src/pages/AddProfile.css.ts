@@ -33,4 +33,6 @@ export const form = style({ display: "grid", gap: "18px" });
 export const offers = style({ marginBottom: "28px" });
 // Only its margins above and below: the narrow page centres its children by their side margins (brand.css.ts).
 export const uses = style({ marginBlock: "0", fontSize: vars.textUi, color: vars.muted });
+/** Under a plan's steps, apart from them (in the form, its grid's gap does it). */
+export const usesBelow = style({ marginBlock: "14px 0" });
 export const stations = style({ marginBottom: "24px" });
