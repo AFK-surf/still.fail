@@ -89,6 +89,10 @@ peer() { "$ROOT/scripts/e2e-local.sh" peer "$@"; }
 drive_roots() { python3 -c "import json; print('\n'.join(json.load(open('$STATION/data/config.json')).get('drive', {}).get('roots', [])))"; }
 FAILS=""
 check() {  # check WHAT COMMAND…: a line of the flow's verdict
+  # (an E2E_APK is not debuggable: the core's store on the device cannot be read back, its checks say so)
+  if [ -n "${E2E_APK:-}" ] && [ $PLATFORM = android ] && printf '%s' "$2" | grep -qE 'core_(device_)?has'; then
+    echo "  skip $1 (the APK is not debuggable: the core's store is not readable)"; return
+  fi
   if eval "$2" >/dev/null 2>&1; then echo "  ok   $1"; else echo "  FAIL $1"; FAILS="$FAILS|$1"; fi
 }
 
