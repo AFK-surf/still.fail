@@ -394,8 +394,10 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
     var line by remember { mutableStateOf(Rect.Zero) }
     if (app.menu == null && menuOpen) menuOpen = false
     // Nothing left in it: archived with one tap on the 归档 at its start (as its menu's 归档), or swiped away to the left.
-    val archivable = live && item.archivable == true && item.offline == null && item.pending != true
-    val onArchive = if (archivable) ({ if (!rowBusy(app, item)) archiveRow(app, item) }) else null
+    // A copy leaving the list (not live, Leaving) keeps its 归档 drawn as it goes, doing nothing: dropped, it would vanish at once.
+    val offered = item.archivable == true && item.offline == null && item.pending != true
+    val archivable = live && offered
+    val onArchive = if (archivable) ({ if (!rowBusy(app, item)) archiveRow(app, item) }) else if (offered) ({}) else null
     val body = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending, item.stateAbout) {
         detectTapGestures(
             // Pressed, the chat is read ahead of its page (AppState.prime).
@@ -416,7 +418,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
             },
         )
     })
-    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onStateLine = { line = it }, modifier = body)
+    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
     SwipeToArchive(item, motion) {
         ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
     }

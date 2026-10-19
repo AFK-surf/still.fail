@@ -1,7 +1,7 @@
 // Archiving a chat with nothing left in it, with real touches injected as the system's own (UiAutomation, as in
 // DecisionsTest), on the app over a fake core: on the home list an archivable row swiped left past the threshold is
 // archived (chat.archive) and leaves; short of it, it springs back; up or down is the list's (it scrolls); a tap opens
-// the chat; a row that cannot be archived does not move; its 归档 chip archives it too. In a chat that can be archived,
+// the chat; a row that cannot be archived does not move; its 归档 chip archives it too, and stays on it as it leaves. In a chat that can be archived,
 // 归档此 chat under the agent's last all-done post archives it. `shots` pictures them (light) into files/shots.
 package fail.still.android
 
@@ -220,6 +220,19 @@ class ArchiveTest {
         assertEquals("one chip per archivable row", 2, chips("归档「").size)
         tap(chips("归档「${done.title}」").single().boundsInRoot.center)
         assertArchived(h, done.session)
+    }
+
+    /** A row archived (gone from the list, as the core takes it out at once) keeps its 归档 chip while it shrinks and fades. */
+    @Test fun leavingRowKeepsItsChip() {
+        val h = home()
+        val r = h.record("archive-chip-leave")
+        putChats(h, listOf(busy, alsoDone) + rest)
+        h.deliver()
+        r.frames(3)
+        assertEquals("the leaving row's chip", 1, chips("归档「${done.title}」").size)
+        r.frames(20)
+        r.end()
+        assertTrue("chip gone after it left", chips("归档「${done.title}」").isEmpty())
     }
 
     // ── a chat ──
