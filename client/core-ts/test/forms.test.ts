@@ -275,7 +275,7 @@ test("supergrok_is_xais_plan_and_an_xai_key_runs_grok_build_where_the_station_ru
   view = flows.value(topic);
   assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
   // Signed in with Grok Build's own command: a station without it installs it first (a manager can, here), then signs in.
-  assert.deepEqual([view.step, view.signIn, view.install, view.usesLine], ["connect", undefined, { runtime: "grok", state: "missing", title: "此 station 尚未安装 Grok Build", note: "需由 workspace 的 owner 或管理员安装" }, "添加后可用于：Grok Build"]);
+  assert.deepEqual([view.step, view.signIn, view.install, view.usesLine], ["connect", null, { runtime: "grok", state: "missing", title: "此 station 尚未安装 Grok Build", note: "需由 workspace 的 owner 或管理员安装" }, "添加后可用于：Grok Build"]);
   s.set({ topic: "workspace", workspace: "ws" }, { ok: { role: "owner" } });
   const updates = (grok: J) => s.set(overview, { ok: { apiProviders: [{ id: "xai" }], updates: [{ id: "station" }, { id: "grok", name: "Grok Build", updatable: true, ...grok }] } });
   updates({});

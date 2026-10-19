@@ -1051,7 +1051,7 @@ export function archiveCheck(v: J): J | null {
 export function installView(runtime: string, updates: J[], manages: boolean): J | null {
   const v = updates.find((u) => get(u, "id") === runtime);
   if (v === undefined) return null;
-  const name = str(v.name) ?? runtime;
+  const name = str(v.name) ?? format.runtimeLabel(runtime);
   if (v.state === "updating") {
     const percent = u64(v.percent);
     return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(percent !== undefined ? { percent } : {}) };

@@ -778,7 +778,8 @@ function profileView(station: string, draft: J, overview: J, manages = false): J
   return out;
 }
 
-type ProfileDraft = { owner: ClientId; value: J; pending: boolean; watch: Watch };
+/// `watch`: the station's overview and its workspace (the viewer's role: whether they may install a runtime).
+type ProfileDraft = { owner: ClientId; value: J; pending: boolean; watch: Watch[] };
 
 export class ProfileFlows {
   readonly #store: Store;
@@ -791,7 +792,7 @@ export class ProfileFlows {
   disconnect(owner: ClientId): void {
     for (const [k, d] of [...this.#drafts]) {
       if (d.owner !== owner) continue;
-      d.watch.drop();
+      for (const w of d.watch) w.drop();
       this.#drafts.delete(k);
     }
   }
@@ -810,14 +811,14 @@ export class ProfileFlows {
     const existing = this.#drafts.get(key);
     if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-views.flow.not_yours"));
     if (action === "drop") {
-      existing?.watch.drop();
+      for (const w of existing?.watch ?? []) w.drop();
       this.#drafts.delete(key);
       this.#store.invalidate(topic);
       return null;
     }
     let d = existing;
     if (!d) {
-      const watch = this.#store.watch({ topic: "overview", station }, () => this.#store.invalidate(topic));
+      const watch = [{ topic: "overview", station }, { topic: "workspace", workspace: ofAddress(station) }].map((t) => this.#store.watch(t, () => this.#store.invalidate(topic)));
       d = { owner, value: blank(), pending: false, watch };
       this.#drafts.set(key, d);
     }
