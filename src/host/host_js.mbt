@@ -311,6 +311,12 @@ pub fn shared_in() -> String {
 }
 
 ///|
+pub fn shared_in_file(i : Int) -> Bytes {
+  ignore(i)
+  b""
+}
+
+///|
 /// This build's version code (see host_native.mbt): a page does not update itself.
 pub fn app_version() -> Int {
   0

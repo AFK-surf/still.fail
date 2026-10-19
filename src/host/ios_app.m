@@ -478,6 +478,7 @@ int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_stri
   return 0;
 }
 moonbit_string_t mb_host_shared_in(void) { return moonbit_make_string_raw(0); }
+moonbit_bytes_t mb_host_shared_in_file(int32_t i) { (void)i; return moonbit_make_bytes(0, 0); }
 
 // Updates (@host.app_version, update_install, update_state): this app does not update itself here.
 int32_t mb_host_app_version(void) { return 0; }

@@ -41,7 +41,7 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways;
 static jclass updates_cls, shares_cls, keeps_cls;
 static jmethodID m_kp_begin, m_kp_append, m_kp_finish, m_kp_state, m_kp_where, m_kp_end;
-static jmethodID m_up_version, m_up_install, m_up_state, m_sh_share, m_sh_in;
+static jmethodID m_up_version, m_up_install, m_up_state, m_sh_share, m_sh_in, m_sh_file;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -86,6 +86,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   shares_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Shares"));
   m_sh_share = (*env)->GetStaticMethodID(env, shares_cls, "share", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[B)Z");
   m_sh_in = (*env)->GetStaticMethodID(env, shares_cls, "sharedIn", "()Ljava/lang/String;");
+  m_sh_file = (*env)->GetStaticMethodID(env, shares_cls, "sharedFile", "(I)[B");
   m_metrics = (*env)->GetStaticMethodID(env, text_cls, "fontMetrics", "(DII[D)V");
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
@@ -852,6 +853,16 @@ moonbit_string_t mb_host_shared_in(void) {
   jstring j = (jstring)(*env)->CallStaticObjectMethod(env, shares_cls, m_sh_in);
   moonbit_string_t out = j ? mstr(env, j) : moonbit_make_string_raw(0);
   if (j) (*env)->DeleteLocalRef(env, j);
+  return out;
+}
+
+moonbit_bytes_t mb_host_shared_in_file(int32_t i) {
+  JNIEnv *env = env_();
+  jbyteArray a = (jbyteArray)(*env)->CallStaticObjectMethod(env, shares_cls, m_sh_file, i);
+  jsize n = a ? (*env)->GetArrayLength(env, a) : 0;
+  moonbit_bytes_t out = moonbit_make_bytes(n, 0);
+  if (n) (*env)->GetByteArrayRegion(env, a, 0, n, (jbyte *)out);
+  if (a) (*env)->DeleteLocalRef(env, a);
   return out;
 }
 

@@ -1,6 +1,8 @@
 package dev.mbui;
 
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ContentResolver;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
@@ -8,6 +10,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 
@@ -15,31 +18,126 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * Sharing out and in (@host.share, @host.shared_in; still.fail's DriveScreen.kt hand and ShareActivity.kt): words or a
  * file handed to another app through the system's share sheet (a file kept in the cache's shared/ for it, read through
  * Shares.Files, a provider of this app's own that lets another app read only what was handed to it); and what another
- * app shares into this one (ACTION_SEND of text: its words and subject), kept for the app to take once.
+ * app shares into this one (ACTION_SEND of text: its words and subject; ACTION_SEND or ACTION_SEND_MULTIPLE of files,
+ * read whole), kept for the app to take once.
  */
 final class Shares {
-    /** What was shared in, as JSON text ({text, title}); taken once (null after). */
+    /** What was shared in, as JSON text ({text, title, files: [{name, type, size}]}); taken once (null after). */
     static volatile String sharedIn;
+    /** The files of what was shared in, by their place in its `files`, until each is taken. */
+    static volatile byte[][] sharedFiles = new byte[0][];
+    /** A file shared in is read whole, at most this much (the composer takes up to 1 GB). */
+    private static final long MAX = 1L << 30;
 
-    /** MainActivity: an ACTION_SEND of text, kept for the app (its words, the subject the app gave with them). */
+    /**
+     * MainActivity: an ACTION_SEND or ACTION_SEND_MULTIPLE, kept for the app: its words, the subject the app gave with
+     * them, its files (EXTRA_STREAM, or the clip the system made of it), each read whole off the main thread first.
+     */
     static void take(Intent intent) {
-        if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
+        if (intent == null) return;
+        String action = intent.getAction();
+        if (!Intent.ACTION_SEND.equals(action) && !Intent.ACTION_SEND_MULTIPLE.equals(action)) return;
         CharSequence text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
         String words = text == null ? "" : text.toString().trim();
-        if (words.isEmpty()) return;
         String subject = intent.getStringExtra(Intent.EXTRA_SUBJECT);
+        List<Uri> uris = streams(intent);
+        if (words.isEmpty() && uris.isEmpty()) return;
+        if (uris.isEmpty()) {
+            keep(words, subject, new JSONArray(), new byte[0][]);
+            return;
+        }
+        ContentResolver cr = Host.activity.getContentResolver();
+        new Thread(() -> {
+            JSONArray files = new JSONArray();
+            List<byte[]> bytes = new ArrayList<>();
+            for (Uri u : uris) {
+                String name = "file";
+                long size = -1;
+                try (Cursor c = cr.query(u, new String[] {OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE}, null, null, null)) {
+                    if (c != null && c.moveToFirst()) {
+                        if (!c.isNull(0)) name = c.getString(0);
+                        if (!c.isNull(1)) size = c.getLong(1);
+                    }
+                } catch (Exception e) {
+                    Host.log("shared in: " + e);
+                }
+                if (size > MAX) {
+                    Host.log("shared in: " + name + " is too big (" + size + " bytes)");
+                    continue;
+                }
+                try (InputStream in = cr.openInputStream(u)) {
+                    if (in == null) continue;
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    byte[] buf = new byte[1 << 16];
+                    for (int r; (r = in.read(buf)) > 0; ) {
+                        out.write(buf, 0, r);
+                        if (out.size() > MAX) break;
+                    }
+                    if (out.size() > MAX) continue;
+                    String type = cr.getType(u);
+                    files.put(new JSONObject().put("name", name).put("type", type == null ? "" : type).put("size", out.size()));
+                    bytes.add(out.toByteArray());
+                } catch (Exception e) {
+                    Host.log("shared in: " + name + ": " + e);
+                }
+            }
+            if (words.isEmpty() && bytes.isEmpty()) return;
+            keep(words, subject, files, bytes.toArray(new byte[0][]));
+        }, "mbui-shared-in").start();
+    }
+
+    /** The files an intent shares: the clip the system made of its streams, else EXTRA_STREAM itself (one or a list). */
+    private static List<Uri> streams(Intent intent) {
+        List<Uri> out = new ArrayList<>();
+        ClipData clip = intent.getClipData();
+        if (clip != null) {
+            for (int i = 0; i < clip.getItemCount(); i++) if (clip.getItemAt(i).getUri() != null) out.add(clip.getItemAt(i).getUri());
+        }
+        if (!out.isEmpty()) return out;
+        if (Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())) {
+            List<Uri> list = Build.VERSION.SDK_INT >= 33 ? intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri.class) : legacyList(intent);
+            if (list != null) for (Uri u : list) if (u != null) out.add(u);
+        } else {
+            Uri u = Build.VERSION.SDK_INT >= 33 ? intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class) : legacyOne(intent);
+            if (u != null) out.add(u);
+        }
+        return out;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static List<Uri> legacyList(Intent intent) {
+        return intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static Uri legacyOne(Intent intent) {
+        return intent.getParcelableExtra(Intent.EXTRA_STREAM);
+    }
+
+    private static void keep(String words, String subject, JSONArray files, byte[][] bytes) {
         try {
-            org.json.JSONObject o = new org.json.JSONObject().put("text", words);
+            JSONObject o = new JSONObject().put("text", words);
             if (subject != null && !subject.trim().isEmpty() && !subject.trim().equals(words)) o.put("title", subject.trim());
+            if (files.length() > 0) o.put("files", files);
+            sharedFiles = bytes;
             sharedIn = o.toString();
-            Host.log("shared in: " + words.length() + " characters" + (subject != null ? " (" + subject + ")" : ""));
+            Host.log("shared in: " + words.length() + " characters" + (subject != null ? " (" + subject + ")" : "")
+                    + (files.length() > 0 ? ", " + files.length() + " files" : ""));
             Host.requestFrame();
-        } catch (org.json.JSONException ignored) {
+        } catch (JSONException ignored) {
         }
     }
 
@@ -47,6 +145,15 @@ final class Shares {
         String s = sharedIn;
         sharedIn = null;
         return s;
+    }
+
+    /** The i-th file of what was shared in, taken once (empty after, or for none). */
+    static byte[] sharedFile(int i) {
+        byte[][] all = sharedFiles;
+        if (i < 0 || i >= all.length || all[i] == null) return new byte[0];
+        byte[] b = all[i];
+        all[i] = null;
+        return b;
     }
 
     /** Words, or a file of `data` named `name` (`mime`), handed to the system's share sheet; false when no app takes it. */

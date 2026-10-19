@@ -121,6 +121,9 @@ extern "C" fn ffi_share(text : String, name : String, mime : String, data : Byte
 extern "C" fn ffi_shared_in() -> String = "mb_host_shared_in"
 
 ///|
+extern "C" fn ffi_shared_in_file(i : Int) -> Bytes = "mb_host_shared_in_file"
+
+///|
 extern "C" fn ffi_app_version() -> Int = "mb_host_app_version"
 
 ///|
@@ -406,10 +409,17 @@ pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool 
 }
 
 ///|
-/// What another app shared into this one since last asked (Android's ACTION_SEND of text), as JSON text
-/// `{"text","title"}`; "" when nothing was.
+/// What another app shared into this one since last asked (Android's ACTION_SEND of text or files, ACTION_SEND_MULTIPLE
+/// of files; MBUI_SHARE_FILES, paths split by |, on macOS for scripted runs), as JSON text `{"text","title","files"}`,
+/// `files` each `{"name","type","size"}` (absent when none); "" when nothing was.
 pub fn shared_in() -> String {
   ffi_shared_in()
+}
+
+///|
+/// The i-th of the files shared in (`shared_in`'s `files`), taken once: empty after, or where there is none.
+pub fn shared_in_file(i : Int) -> Bytes {
+  ffi_shared_in_file(i)
 }
 
 ///|

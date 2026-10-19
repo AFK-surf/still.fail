@@ -783,7 +783,8 @@ int32_t mb_host_system_dark(void) {
 }
 
 // Sharing out (@host.share): the system's sharing picker over the window, the words or the file (kept in a folder
-// of the app's own in the temporary directory); nothing comes in on macOS (shared_in "").
+// of the app's own in the temporary directory). Nothing comes in on macOS but, for scripted runs, the files
+// MBUI_SHARE_FILES names (paths split by |) once, as Android's ACTION_SEND of files would bring them.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
   (void)mime;
   MBView *v = the_view;
@@ -805,7 +806,36 @@ int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_stri
   fflush(stdout);
   return 1;
 }
-moonbit_string_t mb_host_shared_in(void) { return moonbit_make_string_raw(0); }
+static NSMutableArray<NSData *> *shared_files;
+moonbit_string_t mb_host_shared_in(void) {
+  static int taken;
+  const char *given = getenv("MBUI_SHARE_FILES");
+  if (taken || !given || !*given) return moonbit_make_string_raw(0);
+  taken = 1;
+  shared_files = [NSMutableArray new];
+  NSMutableArray *files = [NSMutableArray new];
+  for (NSString *p in [@(given) componentsSeparatedByString:@"|"]) {
+    NSData *d = p.length ? [NSData dataWithContentsOfFile:p] : nil;
+    if (!d) continue;
+    [shared_files addObject:d];
+    [files addObject:@{@"name" : p.lastPathComponent, @"type" : @"", @"size" : @(d.length)}];
+  }
+  if (!files.count) return moonbit_make_string_raw(0);
+  const char *words = getenv("MBUI_SHARE_TEXT");
+  NSData *j = [NSJSONSerialization dataWithJSONObject:@{@"text" : words ? @(words) : @"", @"files" : files} options:0 error:nil];
+  fprintf(stdout, "shared in: %lu files\n", (unsigned long)files.count);
+  fflush(stdout);
+  return mb_string_from_ns([[NSString alloc] initWithData:j encoding:NSUTF8StringEncoding]);
+}
+
+moonbit_bytes_t mb_host_shared_in_file(int32_t i) {
+  if (i < 0 || i >= (int32_t)shared_files.count) return moonbit_make_bytes(0, 0);
+  NSData *d = shared_files[i];
+  moonbit_bytes_t out = moonbit_make_bytes((int32_t)d.length, 0);
+  memcpy(out, d.bytes, d.length);
+  shared_files[i] = [NSData data];
+  return out;
+}
 
 // Updates (@host.app_version, update_install, update_state): this app does not update itself here.
 int32_t mb_host_app_version(void) { return 0; }
