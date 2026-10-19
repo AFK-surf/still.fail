@@ -17,11 +17,12 @@ extern "js" fn js_now() -> Double =
 extern "js" fn js_event_time() -> Double =
   #|() => (globalThis.__mbhost && globalThis.__mbhost.eventTime) ? globalThis.__mbhost.eventTime() : -1
 
+// Without a host (the tests, run in node) a frame asked for is nobody's to draw.
 extern "js" fn js_request_frame() -> Unit =
-  #|() => globalThis.__mbhost.requestFrame()
+  #|() => globalThis.__mbhost && globalThis.__mbhost.requestFrame()
 
 extern "js" fn js_wake_after(ms : Double) -> Unit =
-  #|(ms) => globalThis.__mbhost.wakeAfter(ms)
+  #|(ms) => globalThis.__mbhost && globalThis.__mbhost.wakeAfter(ms)
 
 extern "js" fn js_font_metrics(
   size : Double,
