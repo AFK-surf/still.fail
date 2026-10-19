@@ -94,7 +94,7 @@ fn leaf_size(
   } else if n.kind == kind_editor {
     // an editor takes the width it is offered
     let s = g.editor_display(n)
-    let tl = layout_text(s, n.font_size, n.weight, max_w, true)
+    let tl = layout_text(s, n.font_size, n.weight, max_w, true, line=n.line_h)
     (if wm == Undefined { tl.w } else { w }, tl.h)
   } else if n.kind == kind_image {
     image_leaf_size(n, w, wm, h, hm)
@@ -255,9 +255,19 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   } else if n.kind == kind_editor {
     match self.editors.get(n.id) {
       Some(st) => {
-        st.tl = Some(layout_text(st.display(), n.font_size, n.weight, iw, true))
+        let tl = layout_text(st.display(), n.font_size, n.weight, iw, true, line=n.line_h)
+        st.tl = Some(tl)
+        // taller than the field: scrolled so that the caret's line shows
+        let (_, cl) = tl.caret(st.caret + st.marked.length())
+        let top = cl.to_double() * tl.line_h
+        if top - st.scroll < 0.0 {
+          st.scroll = top
+        } else if top + tl.line_h - st.scroll > ih {
+          st.scroll = top + tl.line_h - ih
+        }
+        st.scroll = dmax(0.0, dmin(st.scroll, tl.h - ih))
         st.ox = ix
-        st.oy = iy
+        st.oy = iy - st.scroll
       }
       None => ()
     }

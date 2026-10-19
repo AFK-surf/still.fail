@@ -296,3 +296,23 @@ extern "C" fn bl_back(id : Int) -> String = "mb_host_browser_login_back"
 
 ///|
 extern "C" fn bl_end(id : Int) -> Unit = "mb_host_browser_login_end"
+
+// Files picked (pick.mbt; mac_app.m's open panel, android_host.c on MainActivity's pickers).
+
+///|
+extern "C" fn pk_start(kind : Int) -> Int = "mb_host_pick_start"
+
+///|
+extern "C" fn pk_state(id : Int) -> Int = "mb_host_pick_state"
+
+///|
+extern "C" fn pk_count(id : Int) -> Int = "mb_host_pick_count"
+
+///|
+extern "C" fn pk_name(id : Int, i : Int) -> String = "mb_host_pick_name"
+
+///|
+extern "C" fn pk_bytes(id : Int, i : Int) -> Bytes = "mb_host_pick_bytes"
+
+///|
+extern "C" fn pk_end(id : Int) -> Unit = "mb_host_pick_end"

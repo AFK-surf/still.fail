@@ -294,3 +294,35 @@ fn bl_back(_id : Int) -> String {
 fn bl_end(_id : Int) -> Unit {
 
 }
+
+// Files picked (pick.mbt): not from a page yet.
+
+///|
+fn pk_start(_kind : Int) -> Int {
+  0
+}
+
+///|
+fn pk_state(_id : Int) -> Int {
+  -1
+}
+
+///|
+fn pk_count(_id : Int) -> Int {
+  0
+}
+
+///|
+fn pk_name(_id : Int, _i : Int) -> String {
+  ""
+}
+
+///|
+fn pk_bytes(_id : Int, _i : Int) -> Bytes {
+  b""
+}
+
+///|
+fn pk_end(_id : Int) -> Unit {
+
+}

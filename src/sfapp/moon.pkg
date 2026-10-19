@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/buffer",
   "mbui/ui",
   "mbui/sf",
   "mbui/gallery",

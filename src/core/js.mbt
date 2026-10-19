@@ -11,6 +11,11 @@ fn ffi_send(_json : String) -> Unit {
 }
 
 ///|
+fn ffi_send_bytes(_json : String, _bytes : Bytes) -> Unit {
+
+}
+
+///|
 fn ffi_stop() -> Unit {
 
 }

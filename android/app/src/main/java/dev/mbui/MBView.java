@@ -61,7 +61,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     @Override
     public void onDrawFrame(GL10 gl) {
-        float w = getWidth() / density, h = getHeight() / density;
+        // the soft keyboard's height off the bottom (Host.imeBottom, as it moves): the app lays out above it, the
+        // surface keeps its size (resizing it with each step of the keyboard's motion would be far too slow)
+        float w = getWidth() / density, h = Math.max(1, getHeight() - Host.imeBottom) / density;
         // the vsync's time; a frame the system asked for (a resize) has none, and time never goes back
         long v = vsyncNanos;
         double now = v != 0 ? v / 1e6 : System.nanoTime() / 1e6;
@@ -129,8 +131,24 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         return true;
     }
 
+    /** What the clipboard holds, as words, into the focused field (a paste: KEYCODE_PASTE, the keyboard's menu). */
+    void paste() {
+        android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        android.content.ClipData clip = cm.getPrimaryClip();
+        if (clip == null || clip.getItemCount() == 0) return;
+        CharSequence t = clip.getItemAt(0).coerceToText(getContext());
+        if (t == null || t.length() == 0) return;
+        String s = t.toString();
+        toGL(() -> Native.text(0, s, 0, 0));
+    }
+
     @Override
     public boolean onKeyDown(int code, KeyEvent e) {
+        if (code == KeyEvent.KEYCODE_PASTE || (code == KeyEvent.KEYCODE_V && e.isCtrlPressed())) {
+            if (Host.imeActive) paste();
+            return true;
+        }
         int k = keyCode(code);
         if (k != 0) {
             int mods = e.isShiftPressed() ? 1 : 0;
@@ -170,9 +188,11 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo out) {
+        // multi-line, with no action of the keyboard's own: its Enter is a key the field decides on (a new line in
+        // still.fail's composer, as its Android app's field does; the demo sends)
         out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE;
-        out.imeOptions = EditorInfo.IME_ACTION_SEND | EditorInfo.IME_FLAG_NO_EXTRACT_UI
-                | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        out.imeOptions = EditorInfo.IME_ACTION_NONE | EditorInfo.IME_FLAG_NO_ENTER_ACTION
+                | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
         out.initialSelStart = Host.selStart;
         out.initialSelEnd = Host.selEnd;
         input = new MBInput(this);
@@ -238,6 +258,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         @Override
         public boolean sendKeyEvent(KeyEvent e) {
             if (e.getAction() != KeyEvent.ACTION_DOWN) return true;
+            if (e.getKeyCode() == KeyEvent.KEYCODE_PASTE) { view.paste(); return true; }
             int k = keyCode(e.getKeyCode());
             if (k != 0) {
                 int mods = e.isShiftPressed() ? 1 : 0;
@@ -249,6 +270,15 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
                 String s = new String(Character.toChars(ch));
                 view.toGL(() -> Native.text(0, s, 0, 0));
             }
+            return true;
+        }
+
+        @Override
+        public boolean performContextMenuAction(int id) {
+            if (id == android.R.id.paste || id == android.R.id.pasteAsPlainText) view.paste();
+            else if (id == android.R.id.selectAll) view.toGL(() -> Native.key(12, 0));
+            else if (id == android.R.id.copy) view.toGL(() -> Native.key(13, 0));
+            else if (id == android.R.id.cut) view.toGL(() -> Native.key(14, 0));
             return true;
         }
 

@@ -180,7 +180,7 @@ fn said(c : @ui.Ctx, src : Source, here : Here, m : Message, list : Array[Entry]
     c.box(w=Fill(1.0), gap=4.0, align=AEnd, fn() {
       quote_cards(c, m.quotes, true)
       if m.text != "" {
-        bubble(c, m.text, m.ts)
+        pickable(c, m.ts, m.by.name, "person", m.text, false, fn() { bubble(c, m.text, m.ts) })
       }
       files(c, src, here, m.attachments, true)
       if m.followed {
@@ -214,11 +214,11 @@ fn said(c : @ui.Ctx, src : Source, here : Here, m : Message, list : Array[Entry]
       quote_cards(c, m.quotes, false)
       if m.author_kind == "person" {
         if m.text != "" {
-          person_words(c, m.text, m.ts)
+          pickable(c, m.ts, m.by.name, "person", m.text, true, fn() { person_words(c, m.text, m.ts) })
         }
         files(c, src, here, m.attachments, false)
       } else {
-        agent_words(c, src, here, m)
+        pickable(c, m.ts, m.by.name, "agent", m.text, true, fn() { agent_words(c, src, here, m) })
       }
       decision_under(c, src, here, m)
       // letting go what it asks (Chat.kt AskDismiss): said, not done from here
@@ -1267,15 +1267,98 @@ fn outgoing(c : @ui.Ctx, src : Source, here : Here, o : Outgoing) -> Unit {
     })
     |> ignore
     if failed {
-      c.box(dir=Row, pt=4.0, gap=4.0, align=ACenter, fn() {
-        @sf.icon(c, "info", size=12.0, color=t.p.red) |> ignore
-        c.text(tr("android-chat.chat.unsent"), size=13.0, color=t.p.red, wrap=false) |> ignore
+      // said briefly (a tap says why); sending it again or dropping it right beside
+      let why = c.id("unsent/" + o.id)
+      if c.clicked(why) {
+        say(
+          c,
+          if o.error != "" {
+            fill("android-chat.chat.unsent.why", [("error", o.error)])
+          } else {
+            tr("android-chat.chat.unsent.toast")
+          },
+        )
+      }
+      let v = here.view
+      let retrying = cui.doing.contains("retry/" + o.id)
+      let discarding = cui.doing.contains("discard/" + o.id)
+      c.box(dir=Row, pt=4.0, gap=2.0, align=ACenter, fn() {
+        c.box(dir=Row, pr=6.0, gap=4.0, align=ACenter, id=why, fn() {
+          @sf.icon(c, "info", size=12.0, color=t.p.red) |> ignore
+          c.text(tr("android-chat.chat.unsent"), size=13.0, color=t.p.red, wrap=false) |> ignore
+        })
+        |> ignore
+        unsent_button(c, src, here, o, "chat.retry", "retry", tr("common.retry"), !v.offline && !v.archived && !discarding, retrying)
+        unsent_button(c, src, here, o, "chat.discard", "trash", tr("common.delete"), !retrying, discarding)
       })
       |> ignore
     } else if !o.followed {
       under_way(c, tr("android-chat.chat.sending"))
     }
   })
+  |> ignore
+}
+
+///|
+/// 重试 or 删除 under a message that did not go (Chat.kt UnsentButton): a spinner on it while it is done, neither
+/// pressed again meanwhile; what failed in it said in a toast.
+fn unsent_button(
+  c : @ui.Ctx,
+  src : Source,
+  here : Here,
+  o : Outgoing,
+  call : String,
+  icon : String,
+  label : String,
+  enabled : Bool,
+  busy : Bool,
+) -> Unit {
+  let t = @sf.theme()
+  let k = ink()
+  let what = if call == "chat.retry" { "retry/" } else { "discard/" }
+  let id = c.id("unsent/" + what + o.id)
+  if c.clicked(id) && enabled && !busy {
+    if src.read_only {
+      say(c, read_only_words)
+    } else {
+      cui.doing[what + o.id] = true
+      let p : Map[String, Json] = { "station": Json::string(here.station), "id": Json::string(o.id) }
+      match here.view.thread {
+        Some(th) => p["thread"] = Json::number(th)
+        None => p["session"] = Json::string(here.session)
+      }
+      let verb = tr(if call == "chat.retry" { "android-chat.chat.retry.verb" } else { "android-chat.chat.delete.verb" })
+      (src.call)(call, Json::object(p), fn(res) {
+        cui.doing.remove(what + o.id)
+        match res {
+          Err(e) => {
+            app.toast = verb + "：" + text(Some(e), "message")
+            app.toast_at = -1.0
+          }
+          _ => ()
+        }
+      })
+    }
+  }
+  c.box(
+    dir=Row,
+    padx=7.0,
+    pady=3.0,
+    gap=4.0,
+    radius=7.0,
+    align=ACenter,
+    opacity=if enabled { 1.0 } else { 0.5 },
+    bg=if c.pressed(id) && enabled { @sf.alpha(t.p.text, 0.08) } else { 0L },
+    id~,
+    fn() {
+      if busy {
+        @sf.spinner(c, size=12.0) |> ignore
+      } else {
+        @sf.icon(c, icon, size=12.0, color=k.muted) |> ignore
+      }
+      c.text(label, size=13.0, color=k.muted, wrap=false) |> ignore
+    },
+  )
   |> ignore
 }
 

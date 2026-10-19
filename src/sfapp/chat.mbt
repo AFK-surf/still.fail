@@ -7,7 +7,7 @@
 //
 // What the page tells the core of the reader (the chat shown and its end seen: `client.focus`, which marks it read;
 // where it was left: `chat.place`) is not said with MBUI_READONLY=1 (Source.readonly): a run on a real account then
-// changes nothing in it. The composer is the next slice's: here its capsule only, not taking words.
+// changes nothing in it. The composer at its foot is composer.mbt's.
 
 ///|
 /// A chat the page is of: its station, the session it is opened by (a row's `session`), its title and its station's
@@ -219,7 +219,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         waiting_messages(c, failed)
         c.layer(fn() {
           c.spacer()
-          composer_placeholder(c)
+          composer(c, src, r, None)
         })
         |> ignore
       }
@@ -228,9 +228,10 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         c.layer(fn() { chat_bar(c, src, w, r, v) }) |> ignore
         c.layer(fn() {
           c.spacer()
-          composer_placeholder(c)
+          composer(c, src, r, Some(v))
         })
         |> ignore
+        pick_bar(c, src, r)
       }
     }
   })
@@ -302,7 +303,7 @@ fn messages(
         }
         match e {
           Top => c.box(h=Px(chat_bar_h + 14.0), fn() {  }) |> ignore
-          Foot => c.box(h=Px(composer_room + 10.0), fn() {  }) |> ignore
+          Foot => c.box(h=Px(composer_room_of(c) + 10.0), fn() {  }) |> ignore
           _ =>
             c.box(w=Fill(1.0), pl=14.0, pr=14.0, pt=top, fn() {
               entry_view(c, src, here, e, list)
@@ -487,6 +488,7 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
     }
     _ => ()
   }
+  composer_left(src, r)
   readings.remove(k)
   (src.leave)("chat", chat_params(r))
   read_chats.remove(k)
@@ -552,7 +554,7 @@ fn jump_to_latest(
   }
   c.layer(align=AEnd, fn() {
     c.spacer()
-    c.box(pr=18.0, pb=composer_room + 2.0, fn() {
+    c.box(pr=18.0, pb=composer_room_of(c) + 2.0, fn() {
       c.box(
         dir=Row,
         h=Px(36.0),
@@ -600,56 +602,6 @@ fn jump_to_latest(
 fn floating_ground() -> Int64 {
   let t = @sf.theme()
   @sf.over(t.p.bg, @sf.alpha(t.p.raised, 0.72))
-}
-
-///|
-/// The composer's capsule (Composer.kt ComposerBar, ChatHost.kt): ＋, the field with its placeholder, the round send
-/// button, floating over the list's foot. The next slice makes it take words; here it is only where it will be.
-fn composer_placeholder(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=8.0, pb=10.0, fn() {
-    c.box(
-      dir=Row,
-      w=Fill(1.0),
-      pad=8.0,
-      gap=2.0,
-      radius=26.0,
-      align=ACenter,
-      bg=floating_ground(),
-      shadow=2.0,
-      shadow_color=0x0000004DL,
-      shadow_y=0.5,
-      fn() {
-        c.box(w=Px(36.0), h=Px(36.0), align=ACenter, justify=JCenter, fn() {
-          @sf.icon(c, "plus", size=18.0, color=t.p.text) |> ignore
-        })
-        |> ignore
-        c.box(w=Fill(1.0), min_h=36.0, pr=14.0, pt=7.0, pb=7.0, justify=JCenter, fn() {
-          c.text(
-            tr("android-chat.chat.placeholder"),
-            size=16.0,
-            color=t.p.subtle,
-            wrap=false,
-            line=21.0,
-          )
-          |> ignore
-        })
-        |> ignore
-        c.box(
-          w=Px(36.0),
-          h=Px(36.0),
-          radius=18.0,
-          align=ACenter,
-          justify=JCenter,
-          bg=@sf.over(t.p.raised, @sf.alpha(t.p.text, 0.18)),
-          fn() { @sf.icon(c, "arrow-up", size=18.0, color=t.p.raised) |> ignore },
-        )
-        |> ignore
-      },
-    )
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|

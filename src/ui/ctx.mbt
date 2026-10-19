@@ -67,6 +67,20 @@ struct EditorState {
   mut oy : Double
   mut submitted : String?
   mut pref_x : Double
+  /// how far its words are scrolled up (taller than the field: the caret's line kept in view)
+  mut scroll : Double
+  /// what was put in at once that was `limit` characters or more, not put in (a long paste the app takes instead)
+  mut pasted : String?
+  mut limit : Int
+  /// Enter sends (the words go to `submitted`); else it is a new line
+  mut enter_sends : Bool
+  /// its look, as the last frame said it: the line's height (0: the font's), the words', the placeholder's, the
+  /// caret's and the selection's colours
+  mut line : Double
+  mut color : Int64
+  mut ph_color : Int64
+  mut caret_color : Int64
+  mut sel_color : Int64
 }
 
 ///|

@@ -81,6 +81,21 @@ fn reset() -> Unit {
   readings.clear()
   left_pages.clear()
   splash_first.val = -1.0
+  drafts.clear()
+  cui.attach = false
+  cui.picking = None
+  cui.was_down = false
+  cui.press_new = false
+  cui.released = false
+  cui.moved = false
+  cui.outside = false
+  cui.room = 0.0
+  cui.doing.clear()
+  cui.hold = 0
+  cui.picked = ""
+  fix_chats.clear()
+  fix_timers.clear()
+  fix_drafts.clear()
 }
 
 ///|
@@ -99,6 +114,7 @@ fn home() -> Unit {
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.begin(c)
+  track_press(c)
   for p in left_pages {
     match p {
       Chat(r) => chat_left(src, r)
@@ -212,6 +228,10 @@ fn toast(c : @ui.Ctx) -> Unit {
     return
   }
   let t = @sf.theme()
+  // said from a call's answer, between frames: from this frame on
+  if app.toast_at < 0.0 {
+    app.toast_at = c.now()
+  }
   let age = c.now() - app.toast_at
   if age > 2800.0 {
     app.toast = ""

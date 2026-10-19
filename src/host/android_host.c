@@ -29,10 +29,11 @@ static struct {
 } cb;
 
 static JavaVM *vm;
-static jclass host_cls, text_cls, images_cls, login_cls;
+static jclass host_cls, text_cls, images_cls, login_cls, picks_cls;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
-    m_bl_open, m_bl_back, m_bl_end, m_back_enabled;
+    m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
+    m_pk_end;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -78,6 +79,13 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_bl_open = (*env)->GetStaticMethodID(env, login_cls, "open", "(ILjava/lang/String;)I");
   m_bl_back = (*env)->GetStaticMethodID(env, login_cls, "back", "(I)Ljava/lang/String;");
   m_bl_end = (*env)->GetStaticMethodID(env, login_cls, "end", "(I)V");
+  picks_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Picks"));
+  m_pk_start = (*env)->GetStaticMethodID(env, picks_cls, "start", "(I)I");
+  m_pk_state = (*env)->GetStaticMethodID(env, picks_cls, "state", "(I)I");
+  m_pk_count = (*env)->GetStaticMethodID(env, picks_cls, "count", "(I)I");
+  m_pk_name = (*env)->GetStaticMethodID(env, picks_cls, "name", "(II)Ljava/lang/String;");
+  m_pk_bytes = (*env)->GetStaticMethodID(env, picks_cls, "bytes", "(II)[B");
+  m_pk_end = (*env)->GetStaticMethodID(env, picks_cls, "end", "(I)V");
   shape_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 4 * 8192));
   small_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 16));
   return JNI_VERSION_1_6;
@@ -263,6 +271,9 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   glViewport(0, 0, fb_w, fb_h);
   glClearColor((float)r, (float)g, (float)b, 1);
   glClear(GL_COLOR_BUFFER_BIT);
+  // the app drawn in the surface's top part, as tall as it was told (the soft keyboard over the rest: MBView)
+  int vh = (int)(cur_h * cur_scale + 0.5);
+  if (vh > 0 && vh < fb_h) glViewport(0, fb_h - vh, fb_w, vh);
   if (count <= 0) return;
   size_t n = (size_t)count * 24;
   if (fcap < n) {
@@ -581,4 +592,45 @@ moonbit_string_t mb_host_browser_login_back(int32_t id) {
 void mb_host_browser_login_end(int32_t id) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, login_cls, m_bl_end, id);
+}
+
+// ---------------------------------------------------------------------------
+// Files picked (pick.mbt): dev.mbui.Picks opens the system's pickers and reads what comes back.
+
+int32_t mb_host_pick_start(int32_t kind) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, picks_cls, m_pk_start, kind);
+}
+
+int32_t mb_host_pick_state(int32_t id) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, picks_cls, m_pk_state, id);
+}
+
+int32_t mb_host_pick_count(int32_t id) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, picks_cls, m_pk_count, id);
+}
+
+moonbit_string_t mb_host_pick_name(int32_t id, int32_t i) {
+  JNIEnv *env = env_();
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, picks_cls, m_pk_name, id, i);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  return out;
+}
+
+moonbit_bytes_t mb_host_pick_bytes(int32_t id, int32_t i) {
+  JNIEnv *env = env_();
+  jbyteArray a = (jbyteArray)(*env)->CallStaticObjectMethod(env, picks_cls, m_pk_bytes, id, i);
+  jsize n = a ? (*env)->GetArrayLength(env, a) : 0;
+  moonbit_bytes_t out = moonbit_make_bytes(n, 0);
+  if (n) (*env)->GetByteArrayRegion(env, a, 0, n, (jbyte *)out);
+  if (a) (*env)->DeleteLocalRef(env, a);
+  return out;
+}
+
+void mb_host_pick_end(int32_t id) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, picks_cls, m_pk_end, id);
 }

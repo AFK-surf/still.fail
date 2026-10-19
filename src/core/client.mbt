@@ -19,6 +19,8 @@ pub struct Sub {
 ///|
 pub struct Client {
   priv send : (String) -> Unit
+  /// a message with bytes beside it (a file's part going up)
+  priv send_bytes : (String, Bytes) -> Unit
   priv subs : Map[Int, Sub]
   priv by_key : Map[String, Sub]
   priv calls : Map[Int, (Result[Json, Json]) -> Unit]
@@ -33,9 +35,14 @@ pub struct Client {
 
 ///|
 /// A client whose messages go out through `send` (one JSON message each).
-pub fn Client::new(send : (String) -> Unit) -> Client {
+/// `send_bytes` sends one with bytes beside it (by default the bytes are dropped: a client that never sends any).
+pub fn Client::new(
+  send : (String) -> Unit,
+  send_bytes? : (String, Bytes) -> Unit = fn(s, _) { send(s) },
+) -> Client {
   {
     send,
+    send_bytes,
     subs: {},
     by_key: {},
     calls: {},
@@ -107,10 +114,12 @@ pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
 ///|
 /// Calls `name` with `params`; `on_done` gets its answer (`ok`) or the core's error (`{code, message, status?}`).
 /// Returns the call's id. A value the call sends before its answer (how far it has got) is not passed on yet.
+/// `bytes` go beside the call (a file's part: `station.upload.part`).
 pub fn Client::call(
   self : Client,
   name : String,
   params? : Json = Json::object({}),
+  bytes? : Bytes? = None,
   on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
 ) -> Int {
   let id = self.next_id
@@ -121,7 +130,10 @@ pub fn Client::call(
     "call": Json::string(name),
     "params": params,
   }
-  (self.send)(Json::object(m).stringify())
+  match bytes {
+    Some(b) => (self.send_bytes)(Json::object(m).stringify(), b)
+    None => (self.send)(Json::object(m).stringify())
+  }
   id
 }
 

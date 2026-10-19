@@ -448,3 +448,11 @@ moonbit_string_t mb_host_env(moonbit_string_t name) {
   const char *v = getenv(mb_ns_from_string(name).UTF8String);
   return mb_string_from_ns(v ? [NSString stringWithUTF8String:v] ?: @"" : @"");
 }
+
+// Files picked (pick.mbt): not on iOS yet (PHPickerViewController, UIDocumentPicker to come).
+int32_t mb_host_pick_start(int32_t kind) { return 0; }
+int32_t mb_host_pick_state(int32_t pid) { return -1; }
+int32_t mb_host_pick_count(int32_t pid) { return 0; }
+moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
+moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) { return moonbit_make_bytes(0, 0); }
+void mb_host_pick_end(int32_t pid) {}

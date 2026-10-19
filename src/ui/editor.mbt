@@ -6,6 +6,10 @@
 pub struct EditorResult {
   submitted : String?
   focused : Bool
+  /// the words in it now (what the input method composes not yet among them)
+  text : String
+  /// words put in at once, `paste_limit` characters or more: not put in, for the app to take (a long paste)
+  pasted : String?
 }
 
 ///|
@@ -197,7 +201,10 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
       }
     }
   } else if code == key_enter {
-    if shift {
+    if shift || !self.enter_sends {
+      if self.marked.length() > 0 {
+        self.text_input(2, "", 0, 0, now)
+      }
       self.insert("\n")
     } else if self.text.length() > 0 {
       self.submitted = Some(self.text)
@@ -222,7 +229,11 @@ fn EditorState::text_input(
   self.blink0 = now
   self.pref_x = -1.0
   if kind == 0 {
-    self.insert(s)
+    if self.limit > 0 && s.length() >= self.limit {
+      self.pasted = Some(s)
+    } else {
+      self.insert(s)
+    }
   } else if kind == 1 {
     self.delete_selection() |> ignore
     self.marked = s
@@ -248,6 +259,13 @@ pub fn Ctx::editor(
   w? : Size = Fill(1.0),
   font_size? : Double = 15.0,
   max_lines? : Int = 5,
+  plain? : Bool = false,
+  line? : Double = 0.0,
+  color? : Int64 = 0x1D1D1FFFL,
+  placeholder_color? : Int64 = 0x8E8E93FFL,
+  caret_color? : Int64 = 0x0A84FFFFL,
+  enter_sends? : Bool = true,
+  paste_limit? : Int = 0,
 ) -> EditorResult {
   let id = self.id(key)
   let st = match self.editors.get(id) {
@@ -266,34 +284,59 @@ pub fn Ctx::editor(
         oy: 0.0,
         submitted: None,
         pref_x: -1.0,
+        scroll: 0.0,
+        pasted: None,
+        limit: 0,
+        enter_sends: true,
+        line: 0.0,
+        color: 0L,
+        ph_color: 0L,
+        caret_color: 0L,
+        sel_color: 0L,
       }
       self.editors[id] = s
       self.own(id)
       s
     }
   }
+  st.limit = paste_limit
+  st.enter_sends = enter_sends
+  st.line = line
+  st.color = color
+  st.ph_color = placeholder_color
+  st.caret_color = caret_color
+  st.sel_color = (caret_color & 0xFFFFFF00L) | 0x40L
   let focused = self.focus == id
   let i = self.alloc(kind_editor)
   let n = self.nodes[i]
-  let (_, _, lh) = font_metrics(font_size, 400)
+  let (_, _, own_lh) = font_metrics(font_size, 400)
+  let lh = if line > 0.0 { line } else { own_lh }
   n.id = id
   n.hit = true
   n.w = w
   n.font_size = font_size
-  n.pad_l = 12.0
-  n.pad_r = 12.0
-  n.pad_t = 9.0
-  n.pad_b = 9.0
-  n.min_h = lh + 18.0
-  n.max_h = lh * max_lines.to_double() + 18.0
-  n.bg = 0xFFFFFFFFL
-  n.radius = 12.0
-  n.border_w = if focused { 2.0 } else { 1.0 }
-  n.border_c = if focused { 0x0A84FFFFL } else { 0xD2D2D7FFL }
+  n.line_h = line
   n.clip = true
   n.text = placeholder
-  let res = { submitted: st.submitted, focused }
+  if plain {
+    // no frame of its own: what holds it draws one
+    n.min_h = lh
+    n.max_h = lh * max_lines.to_double()
+  } else {
+    n.pad_l = 12.0
+    n.pad_r = 12.0
+    n.pad_t = 9.0
+    n.pad_b = 9.0
+    n.min_h = lh + 18.0
+    n.max_h = lh * max_lines.to_double() + 18.0
+    n.bg = 0xFFFFFFFFL
+    n.radius = 12.0
+    n.border_w = if focused { 2.0 } else { 1.0 }
+    n.border_c = if focused { 0x0A84FFFFL } else { 0xD2D2D7FFL }
+  }
+  let res = { submitted: st.submitted, focused, text: st.text, pasted: st.pasted }
   st.submitted = None
+  st.pasted = None
   res
 }
 
@@ -327,7 +370,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
         dmax(ex - sx, 2.0),
         tl.line_h,
         2.0,
-        0x0A84FF40L,
+        st.sel_color,
         0.0,
         0L,
         alpha,
@@ -335,10 +378,11 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     }
   }
   if st.text.length() == 0 && ml == 0 && n.text.length() > 0 {
-    let ph = layout_text(n.text, n.font_size, 400, n.fw - 24.0, true)
-    self.emit_text(ph, st.ox, st.oy, 0x8E8E93FFL, alpha)
+    // on one line, as a text that does not wrap
+    let ph = layout_text(n.text, n.font_size, 400, 1.0e9, false, line=st.line)
+    self.emit_text(ph, st.ox, st.oy, st.ph_color, alpha)
   } else {
-    self.emit_text(tl, st.ox, st.oy, 0x1D1D1FFFL, alpha)
+    self.emit_text(tl, st.ox, st.oy, st.color, alpha)
   }
   // composition underline
   if ml > 0 {
@@ -353,7 +397,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
         dmax(ex - sx, 1.0),
         1.5,
         0.0,
-        0x1D1D1FFFL,
+        st.color,
         0.0,
         0L,
         alpha,
@@ -374,7 +418,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
         2.0,
         tl.line_h - 4.0,
         1.0,
-        0x0A84FFFFL,
+        st.caret_color,
         0.0,
         0L,
         alpha,
@@ -427,8 +471,70 @@ pub fn Ctx::take_editor_text(self : Ctx, key : String) -> String {
       st.text = ""
       st.caret = 0
       st.anchor = 0
+      st.scroll = 0.0
       t
     }
     None => ""
   }
+}
+
+///|
+/// Puts `text` in an editor in place of what it has, the caret at its end (a draft kept, words put back). An editor
+/// not drawn yet takes it when it is.
+pub fn Ctx::set_editor_text(self : Ctx, key : String, text : String) -> Unit {
+  let id = self.id(key)
+  match self.editors.get(id) {
+    Some(st) => {
+      st.marked = ""
+      st.text = text
+      st.caret = text.length()
+      st.anchor = st.caret
+      st.blink0 = self.now
+    }
+    None => {
+      let st = {
+        text,
+        caret: text.length(),
+        anchor: text.length(),
+        marked: "",
+        msel_a: 0,
+        msel_b: 0,
+        blink0: self.now,
+        tl: None,
+        ox: 0.0,
+        oy: 0.0,
+        submitted: None,
+        pref_x: -1.0,
+        scroll: 0.0,
+        pasted: None,
+        limit: 0,
+        enter_sends: true,
+        line: 0.0,
+        color: 0L,
+        ph_color: 0L,
+        caret_color: 0L,
+        sel_color: 0L,
+      }
+      self.editors[id] = st
+      self.own(id)
+    }
+  }
+}
+
+///|
+/// Whether the editor `key` is kept on this page (drawn before, and its page not left since).
+pub fn Ctx::has_editor(self : Ctx, key : String) -> Bool {
+  self.editors.contains(self.id(key))
+}
+
+///|
+/// Whether the editor `key` has the focus (the keyboard is its).
+pub fn Ctx::editor_focused(self : Ctx, key : String) -> Bool {
+  self.focus != 0 && self.focus == self.id(key)
+}
+
+///|
+/// Lets go of the focus: no field takes keys, the keyboard goes.
+pub fn Ctx::blur(self : Ctx) -> Unit {
+  self.focus = 0
 }

@@ -20,6 +20,8 @@ final class Host {
     static volatile boolean imeActive;
     static volatile String imeText = "";
     static volatile int selStart, selEnd;
+    /** The soft keyboard's height over the app's view, in px, as it moves (MainActivity): MBView lays out above it. */
+    static volatile int imeBottom;
 
     static void requestFrame() {
         if (view != null) view.wantFrame();

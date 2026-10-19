@@ -170,6 +170,15 @@ void mbc_send(moonbit_string_t json) {
   free(s);
 }
 
+// With bytes beside it (a file's part going up): `bytes` is a MoonBit Bytes, its length in its header.
+void mbc_send_bytes(moonbit_string_t json, moonbit_bytes_t bytes) {
+  if (!engine) return;
+  size_t len;
+  char *s = utf8_of(json, &len);
+  engine->send(s, len, (const uint8_t *)bytes, (size_t)Moonbit_array_length(bytes));
+  free(s);
+}
+
 void mbc_stop(void) {
   if (!engine) return;
   engine->stop();

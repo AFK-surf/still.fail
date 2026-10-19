@@ -241,6 +241,12 @@ pub fn Tester::ime(self : Tester) -> (Bool, String, Int, Int) {
 }
 
 ///|
+/// Where the host was last told the caret is (x, y, w, h).
+pub fn Tester::ime_rect(self : Tester) -> (Double, Double, Double, Double) {
+  self.fake.ime_rect
+}
+
+///|
 pub fn Tester::clipboard(self : Tester) -> String {
   self.fake.clipboard
 }
@@ -325,7 +331,8 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
   let c = g
   for i in 0..<c.count {
     let n = c.nodes[i]
-    if (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
+    if (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
+      n.text.contains(s) {
       return Some((n.x, n.y, n.fw, n.fh))
     }
   }

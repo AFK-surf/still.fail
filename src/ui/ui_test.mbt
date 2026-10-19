@@ -247,3 +247,54 @@ test "one-line text too wide for its box ends in an ellipsis" {
   // fit in 80
   assert_eq(t.lines_of("a title far"), ["a title f…"])
 }
+
+///|
+test "a composer's field: Enter a new line, a long paste handed over, its words kept in view as they grow" {
+  let pasted : Array[String] = []
+  let t = @ui.Tester::new(fn(c) {
+    c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.spacer()
+      let r = c.editor(
+        "composer",
+        placeholder="write here",
+        plain=true,
+        line=21.0,
+        max_lines=3,
+        enter_sends=false,
+        paste_limit=50,
+      )
+      match r.pasted {
+        Some(s) => pasted.push(s)
+        None => ()
+      }
+    })
+    |> ignore
+  })
+  t.tap_text("write here")
+  t.type_text("one")
+  t.enter()
+  t.type_text("two")
+  let (_, text, _, _) = t.ime()
+  assert_eq(text, "one\ntwo")
+  // fifty characters at once: not put in, handed to the app
+  t.type_text(String::make(60, 'p'))
+  assert_eq(pasted.length(), 1)
+  assert_eq(pasted[0].length(), 60)
+  let (_, same, _, _) = t.ime()
+  assert_eq(same, "one\ntwo")
+  // past three lines the field stops growing and its last line (the caret's) shows
+  for w in ["three", "four", "five"] {
+    t.enter()
+    t.type_text(w)
+  }
+  let (_, y, _, h) = t.rect_of("write here").unwrap()
+  assert_true(h <= 3.0 * 21.0 + 0.5)
+  let (_, cy, _, _) = t.ime_rect()
+  assert_true(cy >= y && cy < y + h)
+  // words put in by the app
+  t.ctx().set_editor_text("composer", "kept")
+  t.frame()
+  let (_, kept, a, _) = t.ime()
+  assert_eq(kept, "kept")
+  assert_eq(a, 4)
+}

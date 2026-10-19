@@ -18,8 +18,8 @@ HOST_TAG=$([ "$(uname)" = Darwin ] && echo darwin-x86_64 || echo linux-x86_64)
 TC=$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin
 CC="$TC/aarch64-linux-android29-clang"
 ADB=$SDK/platform-tools/adb
-AVD=mbui-avd
-PORT=5580
+AVD=${AVD:-mbui-avd}
+PORT=${EMU_PORT:-5580}
 SERIAL=emulator-$PORT
 OUT=out/android
 PKG=${APP:-demo}

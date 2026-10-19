@@ -13,6 +13,7 @@ import android.window.OnBackInvokedDispatcher;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.view.WindowInsets;
+import android.view.WindowInsetsAnimation;
 import android.view.WindowInsetsController;
 import android.widget.FrameLayout;
 
@@ -37,6 +38,17 @@ public class MainActivity extends Activity {
                 }
             }
         }
+        // MBUI_CLIPBOARD (MBUI_CLIPBOARD_REPEAT times): put on the clipboard as the app starts, for pasting in scripted
+        // runs (adb can type but not copy)
+        String clip = System.getenv("MBUI_CLIPBOARD");
+        if (clip != null && !clip.isEmpty()) {
+            int times = 1;
+            try { times = Integer.parseInt(System.getenv("MBUI_CLIPBOARD_REPEAT")); } catch (Exception e) {}
+            StringBuilder b = new StringBuilder();
+            for (int i = 0; i < Math.max(1, times); i++) b.append(clip);
+            ((android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE))
+                    .setPrimaryClip(android.content.ClipData.newPlainText("mbui", b.toString()));
+        }
         Host.script = getIntent().getStringExtra("script");
         Host.bench = getIntent().getIntExtra("bench", 0);
         FrameLayout root = new FrameLayout(this);
@@ -45,16 +57,46 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
         root.addView(view, lp);
+        // The view inside the system bars; the soft keyboard over its foot is told to it as it moves (Host.imeBottom:
+        // the app lays out above it, its composer riding on the keyboard as Compose's imePadding does), the surface
+        // itself not resized.
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             Insets bars = insets.getInsets(WindowInsets.Type.systemBars()
-                    | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+                    | WindowInsets.Type.displayCutout());
             FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) view.getLayoutParams();
             if (p.leftMargin != bars.left || p.topMargin != bars.top
                     || p.rightMargin != bars.right || p.bottomMargin != bars.bottom) {
                 p.setMargins(bars.left, bars.top, bars.right, bars.bottom);
                 view.setLayoutParams(p);
             }
+            if (!imeMoving) keyboardAt(insets);
             return WindowInsets.CONSUMED;
+        });
+        root.setWindowInsetsAnimationCallback(new WindowInsetsAnimation.Callback(
+                WindowInsetsAnimation.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+            @Override
+            public void onPrepare(WindowInsetsAnimation a) {
+                if ((a.getTypeMask() & WindowInsets.Type.ime()) != 0) imeMoving = true;
+            }
+
+            @Override
+            public WindowInsets onProgress(WindowInsets insets, java.util.List<WindowInsetsAnimation> running) {
+                for (WindowInsetsAnimation a : running) {
+                    if ((a.getTypeMask() & WindowInsets.Type.ime()) != 0) {
+                        keyboardAt(insets);
+                        break;
+                    }
+                }
+                return insets;
+            }
+
+            @Override
+            public void onEnd(WindowInsetsAnimation a) {
+                if ((a.getTypeMask() & WindowInsets.Type.ime()) == 0) return;
+                imeMoving = false;
+                WindowInsets now = root.getRootWindowInsets();
+                if (now != null) keyboardAt(now);
+            }
         });
         setContentView(root);
         WindowInsetsController c = getWindow().getInsetsController();
@@ -67,6 +109,19 @@ public class MainActivity extends Activity {
         Host.activity = this;
         Host.view = view;
         if (Host.script != null) Script.start(view);
+    }
+
+    private boolean imeMoving;
+
+    /** How far the keyboard reaches over the view's foot (past the navigation bar it covers), told to the view. */
+    private void keyboardAt(WindowInsets insets) {
+        int ime = insets.getInsets(WindowInsets.Type.ime()).bottom;
+        int bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()).bottom;
+        int over = Math.max(0, ime - bars);
+        if (over != Host.imeBottom) {
+            Host.imeBottom = over;
+            if (Host.view != null) Host.view.wantFrame();
+        }
     }
 
     /** Brought back (singleTask): by BrowserLogin once the browser has come back, or by its page's link. */
@@ -124,6 +179,13 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (backOn) back(2, 0, 1, 0);
         else super.onBackPressed();
+    }
+
+    /** A picker's answer (Picks: the photo picker, the documents UI, the camera). */
+    @Override
+    @SuppressWarnings("deprecation")
+    protected void onActivityResult(int request, int result, Intent data) {
+        if (!Picks.answered(request, result, data)) super.onActivityResult(request, result, data);
     }
 
     @Override

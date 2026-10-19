@@ -372,7 +372,18 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
       } else if f.mode == "chat-long" {
         Some(kept_chat("long", fn() { long_chat(3000) }))
       } else if session == "s-c1" {
-        Some(kept_chat("rich/\{f.older}", fn() { rich_chat(f.older) }))
+        let base = kept_chat("rich/\{f.older}/\{f.mode}", fn() {
+          let v = rich_chat(f.older)
+          match (v, seeded_outbox(f.mode)) {
+            (Object(m), out) if out.length() > 0 => {
+              let o = m.copy()
+              o["outbox"] = Json::array(out)
+              Json::object(o)
+            }
+            _ => v
+          }
+        })
+        Some(with_sent(base, session))
       } else {
         // its row's title
         let mut title = ""
@@ -383,7 +394,7 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             }
           }
         }
-        Some(small_chat(title, session))
+        Some(with_sent(small_chat(title, session), session))
       }
     "stations" =>
       Some([
@@ -407,5 +418,307 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         "statusText": "等你在浏览器里登录",
       })
     _ => None
+  }
+}
+
+// ── sending in the made-up chats ─────────────────────────────────────────
+//
+// The fixture takes what is sent as a station would: into the chat's outbox at once (正在发送), a moment later the
+// chat's own message, and a moment after that an agent's made-up answer. Words with 失败 in them fail instead (未发送,
+// with why), and go on 重试. Drafts are kept while the app runs; a file put up is taken at once. The modes
+// chat-compose, chat-attach, chat-quote, chat-sending and chat-failed open the first row's chat with its composer in
+// that state (scripts/shots.sh composer).
+
+///|
+/// A made-up chat as the fixture changes it: what was sent in it since (its messages, its outbox), by session.
+priv struct FixChat {
+  sent : Array[Json]
+  outbox : Array[Json]
+}
+
+///|
+let fix_chats : Map[String, FixChat] = {}
+
+///|
+/// The made-up chats' threads, by id: their sessions (what is sent by thread goes to its session's chat).
+let fix_threads : Map[Int, String] = {}
+
+///|
+fn fix_chat(session : String) -> FixChat {
+  match fix_chats.get(session) {
+    Some(f) => f
+    None => {
+      let f = { sent: [], outbox: [] }
+      fix_chats[session] = f
+      f
+    }
+  }
+}
+
+///|
+/// What happens later (the station's answers), at a time of day in ms.
+let fix_timers : Array[(Double, () -> Unit)] = []
+
+///|
+/// The fixture's clock and how it asks for a frame later (a test sets its own).
+let fix_clock : Ref[() -> Double] = { val: fn() { @host.now() } }
+
+///|
+let fix_wake : Ref[(Double) -> Unit] = { val: fn(ms) { @host.wake_after(ms) } }
+
+///|
+let fix_drafts : Map[String, Json] = {}
+
+///|
+let fix_serial : Ref[Int] = { val: 0 }
+
+///|
+/// The timers due, run (each a change: the views read again); a frame asked for the next.
+fn fix_tick(f : Fixture) -> Unit {
+  if fix_timers.length() == 0 {
+    return
+  }
+  let now = (fix_clock.val)()
+  let due = fix_timers.filter(fn(t) { t.0 <= now })
+  if due.length() > 0 {
+    fix_timers.retain(fn(t) { t.0 > now })
+    for t in due {
+      (t.1)()
+    }
+    f.version += 1
+  }
+  let mut next = -1.0
+  for t in fix_timers {
+    if next < 0.0 || t.0 < next {
+      next = t.0
+    }
+  }
+  if next >= 0.0 {
+    (fix_wake.val)(dmax(next - now, 1.0))
+  }
+}
+
+///|
+fn fix_later(ms : Double, f : () -> Unit) -> Unit {
+  fix_timers.push(((fix_clock.val)() + ms, f))
+  (fix_wake.val)(ms)
+}
+
+///|
+/// The chat with what was sent in it since.
+fn with_sent(base : Json, session : String) -> Json {
+  match field(field(Some(base), "thread"), "id") {
+    Some(Number(n, ..)) => fix_threads[n.to_int()] = session
+    _ => ()
+  }
+  match (fix_chats.get(session), base) {
+    (Some(fc), Object(m)) if fc.sent.length() > 0 || fc.outbox.length() > 0 => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      for x in fc.sent {
+        all.push(x)
+      }
+      o["messages"] = Json::array(all)
+      o["outbox"] = Json::array(fc.outbox.copy())
+      Json::object(o)
+    }
+    _ => base
+  }
+}
+
+///|
+/// An entry of the outbox (Outgoing).
+fn outgoing_json(id : String, params : Json, state : String, error : String) -> Json {
+  let p = Some(params)
+  let o : Map[String, Json] = {
+    "id": Json::string(id),
+    "text": Json::string(text(p, "text")),
+    "attachments": Json::array(items(p, "attachments")),
+    "quotes": Json::array(items(p, "quotes")),
+    "createdAt": 0,
+    "state": Json::string(state),
+  }
+  if error != "" {
+    o["error"] = Json::string(error)
+  }
+  Json::object(o)
+}
+
+///|
+/// The station has it: out of the outbox, the chat's own message; the agent's answer a moment after.
+fn fix_deliver(session : String, id : String) -> Unit {
+  let fc = fix_chat(session)
+  let mut found : Json? = None
+  for o in fc.outbox {
+    if text(Some(o), "id") == id {
+      found = Some(o)
+    }
+  }
+  guard found is Some(params) else { return }
+  let words = text(Some(params), "text")
+  if words.contains("失败") && text(Some(params), "state") != "retried" {
+    fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
+    fc.outbox.push(outgoing_json(id, params, "failed", "Studio 没有回应（假数据：带「失败」的消息先发不出去）"))
+    return
+  }
+  fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
+  fix_serial.val += 1
+  let seq = 100 + fix_serial.val
+  fc.sent.push(
+    msg(seq, "person", by_person("林"), words, "刚刚", {
+      "mine": true,
+      "author": "lin@example.com",
+      "ts": Json::string("sent\{fix_serial.val}"),
+      "attachments": Json::array(items(Some(params), "attachments")),
+      "quotes": Json::array(items(Some(params), "quotes")),
+    }),
+  )
+  fix_later(1400.0, fn() {
+    fix_serial.val += 1
+    let first = paste_preview(words)
+    let said = if first == "" {
+      "收到文件了，我看一下。"
+    } else {
+      let cut = if first.length() > 40 {
+        first.view(end_offset=40).to_string() + "…"
+      } else {
+        first
+      }
+      "收到：「" + cut + "」。我先看一下，有结果再告诉你。"
+    }
+    fix_chat(session).sent.push(
+      msg(100 + fix_serial.val, "agent", by_agent("anthropic", "claude", session), said, "刚刚", {
+        "ts": Json::string("reply\{fix_serial.val}"),
+      }),
+    )
+  })
+}
+
+///|
+/// The fixture's writes in a chat (`chat.send`, `chat.retry`, `chat.discard`, `draft.get`, `draft.put`,
+/// `station.upload.part`, `session.warm`), and what the page tells (`client.focus`, `chat.place`): None for any other.
+fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+  let p = Some(params)
+  let session = match text(p, "session") {
+    "" =>
+      match field(p, "thread") {
+        Some(Number(n, ..)) => fix_threads.get(n.to_int()).unwrap_or("s-c1")
+        _ => "s-c1"
+      }
+    s => s
+  }
+  match name {
+    "chat.send" => {
+      fix_serial.val += 1
+      let id = "out\{fix_serial.val}"
+      fix_chat(session).outbox.push(outgoing_json(id, params, "sending", ""))
+      f.version += 1
+      fix_later(700.0, fn() { fix_deliver(session, id) })
+      Some(Ok(Json::object({})))
+    }
+    "chat.retry" => {
+      let id = text(p, "id")
+      let fc = fix_chat(session)
+      let mut was : Json = Json::object({})
+      for o in fc.outbox {
+        if text(Some(o), "id") == id {
+          was = o
+        }
+      }
+      fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
+      fc.outbox.push(outgoing_json(id, was, "retried", ""))
+      f.version += 1
+      fix_later(700.0, fn() { fix_deliver(session, id) })
+      Some(Ok(Json::object({})))
+    }
+    "chat.discard" => {
+      let id = text(p, "id")
+      fix_chat(session).outbox.retain(fn(o) { text(Some(o), "id") != id })
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    "draft.get" => {
+      let key = text(p, "key")
+      match fix_drafts.get(key) {
+        Some(d) => Some(Ok(d))
+        None => Some(Ok(seeded_draft(f.mode, key)))
+      }
+    }
+    "draft.put" =>
+      match params {
+        Object(m) => {
+          let d = m.copy()
+          d.remove("key")
+          fix_drafts[text(p, "key")] = Json::object(d)
+          Some(Ok(Json::object({})))
+        }
+        _ => Some(Err({ "code": "invalid_params", "message": "draft.put" }))
+      }
+    "station.upload.part" => {
+      let name = text(p, "name")
+      let id = text(p, "id")
+      Some(
+        Ok({
+          "file": {
+            "name": Json::string(name),
+            "path": Json::string("uploads/" + id + "/" + name),
+            "size": Json::number(number(p, "size")),
+          },
+        }),
+      )
+    }
+    "session.warm" | "client.focus" | "chat.place" => Some(Ok(Json::object({})))
+    _ => None
+  }
+}
+
+///|
+/// The first row's chat's draft as each composer mode has it (none in any other).
+fn seeded_draft(mode : String, key : String) -> Json {
+  if key != "ws1/st1:s-c1" {
+    return Json::null()
+  }
+  match mode {
+    "chat-compose" =>
+      {
+        "text": "把发布清单再过一遍：\n1. 版本号和更新说明\n2. 安卓和 mac 的包都要签名\n3. 截图换成新的",
+        "quotes": [],
+        "files": [],
+      }
+    "chat-attach" =>
+      {
+        "text": "截图和构建日志都在这里，帮我看看第二屏",
+        "quotes": [],
+        "files": [file("compare.png", 1600, 900, 402000), file("build.log", 0, 0, 18432)],
+      }
+    "chat-quote" =>
+      {
+        "text": "",
+        "quotes": [
+          {
+            "author": "Claude",
+            "text": "其余的行按估计的高度占位，滚到时再量真实高度",
+            "comment": "",
+            "ts": "ts3",
+            "role": "agent",
+          },
+        ],
+        "files": [],
+      }
+    _ => Json::null()
+  }
+}
+
+///|
+/// The outbox the first row's chat opens with in the modes chat-sending and chat-failed.
+fn seeded_outbox(mode : String) -> Array[Json] {
+  let words : Json = { "text": "好，就按这个改，顺便把深色模式的截图也换掉" }
+  match mode {
+    "chat-sending" => [outgoing_json("o-seed", words, "sending", "")]
+    "chat-failed" => [outgoing_json("o-seed", words, "failed", "Studio 没有回应")]
+    _ => []
   }
 }

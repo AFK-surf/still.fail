@@ -29,7 +29,9 @@ let engine : Engine = {
 
 ///|
 /// The app's client of its core.
-pub let client : Client = Client::new(fn(s) { ffi_send(s) })
+pub let client : Client = Client::new(fn(s) { ffi_send(s) }, send_bytes=fn(s, b) {
+  ffi_send_bytes(s, b)
+})
 
 ///|
 /// Starts the core: its files in `data_dir` (empty: the platform's place for the app's data, or $MBUI_CORE_DATA),
@@ -74,13 +76,14 @@ pub fn subscribe(topic : String, params? : Map[String, Json] = {}) -> Sub {
 }
 
 ///|
-/// Calls `name` (see Client::call).
+/// Calls `name` (see Client::call); `bytes` beside it.
 pub fn call(
   name : String,
   params? : Json = Json::object({}),
+  bytes? : Bytes? = None,
   on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
 ) -> Unit {
-  client.call(name, params~, on_done~) |> ignore
+  client.call(name, params~, bytes~, on_done~) |> ignore
 }
 
 ///|

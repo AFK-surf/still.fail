@@ -400,6 +400,35 @@ static void run_script_step(int step) {
       case 161: exit(0);
     }
     [v requestFrame];
+  } else if (strcmp(script, "compose") == 0) {
+    // still.fail's composer (APP=sffix MBUI_FIXTURE=chat, a phone's window): the field tapped, Chinese composed through
+    // the input method's calls and committed, a new line (Enter), more words; ＋'s sheet; 文件 picked (MBUI_PICK_FILES
+    // answers the open panel), up at once to the fixture's station; sent; the fixture's answer.
+    // MBUI_SHOT_AT moves it all later (a real chat opened by the core: its first answers)
+    static int at = -1;
+    if (at < 0) at = getenv("MBUI_SHOT_AT") ? atoi(getenv("MBUI_SHOT_AT")) : 30;
+    double fx = s.width / 2, by = s.height - 10 - 8 - 18;
+    switch (step - at + 30) {
+      case 30: mb_cb.pointer(0, fx, by, 0); mb_cb.pointer(2, fx, by, 0); break;
+      case 40:
+        [v setMarkedText:@"fa'bu" selectedRange:NSMakeRange(5, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+        break;
+      case 45: shot("compose-1-composing"); break;
+      case 46: [v insertText:@"发布前" replacementRange:NSMakeRange(NSNotFound, 0)]; break;
+      case 47: [v insertText:@"再看一眼" replacementRange:NSMakeRange(NSNotFound, 0)]; break;
+      case 48: [v doCommandBySelector:@selector(insertNewline:)]; break;
+      case 49: [v insertText:@"日志在附件里" replacementRange:NSMakeRange(NSNotFound, 0)]; break;
+      case 60: shot("compose-2-typed"); break;
+      case 61: mb_cb.pointer(0, 36, by, 0); mb_cb.pointer(2, 36, by, 0); break;
+      case 90: shot("compose-3-sheet"); break;
+      case 91: mb_cb.pointer(0, s.width / 2, s.height - 79, 0); mb_cb.pointer(2, s.width / 2, s.height - 79, 0); break;
+      case 140: shot("compose-4-picked"); break;
+      case 141: mb_cb.pointer(0, s.width - 36, by, 0); mb_cb.pointer(2, s.width - 36, by, 0); break;
+      case 150: shot("compose-5-sending"); break;
+      case 320: shot("compose-6-answered"); break;
+      case 321: exit(0);
+    }
+    [v requestFrame];
   } else if (strcmp(script, "shot") == 0) {
     // MBUI_SHOT_AT: the frame to take it at (later for what waits on something, as the core's first answers)
     static int at;
@@ -507,3 +536,87 @@ double mb_host_mem_bytes(void) {
   if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &n) != KERN_SUCCESS) return 0;
   return (double)info.phys_footprint;
 }
+
+// ---- files picked (pick.mbt): the open panel ----
+// MBUI_PICK_FILES="<path>|<path>…" answers every ask with those files at once, no panel (scripted runs: the screen is
+// often locked where they run).
+
+static NSMutableDictionary<NSNumber *, NSMutableDictionary *> *picks;
+static int32_t next_pick = 1;
+
+static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSMutableArray *names = [NSMutableArray new], *datas = [NSMutableArray new];
+    for (NSURL *u in urls) {
+      NSData *d = [NSData dataWithContentsOfURL:u options:NSDataReadingMappedIfSafe error:nil];
+      if (!d || d.length > (1ull << 30)) continue;  // unreadable, or over 1 GB (as still.fail's composer refuses)
+      [names addObject:u.lastPathComponent ?: @"file"];
+      [datas addObject:d];
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+      NSMutableDictionary *p = picks[@(pid)];
+      if (!p) return;
+      p[@"names"] = names;
+      p[@"datas"] = datas;
+      p[@"state"] = @(names.count > 0 ? 1 : -1);
+      [the_view requestFrame];
+    });
+  });
+}
+
+int32_t mb_host_pick_start(int32_t kind) {
+  if (kind != 1 && kind != 2) return 0;  // no camera here
+  if (!picks) picks = [NSMutableDictionary new];
+  int32_t pid = next_pick++;
+  picks[@(pid)] = [@{@"state" : @0} mutableCopy];
+  const char *canned = getenv("MBUI_PICK_FILES");
+  if (canned && *canned) {
+    NSMutableArray *urls = [NSMutableArray new];
+    for (NSString *path in [@(canned) componentsSeparatedByString:@"|"])
+      if (path.length) [urls addObject:[NSURL fileURLWithPath:path]];
+    pick_answer(pid, urls);
+    return pid;
+  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.allowsMultipleSelection = YES;
+    panel.canChooseDirectories = NO;
+    panel.canChooseFiles = YES;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    if (kind == 1) panel.allowedFileTypes = @[ @"public.image" ];
+#pragma clang diagnostic pop
+    void (^done)(NSModalResponse) = ^(NSModalResponse r) {
+      if (r == NSModalResponseOK) pick_answer(pid, panel.URLs);
+      else {
+        picks[@(pid)][@"state"] = @(-1);
+        [the_view requestFrame];
+      }
+    };
+    if (the_view.window) [panel beginSheetModalForWindow:the_view.window completionHandler:done];
+    else [panel beginWithCompletionHandler:done];
+  });
+  return pid;
+}
+
+int32_t mb_host_pick_state(int32_t pid) {
+  NSMutableDictionary *p = picks[@(pid)];
+  return p ? [p[@"state"] intValue] : -1;
+}
+
+int32_t mb_host_pick_count(int32_t pid) { return (int32_t)[picks[@(pid)][@"names"] count]; }
+
+moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) {
+  NSArray *names = picks[@(pid)][@"names"];
+  return mb_string_from_ns(i >= 0 && i < (int32_t)names.count ? names[i] : @"");
+}
+
+moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) {
+  NSArray<NSData *> *datas = picks[@(pid)][@"datas"];
+  NSData *d = i >= 0 && i < (int32_t)datas.count ? datas[i] : nil;
+  moonbit_bytes_t b = moonbit_make_bytes((int32_t)d.length, 0);
+  if (d.length) memcpy(b, d.bytes, d.length);
+  return b;
+}
+
+void mb_host_pick_end(int32_t pid) { [picks removeObjectForKey:@(pid)]; }

@@ -6,6 +6,10 @@ extern "C" fn ffi_start(data_dir : String, cloud : String, beta : Int) -> Int = 
 #borrow(json)
 extern "C" fn ffi_send(json : String) -> Unit = "mbc_send"
 
+#borrow(json, bytes)
+extern "C" fn ffi_send_bytes(json : String, bytes : Bytes) -> Unit = "mbc_send_bytes"
+
+///|
 extern "C" fn ffi_stop() -> Unit = "mbc_stop"
 
 extern "C" fn ffi_next() -> String = "mbc_next"

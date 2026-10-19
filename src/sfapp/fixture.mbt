@@ -236,6 +236,7 @@ fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
 
 ///|
 fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topic {
+  fix_tick(f)
   let account : Json = { "sub": "u1", "email": "lin@example.com", "name": "林" }
   let value : Json? = match name {
     "accounts" => if f.mode == "signin" { Some([]) } else { Some([account]) }
@@ -317,7 +318,17 @@ pub fn fixture(mode : String) -> Source {
           f.version += 1
           done(Ok(Json::object({})))
         }
-        _ => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
+        _ =>
+          match fixture_chat_call(f, name, params) {
+            Some(r) => done(r)
+            None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
+          }
+      }
+    },
+    call_bytes: fn(name, params, _bytes, done) {
+      match fixture_chat_call(f, name, params) {
+        Some(r) => done(r)
+        None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
       }
     },
     sign_in: fn() {  },
@@ -327,6 +338,6 @@ pub fn fixture(mode : String) -> Source {
     file: fn(_, _, name) { fixture_file(name) },
     now: fn() { 0.0 },
     leave: fn(_, _) {  },
-    read_only: true,
+    read_only: false,
   }
 }

@@ -15,6 +15,8 @@ pub(all) struct Source {
   topic : (String, Map[String, Json]) -> Topic
   /// a call to the core; `done` gets its answer or its error
   call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit
+  /// a call with bytes beside it (a file's part going up: `station.upload.part`)
+  call_bytes : (String, Json, Bytes, (Result[Json, Json]) -> Unit) -> Unit
   /// 登录 pressed
   sign_in : () -> Unit
   /// whether a sign-in is under way
@@ -30,6 +32,7 @@ pub(all) struct Source {
   now : () -> Double
   /// a topic no page shows any more (`unsubscribe`)
   leave : (String, Map[String, Json]) -> Unit
-  /// nothing the reader does is told to the core (MBUI_READONLY=1): no read marks, no place kept
+  /// nothing the reader does is told to the core (MBUI_READONLY=1): no read marks, no place kept, nothing sent, no
+  /// draft kept, no file put up
   read_only : Bool
 }

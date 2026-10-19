@@ -91,15 +91,47 @@ fn chat_file(station : String, key : String, name : String) -> String {
 }
 
 ///|
-/// MBUI_READONLY=1: nothing the reader does is told to the core (no read marks, no place kept), for runs on a real
-/// account that must change nothing in it.
+/// MBUI_READONLY=1: nothing the reader does is told to the core (no read marks, no place kept, nothing sent, no draft
+/// kept, no file put up), for runs on a real account that must change nothing in it.
 let read_only : Bool = @host.env("MBUI_READONLY") == "1"
+
+///|
+/// What a read-only run may still ask of the core: reads, and the prefs this device keeps (the workspace in view, the
+/// list's filter). Anything else (sending, drafts kept, files put up, read marks, places, archiving…) is refused here,
+/// whatever page asks it.
+let read_only_calls : Array[String] = [
+  "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "picture",
+  "prefs.set",
+]
+
+///|
+fn refused(name : String) -> Json {
+  @host.log("MBUI_READONLY: not calling " + name)
+  {
+    "code": "read_only",
+    "message": "只读运行：不发送，不上传，不保存草稿（" + name + "）",
+  }
+}
 
 ///|
 let core_source : @sfapp.Source = {
   topic: core_topic,
   call: fn(name, params, done) {
+    if read_only && !read_only_calls.contains(name) {
+      done(Err(refused(name)))
+      return
+    }
     @core.call(name, params~, on_done=fn(r) {
+      done(r)
+      @host.request_frame()
+    })
+  },
+  call_bytes: fn(name, params, bytes, done) {
+    if read_only {
+      done(Err(refused(name)))
+      return
+    }
+    @core.call(name, params~, bytes=Some(bytes), on_done=fn(r) {
       done(r)
       @host.request_frame()
     })

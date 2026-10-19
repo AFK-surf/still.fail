@@ -9,12 +9,14 @@
 # Home over made-up chats (APP=sffix, src/sfapp/fixture.mbt) in a phone's window: home gives mac-home (the list),
 # mac-home-sheet (the workspaces' sheet) and mac-home-swipe (a chat pushed, swiped halfway back). `chat` (macOS) and
 # `web-chat` are a made-up chat open over it (MBUI_FIXTURE=chat, src/sfapp/chat_fixture.mbt): chat gives mac-chat (at
-# its end), mac-chat-up (scrolled up: the way to the newest over it) and mac-chat-loading (being read).
+# its end), mac-chat-up (scrolled up: the way to the newest over it) and mac-chat-loading (being read). `composer`
+# and `web-composer` are its composer's states (MBUI_FIXTURE=chat-compose|attach|quote|sending|failed):
+# mac-composer-<state>, web-composer-<state>.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home chat web web-kit web-home web-chat ios android}
+PLATFORMS=${*:-mac kit home chat composer web web-kit web-home web-chat web-composer ios android}
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
 fi
@@ -51,6 +53,24 @@ for p in $PLATFORMS; do
       cp out/shot-chat/chat-2-up.png out/shots/mac-chat-up.png
       cp out/shot-chat/loading.png out/shots/mac-chat-loading.png
       names="mac-chat mac-chat-up mac-chat-loading" ;;
+    composer)
+      # the composer's states over the made-up chat (src/sfapp/chat_fixture.mbt's modes): words of several lines, a
+      # picture and a file with them, a quote, a message sending, one failed
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-composer; mkdir -p out/shot-composer
+      names=
+      for m in compose attach quote sending failed; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-composer ./_build/native/release/build/sffix/sffix.exe >/dev/null
+        cp out/shot-composer/$m.png out/shots/mac-composer-$m.png
+        names="$names mac-composer-$m"
+      done ;;
+    web-composer)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in compose attach quote sending failed; do
+        QUERY=MBUI_FIXTURE=chat-$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-composer-$m.png
+        names="$names web-composer-$m"
+      done ;;
     web-chat)
       APP=sffix bash scripts/web.sh build >/dev/null
       QUERY=MBUI_FIXTURE=chat NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-chat.png ;;

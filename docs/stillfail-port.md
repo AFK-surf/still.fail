@@ -139,8 +139,7 @@ ChatFiles.kt, Decisions.kt, LoginCards.kt, Follow.kt):
   place); near the end of a window short of the chat's, `chat.newer`.
 - While the chat is read: its bar, the messages to come breathing, the
   composer; what could not be read over them in red.
-- The composer is the next slice's: its capsule is drawn (＋, 发消息, send),
-  taking nothing.
+- The composer is the next slice's (below).
 - What the reader does is told to the core as the app does
   (`client.focus` with the chat and whether its end shows, which marks it
   read; `left` and `chat.place` as it is left), except with
@@ -159,9 +158,8 @@ ChatFiles.kt, Decisions.kt, LoginCards.kt, Follow.kt):
   3000 messages): `scripts/shots.sh chat web-chat` compares it with
   goldens/mac-chat*.png and web-chat.png.
 
-Not yet, against the current app: sending, the composer and drafts (slice
-5); answering cards, letting go, archiving and keeping from the chat (the
-buttons are drawn, inert); the long-press menu, quoting and picking words;
+Not yet, against the current app: answering cards, letting go, archiving and keeping from the chat (the
+buttons are drawn, inert); the long-press menu and picking words;
 the file preview (slice 11) and opening links outside the app; tables and
 code highlighting in Markdown, a code block's sideways scroll; the messages'
 motion (rising in, coming out of an agent's avatar, the activity's glide and
@@ -169,6 +167,75 @@ its floor); a new message followed from its top when it is taller than the
 screen; the asks' bell; the chat's sheets ("…", the agent's card, jobs);
 images on Android (no decoding there yet: their boxes and likenesses only);
 the station's update control in the bar; the frosted glass.
+
+Slice 5, the composer (branch composer, 2026-10-19): the chat's composer takes
+words and sends them (src/sfapp/composer.mbt; Composer.kt ComposerBar,
+DraftExtras, Drafts, upload; ChatHost.kt HostComposer; Attach.kt;
+PastedText.kt; SendText.kt; MessagePick.kt):
+
+- The capsule: ＋, a field that grows with the words up to six lines (16 on
+  21, 发消息), the round send button (faint while nothing can go, ink once
+  something can; nothing goes while a file is still going up). Focused or
+  holding something it opens: the field the whole width, the buttons under
+  it. Enter is a new line, as the Android app's field has it (the soft
+  keyboard shows its return key; no key sends). Composition (Chinese input)
+  as mbui's editor has it on every host. A tap on the list lets go of the
+  keyboard.
+- What waits to go, over the field: quotes (each a card with a line for a
+  comment, which takes the focus; its Enter goes back to the words), pictures
+  as 56 tiles (a spinner while they go up, 失败 when they did not), a long
+  paste (5000 characters or more at once) as its card (its first line, so
+  many 字符, 展开到输入框 / 重试上传), any other file as a card (正在上传 n% ·
+  size). Files go up as soon as they are added (`station.upload.part`, 4 MB a
+  part, bytes beside the call: `@core.call(bytes=)`), an image's size read
+  from its bytes going with it.
+- Drafts: each chat's (`<station>:<session>`), kept by the core on the device
+  (`draft.get` as the chat opens, `draft.put` 0.4 s after a change and as the
+  chat is left) and put back when it is opened again.
+- Sending: `chat.send` by the chat's thread (or its session before it has
+  one) with the words, the files up and the quotes; the composer empties at
+  once and the list goes to its end; the message shows from the outbox
+  (正在发送 under it), and a failed one says 未发送 (a tap says why) with 重试
+  (`chat.retry`) and 删除 (`chat.discard`). Refused before the outbox
+  (`invalid_params`), the words come back and why is said under the field.
+  Typing wakes the agent's runtime (`session.warm`, once a minute). An
+  archived chat's composer says so with 还原对话; an offline station's says
+  it cannot send.
+- ＋'s sheet: the camera tile and the gallery's tile across the top, then
+  照片, 文件, Station 文件. 照片 is the system's photo picker
+  (ACTION_PICK_IMAGES; the documents UI on images where there is none) and
+  文件 its documents UI (ACTION_OPEN_DOCUMENT) on Android, the open panel on
+  macOS (`@host.pick`, src/host/pick.mbt; Picks.java); the camera tile takes
+  a photo on Android (ACTION_IMAGE_CAPTURE's picture, as the app's
+  TakePicturePreview). Not yet (the same tiles, a toast saying so): the
+  recent photos (they need the gallery's permission and its thumbnails),
+  Station 文件 (slice 12's drive), any picker on iOS, Windows and the web.
+- Quoting: a message's words held still half a second are picked (all of
+  them: the Android app picks a word and widens it by words, with handles),
+  a bar over them with 引用 (into the draft as a quote) and 复制.
+- The soft keyboard (Android): MainActivity follows its insets as they move
+  (WindowInsetsAnimation), MBView lays the app out above it without
+  resizing the surface, so the composer rides on the keyboard as it comes and
+  the list keeps its end in view. Paste: the keyboard's paste, KEYCODE_PASTE
+  and the context menu's paste put the clipboard's words in.
+- MBUI_READONLY=1 refuses every call but the reads (and the device's prefs)
+  in src/stillfail itself: nothing is sent, no draft kept, no file put up,
+  whatever page asks.
+- `APP=sffix` takes what is sent as a station would (the outbox, the message,
+  a made-up answer; words with 失败 fail first and go on 重试), keeps drafts
+  while it runs and takes files at once. MBUI_FIXTURE=chat-compose,
+  chat-attach, chat-quote, chat-sending, chat-failed open the chat with its
+  composer so: `scripts/shots.sh composer web-composer` compares them with
+  goldens/mac-composer-*.png and web-composer-*.png.
+
+Not yet, against the current app: the words flying from the field into their
+bubble (and the capsule's morph as it changes height), `@` references to
+other chats and pasted chat links as marks (chat.ref, chatSearch), sharing
+what they refer to before sending, the recent photos' strip, Station 文件, a
+picture's preview from its tile, files pasted or sent by the keyboard (only
+words are), the composer's frosted glass, the text toolbar of the field
+(select, cut, copy by touch; the keyboard's own paste works), a new chat
+(slice 6).
 
 ## What the hosts need (platform)
 
