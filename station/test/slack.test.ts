@@ -480,8 +480,8 @@ describe("slack", { concurrency: true }, () => {
   });
 
   test("tool calls in words, by either runtime's names", () => {
-    const words = ["Read", "Bash", "exec_command", "apply_patch", "WebSearch", "mcp__ember__chat_post", "something"].map(toolStatus);
-    assert.deepEqual(words, ["正在查看文件…", "正在运行命令…", "正在运行命令…", "正在修改文件…", "正在搜索网页…", "正在读取 Slack…", "正在处理…"]);
+    const words = ["Read", "Bash", "exec_command", "apply_patch", "WebSearch", "mcp__ember__chat_post", "mcp__stillfail__slack_api", "something"].map(toolStatus);
+    assert.deepEqual(words, ["正在查看文件…", "正在运行命令…", "正在运行命令…", "正在修改文件…", "正在搜索网页…", "正在读取对话…", "正在读取 Slack…", "正在处理…"]);
   });
 
   test("a surface's status line goes to Slack as the bot", async () => {
