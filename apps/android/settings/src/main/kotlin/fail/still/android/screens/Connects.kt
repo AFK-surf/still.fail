@@ -255,8 +255,8 @@ fun ConnectScreen(station: String, id: String) {
                 ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { ModeSheet(station, item) } }) {
                     Text(t("android-settings.connect.sessions"), fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.widthIn(min = 32.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(MODE_LABEL[connect.mode] ?: connect.mode, fontSize = 15.sp, color = C.ink)
-                        Text((MODE_TEXT[connect.mode] ?: "") + if (connect.mode == "single-session") (if (connect.requireMention) t("android-settings.connect.mentionOnly") else t("android-settings.connect.everyMessage")) else "", fontSize = 13.sp, color = C.muted)
+                        Text(modeLabel(connect.kind)[connect.mode] ?: connect.mode, fontSize = 15.sp, color = C.ink)
+                        Text((modeText(connect.kind)[connect.mode] ?: "") + if (connect.mode == "single-session") (if (connect.requireMention) t("android-settings.connect.mentionOnly") else t("android-settings.connect.everyMessage")) else "", fontSize = 13.sp, color = C.muted)
                     }
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
@@ -273,12 +273,16 @@ fun ConnectScreen(station: String, id: String) {
                 SectionHeader(t("web-mobile.connects.feishu.section"), start = 24.dp)
                 ListCard {
                     ListRow {
-                        Text("App ID", fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.widthIn(min = 32.dp))
-                        Text(feishu.appId, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                        Column(Modifier.weight(1f)) {
+                            Text("App ID", fontSize = 15.sp, color = C.ink)
+                            Text(feishu.appId, fontSize = 13.sp, color = C.muted)
+                        }
                     }
                     ListRow(onClick = { openFeishuSecret(app, station, connect) }) {
-                        Text("Secret", fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.widthIn(min = 32.dp))
-                        Text(feishu.appSecret.ifEmpty { "••••••••" }, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Column(Modifier.weight(1f)) {
+                            Text("App Secret", fontSize = 15.sp, color = C.ink)
+                            Text(feishu.appSecret.ifEmpty { "••••••••" }, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                         Text(t("web-mobile.connects.feishu.replaceShort"), fontSize = 14.sp, color = C.accent)
                     }
                 }
@@ -299,7 +303,7 @@ fun ConnectScreen(station: String, id: String) {
             }
             SectionHeader(t("android-settings.connect.recent"), start = 24.dp)
             ListCard {
-                if (item.sessions.isEmpty()) ListRow { Text(t("android-settings.connect.noSessions", "name" to connect.name), fontSize = 15.sp, color = C.muted) }
+                if (item.sessions.isEmpty()) ListRow { Text(t(if (connect.kind == "feishu") "web-mobile.connects.noSessions.feishu" else "android-settings.connect.noSessions", "name" to connect.name), fontSize = 15.sp, color = C.muted) }
                 item.sessions.forEach { s ->
                     ListRow(onClick = { app.push(Screen.Chat(station, fail.still.android.data.ChatOf.Session(s.key))) }) {
                         Text(s.titleText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -333,20 +337,23 @@ private fun openConnectMenu(app: AppState, station: String, connect: Connect) {
         // Failed a moment ago (the sheet may have been closed meanwhile): a red mark on its row, a tap says why.
         val reconnectFailed = app.failedOf("connect.reconnect", "station" to station, "id" to connect.id)
         val switchFailed = app.failedOf("connect.put", "station" to station, "id" to connect.id)
+        // A Feishu connect's words say Feishu, not Slack.
+        val feishu = connect.kind == "feishu"
         SheetGrab()
         SheetHead(connect.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow(t("android-settings.connect.reconnect"), enabled = !switching, busy = reconnecting, failed = reconnectFailed) { act(t("android-settings.connect.reconnectWhat"), t("android-settings.connect.reconnected")) { api.reconnect(connect.id) } }
-            if (connect.kind == "feishu") PickRow(t("web-mobile.connects.feishu.replace")) { openFeishuSecret(app, station, connect) }
+            if (feishu) PickRow(t("web-mobile.connects.feishu.replace")) { openFeishuSecret(app, station, connect) }
             else PickRow(t("android-settings.connect.changeTokens")) { openTokens(app, station, connect) }
-            if (connect.kind != "feishu") connect.connection.workspace?.url?.let { url -> PickRow(t("android-settings.connect.openSlack")) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
+            if (!feishu) connect.connection.workspace?.url?.let { url -> PickRow(t("android-settings.connect.openSlack")) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
             connect.feishu?.console?.let { url -> PickRow(t("web-mobile.connects.feishu.openConsole")) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
-            if (connect.enabled) PickRow(t("android-settings.connect.disable"), t("android-settings.connect.disableNote"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.disableWhat"), t("android-settings.connect.disabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
+            if (connect.enabled) PickRow(t("android-settings.connect.disable"), t(if (feishu) "android-settings.connect.disableNote.feishu" else "android-settings.connect.disableNote"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.disableWhat"), t(if (feishu) "android-settings.connect.disabled.feishu" else "android-settings.connect.disabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
             else PickRow(t("android-settings.connect.enable"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.enableWhat"), t("android-settings.connect.enabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
             PickRow(t("android-settings.connect.changeOwner"), connect.createdBy?.shown?.display ?: connect.createdBy?.name) { app.sheet = SheetSpec(0.6f) { OwnerSheet(station, connect) } }
             PickRow(t("android-settings.connect.delete"), color = C.red) {
                 confirm(app, t("android-settings.connect.deleteTitle", "name" to connect.name),
-                    if (connect.sessions > 0) t("android-settings.connect.deleteTextSessions", "n" to connect.sessions) else t("android-settings.connect.deleteText"),
+                    if (connect.sessions > 0) t(if (feishu) "android-settings.connect.deleteTextSessions.feishu" else "android-settings.connect.deleteTextSessions", "n" to connect.sessions)
+                    else t(if (feishu) "android-settings.connect.deleteText.feishu" else "android-settings.connect.deleteText"),
                     t("android-settings.connect.delete"), danger = true, what = t("android-settings.connect.deleteWhat"), then = app::pop) { api.deleteConnect(connect.id); app.toast = t("android-settings.connect.deleted") }
             }
         }
@@ -378,25 +385,38 @@ private fun ColumnScope.OwnerSheet(station: String, connect: Connect) {
 
 /** What switching a connect to `next` does to its conversations, in plain words (web/src/pages/Connect.tsx → consequences). */
 private fun consequences(connect: Connect, mode: String, requireMention: Boolean, running: Long): List<String> {
+    // A Feishu connect's groups in place of Slack's threads and channels.
+    val feishu = mapOf(
+        "android-settings.mode.toSingle" to "web-pages.connect.effects.toSingle.feishu", "android-settings.mode.toMulti" to "web-pages.connect.effects.toMulti.feishu",
+        "android-settings.mode.oldThreads" to "web-pages.connect.effects.threadsRestart.feishu", "android-settings.mode.mention" to "web-pages.connect.effects.mentionOnly.feishu",
+        "android-settings.mode.noMention" to "web-pages.connect.effects.noMention.feishu",
+    )
+    val say = { key: String -> t(if (connect.kind == "feishu") feishu[key] ?: key else key) }
     val out = mutableListOf<String>()
     if (connect.mode == "multi-session" && mode == "single-session") {
-        out += t("android-settings.mode.toSingle")
-        out += if (connect.session != null) t("android-settings.mode.keepSession") else t("android-settings.mode.newSession")
-        if (!requireMention) out += t("android-settings.mode.noMention")
+        out += say("android-settings.mode.toSingle")
+        out += if (connect.session != null) say("android-settings.mode.keepSession") else say("android-settings.mode.newSession")
+        if (!requireMention) out += say("android-settings.mode.noMention")
     } else if (connect.mode == "single-session" && mode == "multi-session") {
-        out += t("android-settings.mode.toMulti")
-        out += t("android-settings.mode.oldThreads")
-        out += t("android-settings.mode.back")
+        out += say("android-settings.mode.toMulti")
+        out += say("android-settings.mode.oldThreads")
+        out += say("android-settings.mode.back")
     } else if (requireMention != connect.requireMention) {
-        out += if (requireMention) t("android-settings.mode.mention") else t("android-settings.mode.noMention")
+        out += if (requireMention) say("android-settings.mode.mention") else say("android-settings.mode.noMention")
     }
     if (running > 0) out += t("android-settings.mode.running", "n" to running)
     return out
 }
 
-/** The mode picker: each way with what it means, and in single-session whether it waits for an @. */
+/** The modes as a connect of `kind` has them: a Feishu connect's groups in place of Slack's threads (web: format.ts modeOf). */
+private fun modeLabel(kind: String?): Map<String, String> =
+    if (kind != "feishu") MODE_LABEL else mapOf("multi-session" to t("web-main.mode.feishu.multi.label"), "single-session" to t("web-main.mode.feishu.single.label"))
+private fun modeText(kind: String?): Map<String, String> =
+    if (kind != "feishu") MODE_TEXT else mapOf("multi-session" to t("web-main.mode.feishu.multi.description"), "single-session" to t("web-main.mode.feishu.single.description"))
+
+/** The mode picker: each way with what it means, and in single-session whether it waits for an @; in `kind`'s words. */
 @Composable
-private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String, Boolean) -> Unit) {
+private fun ModeChoices(mode: String, requireMention: Boolean, kind: String?, onChange: (String, Boolean) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("multi-session", "single-session").forEach { m ->
             val on = mode == m
@@ -404,8 +424,8 @@ private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String
                 Modifier.fillMaxWidth().clip(Smooth(14.dp)).background(C.surface).border(if (on) 2.dp else 1.dp, if (on) C.accent else C.line, Smooth(14.dp))
                     .clickable { onChange(m, if (m == "multi-session") true else requireMention) }.padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
-                Text(MODE_LABEL[m] ?: m, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text(MODE_TEXT[m] ?: "", fontSize = 13.sp, color = C.muted)
+                Text(modeLabel(kind)[m] ?: m, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Text(modeText(kind)[m] ?: "", fontSize = 13.sp, color = C.muted)
             }
         }
         if (mode == "single-session") Row(
@@ -414,7 +434,12 @@ private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String
         ) {
             Column(Modifier.weight(1f)) {
                 Text(t("android-settings.mode.mentionTitle"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text(if (requireMention) t("android-settings.mode.mentionOn") else t("android-settings.mode.mentionOff"), fontSize = 13.sp, color = C.muted)
+                val feishu = kind == "feishu"
+                Text(
+                    if (requireMention) t(if (feishu) "web-mobile.connects.mentionOn.feishu" else "android-settings.mode.mentionOn")
+                    else t(if (feishu) "web-mobile.connects.mentionOff.feishu" else "android-settings.mode.mentionOff"),
+                    fontSize = 13.sp, color = C.muted,
+                )
             }
             Switch(requireMention)
         }
@@ -434,7 +459,7 @@ private fun ColumnScope.ModeSheet(station: String, item: ConnectItem) {
     SheetGrab()
     SheetHead(t("android-settings.mode.title"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        ModeChoices(mode, mention) { m, r -> mode = m; mention = r }
+        ModeChoices(mode, mention, connect.kind) { m, r -> mode = m; mention = r }
         if (effects.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(t("android-settings.mode.after"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
             effects.forEach { Text("· $it", fontSize = 13.sp, color = C.ink) }
@@ -710,7 +735,7 @@ fun NewConnectScreen(station: String) {
             Seg(entry.runtimes.map { RUNTIME_LABEL[it] ?: it }, entry.runtimes.indexOf(rt).coerceAtLeast(0), { flow.choose { put("runtime", entry.runtimes[it]) } }, Modifier.fillMaxWidth(), height = 36.dp, fill = true)
         }
         GroupLabel(t("android-settings.mode.title"))
-        ModeChoices(mode, mention) { m, r -> flow.edit { put("mode", m); put("requireMention", r) } }
+        ModeChoices(mode, mention, if (step == "feishuBind") "feishu" else null) { m, r -> flow.edit { put("mode", m); put("requireMention", r) } }
     }
     Column(Modifier.fillMaxSize()) {
         NavBar(if (view.back == "close") t("common.cancel") else t("android-settings.flow.previous"), back, t("android-settings.flow.title"), sub = { Text("${view.title} · ${view.number} / ${view.total}", fontSize = 11.sp, color = C.muted) })

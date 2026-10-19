@@ -50,17 +50,24 @@
   "android-settings.connect.defaultEffort": "Default effort",
   "android-settings.connect.delete": "Delete connect",
   "android-settings.connect.deleteText": "Disconnects from Slack. You need to delete the app in Slack yourself.",
+  "android-settings.connect.deleteText.feishu": "Disconnects from Feishu. You need to delete the app in the developer console yourself.",
   "android-settings.connect.deleteTextSessions": {
     "one": "Disconnects from Slack. Its chat is kept but gets no new messages. Delete the app in Slack yourself.",
     "other": "Disconnects from Slack. Its {n} chats are kept but get no new messages. Delete the app in Slack yourself."
+  },
+  "android-settings.connect.deleteTextSessions.feishu": {
+    "one": "Disconnects from Feishu. Its chat is kept but gets no new messages. Delete the app in the developer console yourself.",
+    "other": "Disconnects from Feishu. Its {n} chats are kept but get no new messages. Delete the app in the developer console yourself."
   },
   "android-settings.connect.deleteTitle": "Delete “{name}”?",
   "android-settings.connect.deleteWhat": "delete the connect",
   "android-settings.connect.deleted": "Connect deleted",
   "android-settings.connect.disable": "Turn off",
   "android-settings.connect.disableNote": "Disconnects from Slack",
+  "android-settings.connect.disableNote.feishu": "Disconnects from Feishu",
   "android-settings.connect.disableWhat": "turn off the connect",
   "android-settings.connect.disabled": "Off, disconnected from Slack",
+  "android-settings.connect.disabled.feishu": "Off, disconnected from Feishu",
   "android-settings.connect.enable": "Turn on",
   "android-settings.connect.enableWhat": "turn on the connect",
   "android-settings.connect.enabled": "Turned on",
