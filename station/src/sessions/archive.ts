@@ -548,6 +548,67 @@ export async function restoreWorkspace(room: string): Promise<void> {
   await unlockWorktrees(room);
 }
 
+/// What an archived workspace keeps once it has been archived long enough: the files sent in its chat (`uploads/`), out
+/// of its archive and on the disk again; the rest of it is removed, packed or not, and its worktrees are let go (`git
+/// worktree prune` cleans them up). The caller holds the room's lock. The archive goes only once the uploads are out of
+/// it: one interrupted is done again from the start.
+export async function emptyWorkspace(room: string): Promise<void> {
+  const workspace = join(room, "workspace");
+  const archive = workspaceArchive(room);
+  await mkdir(workspace, { recursive: true });
+  if (await exists(archive)) {
+    const stage = join(room, "workspace.emptying");
+    if (await exists(stage)) await rm(stage, { recursive: true });
+    await mkdir(stage);
+    await chmod(stage, 0o700);
+    const stream = unzstd(archive);
+    try {
+      const bytes = new ByteReader(stream[Symbol.asyncIterator]());
+      const uploads = async function* () {
+        for await (const entry of tarEntries(bytes)) {
+          if (entry.parts[0] === "uploads" && (entry.kind === "file" || entry.kind === "dir")) yield entry;
+        }
+      };
+      await unpack(uploads(), stage, new Map());
+      await bytes.drain();
+    } finally {
+      stream.destroy();
+    }
+    await takeUploads(stage, workspace);
+    await unlink(archive);
+    await rm(stage, { recursive: true });
+  }
+  // What an interrupted packing or restoring left beside it (restoreWorkspace overlays these too).
+  for (const left of ["workspace.retiring", "workspace.restored-old", "workspace.restoring"]) {
+    if (!(await isDir(join(room, left)))) continue;
+    await takeUploads(join(room, left), workspace);
+    await rm(join(room, left), { recursive: true });
+  }
+  for (const entry of await readdir(workspace)) {
+    if (entry !== "uploads") await rm(join(workspace, entry), { recursive: true, force: true });
+  }
+  await unlockWorktrees(room);
+}
+
+/// The files in `from`'s uploads moved into `workspace`'s, durably; those already there are kept (one put back on the
+/// disk to be read, api/routes/sessions.ts, is the same file).
+async function takeUploads(from: string, workspace: string): Promise<void> {
+  if (!(await isDir(join(from, "uploads")))) return;
+  const into = join(workspace, "uploads");
+  await mkdir(into, { recursive: true });
+  for (const entry of await readdir(join(from, "uploads"))) {
+    if (!(await lstatOrNull(join(into, entry)))) await rename(join(from, "uploads", entry), join(into, entry));
+  }
+  await syncDir(into);
+}
+
+/// Whether an archived workspace holds anything `emptyWorkspace` would remove.
+export async function holdsMore(room: string): Promise<boolean> {
+  if (await exists(workspaceArchive(room))) return true;
+  const names = await readdir(join(room, "workspace")).catch(() => [] as string[]);
+  return names.some((name) => name !== "uploads");
+}
+
 /// An archived attachment is read directly from the tar stream, without inflating the whole workspace on disk.
 /// `relative`: its path in the workspace.
 export async function workspaceFile(room: string, relative: string): Promise<Buffer | null> {

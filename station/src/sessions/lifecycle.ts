@@ -223,6 +223,30 @@ export function archiveChat(hub: Hub, thread: number, archived: boolean): void |
   hub.store.setThreadHidden(thread, archived, MANUAL);
 }
 
+/// Empties the workspaces of sessions archived past archivedWorkspaceMs, one after another: each keeps the files sent in
+/// its chat, its history and its transcripts (cold.ts `expire`). Returns when the next one archived comes due (null:
+/// none, or off).
+export async function expireArchived(hub: Hub, now: number): Promise<number | null> {
+  const after = hub.config().archivedWorkspaceMs;
+  const { cold } = hub;
+  if (after <= 0 || !cold.expire || !cold.holdsMore) return null;
+  let next: number | null = null;
+  for (const s of hub.store.listSessions()) {
+    if (s.archivedAt === null) continue;
+    const due = s.archivedAt + after;
+    if (due > now) {
+      if (next === null || due < next) next = due;
+      continue;
+    }
+    try {
+      if (await cold.holdsMore(s.key)) await cold.expire(s.key, now - after);
+    } catch (error) {
+      log.warn("hub", "the workspace of a long-archived session was not emptied", { session: s.key, error: (error as Error).message });
+    }
+  }
+  return next;
+}
+
 /// Archives what has idled past autoArchiveMs (counted from its last activity, or from being shown again by hand) and is
 /// done: nothing running or waiting to be heard, no background job or service of its own still up (a watch above all),
 /// not stopped at a block for someone, nothing its chat's starter has not read, and no single-session connect feeding

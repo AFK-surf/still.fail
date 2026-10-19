@@ -61,6 +61,9 @@ export type HubConfig = {
   /// Only chats the archive review recommended are archived on their own (none while the review is off); Slack sessions
   /// stopped at a block go after slackArchiveMs all the same.
   autoArchiveReviewed: boolean;
+  /// Sessions archived this long keep only the files sent in their chat, their history and transcripts: the rest of
+  /// their workspace is removed (cold.ts `expire`); 0: never.
+  archivedWorkspaceMs: number;
 };
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
@@ -120,6 +123,7 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
     autoArchiveMs: Math.trunc(Math.max(0, typeof raw?.autoArchiveDays === "number" ? raw.autoArchiveDays : 1) * 86_400_000),
     slackArchiveMs: Math.trunc(Math.max(0, typeof raw?.slackArchiveDays === "number" ? raw.slackArchiveDays : 3) * 86_400_000),
     autoArchiveReviewed: raw?.autoArchiveReviewed === true,
+    archivedWorkspaceMs: Math.trunc(Math.max(0, typeof raw?.archivedWorkspaceDays === "number" ? raw.archivedWorkspaceDays : 7) * 86_400_000),
   };
 }
 

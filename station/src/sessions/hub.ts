@@ -78,6 +78,9 @@ export interface ColdStorage {
   restore(key: string): void | Promise<void>;
   /// Packs what it can of an archived, idle session.
   pack(key: string): void | Promise<void>;
+  /// Whether an archived session's directory holds more than its chat's files, and empties it of that.
+  holdsMore?(key: string): Promise<boolean>;
+  expire?(key: string, before: number): Promise<void>;
 }
 
 /// The most of a shared file the station fetches, as much as an agent may attach.

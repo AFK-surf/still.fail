@@ -145,6 +145,31 @@ export class ColdRooms implements ColdStorage {
     });
   }
 
+  /// Archived long enough (expireArchived, lifecycle.ts): its workspace keeps only the files sent in its chat
+  /// (archive.ts `emptyWorkspace`); its history and transcripts stay. Left as it is while it is shown again or at work,
+  /// or something else still uses its directory; one restored (no `cold` mark) is no longer archived.
+  /// `before`: only if it was archived by then (one shown and archived again since is archived anew).
+  async expire(key: string, before: number): Promise<void> {
+    const due = () => {
+      const at = this.hub().store.getSession(key)?.archivedAt ?? null;
+      return at !== null && at <= before && this.archiveRoom(key) !== null;
+    };
+    const room = due() ? this.archiveRoom(key) : null;
+    if (room === null) return;
+    await archive.withLock(room, async () => {
+      if (!due() || !existsSync(join(room, "cold")) || !(await archive.holdsMore(room))) return;
+      await archive.emptyWorkspace(room);
+      log.info("hub", "workspace of a long-archived session emptied", { session: key });
+    });
+  }
+
+  /// Whether an archived session's directory holds more than its chat's files.
+  async holdsMore(key: string): Promise<boolean> {
+    const row = this.hub().store.getSession(key);
+    const room = row ? roomOf(this.dataDir(), row.workspace) : null;
+    return room !== null && existsSync(join(room, "cold")) && (await archive.holdsMore(room));
+  }
+
   async pack(key: string): Promise<void> {
     const room = this.archiveRoom(key);
     if (room === null) return;

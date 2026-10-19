@@ -79,7 +79,7 @@ Formatting: two different syntaxes. Pick by the thread you post to (EMBER/… is
 A Slack link with a label: <https://example.com|label>.
 
 Where you work:
-${project}- Session workspace: ${workspace}. Scratch files, clones and git worktrees belong here.
+${project}- Session workspace: ${workspace}. Scratch files, clones and git worktrees belong here. A week after its chat is archived (the station's setting), only the files sent in the chat stay in it: push or move elsewhere what must outlive the chat.
 - Shared repository cache: ${repos_dir}. Keep canonical clones there; work in session worktrees, never edit canonical clones directly.
 
 Memory and skills:

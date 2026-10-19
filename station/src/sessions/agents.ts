@@ -55,7 +55,7 @@ import { inBrief } from "./live.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
-import { autoArchive } from "./lifecycle.ts";
+import { autoArchive, expireArchived } from "./lifecycle.ts";
 import { fromPeer, sender } from "./messages.ts";
 import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { chatsTouched, forPeer, READ } from "./others.ts";
@@ -556,6 +556,19 @@ export const AgentsLive = (control: Control) =>
         time.after(Math.min(600_000, next === null ? Infinity : next - hub.now()), archiving);
       };
       time.after(60_000, archiving);
+
+      // Chats archived long enough keep only their history and the files sent in them: looked at when the next one
+      // comes due, and every hour for the setting changed.
+      const emptying = async () => {
+        let next: number | null = null;
+        try {
+          next = await expireArchived(hub, hub.now());
+        } catch (error) {
+          log.warn("hub", "emptying long-archived workspaces failed", { error: (error as Error).message });
+        }
+        time.after(Math.min(3_600_000, next === null ? Infinity : next - hub.now()), emptying);
+      };
+      time.after(300_000, emptying);
 
       // The archive review turned on, or given another model: the done chats no decision has answered are reviewed then,
       // not only the ones that end all_done from now on; and once after the start (the profiles' checks read by then).

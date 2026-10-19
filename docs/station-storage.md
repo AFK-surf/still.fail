@@ -304,6 +304,17 @@ are those at the moment it opened.
   session when it is that session's own chat). The station also archives
   what has idled past `auto_archive_ms` and is done (`Hub::auto_archive`,
   hourly); anything new said brings it back.
+- An archived, idle session's own directory goes to cold storage
+  (`sessions/cold.ts`): what a build makes again is removed, the rest of its
+  workspace is packed into `workspace.tar.zst` beside it, and the transcripts
+  the station keeps are compressed; all of it is restored before its runtime
+  starts again. Once it has been archived for `archivedWorkspaceDays` (7 by
+  default; 0 keeps them), the station empties its workspace
+  (`expireArchived`, looked at when the next one comes due and hourly): the
+  files sent in its chat (`uploads/`) are taken out of the archive onto the
+  disk, the archive and everything else in the workspace are removed, and the
+  git worktrees it locked are let go. Its transcripts and its threads stay, so
+  it goes on in its history, in an empty workspace.
 - `DELETE /sessions/:key`: ends its process, deletes its rows (turns,
   deliveries, thread_sessions; threads left with no session, with their
   entries or archive files, and reads), its workspace directory and its
