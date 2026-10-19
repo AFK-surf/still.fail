@@ -53,16 +53,23 @@ fn placeholder_page(c : @ui.Ctx, title : String) -> Unit {
 
 ///|
 /// The scrim under a menu or a sheet (black at 28%), which closes it when tapped.
-fn scrim(c : @ui.Ctx, key : String, shown : Double, close : () -> Unit) -> Unit {
+fn scrim(
+  c : @ui.Ctx,
+  key : String,
+  shown : Double,
+  open? : Bool = true,
+  close : () -> Unit,
+) -> Unit {
   let id = c.id(key)
-  if c.clicked(id) {
+  if c.clicked(id) && open {
     close()
   }
-  c.layer(fn() {
+  let l = c.layer(fn() {
     c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(0x000000FFL, 0.28 * shown), id~, fn() {  })
     |> ignore
   })
-  |> ignore
+  // fading once let go of, only drawn: it takes no tap from the page coming back under it
+  @motion.leaving(c, l, open)
 }
 
 ///|
@@ -71,15 +78,27 @@ fn scrim(c : @ui.Ctx, key : String, shown : Double, close : () -> Unit) -> Unit 
 fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let filter = filter_of(src, w.id)
-  let shown = opening(c, app.menu_at, 160.0)
-  scrim(c, "filter-scrim", shown, fn() { app.menu = false })
+  // in: its opacity 160 ms (Ease.Out), its scale from 90% on the menu's spring, from its top left; out: 120 ms (CSS's
+  // ease-out), back to 90%; the scrim 200 ms (Sheet.kt MenuHost). Drawn until it has gone.
+  let look = match
+    @motion.presence(
+      c,
+      "filter-menu",
+      app.menu,
+      enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
+      exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=CssOut)),
+    ) {
+    Some(l) => l
+    None => return
+  }
+  let shown = @motion.animate(c, "filter-menu/scrim", if app.menu { 1.0 } else { 0.0 }, spec=@motion.tween(200.0))
+  scrim(c, "filter-scrim", shown, open=app.menu, fn() { app.menu = false })
   let x = dmax(12.0, c.width - 16.0 - 180.0)
   c.layer(fn() {
-    c.box(
+    let menu = c.box(
       w=Px(180.0),
       tx=x,
-      ty=bar_h + 6.0 - 6.0 * (1.0 - shown),
-      opacity=shown,
+      ty=bar_h + 6.0,
       radius=14.0,
       bg=t.p.card,
       shadow=18.0,
@@ -95,7 +114,7 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             pady=12.0,
             align=ACenter,
             justify=JBetween,
-            bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
+            bg=@sf.alpha(t.p.text, 0.06 * @motion.pressing(c, id)),
             id~,
             fn() {
               c.text(label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
@@ -132,7 +151,8 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
       },
     )
-    |> ignore
+    c.look(menu, look)
+    @motion.leaving(c, menu, app.menu)
   })
   |> ignore
 }
@@ -238,7 +258,7 @@ fn pick_row(
       pady=12.0,
       gap=12.0,
       align=ACenter,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
+      bg=@sf.alpha(t.p.text, 0.06 * @motion.pressing(c, id)),
       id~,
       fn() {
         match lead {

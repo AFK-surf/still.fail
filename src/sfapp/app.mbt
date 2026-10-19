@@ -260,9 +260,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       bottom_bar(c, src, w, place_of(root), app.nav.depth() == 1 && place_of(root) is Some(_))
       // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
       preview(c, src)
-      if app.menu {
-        filter_menu(c, src, w)
-      }
+      filter_menu(c, src, w)
       sheet_layer(c, fn(kind) {
         match kind {
           Workspaces => workspaces_sheet(c, src, w, all)
@@ -472,32 +470,45 @@ fn appearance(src : Source) -> Unit {
 let told_dark : Ref[Bool?] = Ref(None)
 
 ///|
-/// What a write said (Sheet.kt ToastHost): over the foot, in ink, 2.6s.
+/// What a write said (Sheet.kt ToastHost): over the foot, in ink, 2.6 s; it fades in and out (200 ms, CSS's ease),
+/// its words kept while it fades.
 fn toast(c : @ui.Ctx) -> Unit {
-  if app.toast == "" {
-    return
-  }
   let t = @sf.theme()
-  // said from a call's answer, between frames: from this frame on
-  if app.toast_at < 0.0 {
-    app.toast_at = c.now()
+  if app.toast != "" {
+    // said from a call's answer, between frames: from this frame on
+    if app.toast_at < 0.0 {
+      app.toast_at = c.now()
+    }
+    if toast_said.val != app.toast {
+      toast_said.val = app.toast
+    }
+    let age = c.now() - app.toast_at
+    if age >= 2600.0 {
+      app.toast = ""
+    } else {
+      c.wake_in(2600.0 - age)
+    }
   }
-  let age = c.now() - app.toast_at
-  if age > 2800.0 {
-    app.toast = ""
-    return
+  let look = match
+    @motion.presence(c, "toast", app.toast != "", enter=@motion.trans(fade=0.0, spec=@motion.tween(200.0, ease=Css))) {
+    Some(l) => l
+    None => return
   }
-  c.wake_in(2800.0 - age)
   c.layer(align=ACenter, fn() {
     c.spacer()
-    c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, fn() {
-      c.text(app.toast, size=14.0, color=t.p.bg, line=20.0) |> ignore
+    let b = c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, fn() {
+      c.text(toast_said.val, size=14.0, color=t.p.bg, line=20.0) |> ignore
     })
-    |> ignore
+    c.look(b, look)
+    @motion.leaving(c, b, app.toast != "")
     c.box(h=Px(90.0), fn() {  }) |> ignore
   })
   |> ignore
 }
+
+///|
+/// What the toast says, kept while it fades out.
+let toast_said : Ref[String] = { val: "" }
 
 ///|
 fn say(c : @ui.Ctx, words : String) -> Unit {

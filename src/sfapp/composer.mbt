@@ -643,6 +643,8 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   let taken_files = d.files.copy()
   let taken_quotes = d.quotes.copy()
   let taken_comments = d.comments.copy()
+  // the words take off from where they were typed (flight.mbt)
+  flight_start(c, d.key, words, v, @motion.measured(c, "composer/content").unwrap_or(0.0))
   c.take_editor_text(field_key) |> ignore
   d.text = ""
   d.files.clear()
@@ -685,8 +687,9 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
       _ => ()
     }
   })
-  // the reader goes to the chat's end with what was sent (Chat.kt: by the composer as it sends)
-  c.list_to_end(list_key(r))
+  // the reader goes to the chat's end with what was sent (Chat.kt: by the composer as it sends); with words flying
+  // there at once, the rows above going up with them (flight.mbt)
+  c.list_to_end(list_key(r), glide=flight_of(d.key) is None)
   c.request_frame()
 }
 
@@ -736,18 +739,47 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   if c.clicked(cap) && !locked {
     c.focus_editor(field_key)
   }
+  // the capsule changes shape in one motion (Composer.kt Morph, web morph.ts): drawn from the height it was to the one
+  // its content now takes (260 ms, Ease.Out), its ground standing on its bottom edge and its content cut to it, its
+  // parts drawn carried from where they were to their places on the same timeline. Only drawn: laid out as tall as its
+  // content at once, all of it (＋, the field, send, a quote's line) tapped where it is from the first frame. At rest
+  // (and in screenshots) as tall as its content
+  let natural = @motion.measured(c, "composer/content")
+  // words just sent: as tall as when they went, until they are a quarter of the way (ChatHost.kt hold)
+  let held = match flight_of(d.key) {
+    Some(f) if flight_p(c, f) < flight_settle => f.room
+    _ => 0.0
+  }
+  let morph = match natural {
+    Some(h) if !c.stable() =>
+      Some(@motion.animate(c, "composer/morph", dmax(h, held), spec=@motion.tween(260.0, ease=Out)))
+    _ => None
+  }
+  let mut content = -1
   c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=8.0, pb=10.0, fn() {
-    c.box(
-      w=Fill(1.0),
-      pad=composer_inset,
-      gap=8.0,
-      radius=composer_corner,
-      glass=@sf.glass_floating(),
-      shadow=2.0,
-      shadow_color=0x0000004DL,
-      shadow_y=0.5,
-      id=cap,
-      fn() {
+    c.box(w=Fill(1.0), pad=composer_inset, id=cap, fn() {
+      // its ground, as tall as the morph has it, on the capsule's bottom edge (over it while it is taller)
+      let ground = c.layer(fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), justify=JEnd, fn() {
+          c.box(
+            w=Fill(1.0),
+            h=match morph {
+              Some(h) => Px(h + 2.0 * composer_inset)
+              None => Fill(1.0)
+            },
+            radius=composer_corner,
+            glass=@sf.glass_floating(),
+            shadow=2.0,
+            shadow_color=0x0000004DL,
+            shadow_y=0.5,
+            fn() {  },
+          )
+          |> ignore
+        })
+        |> ignore
+      })
+      c.draw_only(ground)
+      content = c.box(w=Fill(1.0), gap=8.0, fn() {
         match v {
           Some(v) => composer_notices(c, src, r, v)
           None => ()
@@ -760,14 +792,29 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
             |> ignore
           None => ()
         }
-      },
-    )
+      })
+      @motion.measure(c, content, "composer/content")
+      @motion.scope(c, content, bottom=true)
+    })
     |> ignore
   })
   |> ignore
-  let room = match c.rect_of(cap) {
-    Some((_, _, _, h)) => h + 8.0 + 10.0
-    None => 0.0
+  match morph {
+    // growing: what is above the ground is not drawn yet
+    Some(h) => c.cut_to_bottom(content, h + composer_inset)
+    None => ()
+  }
+  let room = match (flight_of(d.key), natural, morph) {
+    // while words fly to their row, the list keeps the room the composer will have, so their place is where they
+    // land (ChatHost.kt roomForList)
+    (Some(_), Some(h), _) => h + 2.0 * composer_inset + 8.0 + 10.0
+    // otherwise the room the capsule is drawn with (the list's rows going with it)
+    (None, _, Some(h)) => h + 2.0 * composer_inset + 8.0 + 10.0
+    _ =>
+      match c.rect_of(cap) {
+        Some((_, _, _, h)) => h + 8.0 + 10.0
+        None => 0.0
+      }
   }
   if room != cui.room {
     cui.room = room
@@ -807,8 +854,13 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
       }
     None => ()
   }
-  if cui.attach {
-    attach_sheet(c, src, r, d)
+  // ＋'s sheet: up from below and back down on the sheet's spring, the scrim in and out (Sheet.kt SheetHost);
+  // drawn until it has gone
+  let sheet_h = attach_h + 26.0
+  let off = @motion.animate(c, "attach/offset", if cui.attach { 0.0 } else { sheet_h }, spec=@motion.sheet_spring, from=sheet_h)
+  let dim = @motion.animate(c, "attach/scrim", if cui.attach { 1.0 } else { 0.0 }, spec=@motion.tween(300.0, ease=Css))
+  if cui.attach || off < sheet_h || dim > 0.0 {
+    attach_sheet(c, src, r, d, off, dim)
   }
   // ＋'s Station 文件 (station_files.mbt)
   station_files_sheet(c, src, workspace_of(r.station), d.key)
@@ -904,25 +956,28 @@ fn composer_bar(
   if c.clicked(send) {
     do_send()
   }
+  let part = fn(i : Int, name : String) {
+    @motion.layout(c, i, "composer/part/" + name, spec=@motion.tween(260.0, ease=Out), listed=false)
+  }
   let plus_button = fn() {
-    c.box(
+    let b = c.box(
       w=Px(36.0),
       h=Px(36.0),
       radius=18.0,
       align=ACenter,
       justify=JCenter,
-      bg=if c.pressed(plus) && !locked { @sf.alpha(t.p.text, 0.08) } else { 0L },
+      bg=if locked { 0L } else { @sf.alpha(t.p.text, 0.08 * @motion.pressing(c, plus)) },
       id=plus,
       fn() {
         @sf.icon(c, "plus", size=18.0, color=if locked { @sf.alpha(t.p.text, 0.35) } else { t.p.text })
         |> ignore
       },
     )
-    |> ignore
+    part(b, "plus")
   }
   let send_button = fn() {
     // not ready: the ink faint over the capsule's own ground (web: 18% text over --raised)
-    c.box(
+    let b = c.box(
       w=Px(36.0),
       h=Px(36.0),
       radius=18.0,
@@ -934,7 +989,7 @@ fn composer_bar(
         @sf.icon(c, "arrow-up", size=18.0, color=if ready { t.p.bg } else { t.p.raised }) |> ignore
       },
     )
-    |> ignore
+    part(b, "send")
   }
   let placeholder = match (fresh, v) {
     (Some(_), _) => tr("android-chat.new.placeholder")
@@ -942,7 +997,7 @@ fn composer_bar(
     _ => tr("android-chat.chat.placeholder")
   }
   let field = fn() {
-    c.box(
+    let f = c.box(
       w=Fill(1.0),
       min_h=36.0,
       pl=if expanded { plus_ink } else { 0.0 },
@@ -951,6 +1006,12 @@ fn composer_bar(
       pb=7.0,
       justify=JCenter,
       fn() {
+        let hint = @motion.anim(c, "composer/hint", 1.0)
+        if flight_hint_away(c, d.key) {
+          hint.snap(0.0)
+        } else {
+          hint.follow(1.0, @motion.tween(200.0, ease=Arrive))
+        }
         let res = c.editor(
           field_key,
           placeholder~,
@@ -959,7 +1020,7 @@ fn composer_bar(
           max_lines=6,
           plain=true,
           color=t.p.text,
-          placeholder_color=t.p.subtle,
+          placeholder_color=@sf.alpha(t.p.subtle, hint.get()),
           caret_color=t.p.accent,
           enter_sends=false,
           paste_limit=if locked { 0 } else { paste_threshold },
@@ -994,7 +1055,7 @@ fn composer_bar(
         }
       },
     )
-    |> ignore
+    part(f, "field")
   }
   if expanded {
     c.box(w=Fill(1.0), gap=4.0, fn() {
@@ -1337,13 +1398,23 @@ fn file_icon(name : String) -> String {
 // ── ＋'s sheet (Attach.kt) ──────────────────────────────────────────────
 
 ///|
+/// How tall ＋'s sheet is (over the foot's 26 it is drawn past): its grabber and head, the strip, the three tiles.
+let attach_h : Double = 25.0 + 4.0 + 122.0 + 12.0 + 70.0 + 18.0
+
+///|
 /// ＋'s sheet: the recent photos across the top (the camera first; reading the gallery is not in this build, so its
 /// tile only says so), then 照片, 文件 and Station 文件 (station_files.mbt). As tall as those two rows.
-fn attach_sheet(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Unit {
+fn attach_sheet(
+  c : @ui.Ctx,
+  src : Source,
+  r : ChatRef,
+  d : Draft,
+  offset : Double,
+  dim : Double,
+) -> Unit {
   let t = @sf.theme()
-  let shown = opening(c, cui.attach_at, 300.0)
-  scrim(c, "attach-scrim", dmin(shown, 1.0), fn() { cui.attach = false })
-  let h = 25.0 + 4.0 + 122.0 + 12.0 + 70.0 + 18.0
+  scrim(c, "attach-scrim", dim, open=cui.attach, fn() { cui.attach = false })
+  let h = attach_h
   let ask = fn(kind : @host.PickKind) {
     cui.attach = false
     match @host.pick(kind) {
@@ -1386,12 +1457,12 @@ fn attach_sheet(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Unit {
     cui.attach = false
     station_files_open(c, d.key)
   }
-  c.layer(fn() {
+  let sheet = c.layer(fn() {
     c.spacer()
     c.box(
       w=Fill(1.0),
       h=Px(h + 26.0),
-      ty=26.0 + (1.0 - shown) * (h + 26.0),
+      ty=26.0 + offset,
       radius=26.0,
       bg=t.p.card,
       shadow=24.0,
@@ -1450,7 +1521,8 @@ fn attach_sheet(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Unit {
     )
     |> ignore
   })
-  |> ignore
+  // going down once let go of, only drawn: what is tapped meanwhile is the composer under it
+  @motion.leaving(c, sheet, cui.attach)
 }
 
 ///|
@@ -1583,7 +1655,7 @@ fn pick_bar(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       gap=5.0,
       radius=16.0,
       align=ACenter,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
+      bg=@sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)),
       id~,
       fn() {
         @sf.icon(c, icon, size=15.0, color=t.p.text) |> ignore

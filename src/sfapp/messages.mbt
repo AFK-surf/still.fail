@@ -58,6 +58,10 @@ fn ink() -> Ink {
 let absolute_times : Ref[Bool] = { val: false }
 
 ///|
+/// The flight of words sent whose row is being built (flight.mbt), for its bubble and what is under it.
+let flying : Ref[SendFlight?] = { val: None }
+
+///|
 /// System notices opened (all their words, and their time), by message.
 let opened_notices : Map[String, Bool] = {}
 
@@ -199,7 +203,14 @@ fn said(
             if m.waiting {
               under_way(c, tr("android-chat.chat.waitingAgent"))
             } else {
-              message_time(c, m.ts, m.time)
+              // coming in with the words, when they fly here from the composer
+              match flying.val {
+                Some(f) => {
+                  let at = c.box(fn() { message_time(c, m.ts, m.time) })
+                  c.look(at, @ui.look(alpha=flight_settled(flight_p(c, f))))
+                }
+                None => message_time(c, m.ts, m.time)
+              }
             }
         }
       }
@@ -543,7 +554,12 @@ fn person_words(c : @ui.Ctx, words : String, ts : String) -> Unit {
 fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
   let t = @sf.theme()
   let k = ink()
-  c.box(max_w=c.width - 36.0, padx=14.0, pady=8.0, radius=18.0, bg=k.neutral, fn() {
+  // words sent flying here: the bubble's ground comes in round them on their way (flight.mbt)
+  let ground = match flying.val {
+    Some(f) if f.placed_at >= 0.0 => flight_ground(flight_p(c, f))
+    _ => 1.0
+  }
+  let b = c.box(max_w=c.width - 36.0, padx=14.0, pady=8.0, radius=18.0, bg=@sf.alpha(k.neutral, ground), fn() {
     c.rich(
       ref_runs(words),
       key="bubble/" + ts,
@@ -556,7 +572,10 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
     )
     |> ignore
   })
-  |> ignore
+  match flying.val {
+    Some(f) => flight_bubble(c, f, b)
+    None => ()
+  }
 }
 
 ///|
@@ -1329,7 +1348,14 @@ fn outgoing(c : @ui.Ctx, src : Source, here : Here, o : Outgoing) -> Unit {
       })
       |> ignore
     } else if !o.followed {
-      under_way(c, tr("android-chat.chat.sending"))
+      // not seen while its words fly here, its room kept (Chat.kt Out: a layer at no opacity)
+      match flying.val {
+        Some(_) => {
+          let w = c.box(fn() { under_way(c, tr("android-chat.chat.sending")) })
+          c.look(w, @ui.look(alpha=0.0))
+        }
+        None => under_way(c, tr("android-chat.chat.sending"))
+      }
     }
   })
   |> ignore
@@ -1384,7 +1410,7 @@ fn unsent_button(
     radius=7.0,
     align=ACenter,
     opacity=if enabled { 1.0 } else { 0.5 },
-    bg=if c.pressed(id) && enabled { @sf.alpha(t.p.text, 0.08) } else { 0L },
+    bg=if enabled { @sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)) } else { 0L },
     id~,
     fn() {
       if busy {
@@ -1420,7 +1446,13 @@ fn elapsed(ms : Double) -> String {
 ///|
 /// An agent at work, in one line (Chat.kt Activity): its picture ringed while it works (a still, quiet ring while it
 /// waits on work it started), what it does now as the core says, and how long its turn has run.
-fn activity(c : @ui.Ctx, src : Source, here : Here, a : Agent) -> Unit {
+fn activity(
+  c : @ui.Ctx,
+  src : Source,
+  here : Here,
+  a : Agent,
+  leaving? : Bool = false,
+) -> Unit {
   let t = @sf.theme()
   let k = ink()
   let live = (src.topic)("live", { "station": Json::string(here.station), "key": Json::string(a.key) })
@@ -1472,7 +1504,9 @@ fn activity(c : @ui.Ctx, src : Source, here : Here, a : Agent) -> Unit {
     fn() {
     c.box(w=Px(24.0), h=Px(24.0), tx=-3.0, align=ACenter, justify=JCenter, fn() {
       agent_avatar(c, a.maker, a.runtime)
-      c.layer(fn() {
+      // its turn over, the ring goes first (Chat.kt WorkRing: 160 ms)
+      let ring = @motion.animate(c, "ring/" + here.station + "/" + a.key, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(160.0))
+      let rl = c.layer(fn() {
         if a.wait is Some(_) {
           c.box(w=Px(24.0), h=Px(24.0), radius=12.0, border=1.5, border_color=t.p.line, fn() {  })
           |> ignore
@@ -1480,7 +1514,7 @@ fn activity(c : @ui.Ctx, src : Source, here : Here, a : Agent) -> Unit {
           @sf.spinner(c, size=24.0, ring=0L, arc=k.accent, sweep=0.4, period=2000.0) |> ignore
         }
       })
-      |> ignore
+      c.look(rl, @ui.look(alpha=ring))
     })
     |> ignore
     c.box(fn() { c.text(now_words, size=15.0, color=k.muted, wrap=false) |> ignore }) |> ignore

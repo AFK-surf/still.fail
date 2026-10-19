@@ -4,6 +4,7 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/core/math",
   "mbui/ui",
+  "mbui/motion",
   "mbui/sf",
   "mbui/gallery",
   "mbui/host",

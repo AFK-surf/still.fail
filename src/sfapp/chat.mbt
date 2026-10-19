@@ -73,8 +73,9 @@ priv struct Reading {
   /// the first message's entry and where it was in the list, the last frame
   mut head : String
   mut head_at : Int
-  /// put in place once (the unread line, where it was opened, or the end)
+  /// put in place once (the unread line, where it was opened, or the end), and when
   mut placed : Bool
+  mut placed_at : Double
   mut put : Bool
   /// the first message when the page before was asked for (once per page)
   mut asked : Double
@@ -94,6 +95,17 @@ priv struct Reading {
   mut bench_rows : Int
   bench_ms : Array[Double]
   bench_present : Array[Double]
+  /// the rows drawn so far, by key (what is new to the list rises in: Chat.kt known, arrived); whether it has been
+  /// drawn; the rows new to it since, until they show
+  known : Map[String, Bool]
+  mut drawn : Bool
+  fresh : Map[String, Bool]
+  /// the outbox entries messages were sent from here as, by seq (their rows go on being those: Chat.kt sentAs)
+  sent : Map[Double, String]
+  /// agents whose turn ended, still shown a moment (Chat.kt lingering: 600 ms, then fading 220), since when
+  linger : Map[String, (Agent, Double)]
+  /// the agents running as last drawn
+  running : Map[String, Agent]
 }
 
 ///|
@@ -108,6 +120,7 @@ fn reading_of(key : String) -> Reading {
         head: "",
         head_at: -1,
         placed: false,
+        placed_at: 0.0,
         put: false,
         asked: -1.0,
         asked_newer: -1.0,
@@ -121,6 +134,12 @@ fn reading_of(key : String) -> Reading {
         bench_rows: 0,
         bench_ms: [],
         bench_present: [],
+        known: {},
+        drawn: false,
+        fresh: {},
+        sent: {},
+        linger: {},
+        running: {},
       }
       readings[key] = r
       r
@@ -231,6 +250,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
           composer(c, src, r, Some(v))
         })
         |> ignore
+        // words sent, as typed, until their row is in the list (flight.mbt)
+        flight_waiting(c, draft_key(r))
         pick_bar(c, src, r)
       }
     }
@@ -252,10 +273,16 @@ fn messages(
   src : Source,
   r : ChatRef,
   v : ChatView,
-  list : Array[Entry],
+  read : Array[Entry],
 ) -> Unit {
   let key = list_key(r)
   let rd = reading_of(r.station + "\u{1}" + r.session)
+  let list = with_lingering(c, rd, v, read)
+  let keys = row_keys(c, rd, v, list, key)
+  let dkey = draft_key(r)
+  flight_frame(c, dkey)
+  let flight = flight_of(dkey)
+  @motion.list_keys(c, key, keys.map(fn(k) { key + "\u{1}" + k })) |> ignore
   let here = { station: r.station, session: r.session, view: v }
   // the first message's row: the page before come in above it, it stays where it is (Chat.kt: the list keeps its
   // first item in view by its key, or the first row after the spinner)
@@ -268,7 +295,9 @@ fn messages(
       break
     }
   }
-  if rd.head != "" && head != rd.head && rd.placed {
+  // rows came at the top (the page before): what is in view stays where it is, and nothing glides for it
+  let older_came = rd.head != "" && head != rd.head && rd.placed
+  if older_came {
     for i, e in list {
       if e.id() == rd.head {
         if i != rd.head_at {
@@ -305,20 +334,95 @@ fn messages(
         match e {
           Top => c.box(h=Px(chat_bar_h + 14.0), fn() {  }) |> ignore
           Foot => c.box(h=Px(composer_room_of(c) + 10.0), fn() {  }) |> ignore
-          _ =>
-            c.box(w=Fill(1.0), pl=14.0, pr=14.0, pt=top, fn() {
+          Working(a) => {
+            // coming in, its room opens (220 ms, Ease.Out) as it fades in and grows from its avatar; its turn over,
+            // it stays a moment and fades (Chat.kt Activity)
+            let mk = key + "\u{1}" + keys[i]
+            let open = @motion.anim(c, "open/" + mk, 1.0, global=true)
+            if rd.fresh.contains(keys[i]) {
+              rd.fresh.remove(keys[i])
+              open.snap(0.0)
+              open.animate(1.0, @motion.tween(220.0, ease=Out))
+            }
+            let leaving = match rd.linger.get(a.key) {
+              Some((_, at)) => c.now() - at >= 600.0
+              None => false
+            }
+            let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(220.0))
+            let p = open.get()
+            @motion.reveal(c, mk, p, fn() {
+              let ri = c.box(w=Fill(1.0), pl=14.0, pr=14.0, pt=top, fn() {
+                activity(c, src, here, a, leaving~)
+              })
+              @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(200.0)))
+              // pushed down by what comes in above it, it glides there (Chat.kt ACTIVITY_GLIDE: spring(1, 300))
+              if !older_came && flight is None {
+                @motion.layout(c, ri, mk, spec=@motion.spring(stiffness=300.0, threshold=1.0), listed=false)
+              }
+              c.look(ri, @ui.look(alpha=p * fade, scale=0.5 + 0.5 * p, ox=(14.0 + 9.0) / c.width, oy=0.5))
+            })
+          }
+          _ => {
+            // the row words sent go to: its bubble flies there from the composer (flight.mbt)
+            let mine = match e {
+              Out(_) => true
+              Said(m) => m.mine && !m.system
+              _ => false
+            }
+            let flies = flight_takes(dkey, keys[i], mine)
+            flying.val = if flies { flight } else { None }
+            match flight {
+              Some(f) if flies => flight_placed(c, f)
+              _ => ()
+            }
+            let ri = c.box(w=Fill(1.0), pl=14.0, pr=14.0, pt=top, fn() {
               entry_view(c, src, here, e, list)
             })
-            |> ignore
+            flying.val = None
+            match flight {
+              Some(_) if flies => {
+                // flown in, it does not rise in as well
+                rd.known[keys[i]] = true
+                rd.fresh.remove(keys[i]) |> ignore
+              }
+              // the rows above go up with the words (ChatHost.kt sendReflow)
+              Some(f) if f.placed_at >= 0.0 =>
+                @motion.layout(
+                  c,
+                  ri,
+                  key + "\u{1}" + keys[i],
+                  listed=false,
+                  screen=true,
+                  drive=flight_up(flight_p(c, f)),
+                )
+              _ => ()
+            }
+            // what is new to the list while it is followed rises in (Chat.kt rise: 14 up and from nothing, 320 ms
+            // on the standard curve); what leaves the chat from the outbox fades (200 ms)
+            let mk = key + "\u{1}" + keys[i]
+            if e is Out(_) {
+              @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(200.0)))
+            } else {
+              @motion.keyed(c, ri, mk)
+            }
+            if rd.fresh.contains(keys[i]) {
+              rd.fresh.remove(keys[i])
+              @motion.entering(c, ri, mk, @motion.trans(fade=0.0, dy=14.0, spec=@motion.tween(320.0)))
+            }
+          }
         }
       },
       stick_end=true,
+      // what comes at the end while it follows is glided after (Follow.kt), half a second after it was put in place,
+      // not while words sent fly (they put the list in place)
+      glide_on_growth=rd.placed && flight is None && c.now() - rd.placed_at > 500.0,
     )
     |> ignore
     // put in place once: at the unread line (a few lines of what came before it in view), else where the core opened
     // it, else at its end (where the list starts)
     if !rd.placed && v.messages.length() > 0 && !v.unread_above {
       rd.placed = true
+      rd.placed_at = c.now()
     }
     if rd.placed && !rd.put && !at_end_asked() {
       rd.put = true
@@ -422,6 +526,111 @@ fn messages(
 }
 
 ///|
+/// The list with the activities of agents whose turn just ended, kept a moment (Chat.kt: 600 ms, then fading 220).
+fn with_lingering(c : @ui.Ctx, rd : Reading, v : ChatView, list : Array[Entry]) -> Array[Entry] {
+  let now = c.now()
+  let running : Map[String, Agent] = {}
+  if !v.newer {
+    for a in v.agents {
+      if a.status == "running" {
+        running[a.key] = a
+      }
+    }
+  }
+  for k, a in rd.running {
+    if !running.contains(k) && !rd.linger.contains(k) && !c.stable() {
+      rd.linger[k] = (a, now)
+    }
+  }
+  let over : Array[String] = []
+  for k, l in rd.linger {
+    if running.contains(k) || now - l.1 >= 820.0 {
+      over.push(k)
+    } else {
+      c.wake_in(dmax(1.0, if now - l.1 < 600.0 { 600.0 - (now - l.1) } else { 820.0 - (now - l.1) }))
+    }
+  }
+  for k in over {
+    rd.linger.remove(k)
+  }
+  rd.running.clear()
+  for k, a in running {
+    rd.running[k] = a
+  }
+  if rd.linger.is_empty() {
+    return list
+  }
+  // after the running ones, before the foot
+  let out = list.copy()
+  let foot = match out.last() {
+    Some(Foot) => out.pop()
+    _ => None
+  }
+  for _, l in rd.linger {
+    out.push(Working(l.0))
+  }
+  match foot {
+    Some(f) => out.push(f)
+    None => ()
+  }
+  out
+}
+
+///|
+/// The rows' keys, as they move (a message sent from here keeps its outbox row's: Chat.kt sentAs), and which are
+/// new: what comes while the list follows its end and the chat shows, not caught up on (Chat.kt arrived, caught).
+fn row_keys(
+  c : @ui.Ctx,
+  rd : Reading,
+  v : ChatView,
+  list : Array[Entry],
+  key : String,
+) -> Array[String] {
+  for o in v.outbox {
+    if o.seq >= 0.0 {
+      rd.sent[o.seq] = o.id
+    }
+  }
+  for m in v.messages {
+    if m.outgoing != "" {
+      rd.sent[m.seq] = m.outgoing
+    }
+  }
+  let keys = list.map(fn(e) {
+    match e {
+      Said(m) =>
+        match rd.sent.get(m.seq) {
+          Some(o) => "o:" + o
+          None => e.id()
+        }
+      _ => e.id()
+    }
+  })
+  let following = match c.list_info(key) {
+    Some(i) => i.at_end || i.gliding
+    None => true
+  }
+  if rd.drawn && following && !c.stable() {
+    for i, e in list {
+      let caught = match e {
+        Said(m) => !m.said
+        Working(a) => !a.started
+        Top | Foot => true
+        _ => false
+      }
+      if !rd.known.contains(keys[i]) && !caught {
+        rd.fresh[keys[i]] = true
+      }
+    }
+  }
+  for k in keys {
+    rd.known[k] = true
+  }
+  rd.drawn = true
+  keys
+}
+
+///|
 /// MBUI_CHAT_AT_END=1: a chat opens at its end, whatever the core says of where it was left (scripted runs).
 let at_end_env : Ref[Int] = { val: -1 }
 
@@ -509,33 +718,20 @@ fn jump_to_latest(
   shown : Bool,
 ) -> Unit {
   let t = @sf.theme()
-  if shown != rd.jump {
-    rd.jump = shown
-    rd.jump_at = c.now()
+  // it comes up growing and goes the way it came (Chat.kt JumpToLatest, web mJump: from 18 down at 60%; its opacity
+  // 180 ms, CSS's ease, the rest 220 on the standard curve; going, 150 and 180), turned back mid-way from where it is
+  let look = match
+    @motion.presence(
+      c,
+      "chat-jump",
+      shown,
+      enter=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css)),
+      exit=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css)),
+    ) {
+    Some(l) => l
+    None => return
   }
-  // 180 ms (going 150) for its opacity, 220 (180) for the rest
-  let k = if c.stable() {
-    if shown {
-      1.0
-    } else {
-      0.0
-    }
-  } else {
-    let age = c.now() - rd.jump_at
-    let p = dmin(age / (if shown { 220.0 } else { 180.0 }), 1.0)
-    if p < 1.0 {
-      c.request_frame()
-    }
-    let e = 1.0 - (1.0 - p) * (1.0 - p) * (1.0 - p)
-    if shown {
-      e
-    } else {
-      1.0 - e
-    }
-  }
-  if k <= 0.0 {
-    return
-  }
+  rd.jump = shown
   let count = if v.newer && v.unread > 0.0 { Some(v.unread.to_int()) } else { None }
   let id = c.id("chat-jump")
   if c.clicked(id) && shown {
@@ -556,7 +752,7 @@ fn jump_to_latest(
   c.layer(align=AEnd, fn() {
     c.spacer()
     c.box(pr=18.0, pb=composer_room_of(c) + 2.0, fn() {
-      c.box(
+      let pill = c.box(
         dir=Row,
         h=Px(36.0),
         min_w=36.0,
@@ -571,8 +767,6 @@ fn jump_to_latest(
         shadow=2.0,
         shadow_color=0x0000004DL,
         shadow_y=0.5,
-        opacity=k,
-        ty=18.0 * (1.0 - k),
         id~,
         fn() {
           @sf.icon(c, "arrow-down", size=18.0, color=t.p.text) |> ignore
@@ -590,7 +784,9 @@ fn jump_to_latest(
           }
         },
       )
-      |> ignore
+      c.look(pill, look)
+      // going, only drawn: a tap there goes to the rows under it
+      @motion.leaving(c, pill, shown)
     })
     |> ignore
   })
@@ -621,7 +817,7 @@ fn bar_frame(
       radius=20.0,
       align=ACenter,
       justify=JCenter,
-      bg=if c.pressed(back) { @sf.alpha(t.p.text, 0.08) } else { 0L },
+      bg=@sf.alpha(t.p.text, 0.08 * @motion.pressing(c, back)),
       id=back,
       fn() { @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore },
     )

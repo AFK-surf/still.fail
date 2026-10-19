@@ -674,6 +674,7 @@ while the card moved the list):
 | 36 archive-restore | the other device archives a chat (chat.archive): it leaves Home; the filter → 已归档 shows it; 还原 from its row | the other device saw it in the archive; restored, the station's thread has no archived_at |
 | 37 workspace-members | settings → Workspace: its people, alice among them | the cloud's workspace has alice as a member |
 | 38 preview | the other device makes a chat with a picture, a PDF, a video and a page (`peer createfiles`: put up in parts, then the chat made with them, so the test chat's end stays as the other flows know it); opened from Home, each file opened in the preview, shot, closed | the station's entry has the four files; the app's log: the picture and the page read through the core, the PDF's 2 pages drawn, the player's reads through the core (`station.file.part`) and its first frame, the page loaded in the web view; each shot shows something in its place (e2e/pngstat.py) |
+| 39 send-flying | two messages sent back to back, the second while the first's words still fly to their bubble | both at the station, once each, in order; the flight in the motion log |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once
@@ -701,6 +702,25 @@ agent 未在对话中回复…) as the fake claude only echoes it, and a station
 tests; the mock account is taken in through `migrate` instead), pushes, the camera and the system's photo picker
 (MBUI_PICK_FILES stands for the pickers), the soft keyboard's own typing (the InputConnection is driven, not the
 keyboard), and anything only a real agent runtime does.
+
+## Motion (branch motion, 2026-10-19)
+
+still.fail's motion as its Android app has it: docs/stillfail-motion.md catalogues every animation of the Android app
+(where, what sets it off, what moves, its duration and curve or spring, its place in the Kotlin) and says what mbui has
+of each. The framework, the motion package (src/motion) over ui's drawing (src/ui/draw.mbt), only ever changing what is drawn
+(tapped where laid out, at once): Compose's curves, tweens and springs
+(closed form, Compose's durations; checked against values printed by Compose's own classes, scripts/compose_ref.sh),
+animated values kept by key (Animatable, animateFloatAsState), and a motion layer applied only when painting: looks
+(opacity, offset, scale), keyed layout animation (FLIP; in a list by the list's content, so scrolling moves nothing),
+a list's rows by key (rows in, rows out by a copy kept painted, rows passing over others, closing late), presence
+(AnimatedVisibility), a height opening and closing, shared elements flown from a rect, reduced motion (the host's
+setting). On the screens: Home's rows as the list changes (and held while a finger is on it), marks popping in, a
+chat's new rows rising, the list gliding after what comes, an activity opening, staying and fading, gliding when
+pushed, words sent flying from the field into their bubble with the rows above going up with them, the composer's
+change of shape, the way to the newest, toasts, ＋'s sheet on the sheet's spring, the filter's menu, pressed grounds on
+the ripple's timing. MBUI_MOTION_LOG=1 logs every moving frame; scripts/record.sh records a motion on macOS frame by
+frame (MBUI_RECORD), `scripts/android.sh record` on the emulator, scripts/motionplot.py compares the frames with the
+Android app's curves. At rest nothing of it is drawn: every golden is unchanged.
 
 ## What the hosts need (platform)
 

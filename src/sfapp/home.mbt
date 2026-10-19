@@ -177,7 +177,11 @@ fn home_page(
       if items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").length() > 0 {
         list.push(OpenJobs)
       }
-      for d in v.days {
+      // while a finger is on the list or it moves, the rows keep their places (ListMotion.kt HeldOrder)
+      let key = "home/" + w.id + "/" + filter
+      let (_, _, down) = c.pointer()
+      let days = held_order(key, v.days, down || c.list_moving(key))
+      for d in days {
         list.push(Header(d.label))
         for item in d.items {
           list.push(Row(item))
@@ -190,8 +194,19 @@ fn home_page(
     Some(v) => v.leading
     None => "agents"
   }
+  let key = "home/" + w.id + "/" + filter
+  // the rows move as the list changes (ListMotion.kt): by their keys
+  match view {
+    Some(v) => note_marks(c, v)
+    None => ()
+  }
+  let keys = list.map(item_key)
+  // only the days and rows count (ListMotion.kt update): the list's first rows, after it waited, come as they are,
+  // not growing in (nothing moves the first time)
+  let moved = keys.filter(fn(k) { k.has_prefix("h/") || k.has_prefix("r/") })
+  let lid = @motion.list_keys(c, key, moved.map(fn(k) { key + "\u{1}" + k }), liftable=fn(k) { !k.contains("\u{1}h/") })
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    c.list("home/" + w.id + "/" + filter, list.length(), 66.0, fn(i) {
+    c.list(key, list.length(), 66.0, fn(i) {
       match list[i] {
         Top => c.box(h=Px(bar_h + 8.0), fn() {  }) |> ignore
         Search => search_field(c)
@@ -202,8 +217,9 @@ fn home_page(
             None => ()
           }
         OpenJobs => open_jobs(c, src, w)
-        Header(label) => section_header(c, label)
-        Row(item) => chat_row(c, src, item, lead)
+        Header(label) => moving(c, lid, key, keys[i], section_header(c, label))
+        Row(item) =>
+          moving(c, lid, key, keys[i], chat_row(c, src, item, lead, lifted=@motion.lifted(c, lid, key + "\u{1}" + keys[i])))
         // room for the bottom bar (Home.kt: LocalBarRoom)
         Foot => c.box(h=Px(bar_room), fn() {  }) |> ignore
       }
@@ -299,7 +315,7 @@ fn nav_button(
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
+    bg=@sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)),
     id~,
     fn() { @sf.icon(c, icon, size~, color=color.unwrap_or(t.p.text)) |> ignore },
   )
@@ -339,13 +355,134 @@ fn search_field(c : @ui.Ctx) -> Unit {
 
 ///|
 /// A day's heading (Parts.kt SectionHeader).
-fn section_header(c : @ui.Ctx, label : String) -> Unit {
+fn section_header(c : @ui.Ctx, label : String) -> Int {
   let t = @sf.theme()
   c.box(pl=20.0, pr=20.0, pt=14.0, pb=6.0, fn() {
     c.text(label, size=15.0, weight=600, color=t.p.text, wrap=false, line=21.0)
     |> ignore
   })
-  |> ignore
+}
+
+///|
+/// The days as last shown, by list (held_order).
+let shown_days : Map[String, Array[ChatDay]] = {}
+
+///|
+/// `days` as shown (ListMotion.kt HeldOrder): while `hold` (a finger on the list, or it moving) rows keep their
+/// places and their days, each with what is new of it, so the row about to be tapped does not move away; ones gone
+/// go, new ones come in where they would be in their day (a day not shown yet comes where it would be). Let go, the
+/// list is as it is.
+fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[ChatDay] {
+  let shown = shown_days.get(key).unwrap_or([])
+  if !hold || shown.is_empty() {
+    shown_days[key] = days
+    return days
+  }
+  let fresh : Map[String, ChatItem] = {}
+  for d in days {
+    for item in d.items {
+      fresh[item.station + "/" + item.id] = item
+    }
+  }
+  let held : Map[String, Bool] = {}
+  let out : Array[(String, Array[ChatItem])] = shown.map(fn(d) {
+    let items : Array[ChatItem] = []
+    for item in d.items {
+      match fresh.get(item.station + "/" + item.id) {
+        Some(now) => {
+          items.push(now)
+          held[item.station + "/" + item.id] = true
+        }
+        None => ()
+      }
+    }
+    (d.label, items)
+  })
+  for di, d in days {
+    for i, item in d.items {
+      if held.contains(item.station + "/" + item.id) {
+        continue
+      }
+      let into = match out.search_by(fn(o) { o.0 == d.label }) {
+        Some(k) => k
+        None => {
+          // before the first day shown that comes after it now
+          let mut at = out.length()
+          for k, o in out {
+            let later = days.search_by(fn(x) { x.label == o.0 })
+            match later {
+              Some(j) if j > di => {
+                at = k
+                break
+              }
+              _ => ()
+            }
+          }
+          out.insert(at, (d.label, []))
+          at
+        }
+      }
+      let items = out[into].1
+      items.insert(if i < items.length() { i } else { items.length() }, item)
+    }
+  }
+  let result = out.filter(fn(o) { o.1.length() > 0 }).map(fn(o) { { label: o.0, items: o.1 } })
+  shown_days[key] = result
+  result
+}
+
+///|
+/// An item's key in the list (ListMotion.kt rowKey, dayKey): a row by its station and chat, a day by its heading.
+fn item_key(it : Item) -> String {
+  match it {
+    Top => "top"
+    Search => "search"
+    Wait(_, _, _) => "wait"
+    Empty => "empty"
+    OpenJobs => "open-jobs"
+    Header(label) => "h/" + label
+    Row(item) => "r/" + item.station + "/" + item.id
+    Foot => "foot"
+  }
+}
+
+///|
+/// How a row or day's heading moves as the list changes (Home.kt Moving, Leaving): from where it was to where it is
+/// on the MOVE spring (a little late while closing over one gone), growing in when new (240 ms after 100, Ease.Out,
+/// from 90% and nothing), and one gone drawn where it was as it shrinks to 90% and fades (200 ms, CSS's ease-out);
+/// one that went ahead of others passes over them.
+fn moving(c : @ui.Ctx, lid : Int, list : String, key : String, i : Int) -> Unit {
+  @motion.layout(
+    c,
+    i,
+    list + "\u{1}" + key,
+    spec=@motion.row_spring,
+    enter=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(240.0, ease=Out, delay=100.0)),
+    exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)),
+  )
+  if @motion.lifted(c, lid, list + "\u{1}" + key) >= 0.0 {
+    c.put_over(i)
+  }
+}
+
+///|
+/// The marks each chat has had and since when (ListMotion.kt MarksSeen), from the whole list: a mark that came while
+/// the list shows pops in as its row is drawn (within 300 ms of coming), one there from the first does not.
+let marks_seen : Map[String, (String, Double)] = {}
+
+///|
+fn note_marks(c : @ui.Ctx, v : ChatsView) -> Unit {
+  for d in v.days {
+    for item in d.items {
+      let k = item.station + "/" + item.id
+      let tone = row_tone(item)
+      match marks_seen.get(k) {
+        None => marks_seen[k] = (tone, -1.0e9)
+        Some((was, _)) if was != tone => marks_seen[k] = (tone, c.now())
+        _ => ()
+      }
+    }
+  }
 }
 
 ///|
@@ -560,9 +697,9 @@ fn row_tone(item : ChatItem) -> String {
 /// A chat's state, a mark before its title (Home.kt ChatMark): a blue dot done and unread, a red one with a soft
 /// halo to be seen now, a turning yellow ring with a gap at work, a blue ring when something waits on the viewer, a
 /// grey one when only on others.
-fn chat_mark(c : @ui.Ctx, tone : String) -> Unit {
+fn chat_mark(c : @ui.Ctx, tone : String, pop? : String = "") -> Unit {
   let t = @sf.theme()
-  c.box(w=Px(10.0), h=Px(10.0), fn() {
+  let mark = c.box(w=Px(10.0), h=Px(10.0), fn() {
     match tone {
       "done" => dot(c, mark_blue)
       "alert" => halo_dot(c, mark_red)
@@ -580,7 +717,23 @@ fn chat_mark(c : @ui.Ctx, tone : String) -> Unit {
         |> ignore
     }
   })
-  |> ignore
+  // one that came while the list shows pops in (Home.kt ChatMark: 320 ms, CSS's ease-out, 0 → 1.3 at 60% → 1)
+  if pop != "" {
+    let k = "mark-pop/" + pop + "/" + tone
+    let fresh = match marks_seen.get(pop) {
+      Some((was, at)) => was == tone && c.now() - at <= 300.0
+      None => false
+    }
+    let p = @motion.anim(c, k, if fresh { 0.0 } else { 1.0 }, global=true)
+    if fresh && !p.moving() && p.get() == 0.0 {
+      p.animate(1.0, @motion.tween(320.0, ease=CssOut))
+    }
+    let v = p.get()
+    if v < 1.0 {
+      let s = if v < 0.6 { 1.3 * v / 0.6 } else { 1.3 - 0.3 * (v - 0.6) / 0.4 }
+      c.look(mark, @ui.look(scale=s))
+    }
+  }
 }
 
 ///|
@@ -589,7 +742,13 @@ let hold_ms : Double = 450.0
 
 ///|
 /// A row (Home.kt ChatRow, ChatRowBody): 66 high, two lines; tapped, its chat is pushed.
-fn chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String) -> Unit {
+fn chat_row(
+  c : @ui.Ctx,
+  src : Source,
+  item : ChatItem,
+  lead : String,
+  lifted? : Double = -1.0,
+) -> Int {
   let t = @sf.theme()
   let id = c.id("row/" + item.station + "/" + item.id)
   let pressed = c.pressed(id)
@@ -630,7 +789,15 @@ fn chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String) -> Unit {
     pr=16.0,
     gap=6.0,
     align=ACenter,
-    bg=if held { @sf.alpha(t.p.text, 0.05) } else { 0L },
+    bg=if held {
+      @sf.alpha(t.p.text, 0.05)
+    } else if lifted >= 0.0 {
+      // going ahead of others, on a ground of its own over them: held to 60% of its 480 ms, then fading
+      let p = lifted / 480.0
+      @sf.alpha(@sf.over(t.p.bg, @sf.alpha(t.p.text, 0.06)), if p < 0.6 { 1.0 } else { 1.0 - (p - 0.6) / 0.4 })
+    } else {
+      0L
+    },
     id~,
     fn() {
       if archivable {
@@ -640,7 +807,7 @@ fn chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String) -> Unit {
         c.box(dir=Row, w=Fill(1.0), h=Px(22.0), gap=8.0, align=ACenter, fn() {
           let tone = row_tone(item)
           if tone != "" {
-            chat_mark(c, tone)
+            chat_mark(c, tone, pop=item.station + "/" + item.id)
           }
           c.box(w=Fill(1.0), opacity=dim, fn() {
             c.text(
@@ -700,7 +867,6 @@ fn chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String) -> Unit {
       |> ignore
     },
   )
-  |> ignore
 }
 
 ///|

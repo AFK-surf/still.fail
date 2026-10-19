@@ -237,6 +237,10 @@ pub(all) struct Message {
   archive_check : (String, Bool)?
   elsewhere : Array[Elsewhere]
   placed : Array[String]
+  /// said while the chat shows (not caught up on): it comes in rather than being there at once
+  said : Bool
+  /// the outbox entry it was sent from here as (its row goes on being that one)
+  outgoing : String
 }
 
 ///|
@@ -297,6 +301,8 @@ fn message_of(m : Json) -> Message {
         _ => ""
       }
     }),
+    said: flag(s, "said"),
+    outgoing: text(s, "outgoing"),
   }
 }
 
@@ -312,6 +318,8 @@ pub(all) struct Outgoing {
   error : String
   joined : Bool
   followed : Bool
+  /// the message's seq once the station has it (-1 before)
+  seq : Double
 }
 
 ///|
@@ -327,6 +335,8 @@ pub(all) struct Agent {
   status : String
   since : Double?
   wait : (Double, Double?, String)?
+  /// seen starting while the chat shows: its activity comes in
+  started : Bool
 }
 
 ///|
@@ -345,6 +355,7 @@ fn agent_of(a : Json) -> Agent {
       Some(Object(_)) as w => Some((number(w, "since"), opt_number(w, "seconds"), text(w, "text")))
       _ => None
     },
+    started: flag(s, "started"),
   }
 }
 
@@ -404,6 +415,7 @@ pub fn chat_view(v : Json) -> ChatView {
         error: text(s, "error"),
         joined: flag(s, "joined"),
         followed: flag(s, "followed"),
+        seq: opt_number(s, "seq").unwrap_or(-1.0),
       }
     }),
     offline: flag(s, "offline"),

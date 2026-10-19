@@ -18,6 +18,9 @@ priv struct Fixture {
   mut version : Int
   /// the first row's chat: how many older pages have come in
   mut older : Int
+  /// "home-motion": how far the list's changes have gone (a chat with news to the top, a new chat, one archived,
+  /// a mark come)
+  mut step : Int
 }
 
 ///|
@@ -159,6 +162,43 @@ fn fixture_days(f : Fixture) -> Array[Json] {
       "agents": [agent("gemini", "dsh")],
     }),
   ]
+  if f.mode == "home-motion" {
+    // 1: news in 盯着 CI, which goes to the top; 2: a new chat comes; 3: one archived goes; 4: a mark comes
+    if f.step >= 1 {
+      let ci = today.remove(4)
+      today.insert(
+        0,
+        row("c5", "盯着 CI，绿了告诉我", "ws1/st2", "刚刚", {
+          "unread": true,
+          "tone": "done",
+          "last": last("CI 绿了：主干 #812 的检查都过了"),
+        }),
+      )
+      ignore(ci)
+    }
+    if f.step >= 2 {
+      today.insert(
+        0,
+        row("c11", "看一下新的崩溃报告", "ws1/st1", "刚刚", {
+          "state": "run",
+          "tone": "busy",
+          "last": last("正在读第一份报告"),
+        }),
+      )
+    }
+    if f.step >= 3 {
+      f.archived["c8"] = true
+    }
+    if f.step >= 4 {
+      let i = today.search_by(fn(r) { text(Some(r), "id") == "c4" }).unwrap()
+      today[i] = row("c4", "给设置页加一个深色模式开关", "ws1/st1", "刚刚", {
+        "unread": true,
+        "tone": "alert",
+        "stateText": "要你帮忙：深色模式下图标看不清，要不要换一套？",
+        "agents": [agent("deepseek", "dsh")],
+      })
+    }
+  }
   let keep = fn(items : Array[Json]) -> Json {
     Json::array(items.filter(fn(r) { !f.archived.contains(text(Some(r), "id")) }))
   }
@@ -312,6 +352,29 @@ pub fn fixture(mode : String) -> Source {
     filters: {},
     version: 1,
     older: 0,
+    step: 0,
+  }
+  if f.mode == "home-motion" {
+    // the list changing on its own, a step every 1.6 s from MBUI_MOTION_AT ms (2000) after it starts: rows moving,
+    // coming, going (ListMotion.kt), for the recordings of the Home rows' motion
+    let at = {
+      let w = @host.env("MBUI_MOTION_AT")
+      let mut v = 0
+      for ch in w {
+        let d = ch.to_int() - 48
+        if d >= 0 && d <= 9 {
+          v = v * 10 + d
+        }
+      }
+      if w == "" {
+        2000.0
+      } else {
+        v.to_double()
+      }
+    }
+    for k in 1..=4 {
+      fix_later(at + (k - 1).to_double() * 1600.0, fn() { f.step = k })
+    }
   }
   {
     topic: fn(name, params) { fixture_topic(f, name, params) },
