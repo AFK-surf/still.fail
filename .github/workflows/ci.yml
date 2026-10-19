@@ -33,6 +33,8 @@ jobs:
           moon test --target native -p mbui/text 2>&1 | tail -4
       - name: flexbox (Yoga's tests)
         run: moon test --target native -p mbui/flex 2>&1 | tail -3
+      - name: "The C step: the splitter on made-up C, and a MoonBit program built whole and split (scripts/mbc_test.py)"
+        run: python3 scripts/mbc_test.py
 
   macos:
     runs-on: macos-15
@@ -80,6 +82,12 @@ jobs:
         run: APP=textdiff scripts/android.sh build
       - name: APK (libmbui.so from the generated C, then Gradle)
         run: scripts/android.sh build
+      - name: "The split's self-check: the app's C whole and split define the same symbols (scripts/mbc.py check)"
+        run: |
+          TC=$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
+          python3 scripts/mbc.py check "--cc=$TC/aarch64-linux-android29-clang" --nm="$TC/llvm-nm" --obj=out/mbc-check \
+            "--cflags=-I$MOON_HOME/include -Isrc/host -fPIC -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM -Dmain=mbui_main" \
+            out/android/mod/_build/native/release/build/demo/demo.c
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk

@@ -75,6 +75,16 @@ scripts/textdiff.sh mac web android             # mbui's text against the platfo
                                                 # out/textdiff/<host>/report.html (scripts/test.sh runs mac web)
 ```
 
+Every native build compiles the one C file moonc generates for an app split into
+units, in parallel (`scripts/mbc.py`, the splitter `scripts/csplit.py`): the
+Android and iOS builds take only moonc's C from moon (`mbc.py gen`, its compile
+for macOS left out) and compile it with their own compiler (`mbc.py compile`);
+the macOS and Windows builds give moon a `cc`/`cl.exe` of ours that passes every
+command through but that one (`mbc.py shim`/`wrap`). `moonbit_init` (every
+global's initial value, run once) is a unit of its own at `-O0` (`/Od`).
+`MBC_SPLIT=0` compiles the file whole; `mbc.py check` compares the global
+symbols of the whole and the split build, `scripts/mbc_test.py` tests both.
+
 On Windows (Git Bash, MoonBit, MSVC from a Developer Command Prompt):
 
 ```sh
