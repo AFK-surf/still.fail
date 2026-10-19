@@ -8,6 +8,7 @@
 //   node e2e/peer.ts create TITLE-WORDS    another chat, its first message TITLE-WORDS (Home's new row)
 //   node e2e/peer.ts send TEXT             TEXT said in the chat by this device
 //   node e2e/peer.ts sendfiles TEXT -- F…  TEXT said with files (from $E2E_FILES), each put up first in 4 MB parts
+//   node e2e/peer.ts createfiles TEXT -- F…  another chat, its first message TEXT with those files
 //   node e2e/peer.ts read                  the chat as this device's core shows it (JSON lines: who, text, files)
 //   node e2e/peer.ts chats [WORDS]         the workspace's chats as Home lists them (JSON: title, session, last), once a
 //                                          row has WORDS
@@ -125,10 +126,11 @@ async function signIn(): Promise<{ workspace: string; station: string }> {
 }
 
 /// A chat made on `station` with `text` its first words: its row once the station has it.
-async function make(workspace: string, station: string, text: string): Promise<{ session: string; thread: number; title: string }> {
+async function make(workspace: string, station: string, text: string, attachments: J[] = []): Promise<{ session: string; thread: number; title: string }> {
   const { key } = await call("chat.create", { station, runtime: "claude" });
   console.error(`peer: chat.create on ${station}: ${key}`);
-  console.error(`peer: chat.send: ${JSON.stringify(await call("chat.send", { station, session: key, text }))}`);
+  const send = attachments.length > 0 ? { station, session: key, text, attachments } : { station, session: key, text };
+  console.error(`peer: chat.send: ${JSON.stringify(await call("chat.send", send))}`);
   const row = await until<{ session: string; thread: number; title: string }>({ topic: "chats", scope: workspace, mine: false }, (v) => {
     for (const d of v?.days ?? []) {
       for (const it of d.items ?? []) {
@@ -161,6 +163,16 @@ try {
   } else if (cmd === "send") {
     const chat = JSON.parse(readFileSync(chatFile, "utf8"));
     console.log(JSON.stringify(await call("chat.send", { station: chat.station, thread: chat.thread, text: rest.join(" ") })));
+  } else if (cmd === "createfiles") {
+    const cut = rest.indexOf("--");
+    const attachments = [];
+    for (const f of rest.slice(cut + 1)) {
+      const file = await upload(station, join(process.env.E2E_FILES!, f));
+      console.error(`peer: put up ${f}: ${JSON.stringify(file)}`);
+      attachments.push(file);
+    }
+    const made = await make(workspace, station, rest.slice(0, cut).join(" "), attachments);
+    console.log(`CHAT ${station} ${made.session} ${made.thread} ${made.title}`);
   } else if (cmd === "sendfiles") {
     const chat = JSON.parse(readFileSync(chatFile, "utf8"));
     const cut = rest.indexOf("--");

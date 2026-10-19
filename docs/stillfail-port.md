@@ -251,8 +251,7 @@ DriveScreen.kt, Reader.kt, TextModel.kt, Novel.kt, ReaderMarkdown.kt; chat/scree
   hidden files, prefs `driveViews`); the crumbs; what it holds in a line; the files going up; its entries as one
   card (kind's mark, name, size · time; how far a text was read; a folder's chevron), folders first. A folder goes
   in (a page pushed: the stack's slide and edge swipe), text and Markdown are read, anything else goes to
-  `open_file` (src/sfapp/open_file.mbt, the file preview's: branch preview fills it in; until then it says
-  暂时无法预览). Held, a row is chosen (others by a tap; 已选 n 项, 全选, ⋯): one renamed (the ask sheet,
+  `open_file` (src/sfapp/open_file.mbt: the file preview, slice 11, its bytes read by `drive.read`). Held, a row is chosen (others by a tap; 已选 n 项, 全选, ⋯): one renamed (the ask sheet,
   `drive.rename`), downloaded, shared, its path copied, deleted (to the machine's trash where the station has one,
   said so; else asked, then for good: `drive.remove`); several downloaded, their paths copied, deleted. Uploads go
   one at a time whatever page shows, each a row of its folder (`drive.upload.part`: a quarter of a megabyte first,
@@ -607,8 +606,7 @@ while the card moved the list):
 | 30 new-chat | 令 in the bar's notch: the new chat rises; the first message typed and sent; the page becomes its chat; the agent's answer comes there; back on Home | the station's entry: the words, once, alice's, in a thread of their own; the agent's answer in that thread; alice's other device lists the chat |
 | 31 places | 文件 tapped on the bar (the drive's page in place); the bar drawn up into the other bar's panel and let go on 奏 (that bar, 奏's page); 用量; the panel again, back on the chats | the bar chosen kept as the workspace's in the core's store on the device (`prefs.set {barsBy}`) |
 | 32 sheet-drag | the workspaces' sheet drawn up to 94% and dragged closed; a new chat's station sheet dragged a little (back) and past 80 (closed), opened again and its station tapped | the sheet's settling as the app logs it; the core took the pick (`newChat.pick` answered) |
-
-| 15 preview | the other device sends a picture, a PDF, a video and a page (`peer sendfiles`: put up in parts, then the message); each opened in the preview, shot, closed | the station's entry has the four files; the app's log: the picture and the page read through the core, the PDF's 2 pages drawn, the player's reads through the core (`station.file.part`) and its first frame, the page loaded in the web view; each shot shows something in its place (e2e/pngstat.py) |
+| 38 preview | the other device makes a chat with a picture, a PDF, a video and a page (`peer createfiles`: put up in parts, then the chat made with them, so the test chat's end stays as the other flows know it); opened from Home, each file opened in the preview, shot, closed | the station's entry has the four files; the app's log: the picture and the page read through the core, the PDF's 2 pages drawn, the player's reads through the core (`station.file.part`) and its first frame, the page loaded in the web view; each shot shows something in its place (e2e/pngstat.py) |
 
 Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
 never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however
