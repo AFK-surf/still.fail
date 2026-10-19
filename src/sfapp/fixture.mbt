@@ -269,7 +269,11 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
         "others": if f.workspace == "ws1" { "done" } else { "alert" },
       })
     "status" => Some({ "items": [] })
-    _ => fixture_chat_topic(f, name, params)
+    _ =>
+      match decide_fixture_topic(f, name, params) {
+        Some(v) => v
+        None => fixture_chat_topic(f, name, params)
+      }
   }
   { value, error: None, version: f.version }
 }
@@ -321,7 +325,11 @@ pub fn fixture(mode : String) -> Source {
         _ =>
           match fixture_chat_call(f, name, params) {
             Some(r) => done(r)
-            None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
+            None =>
+              match decide_fixture_call(name) {
+                Some(r) => done(r)
+                None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
+              }
           }
       }
     },

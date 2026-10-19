@@ -17,5 +17,7 @@ fn main {
   }
   // the drive's pages (src/sfapp/drive_fixture.mbt): files, drive…, reader…
   @sfapp.open_drive_fixture(mode)
+  // slice 8's (src/sfapp/decide_fixture.mbt): the 奏 page, a history, a chat's sheets
+  @sfapp.open_fixture(mode)
   @ui.run("still.fail", fn(c) { @sfapp.view(c, src) })
 }

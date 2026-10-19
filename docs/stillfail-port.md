@@ -288,6 +288,58 @@ system's back closing a sheet or ending a choice (it goes back a page), dragging
 long-press ripple, a station file sent as a file (`drive.stage`, the card's sheet, 此对话默认发送文件) and station
 files kept with the draft on the device, the station page's way into a drive (slice 13).
 
+Slice 8, decisions, history, tool steps, a chat's sheets, jobs (branch decisions, 2026-10-19): what a chat asks is
+answered from it, and an agent's work can be looked into (src/sfapp/decide.mbt, sheets.mbt, history.mbt,
+decisions.mbt; Decisions.kt, Chat.kt AskDismiss and ArchiveUnder, LoginCards.kt, ChatInfo.kt, AgentSheet.kt, Jobs.kt,
+OpenJobs.kt, History.kt, ui/ToolStep.kt, ui/Sheet.kt):
+
+- The cards in a chat do what they say: an options card's option tapped answers it (`decision.answer`: the core sends
+  the viewer's message quoting the post, or, for an option the agent made with action=close, closes the card with no
+  message: `decision.close`), a spinner on it meanwhile, its row pressed as the Android app's ripple; 忽略 lets the ask
+  go (`decision.dismiss`), at once, back if it failed; 保留 (`chat.keep`, 已保留… said) and 归档此对话 under the last
+  all-done post, as the bar's 归档 (`chat.archive`: Home at once, 已归档 said); a login card for one who may finish it
+  (the station's `machineLogins.canLogin`) says what to do now by its step, with its pill and 取消
+  (`machineLogin.cancel`). Anything that fails is said in a toast (无法…：…), as AppState.act says it.
+- Sheets over the chat, one at a time, coming up over the scrim (Sheet.kt's 26 corners, the grabber, as tall as what
+  they show): "…" opens the chat's own (its name with renaming it, `chat.rename`; who started it, how many take part,
+  its latest; its agents with where each stands and its account's allowance; 固定到列表顶部 / 取消固定 `chat.pin`, 复制会话
+  链接, its sharing, 在 Slack 中打开, 归档对话); an agent's mark in the bar, its name over its messages or its row there opens
+  its card (what it runs and where it stands with 停止 while it works, `session.stop`; its latest lines; 费用估算, 缓存
+  命中, 上下文; its station, account, 历史, 后台); the bar's jobs button (its dot when one died lately or a service
+  restarts) its services and jobs (`chatJobs`: those that matter now, 全部 N 个, 清掉已结束的 `job.clearEnded`) and each
+  job's own (通知 / 输出 as it grows, `jobLog`; 停止 `job.stop`).
+- An agent's execution history, a page pushed from its card's 历史 or its activity row (the `history` view): its head
+  (停止, 释放进程 `session.evict`, 步骤 / 详情), what it received and posted drawn alike (a line, the words in brief beside a
+  bar, opened whole on a page of their own as Markdown), the states it marked, its own words, its groups of steps
+  opening to calls and thoughts; a call in brief is read whole as it is opened (`history.detail`), the page before as
+  the reader nears the top (`history.older`). A call is drawn by what it is (ToolStep.kt): a command, an edit as a diff
+  with its context, a file written or read (Claude's `cat -n` lines without their numbers), a patch, a plan, the
+  search's words, its fields; what came back (Codex's exit code and time, DeepSeek Harness's tags and exit marker,
+  output on red when it failed). Its details: where it stands, its figures, how it runs (the model, effort, account),
+  runtime, process, turns, usage, the station and its machine.
+- The 奏 page (decisions.mbt; `decisions {scope}`): the cards waiting for the viewer one at a time, the chat's title
+  over the messages before the post and the post as the chat draws them, the options under it (tapped: it flies up and
+  the next comes in), the reply field at its foot (a text card's placeholder; `decision.reply`), swiped left 待定
+  (`decision.defer`, last) or right 不再提醒 (`decision.dismiss`) past a third of the width or flung, springing back
+  short of that; none left, how the day went (今日已批, 平均等待, 办理中), where the next may come from, what was
+  answered today. Its way in is the bottom bar's 奏 (slice 7's): `open_decisions()`, and `decisions_capsule` draws
+  奏 N (Home.kt DecisionsCapsule) where the bar puts it; MBUI_OPEN_PAGE=decisions opens it at the start for scripted
+  runs.
+- Home's list has the jobs left up a long while at its top (OpenJobs.kt, `longJobs`): a row to its chat, stop at its
+  end, 还有 N 个 folding the rest. A message's files in a chat (ChatFiles.kt) were slice 4's.
+- `APP=sffix MBUI_FIXTURE=decisions | decisions-text | decisions-idle | history | history-details | chat-info |
+  chat-agent | chat-jobs | chat-job | home-jobs` (src/sfapp/decide_fixture.mbt): `scripts/shots.sh decide web-decide`
+  compares them with goldens/mac-decide-*.png and web-decide-*.png.
+
+Not yet, against the current app: code highlighting in tool steps (code is drawn in the code face, in the ink) and a
+capped block's own scroll (it is cut at its height); the run settings page (RunSettings: its rows are shown, not
+opened); the station's card from an agent's; a service's page (Preview.kt) from its row; sharing the chat with other
+workspaces and making it public (their rows are shown); a watched chat's question before archiving; opening a login's
+page in the browser (there is no URL hand-off on the hosts yet: its pill copies the link or the code and says so); the
+reply on the 奏 page takes words only (no files, quotes or its own draft kept by the core) and its card neither tilts
+nor shrinks as it goes (boxes have no rotation or scale yet); a sheet dragged by its grabber; the segmented control's
+sliding thumb; a history opened at an entry; a Slack user's 这是我.
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
@@ -326,6 +378,25 @@ need); the station starts with what the shell has of the machine's own station (
   emulator's 127.0.0.1, the files to attach go into the app's own files, MBUI_PICK_FILES answers the pickers, each
   flow recorded with screenrecord). `down` stops all of it.
 
+Found by flow 25 (not the app's): a chat made on another device while the app runs can come into Home's list as a
+row with no title (（暂无消息）) and stay so. Probed on main's own build (0d96fb8, no slice 8 in it), five runs on a fresh
+station, each making a chat of its own (e2e/peer.ts) and the app dumping its `chats` view (MBUI_CORE_DUMP=1) for 45 s:
+run 1 the row came titled with its answer; runs 2–5 it came as （暂无消息） in the second or third value and no later
+message changed it. The station had threads 3 and 4 (runs 2, 3) with both their entries and their titles, while the
+app's core never sent the change; threads 5–7 (runs 4, 5, and one more the other device made) had no entries at all:
+the other device's process had ended with its first words still in its core's outbox (its row shows them from there),
+so they never reached the station. A new subscription in the same core (the filter switched) got the placeholder too;
+only a new core (the app started again) reads the chat whole. e2e/peer.ts now waits for the station to have the words
+(the chat's messages, not the outbox) before it ends, and flow 25 makes its chat before the app starts (`#before`) and
+waits for the station to have it (`scripts/e2e-local.sh wait-chat`). Flow 02 makes one while the app runs and may meet
+the first half of it.
+
+Slice 8 (branch decisions) added flows 22–28 and e2e/fake/claude.mjs, put first on the test station's PATH: ember's
+fake claude for everything it knows, and beside it `card:<question>|<label>|<label>*|<label>!` (chat_post with an
+options card ending need_human: `*` recommended, `!` action=close), `text-card:<question>|<placeholder>` and
+`steps:<words>` (tool calls written to the runtime's own transcript, then chat_post all done). A flow's `#env K=V` lines
+go to the app (mac and Android), its `#before WORDS` lines run before the app starts; `scripts/e2e-local.sh pins` says whether alice keeps the test chat pinned.
+
 To check a later slice the same way: add its flows and checks to e2e/flows, and what the runner must do beside the
 app to `scripts/e2e-local.sh` (as `peer`, `freeze`, `reads`).
 A flow's `#env K=V` lines are put in the app's environment for that flow (the drive's flows start on 文件 with
@@ -360,6 +431,13 @@ while the card moved the list):
 | 19 drive-rename | the photo held: 已选 1 项, ⋯ → 重命名, a new name typed, 保存 | the station has it under the new name, the same bytes; the old name gone |
 | 20 drive-delete | the renamed file held, ⋯ → 删除, asked (the test station has no trash), 删除 | gone from the station's folder, the others there |
 | 21 station-files | in the chat, ＋ → Station 文件: the lent folder, a file ticked, 添加 1 个: its card; sent with words | the station's entry: the words and studio 上的文件：<path> under them; no attachment |
+| 22 answer-option | the agent posts an options card (e2e/fake: `card:`), the recommended one marked; one tapped (decision.answer); 你 选择了「…」 under it | alice's message with the option's words, quoting the post; the card as posted, `recommended` on the one |
+| 23 dismiss | another card; 忽略 tapped: it and the options go at once (decision.dismiss) | `dismissed` has alice's row for the post; nothing answered |
+| 24 close-option | a card with an option made to close it (action=close) tapped | `closed_cards` has the post; no message sent for it |
+| 25 archive | a chat made on the other device (before the app starts: `#before`, see below) ends all done; opened, 归档此对话: 已归档, Home without it | the session the app archived and its thread put away by hand (`archived_by`, `hidden_by` manual; its entries leave the live tables); the test chat not |
+| 26 history | the agent does steps (e2e/fake: `steps:` writes its transcript); "…" → its row → its card → 历史: received and posted, the group opened, the command opened to what it printed | the agent's post; its transcript (what the history is read from) has the steps |
+| 27 pin | "…" → 固定到列表顶部, then 取消固定 | the station's `pins` has alice's for the chat, then none |
+| 28 decisions-page | the 奏 page (MBUI_OPEN_PAGE=decisions, a flow's `#env`); the other device asks with a card; the option tapped there; 奏折已全部批完 | alice's answer quoting the post |
 
 Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
 never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however

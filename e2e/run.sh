@@ -6,7 +6,9 @@
 #   e2e/run.sh mac [NAME…]        APP=stillfail on macOS (390×844), every flow or those named (NN-name or name)
 #   e2e/run.sh android [NAME…]    the same on the emulator (AVD, EMU_PORT; scripts/android.sh), recorded
 #
-# A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed).
+# A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed);
+# its `#env K=V` lines are given to the app (as MBUI_OPEN_PAGE=decisions: a page opened at the start), its `#before
+# WORDS` lines run as `scripts/e2e-local.sh WORDS` before the app starts.
 # The flows run in order on one sign-in (a fresh core data directory per run); later ones lean on earlier ones' chat.
 # Shots go to out/e2e/<platform>/<flow>/, the logs to out/e2e/<platform>/<flow>.log, the table to out/e2e/<platform>.txt.
 set -u
@@ -114,6 +116,10 @@ run_flow() {
   sed "s/{T}/$TAG/g" $2 > $script
   mkdir -p $OUT/$name
   local extra=$(grep '^#env ' $script | sed 's/^#env //' | tr '\n' ' ')
+  # what the runner does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, as a chat made elsewhere)
+  sed -n 's/^#before //p' $script | while IFS= read -r words; do
+    "$ROOT/scripts/e2e-local.sh" $words < /dev/null >> $log 2>&1
+  done
   if [ $PLATFORM = mac ]; then
     env $extra MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
       MBUI_WIN=390x844 MBUI_SHOT_DIR=$OUT/$name MBUI_DRIVE_B64=$(base64 < $script | tr -d '\n') \

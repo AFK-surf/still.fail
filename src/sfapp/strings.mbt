@@ -107,7 +107,11 @@ let zh : Map[String, String] = {
 pub fn tr(key : String) -> String {
   match zh.get(key) {
     Some(s) => s
-    None => drive_zh.get(key).unwrap_or(key)
+    None =>
+      match drive_zh.get(key) {
+        Some(s) => s
+        None => zh_decide.get(key).unwrap_or(key)
+      }
   }
 }
 

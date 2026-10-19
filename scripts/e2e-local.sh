@@ -16,6 +16,8 @@
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
 #   scripts/e2e-local.sh reads      how far alice has read the test chat, as the station has it
+#   scripts/e2e-local.sh pins       whether alice keeps the test chat pinned (PINS 1 or 0)
+#   scripts/e2e-local.sh wait-chat WORDS   until the test station has a chat whose first words begin with WORDS
 #   scripts/e2e-local.sh freeze|thaw  the test station stopped where it is (SIGSTOP: as if its network went) or let go on
 #   scripts/e2e-local.sh drive-seed TAG   the drive flows' folder in the test station's home (e2e-TAG)
 #   scripts/e2e-local.sh status
@@ -95,7 +97,8 @@ EOF
   wait_for "grep -q 'READY still.fail cloud' $RUN/cloud.log" 120 || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
   local token=$(grep -m1 '^ENROLL ' $RUN/cloud.log | awk '{print $NF}')
   [ -n "$token" ] || die "no enrollment in the cloud's log"
-  # the station: its own data and HOME, the fake runtimes first on PATH, no discovery on the LAN
+  # the station: its own data and HOME, the fake runtimes first on PATH (e2e/fake's claude, which posts cards and
+# tool steps, over ember's), no discovery on the LAN
   rm -rf $STATION $WORK/peer $WORK/peer-home && mkdir -p $STATION/data/homes/cc $STATION/home $STATION/app/node/bin
   ln -s $E/station/dist $STATION/app/station
   ln -s "$(command -v node)" $STATION/app/node/bin/node
@@ -105,7 +108,7 @@ EOF
   cat > $RUN/station-env.sh <<EOF
 for v in \$(env | grep -Eo '^(EMBER|STILLFAIL|CLAUDE|CODEX)[A-Z0-9_]*=' | tr -d =); do unset \$v; done
 export HOME=$STATION/home
-export PATH=$E/station/test/fake:\$PATH
+export PATH=$ROOT/e2e/fake:$E/station/test/fake:\$PATH
 export STILLFAIL_NO_DISCOVERY=1
 export STILLFAIL_DATA=$STATION/data
 export STILLFAIL_MESH_NATIVE=$(native mesh)
@@ -214,6 +217,21 @@ open(sys.argv[1], "w").write("\n".join(out) + "\n")
 PY
   say "drive folder $d"
 }
+
+# waits (a minute at most) until the test station has a chat whose first words begin with WORDS, said in it
+wait_chat() {
+  local w="$*" i=0
+  until [ "$(sql "select count(*) from entries where n = 1 and text like '$w%'")" -ge 1 ]; do
+    i=$((i + 1)); [ $i -gt 120 ] && { say "no chat \"$w\" on the station"; return 1; }; sleep 0.5
+  done
+  say "the station has the chat \"$w\""
+}
+
+# whether alice keeps the test chat pinned, as the station has it
+pins() {
+  local s=$(python3 -c "import json; print(json.load(open('$WORK/peer/chat.json'))['session'])")
+  echo "PINS $(sql "select count(*) from pins where viewer = 'alice@example.test' and session = '$s'")"
+}
 freeze() { local p=$(station_node); [ -n "$p" ] || die "no station to freeze"; kill -STOP $p; say "station frozen ($p)"; }
 thaw() { local p=$(station_node); [ -n "$p" ] || die "no station to thaw"; kill -CONT $p; say "station thawed ($p)"; }
 
@@ -225,6 +243,8 @@ case "${1:-all}" in
   peer) shift; peer "$@" ;;
   sql) shift; sql "$@" ;;
   reads) reads ;;
+  pins) pins ;;
+  wait-chat) shift; wait_chat "$@" ;;
   android-ime) shift; android_ime "$@" ;;
   freeze) freeze ;;
   thaw) thaw ;;

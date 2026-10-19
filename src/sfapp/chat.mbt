@@ -614,6 +614,7 @@ fn bar_frame(
   trailing : () -> Unit,
   more : Bool,
   room? : Double = 0.0,
+  on_more? : () -> Unit = fn() {  },
 ) -> Unit {
   let t = @sf.theme()
   c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=6.0, pb=8.0, align=ACenter, fn() {
@@ -643,8 +644,8 @@ fn bar_frame(
     })
     |> ignore
     trailing()
-    if more {
-      nav_button(c, "more", 18.0, key="chat-more") |> ignore
+    if more && nav_button(c, "more", 18.0, key="chat-more") {
+      on_more()
     }
   })
   |> ignore
@@ -695,23 +696,66 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
           people_stack(c, src, people, 16.0)
         }
         for i, a in v.agents {
-          if i == 0 {
-            agent_station_mark(c, a, station)
-          } else {
-            model_mark(c, a, 22.0)
+          // each opens its card (AgentSheet.kt)
+          let id = c.id("bar-agent/" + a.key)
+          if c.clicked(id) {
+            open_sheet(c, AgentOf(r, a.key))
           }
+          c.box(id~, fn() {
+            if i == 0 {
+              agent_station_mark(c, a, station)
+            } else {
+              model_mark(c, a, 22.0)
+            }
+          })
+          |> ignore
         }
       },
       fn() {
         if archive {
-          nav_button(c, "archive", 20.0, key="chat-archive") |> ignore
+          if doing("archive/" + r.station + "/" + r.session) {
+            c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() {
+              @sf.spinner(c) |> ignore
+            })
+            |> ignore
+          } else if nav_button(c, "archive", 20.0, key="chat-archive") {
+            archive_chat(src, r, v)
+          }
         }
         if has_jobs {
-          nav_button(c, "web", 20.0, key="chat-jobs") |> ignore
+          // a dot when one died lately (red) or a service is started again (amber)
+          let alarm = text(jobs.value, "alarm")
+          c.box(fn() {
+            if nav_button(c, "web", 20.0, key="chat-jobs") {
+              dui.jobs_all = false
+              open_sheet(c, JobsOf(r))
+            }
+            if alarm == "fail" || alarm == "restart" {
+              c.layer(align=AEnd, fn() {
+                c.box(pt=6.0, pr=6.0, fn() {
+                  c.box(w=Px(11.0), h=Px(11.0), radius=5.5, bg=t.p.bg, pad=2.0, fn() {
+                    c.box(
+                      w=Fill(1.0),
+                      h=Fill(1.0),
+                      radius=3.5,
+                      bg=if alarm == "fail" { t.p.red } else { 0xD9962BFFL },
+                      fn() {  },
+                    )
+                    |> ignore
+                  })
+                  |> ignore
+                })
+                |> ignore
+              })
+              |> ignore
+            }
+          })
+          |> ignore
         }
       },
       v.thread is Some(_),
       room~,
+      on_more=fn() { open_sheet(c, Info(r)) },
     )
     c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
   })

@@ -13,12 +13,17 @@
 # and `web-composer` are its composer's states (MBUI_FIXTURE=chat-compose|attach|quote|sending|failed):
 # mac-composer-<state>, web-composer-<state>. `drive` and `web-drive` are the drive's pages over a made-up drive
 # (MBUI_FIXTURE=files|drive|…|reader|…, src/sfapp/drive_fixture.mbt): mac-<mode>, web-<mode>.
+# `decide` and `web-decide` are slice 8's (src/sfapp/decide_fixture.mbt's
+# modes): the 奏 page (an options card, a text card, none left), an execution history (its steps, its details), the
+# chat's sheets (its own, an agent's card, its jobs, a job) and Home with the jobs left up: mac-decide-<mode>,
+# web-decide-<mode>.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home chat composer drive web web-kit web-home web-chat web-composer web-drive ios android}
+PLATFORMS=${*:-mac kit home chat composer drive decide web web-kit web-home web-chat web-composer web-drive web-decide ios android}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
+DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
 fi
@@ -84,6 +89,22 @@ for p in $PLATFORMS; do
       for m in $DRIVE_MODES; do
         QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-$m.png
         names="$names web-$m"
+      done ;;
+    decide)
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-decide; mkdir -p out/shot-decide
+      names=
+      for m in $DECIDE; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-decide ./_build/native/release/build/sffix/sffix.exe >/dev/null
+        cp out/shot-decide/$m.png out/shots/mac-decide-$m.png
+        names="$names mac-decide-$m"
+      done ;;
+    web-decide)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in $DECIDE; do
+        QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-decide-$m.png
+        names="$names web-decide-$m"
       done ;;
     web-composer)
       APP=sffix bash scripts/web.sh build >/dev/null

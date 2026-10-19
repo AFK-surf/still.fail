@@ -12,6 +12,8 @@ priv enum Item {
   Search
   Wait(Int, ListNote?, String?)
   Empty
+  /// the jobs left up a long while (OpenJobs.kt: sheets.mbt open_jobs)
+  OpenJobs
   Header(String)
   Row(ChatItem)
   Foot
@@ -171,6 +173,10 @@ fn home_page(
       if empty {
         list.push(Empty)
       }
+      // what is left up a long while on the stations: nothing while there is none
+      if items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").length() > 0 {
+        list.push(OpenJobs)
+      }
       for d in v.days {
         list.push(Header(d.label))
         for item in d.items {
@@ -195,6 +201,7 @@ fn home_page(
             Some(v) => empty(c, v, filter)
             None => ()
           }
+        OpenJobs => open_jobs(c, src, w)
         Header(label) => section_header(c, label)
         Row(item) => chat_row(c, src, item, lead)
         Foot => c.box(h=Px(8.0), fn() {  }) |> ignore

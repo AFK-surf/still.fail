@@ -219,6 +219,10 @@ fn main {
   if @host.env("MBUI_OPEN_PAGE") == "files" {
     @sfapp.open_page(Files)
   }
+  // MBUI_OPEN_PAGE=decisions: the 奏 page over Home from the start (its way in is the bottom bar's)
+  if @host.env("MBUI_OPEN_PAGE") == "decisions" {
+    @sfapp.open_decisions()
+  }
   @ui.run("still.fail", fn(c) {
     @sfcore.frame(@core.subscribe("accounts"))
     @sfapp.view(c, core_source)

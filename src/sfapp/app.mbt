@@ -18,6 +18,12 @@ pub(all) enum Page {
   Drive(DriveAt)
   /// a text of a drive, read (drive_reader.mbt)
   DriveRead(DriveAt)
+  /// the decisions waiting for the viewer, one at a time (奏: decisions.mbt)
+  Decisions
+  /// an agent's execution history (history.mbt): its chat, its session
+  History(ChatRef, String)
+  /// an entry of a history opened in full: the line it was under, its words
+  Words(String, String)
 }
 
 ///|
@@ -111,13 +117,16 @@ fn reset() -> Unit {
   fix_timers.clear()
   fix_drafts.clear()
   dv_reset()
+  decide_reset()
 }
 
 ///|
-/// Back to Home (the stack's root), the sheet and the menu closed.
+/// Back to Home (the stack's root), the sheets and the menu closed.
 fn home() -> Unit {
   app.sheet = false
   app.menu = false
+  dui.sheet = None
+  dui.leaving = None
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
@@ -134,6 +143,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
     match p {
       Chat(r) => chat_left(src, r)
       DriveRead(at) => reader_left(at)
+      History(r, key) => history_left(src, r, key)
       _ => ()
     }
   }
@@ -192,6 +202,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       if app.sheet {
         workspaces_sheet(c, src, w, all, ws.value)
       }
+      sheets(c, src, w)
       toast(c)
     }
     None =>
@@ -238,6 +249,9 @@ fn page_view(
     Files => files_page(c, src, w)
     Drive(at) => drive_page(c, src, w, at)
     DriveRead(at) => reader_page(c, src, at)
+    Decisions => decisions_page(c, src, w)
+    History(r, key) => history_page(c, src, r, key)
+    Words(head, words) => words_page(c, src, head, words)
   }
 }
 

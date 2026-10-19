@@ -23,6 +23,7 @@ DRAWABLES = [
     'maker_cerebras', 'maker_huggingface', 'maker_nvidia', 'maker_baseten', 'maker_dsh',
     'slack', 'stillfail_mark', 'stillfail_mark_dark',
     'illus_sign_in', 'illus_sign_in_dark', 'illus_new_chat', 'illus_new_chat_dark', 'illus_no_station', 'illus_no_station_dark',
+    'buddy_idle', 'buddy_idle_dark',
 ]
 
 

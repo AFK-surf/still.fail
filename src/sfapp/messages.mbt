@@ -2,8 +2,8 @@
 // QuoteCards, SentElsewhere, Activity, UnreadLine; Prose.kt AgentWords; ChatFiles.kt Files, FileCard, ChatImage;
 // Decisions.kt DecisionUnder; SettingParts.kt DecisionOptions; LoginCards.kt LoginCard). The viewer's words sit right in
 // a bubble; everyone else gets a picture, a name and the time over their words; what still.fail itself says is a pill
-// across the chat. What a message asks to be done (its options, letting it go, archiving) is drawn as it is, not
-// done from here yet: this page reads.
+// across the chat. What a message asks to be done (its options, letting it go, keeping or archiving the chat) is done
+// from here as decide.mbt has it.
 
 ///|
 /// What the rows need to know of the chat.
@@ -169,7 +169,14 @@ fn agent_avatar(c : @ui.Ctx, maker : String, runtime : String) -> Unit {
 ///|
 /// A message (Chat.kt SaidRow): still.fail's own a notice across the chat; the viewer's on the right in a bubble;
 /// anyone else's under their picture, name and time, an agent's as Markdown with its files placed in it.
-fn said(c : @ui.Ctx, src : Source, here : Here, m : Message, list : Array[Entry]) -> Unit {
+fn said(
+  c : @ui.Ctx,
+  src : Source,
+  here : Here,
+  m : Message,
+  list : Array[Entry],
+  decide? : Bool = true,
+) -> Unit {
   ignore(list)
   let k = ink()
   if m.system {
@@ -203,7 +210,13 @@ fn said(c : @ui.Ctx, src : Source, here : Here, m : Message, list : Array[Entry]
   c.box(w=Fill(1.0), fn() {
     c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
       c.box(dir=Row, w=Fill(1.0), pl=25.0, min_h=24.0, gap=6.0, align=ACenter, fn() {
-        c.box(max_w=240.0, fn() {
+        // an agent of the chat's name opens its card (AgentSheet.kt)
+        let mine = m.by.agent != "" && here.view.agents.iter().any(fn(a) { a.key == m.by.agent })
+        let name = c.id("name/" + m.ts)
+        if mine && c.clicked(name) {
+          open_sheet(c, AgentOf(ref_of(here), m.by.agent))
+        }
+        c.box(max_w=240.0, id=if mine { name } else { 0 }, fn() {
           c.text(m.by.name, size=15.0, weight=650, color=k.name, wrap=false, line=21.0)
           |> ignore
         })
@@ -220,15 +233,13 @@ fn said(c : @ui.Ctx, src : Source, here : Here, m : Message, list : Array[Entry]
       } else {
         pickable(c, m.ts, m.by.name, "agent", m.text, true, fn() { agent_words(c, src, here, m) })
       }
-      decision_under(c, src, here, m)
-      // letting go what it asks (Chat.kt AskDismiss): said, not done from here
-      if m.asked {
-        c.box(pt=6.0, fn() {
-          c.text(tr("android-chat.asks.dismiss"), size=12.0, color=@sf.theme().p.muted, line=18.0)
-          |> ignore
-        })
-        |> ignore
+      // what it asks, under it: not on the 奏 page, which has its options at its foot (Chat.kt SaidAlone)
+      if !decide {
+        return
       }
+      decision_under(c, src, here, m)
+      // letting go what it asks (Chat.kt AskDismiss)
+      ask_dismiss(c, src, here, m)
       match m.archive_check {
         Some((words, failed)) =>
           c.box(pt=6.0, fn() {
@@ -244,7 +255,7 @@ fn said(c : @ui.Ctx, src : Source, here : Here, m : Message, list : Array[Entry]
         None => ()
       }
       if archive_under(here.view) == Some(m.seq) {
-        archive_buttons(c)
+        archive_buttons(c, src, here)
       }
     })
     |> ignore
@@ -273,37 +284,6 @@ fn archive_under(v : ChatView) -> Double? {
     i = i - 1
   }
   None
-}
-
-///|
-/// 保留 and 归档此对话 under it (Chat.kt ArchiveUnder), drawn as buttons (Decisions.kt OptionButton), the second in
-/// the accent. (Doing either is not this slice's: they are where they will be.)
-fn archive_buttons(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
-  c.box(dir=Row, w=Fill(1.0), pt=6.0, gap=6.0, fn() {
-    for i, label in [tr("android-chat.chat.keep"), tr("android-chat.chat.archiveThis")] {
-      let strong = i == 1
-      c.box(
-        w=Fill(1.0),
-        padx=14.0,
-        pady=10.0,
-        radius=12.0,
-        bg=if strong { t.p.accent } else { t.p.chip },
-        fn() {
-          c.text(
-            label,
-            size=15.0,
-            weight=500,
-            color=if strong { 0xFFFFFFFFL } else { t.p.text },
-            line=21.0,
-          )
-          |> ignore
-        },
-      )
-      |> ignore
-    }
-  })
-  |> ignore
 }
 
 ///|
@@ -1020,16 +1000,37 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
     Some({ assignee_text: Some(a), .. }) => quiet(a)
     _ => ()
   }
-  decision_options(c, options, !here.view.offline && !here.view.archived)
+  let busy = answering(here.station, m, options)
+  match
+    decision_options(
+      c,
+      "options/" + m.ts,
+      options,
+      !here.view.offline && !here.view.archived,
+      busy,
+    ) {
+    Some(o) => answer_option(src, here.station, m.thread, m.seq, o.label)
+    None => ()
+  }
 }
 
 ///|
-/// A card of options (SettingParts.kt DecisionOptions): each a row, its number in a disc (the one recommended in the
-/// accent), its label and what it leads to; hairlines between them.
-fn decision_options(c : @ui.Ctx, options : Array[Choice], enabled : Bool) -> Unit {
+/// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger 8 in
+/// from the card's edge, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
+/// leads to; hairlines between them; half there when not `enabled`, a spinner on the one being answered (`busy`, none
+/// pressed meanwhile). The option tapped, on the frame after.
+fn decision_options(
+  c : @ui.Ctx,
+  key : String,
+  options : Array[Choice],
+  enabled : Bool,
+  busy : String?,
+) -> Choice? {
   let t = @sf.theme()
+  let free = enabled && busy is None
+  let mut picked : Choice? = None
   c.box(w=Fill(1.0), pt=6.0, fn() {
-    c.box(w=Fill(1.0), radius=24.4, bg=t.p.chip, pad=8.0, opacity=if enabled { 1.0 } else { 0.5 }, fn() {
+    c.box(w=Fill(1.0), radius=24.4, bg=t.p.chip, pad=8.0, fn() {
       for i, o in options {
         if i > 0 {
           c.box(w=Fill(1.0), pl=41.0, pr=12.0, fn() {
@@ -1037,43 +1038,67 @@ fn decision_options(c : @ui.Ctx, options : Array[Choice], enabled : Bool) -> Uni
           })
           |> ignore
         }
-        c.box(dir=Row, w=Fill(1.0), pl=7.0, pr=12.0, pt=7.0, pb=7.0, gap=12.0, align=AStart, fn() {
-          c.box(
-            w=Px(22.0),
-            h=Px(22.0),
-            radius=11.0,
-            bg=if o.recommended { t.p.accent } else { @sf.alpha(t.p.text, 0.09) },
-            align=ACenter,
-            justify=JCenter,
-            fn() {
-              let color = if o.recommended { 0xFFFFFFFFL } else { t.p.muted }
-              if i < 6 {
-                @sf.icon(c, "option-\{i + 1}", size=22.0, color~) |> ignore
-              } else {
-                c.text("\{i + 1}", size=12.0, weight=600, color~, wrap=false) |> ignore
+        let id = c.id(key + "/" + i.to_string())
+        if c.clicked(id) && free {
+          picked = Some(o)
+        }
+        c.box(
+          dir=Row,
+          w=Fill(1.0),
+          pl=7.0,
+          pr=12.0,
+          pt=7.0,
+          pb=7.0,
+          gap=12.0,
+          align=AStart,
+          radius=18.0,
+          opacity=if enabled { 1.0 } else { 0.5 },
+          bg=if free && c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
+          id~,
+          fn() {
+            c.box(
+              w=Px(22.0),
+              h=Px(22.0),
+              radius=11.0,
+              bg=if o.recommended { t.p.accent } else { @sf.alpha(t.p.text, 0.09) },
+              align=ACenter,
+              justify=JCenter,
+              fn() {
+                let color = if o.recommended { 0xFFFFFFFFL } else { t.p.muted }
+                if i < 6 {
+                  @sf.icon(c, "option-\{i + 1}", size=22.0, color~) |> ignore
+                } else {
+                  c.text("\{i + 1}", size=12.0, weight=600, color~, wrap=false) |> ignore
+                }
+              },
+            )
+            |> ignore
+            c.box(w=Fill(1.0), fn() {
+              c.text(o.label, size=15.0, weight=500, color=t.p.text, line=21.0) |> ignore
+              if o.detail != "" {
+                c.text(o.detail, size=13.0, color=t.p.muted, line=18.0) |> ignore
               }
-            },
-          )
-          |> ignore
-          c.box(w=Fill(1.0), fn() {
-            c.text(o.label, size=15.0, weight=500, color=t.p.text, line=21.0) |> ignore
-            if o.detail != "" {
-              c.text(o.detail, size=13.0, color=t.p.muted, line=18.0) |> ignore
+            })
+            |> ignore
+            if busy == Some(o.label) {
+              c.box(h=Px(21.0), justify=JCenter, fn() { @sf.spinner(c, size=12.0) |> ignore })
+              |> ignore
             }
-          })
-          |> ignore
-        })
+          },
+        )
         |> ignore
       }
     })
     |> ignore
   })
   |> ignore
+  picked
 }
 
 ///|
-/// A login as its card shows it (LoginCards.kt LoginCard): its title and how it stands while under way; ended, a line
-/// saying how (failed in red). A login the core does not know draws nothing. (Its buttons are not this slice's.)
+/// A login as its card shows it (LoginCards.kt LoginCard): its title and how it stands while under way, with what the
+/// person does now for one who may finish it (decide.mbt login_active); ended, a line saying how (failed in red). A
+/// login the core does not know draws nothing.
 fn login_card(c : @ui.Ctx, src : Source, station : String, id : String) -> Unit {
   let t = @sf.theme()
   let topic = (src.topic)("machineLogin", { "station": Json::string(station), "id": Json::string(id) })
@@ -1098,16 +1123,21 @@ fn login_card(c : @ui.Ctx, src : Source, station : String, id : String) -> Unit 
     |> ignore
     return
   }
+  let all = (src.topic)("machineLogins", { "station": Json::string(station) })
   c.box(pt=6.0, fn() {
     c.box(min_w=280.0, radius=17.6, bg=t.p.chip, pad=8.0, gap=2.0, fn() {
       c.box(pl=10.0, pr=10.0, pt=10.0, fn() {
         c.text(text(l, "title"), size=15.0, weight=500, color=t.p.text, line=21.0) |> ignore
       })
       |> ignore
-      c.box(padx=10.0, pb=10.0, fn() {
-        c.text(text(l, "statusText"), size=13.0, color=t.p.muted, line=19.0) |> ignore
-      })
-      |> ignore
+      if flag(all.value, "canLogin") {
+        login_active(c, src, station, l, flag(all.value, "canRelay"))
+      } else {
+        c.box(padx=10.0, pb=10.0, fn() {
+          c.text(text(l, "statusText"), size=13.0, color=t.p.muted, line=19.0) |> ignore
+        })
+        |> ignore
+      }
     })
     |> ignore
   })
@@ -1420,7 +1450,20 @@ fn activity(c : @ui.Ctx, src : Source, here : Here, a : Agent) -> Unit {
         }
     }
   }
-  c.box(dir=Row, w=Fill(1.0), gap=5.0, align=ACenter, fn() {
+  // tapped, its execution history (History.kt), its press drawn round it
+  let id = c.id("activity/" + a.key)
+  if c.clicked(id) {
+    app.nav.push(History(ref_of(here), a.key))
+  }
+  c.box(
+    dir=Row,
+    w=Fill(1.0),
+    gap=5.0,
+    align=ACenter,
+    radius=6.0,
+    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.1) } else { 0L },
+    id~,
+    fn() {
     c.box(w=Px(24.0), h=Px(24.0), tx=-3.0, align=ACenter, justify=JCenter, fn() {
       agent_avatar(c, a.maker, a.runtime)
       c.layer(fn() {
@@ -1439,6 +1482,13 @@ fn activity(c : @ui.Ctx, src : Source, here : Here, a : Agent) -> Unit {
       c.box(pl=3.0, fn() { c.text(clock, size=15.0, color=k.subtle, wrap=false) |> ignore })
       |> ignore
     }
-  })
+    },
+  )
   |> ignore
+}
+
+///|
+/// The chat a row is of.
+fn ref_of(here : Here) -> ChatRef {
+  { station: here.station, session: here.session, title: here.view.title, station_name: "" }
 }

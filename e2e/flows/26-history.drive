@@ -1,0 +1,29 @@
+# An agent's execution history, from the chat's own sheet ("…": its agents) and the agent's card (历史): what it
+# received and posted, its steps; a group opened, a command in it opened to what it printed.
+timeout 60000
+tap 端到端测试
+until =studio
+until 发消息
+wait 1000
+tap 发消息
+type 看看文档 {T} steps:文档目录看过了 {T}
+tap icon:arrow-up
+gone 正在发送
+timeout 120000
+untiln 2 文档目录看过了 {T}
+wait 1500
+tap icon:more
+until 复制会话链接
+shot 1-info
+tap icon:chevron-right
+until =历史
+shot 2-agent
+tap =历史
+until 执行历史
+until 文档目录看过了 {T}
+shot 3-history
+tap icon:chevron-right
+until 列出 docs 目录
+tap 列出 docs 目录
+until stillfail-port.md
+shot 4-step

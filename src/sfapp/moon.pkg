@@ -1,6 +1,7 @@
 import {
   "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
   "mbui/ui",
   "mbui/sf",
   "mbui/gallery",

@@ -98,17 +98,22 @@ async function make(workspace: string, station: string, text: string): Promise<{
   const { key } = await call("chat.create", { station, runtime: "claude" });
   console.error(`peer: chat.create on ${station}: ${key}`);
   console.error(`peer: chat.send: ${JSON.stringify(await call("chat.send", { station, session: key, text }))}`);
-  return until({ topic: "chats", scope: workspace, mine: false }, (v) => {
+  const row = await until<{ session: string; thread: number; title: string }>({ topic: "chats", scope: workspace, mine: false }, (v) => {
     for (const d of v?.days ?? []) {
       for (const it of d.items ?? []) {
         if (it.station === station && typeof it.thread === "number" && it.session && !String(it.session).startsWith("pending") &&
-          (it.last?.preview ?? "").includes(text.split(" post:")[0].slice(0, 6))) {
+          // its own words, whole where the row has them (a chat made before with the same lead may still be listed)
+          [it.last?.preview ?? "", it.title ?? ""].some((w: string) => w.includes(text.split(" post:")[0]))) {
           return { session: it.session, thread: it.thread, title: it.title };
         }
       }
     }
     return undefined;
   }, 120_000);
+  // not gone before the station has the words: the row shows them from this core's outbox already, and a process that
+  // ends then leaves them there (the station's thread stays empty)
+  await until({ topic: "chat", station, thread: row.thread }, (v) => (v?.messages ?? []).some((m: J) => m.text === text) || undefined, 120_000);
+  return row;
 }
 
 const chatFile = join(dir, "chat.json");
