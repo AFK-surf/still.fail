@@ -1,0 +1,1060 @@
+#!/usr/bin/env python3
+"""detlint: what a run's determinism must not rest on: a guessed time, a wait for the app to "settle", a frame the app
+asks for itself, the machine's own clock. mbui runs it on itself; still.fail's apps/mbui runs the one of the mbui it
+pins ($MBUI_DIR/scripts/detlint.py apps/mbui) with its own apps/mbui/detlint.json.
+
+    python3 scripts/detlint.py [ROOT]            check ROOT (default: this script's module) against ROOT/detlint.json
+    python3 scripts/detlint.py ROOT --update     write the counts found as the new bar (never above the old one;
+                                                 --update=raise to raise it, said why in the commit)
+    python3 scripts/detlint.py ROOT --list RULE  every finding of RULE, file:line
+
+The bar (a ratchet): detlint.json keeps each rule's count of findings, file by file, and each file is held to its own:
+one more in any file fails (a finding moved to another file too), naming it and its lines; fewer fails too, until
+--update lowers the bar (the migration's own commit: what was moved off stays off). A rule whose bar is 0 is simply
+forbidden.
+
+The rules (see RULES below for each one's words):
+
+    frame-request  anything but the scheduler itself (mbt.frame_core: the frame loop, the dispatch, the host's
+                   bridge) asks for a frame (Ctx::request_frame, @host.request_frame, @ui.request_frame): components
+                   and motion included; the framework knows when a frame is due (an input, an event, an animation's
+                   declared end, a layout read)
+    settle         anything waits for, or asks whether, the app is "settled" (Tester::settle / settled, Ctx::settled /
+                   stable): stability is an assertion at the end (assert_idle), never a condition
+    flow-wait      an end-to-end flow (*.drive) waits a fixed time (wait N, linger N)
+    script-wait    a test or screenshot script waits a fixed time or a fixed frame count (sleep N, MBUI_SHOT_AT=N,
+                   setTimeout(…, N), waitForTimeout(N), time.sleep(N))
+    page-settle    a script waits on a web page until the app is settled (__mbhost.settled(), unsettled())
+    frame-count    a test runs a fixed number of frames (for _ in 0..<N { t.frame() })
+    literal-time   a time given as a bare number (run_for(347), wake_in(500.0), advance(16.0), frame(ms=33.0),
+                   wake_at(c.now() + 500.0)): a time names what it is (an animation's, a timer's declared length)
+    app-clock      the app reads the clock (c.now(), @ui.now(), @host.now()) to work out where an animation is or
+                   whether a time has passed: motion / wake_at do that from what they declared
+    wall-clock     the machine's own clock or randomness (Date.now, performance.now, Math.random, an unseeded
+                   @random) outside the host that provides them
+    poll           a frame or a wake asked for under a condition that reads the host or the layout (a frame each
+                   until it says yes): the host's answer, or the layout, is an event
+    host-read      the app reads where it runs from @host (now, wake_after, platform, system_dark, window_inset, env),
+                   not through @ui, which a Tester answers
+    globals        a mutable global (a top-level let of a Ref, Map, Array or struct) that its package's reset (reset,
+                   reset_globals, or what on_reset is given) does not put back, nor says `// kept across runs: why`
+
+An exception is written on the line itself or on the line above it, with its reason:
+
+    c.request_frame() // det-ok(frame-request): the bench mode draws every frame on purpose
+    # det-ok(script-wait): the emulator's boot has no event to wait for
+
+They are printed with their reasons, and counted (detlint.json's `excused`, by rule and file), and only go down:
+marking a finding det-ok does not make it go away. app-clock alone (SWAPPABLE: a time shown is right) lets an
+exception take the place of a finding there was (found and excused together never above their bar).
+
+What it reads: MoonBit through a lexer of its own (comments, strings with their interpolations, #| lines, chars,
+numbers), a call being NAME ( … ) with what is before it (a receiver `.`, a package `@pkg.`, a type `T::`) and its
+arguments split at the top level, the enclosing top-level item (a `test` block, a `fn`) and blocks with their
+headers (if / while / match / guards). It does not know types: `x.request_frame()` is the Ctx's for any x. Where that
+is wrong, see "Limits" in docs/detlint.md.
+"""
+import fnmatch
+import json
+import os
+import re
+import sys
+
+# ---------------------------------------------------------------------------------------------------------------------
+# MoonBit lexer
+
+IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+NUMBER = re.compile(
+    r"0[xX][0-9A-Fa-f_]+(?:[UL]+|N)?|0[oO][0-7_]+(?:[UL]+|N)?|0[bB][01_]+(?:[UL]+|N)?"
+    r"|[0-9][0-9_]*(?:\.(?!\.)[0-9_]*)?(?:[eE][+-]?[0-9]+)?(?:UL|L|U|N|F)?"
+)
+OPS = ["..<", "..=", "...", "::", "=>", "->", "==", "!=", "<=", ">=", "&&", "||", "|>", "+=", "-=", "*=", "/=", "%=",
+       "<<", ">>", ".."]
+
+
+class Tok:
+    __slots__ = ("kind", "text", "line", "col", "end")
+
+    def __init__(self, kind, text, line, col):
+        self.kind, self.text, self.line, self.col = kind, text, line, col
+        self.end = None  # for an opening bracket: the index of its closing one
+
+    def __repr__(self):
+        return f"{self.kind}:{self.text}@{self.line}"
+
+
+def lex(src):
+    """Tokens (ident, num, str, op, at: @pkg) and the comments by line ({line: text})."""
+    toks, comments = [], {}
+    i, n, line, lstart = 0, len(src), 1, 0
+
+    def col():
+        return i - lstart + 1
+
+    while i < n:
+        ch = src[i]
+        if ch == "\n":
+            line += 1
+            i += 1
+            lstart = i
+            continue
+        if ch in " \t\r":
+            i += 1
+            continue
+        if src.startswith("//", i):
+            j = src.find("\n", i)
+            j = n if j < 0 else j
+            comments[line] = comments.get(line, "") + src[i:j]
+            i = j
+            continue
+        if src.startswith("/*", i):  # not MoonBit's, but harmless
+            j = src.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            line += src.count("\n", i, j)
+            i = j
+            continue
+        if (ch in "#$") and i + 1 < n and src[i + 1] == "|":
+            j = src.find("\n", i)
+            j = n if j < 0 else j
+            toks.append(Tok("str", src[i + 2:j], line, col()))
+            i = j
+            continue
+        if ch == '"':
+            start_line, c0 = line, col()
+            j, depth, buf = i + 1, 0, []
+            while j < n:
+                c = src[j]
+                if c == "\\" and j + 1 < n:
+                    if src[j + 1] == "{":
+                        depth += 1
+                        j += 2
+                        continue
+                    j += 2
+                    continue
+                if depth and c == "}":
+                    depth -= 1
+                elif depth and c == "{":
+                    depth += 1
+                elif not depth and c == '"':
+                    break
+                elif c == "\n":
+                    line += 1
+                    lstart = j + 1
+                buf.append(c)
+                j += 1
+            toks.append(Tok("str", "".join(buf), start_line, c0))
+            i = j + 1
+            continue
+        if ch == "'":
+            m = re.match(r"'(?:\\u\{[0-9A-Fa-f]+\}|\\x[0-9A-Fa-f]{2}|\\.|[^'\\\n])'", src[i:])
+            if m:
+                toks.append(Tok("str", m.group(0), line, col()))
+                i += len(m.group(0))
+                continue
+        if ch == "@" and i + 1 < n and (src[i + 1].isalpha() or src[i + 1] == "_"):
+            m = IDENT.match(src, i + 1)
+            toks.append(Tok("at", "@" + m.group(0), line, col()))
+            i = m.end()
+            continue
+        if ch.isalpha() or ch == "_":
+            m = IDENT.match(src, i)
+            toks.append(Tok("ident", m.group(0), line, col()))
+            i = m.end()
+            continue
+        if ch.isdigit():
+            m = NUMBER.match(src, i)
+            toks.append(Tok("num", m.group(0), line, col()))
+            i = m.end()
+            continue
+        for op in OPS:
+            if src.startswith(op, i):
+                toks.append(Tok("op", op, line, col()))
+                i += len(op)
+                break
+        else:
+            toks.append(Tok("op", ch, line, col()))
+            i += 1
+    # brackets
+    stack = []
+    for k, t in enumerate(toks):
+        if t.kind != "op":
+            continue
+        if t.text in "([{":
+            stack.append(k)
+        elif t.text in ")]}" and stack:
+            toks[stack.pop()].end = k
+    return toks, comments
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# A MoonBit file: its items, its calls, its blocks
+
+ITEM_KW = {"fn", "test", "let", "impl", "struct", "enum", "type", "trait", "extern", "typealias", "const", "suberror",
+           "traitalias", "enumview"}
+
+
+class Call:
+    __slots__ = ("name", "kind", "qual", "at", "args", "item", "is_def")
+
+    def __init__(self, name, kind, qual, at, args, item, is_def):
+        # kind: "method" (x.name), "pkg" (@pkg.name), "type" (T::name), "bare" (name)
+        self.name, self.kind, self.qual, self.at, self.args, self.item, self.is_def = (
+            name, kind, qual, at, args, item, is_def)
+
+
+class Item:
+    __slots__ = ("kind", "name", "start", "end", "line")
+
+    def __init__(self, kind, name, start, end, line):
+        self.kind, self.name, self.start, self.end, self.line = kind, name, start, end, line
+
+
+class MbtFile:
+    def __init__(self, path, rel, src):
+        self.path, self.rel, self.src = path, rel, src
+        self.lines = src.split("\n")
+        self.toks, self.comments = lex(src)
+        base = os.path.basename(rel)
+        self.test_file = base.endswith("_test.mbt") or base.endswith("_wbtest.mbt")
+        self.items = self._items()
+        self.item_of = [None] * len(self.toks)
+        for it in self.items:
+            for k in range(it.start, min(it.end + 1, len(self.toks))):
+                self.item_of[k] = it
+        self.calls = self._calls()
+
+    def _items(self):
+        """Top-level items: each from a keyword at the start of a line, outside any bracket (after pub, priv, async,
+        declare), to the token before the next one."""
+        toks, starts, depth = self.toks, [], 0
+        for k, t in enumerate(toks):
+            if depth == 0 and t.col == 1 and t.kind == "ident" and (t.text in ITEM_KW or t.text in (
+                    "pub", "priv", "async", "declare")):
+                starts.append(k)
+            if t.kind == "op" and t.text in "([{":
+                depth += 1
+            elif t.kind == "op" and t.text in ")]}":
+                depth = max(0, depth - 1)
+        items = []
+        for n, k in enumerate(starts):
+            e = (starts[n + 1] - 1) if n + 1 < len(starts) else len(toks) - 1
+            j = k
+            while j < e and toks[j].line == toks[k].line and not (toks[j].kind == "ident" and toks[j].text in ITEM_KW):
+                j += 1  # pub(all), async, declare
+            kw = toks[j].text if toks[j].kind == "ident" else ""
+            name = ""
+            nt = toks[j + 1] if j + 1 <= e else None
+            if nt is not None:
+                if kw == "test":
+                    name = nt.text if nt.kind == "str" else ""
+                elif kw == "fn" and nt.kind == "op" and nt.text == "[" and nt.end is not None:
+                    name = self._fn_name(nt.end + 1)
+                elif kw in ("fn", "extern"):
+                    name = self._fn_name(j + 1)
+                elif nt.kind == "ident":
+                    name = nt.text
+            items.append(Item(kw, name, k, e, toks[k].line))
+        return items
+
+    def _fn_name(self, k):
+        toks = self.toks
+        if k >= len(toks):
+            return ""
+        if toks[k].kind == "str":  # extern "C" fn
+            k += 1
+            if k < len(toks) and toks[k].text == "fn":
+                k += 1
+        if k + 2 < len(toks) and toks[k + 1].text == "::":
+            return toks[k].text + "::" + toks[k + 2].text
+        return toks[k].text if k < len(toks) else ""
+
+    def _calls(self):
+        toks, out = self.toks, []
+        for k in range(len(toks) - 1):
+            t = toks[k]
+            if t.kind != "ident":
+                continue
+            nx = toks[k + 1]
+            if not (nx.kind == "op" and nx.text == "(" and nx.end is not None):
+                # a method named and given a label (x.f~) is not called; `x.f` passed as a function is not either
+                continue
+            prev = toks[k - 1] if k else None
+            prev2 = toks[k - 2] if k > 1 else None
+            kind, qual = "bare", ""
+            if prev is not None and prev.kind == "op" and prev.text == ".":
+                if prev2 is not None and prev2.kind == "at":
+                    kind, qual = "pkg", prev2.text
+                else:
+                    kind = "method"
+            elif prev is not None and prev.kind == "op" and prev.text == "::":
+                kind = "type"
+                qual = prev2.text if prev2 is not None else ""
+            is_def = False
+            j = k - 1
+            if kind == "type":
+                j = k - 3
+                if j >= 0 and toks[j].kind == "at":
+                    j -= 2
+            if j >= 0 and toks[j].kind == "op" and toks[j].text == "]":  # fn[T] Name::f
+                pass
+            if j >= 0 and toks[j].kind == "ident" and toks[j].text == "fn":
+                is_def = True
+            if j >= 0 and toks[j].kind == "op" and toks[j].text == "]":
+                o = self._open_of(j)
+                if o is not None and o > 0 and toks[o - 1].text == "fn":
+                    is_def = True
+            args = self._args(k + 1)
+            out.append(Call(t.text, kind, qual, k, args, self.item_of[k], is_def))
+        return out
+
+    def _open_of(self, close):
+        for o in range(close, -1, -1):
+            if self.toks[o].end == close:
+                return o
+        return None
+
+    def _args(self, open_):
+        """The arguments of the call whose ( is at open_: [(label or None, [token indices])]."""
+        toks, close = self.toks, self.toks[open_].end
+        args, cur, k = [], [], open_ + 1
+        while k < close:
+            t = toks[k]
+            if t.kind == "op" and t.text == ",":
+                args.append(cur)
+                cur = []
+                k += 1
+                continue
+            if t.kind == "op" and t.text in "([{" and t.end is not None:
+                cur.extend(range(k, t.end + 1))
+                k = t.end + 1
+                continue
+            cur.append(k)
+            k += 1
+        if cur:
+            args.append(cur)
+        out = []
+        for a in args:
+            label = None
+            if len(a) >= 2 and toks[a[0]].kind == "ident" and toks[a[1]].kind == "op" and toks[a[1]].text in ("=", "~"):
+                label = toks[a[0]].text
+                a = a[2:] if toks[a[1]].text == "=" else []
+            out.append((label, a))
+        return out
+
+    def recv_type(self, k, returns):
+        """The type of the receiver of the method called at k (x.name(…)): its last name (Tester, Ctx…), or None
+        when it cannot be told. From: self in a `fn T::…`; a parameter or let annotated `x : T`; `let x = T::f(…)`,
+        `let x = f(…)` with f declared `-> T` (returns: name -> type, across the files); `f(…).name(…)`."""
+        toks = self.toks
+        d = k - 1  # the "."
+        r = d - 1
+        if r < 0:
+            return None
+        rt = toks[r]
+        if rt.kind == "op" and rt.text == ")":
+            o = self._open_of(r)
+            if o is not None and o > 0 and toks[o - 1].kind == "ident":
+                if o > 1 and toks[o - 2].text == "::":
+                    return toks[o - 3].text if o > 2 else None  # T::new(…).name
+                if o > 1 and toks[o - 2].text == ".":
+                    return None
+                return returns.get(toks[o - 1].text)
+            return None
+        if rt.kind != "ident" or (r > 0 and toks[r - 1].text == "."):
+            return None
+        name = rt.text
+        it = self.item_of[k]
+        if name == "self":
+            if it is not None and "::" in it.name:
+                return it.name.split("::")[0]
+            return None
+        lo = it.start if it is not None else 0
+        for j in range(r - 1, lo - 1, -1):
+            t = toks[j]
+            if t.kind != "ident" or t.text != name:
+                continue
+            nx = toks[j + 1] if j + 1 < len(toks) else None
+            pv = toks[j - 1] if j > 0 else None
+            if nx is not None and nx.text == ":" and not (pv is not None and pv.text == "."):
+                ty = self._type_at(j + 2)
+                if ty:
+                    return ty
+            if pv is not None and pv.text in ("let", "mut") and nx is not None and nx.text == "=":
+                v = j + 2
+                if v < len(toks) and toks[v].kind == "at":
+                    v += 2
+                if v + 2 < len(toks) and toks[v].kind == "ident" and toks[v + 1].text == "::":
+                    return toks[v].text
+                if v + 1 < len(toks) and toks[v].kind == "ident" and toks[v + 1].text == "(":
+                    return returns.get(toks[v].text)
+                return None
+        return None
+
+    def _type_at(self, j):
+        toks = self.toks
+        if j < len(toks) and toks[j].kind == "at":
+            j += 2
+        if j < len(toks) and toks[j].kind == "ident" and toks[j].text[:1].isupper():
+            return toks[j].text
+        return None
+
+    def returns(self):
+        """fn name(…) -> T: {name: T} for this file's functions."""
+        out = {}
+        for it in self.items:
+            if it.kind != "fn" or not it.name:
+                continue
+            j = it.start
+            while j < it.end:
+                t = self.toks[j]
+                if t.kind == "op" and t.text in "([" and t.end is not None:
+                    j = t.end + 1
+                    continue
+                j += 1
+                if t.kind == "op" and t.text == "{":
+                    break
+                if t.kind == "op" and t.text == "->":
+                    j -= 1
+                    ty = self._type_at(j + 1)
+                    if ty:
+                        out[it.name.split("::")[-1]] = ty
+                    break
+        return out
+
+    def in_test(self, k):
+        it = self.item_of[k]
+        return self.test_file or (it is not None and it.kind == "test")
+
+    def enclosing_conditions(self, k):
+        """The tokens of each condition k runs under, innermost first: an if's or while's condition (an else's: the
+        if's it is the other branch of), a match's scrutinee, an arm's pattern and guard."""
+        toks, out = self.toks, []
+        # the arm k is in, if any, within its block: `pattern (if guard)? => expr`
+        opens = [o for o in range(k - 1, -1, -1) if toks[o].kind == "op" and toks[o].text in "({["
+                 and toks[o].end is not None and toks[o].end > k]
+        level_start = opens[0] + 1 if opens else 0
+        out.extend(self._arm_before(level_start, k))
+        for o in opens:
+            if toks[o].text != "{":
+                continue
+            out.extend(self._header(o))
+        return out
+
+    def _arm_before(self, start, k):
+        """In a block from start to k: the pattern and guard of the arm k's statement is in, if it has one."""
+        toks = self.toks
+        b = k - 1
+        while b >= start:
+            t = toks[b]
+            if t.kind == "op" and t.text in (";",):
+                break
+            if t.kind == "op" and t.text in ")]}":
+                o = self._open_of(b)
+                b = (o if o is not None else b) - 1
+                continue
+            if t.kind == "op" and t.text == "=>":
+                # the arm's head: back to the line where it starts (a pattern starts a line)
+                h = b - 1
+                while h >= start and toks[h].line == toks[b].line:
+                    h -= 1
+                return [list(range(h + 1, b))]
+            if toks[b].line != toks[k].line and not (toks[b].kind == "op" and toks[b].text in ("(", ",")):
+                # a statement on an earlier line: k's statement starts after it
+                prev_line_tok = toks[b]
+                if prev_line_tok.kind == "op" and prev_line_tok.text in ("{",):
+                    break
+            b -= 1
+        return []
+
+    def _header(self, o):
+        """What a block opened at o is under: if/while/match head, else (the if's condition), an arm's head."""
+        toks = self.toks
+        # back from o to the start of its header: the nearest if/while/match/else/=>/for at this level
+        b, head = o - 1, []
+        while b >= 0:
+            t = toks[b]
+            if t.kind == "op" and t.text in ")]}":
+                ob = self._open_of(b)
+                if t.text == "}":
+                    # `} else {`: the if's condition before the previous block
+                    if head == [] and b + 1 < o and toks[b + 1].text == "else":
+                        return self._header(ob) if ob is not None else []
+                    break
+                head = list(range(ob if ob is not None else b, b + 1)) + head
+                b = (ob if ob is not None else b) - 1
+                continue
+            if t.kind == "op" and t.text in ("{", ";", ","):
+                break
+            if t.kind == "op" and t.text == "=>":
+                # a block as an arm's body: the arm's head
+                return self._arm_before(self._block_start(b), b + 1) + []
+            if t.kind == "ident" and t.text in ("if", "while", "match", "guard"):
+                return [head]
+            if t.kind == "ident" and t.text in ("fn", "test", "for", "loop", "let"):
+                return []
+            head.insert(0, b)
+            b -= 1
+        return []
+
+    def _block_start(self, k):
+        toks = self.toks
+        for o in range(k - 1, -1, -1):
+            if toks[o].kind == "op" and toks[o].text == "{" and toks[o].end is not None and toks[o].end > k:
+                return o + 1
+        return 0
+
+    def text_of(self, idx):
+        return " ".join(self.toks[i].text for i in idx)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The rules
+
+RULES = {
+    "frame-request": "the app asks for a frame itself: the framework knows when one is due (an input, an event, an "
+                     "animation's deadline, a layout read)",
+    "settle": "waits for, or asks whether, the app is settled: stability is an end-of-test assertion (assert_idle), "
+              "never what a step waits for",
+    "flow-wait": "an end-to-end flow waits a fixed time: wait for the named thing (until, answered, ready, decoded)",
+    "script-wait": "a test or screenshot script waits a fixed time or frame count: wait for the event, or take the "
+                   "picture at a time the animations declare",
+    "page-settle": "a script waits on a web page until the app is settled (__mbhost.settled): take it at a declared "
+                   "time, or wait for the named thing",
+    "frame-count": "a test runs a fixed number of frames: give the inputs and run_for a declared time",
+    "literal-time": "a time given as a bare number: name what it is (an animation's or a timer's declared length)",
+    "stable-mode": "the app draws otherwise when it is screenshotted (Ctx::stable): the picture is taken at a time "
+                   "its animations declare, of the app as it runs",
+    "retired-api": "an interface given up (an animation is data, declared once with its start and end): "
+                   "frames_until, animating, animating_until, run_animations",
+    "app-clock": "the app reads the clock to work out an animation or a time passed: motion / wake_at do it from what "
+                 "they declared",
+    "wall-clock": "the machine's own clock or randomness, outside the host that provides them",
+    "poll": "a frame or a wake asked for under a condition that reads the host or the layout: that answer is an event",
+    "host-read": "the app reads where it runs from @host: through @ui, which a Tester answers",
+    "globals": "a mutable global its package's reset does not put back, nor says `// kept across runs: why`",
+}
+
+FRAME_ASK = {"request_frame", "wake_in", "wake_after", "wake_at", "wake_at_time", "frames_until"}
+RETIRED = {"frames_until", "animating", "animating_until", "run_animations"}
+SETTLE = {"settle", "settled"}
+SETTLE_TYPES = {"Tester", "Ctx", "Runtime"}
+SETTLE_DEFS = {"settle", "settled", "unsettled", "stable", "assert_idle"}
+TIME_FNS = {"run_for": 0, "wake_in": 0, "wake_after": 0, "wake_at": 0, "advance": 0, "frames_until": 0,
+            "wake_at_time": 0}
+CLOCK_READ = {"now"}
+HOST_READS = {"now", "wake_after", "platform", "system_dark", "window_inset", "env"}
+QUERY_DEFAULT = ["pressed", "list_row_height", "list_place", "rect_of", "row_height", "image_info", "view_info", "view_site_state",
+                 "update_state", "shared_in", "made", "grabbed", "photos", "kept", "files"]
+WALL_WORDS = re.compile(r"\b(Date\.now|performance\.now|Math\.random|crypto\.getRandomValues|clock_gettime|"
+                        r"gettimeofday|mach_absolute_time|CFAbsoluteTimeGetCurrent|arc4random)\b")
+PLAIN_TYPES = {"Int", "Int64", "UInt", "UInt64", "Int16", "UInt16", "Double", "Float", "String", "Bool", "Char", "Byte",
+               "Bytes", "Json", "Unit"}
+
+EXC = re.compile(r"det-ok\(([a-z-]+(?:\s*,\s*[a-z-]+)*)\)\s*:?\s*(.*)")
+
+
+class Finding:
+    __slots__ = ("rule", "file", "line", "what", "excused")
+
+    def __init__(self, rule, file, line, what):
+        self.rule, self.file, self.line, self.what, self.excused = rule, file, line, what, None
+
+
+def under(rel, prefixes):
+    return any(rel == p or rel.startswith(p.rstrip("/") + "/") for p in prefixes)
+
+
+def matches(rel, globs):
+    return any(fnmatch.fnmatch(rel, g) for g in globs)
+
+
+class Config:
+    def __init__(self, d):
+        self.mbt_roots = d.get("mbt", {}).get("roots", ["src"])
+        self.framework = d.get("mbt", {}).get("framework", [])
+        # the scheduler itself (the frame loop, the dispatch of inputs and events, the host's bridge): the only place
+        # a frame is asked for
+        self.frame_core = d.get("mbt", {}).get("frame_core", [])
+        self.clock_sources = d.get("mbt", {}).get("clock_sources", [])
+        self.queries = set(d.get("mbt", {}).get("queries", QUERY_DEFAULT))
+        self.globals_roots = d.get("globals", {}).get("roots", [])
+        self.flows = d.get("flows", [])
+        self.scripts = d.get("scripts", [])
+        self.skip = d.get("skip", [])
+        self.counts = d.get("counts", {})
+
+
+def lint_mbt(f, cfg, out, returns, readers):
+    app = not under(f.rel, cfg.framework)
+    toks = f.toks
+
+    def add(rule, k, what):
+        out.append(Finding(rule, f.rel, toks[k].line, what))
+
+    for c in f.calls:
+        # the interfaces given up: neither defined nor called, anywhere
+        if c.name in RETIRED and (c.is_def or c.kind in ("method", "pkg", "bare", "type")):
+            add("retired-api", c.at, f.lines[toks[c.at].line - 1].strip())
+        if c.is_def:
+            continue
+        test = f.in_test(c.at)
+        item = c.item
+        line_text = f.lines[toks[c.at].line - 1].strip()
+        # 1. the app asks for a frame
+        # (bare: the framework's own, in its package: h_request_frame, hostread's request_frame)
+        if c.name in ("request_frame", "h_request_frame") and not under(f.rel, cfg.frame_core) and not test:
+            add("frame-request", c.at, line_text)
+        # 2. settle / settled / stable, but in their own definitions
+        if c.name in SETTLE and c.kind in ("method", "pkg"):
+            own = item is not None and item.kind == "fn" and item.name.split("::")[-1] in SETTLE_DEFS
+            ty = f.recv_type(c.at, returns) if c.kind == "method" else c.qual
+            if not own and (ty is None or ty in SETTLE_TYPES or c.kind == "pkg"):
+                add("settle", c.at, line_text + ("   (receiver's type not known: counted)" if ty is None else ""))
+        # the app as it is screenshotted is not the app
+        if c.name == "stable" and c.kind == "method" and app and not test and not c.args and f.recv_type(
+                c.at, returns) in ("Ctx", None):
+            add("stable-mode", c.at, line_text)
+        # 4. a bare number as a time
+        if c.name in TIME_FNS or (c.name == "frame" and c.kind == "method"):
+            for label, a in c.args:
+                if c.name == "frame" and label != "ms":
+                    continue
+                if c.name != "frame" and label is not None:
+                    continue
+                if literal_time(f, a):
+                    add("literal-time", c.at, line_text)
+                    break
+        # 5. the app reads the clock
+        if c.name in CLOCK_READ and app and not test and c.kind in ("method", "pkg") and not c.args:
+            add("app-clock", c.at, line_text)
+        # wall clock through a provider's function outside it
+        if c.name in ("wall_ms", "ffi_wall_ms") and not under(f.rel, cfg.clock_sources) and not test:
+            add("wall-clock", c.at, line_text)
+        # 6. a frame asked under a condition that reads the host or the layout
+        if c.name in FRAME_ASK and c.kind in ("method", "pkg") and not test and not under(f.rel, cfg.host_dirs()):
+            timed = c.name != "request_frame" and not any(literal_time(f, a) for lb, a in c.args if lb is None)
+            for cond in f.enclosing_conditions(c.at):
+                q = reads_query(f, cond, cfg, readers)
+                # a wake at a deadline while a finger is down (a long press) is the deadline, not a poll
+                if q and not (timed and q.split(" ")[-1] == "pressed"):
+                    add("poll", c.at, f"{line_text}   (under: {q})")
+                    break
+        # 7a. @host's reads in the app
+        if c.kind == "pkg" and c.qual == "@host" and c.name in HOST_READS and app and not test:
+            add("host-read", c.at, line_text)
+    # wall clock and randomness in externs' bodies and anywhere else
+    if not under(f.rel, cfg.clock_sources):
+        for k, t in enumerate(toks):
+            if t.kind == "str" and WALL_WORDS.search(t.text) and not f.in_test(k):
+                add("wall-clock", k, f.lines[t.line - 1].strip())
+            if t.kind == "at" and t.text == "@random" and k + 2 < len(toks):
+                # @random.Rand::new() without a seed
+                j = k + 1
+                while j < len(toks) and j < k + 8 and not (toks[j].kind == "op" and toks[j].text == "("):
+                    j += 1
+                if j < len(toks) and toks[j].text == "(" and toks[j].end == j + 1:
+                    add("wall-clock", k, f.lines[t.line - 1].strip())
+    # 3. a fixed count of frames in a test
+    for k, t in enumerate(toks):
+        if t.kind == "ident" and t.text == "for" and f.in_test(k):
+            # for _ in 0..<N { … .frame( … }
+            j, rng = k + 1, []
+            while j < len(toks) and not (toks[j].kind == "op" and toks[j].text == "{"):
+                rng.append(j)
+                j += 1
+            if j >= len(toks) or toks[j].end is None:
+                continue
+            body = range(j, toks[j].end)
+            has_range = any(toks[r].text in ("..<", "..=") for r in rng)
+            bound_lit = has_range and all(toks[r].kind != "ident" or toks[r].text in ("in", "_") or
+                                          toks[r] is toks[k + 1] for r in rng) and any(
+                toks[r].kind == "num" and toks[r].text not in ("0", "1") for r in rng)
+            if bound_lit and any(toks[b].kind == "ident" and toks[b].text == "frame" and
+                                 toks[b - 1].text == "." for b in body):
+                add("frame-count", k, f.lines[t.line - 1].strip())
+
+
+def cfg_host_dirs(self):
+    return [p for p in self.framework if p.rstrip("/").endswith("/host")]
+
+
+Config.host_dirs = cfg_host_dirs
+
+
+def literal_time(f, idx):
+    """Whether a time argument is a bare number: its tokens, the clock's reads taken out (c.now(), now(), t.time()),
+    are numbers and operators only, with a number among them."""
+    toks = f.toks
+    skip = set()
+    for i in idx:
+        t = toks[i]
+        if t.kind == "ident" and t.text in ("now", "time") and i + 1 < len(toks) and toks[i + 1].text == "(":
+            skip.update(range(i, (toks[i + 1].end or i + 1) + 1))
+            j = i - 1
+            while j >= 0 and toks[j].text == "." and j - 1 >= 0 and toks[j - 1].kind in ("ident", "at"):
+                skip.update((j, j - 1))
+                j -= 2
+    rest = [toks[i] for i in idx if i not in skip]
+    if not rest or all(t.kind != "num" or float(re.sub(r"[_A-Za-z]+$", "", t.text.replace("_", "")) or 0) == 0
+                       for t in rest if t.kind == "num") and not skip:
+        return False  # no time at all (frame(ms=0.0)) is not a guess
+    if any(t.kind in ("ident", "at", "str") for t in rest):
+        return False
+    return any(t.kind == "num" for t in rest)
+
+
+def reads_query(f, cond, cfg, readers=None):
+    toks = f.toks
+    for i in cond:
+        t = toks[i]
+        if t.kind == "ident" and i + 1 < len(toks) and toks[i + 1].text == "(":
+            prev = toks[i - 1] if i else None
+            if readers and (prev is None or prev.text != ".") and (os.path.dirname(f.rel), t.text) in readers:
+                return t.text + "() → " + readers[(os.path.dirname(f.rel), t.text)]
+            if prev is not None and prev.text == "." and i >= 2 and toks[i - 2].kind == "at" and toks[i - 2].text == "@host":
+                return "@host." + t.text
+            if t.text in cfg.queries and prev is not None and prev.text == ".":
+                return t.text
+            if t.text.startswith("h_") and t.text[2:] in cfg.queries:
+                return t.text
+    return None
+
+
+def host_readers(files, cfg):
+    """The package's own functions that read the host or the layout, themselves or through another such function
+    of their package: {(package dir, name): what they read}."""
+    bodies = {}
+    for f in files:
+        if f.test_file:
+            continue
+        pkg = os.path.dirname(f.rel)
+        for it in f.items:
+            if it.kind == "fn" and it.name and "::" not in it.name:
+                bodies[(pkg, it.name)] = (f, range(it.start, it.end + 1))
+    readers = {}
+    changed = True
+    while changed:
+        changed = False
+        for key, (f, rng) in bodies.items():
+            if key in readers:
+                continue
+            q = reads_query(f, rng, cfg, readers)
+            if q:
+                readers[key] = q
+                changed = True
+    return readers
+
+
+def lint_globals(files, cfg, out):
+    """7b: per package under globals.roots, every top-level let of a non-plain type is put back by the package's
+    reset (reset, reset_globals, a function given to on_reset, and what those call) or says why not."""
+    pkgs = {}
+    for f in files:
+        if f.test_file or not under(f.rel, cfg.globals_roots):
+            continue
+        pkgs.setdefault(os.path.dirname(f.rel), []).append(f)
+    alias = {os.path.basename(p): p for p in pkgs}
+    fns = {}  # (pkg, name) -> [token lists]
+    roots = []
+    lets = []
+    for pkg, fs in pkgs.items():
+        for f in fs:
+            for it in f.items:
+                body = f.toks[it.start:it.end + 1]
+                if it.kind == "fn":
+                    fns.setdefault((pkg, it.name.split("::")[-1] if "::" not in it.name else it.name), []).append(body)
+                    if it.name in ("reset", "reset_globals"):
+                        roots.append((pkg, it.name))
+                elif it.kind == "let":
+                    lets.append((pkg, f, it))
+            for c in f.calls:
+                if c.name == "on_reset" and c.args:
+                    _, a = c.args[0]
+                    toks = [f.toks[i] for i in a]
+                    if len(toks) == 1 and toks[0].kind == "ident":
+                        roots.append((pkg, toks[0].text))
+                    else:
+                        fns.setdefault((pkg, f"<on_reset {f.rel}:{f.toks[c.at].line}>"), []).append(toks)
+                        roots.append((pkg, f"<on_reset {f.rel}:{f.toks[c.at].line}>"))
+    said = {p: set() for p in pkgs}
+    seen, todo = set(), list(roots)
+    while todo:
+        key = todo.pop()
+        if key in seen or key not in fns:
+            continue
+        seen.add(key)
+        pkg = key[0]
+        for body in fns[key]:
+            for i, t in enumerate(body):
+                if t.kind == "ident":
+                    if not (i and body[i - 1].text == "."):  # a field of the same name is not the global
+                        said[pkg].add(t.text)
+                    if i + 1 < len(body) and body[i + 1].text == "(":
+                        q = body[i - 2].text if i >= 2 and body[i - 1].text == "." and body[i - 2].kind == "at" else None
+                        p = alias.get(q[1:]) if q else pkg
+                        if p is not None:
+                            todo.append((p, t.text))
+                    if i >= 2 and body[i - 1].text == "." and body[i - 2].kind == "at" and body[i - 2].text[1:] in alias:
+                        said[alias[body[i - 2].text[1:]]].add(t.text)
+    for pkg, f, it in lets:
+        toks = f.toks[it.start:it.end + 1]
+        # let NAME (: TYPE)? = VALUE
+        k = 0
+        while k < len(toks) and toks[k].text != "let":
+            k += 1
+        if k + 1 >= len(toks) or toks[k + 1].kind != "ident":
+            continue
+        name = toks[k + 1].text
+        ty, j = [], k + 2
+        if j < len(toks) and toks[j].text == ":":
+            j += 1
+            while j < len(toks) and toks[j].text != "=":
+                ty.append(toks[j])
+                j += 1
+        value = toks[j + 1:] if j < len(toks) else []
+        tynames = {t.text for t in ty if t.kind == "ident"}
+        if ty and tynames <= PLAIN_TYPES:
+            continue
+        if ty and ty[0].text == "(" and ty[0].end is not None and any(t.text == "->" for t in ty) and not any(
+                t.text in ("Ref", "Array", "Map", "Set", "FixedArray") for t in ty):
+            continue  # a function: a top-level let cannot be set again
+        if not ty and value and len(value) == 1 and value[0].kind in ("num", "str"):
+            continue
+        if not ty and value and all(t.kind in ("num", "str", "op") or t.text in ("true", "false") for t in value):
+            continue
+        # the comment over it
+        above = it.line - 1
+        while above >= 1 and f.lines[above - 1].strip() == "":
+            above -= 1
+        kept = above >= 1 and f.lines[above - 1].strip().startswith("// kept across runs:")
+        # doc comments (///) between: look over them
+        a2 = above
+        while not kept and a2 >= 1 and f.lines[a2 - 1].strip().startswith("//"):
+            if f.lines[a2 - 1].strip().startswith("// kept across runs:"):
+                kept = True
+            a2 -= 1
+        if kept or name in said[pkg]:
+            continue
+        out.append(Finding("globals", f.rel, it.line, f"{name} : {' '.join(t.text for t in ty) or '(inferred)'}"))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Flows and scripts
+
+DRIVE_WAIT = re.compile(r"^\s*(wait|linger)\s+[0-9]")
+SCRIPT_WAITS = [
+    re.compile(r"(?<![\w-])sleep\s+[\"'$0-9.]"),
+    re.compile(r"\bMBUI_SHOT_AT=[\"'$0-9]"),
+    re.compile(r"\bsetTimeout\(.*[^\w.][0-9]"),
+    re.compile(r"\bwaitForTimeout\("),
+    re.compile(r"\btime\.sleep\("),
+]
+PAGE_SETTLE = re.compile(r"\b__mb\w*\.(?:settled|unsettled)\b")
+
+
+def lint_lines(rel, src, rule, pats, out, comment):
+    for n, line in enumerate(src.split("\n"), 1):
+        s = line.lstrip()
+        if s.startswith(comment) and "det-ok(" not in s:
+            continue
+        for p in pats:
+            m = p.search(line)
+            if m:
+                # in a comment after the code
+                ci = line.find(" " + comment + " ")
+                if ci >= 0 and ci < m.start():
+                    continue
+                out.append(Finding(rule, rel, n, line.strip()))
+                break
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Exceptions, the bar, the report
+
+def excuse(findings, texts):
+    for fd in findings:
+        lines = texts.get(fd.file)
+        if lines is None:
+            continue
+        for ln in (fd.line, fd.line - 1):
+            if 1 <= ln <= len(lines):
+                m = EXC.search(lines[ln - 1])
+                if m and fd.rule in [r.strip() for r in m.group(1).split(",")]:
+                    reason = m.group(2).strip()
+                    fd.excused = reason or None
+                    if not reason:
+                        fd.what += "   (det-ok without a reason: not taken)"
+                    break
+
+
+def read(path):
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        return fh.read()
+
+
+def collect(root, cfg):
+    findings, texts, mbts = [], {}, []
+    for dirpath, dirnames, names in os.walk(root):
+        rd = os.path.relpath(dirpath, root).replace(os.sep, "/")
+        rd = "" if rd == "." else rd
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and d not in (
+            "_build", "node_modules", "target", ".mooncakes", "out") and not matches(
+            (rd + "/" + d).lstrip("/"), cfg.skip))
+        for n in sorted(names):
+            rel = (rd + "/" + n).lstrip("/")
+            if matches(rel, cfg.skip):
+                continue
+            path = os.path.join(dirpath, n)
+            if n.endswith(".mbt") and under(rel, cfg.mbt_roots):
+                src = read(path)
+                texts[rel] = src.split("\n")
+                mbts.append(MbtFile(path, rel, src))
+            elif matches(rel, cfg.flows):
+                src = read(path)
+                texts[rel] = src.split("\n")
+                lint_lines(rel, src, "flow-wait", [DRIVE_WAIT], findings, "#")
+            elif matches(rel, cfg.scripts):
+                src = read(path)
+                texts[rel] = src.split("\n")
+                comment = "//" if n.endswith((".mjs", ".js", ".ts")) else "#"
+                lint_lines(rel, src, "script-wait", SCRIPT_WAITS, findings, comment)
+                lint_lines(rel, src, "page-settle", [PAGE_SETTLE], findings, comment)
+    returns = {}
+    for f in mbts:
+        returns.update(f.returns())
+    readers = host_readers(mbts, cfg)
+    for f in mbts:
+        lint_mbt(f, cfg, findings, returns, readers)
+    lint_globals(mbts, cfg, findings)
+    excuse(findings, texts)
+    return findings
+
+
+def tally(findings, excused):
+    counts = {r: {} for r in RULES}
+    for fd in findings:
+        if (fd.excused is not None) == excused:
+            counts[fd.rule][fd.file] = counts[fd.rule].get(fd.file, 0) + 1
+    return counts
+
+
+def total(per_file):
+    return sum(per_file.values())
+
+
+# the rules where an exception may take the place of a finding there was (docs/detlint.md: a time shown is right);
+# elsewhere an exception's count only goes down, apart from the findings'
+SWAPPABLE = {"app-clock"}
+
+
+def over(cur, bar, rule):
+    """The files (of one rule) above their bar: (file, found, its bar, found and excused, their bar)."""
+    out = []
+    for p in sorted(set(cur["found"]) | set(cur["excused"])):
+        f, e = cur["found"].get(p, 0), cur["excused"].get(p, 0)
+        bf, be = bar["found"].get(p, 0), bar["excused"].get(p, 0)
+        if f > bf or (f + e > bf + be if rule in SWAPPABLE else e > be):
+            out.append((p, f, bf, f + e, bf + be))
+    return out
+
+
+def under_bar(cur, bar):
+    """The files (of one rule) below their bar: found fewer, or found and excused fewer."""
+    out = []
+    for p in sorted(set(bar["found"]) | set(bar["excused"])):
+        f, e = cur["found"].get(p, 0), cur["excused"].get(p, 0)
+        bf, be = bar["found"].get(p, 0), bar["excused"].get(p, 0)
+        if f < bf or f + e < bf + be:
+            out.append(p)
+    return out
+
+
+def main(argv):
+    args = [a for a in argv if not a.startswith("--")]
+    flags = [a for a in argv if a.startswith("--")]
+    root = os.path.abspath(args[0] if args else os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+    conf_path = os.path.join(root, "detlint.json")
+    if not os.path.exists(conf_path):
+        print(f"detlint: no {conf_path}", file=sys.stderr)
+        return 2
+    conf = json.loads(read(conf_path))
+    cfg = Config(conf)
+    findings = collect(root, cfg)
+    if "--list" in flags:
+        want = args[1] if len(args) > 1 else None
+        for fd in sorted(findings, key=lambda x: (x.rule, x.file, x.line)):
+            if want is None or fd.rule == want:
+                ex = f"   [det-ok: {fd.excused}]" if fd.excused else ""
+                print(f"{fd.rule}\t{fd.file}:{fd.line}\t{fd.what}{ex}")
+        return 0
+    found, excused = tally(findings, False), tally(findings, True)
+    have = {r: {"found": found[r], "excused": excused[r]} for r in RULES}
+    bars = {r: {"found": conf.get("counts", {}).get(r), "excused": conf.get("excused", {}).get(r)} for r in RULES}
+    update = next((a for a in flags if a.startswith("--update")), None)
+    if update:
+        counts, exc = {}, {}
+        for r in RULES:
+            cur, bar = have[r], bars[r]
+            nf, ne = dict(cur["found"]), dict(cur["excused"])
+            if bar["found"] is not None and update != "--update=raise":
+                bar = {"found": bar["found"], "excused": bar["excused"] or {}}
+                for p, f, bf, fe, bfe in over(cur, bar, r):
+                    print(f"detlint: {r} in {p} is above its bar ({f} found, {fe} with det-ok; the bar {bf}, {bfe}): "
+                          f"kept (--update=raise to raise it, and say why)", file=sys.stderr)
+                    nf[p], ne[p] = bar["found"].get(p, 0), bar["excused"].get(p, 0)
+            counts[r] = {p: n for p, n in sorted(nf.items()) if n}
+            exc[r] = {p: n for p, n in sorted(ne.items()) if n}
+        conf["counts"], conf["excused"] = counts, exc
+        with open(conf_path, "w", encoding="utf-8") as fh:
+            json.dump(conf, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        print("detlint: bars written: " + ", ".join(
+            f"{r} {total(counts[r])}" + (f" (+{total(exc[r])} det-ok)" if exc[r] else "") for r in RULES))
+        return 0
+    bad = False
+    print(f"detlint ({os.path.basename(root)}): rule, found / bar, "
+          f"det-ok / bar (each file against its own)")
+    for r in RULES:
+        cur, bar = have[r], bars[r]
+        notes = []
+        line = f"  {r:14} {total(cur['found']):5} / "
+        if bar["found"] is None:
+            bad = True
+            line += "-"
+            notes.append(f"    {r}: no bar in detlint.json (scripts/detlint.py --update)")
+        else:
+            bar = {"found": bar["found"], "excused": bar["excused"] or {}}
+            line += f"{total(bar['found']):<5} {total(cur['excused']):4} / {total(bar['excused']):<4}"
+            if total(bar["found"]) == 0 and total(bar["excused"]) == 0:
+                line += "  forbidden"
+            for p, f, bf, fe, bfe in over(cur, bar, r):
+                bad = True
+                if f > bf:
+                    notes.append(f"    {r}: {p}: {f} > {bf}: {RULES[r]}")
+                else:
+                    notes.append(f"    {r}: {p}: {fe - f} det-ok, the bar {bfe - bf}: " + (
+                        "an exception may only take the place of a finding there was" if r in SWAPPABLE else
+                        "this rule's exceptions only go down (a finding marked det-ok is still a finding)"))
+                for fd in findings:
+                    if fd.rule == r and fd.file == p:
+                        notes.append(f"        {p}:{fd.line}  {fd.what}" + (
+                            f"   [det-ok: {fd.excused}]" if fd.excused is not None else ""))
+                if f > bf:
+                    notes.append(f"      an exception says why on its line (`det-ok({r}): <why>`), in place of a "
+                                 f"finding there was")
+            lower = under_bar(cur, bar)
+            if lower:
+                bad = True
+                notes.append(f"    {r}: fewer than the bar in {', '.join(lower)}: lower it to what is now "
+                             f"(scripts/detlint.py --update), so it stays there")
+        print(line)
+        for fd in findings:
+            if fd.rule == r and fd.excused is not None:
+                print(f"      det-ok {fd.file}:{fd.line}: {fd.excused}")
+        for x in notes:
+            print(x)
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

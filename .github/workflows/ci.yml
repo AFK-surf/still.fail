@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (scripts/detlint.py, docs/detlint.md)"
+        run: python3 scripts/detlint_test.py && python3 scripts/detlint.py
       - name: Install MoonBit
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash

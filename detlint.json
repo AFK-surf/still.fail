@@ -1,0 +1,198 @@
+{
+  "mbt": {
+    "roots": [
+      "src"
+    ],
+    "framework": [
+      "src/ui",
+      "src/host",
+      "src/motion",
+      "src/effect"
+    ],
+    "clock_sources": [
+      "src/host"
+    ],
+    "frame_core": [
+      "src/ui/app.mbt",
+      "src/ui/ctx.mbt",
+      "src/ui/hostcall.mbt",
+      "src/ui/hostread.mbt",
+      "src/host"
+    ]
+  },
+  "globals": {
+    "roots": [
+      "src/ui",
+      "src/kit",
+      "src/motion"
+    ]
+  },
+  "flows": [
+    "test/**/*.drive"
+  ],
+  "scripts": [
+    "scripts/*.sh",
+    "scripts/*.mjs",
+    "scripts/*.py",
+    "web/*.js",
+    "web/*.mjs"
+  ],
+  "skip": [
+    "scripts/detlint*.py",
+    "scripts/bench*",
+    "src/bench"
+  ],
+  "counts": {
+    "frame-request": {
+      "src/kit/dialog.mbt": 1,
+      "src/kit/disclosure.mbt": 1,
+      "src/kit/form.mbt": 1,
+      "src/kit/look.mbt": 1,
+      "src/kit/menu.mbt": 1,
+      "src/kit/popover.mbt": 1,
+      "src/kit/progress.mbt": 1,
+      "src/kit/sheet.mbt": 5,
+      "src/kit/toggle.mbt": 1,
+      "src/kitdemo/foundation.mbt": 1,
+      "src/motion/anim.mbt": 5,
+      "src/motion/layer.mbt": 2,
+      "src/textdiff/main.mbt": 1,
+      "src/ui/code_field.mbt": 1,
+      "src/ui/desktop.mbt": 3,
+      "src/ui/drive.mbt": 1,
+      "src/ui/focus.mbt": 2,
+      "src/ui/fx.mbt": 2,
+      "src/ui/image.mbt": 1,
+      "src/ui/inputrec.mbt": 1,
+      "src/ui/list.mbt": 8,
+      "src/ui/native.mbt": 3,
+      "src/ui/nav.mbt": 5,
+      "src/ui/overlay.mbt": 5,
+      "src/ui/reader.mbt": 4,
+      "src/ui/scroll.mbt": 6,
+      "src/ui/semantics.mbt": 2,
+      "src/ui/sideways.mbt": 1
+    },
+    "settle": {
+      "src/effecttest/fiber_test.mbt": 9,
+      "src/effecttest/frame_test.mbt": 2,
+      "src/effecttest/outside_test.mbt": 16,
+      "src/effecttest/prims_test.mbt": 6,
+      "src/effecttest/scheduler_test.mbt": 4,
+      "src/effecttest/scope_test.mbt": 6,
+      "src/effecttest/sims_test.mbt": 3,
+      "src/kit/controls_test.mbt": 4,
+      "src/kit/menus_test.mbt": 5,
+      "src/kit/overlays_test.mbt": 17,
+      "src/kit/time_test.mbt": 2,
+      "src/motion/fx_test.mbt": 12,
+      "src/motion/motion_port_test.mbt": 3,
+      "src/motion/motion_test.mbt": 8,
+      "src/ui/app.mbt": 1,
+      "src/ui/desktop_test.mbt": 3,
+      "src/ui/drive.mbt": 1,
+      "src/ui/fx_test.mbt": 4,
+      "src/ui/hostread_test.mbt": 1,
+      "src/ui/image_test.mbt": 7,
+      "src/ui/nav_test.mbt": 6,
+      "src/ui/reader_test.mbt": 3,
+      "src/ui/scroll_wbtest.mbt": 5
+    },
+    "flow-wait": {},
+    "script-wait": {
+      "scripts/android.sh": 6,
+      "scripts/shots.sh": 2,
+      "scripts/textdiff.sh": 1
+    },
+    "page-settle": {
+      "scripts/web-shot.mjs": 3,
+      "scripts/web-test.mjs": 2
+    },
+    "frame-count": {
+      "src/effecttest/frame_test.mbt": 1,
+      "src/motion/fx_test.mbt": 2,
+      "src/motion/motion_port_test.mbt": 1,
+      "src/motion/motion_test.mbt": 1,
+      "src/ui/code_field_wbtest.mbt": 3,
+      "src/ui/fx_test.mbt": 2,
+      "src/ui/image_test.mbt": 1,
+      "src/ui/layout_wbtest.mbt": 8,
+      "src/ui/list_test.mbt": 1,
+      "src/ui/scroll_wbtest.mbt": 3,
+      "src/ui/words_test.mbt": 1
+    },
+    "literal-time": {
+      "src/effecttest/fiber_test.mbt": 1,
+      "src/effecttest/outside_test.mbt": 2,
+      "src/effecttest/scheduler_test.mbt": 4,
+      "src/effecttest/scope_test.mbt": 4,
+      "src/kit/disclosure_test.mbt": 1,
+      "src/kit/menus_test.mbt": 5,
+      "src/kit/overlays_test.mbt": 13,
+      "src/kit/time_test.mbt": 7,
+      "src/motion/motion_port_test.mbt": 1,
+      "src/motion/motion_test.mbt": 1,
+      "src/ui/focus_test.mbt": 3,
+      "src/ui/frames_test.mbt": 1,
+      "src/ui/hostread_test.mbt": 1,
+      "src/ui/layout_wbtest.mbt": 2,
+      "src/ui/nav_test.mbt": 1,
+      "src/ui/scroll_wbtest.mbt": 12,
+      "src/ui/words_test.mbt": 1
+    },
+    "stable-mode": {
+      "src/demo/main.mbt": 1
+    },
+    "retired-api": {},
+    "app-clock": {
+      "src/effectdemo/demo.mbt": 1,
+      "src/kit/menu.mbt": 2,
+      "src/kit/popover.mbt": 2,
+      "src/kit/progress.mbt": 1,
+      "src/kit/sheet.mbt": 5,
+      "src/kit/time.mbt": 2
+    },
+    "wall-clock": {},
+    "poll": {
+      "src/kitdemo/foundation.mbt": 1
+    },
+    "host-read": {
+      "src/textdiff/main.mbt": 1
+    },
+    "globals": {
+      "src/kit/form.mbt": 1,
+      "src/kit/time.mbt": 1,
+      "src/motion/layer.mbt": 2,
+      "src/motion/spec.mbt": 4,
+      "src/ui/app.mbt": 3,
+      "src/ui/draw.mbt": 4,
+      "src/ui/frames.mbt": 2,
+      "src/ui/fx.mbt": 2,
+      "src/ui/hostcall.mbt": 3,
+      "src/ui/image.mbt": 2,
+      "src/ui/layout.mbt": 2,
+      "src/ui/native.mbt": 2,
+      "src/ui/nav.mbt": 1,
+      "src/ui/scene.mbt": 1,
+      "src/ui/scroll.mbt": 3,
+      "src/ui/sideways.mbt": 1,
+      "src/ui/textrec.mbt": 2
+    }
+  },
+  "excused": {
+    "frame-request": {},
+    "settle": {},
+    "flow-wait": {},
+    "script-wait": {},
+    "page-settle": {},
+    "frame-count": {},
+    "literal-time": {},
+    "stable-mode": {},
+    "retired-api": {},
+    "app-clock": {},
+    "wall-clock": {},
+    "poll": {},
+    "host-read": {},
+    "globals": {}
+  }
+}
