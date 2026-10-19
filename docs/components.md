@@ -103,6 +103,12 @@ The gallery's page for each is `MBUI_SCREEN=<page>`.
 | Select | `@kit.select(c, key, value, options, placeholder?) -> Changed[String]`: a listbox on the chosen option | menus |
 | Toolbar | `@kit.toolbar(c, key, body)`: one roving group | menus |
 | NavigationMenu | `@kit.navigation_menu(c, key, items) -> String?`: `nav_trigger` (content by a resting pointer), `nav_link` | menus |
+| (a sheet) | `@kit.sheet(c, key, open, h, body) -> Changed[Bool]`: from the bottom (Vaul's Drawer), modal, closed by a drag down by its grabber | |
+| Collapsible | `@kit.collapsible(c, key, open, label, body) -> Changed[Bool]`: its content grows to its height | disclosure |
+| Accordion | `@kit.accordion(c, key, items, value, multiple?, collapsible?) -> Changed[Array[String]]`: items by `fold`; its triggers one roving group | disclosure |
+| Tabs | `@kit.tabs(c, key, tabs, value, panel, manual?) -> Changed[String]`: the arrows choose as they move unless `manual` | disclosure |
+| ScrollArea | `@kit.scroll_area(c, key, h, body)`: a list's scrolling (wheel, drag, keys, its bar) round what is taller than its room | disclosure |
+| Form | `@kit.form(c, key, fields, submit?) -> FormResult`: fields by `form_field` (needed, an email, a number, the view's check); what is wrong shows once left or handed on | disclosure |
 
 ## Radix's utilities
 

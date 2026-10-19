@@ -25,7 +25,7 @@ pub fn text_field(
 
 ///|
 /// The pill of field `key` round its editor (`secret`: drawn as dots), then what `after` builds in it (a button);
-/// `got` is given what the editor reports.
+/// `got` is given what the editor reports; `invalid`: edged in the danger colour.
 fn pill_field(
   c : @ui.Ctx,
   key : String,
@@ -35,10 +35,17 @@ fn pill_field(
   placeholder : String,
   got : (@ui.EditorResult) -> Unit,
   after : () -> Unit,
+  invalid? : Bool = false,
 ) -> Unit {
   let t = c.theme()
   let fid = c.id(key + "/field")
-  let edge = if c.editor_focused(key) || c.hovered(fid) { t.field_hover } else { t.border }
+  let edge = if invalid {
+    t.danger
+  } else if c.editor_focused(key) || c.hovered(fid) {
+    t.field_hover
+  } else {
+    t.border
+  }
   c.box(
     id=fid,
     dir=Row,

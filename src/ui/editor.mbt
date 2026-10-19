@@ -545,6 +545,15 @@ pub fn Ctx::set_editor_text(self : Ctx, key : String, text : String) -> Unit {
 }
 
 ///|
+/// The words in editor `key` now ("" none such): what a view checks before the editor is built this frame.
+pub fn Ctx::editor_text(self : Ctx, key : String) -> String {
+  match self.editors.get(self.id(key)) {
+    Some(st) => st.text
+    None => ""
+  }
+}
+
+///|
 /// Whether the editor `key` is kept on this page (drawn before, and its page not left since).
 pub fn Ctx::has_editor(self : Ctx, key : String) -> Bool {
   self.editors.contains(self.id(key))

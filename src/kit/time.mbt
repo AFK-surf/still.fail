@@ -33,6 +33,8 @@ priv struct KitState {
   /// where a context menu opened, by its id; which of a menubar's menus is open (-1 none), by its id
   at : Map[Int, (Double, Double)]
   bars : Map[Int, Int]
+  /// a form's state (form.mbt), by its id
+  forms : Map[Int, FormState]
   /// the pointer this frame and the last (whether it moved: what moves a menu's highlight), as of frame `ptr_frame`
   mut ptr : (Double, Double)
   mut ptr_was : (Double, Double)
@@ -51,6 +53,7 @@ fn KitState::new() -> KitState {
     typed: {},
     at: {},
     bars: {},
+    forms: {},
     ptr: (-1.0, -1.0),
     ptr_was: (-1.0, -1.0),
     ptr_frame: -1,

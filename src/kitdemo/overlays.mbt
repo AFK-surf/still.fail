@@ -100,14 +100,16 @@ fn overlays(c : @ui.Ctx) -> Unit {
     |> ignore
   })
   section(c, "Toast", fn() {
-    @kit.toast_look(
-      c,
-      { toast: @kit.toast("g", "Sent", description="To the team, 2 minutes ago", action="Undo"), t: shown, dx: 0.0, hovered: false },
-      fn() {
-        @kit.toast_button(c, "g-undo", "Undo", "Undo", false) |> ignore
-        @kit.toast_button(c, "g-toast-close", "✕", "关闭", true) |> ignore
-      },
-    )
+    // as wide as what it says, as in the window
+    c.box(dir=Row, fn() {
+      @kit.toast_look(
+        c,
+        { toast: @kit.toast("g", "Sent", description="To the team, 2 minutes ago", action="Undo"), t: shown, dx: 0.0, hovered: false },
+        fn() { @kit.toast_button(c, "g-undo", "Undo", "Undo", false) |> ignore },
+        fn() { @kit.toast_button(c, "g-toast-close", "✕", "关闭", true) |> ignore },
+      )
+    })
+    |> ignore
   })
   section(c, "Live", fn() {
     line(c, fn() {

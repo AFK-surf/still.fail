@@ -31,6 +31,7 @@ fn half(c : @ui.Ctx, t : @ui.Theme, page : String) -> Unit {
           "controls" => controls(c)
           "overlays" => overlays(c)
           "menus" => menus(c)
+          "disclosure" => disclosure(c)
           _ => c.text("No page \"\{page}\"") |> ignore
         }
       })

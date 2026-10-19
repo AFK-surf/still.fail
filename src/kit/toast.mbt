@@ -55,7 +55,7 @@ pub fn toaster(
   w? : Double = 560.0,
   label? : String = "通知",
   close_label? : String = "关闭",
-  look? : (@ui.Ctx, ToastState, () -> Unit) -> Unit = toast_look,
+  look? : (@ui.Ctx, ToastState, () -> Unit, () -> Unit) -> Unit = toast_look,
 ) -> Toasts {
   install()
   let vid = c.id(key)
@@ -147,18 +147,21 @@ pub fn toaster(
           hovered: c.hovered(tid),
         }
         let i = c.drag_area(if live { tid } else { 0 }, axis=Horizontal, fn() {
-          look(c, st, fn() {
-            if !live {
-              return
-            }
-            if to.action != "" && toast_button(c, k + "/action", to.action, to.action, false) {
-              acted = Some(to.id)
-              live = false
-            }
-            if toast_button(c, k + "/close", "✕", close_label, true) {
-              live = false
-            }
-          })
+          look(
+            c,
+            st,
+            fn() {
+              if live && to.action != "" && toast_button(c, k + "/action", to.action, to.action, false) {
+                acted = Some(to.id)
+                live = false
+              }
+            },
+            fn() {
+              if live && toast_button(c, k + "/close", "✕", close_label, true) {
+                live = false
+              }
+            },
+          )
         })
         c.semantics(i, Status, label=to.title, description=to.description)
         if live {
@@ -195,19 +198,19 @@ fn focus_in(c : @ui.Ctx, key : String, id : String) -> Bool {
 }
 
 ///|
-/// A toast's default look (still.fail's): the primary ink, a corner of 20, its title over its description (fainter),
-/// then what `actions` builds (its action, its close button) beside them; it fades and rises as it comes in, slides
-/// away as it goes out and is swiped.
-pub fn toast_look(c : @ui.Ctx, s : ToastState, actions : () -> Unit) -> Unit {
+/// A toast's default look (still.fail's): the primary ink, a corner of 20; its title over its description (fainter)
+/// over what `action` builds (its action), what `close` builds (its close button) in its top right corner; it fades
+/// and rises as it comes in, slides away as it goes out and is swiped.
+pub fn toast_look(c : @ui.Ctx, s : ToastState, action : () -> Unit, close : () -> Unit) -> Unit {
   let t = c.theme()
   let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
   c.box(
     dir=Row,
     pl=18.0,
-    pr=8.0,
-    pady=9.0,
-    gap=10.0,
-    align=ACenter,
+    pr=6.0,
+    pady=6.0,
+    gap=8.0,
+    align=AStart,
     bg=t.primary,
     radius=20.0,
     max_w=560.0,
@@ -218,14 +221,18 @@ pub fn toast_look(c : @ui.Ctx, s : ToastState, actions : () -> Unit) -> Unit {
     ty=(1.0 - k) * 12.0,
     opacity=k,
     fn() {
-      c.box(gap=2.0, fn() {
+      // the first line of words on the close button's middle
+      c.box(gap=2.0, pady=4.0, fn() {
         c.text(s.toast.title, size=t.font, weight=500, color=t.on_primary, line=20.0) |> ignore
         if s.toast.description != "" {
           c.text(s.toast.description, size=t.font_sm, color=@ui.alpha(t.on_primary, 0.7), line=18.0) |> ignore
         }
+        if s.toast.action != "" {
+          c.box(dir=Row, pt=6.0, fn() { action() }) |> ignore
+        }
       })
       |> ignore
-      actions()
+      close()
     },
   )
   |> ignore

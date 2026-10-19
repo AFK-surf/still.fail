@@ -255,3 +255,35 @@ test "toasts: each goes after its time, paused under the pointer; closed, acted 
   t.settle() |> ignore
   assert_true(t.query(@ui.Status, label="Moved") is None)
 }
+
+///|
+test "sheet: up from the bottom, the page hidden; a press above it, Escape and a drag down by its grabber close it" {
+  let open = Ref(true)
+  let t = @ui.Tester::new(fn(c) {
+    c.text("Page") |> ignore
+    open.val = sheet(c, "s", open.val, 300.0, label="Chat info", fn() { button(c, "Pin") |> ignore }).value
+  })
+  t.settle() |> ignore
+  let (_, y, _, h) = t.get(@ui.Dialog, label="Chat info").rect
+  assert_eq(y, 844.0 - 300.0)
+  assert_eq(h, 300.0)
+  assert_true(t.query(@ui.Text, label="Page") is None)
+  t.click(@ui.Button, label="Pin")
+  assert_true(open.val)
+  t.tap(100.0, 100.0)
+  assert_false(open.val)
+  open.val = true
+  t.frame()
+  t.settle() |> ignore
+  t.press("Escape")
+  assert_false(open.val)
+  open.val = true
+  t.frame()
+  t.settle() |> ignore
+  // a short drag goes back; a long one closes it
+  t.drag(195.0, 552.0, 195.0, 590.0)
+  t.settle() |> ignore
+  assert_true(open.val)
+  t.drag(195.0, 552.0, 195.0, 700.0)
+  assert_false(open.val)
+}
