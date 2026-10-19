@@ -372,7 +372,7 @@ export const AgentsLive = (control: Control) =>
         return cloud.state?.peers.find((x) => x?.id === host)?.name ?? host ?? null;
       };
       const accounts: Accounts = makeAccounts({
-        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, following: () => events.inUse(), checkOnStart: true,
+        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
         workspaces: () => hub.workspaces(),
         shared: { status: (p) => sharing!.status(p), view: (p) => sharing?.profileView(p) ?? null, hostName },
       });

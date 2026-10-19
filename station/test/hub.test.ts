@@ -1337,6 +1337,64 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await r.close();
 });
 
+test("a session leaves an account whose five hours are nearly full before its next turn, when another has room", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  const now = time.clock.currentTimeMillisUnsafe();
+  const HOUR = 60 * 60 * 1000;
+  const used: Record<string, number> = { cc: 10, cc2: 10 };
+  const quota = (five: number) => ({
+    state: "ok",
+    windows: [
+      { label: "5 小时", usedPercent: five, resetsAt: now + 2 * HOUR, minutes: 300 },
+      { label: "每周", usedPercent: 20, resetsAt: now + 100 * HOUR, minutes: 7 * 24 * 60 },
+    ],
+    detail: null,
+    checkedAt: now,
+  });
+  r.hub.accounts.setHealth((id) => ({ quota: quota(used[id] ?? 0) }));
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const turn = async (text: string) => {
+    await r.accept({ ...say(`<@UBOT> ${text}`), threadTs: m.threadTs });
+    await settle();
+  };
+  const done = async () => {
+    await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+    r.claude.last().complete();
+    await settle();
+  };
+  await done();
+  r.edit(withProfile("cc2", "another", ["opus"]));
+  const first = r.claude.last();
+  const own = r.session(key).profile;
+  const other = own === "cc" ? "cc2" : "cc";
+  // Its account is nearly full: the next turn starts on the other, its process ended first.
+  used[own] = 85;
+  await turn("once more");
+  assert.ok(first.disposed);
+  assert.equal(r.session(key).profile, other);
+  assert.equal(r.claude.last().options.profile.id, other);
+  await done();
+  // Both nearly full: it stays where it is, in the same process.
+  used[other] = 90;
+  const second = r.claude.last();
+  await turn("and again");
+  assert.equal(r.claude.last(), second);
+  assert.ok(!second.disposed);
+  assert.equal(r.session(key).profile, other);
+  await done();
+  // Kept to it by hand: it stays however full.
+  used[own] = 10;
+  await configure(r.hub, key, { profile: other });
+  await turn("pinned");
+  assert.equal(r.session(key).profile, other);
+  await done();
+  await r.close();
+});
+
 test("the station's variables for its agents changed: a process that could take a model in place still ends, the next starts with them", async () => {
   const r = new Rig();
   const m = say("<@UBOT> fix the build");

@@ -7,7 +7,7 @@ import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
-import { availableEfforts, commonEfforts, type ProfileHealth, pickProfile, serves, usable, windowsOf } from "./pool.ts";
+import { availableEfforts, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
@@ -72,9 +72,10 @@ export class Accounts {
     return this.deps.allows?.(key, profile) ?? true;
   }
 
-  /// The profile a session's runtime starts on: its own while usable (the account's cache is warm there), else the one
-  /// the pool picks among those of its runtime allowed in its workspace (transcripts are shared, so it resumes with all
-  /// it had there).
+  /// The profile a session's runtime starts on, asked again before each turn: its own while usable and its short window
+  /// not nearly full (the account's cache is warm there), else the one the pool picks among those of its runtime allowed
+  /// in its workspace (transcripts are shared, so it resumes with all it had there). Nearly full, it stays when the pool
+  /// has no better: every other is as full.
   runOn(key: string): RunOn {
     const { store } = this.deps;
     const row = store.getSession(key);
@@ -89,9 +90,14 @@ export class Accounts {
     // Kept to it by hand: that one, whatever it says. Otherwise its own while it can run it: usable, and with its model
     // enabled.
     const current = candidates.find((p) => p.id === row.profile);
-    if (current && (row.profilePinned || (usable(this.healthOf(current.id)) && serves(current, row.model)))) return withSpelling(current);
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    const crowded = (p: Profile) => urgency(this.healthOf(p.id).quota, now).crowded;
+    const keeps = current && (row.profilePinned || (usable(this.healthOf(current.id)) && serves(current, row.model)));
+    if (current && keeps && (row.profilePinned || !crowded(current))) return withSpelling(current);
     if (candidates.length === 0) throw new Error(`session ${key}: no profile runs ${row.runtime}`);
-    const next = this.pick(candidates, row.model, false);
+    // Crowded: a move only to one that is not (the pool puts crowded ones last), and not counting itself where it is.
+    if (current && keeps && !candidates.some((p) => p.id !== current.id && serves(p, row.model) && usable(this.healthOf(p.id)) && !crowded(p))) return withSpelling(current);
+    const next = this.pick(keeps ? candidates.filter((p) => p.id !== current!.id) : candidates, row.model, false);
     if (next.id !== row.profile) {
       store.setSessionProfile(key, next.id, false);
       log.info("hub", "session taken on by another profile", { session: key, from: row.profile, to: next.id });

@@ -6,8 +6,9 @@
 // What changes is pushed: `onChange` hears each change the overview shows (a check, an allowance, a sign-in, the
 // machine's logins); config.json's own changes are the ConfigFile's to tell. Kept on a timer only where nothing says
 // when it changed:
-// - allowances: every 5 minutes, and only while someone follows the events (`following`), as admin/events.rs does; the
-//   providers do not tell when an allowance moves. `followed()` asks the stale ones at once when the first follower comes.
+// - allowances: every 5 minutes, while someone follows the events or a turn runs (`following`); the providers do not
+//   tell when an allowance moves, and the pool picks by them. `followed()` asks the stale ones at once when the first
+//   follower comes.
 // - every profile checked 3 s after start (what changed while the station was off: keys revoked, logins expired).
 // - the machine's logins: read again when the overview is read with a reading over 2 minutes old (machine.ts).
 // - a sign-in times out after 15 minutes; a finished sign-in for a new profile is kept 15 minutes for its page.
@@ -98,7 +99,7 @@ export type AccountsDeps = {
   };
   /// The codex driver, once there.
   codex?: () => CodexAccess | undefined;
-  /// Whether someone follows the events (allowances are asked again on a round only then).
+  /// Whether someone follows the events or a turn runs (allowances are asked again on a round only then).
   following?: () => boolean;
   /// The station's environment (where the machine's logins are, and the CLIs found); process.env by default.
   env?: Env;

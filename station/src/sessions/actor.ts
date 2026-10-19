@@ -501,6 +501,8 @@ export class SessionActor {
   /// as the generation the caller opened it as (`nextGeneration`, whose `listener` the driver was given).
   adopt(snap: Snapshot, agent: AgentSession | null) {
     this.agent = agent ? { generation: this.generation, session: agent } : null;
+    // Taken up on the profile the session has (hub.ts takeUp runs it there).
+    this.profile = agent ? (this.deps.store.getSession(this.key)?.profile ?? null) : null;
     this.turn = snap.turn && {
       id: snap.turn.id,
       authRetried: snap.turn.authRetried,
@@ -790,6 +792,13 @@ export class SessionActor {
   }
 
   private async ensureAgent(): Promise<AgentSession> {
+    // Before each turn the account is asked about again: one whose five hours are nearly full is left for one with
+    // room (accounts.ts runOn), before the turn runs into it.
+    if (this.agent && !this.stale && !this.agent.session.busy()) {
+      try {
+        if (this.deps.runOn(this.key).id !== this.profile) this.stale = true;
+      } catch {}
+    }
     await this.catchUp(true);
     if (this.agent) return this.agent.session;
     if (this.deps.archiveIsCold(this.key)) await this.deps.restoreArchive(this.key);
