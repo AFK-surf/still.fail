@@ -208,8 +208,9 @@ const PARTS: Record<string, Part> = {
       const target = targetDir(join(ROOT, "client/target"), "shell");
       if (t === "win32-x64") {
         cargo(shellWinCommand(), join(ROOT, "client"), { CARGO_TARGET_DIR: target });
-        // The time zone's offset is the one thing of the shell's Windows does its own way (sf_utc_offset_min).
-        cargo(["test", "--release", "--locked", "-p", "stillfail-shell", "--target", "x86_64-pc-windows-msvc", "--test", "utc_offset"], join(ROOT, "client"), { CARGO_TARGET_DIR: target });
+        // Its tests where it runs (files, the accounts' SQLite, iroh on loopback, the time zone's offset: what the core's
+        // engine leans on), which nothing else runs on Windows.
+        cargo(["test", "--release", "--locked", "-p", "stillfail-shell", "--target", "x86_64-pc-windows-msvc"], join(ROOT, "client"), { CARGO_TARGET_DIR: target });
         for (const f of P("shell").files(t)) copyFileSync(join(target, "x86_64-pc-windows-msvc/release", f), join(out, f));
         return;
       }

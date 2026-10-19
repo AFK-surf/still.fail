@@ -426,9 +426,12 @@ impl Inner {
                 let value = bytes.unwrap_or_default();
                 self.disk(move || {
                     // Written aside and renamed over: a crash leaves the old value or the new one, never half.
+                    // Synced through the handle it was written with: Windows syncs only a handle that may write (one
+                    // opened again to read, as this did, failed every storage.set there).
                     let partial = path.with_extension("partial");
-                    std::fs::write(&partial, &value).map_err(err)?;
-                    std::fs::File::open(&partial).and_then(|f| f.sync_all()).map_err(err)?;
+                    let mut file = std::fs::File::create(&partial).map_err(err)?;
+                    std::io::Write::write_all(&mut file, &value).and_then(|()| file.sync_all()).map_err(err)?;
+                    drop(file);
                     std::fs::rename(&partial, &path).map_err(err)?;
                     Ok(Answer::json(json!({})))
                 })
