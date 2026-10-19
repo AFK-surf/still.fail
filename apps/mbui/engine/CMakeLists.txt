@@ -1,10 +1,11 @@
 # The still.fail core's engine for the mbui app on Windows (engine.cpp, its C API engine.h), built in Hermes's own tree
 # (scripts/native.ts, part `engine` win32-x64, puts this directory there and adds it): Hermes's libhermes linked in
 # statically, the Rust shell (client/shell, stillfail_shell.dll) by name, through an import library made from its C ABI
-# (stillfail_shell.def). With clang-cl, as Hermes is (MSVC's own fails on Hermes at this tag); the app calls it in C.
+# (stillfail_shell.def, by the librarian: lib or llvm-lib). With clang-cl, as Hermes is (MSVC's own fails on Hermes at
+# this tag), on Windows or cross from a Mac; the app calls it in C.
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/stillfail_shell.lib
-  COMMAND lib /nologo /machine:x64 /def:${CMAKE_CURRENT_SOURCE_DIR}/stillfail_shell.def /out:${CMAKE_CURRENT_BINARY_DIR}/stillfail_shell.lib
+  COMMAND ${CMAKE_AR} /nologo /machine:x64 /def:${CMAKE_CURRENT_SOURCE_DIR}/stillfail_shell.def /out:${CMAKE_CURRENT_BINARY_DIR}/stillfail_shell.lib
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/stillfail_shell.def
   VERBATIM)
 add_custom_target(stillfail_shell_lib DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/stillfail_shell.lib)
