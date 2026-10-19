@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="800" font-family="sans-serif" font-size="11">
+<text x="36" y="16">the way to the newest, its opacity (Chat.kt: in 180 ms, out 150, CSS's ease) — chat-jump</text>
+<line x1="36" y1="164.0" x2="604" y2="164.0" stroke="#ddd"/>
+<polyline fill="none" stroke="#adb5bd" stroke-width="4" points="36.0,36.0 87.6,36.0 139.3,49.5 190.9,79.6 242.5,109.7 294.2,130.2 345.8,144.9 397.5,154.4 449.1,159.9 500.7,163.1 552.4,164.0 604.0,164.0"/>
+<polyline fill="none" stroke="#d9480f" stroke-width="1.5" points="36.0,36.0 87.6,36.0 139.3,49.5 190.9,79.6 242.5,109.7 294.2,130.2 345.8,144.9 397.5,154.4 449.1,159.9 500.7,163.1 552.4,164.0 604.0,164.0"/>
+<circle cx="36.0" cy="36.0" r="2" fill="#d9480f"/>
+<circle cx="87.6" cy="36.0" r="2" fill="#d9480f"/>
+<circle cx="139.3" cy="49.5" r="2" fill="#d9480f"/>
+<circle cx="190.9" cy="79.6" r="2" fill="#d9480f"/>
+<circle cx="242.5" cy="109.7" r="2" fill="#d9480f"/>
+<circle cx="294.2" cy="130.2" r="2" fill="#d9480f"/>
+<circle cx="345.8" cy="144.9" r="2" fill="#d9480f"/>
+<circle cx="397.5" cy="154.4" r="2" fill="#d9480f"/>
+<circle cx="449.1" cy="159.9" r="2" fill="#d9480f"/>
+<circle cx="500.7" cy="163.1" r="2" fill="#d9480f"/>
+<circle cx="552.4" cy="164.0" r="2" fill="#d9480f"/>
+<circle cx="604.0" cy="164.0" r="2" fill="#d9480f"/>
+<text x="604" y="192" text-anchor="end">183 ms · grey: Android (Compose) · orange: mbui</text>
+<text x="36" y="216">the composer's height (Composer.kt Morph: 260 ms, Ease.Out) — composer/morph</text>
+<line x1="36" y1="236.0" x2="604" y2="236.0" stroke="#ddd"/>
+<polyline fill="none" stroke="#adb5bd" stroke-width="4" points="36.0,364.0 71.5,364.0 107.0,335.6 142.5,306.7 178.0,284.4 213.5,270.2 249.0,259.9 284.5,252.9 320.0,248.1 355.5,244.4 391.0,241.7 426.5,239.8 462.0,238.4 497.5,237.3 533.0,236.7 568.5,236.2 604.0,236.0"/>
+<polyline fill="none" stroke="#d9480f" stroke-width="1.5" points="36.0,364.0 71.5,364.0 107.0,335.6 142.5,306.7 178.0,284.4 213.5,270.2 249.0,259.9 284.5,252.9 320.0,248.1 355.5,244.4 391.0,241.7 426.5,239.8 462.0,238.4 497.5,237.3 533.0,236.7 568.5,236.2 604.0,236.0"/>
+<circle cx="36.0" cy="364.0" r="2" fill="#d9480f"/>
+<circle cx="71.5" cy="364.0" r="2" fill="#d9480f"/>
+<circle cx="107.0" cy="335.6" r="2" fill="#d9480f"/>
+<circle cx="142.5" cy="306.7" r="2" fill="#d9480f"/>
+<circle cx="178.0" cy="284.4" r="2" fill="#d9480f"/>
+<circle cx="213.5" cy="270.2" r="2" fill="#d9480f"/>
+<circle cx="249.0" cy="259.9" r="2" fill="#d9480f"/>
+<circle cx="284.5" cy="252.9" r="2" fill="#d9480f"/>
+<circle cx="320.0" cy="248.1" r="2" fill="#d9480f"/>
+<circle cx="355.5" cy="244.4" r="2" fill="#d9480f"/>
+<circle cx="391.0" cy="241.7" r="2" fill="#d9480f"/>
+<circle cx="426.5" cy="239.8" r="2" fill="#d9480f"/>
+<circle cx="462.0" cy="238.4" r="2" fill="#d9480f"/>
+<circle cx="497.5" cy="237.3" r="2" fill="#d9480f"/>
+<circle cx="533.0" cy="236.7" r="2" fill="#d9480f"/>
+<circle cx="568.5" cy="236.2" r="2" fill="#d9480f"/>
+<circle cx="604.0" cy="236.0" r="2" fill="#d9480f"/>
+<text x="604" y="392" text-anchor="end">267 ms · grey: Android (Compose) · orange: mbui</text>
+<text x="36" y="416">the composer's parts (Composer.kt Morph: 260 ms, Ease.Out) — composer/part/field</text>
+<line x1="36" y1="564.0" x2="604" y2="564.0" stroke="#ddd"/>
+<polyline fill="none" stroke="#adb5bd" stroke-width="4" points="36.0,436.0 71.5,436.0 107.0,464.4 142.5,493.3 178.0,515.6 213.5,529.8 249.0,540.1 284.5,547.1 320.0,551.9 355.5,555.6 391.0,558.3 426.5,560.2 462.0,561.6 497.5,562.7 533.0,563.3 568.5,563.8 604.0,564.0"/>
+<polyline fill="none" stroke="#d9480f" stroke-width="1.5" points="36.0,436.0 71.5,436.0 107.0,464.4 142.5,493.3 178.0,515.6 213.5,529.8 249.0,540.1 284.5,547.1 320.0,551.9 355.5,555.6 391.0,558.3 426.5,560.2 462.0,561.6 497.5,562.7 533.0,563.3 568.5,563.8 604.0,564.0"/>
+<circle cx="36.0" cy="436.0" r="2" fill="#d9480f"/>
+<circle cx="71.5" cy="436.0" r="2" fill="#d9480f"/>
+<circle cx="107.0" cy="464.4" r="2" fill="#d9480f"/>
+<circle cx="142.5" cy="493.3" r="2" fill="#d9480f"/>
+<circle cx="178.0" cy="515.6" r="2" fill="#d9480f"/>
+<circle cx="213.5" cy="529.8" r="2" fill="#d9480f"/>
+<circle cx="249.0" cy="540.1" r="2" fill="#d9480f"/>
+<circle cx="284.5" cy="547.1" r="2" fill="#d9480f"/>
+<circle cx="320.0" cy="551.9" r="2" fill="#d9480f"/>
+<circle cx="355.5" cy="555.6" r="2" fill="#d9480f"/>
+<circle cx="391.0" cy="558.3" r="2" fill="#d9480f"/>
+<circle cx="426.5" cy="560.2" r="2" fill="#d9480f"/>
+<circle cx="462.0" cy="561.6" r="2" fill="#d9480f"/>
+<circle cx="497.5" cy="562.7" r="2" fill="#d9480f"/>
+<circle cx="533.0" cy="563.3" r="2" fill="#d9480f"/>
+<circle cx="568.5" cy="563.8" r="2" fill="#d9480f"/>
+<circle cx="604.0" cy="564.0" r="2" fill="#d9480f"/>
+<text x="604" y="592" text-anchor="end">267 ms · grey: Android (Compose) · orange: mbui</text>
+<text x="36" y="616">words sent, up (ChatHost.kt Flight: Ease.Flight, 12% late, over 80% of 600 ms) — fly</text>
+<line x1="36" y1="764.0" x2="604" y2="764.0" stroke="#ddd"/>
+<polyline fill="none" stroke="#adb5bd" stroke-width="4" points="36.0,636.0 51.8,636.0 67.6,636.0 83.3,636.0 99.1,636.0 114.9,636.0 130.7,636.5 146.4,637.4 162.2,638.9 178.0,641.2 193.8,644.6 209.6,649.2 225.3,656.0 241.1,665.8 256.9,678.7 272.7,695.8 288.4,712.2 304.2,724.4 320.0,734.1 335.8,741.5 351.6,746.8 367.3,751.2 383.1,754.7 398.9,757.3 414.7,759.4 430.4,761.0 446.2,762.2 462.0,763.1 477.8,763.6 493.6,763.9 509.3,764.0 525.1,764.0 540.9,764.0 556.7,764.0 572.4,764.0 588.2,764.0 604.0,764.0"/>
+<polyline fill="none" stroke="#d9480f" stroke-width="1.5" points="36.0,636.0 51.8,636.0 67.6,636.0 83.3,636.0 99.1,636.0 114.9,636.1 130.7,636.5 146.4,637.4 162.2,638.9 178.0,641.3 193.8,644.6 209.6,649.4 225.3,656.2 241.1,665.8 256.9,679.4 272.7,696.1 288.4,712.2 304.2,724.8 320.0,734.3 335.8,741.5 351.6,747.0 367.3,751.3 383.1,754.7 398.9,757.4 414.7,759.4 430.4,761.0 446.2,762.2 462.0,763.1 477.8,763.6 493.6,763.9 509.3,764.0 525.1,764.0 540.9,764.0 556.7,764.0 572.4,764.0 588.2,764.0 604.0,764.0"/>
+<circle cx="36.0" cy="636.0" r="2" fill="#d9480f"/>
+<circle cx="51.8" cy="636.0" r="2" fill="#d9480f"/>
+<circle cx="67.6" cy="636.0" r="2" fill="#d9480f"/>
+<circle cx="83.3" cy="636.0" r="2" fill="#d9480f"/>
+<circle cx="99.1" cy="636.0" r="2" fill="#d9480f"/>
+<circle cx="114.9" cy="636.1" r="2" fill="#d9480f"/>
+<circle cx="130.7" cy="636.5" r="2" fill="#d9480f"/>
+<circle cx="146.4" cy="637.4" r="2" fill="#d9480f"/>
+<circle cx="162.2" cy="638.9" r="2" fill="#d9480f"/>
+<circle cx="178.0" cy="641.3" r="2" fill="#d9480f"/>
+<circle cx="193.8" cy="644.6" r="2" fill="#d9480f"/>
+<circle cx="209.6" cy="649.4" r="2" fill="#d9480f"/>
+<circle cx="225.3" cy="656.2" r="2" fill="#d9480f"/>
+<circle cx="241.1" cy="665.8" r="2" fill="#d9480f"/>
+<circle cx="256.9" cy="679.4" r="2" fill="#d9480f"/>
+<circle cx="272.7" cy="696.1" r="2" fill="#d9480f"/>
+<circle cx="288.4" cy="712.2" r="2" fill="#d9480f"/>
+<circle cx="304.2" cy="724.8" r="2" fill="#d9480f"/>
+<circle cx="320.0" cy="734.3" r="2" fill="#d9480f"/>
+<circle cx="335.8" cy="741.5" r="2" fill="#d9480f"/>
+<circle cx="351.6" cy="747.0" r="2" fill="#d9480f"/>
+<circle cx="367.3" cy="751.3" r="2" fill="#d9480f"/>
+<circle cx="383.1" cy="754.7" r="2" fill="#d9480f"/>
+<circle cx="398.9" cy="757.4" r="2" fill="#d9480f"/>
+<circle cx="414.7" cy="759.4" r="2" fill="#d9480f"/>
+<circle cx="430.4" cy="761.0" r="2" fill="#d9480f"/>
+<circle cx="446.2" cy="762.2" r="2" fill="#d9480f"/>
+<circle cx="462.0" cy="763.1" r="2" fill="#d9480f"/>
+<circle cx="477.8" cy="763.6" r="2" fill="#d9480f"/>
+<circle cx="493.6" cy="763.9" r="2" fill="#d9480f"/>
+<circle cx="509.3" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="525.1" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="540.9" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="556.7" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="572.4" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="588.2" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="604.0" cy="764.0" r="2" fill="#d9480f"/>
+<text x="604" y="792" text-anchor="end">600 ms · grey: Android (Compose) · orange: mbui</text>
+</svg>

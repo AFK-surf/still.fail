@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="1200" font-family="sans-serif" font-size="11">
+<text x="36" y="16">the way to the newest, its opacity (Chat.kt: in 180 ms, out 150, CSS's ease) — chat-jump</text>
+<line x1="36" y1="164.0" x2="604" y2="164.0" stroke="#ddd"/>
+<polyline fill="none" stroke="#adb5bd" stroke-width="4" points="36.0,36.0 87.6,36.0 139.3,49.5 190.9,79.6 242.5,109.7 294.2,130.2 345.8,144.9 397.5,154.4 449.1,159.9 500.7,163.1 552.4,164.0 604.0,164.0"/>
+<polyline fill="none" stroke="#d9480f" stroke-width="1.5" points="36.0,36.0 87.6,36.0 139.3,49.5 190.9,79.6 242.5,109.7 294.2,130.2 345.8,144.9 397.5,154.4 449.1,159.9 500.7,163.1 552.4,164.0 604.0,164.0"/>
+<circle cx="36.0" cy="36.0" r="2" fill="#d9480f"/>
+<circle cx="87.6" cy="36.0" r="2" fill="#d9480f"/>
+<circle cx="139.3" cy="49.5" r="2" fill="#d9480f"/>
+<circle cx="190.9" cy="79.6" r="2" fill="#d9480f"/>
+<circle cx="242.5" cy="109.7" r="2" fill="#d9480f"/>
+<circle cx="294.2" cy="130.2" r="2" fill="#d9480f"/>
+<circle cx="345.8" cy="144.9" r="2" fill="#d9480f"/>
+<circle cx="397.5" cy="154.4" r="2" fill="#d9480f"/>
+<circle cx="449.1" cy="159.9" r="2" fill="#d9480f"/>
+<circle cx="500.7" cy="163.1" r="2" fill="#d9480f"/>
+<circle cx="552.4" cy="164.0" r="2" fill="#d9480f"/>
+<circle cx="604.0" cy="164.0" r="2" fill="#d9480f"/>
+<text x="604" y="192" text-anchor="end">183 ms · grey: Android (Compose) · orange: mbui</text>
+<text x="36" y="216">their opacity (Chat.kt: 280 ms, ArchiveEase) — under/archive/ws1/st1/ts11</text>
+<line x1="36" y1="364.0" x2="604" y2="364.0" stroke="#ddd"/>
+<polyline fill="none" stroke="#adb5bd" stroke-width="4" points="36.0,236.0 69.4,236.0 102.8,276.4 136.2,307.0 169.6,327.1 203.1,339.3 236.5,347.9 269.9,353.5 303.3,357.1 336.7,359.6 370.1,361.3 403.5,362.4 436.9,363.1 470.4,363.5 503.8,363.8 537.2,363.9 570.6,364.0 604.0,364.0"/>
+<polyline fill="none" stroke="#d9480f" stroke-width="1.5" points="36.0,236.0 69.4,236.0 102.8,276.4 136.2,307.0 169.6,327.1 203.1,339.3 236.5,347.9 269.9,353.5 303.3,357.1 336.7,359.6 370.1,361.3 403.5,362.4 436.9,363.1 470.4,363.5 503.8,363.8 537.2,363.9 570.6,364.0 604.0,364.0"/>
+<circle cx="36.0" cy="236.0" r="2" fill="#d9480f"/>
+<circle cx="69.4" cy="236.0" r="2" fill="#d9480f"/>
+<circle cx="102.8" cy="276.4" r="2" fill="#d9480f"/>
+<circle cx="136.2" cy="307.0" r="2" fill="#d9480f"/>
+<circle cx="169.6" cy="327.1" r="2" fill="#d9480f"/>
+<circle cx="203.1" cy="339.3" r="2" fill="#d9480f"/>
+<circle cx="236.5" cy="347.9" r="2" fill="#d9480f"/>
+<circle cx="269.9" cy="353.5" r="2" fill="#d9480f"/>
+<circle cx="303.3" cy="357.1" r="2" fill="#d9480f"/>
+<circle cx="336.7" cy="359.6" r="2" fill="#d9480f"/>
+<circle cx="370.1" cy="361.3" r="2" fill="#d9480f"/>
+<circle cx="403.5" cy="362.4" r="2" fill="#d9480f"/>
+<circle cx="436.9" cy="363.1" r="2" fill="#d9480f"/>
+<circle cx="470.4" cy="363.5" r="2" fill="#d9480f"/>
+<circle cx="503.8" cy="363.8" r="2" fill="#d9480f"/>
+<circle cx="537.2" cy="363.9" r="2" fill="#d9480f"/>
+<circle cx="570.6" cy="364.0" r="2" fill="#d9480f"/>
+<circle cx="604.0" cy="364.0" r="2" fill="#d9480f"/>
+<text x="604" y="392" text-anchor="end">283 ms · grey: Android (Compose) · orange: mbui</text>
+<text x="36" y="416">their opacity (Chat.kt: 280 ms, ArchiveEase) — under/dismiss/ws1/st1	7	8</text>
+<line x1="36" y1="564.0" x2="604" y2="564.0" stroke="#ddd"/>
+<polyline fill="none" stroke="#adb5bd" stroke-width="4" points="36.0,436.0 69.4,436.0 102.8,476.4 136.2,507.0 169.6,527.1 203.1,539.3 236.5,547.9 269.9,553.5 303.3,557.1 336.7,559.6 370.1,561.3 403.5,562.4 436.9,563.1 470.4,563.5 503.8,563.8 537.2,563.9 570.6,564.0 604.0,564.0"/>
+<polyline fill="none" stroke="#d9480f" stroke-width="1.5" points="36.0,436.0 69.4,436.0 102.8,476.4 136.2,507.0 169.6,527.1 203.1,539.3 236.5,547.9 269.9,553.5 303.3,557.1 336.7,559.6 370.1,561.3 403.5,562.4 436.9,563.1 470.4,563.5 503.8,563.8 537.2,563.9 570.6,564.0 604.0,564.0"/>
+<circle cx="36.0" cy="436.0" r="2" fill="#d9480f"/>
+<circle cx="69.4" cy="436.0" r="2" fill="#d9480f"/>
+<circle cx="102.8" cy="476.4" r="2" fill="#d9480f"/>
+<circle cx="136.2" cy="507.0" r="2" fill="#d9480f"/>
+<circle cx="169.6" cy="527.1" r="2" fill="#d9480f"/>
+<circle cx="203.1" cy="539.3" r="2" fill="#d9480f"/>
+<circle cx="236.5" cy="547.9" r="2" fill="#d9480f"/>
+<circle cx="269.9" cy="553.5" r="2" fill="#d9480f"/>
+<circle cx="303.3" cy="557.1" r="2" fill="#d9480f"/>
+<circle cx="336.7" cy="559.6" r="2" fill="#d9480f"/>
+<circle cx="370.1" cy="561.3" r="2" fill="#d9480f"/>
+<circle cx="403.5" cy="562.4" r="2" fill="#d9480f"/>
+<circle cx="436.9" cy="563.1" r="2" fill="#d9480f"/>
+<circle cx="470.4" cy="563.5" r="2" fill="#d9480f"/>
+<circle cx="503.8" cy="563.8" r="2" fill="#d9480f"/>
+<circle cx="537.2" cy="563.9" r="2" fill="#d9480f"/>
+<circle cx="570.6" cy="564.0" r="2" fill="#d9480f"/>
+<circle cx="604.0" cy="564.0" r="2" fill="#d9480f"/>
+<text x="604" y="592" text-anchor="end">283 ms · grey: Android (Compose) · orange: mbui</text>
+<text x="36" y="616">a card's options going (Decisions.kt: fadeOut 200 ms, CSS's ease-out) — under/options/ws1/st1/ts8</text>
+<line x1="36" y1="764.0" x2="604" y2="764.0" stroke="#ddd"/>
+<polyline fill="none" stroke="#adb5bd" stroke-width="4" points="36.0,636.0 52.7,636.0 69.4,652.6 86.1,669.0 102.8,684.4 119.5,698.0 136.2,711.4 152.9,723.6 169.6,734.1 186.4,743.8 203.1,752.0 219.8,758.1 236.5,762.4 253.2,764.0 269.9,764.0 286.6,764.0 303.3,764.0 320.0,764.0 336.7,764.0 353.4,764.0 370.1,764.0 386.8,764.0 403.5,764.0 420.2,764.0 436.9,764.0 453.6,764.0 470.4,764.0 487.1,764.0 503.8,764.0 520.5,764.0 537.2,764.0 553.9,764.0 570.6,764.0 587.3,764.0 604.0,764.0"/>
+<polyline fill="none" stroke="#d9480f" stroke-width="1.5" points="36.0,636.0 52.7,636.0 69.4,652.6 86.1,669.0 102.8,684.4 119.5,698.0 136.2,711.4 152.9,723.6 169.6,734.1 186.4,743.8 203.1,752.0 219.8,758.1 236.5,762.4 253.2,764.0 269.9,764.0 286.6,764.0 303.3,764.0 320.0,764.0 336.7,764.0 353.4,764.0 370.1,764.0 386.8,764.0 403.5,764.0 420.2,764.0 436.9,764.0 453.6,764.0 470.4,764.0 487.1,764.0 503.8,764.0 520.5,764.0 537.2,764.0 553.9,764.0 570.6,764.0 587.3,764.0 604.0,764.0"/>
+<circle cx="36.0" cy="636.0" r="2" fill="#d9480f"/>
+<circle cx="52.7" cy="636.0" r="2" fill="#d9480f"/>
+<circle cx="69.4" cy="652.6" r="2" fill="#d9480f"/>
+<circle cx="86.1" cy="669.0" r="2" fill="#d9480f"/>
+<circle cx="102.8" cy="684.4" r="2" fill="#d9480f"/>
+<circle cx="119.5" cy="698.0" r="2" fill="#d9480f"/>
+<circle cx="136.2" cy="711.4" r="2" fill="#d9480f"/>
+<circle cx="152.9" cy="723.6" r="2" fill="#d9480f"/>
+<circle cx="169.6" cy="734.1" r="2" fill="#d9480f"/>
+<circle cx="186.4" cy="743.8" r="2" fill="#d9480f"/>
+<circle cx="203.1" cy="752.0" r="2" fill="#d9480f"/>
+<circle cx="219.8" cy="758.1" r="2" fill="#d9480f"/>
+<circle cx="236.5" cy="762.4" r="2" fill="#d9480f"/>
+<circle cx="253.2" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="269.9" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="286.6" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="303.3" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="320.0" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="336.7" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="353.4" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="370.1" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="386.8" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="403.5" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="420.2" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="436.9" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="453.6" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="470.4" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="487.1" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="503.8" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="520.5" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="537.2" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="553.9" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="570.6" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="587.3" cy="764.0" r="2" fill="#d9480f"/>
+<circle cx="604.0" cy="764.0" r="2" fill="#d9480f"/>
+<text x="604" y="792" text-anchor="end">567 ms · grey: Android (Compose) · orange: mbui</text>
+<text x="36" y="816">a card's options' room closing (ListMotion.kt closeGap: spring(1, 350), 100 ms late) — under/options/ws1/st1/ts8</text>
+<line x1="36" y1="964.0" x2="604" y2="964.0" stroke="#ddd"/>
+<polyline fill="none" stroke="#adb5bd" stroke-width="4" points="36.0,836.0 52.7,836.0 69.4,836.0 86.1,836.0 102.8,836.0 119.5,836.0 136.2,836.0 152.9,836.0 169.6,840.7 186.4,852.3 203.1,866.8 219.8,880.8 236.5,894.8 253.2,907.4 269.9,917.7 286.6,926.9 303.3,934.6 320.0,940.5 336.7,945.5 353.4,949.6 370.1,952.7 386.8,955.2 403.5,957.2 420.2,958.7 436.9,960.0 453.6,960.9 470.4,961.6 487.1,962.2 503.8,962.6 520.5,962.9 537.2,963.2 553.9,963.4 570.6,963.5 587.3,963.6 604.0,963.7"/>
+<polyline fill="none" stroke="#d9480f" stroke-width="1.5" points="36.0,836.0 52.7,836.0 69.4,836.0 86.1,836.0 102.8,836.0 119.5,836.0 136.2,836.0 152.9,836.0 169.6,840.7 186.4,852.3 203.1,866.8 219.8,880.8 236.5,894.8 253.2,907.4 269.9,917.7 286.6,926.9 303.3,934.6 320.0,940.5 336.7,945.5 353.4,949.6 370.1,952.7 386.8,955.2 403.5,957.2 420.2,958.7 436.9,960.0 453.6,960.9 470.4,961.6 487.1,962.2 503.8,962.6 520.5,962.9 537.2,963.2 553.9,963.4 570.6,963.5 587.3,963.6 604.0,963.7"/>
+<circle cx="36.0" cy="836.0" r="2" fill="#d9480f"/>
+<circle cx="52.7" cy="836.0" r="2" fill="#d9480f"/>
+<circle cx="69.4" cy="836.0" r="2" fill="#d9480f"/>
+<circle cx="86.1" cy="836.0" r="2" fill="#d9480f"/>
+<circle cx="102.8" cy="836.0" r="2" fill="#d9480f"/>
+<circle cx="119.5" cy="836.0" r="2" fill="#d9480f"/>
+<circle cx="136.2" cy="836.0" r="2" fill="#d9480f"/>
+<circle cx="152.9" cy="836.0" r="2" fill="#d9480f"/>
+<circle cx="169.6" cy="840.7" r="2" fill="#d9480f"/>
+<circle cx="186.4" cy="852.3" r="2" fill="#d9480f"/>
+<circle cx="203.1" cy="866.8" r="2" fill="#d9480f"/>
+<circle cx="219.8" cy="880.8" r="2" fill="#d9480f"/>
+<circle cx="236.5" cy="894.8" r="2" fill="#d9480f"/>
+<circle cx="253.2" cy="907.4" r="2" fill="#d9480f"/>
+<circle cx="269.9" cy="917.7" r="2" fill="#d9480f"/>
+<circle cx="286.6" cy="926.9" r="2" fill="#d9480f"/>
+<circle cx="303.3" cy="934.6" r="2" fill="#d9480f"/>
+<circle cx="320.0" cy="940.5" r="2" fill="#d9480f"/>
+<circle cx="336.7" cy="945.5" r="2" fill="#d9480f"/>
+<circle cx="353.4" cy="949.6" r="2" fill="#d9480f"/>
+<circle cx="370.1" cy="952.7" r="2" fill="#d9480f"/>
+<circle cx="386.8" cy="955.2" r="2" fill="#d9480f"/>
+<circle cx="403.5" cy="957.2" r="2" fill="#d9480f"/>
+<circle cx="420.2" cy="958.7" r="2" fill="#d9480f"/>
+<circle cx="436.9" cy="960.0" r="2" fill="#d9480f"/>
+<circle cx="453.6" cy="960.9" r="2" fill="#d9480f"/>
+<circle cx="470.4" cy="961.6" r="2" fill="#d9480f"/>
+<circle cx="487.1" cy="962.2" r="2" fill="#d9480f"/>
+<circle cx="503.8" cy="962.6" r="2" fill="#d9480f"/>
+<circle cx="520.5" cy="962.9" r="2" fill="#d9480f"/>
+<circle cx="537.2" cy="963.2" r="2" fill="#d9480f"/>
+<circle cx="553.9" cy="963.4" r="2" fill="#d9480f"/>
+<circle cx="570.6" cy="963.5" r="2" fill="#d9480f"/>
+<circle cx="587.3" cy="963.6" r="2" fill="#d9480f"/>
+<circle cx="604.0" cy="963.7" r="2" fill="#d9480f"/>
+<text x="604" y="992" text-anchor="end">567 ms · grey: Android (Compose) · orange: mbui</text>
+<text x="36" y="1016">how a card went, its room opening (closeGap) — under/outcome/ws1/st1/ts8</text>
+<line x1="36" y1="1036.0" x2="604" y2="1036.0" stroke="#ddd"/>
+<polyline fill="none" stroke="#adb5bd" stroke-width="4" points="36.0,1164.0 52.7,1164.0 69.4,1164.0 86.1,1164.0 102.8,1164.0 119.5,1164.0 136.2,1164.0 152.9,1164.0 169.6,1159.3 186.4,1147.7 203.1,1133.2 219.8,1119.2 236.5,1105.2 253.2,1092.6 269.9,1082.3 286.6,1073.1 303.3,1065.4 320.0,1059.5 336.7,1054.5 353.4,1050.4 370.1,1047.3 386.8,1044.8 403.5,1042.8 420.2,1041.3 436.9,1040.0 453.6,1039.1 470.4,1038.4 487.1,1037.8 503.8,1037.4 520.5,1037.1 537.2,1036.8 553.9,1036.6 570.6,1036.5 587.3,1036.4 604.0,1036.3"/>
+<polyline fill="none" stroke="#d9480f" stroke-width="1.5" points="36.0,1164.0 52.7,1164.0 69.4,1164.0 86.1,1164.0 102.8,1164.0 119.5,1164.0 136.2,1164.0 152.9,1164.0 169.6,1159.3 186.4,1147.7 203.1,1133.2 219.8,1119.2 236.5,1105.2 253.2,1092.6 269.9,1082.3 286.6,1073.1 303.3,1065.4 320.0,1059.5 336.7,1054.5 353.4,1050.4 370.1,1047.3 386.8,1044.8 403.5,1042.8 420.2,1041.3 436.9,1040.0 453.6,1039.1 470.4,1038.4 487.1,1037.8 503.8,1037.4 520.5,1037.1 537.2,1036.8 553.9,1036.6 570.6,1036.5 587.3,1036.4 604.0,1036.3"/>
+<circle cx="36.0" cy="1164.0" r="2" fill="#d9480f"/>
+<circle cx="52.7" cy="1164.0" r="2" fill="#d9480f"/>
+<circle cx="69.4" cy="1164.0" r="2" fill="#d9480f"/>
+<circle cx="86.1" cy="1164.0" r="2" fill="#d9480f"/>
+<circle cx="102.8" cy="1164.0" r="2" fill="#d9480f"/>
+<circle cx="119.5" cy="1164.0" r="2" fill="#d9480f"/>
+<circle cx="136.2" cy="1164.0" r="2" fill="#d9480f"/>
+<circle cx="152.9" cy="1164.0" r="2" fill="#d9480f"/>
+<circle cx="169.6" cy="1159.3" r="2" fill="#d9480f"/>
+<circle cx="186.4" cy="1147.7" r="2" fill="#d9480f"/>
+<circle cx="203.1" cy="1133.2" r="2" fill="#d9480f"/>
+<circle cx="219.8" cy="1119.2" r="2" fill="#d9480f"/>
+<circle cx="236.5" cy="1105.2" r="2" fill="#d9480f"/>
+<circle cx="253.2" cy="1092.6" r="2" fill="#d9480f"/>
+<circle cx="269.9" cy="1082.3" r="2" fill="#d9480f"/>
+<circle cx="286.6" cy="1073.1" r="2" fill="#d9480f"/>
+<circle cx="303.3" cy="1065.4" r="2" fill="#d9480f"/>
+<circle cx="320.0" cy="1059.5" r="2" fill="#d9480f"/>
+<circle cx="336.7" cy="1054.5" r="2" fill="#d9480f"/>
+<circle cx="353.4" cy="1050.4" r="2" fill="#d9480f"/>
+<circle cx="370.1" cy="1047.3" r="2" fill="#d9480f"/>
+<circle cx="386.8" cy="1044.8" r="2" fill="#d9480f"/>
+<circle cx="403.5" cy="1042.8" r="2" fill="#d9480f"/>
+<circle cx="420.2" cy="1041.3" r="2" fill="#d9480f"/>
+<circle cx="436.9" cy="1040.0" r="2" fill="#d9480f"/>
+<circle cx="453.6" cy="1039.1" r="2" fill="#d9480f"/>
+<circle cx="470.4" cy="1038.4" r="2" fill="#d9480f"/>
+<circle cx="487.1" cy="1037.8" r="2" fill="#d9480f"/>
+<circle cx="503.8" cy="1037.4" r="2" fill="#d9480f"/>
+<circle cx="520.5" cy="1037.1" r="2" fill="#d9480f"/>
+<circle cx="537.2" cy="1036.8" r="2" fill="#d9480f"/>
+<circle cx="553.9" cy="1036.6" r="2" fill="#d9480f"/>
+<circle cx="570.6" cy="1036.5" r="2" fill="#d9480f"/>
+<circle cx="587.3" cy="1036.4" r="2" fill="#d9480f"/>
+<circle cx="604.0" cy="1036.3" r="2" fill="#d9480f"/>
+<text x="604" y="1192" text-anchor="end">567 ms · grey: Android (Compose) · orange: mbui</text>
+</svg>
