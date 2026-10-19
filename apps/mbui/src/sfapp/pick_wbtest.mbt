@@ -26,7 +26,7 @@ fn slide(t : @ui.Tester, x0 : Double, y0 : Double, x1 : Double, y1 : Double, ste
 test "held still on a message's words: the word under the finger is picked, the bar over it" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
-  hold_on(t, "做完了：列表、跳到最新的按钮")
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   assert_true(pk.ts != "")
   assert_eq(pk.b - pk.a, 1)
   assert_true(t.find("引用") is Some(_))
@@ -61,13 +61,13 @@ test "a finger sliding on widens it by words, from the word first held; the list
 test "复制 puts the passage on the clipboard and lets go; 全选 takes all of the message" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
-  hold_on(t, "做完了：列表、跳到最新的按钮")
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   let one = t.ctx().words_of(pk.key).unwrap().slice(pk.a, pk.b)
   t.tap_text("复制")
   assert_eq(t.clipboard(), one)
   assert_eq(pk.ts, "")
   assert_true(t.find("已复制") is Some(_))
-  hold_on(t, "做完了：列表、跳到最新的按钮")
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.tap_text("全选")
   assert_true(t.find("全选") is None)
   t.tap_text("复制")
@@ -78,7 +78,7 @@ test "复制 puts the passage on the clipboard and lets go; 全选 takes all of 
 test "a handle moves its end: the passage's end follows the finger" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
-  hold_on(t, "做完了：列表、跳到最新的按钮")
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   let w = t.ctx().words_of(pk.key).unwrap()
   let lines = w.rects(pk.a, pk.b)
   let last = lines[lines.length() - 1]
@@ -97,10 +97,10 @@ test "a handle moves its end: the passage's end follows the finger" {
 test "a tap anywhere else lets go of it, as back does" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
-  hold_on(t, "做完了：列表、跳到最新的按钮")
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.tap(195.0, 300.0)
   assert_eq(pk.ts, "")
-  hold_on(t, "做完了：列表、跳到最新的按钮")
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.back()
   t.settle() |> ignore
   assert_eq(pk.ts, "")

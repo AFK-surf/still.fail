@@ -229,9 +229,9 @@ fn emit_step(c : @ui.Ctx, e : Emits) -> Unit {
     emit_next(c, e, "")
   }
   // a pose's end reached: the next pose, from its own beginning in this frame
-  let mut guard = 0
-  while guard < 6 {
-    guard = guard + 1
+  let mut steps = 0
+  while steps < 6 {
+    steps = steps + 1
     let t = match e.current {
       Some(t) => t
       None => return
@@ -294,9 +294,9 @@ fn emit_clock(c : @ui.Ctx, t : Turn) -> Double {
 ///|
 /// What is left, at `s` seconds, of a spring let go from 1 (stiffness 520, damping 14, mass 1: under-damped).
 fn emit_settle(s : Double) -> Double {
-  let w0 = @math.sqrt(520.0)
+  let w0 = (520.0).sqrt()
   let z = 14.0 / (2.0 * w0)
-  let wd = w0 * @math.sqrt(1.0 - z * z)
+  let wd = w0 * (1.0 - z * z).sqrt()
   @math.exp(-z * w0 * s) * (@math.cos(wd * s) + z * w0 / wd * @math.sin(wd * s))
 }
 
