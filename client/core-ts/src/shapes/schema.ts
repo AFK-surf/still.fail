@@ -1538,6 +1538,26 @@ export const SHAPES: Record<string, Shape> = {
     ["station", "String", { doc: "Its address." }],
     ["name", "String"],
   ]),
+  PluginsView: struct([
+    ["items", vec("PluginItem"), { doc: "This person's plugins in the workspace, by name; with a `source`, those with a share entry that takes it." }],
+  ], { doc: "A person's plugins (the `plugins` topic; docs/client-plugins.md): what their agent made, kept by the workspace's stations." }),
+  PluginItem: struct([
+    ["station", "String", { doc: "The address of the station keeping it (its chat is there)." }],
+    ["id", "String"],
+    ["name", "String", { doc: "What the person sees: 抖音下载." }],
+    ["entries", vec("PluginEntry")],
+    ["action", "PluginAction"],
+    ["chat", opt("String"), { doc: "The title of the chat it sends to, as the chats view has it." }],
+  ]),
+  PluginEntry: struct([
+    ["kind", "String", { doc: "`share`: what another app shares." }],
+    ["match", opt("String"), { doc: "A regular expression (any case) what is shared must have; none: anything." }],
+  ]),
+  PluginAction: struct([
+    ["kind", "String", { doc: "`chat`: what is shared goes into a chat." }],
+    ["session", "String", { doc: "That chat's session on the station." }],
+    ["send", "String", { doc: "`auto`: sent at once as the person's message; `composer`: put in the chat's composer." }],
+  ]),
   FrequentCombo: struct([
     ["model", "String"],
     ["runtime", "RuntimeKind"],

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The share list's entry for a person's plugins (share/Quick.kt, docs/client-plugins.md), in the system's language:
+     beside the app's icon, so it needs no name of the app's. -->
+<resources>
+    <string name="share_quick">Quick share</string>
+</resources>

@@ -68,13 +68,20 @@ private const val SHEET_GONE_MS = 320L
 private const val SEARCHED_FROM = 6
 
 @Composable
-fun ShareScreen(shared: Shared, target: ShareTarget?, onOpen: (Opened) -> Unit, onOpenApp: () -> Unit, onClose: () -> Unit) {
+fun ShareScreen(shared: Shared, target: ShareTarget?, onOpen: (Opened) -> Unit, onOpenApp: () -> Unit, onClose: () -> Unit, quick: Boolean = false) {
     var closing by remember { mutableStateOf(false) }
     val current by rememberUpdatedState(target)
     val haze = remember { HazeState() }
+    // Through the plugins' entry (QuickSheet.kt), until none of them takes what is shared: then the ordinary sheet.
+    var plugins by remember { mutableStateOf(quick) }
     val spec = remember {
         SheetSpec(0.72f, draggable = true, onClose = { closing = true }, solid = true) {
-            ShareSheetContent(shared, current, onOpen, onOpenApp)
+            val to = current
+            if (plugins && to?.workspace != null) {
+                SheetGrab()
+                SharedHead(shared)
+                QuickContent(shared, to.core, to.workspace, onOpen, onClose = { closing = true }, onNone = { plugins = false })
+            } else ShareSheetContent(shared, current, onOpen, onOpenApp)
         }
     }
     LaunchedEffect(closing) {
@@ -168,7 +175,7 @@ private fun ColumnScope.ShareSheetContent(shared: Shared, target: ShareTarget?, 
 
 /** What is shared: its title (the app's subject, else its first line), and the site it is from. */
 @Composable
-private fun SharedHead(shared: Shared) {
+internal fun SharedHead(shared: Shared) {
     val first = shared.source.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
     val head = shared.title ?: first
     val sub = if (shared.title != null) first else null

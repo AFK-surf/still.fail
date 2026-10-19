@@ -3874,6 +3874,40 @@ export interface OpenChat {
 	key: string;
 }
 
+export interface PluginAction {
+	/** `chat`: what is shared goes into a chat. */
+	kind: string;
+	/** That chat's session on the station. */
+	session: string;
+	/** `auto`: sent at once as the person's message; `composer`: put in the chat's composer. */
+	send: string;
+}
+
+export interface PluginEntry {
+	/** `share`: what another app shares. */
+	kind: string;
+	/** A regular expression (any case) what is shared must have; none: anything. */
+	match?: string;
+}
+
+export interface PluginItem {
+	/** The address of the station keeping it (its chat is there). */
+	station: string;
+	id: string;
+	/** What the person sees: 抖音下载. */
+	name: string;
+	entries: PluginEntry[];
+	action: PluginAction;
+	/** The title of the chat it sends to, as the chats view has it. */
+	chat?: string;
+}
+
+/** A person's plugins (the `plugins` topic; docs/client-plugins.md): what their agent made, kept by the workspace's stations. */
+export interface PluginsView {
+	/** This person's plugins in the workspace, by name; with a `source`, those with a share entry that takes it. */
+	items: PluginItem[];
+}
+
 /**
  * What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide
  * screen the decisions waiting for the viewer (奏) or the archived chats (已归档) in place of the chats.

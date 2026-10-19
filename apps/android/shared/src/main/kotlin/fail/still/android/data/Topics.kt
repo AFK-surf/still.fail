@@ -353,6 +353,8 @@ object Topics {
     fun newChat(scope: String) = buildJsonObject { put("topic", "newChat"); put("scope", scope) }
     /** Where something another app shares goes (docs/share-in.md): `source` what is shared, `query` what is typed to find a chat. */
     fun shareIn(scope: String, source: String, query: String) = buildJsonObject { put("topic", "shareIn"); put("scope", scope); put("source", source); put("query", query) }
+    /** A person's plugins in a scope (docs/client-plugins.md); with `source`, those whose share entry takes it. */
+    fun plugins(scope: String, source: String? = null) = buildJsonObject { put("topic", "plugins"); put("scope", scope); source?.let { put("source", it) } }
     /** A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new). */
     fun pick(station: String, of: String) = buildJsonObject { put("topic", "pick"); put("station", station); put("of", of) }
 

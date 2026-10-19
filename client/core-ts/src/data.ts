@@ -578,6 +578,8 @@ export class Data {
     // A workspace's vaults as its stations hold them (views/vault.ts): the vaults, box certificates and requests by the
     // workspace's id; each vault's items by `<workspace>/<vault>`.
     if (table === "vault") return [this.#ofWorkspace(key) ?? null, [key, "vault"]];
+    // A person's plugins as the workspace's stations keep them (views/plugins.ts), by the workspace's id.
+    if (table === "plugins") return [this.#ofWorkspace(key) ?? null, [key, "plugins"]];
     if (table === "vaultItems") {
       const ws = ofAddress(key);
       return [this.#ofWorkspace(ws) ?? null, [ws, `vaultItems:${key.slice(ws.length + 1)}`]];

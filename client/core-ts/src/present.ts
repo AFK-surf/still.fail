@@ -153,6 +153,7 @@ const SHAPED: Record<string, Ty> = {
   archive: "ArchiveView",
   newChat: "NewChatView",
   shareIn: "ShareInView",
+  plugins: "PluginsView",
   pick: "PickView",
   chatJobs: "ChatJobsView",
   imageNear: "ImageNear",
