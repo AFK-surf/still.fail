@@ -664,10 +664,10 @@ fun ConnectRunScreen(station: String, id: String) {
 
 /**
  * A new connect, a step a screen: where the station has the Feishu connect, the platform first (Feishu's path in
- * FeishuConnect.kt: the model, then the bot made by scanning or an app of one's own). Slack's: the Slack workspace to make its app in (a configuration token each, or a new
- * one); the app's name and description; making and installing it, then the app-level token; last, the model it runs and
- * how its conversations become sessions. Without a configuration token the app is made in Slack by hand and both
- * tokens are pasted.
+ * FeishuConnect.kt: the model, then the bot made by scanning or an app of one's own). Slack's: the Slack workspace to
+ * make its app in (a configuration token each, or a new one); the app's name and description; making and installing
+ * it, then the app-level token; last, the model it runs and how its conversations become sessions. Without a
+ * configuration token the app is made in Slack by hand and both tokens are pasted.
  */
 @Composable
 fun NewConnectScreen(station: String) {
