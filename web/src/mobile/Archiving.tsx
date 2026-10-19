@@ -95,7 +95,7 @@ function StationArchivingForm({ s, view }: { s: StationView; view: ArchivingView
     {!view.canEdit && <div className={css.mSegNote}>{t("web-pages.archiving.adminOnly")}</div>}
     <SectionHeader title={t("web-pages.archiving.review")} start={24} />
     <div className={css.mSegNote}>
-      {review.text}{" · "}
+      {review.short}{" · "}
       <a className={chatCss.inlineLink} href={decisions} onClick={(e) => { e.preventDefault(); app.push(decisions); }}>{t("web-pages.archiving.reviewGo")}</a>
     </div>
     <SectionHeader title={t("web-pages.archiving.mode")} start={24} />

@@ -81,7 +81,7 @@ function StationArchivingForm({ workspace, s, view }: { workspace: string; s: St
   const locked = !view.canEdit || busy;
   return <>
     {!view.canEdit && <p className={chatCss.appearanceHint}>{t("web-pages.archiving.adminOnly")}</p>}
-    <Section title={t("web-pages.archiving.review")} description={<>{review.text}{" · "}<Link className={chatCss.inlineLink} to={`/w/${workspace}/settings/automatic-decisions/completion`}>{t("web-pages.archiving.reviewGo")}</Link></>}>
+    <Section title={t("web-pages.archiving.review")} description={<>{review.short}{" · "}<Link className={chatCss.inlineLink} to={`/w/${workspace}/settings/automatic-decisions/completion`}>{t("web-pages.archiving.reviewGo")}</Link></>}>
       <></>
     </Section>
     <Section title={t("web-pages.archiving.mode")}>

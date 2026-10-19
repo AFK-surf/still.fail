@@ -44,11 +44,16 @@ export const SLACK_DAYS = [0, 3, 7, 30];
 export const daysLabel = (n: number) => (n <= 0 ? t("web-pages.archiving.never") : t("web-pages.archiving.days", { n }));
 
 /** What a station's row says of its archive review, and whether it is on. */
-export function reviewOf(s: StationView): { on: boolean; text: string } {
+export function reviewOf(s: StationView): { on: boolean; text: string; short: string } {
   const rule = s.overview?.automaticDecisions?.settings.completion;
   const on = rule?.enabled === true;
   const model = s.overview?.automaticDecisions?.models.find((m) => m.id === rule?.model)?.name ?? rule?.model ?? "";
-  return { on, text: on ? t("web-pages.archiving.reviewOn", { model }) : t("web-pages.archiving.reviewOff") };
+  return {
+    on,
+    text: on ? t("web-pages.archiving.reviewOn", { model }) : t("web-pages.archiving.reviewOff"),
+    // Under its own heading (归档建议): the state alone.
+    short: on ? t("web-pages.archiving.reviewOnShort", { model }) : t("web-pages.archiving.reviewOffShort"),
+  };
 }
 
 /** 按模型判断 goes by the stations' archive reviews (自动决策): none on, it can suggest nothing; some on, the others'

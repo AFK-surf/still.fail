@@ -167,6 +167,8 @@
   "web-pages.archiving.stalled": "After review, but archive suggestions are off: nothing is archived for now",
   "web-pages.archiving.review": "Archive suggestions",
   "web-pages.archiving.mode": "How it archives",
+  "web-pages.archiving.reviewOnShort": "On · {model}",
+  "web-pages.archiving.reviewOffShort": "Off",
   "web-pages.archiving.reviewOn": "Archive suggestions: on · {model}",
   "web-pages.archiving.reviewOff": "Archive suggestions: off",
   "web-pages.archiving.reviewGo": "Settings",
