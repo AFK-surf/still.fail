@@ -29,6 +29,8 @@
 //        Windows ones), then put there (scripts/release-put.sh: CLOUDFLARE_API_TOKEN, the releases bucket's), for CI to
 //        fetch: CI never builds those (`msvc`), it says to prebuild them. --release: in the release native-artifacts
 //        instead (gh), which native.ts fetches from after the store, for a machine without the bucket's token.
+//   node scripts/native.ts store-sync                  CI on main: each prebuilt part (the Windows ones) at its key that the
+//        release has and the store lacks, copied there (release-put.sh, CLOUDFLARE_API_TOKEN); never built
 //
 // STILLFAIL_NATIVE=build never downloads (builds what the cache lacks); STILLFAIL_NATIVE=offline neither downloads nor
 // builds. Builds go to $CARGO_TARGET_DIR/native/<part> when it is set, else the crate's own target/ (a worktree's own:
@@ -873,6 +875,26 @@ async function main(argv: string[]) {
       try {
         if (any && toRelease) for (const f of readdirSync(join(work, "natives"))) gh(["release", "upload", RELEASE, join(work, "natives", f), "-R", REPO]);
         else if (any) run("sh", [join(ROOT, "scripts/release-put.sh"), "--files", work], { stdio: "inherit" });
+      } finally { rmSync(work, { recursive: true, force: true }); }
+      return;
+    }
+    case "store-sync": {
+      const work = join(tmpdir(), `stillfail-store-sync-${process.pid}`);
+      mkdirSync(join(work, "natives"), { recursive: true });
+      let any = false;
+      try {
+        for (const [p, t] of ours()) {
+          if (!onWindows(p, t)) continue;
+          const name = asset(p, t, key(p, t));
+          if (await inStore(name)) { console.log(`${name}: in the store`); continue; }
+          if (!(await exists(name))) { console.log(`${name}: in neither (prebuild it: node scripts/native.ts prebuild ${p}:${t})`); continue; }
+          const r = await fetch(`https://github.com/${REPO}/releases/download/${RELEASE}/${name}`, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
+          if (!r.ok) throw new Error(`${name}: the release answered ${r.status}`);
+          writeFileSync(join(work, "natives", name), Buffer.from(await r.arrayBuffer()));
+          console.log(`${name}: from the release, to the store`);
+          any = true;
+        }
+        if (any) run("sh", [join(ROOT, "scripts/release-put.sh"), "--files", work], { stdio: "inherit" });
       } finally { rmSync(work, { recursive: true, force: true }); }
       return;
     }
