@@ -546,45 +546,26 @@ let told_bars : Ref[Bool?] = Ref(None)
 let told_dark : Ref[Bool?] = Ref(None)
 
 ///|
-/// What a write said (Sheet.kt ToastHost): over the foot, in ink, 2.6 s; it fades in and out (200 ms, CSS's ease),
-/// its words kept while it fades.
+/// What a write said (Sheet.kt ToastHost), mbui's toast (@kit.toaster) in still.fail's look: over the foot (90 above
+/// it), in ink, 2.6 s (paused while the pointer is on it), coming in and going out; one said again is a new one.
 fn toast(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
-  if app.toast != "" {
-    // said from a call's answer, between frames: from this frame on
-    if app.toast_at < 0.0 {
-      app.toast_at = c.now()
-    }
-    if toast_said.val != app.toast {
-      toast_said.val = app.toast
-    }
-    let age = c.now() - app.toast_at
-    if age >= 2600.0 {
-      app.toast = ""
-    } else {
-      c.wake_in(2600.0 - age)
-    }
+  // said from a call's answer, between frames: from this frame on
+  if app.toast != "" && app.toast_at < 0.0 {
+    app.toast_at = c.now()
   }
-  let look = match
-    @motion.presence(c, "toast", app.toast != "", enter=@motion.trans(fade=0.0, spec=@motion.tween(200.0, ease=Css))) {
-    Some(l) => l
-    None => return
-  }
-  c.layer(align=ACenter, fn() {
-    c.spacer()
-    let b = c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, fn() {
-      c.text(toast_said.val, size=14.0, color=t.p.bg, line=20.0) |> ignore
+  let said = if app.toast != "" { [@kit.toast("t\{app.toast_at}", app.toast)] } else { [] }
+  let r = @kit.toaster(c, "toast", said, duration=2600.0, bottom=90.0, look=fn(c, s, _action, _close) {
+    let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
+    c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
+      c.text(s.toast.title, size=14.0, color=t.p.bg, line=20.0) |> ignore
     })
-    c.look(b, look)
-    @motion.leaving(c, b, app.toast != "")
-    c.box(h=Px(90.0), fn() {  }) |> ignore
+    |> ignore
   })
-  |> ignore
+  if app.toast != "" && r.open.is_empty() {
+    app.toast = ""
+  }
 }
-
-///|
-/// What the toast says, kept while it fades out.
-let toast_said : Ref[String] = { val: "" }
 
 ///|
 fn say(c : @ui.Ctx, words : String) -> Unit {
