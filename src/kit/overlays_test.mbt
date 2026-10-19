@@ -341,3 +341,21 @@ test "sheet: closed by the view, it sinks away and is gone" {
   assert_false(shown.val)
   assert_true(t.query(@ui.Dialog) is None)
 }
+
+///|
+test "toasts: the room beside one takes no press (what is under it does)" {
+  let taps = Ref(0)
+  let t = @ui.Tester::new(fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), justify=JEnd, fn() {
+      if button(c, "Under", key="under", w=Fill(1.0)).clicked {
+        taps.val += 1
+      }
+    })
+    |> ignore
+    toaster(c, "toasts", [toast("a", "Saved")], bottom=0.0) |> ignore
+  })
+  t.settle() |> ignore
+  let (_, y, _, h) = t.get(@ui.Status, label="Saved").rect
+  t.tap(8.0, y + h / 2.0)
+  assert_eq(taps.val, 1)
+}

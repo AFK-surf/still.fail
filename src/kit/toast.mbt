@@ -45,7 +45,7 @@ priv struct Kept {
 }
 
 ///|
-/// `key`'s toasts (see the file's head), `toasts` showing, the newest last, at the bottom of the window in its
+/// `key`'s toasts (see the file's head), `toasts` showing, the newest last, `bottom` above the window's foot in its
 /// middle, at most `w` wide; each goes after `duration` ms; named `label` for the semantics tree, and their close buttons `close_label`.
 pub fn toaster(
   c : @ui.Ctx,
@@ -53,6 +53,7 @@ pub fn toaster(
   toasts : Array[Toast],
   duration? : Double = 5000.0,
   w? : Double = 560.0,
+  bottom? : Double = 24.0,
   label? : String = "通知",
   close_label? : String = "关闭",
   look? : (@ui.Ctx, ToastState, () -> Unit, () -> Unit) -> Unit = toast_look,
@@ -90,20 +91,18 @@ pub fn toaster(
     kept.drawn = drawn
     return { open, acted }
   }
-  // the time stops while the pointer is over them or the focus is in one
-  let rid = c.id(key + "/region")
-  let paused = pointer_in(c, rid) || order.iter().any(fn(to) { focus_in(c, key, to.id) })
-  let (ww, wh) = c.window_size()
+  // the time stops while the pointer is over one or the focus is in one
+  let paused = order.iter().any(fn(to) { pointer_in(c, c.id(key + "/" + to.id)) || focus_in(c, key, to.id) })
+  let (ww, _) = c.window_size()
   let width = dmin(w, ww - 32.0)
+  let mut region = 0
   c.overlay(key, escape=false, outside=false, initial_focus=0, fn() {
-    // at the bottom of the window, in its middle (still.fail's)
-    let region = c.box(
-      id=rid,
+    // at the bottom of the window, in its middle (still.fail's); only the toasts take a press, not the room round them
+    c.box(w=Fill(1.0), h=Fill(1.0), justify=JEnd, align=ACenter, pb=bottom, fn() {
+    region = c.box(
       w=Px(width),
       gap=8.0,
       align=ACenter,
-      tx=(ww - width) / 2.0,
-      ty=wh - height_of(c, rid) - 24.0,
       fn() {
       for to in order {
         let k = key + "/" + to.id
@@ -171,24 +170,14 @@ pub fn toaster(
         }
       }
     })
+    })
+    |> ignore
     c.semantics(region, Region, label~)
   })
   |> ignore
   ignore(told(c, open.length() != toasts.length()))
   kept.drawn = drawn
   { open, acted }
-}
-
-///|
-/// The height `id` was drawn last frame (0 not yet: a frame is asked for).
-fn height_of(c : @ui.Ctx, id : Int) -> Double {
-  match c.rect_of(id) {
-    Some((_, _, _, h)) => h
-    None => {
-      c.request_frame()
-      0.0
-    }
-  }
 }
 
 ///|
