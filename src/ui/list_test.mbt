@@ -338,3 +338,37 @@ test "list: back to its end, gliding, then at its end" {
   t.frame()
   assert_true(t.at_end())
 }
+
+///|
+test "list: what is built from how it stood is built again once a scroll of one frame moved it" {
+  // a way back to the end shown while the list is away from it, read from list_info as a view does
+  let away : Array[Bool] = [false]
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list(
+        "list",
+        200,
+        40.0,
+        fn(i) {
+          c.box(h=Px(varied(i)), fn() { c.text("Row \{i}", wrap=false) |> ignore })
+          |> ignore
+        },
+        stick_end=true,
+      )
+      |> ignore
+      away[0] = match c.list_info("list") {
+        Some(i) => i.below > 120.0
+        None => false
+      }
+    },
+    w=300.0,
+    h=400.0,
+  )
+  t.settle() |> ignore
+  assert_true(!away[0])
+  // a wheel's scroll, laid out in one frame and nothing moving after it
+  t.move(100.0, 100.0)
+  t.wheel(100.0, 100.0, -600.0)
+  assert_true(!t.list_moving())
+  assert_true(away[0])
+}

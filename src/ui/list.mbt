@@ -335,6 +335,8 @@ fn Ctx::place_list(
     None => return
   }
   st.vp_h = ih
+  // how it stood after the last layout (Ctx::list_info): what was built from that is drawn again if this one moves it
+  let was = (st.vis_first, st.vis_last, st.at_end, st.below)
   // rows built in the build phase (none, normally) are not shown
   n.first = -1
   n.last = -1
@@ -475,6 +477,12 @@ fn Ctx::place_list(
   }
   st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.5)
   st.below = if last == st.count - 1 { bottom - bottom_edge } else { 1.0e9 }
+  // what the view built this frame read from the list as it stood (a way back to the end, the rows in view told): a
+  // frame more where this layout changed that (a scroll that took one frame, a wheel's or a key's, would otherwise
+  // leave it drawn as before the scroll until something else asked for a frame)
+  if was != (st.vis_first, st.vis_last, st.at_end, st.below) {
+    self.wants_frame = true
+  }
   if st.glide {
     // each frame the same share of what is left (1 - e^(-dt/100ms)), at
     // least a pixel; far below what is laid out, most of the way at once
