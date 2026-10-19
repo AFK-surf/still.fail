@@ -20,7 +20,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -478,9 +480,24 @@ fun stationPicture(icon: String?): ImageBitmap? {
 /** Back, in the accent color, with where it goes back to. */
 @Composable
 fun NavBack(label: String, onClick: () -> Unit) {
-    Row(Modifier.clip(Smooth(8.dp)).clickable(onClick = onClick).padding(end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconIn(Icons.ChevronLeft, 22.dp, C.accent)
-        Text(label, fontSize = 17.sp, color = C.accent)
+    // A word that does not fit the room it is given (a bar's title takes the middle) is left out, not cut: the chevron
+    // alone still says back, as on iOS.
+    Layout(
+        content = {
+            IconIn(Icons.ChevronLeft, 22.dp, C.accent)
+            Text(label, fontSize = 17.sp, color = C.accent, maxLines = 1, softWrap = false)
+        },
+        modifier = Modifier.clip(Smooth(8.dp)).clickable(onClick = onClick).padding(end = 6.dp, top = 4.dp, bottom = 4.dp),
+    ) { (chevron, word), constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val c = chevron.measure(loose)
+        val w = word.measure(loose.copy(maxWidth = Constraints.Infinity))
+        val shown = c.width + w.width <= constraints.maxWidth
+        val height = maxOf(c.height, if (shown) w.height else 0)
+        layout(if (shown) c.width + w.width else c.width, height) {
+            c.place(0, (height - c.height) / 2)
+            if (shown) w.place(c.width, (height - w.height) / 2)
+        }
     }
 }
 
@@ -495,18 +512,38 @@ fun NavButton(icon: ImageVector, onClick: () -> Unit, iconSize: Dp = 18.dp) {
 @Composable
 fun NavBar(back: String, onBack: () -> Unit, title: String, sub: (@Composable RowScope.() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.statusBars)) {
-        Box(Modifier.fillMaxWidth().padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)) {
-            // As the web's (mobile/parts.css.ts mNavbar): the buttons and the title's first line share one 32dp line at the
-            // top; a title's second line (sub) hangs below it rather than pushing the title up off the back button's line.
-            Box(Modifier.align(Alignment.TopStart).height(32.dp), contentAlignment = Alignment.CenterStart) { NavBack(back, onBack) }
-            Column(Modifier.align(Alignment.TopCenter).padding(horizontal = 84.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.height(30.dp), contentAlignment = Alignment.Center) {
-                    Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        // As the web's (mobile/parts.css.ts mNavbar): the buttons and the title's first line share one 32dp line at the
+        // top; a title's second line (sub) hangs below it rather than pushing the title up off the back button's line.
+        // The title stays in the middle and keeps 84dp clear at each side; the back button and the action get what is
+        // left beside it, so a long back word never runs under the title.
+        Layout(
+            content = {
+                Box(Modifier.height(32.dp), contentAlignment = Alignment.CenterStart) { NavBack(back, onBack) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.height(30.dp), contentAlignment = Alignment.Center) {
+                        Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    if (sub != null) Row(Modifier.offset(y = (-4).dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), content = sub)
                 }
-                Spacer(Modifier.height(2.dp))
-                if (sub != null) Row(Modifier.offset(y = (-4).dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), content = sub)
+                Box(Modifier.height(32.dp), contentAlignment = Alignment.CenterEnd) { trailing?.invoke() }
+            },
+            modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
+        ) { (backPart, titlePart, endPart), constraints ->
+            val width = constraints.maxWidth
+            val side = 84.dp.roundToPx()
+            val gap = 8.dp.roundToPx()
+            val loose = constraints.copy(minWidth = 0, minHeight = 0)
+            val t = titlePart.measure(loose.copy(maxWidth = (width - 2 * side).coerceAtLeast(0)))
+            val titleX = (width - t.width) / 2
+            val room = (titleX - gap).coerceAtLeast(0)
+            val b = backPart.measure(loose.copy(maxWidth = room))
+            val e = endPart.measure(loose.copy(maxWidth = room))
+            layout(width, maxOf(t.height, b.height, e.height)) {
+                b.place(0, 0)
+                t.place(titleX, 0)
+                e.place(width - e.width, 0)
             }
-            if (trailing != null) Box(Modifier.align(Alignment.TopEnd).height(32.dp), contentAlignment = Alignment.CenterEnd) { trailing() }
         }
     }
 }

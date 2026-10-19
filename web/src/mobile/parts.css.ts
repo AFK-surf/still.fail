@@ -77,23 +77,29 @@ export const mSegThumb = style({
     },
   },
 });
+/** The chevron, then the word on the same line or not at all: a word that does not fit the room beside a bar's title
+ * wraps to a second line, which the button's height leaves out (the chevron alone still says back, as on iOS). */
 export const mNavBack = style({
-  display: "inline-flex", alignItems: "center", gap: "0", padding: "4px 6px 4px 0", border: "0", background: "none",
+  display: "inline-flex", flexWrap: "wrap", alignItems: "center", alignContent: "flex-start", height: "32px", maxWidth: "100%", overflow: "hidden",
+  gap: "0", padding: "4px 6px 4px 0", border: "0", background: "none", boxSizing: "border-box",
   borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, color: "var(--m-accent) !important",
   fontSize: `${vars.textTitle} !important`, lineHeight: "24px",
   cursor: "pointer",
 });
+export const mNavBackWord = style({ whiteSpace: "nowrap" });
+/** The title in the middle with 84px clear at each side at least; the back button and the action get what is left beside
+ * it (less 8px), so a long back word never runs under the title. */
 export const mNavbar = style({
-  display: "grid", gridTemplateColumns: "84px minmax(0, 1fr) 84px", alignItems: "start", flex: "none",
+  display: "grid", gridTemplateColumns: "minmax(84px, 1fr) minmax(0, max-content) minmax(84px, 1fr)", alignItems: "start", flex: "none",
   padding: "calc(var(--m-top) + 6px) 16px 10px 10px", background: "var(--m-bg)",
 });
 /** The buttons and the title's first line share one 32px line, the title set 1px higher in it so it stands on the back word's baseline (17px to its 16px); a title's second line (sub) hangs below it. */
-export const mNavbarBack = style({ gridColumn: "1", justifySelf: "start", display: "flex", alignItems: "center", height: "32px", whiteSpace: "nowrap" });
+export const mNavbarBack = style({ gridColumn: "1", justifySelf: "start", display: "flex", alignItems: "center", height: "32px", whiteSpace: "nowrap", minWidth: "0", maxWidth: "calc(100% - 8px)" });
 export const mNavbarTitle = style({
   gridColumn: "2", display: "flex", flexDirection: "column", alignItems: "center", minWidth: "0", textAlign: "center",
 });
 export const mNavbarSub = style({ display: "flex", alignItems: "center", gap: "5px", maxWidth: "100%", ...outsetTop(4) });
-export const mNavbarTrailing = style({ gridColumn: "3", justifySelf: "end", display: "flex", alignItems: "center", height: "32px" });
+export const mNavbarTrailing = style({ gridColumn: "3", justifySelf: "end", display: "flex", alignItems: "center", height: "32px", minWidth: "0", maxWidth: "calc(100% - 8px)" });
 export const mTopBack = style({ padding: "calc(var(--m-top) + 6px) 0 4px 10px" });
 /** A top bar with a button at its end as well (a page's ＋). */
 export const mTopBackRow = style({ display: "flex", alignItems: "center", justifyContent: "space-between", paddingRight: "10px" });

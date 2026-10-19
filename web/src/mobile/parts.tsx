@@ -195,7 +195,7 @@ export function DoingMark({ calls, on, inline = false, onColor = false }: { call
 export function NavBack({ label, onClick }: { label: string; onClick: () => void }) {
   // A place's top page (the bottom bar under it) has nowhere to go back to: its room kept, nothing drawn in it.
   if (useRootPage()) return <span className={css.mNavBack} aria-hidden="true" style={{ visibility: "hidden" }}><ChevronLeft size={22} /></span>;
-  return <button type="button" className={css.mNavBack} onClick={onClick}><ChevronLeft size={22} />{label}</button>;
+  return <button type="button" className={css.mNavBack} onClick={onClick}><ChevronLeft size={22} /><span className={css.mNavBackWord}>{label}</span></button>;
 }
 
 /** A bar's button: the icon alone, no disc behind it (a bar's buttons are quiet). */
