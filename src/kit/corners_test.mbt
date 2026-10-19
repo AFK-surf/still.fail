@@ -9,12 +9,12 @@ test "corners: a dialog, an alert dialog" {
     })
     |> ignore
   })
-  t.settle() |> ignore
+  t.draw()
   assert_eq(t.corner_faults(), [])
   let t = @ui.Tester::new(fn(c) {
     alert_dialog(c, "a", true, "Delete the chat?", "Delete", description="It cannot be undone.", danger=true) |> ignore
   })
-  t.settle() |> ignore
+  t.draw()
   assert_eq(t.corner_faults(), [])
 }
 
@@ -33,7 +33,7 @@ test "corners: a menu, a select's list, a popover, a tooltip" {
     })
     |> ignore
   })
-  t.settle() |> ignore
+  t.draw()
   t.press("Down")
   assert_eq(t.corner_faults(), [])
   let t = @ui.Tester::new(fn(c) {
@@ -44,9 +44,9 @@ test "corners: a menu, a select's list, a popover, a tooltip" {
     })
     |> ignore
   })
-  t.settle() |> ignore
+  t.draw()
   t.tab()
-  t.settle() |> ignore
+  t.draw()
   assert_eq(t.corner_faults(), [])
 }
 
@@ -66,7 +66,7 @@ test "corners: toasts, fields, segmented choices, a toolbar" {
     |> ignore
     toaster(c, "toasts", [toast("a", "Saved"), toast("b", "Sent", description="To the team", action="Undo")]) |> ignore
   })
-  t.settle() |> ignore
+  t.draw()
   // pointed at: the password's button shows its ground
   let (x, y, w, h) = t.get(@ui.Button, label="显示").rect
   t.move(x + w / 2.0, y + h / 2.0)

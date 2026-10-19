@@ -475,7 +475,7 @@ test "what leaves is drawn, and a tap meanwhile goes to what is under it" {
   t.tap_once(100.0, 50.0)
   t.frame()
   assert_eq((over.val, under.val), (1, 1))
-  t.settle() |> ignore
+  t.draw()
   assert_eq(t.drawn_rects().filter(fn(r) { r.4 == 0x445566FFL }).length(), 0)
 }
 

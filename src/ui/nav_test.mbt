@@ -29,8 +29,9 @@ test "a page pushed slides in from the right, the one under it out to the left" 
   let t = @ui.Tester::new(nav_view(nav))
   assert_false(t.takes_back())
   t.tap_text("open 1")
-  // tap() settles: page 1 alone, in place
+  // the state at once; the picture once it has slid in
   assert_eq(nav.depth(), 2)
+  t.run_for(@ui.nav_push_ms)
   assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
   assert_true(t.rect_of("title 0") is None)
   assert_true(t.takes_back())
@@ -57,16 +58,22 @@ test "back pops; the page under keeps where its list was scrolled" {
   let before = t.visible()
   assert_true(before.0 > 10)
   t.tap_text("open 1")
+  t.run_for(@ui.nav_push_ms)
   // page 1's own list starts at its top
   assert_eq(t.visible().0, 0)
   t.wheel(100.0, 400.0, 600.0)
   t.back()
   assert_eq(nav.depth(), 1)
+  // (on_leave is told the frame after the page has slid off: logic on a motion's end, to be told at once instead,
+  // the page sliding off then drawn from what it was)
+  t.run_for(@ui.nav_push_ms)
+  t.frame()
   assert_eq(t.visible(), before)
   assert_eq(left, [1])
   assert_false(t.takes_back())
   // page 1 again is a new page: its list at the top, not where it was left
   t.tap_text("open 1")
+  t.run_for(@ui.nav_push_ms)
   assert_eq(t.visible().0, 0)
 }
 
@@ -75,6 +82,7 @@ test "swiped from the left edge the page follows the finger, then goes back" {
   let nav = @ui.Nav::new(0)
   let t = @ui.Tester::new(nav_view(nav))
   t.tap_text("open 1")
+  t.run_for(@ui.nav_push_ms)
   t.hold_drag(5.0, 400.0, 200.0, 400.0)
   // the page where the finger has it, the one under it beside it
   assert_eq(t.rect_of("title 1").unwrap().0, 195.0)
@@ -107,7 +115,7 @@ test "a press on the edge that moves up and down scrolls the list, and a tap the
   let t = @ui.Tester::new(nav_view(nav))
   t.tap_text("open 1")
   t.drag(10.0, 600.0, 12.0, 300.0)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(nav.depth(), 2)
   assert_true(t.visible().0 > 0)
 }

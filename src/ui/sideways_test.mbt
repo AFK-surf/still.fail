@@ -28,7 +28,7 @@ fn sideways_view(at : Ref[Double]) -> @ui.Tester {
 ///|
 test "sideways: what it holds is laid out as wide as it is, cut to the box" {
   let t = sideways_view(Ref::new(0.0))
-  t.settle() |> ignore
+  t.draw()
   let (_, _, w, _) = t.rect_of("xxxx").unwrap()
   assert_eq(w, 600.0)
 }
@@ -37,15 +37,15 @@ test "sideways: what it holds is laid out as wide as it is, cut to the box" {
 test "sideways: a finger moving sideways drags it; up or down, the list scrolls" {
   let at = Ref::new(0.0)
   let t = sideways_view(at)
-  t.settle() |> ignore
+  t.draw()
   let (_, y, _, _) = t.rect_of("xxxx").unwrap()
   t.drag(250.0, y + 5.0, 50.0, y + 5.0)
-  t.settle() |> ignore
+  t.draw()
   let was = at.val
   assert_true(was > 150.0)
   assert_eq(t.list_offset(), 0.0)
   t.drag(250.0, y + 5.0, 250.0, y - 115.0)
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.list_offset() > 80.0)
 }
 
@@ -53,14 +53,14 @@ test "sideways: a finger moving sideways drags it; up or down, the list scrolls"
 test "sideways: it stops at its ends" {
   let at = Ref::new(0.0)
   let t = sideways_view(at)
-  t.settle() |> ignore
+  t.draw()
   let (_, y, _, _) = t.rect_of("xxxx").unwrap()
   t.drag(50.0, y + 5.0, 250.0, y + 5.0)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(at.val, 0.0)
   for _ in 0..<4 {
     t.drag(280.0, y + 5.0, 20.0, y + 5.0)
-    t.settle() |> ignore
+    t.draw()
   }
   t.frame()
   assert_eq(at.val, 300.0)

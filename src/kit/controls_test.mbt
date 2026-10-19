@@ -114,6 +114,8 @@ test "toggle group that slides: its thumb behind the pressed item, getting there
   assert_true(under("Left"))
   t.click(@ui.Radio, label="Right")
   assert_eq(v.val, ["r"])
+  // (the thumb on its spring: until springs say when they end, drawn until it rests)
+  t.settle() |> ignore
   assert_true(under("Right"))
   assert_false(under("Left"))
   // the view's choice: on its way a few frames, not yet under the words it goes to

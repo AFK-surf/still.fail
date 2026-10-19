@@ -329,7 +329,7 @@ test "list: back to its end, gliding, then at its end" {
   t.frame()
   // on its way, not there at once
   assert_true(!t.at_end())
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.at_end())
   assert_true(t.ctx().list_info("list").unwrap().below.abs() < 0.5)
   // far from it, most of the way at once
@@ -364,7 +364,7 @@ test "list: what is built from how it stood is built again once a scroll of one 
     w=300.0,
     h=400.0,
   )
-  t.settle() |> ignore
+  t.draw()
   assert_true(!away[0])
   // a wheel's scroll, laid out in one frame and nothing moving after it
   t.move(100.0, 100.0)
@@ -394,7 +394,7 @@ test "a click seen in a list's row is drawn by the next frame" {
     h=300.0,
   )
   t.tap_text("第 1 行")
-  t.settle() |> ignore
+  t.draw()
   assert_true(on.val)
   assert_true(t.find("开着") is Some(_))
 }

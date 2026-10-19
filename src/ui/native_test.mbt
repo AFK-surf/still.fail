@@ -91,7 +91,7 @@ test "a PDF's pages are images the host draws at the size they are shown" {
     w=390.0,
     h=844.0,
   )
-  t.settle() |> ignore
+  t.draw()
   let pdf = cell.val.unwrap()
   assert_eq(pdf.pages, 3)
   assert_eq(pdf.sizes[0], (612.0, 792.0))

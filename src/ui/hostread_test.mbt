@@ -49,7 +49,7 @@ test "host reads: set while it runs, read from the next frame on" {
   assert_eq(seen[seen.length() - 1], "true true [1]")
   t.set_env("MBUI_X", "")
   t.set_dark(false)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(seen[seen.length() - 1], "false true []")
 }
 

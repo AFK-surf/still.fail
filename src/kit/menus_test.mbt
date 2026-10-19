@@ -42,7 +42,7 @@ test "dropdown menu: opened by the keyboard at its first item; the arrows skip w
   t.press("Enter")
   assert_eq(chosen.val, Some("window"))
   assert_false(open.val)
-  t.settle() |> ignore
+  t.draw()
   // the focus back on its trigger
   assert_eq(t.focused().unwrap().label, "File")
 }
@@ -67,7 +67,7 @@ test "dropdown menu: opened by a click, nothing lit until a key; Down on the tri
   assert_eq(t.focused().unwrap().label, "Show bookmarks")
   t.press("Escape")
   assert_false(open.val)
-  t.settle() |> ignore
+  t.draw()
   t.tab()
   t.press("Down")
   assert_true(open.val)
@@ -86,7 +86,7 @@ test "menu: letters typed go to the item they start; a press outside closes it; 
       chosen.val = m.chosen
     }
   })
-  t.settle() |> ignore
+  t.draw()
   t.press("s")
   assert_eq(t.focused().unwrap().label, "Share")
   t.press("s")
@@ -102,7 +102,7 @@ test "menu: letters typed go to the item they start; a press outside closes it; 
   assert_false(open.val)
   open.val = true
   t.frame()
-  t.settle() |> ignore
+  t.draw()
   t.tap(380.0, 800.0)
   assert_false(open.val)
 }
@@ -119,7 +119,7 @@ test "submenu: Right opens it at its first item, Left closes it alone; the point
       chosen.val = m.chosen
     }
   })
-  t.settle() |> ignore
+  t.draw()
   t.press("End")
   t.press("Up")
   assert_eq(t.focused().unwrap().label, "Share")
@@ -138,7 +138,7 @@ test "submenu: Right opens it at its first item, Left closes it alone; the point
   // the pointer onto it opens it; a choice in it closes everything
   let (x, y, w, h) = t.get(@ui.MenuItem, label="Share").rect
   t.move(x + w / 2.0, y + h / 2.0)
-  t.settle() |> ignore
+  t.draw()
   t.click(@ui.MenuItem, label="Copy link")
   assert_eq(chosen.val, Some("copy"))
   assert_false(open.val)
@@ -192,25 +192,25 @@ test "menubar: a click opens a menu, the pointer moves among them, Left and Righ
   })
   ignore(t.get(@ui.MenuBar, label="Main"))
   t.click(@ui.MenuItem, label="File")
-  t.settle() |> ignore
+  t.draw()
   ignore(t.get(@ui.Menu, label="File"))
   let (x, y, w, h) = t.get(@ui.MenuItem, label="Edit").rect
   t.move(x + w / 2.0, y + h / 2.0)
-  t.settle() |> ignore
+  t.draw()
   ignore(t.get(@ui.Menu, label="Edit"))
   assert_true(t.query(@ui.Menu, label="File") is None)
   t.press("Down")
   assert_eq(t.focused().unwrap().label, "Undo")
   t.press("Right")
-  t.settle() |> ignore
+  t.draw()
   ignore(t.get(@ui.Menu, label="View"))
   assert_eq(t.focused().unwrap().label, "Sidebar")
   t.press("Right")
-  t.settle() |> ignore
+  t.draw()
   ignore(t.get(@ui.Menu, label="File"))
   t.press("Enter")
   assert_eq(chosen.val, Some("new"))
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.query(@ui.Menu) is None)
 }
 
@@ -230,7 +230,7 @@ test "select: opens on the chosen option; Enter chooses; letters on the trigger 
   assert_eq(t.get(@ui.Combobox, label="Fruit").value, "Banana")
   t.tab()
   t.press("Enter")
-  t.settle() |> ignore
+  t.draw()
   // (the page under it, its trigger too, out of the tree while it is open)
   ignore(t.get(@ui.Listbox, label="Fruit"))
   assert_eq(t.focused().unwrap().label, "Banana")
@@ -242,7 +242,7 @@ test "select: opens on the chosen option; Enter chooses; letters on the trigger 
   assert_eq(t.focused().unwrap().label, "Cherry")
   t.press("Enter")
   assert_eq(v.val, "c")
-  t.settle() |> ignore
+  t.draw()
   assert_eq(t.focused().unwrap().label, "Fruit")
   // a letter on the closed trigger
   t.press("a")
@@ -250,9 +250,9 @@ test "select: opens on the chosen option; Enter chooses; letters on the trigger 
   assert_eq(t.focused().unwrap().label, "Fruit")
   // opened and left by a press outside: unchanged
   t.click(@ui.Combobox, label="Fruit")
-  t.settle() |> ignore
+  t.draw()
   t.tap(380.0, 800.0)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(v.val, "a")
   assert_true(t.query(@ui.Listbox) is None)
 }
@@ -312,25 +312,25 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   t.frame(ms=100.0)
   assert_true(t.find("Guides and tutorials") is None)
   t.frame(ms=150.0)
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.find("Guides and tutorials") is Some(_))
   let (x2, y2, w2, h2) = t.get(@ui.Button, label="Overview").rect
   t.move(x2 + w2 / 2.0, y2 + h2 / 2.0)
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.find("What it is") is Some(_))
   assert_true(t.find("Guides and tutorials") is None)
   // away from both: closed after a moment
   t.move(380.0, 800.0)
   t.frame(ms=200.0)
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.find("What it is") is None)
   // by the keyboard: Down opens it, Escape closes it
   t.tab()
   t.press("Down")
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.find("Guides and tutorials") is Some(_))
   t.press("Escape")
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.find("Guides and tutorials") is None)
   t.click(@ui.Link, label="GitHub")
   assert_eq(followed.val, Some("github"))

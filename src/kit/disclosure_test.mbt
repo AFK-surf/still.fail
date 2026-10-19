@@ -13,14 +13,14 @@ test "collapsible: its trigger opens it, its content grows in; closed, gone from
   // on its way: cut to part of its height
   t.frame(ms=50.0)
   let (_, _, _, h1) = t.get(@ui.Region, label="Details").rect
-  t.settle() |> ignore
+  t.draw()
   let (_, _, _, h2) = t.get(@ui.Region, label="Details").rect
   assert_true(h2 > 0.0)
   ignore(h1)
   assert_eq(t.get(@ui.Button, label="Details").expanded, Some(true))
   t.act(@ui.Button, @ui.Activate, label="Details")
   assert_false(open.val)
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.query(@ui.Region, label="Details") is None)
 }
 
@@ -44,7 +44,7 @@ test "accordion: one open at a time; pressed again it closes; Up and Down move a
   assert_eq(v.val, ["a"])
   t.click(@ui.Button, label="Is it fast?")
   assert_eq(v.val, ["b"])
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.query(@ui.Region, label="What is it?") is None)
   ignore(t.get(@ui.Region, label="Is it fast?"))
   t.click(@ui.Button, label="Is it fast?")

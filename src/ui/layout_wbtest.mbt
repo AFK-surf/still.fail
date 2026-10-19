@@ -500,7 +500,7 @@ test "kept layouts: a column moved under a clip (the scroll scene), and lists sc
     t.frame()
     t.wheel(150.0, 400.0, 120.0)
     t.drag(150.0, 500.0, 150.0, 300.0)
-    t.settle() |> ignore
+    t.draw()
     t.wheel(150.0, 400.0, -60.0)
   })
   |> ignore
@@ -535,12 +535,12 @@ test "kept layouts: animations (springs moving boxes, widths, opacity)" {
       h=300.0,
     )
     target.val = 100.0
-    t.settle() |> ignore
+    t.draw()
     target.val = 20.0
     for _ in 0..<5 {
       t.frame()
     }
-    t.settle() |> ignore
+    t.draw()
   })
   |> ignore
 }
@@ -677,16 +677,16 @@ test "kept layouts: pages pushed and popped, mid-slide" {
     for _ in 0..<6 {
       t.frame(ms=40.0)
     }
-    t.settle() |> ignore
+    t.draw()
     nav.pop() |> ignore
     for _ in 0..<4 {
       t.frame(ms=50.0)
     }
-    t.settle() |> ignore
+    t.draw()
     t.back_gesture(150.0, false)
-    t.settle() |> ignore
+    t.draw()
     t.back_gesture(300.0, true)
-    t.settle() |> ignore
+    t.draw()
   })
   |> ignore
 }
@@ -709,11 +709,11 @@ test "kept layouts: a pager dragged and turned, images arriving" {
       h=500.0,
       images=[("a.png", 400, 200)],
     )
-    t.settle() |> ignore
+    t.draw()
     t.drag(250.0, 300.0, 120.0, 300.0)
-    t.settle() |> ignore
+    t.draw()
     t.drag(100.0, 300.0, 140.0, 300.0)
-    t.settle() |> ignore
+    t.draw()
   })
   |> ignore
 }

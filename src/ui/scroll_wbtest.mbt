@@ -303,7 +303,7 @@ test "Android: a finger on a flinging list stops it and taps nothing" {
   t.frame()
   t.touch(2, 200.0, 400.0)
   t.frame()
-  t.settle() |> ignore
+  t.draw()
   assert_false(t.list_moving())
   approx(t.list_offset(), at, 0.0)
   assert_eq(clicks.length(), 0)

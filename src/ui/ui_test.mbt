@@ -87,7 +87,7 @@ test "a list pinned to its end stays there as rows are measured and added" {
     }
   })
   let t = @ui.Tester::new(chat_view(items), w=240.0, h=400.0)
-  t.settle() |> ignore
+  t.draw()
   let rows = t.rows()
   let (last, y, h) = rows[rows.length() - 1]
   assert_eq(last, 499)
@@ -95,7 +95,7 @@ test "a list pinned to its end stays there as rows are measured and added" {
   // a new message while at the end: still at the end
   items.push("new message")
   t.frame()
-  t.settle() |> ignore
+  t.draw()
   let rows2 = t.rows()
   let (last2, y2, h2) = rows2[rows2.length() - 1]
   assert_eq(last2, 500)
@@ -106,7 +106,7 @@ test "a list pinned to its end stays there as rows are measured and added" {
 test "scrolling up keeps the row under the finger in place" {
   let items = Array::makei(300, fn(i) { "row \{i}" })
   let t = @ui.Tester::new(chat_view(items), w=240.0, h=400.0)
-  t.settle() |> ignore
+  t.draw()
   t.wheel(100.0, 200.0, -300.0)
   let rows = t.rows()
   let (first, _, _) = rows[0]
@@ -114,7 +114,7 @@ test "scrolling up keeps the row under the finger in place" {
   // dragging moves content with the finger, by the same distance
   let before = t.rows()
   t.drag(100.0, 100.0, 100.0, 160.0)
-  t.settle() |> ignore
+  t.draw()
   let after = t.rows()
   let (i0, y0, _) = before[2]
   let mut moved = 0.0
@@ -375,7 +375,7 @@ test "a scripted step waits for the app to settle: a tap once what moves has sto
   let log = t.drive("tap 动起来\nnow tap 按一下\nexit")
   assert_true(log.contains("DRIVE PASS"))
   assert_true(tapped_at.val < moving_until.val)
-  t.settle() |> ignore
+  t.draw()
 }
 
 ///|

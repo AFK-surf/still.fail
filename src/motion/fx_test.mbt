@@ -324,6 +324,6 @@ test "layout: a node that moves is drawn from where it was, and goes to its new 
   for k, y in ys {
     assert_true(same(y, y0 + 20.0 * (k + 1).to_double()), msg="frame \{k}: \{y}")
   }
-  ignore(t.settle())
+  t.draw()
   assert_true(same(t.drawn_of("card").unwrap().1, y0 + 200.0))
 }

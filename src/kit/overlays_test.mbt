@@ -30,7 +30,7 @@ test "dialog: opened by its trigger, the page hidden under it, the focus in it; 
   assert_eq(t.focused().unwrap().label, "Name")
   t.press("Escape")
   assert_false(open.val)
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.query(@ui.Dialog) is None)
   assert_eq(t.focused().unwrap().label, "Edit profile")
 }
@@ -41,14 +41,14 @@ test "dialog: a press outside it closes it, as its close button does; one inside
   let t = @ui.Tester::new(fn(c) {
     open.val = dialog(c, "d", open.val, "Hello", fn() { c.text("Inside") |> ignore }).value
   })
-  t.settle() |> ignore
+  t.draw()
   t.tap_text("Inside")
   assert_true(open.val)
   t.tap(5.0, 5.0)
   assert_false(open.val)
   open.val = true
   t.frame()
-  t.settle() |> ignore
+  t.draw()
   t.click(@ui.Button, label="关闭")
   assert_false(open.val)
 }
@@ -64,7 +64,7 @@ test "alert dialog: opens on cancel (Enter does not do it), a press outside leav
       done.val += 1
     }
   })
-  t.settle() |> ignore
+  t.draw()
   assert_eq(t.get(@ui.AlertDialog, label="Delete the chat?").description, "It cannot be undone")
   assert_eq(t.focused().unwrap().label, "取消")
   t.tap(5.0, 5.0)
@@ -74,7 +74,7 @@ test "alert dialog: opens on cancel (Enter does not do it), a press outside leav
   assert_eq(done.val, 0)
   open.val = true
   t.frame()
-  t.settle() |> ignore
+  t.draw()
   t.click(@ui.Button, label="Delete")
   assert_false(open.val)
   assert_eq(done.val, 1)
@@ -92,7 +92,7 @@ test "popover: beside its trigger, the focus in it; its trigger toggles it, a pr
   })
   t.click(@ui.Button, label="Filters")
   assert_true(open.val)
-  t.settle() |> ignore
+  t.draw()
   let (_, ty, _, th) = t.get(@ui.Button, label="Filters").rect
   let (_, py, _, _) = t.get(@ui.Dialog, label="Filters").rect
   assert_true(py >= ty + th)
@@ -125,7 +125,7 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
   assert_false(shown.val)
   t.frame(ms=100.0)
   assert_true(shown.val)
-  t.settle() |> ignore
+  t.draw()
   ignore(t.get(@ui.Tooltip, label="Bold (⌘B)"))
   // a press shuts it until the pointer leaves
   t.tap(x + w / 2.0, y + h / 2.0)
@@ -188,7 +188,7 @@ test "hover card: opened once the pointer rests on its trigger, kept while over 
   assert_false(open.val)
   t.frame(ms=1.0)
   assert_true(open.val)
-  t.settle() |> ignore
+  t.draw()
   // onto the card: still open
   let (cx, cy, cw, ch) = t.rect_of("Ada Lovelace").unwrap()
   t.move(cx + cw / 2.0, cy + ch / 2.0)
@@ -354,7 +354,7 @@ test "toasts: the room beside one takes no press (what is under it does)" {
     |> ignore
     toaster(c, "toasts", [toast("a", "Saved")], bottom=0.0) |> ignore
   })
-  t.settle() |> ignore
+  t.draw()
   let (_, y, _, h) = t.get(@ui.Status, label="Saved").rect
   t.tap(8.0, y + h / 2.0)
   assert_eq(taps.val, 1)

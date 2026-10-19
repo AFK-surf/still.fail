@@ -118,12 +118,12 @@ test "a press taken by the app is no tap of what it went down on, and scrolls no
     h=300.0,
   )
   t.tap(50.0, 20.0)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(taps.val, 1)
   take.val = true
   t.press_at(50.0, 20.0)
   t.release(50.0, 20.0)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(taps.val, 1)
 }
 
@@ -154,14 +154,14 @@ test "a link held still a long press's time: its hold told once, with where it l
     t.frame(ms=50.0)
   }
   t.release(x + w / 2.0, y + h / 2.0)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(held.length(), 1)
   assert_eq(held[0].0, "https://example.com/d")
   assert_eq((held[0].1).2, w)
   assert_eq(tapped.length(), 0)
   // a quick tap is the link's
   t.tap(x + w / 2.0, y + h / 2.0)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(tapped, ["https://example.com/d"])
   assert_eq(held.length(), 1)
 }

@@ -327,7 +327,7 @@ pub fn Tester::resize(self : Tester, w : Double, h : Double) -> Unit {
   self.w = w
   self.h = h
   self.frame()
-  self.settle(unsettled_ok=true) |> ignore
+  self.draw()
 }
 
 ///|
@@ -335,7 +335,7 @@ pub fn Tester::tap(self : Tester, x : Double, y : Double) -> Unit {
   on_pointer(0, x, y, 0)
   on_pointer(2, x, y, 0)
   self.frame()
-  self.settle(unsettled_ok=true) |> ignore
+  self.draw()
 }
 
 ///|
@@ -364,7 +364,7 @@ pub fn Tester::drag(
 pub fn Tester::wheel(self : Tester, x : Double, y : Double, dy : Double) -> Unit {
   on_wheel(x, y, 0.0, dy, 0)
   self.frame()
-  self.settle(unsettled_ok=true) |> ignore
+  self.draw()
 }
 
 ///|
@@ -385,7 +385,7 @@ pub fn Tester::compose(self : Tester, s : String) -> Unit {
 pub fn Tester::key(self : Tester, code : Int, mods? : Int = 0) -> Unit {
   on_key(code, mods)
   self.frame()
-  self.settle(unsettled_ok=true) |> ignore
+  self.draw()
 }
 
 ///|
@@ -760,7 +760,7 @@ pub fn Tester::press(self : Tester, name : String) -> Unit {
 pub fn Tester::back(self : Tester) -> Unit {
   on_back(2, 0.0, 1.0, 0)
   self.frame()
-  self.settle(unsettled_ok=true) |> ignore
+  self.draw()
 }
 
 ///|
@@ -1111,7 +1111,7 @@ pub fn Tester::right_click(self : Tester, x : Double, y : Double) -> Unit {
   on_pointer(0, x, y, 2)
   on_pointer(2, x, y, 2)
   self.frame()
-  self.settle(unsettled_ok=true) |> ignore
+  self.draw()
 }
 
 ///|
@@ -1217,7 +1217,7 @@ pub fn Tester::act(self : Tester, role : Role, action : Action, label? : String 
   }
   g().ask_action(s.id, action)
   self.frame()
-  self.settle(unsettled_ok=true) |> ignore
+  self.draw()
 }
 
 ///|

@@ -39,7 +39,7 @@ test "an image with a free height takes its proportions once known" {
     h=400.0,
     images=[("photo.jpg", 4000, 3000)],
   )
-  t.settle() |> ignore
+  t.draw()
   let (_, y, _, _) = t.rect_of("caption").unwrap()
   assert_eq(y, 150.0)
   let im = t.drawn_images()[0]
@@ -60,7 +60,7 @@ test "a bigger box loads a sharper decode, showing the small one meanwhile" {
     h=400.0,
     images=[("p.png", 2000, 2000)],
   )
-  t.settle() |> ignore
+  t.draw()
   big[0] = true
   t.frame()
   assert_eq(t.image_loads(), [("p.png", 128), ("p.png", 1024)])
@@ -82,7 +82,7 @@ test "contain letterboxes; a missing image draws only its background" {
     h=400.0,
     images=[("wide.jpg", 400, 200)],
   )
-  t.settle() |> ignore
+  t.draw()
   let ims = t.drawn_images()
   assert_eq(ims.length(), 1)
   assert_eq((ims[0][0], ims[0][1], ims[0][2], ims[0][3]), (0.0, 25.0, 100.0, 50.0))

@@ -4,7 +4,7 @@
 ///|
 test "every input asks the host for a frame, a key nothing under the pointer takes too" {
   let t = Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
-  t.settle() |> ignore
+  t.draw()
   t.fake.wants = false
   // Enter with no field focused and no list under the pointer: before, nothing asked for a frame
   on_key(key_enter, 0)
@@ -14,7 +14,7 @@ test "every input asks the host for a frame, a key nothing under the pointer tak
 ///|
 test "the frame after an input is followed by one more, for what read it late" {
   let t = Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
-  t.settle() |> ignore
+  t.draw()
   on_key(key_enter, 0)
   t.frame()
   assert_true(g().wants_frame)
@@ -25,7 +25,7 @@ test "the frame after an input is followed by one more, for what read it late" {
 ///|
 test "a frame asked for between frames reaches the host" {
   let t = Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
-  t.settle() |> ignore
+  t.draw()
   t.fake.wants = false
   g().request_frame()
   assert_true(t.fake.wants)
