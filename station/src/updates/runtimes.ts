@@ -151,6 +151,21 @@ export function howToInstall(kind: Kind, env: Env): How | Unable {
   return new Unable("station.updates.noNpmNoBrew");
 }
 
+/// Whether `how` is npm installing a package.
+export const isNpmInstall = (how: How) => /^npm(\.cmd)?$/i.test(basename(how.program)) && how.args[0] === "install";
+
+/// After an npm install that left `kind`'s command off the station's PATH: the command as npm put it in its global
+/// prefix's bin, linked beside that npm (on PATH: it was found there). So with a Node unpacked somewhere and only its
+/// node and npm linked into ~/.local/bin, whose global bin PATH does not have. Whether it was linked.
+export async function linkBesideNpm(kind: Kind, how: How, env: Env): Promise<boolean> {
+  if (!isNpmInstall(how) || how.args.includes("--prefix")) return false;
+  const [ok, , out] = await runBoth(how.program, ["prefix", "-g"], env, 20_000, () => {}, "en");
+  const prefix = out.trim().split("\n").at(-1)?.trim();
+  if (!ok || !prefix) return false;
+  const found = platform.findCommand(kindCommand(kind), { ...env, PATH: join(prefix, "bin") });
+  return found !== null && platform.linkCommand(found.onPath, dirname(how.program));
+}
+
 /// A command that did not end in time.
 export class NotFinished extends Error {}
 

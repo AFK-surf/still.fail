@@ -429,6 +429,7 @@ export const windows: Platform = {
     }
     return null;
   },
+  linkCommand: () => false,
   // Its installer is a shell script (install.sh).
   codexStandalone: false,
 

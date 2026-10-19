@@ -3,7 +3,7 @@
 import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
 import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { cpus as cpuList, release, type as osType } from "node:os";
-import { delimiter, join } from "node:path";
+import { basename, delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
@@ -390,6 +390,19 @@ export const unix: Platform = {
     });
   },
   shimUpdate: () => null,
+  linkCommand(command, dir) {
+    const link = join(dir, basename(command));
+    try {
+      lstatSync(link);
+      return false;
+    } catch {}
+    try {
+      symlinkSync(command, link);
+      return true;
+    } catch {
+      return false;
+    }
+  },
   codexStandalone: true,
 
   /// macOS: caffeinate against idle sleep, for as long as the station's process is there (-w). Linux: systemd-inhibit

@@ -46,8 +46,8 @@ import type { RuntimeKind } from "../agents/runtime.ts";
 import { platform as machine } from "../platform/index.ts";
 import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
 import {
-  type Env, type How, type Kind, KINDS, NotFinished, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, kindCommand,
-  kindName, kindPackage, pinNpmVersion, run, runLines,
+  type Env, type How, type Kind, KINDS, NotFinished, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, isNpmInstall, kindCommand,
+  kindName, kindPackage, linkBesideNpm, pinNpmVersion, run, runLines,
 } from "./runtimes.ts";
 import {
   type Channel, type Words, INSTALLING, channelOf, downloading, newer, offer, platform, releaseChannel, sameWords, say, stationDownloadPercent,
@@ -614,7 +614,11 @@ export class Updates {
       failed = e instanceof NotFinished ? { key: "station.updates.timedOut" } : { text: (e as Error).message };
     }
     if (failed) log.warn("updates", "the runtime not updated", { runtime: kind, failed: say(failed, "en") });
-    const read = await this.readRuntime(kind);
+    let read = await this.readRuntime(kind);
+    if (failed === null && !read.installed && (await linkBesideNpm(kind, how, this.env).catch(() => false))) {
+      log.info("updates", "the runtime npm installed off PATH linked beside npm", { runtime: kind, npm: how.program });
+      read = await this.readRuntime(kind);
+    }
     // Done without an error but not there, or not newer: installed somewhere the station's PATH does not find.
     if (failed === null) {
       if (!read.installed) failed = { key: "station.updates.notOnPath", args: { program: how.program, command: kindCommand(kind) } };
@@ -634,7 +638,7 @@ export class Updates {
   /// build for this machine, fetched here first; Claude Code's, as its installer writes it), else the step the command
   /// says it is at (Homebrew's, Claude Code's installer's).
   private async install(kind: Kind, how: How): Promise<[boolean, string]> {
-    const npm = /^npm(\.cmd)?$/i.test(how.program.split(/[\\/]/).pop() ?? "") && how.args[0] === "install";
+    const npm = isNpmInstall(how);
     if (kind === "codex" && npm) {
       const version = await this.fetchCodex(how.program);
       // That version, as npm's cache has its build (`latest` from a cached list could be an older one).

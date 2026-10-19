@@ -133,6 +133,9 @@ export type Platform = {
   /// How a runtime found as a package manager's shim of this machine's kind is updated (Windows: Vite+'s beside
   /// vp.exe, npm's .cmd in its prefix), none for the shared rules.
   shimUpdate(found: Found, pkg: string, env: Env): How | "no-npm" | null;
+  /// `command` (a command npm installed in its global prefix) linked into `dir` under its name, where nothing of that
+  /// name is: whether it now is (not on Windows: npm's .cmd finds its package beside itself, and its prefix is on PATH).
+  linkCommand(command: string, dir: string): boolean;
   /// Whether Codex's standalone install updates by its installer here (a shell script: not on Windows).
   codexStandalone: boolean;
 

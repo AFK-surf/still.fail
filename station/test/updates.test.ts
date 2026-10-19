@@ -2,7 +2,7 @@
 // servers, fake installers and fake npm/vp/curl commands in temporary directories: nothing real is installed or read.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -576,6 +576,31 @@ describe("updates", { concurrency: true }, () => {
       await until("failed", () => updates.get("zh")[2]!.state === "failed");
       assert.equal(updates.get("zh")[2]!.message, `${exe(join(bin, "npm"))} 已完成，但 station 的 PATH 中仍找不到 codex：可能安装到了其他位置`);
     });
+  });
+
+  test("a runtime npm installs in its own Node's bin, off PATH, is linked beside the npm on PATH", { skip: WINDOWS && "npm's .cmd stays in its prefix (on PATH)" }, async (t) => {
+    const [registry, server] = await serve((path) => (path === "/@xai-official/grok/latest" ? { body: JSON.stringify({ version: "1.0.62" }) } : null));
+    t.after(() => server.close());
+    // A Node unpacked in its own directory, only its npm linked into a directory on PATH (as ~/.local/bin).
+    const dir = temp();
+    const [node, bin] = [join(dir, "node-v24"), join(dir, "bin")];
+    script(join(node, "bin", "npm"), `#!/bin/sh
+case "$1" in
+  prefix) echo "${node}" ;;
+  install) printf '#!/bin/sh\necho "grok 1.0.62 (1474f9cb)"\n' > "${node}/bin/grok.sh"; /bin/ln "${launcher()}" "${node}/bin/grok"; echo "added 1 package" ;;
+esac
+`);
+    mkdirSync(bin);
+    symlinkSync(join(node, "bin", "npm"), join(bin, "npm"));
+    const updates = installed(dir, "1300", null, { registry, env: { PATH: withSystem(bin), HOME: dir } });
+    t.after(() => updates.close());
+    await updates.check();
+    const grok = () => updates.get("zh").find((v) => v.id === "grok")!;
+    assert.deepEqual([grok().installed, grok().updatable], [false, true]);
+    await updates.update("grok", "zh");
+    await until("installed", () => grok().state !== "updating");
+    assert.deepEqual([grok().installed, grok().version, grok().state, grok().message], [true, "1.0.62", "idle", undefined]);
+    assert.equal(readlinkSync(join(bin, "grok")), join(node, "bin", "grok"));
   });
 
   test("on Windows a command beside vp.exe is Vite+'s, updated with it; one in npm's prefix with that npm", { skip: !WINDOWS && "Windows'" }, () => {
