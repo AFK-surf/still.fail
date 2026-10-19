@@ -1,4 +1,4 @@
-// The app's one core: the engine (src/host/core_api.h; JavaScriptCore on the Rust shell on macOS and iOS) linked into
+// The app's one core: the engine (src/host/core_api.h; Hermes on the Rust shell on macOS, iOS and Android) linked into
 // the app, its messages queued by core_native.c and drained here on the UI thread. On Apple's systems the queue wakes
 // the main thread itself; a host without a main queue (Android's GL thread) calls `pump` each frame. On the web there
 // is no engine yet (js.mbt): `start` says so.

@@ -1,98 +1,118 @@
-# The still.fail core in mbui's Apple hosts
+# The still.fail core in mbui's native hosts
 
-The still.fail client core (`client/core-ts` of github.com/zzj3720/ember) runs in JavaScriptCore, on the same Rust
-shell (`client/shell`) the Android app uses, behind a three-function C API the MoonBit host can call:
+The still.fail client core (`client/core-ts` of this repository) runs in Hermes on every native host, the same
+engine, version and bytecode still.fail's Android app runs it in (React Native 0.81.4's Hermes; `core.hbc`), on the
+same Rust shell (`client/shell`), behind a three-function C API the MoonBit host can call. The user decided it
+(2026-10-19): one engine for the four native apps (the measurements behind it: Hermes starts the core 4–5× sooner than
+Node in a quarter of the memory). Apple's systems ran it in JavaScriptCore until then.
 
 ```
-src/host/core_api.h    mb_core_start / mb_core_send / mb_core_stop, the on_message callback
-src/host/apple_core.m  the engine (ObjC, ARC; macOS and iOS): JSContext, __native, timers, the shell
-src/host/apple_auth.m  a sign-in's browser page: ASWebAuthenticationSession (macOS and iOS)
-core/jsc-start.ts      hermes-globals' polyfills, JSC's case conversion, then ember's hosts/engine.ts startEngine
-core/jsc.ts            still.fail's entry: startJsc([]) (an app's own entry passes its modules)
-core/jsc-pre.ts        keeps JSC's own toLowerCase/toUpperCase (hermes-globals replaces them for Hermes)
-core/smoke.m           headless smoke test: accounts, auth.begin, stop
-core/delta-vectors.ts  test vectors from core-ts's diff and apply -> src/core/vectors_test.mbt
-src/core               mbui/core: the MoonBit client (subscriptions, deltas, calls, sign-in) and its C queue
-src/coredemo           the macOS app with the core linked in (MBUI_CORE=1 scripts/mac.sh)
-scripts/core.sh        deps | shell [TARGET] | bundle | smoke [build|run] | vectors | sizes | clean | all
+src/host/core_api.h     mb_core_start / mb_core_send / mb_core_stop, the on_message callback
+src/host/apple_core.mm  the engine on macOS and iOS (Objective-C++, ARC): Hermes and its JSI, the core's thread and
+                        loop, __native, the shell, secure.* (the Keychain) and listen.*
+src/host/apple_auth.m   a sign-in's browser page: ASWebAuthenticationSession (macOS and iOS)
+src/host/android_core.c the engine on Android: still.fail's own, prebuilt (below)
+core/hermes.ts          still.fail's entry: ember's hosts/hermes-start.ts, no app's modules
+core/media-hermes.ts    the media app's entry (still.fail's core with the media module): what the apps ship
+core/smoke.m            headless smoke test on macOS: accounts, auth.begin, stop
+core/delta-vectors.ts   test vectors from core-ts's diff and apply -> src/core/vectors_test.mbt
+src/core                mbui/core: the MoonBit client (subscriptions, deltas, calls, sign-in) and its C queue
+src/coredemo            the core demo app (MBUI_CORE=1 scripts/mac.sh), src/stillfail still.fail itself
+scripts/core.sh         deps | shell [TARGET] | hermes | hermes-apple | engine [TARGET] | apple [TARGET] | smoke | listen | …
 ```
 
-The default `moon` build does not link the engine: only `src/coredemo` (its `core_engine.m` includes `apple_core.m`
-and `apple_auth.m`, its `moon.pkg` links the shell's `.a`), built by `MBUI_CORE=1 scripts/mac.sh build`.
+The default `moon` build does not link the engine: only the apps with the core (src/coredemo, src/stillfail: their
+`core_engine.m` includes src/sfcore/apple_engine.m, their `moon.pkg` links `out/core/<target>/libmbui_core.a`, the
+shell's `.a` and Hermes's framework), built by `scripts/mac.sh`, which makes what they link first (`scripts/core.sh
+apple`).
 
 ## Building and the smoke test (on Studio)
 
-`scripts/core.sh` expects an ember checkout at `$EMBER` (default: `ember-src` beside the session's `tools/`, i.e.
-`<session>/work/ember-src`, origin/main), pnpm, and rustup's cargo. Everything it makes goes to `out/core/`
-(ignored); the shell's intermediate build goes to `$CARGO_TARGET_DIR` (default `<session>/work/core-target`), which
-can be deleted once the `.a` is copied out.
+`scripts/core.sh` builds from the still.fail checkout it is in (`$EMBER`), with pnpm and rustup's cargo. Everything it
+makes goes to `out/core/` (ignored); the shell's intermediate build goes to `$CARGO_TARGET_DIR` (`out/core-target`).
 
 ```sh
 scripts/core.sh deps                 # pnpm install --frozen-lockfile in client/core-ts
-scripts/core.sh shell                # out/core/aarch64-apple-darwin/libstillfail_shell.a (+ shell-<target>.libs)
-scripts/core.sh shell aarch64-apple-ios       # (or aarch64-apple-ios-sim) for iOS
-scripts/core.sh bundle               # out/core/core.js
-scripts/core.sh smoke                # bundle, build out/core/smoke, run it twice against https://app.still.fail
-scripts/core.sh clean                # drop the shell's intermediate build (out/core stays)
+scripts/core.sh hermes-apple         # Hermes for macOS and iOS, fetched once (out/core/hermes, a link into the cache)
+scripts/core.sh engine [TARGET]      # out/core/<target>/libmbui_core.a: src/host/apple_core.mm (when it changed)
+scripts/core.sh shell [TARGET]       # out/core/<target>/libstillfail_shell.a (+ shell-<target>.libs)
+scripts/core.sh hermes               # out/core/core.hbc (ENTRY: core/hermes.ts, or core/media-hermes.ts)
+scripts/core.sh apple [TARGET]       # all four for an app, each when missing or stale (the media entry)
+scripts/core.sh smoke                # out/core/smoke built and run twice against https://app.still.fail
+scripts/core.sh listen               # listen.* with core/listen-test.js in the core's place
 ```
 
-The shell crate is `crate-type = ["cdylib", "lib"]`; `cargo rustc --crate-type staticlib` makes the archive without
-touching ember. The link line it needs (`-framework Security -framework CoreFoundation … -liconv -lc …`) is what
-rustc prints as `native-static-libs`, kept in `out/core/shell-<target>.libs`.
+TARGET is aarch64-apple-darwin (the default), aarch64-apple-ios-sim or aarch64-apple-ios.
 
-The bundle is esbuild only (IIFE, ES2020, minified), no Babel: JavaScriptCore has classes, private fields and block
-scoping; `@core/` is aliased to ember's `client/core-ts/src`.
+- **Hermes** (`hermes-apple`): React Native 0.81.4's Maven tarball `react-native-artifacts:0.81.4:hermes-ios-release`
+  (21.3 MB, its sha256 pinned in core.sh), the release the Android app's `hermes-android:0.81.4` comes from: macOS's
+  `Library/Frameworks/macosx/hermes.framework` (universal, arm64 4.7 MB; macOS 11 and later), iOS's
+  `Library/Frameworks/universal/hermes.xcframework` (`ios-arm64`, `ios-arm64_x86_64-simulator`; iOS 15.1 and later)
+  and the headers of Hermes and its JSI (`include`; the JSI is compiled into the framework). Fetched once into
+  `~/Library/Caches/stillfail-build/hermes-apple-0.81.4`, which every worktree shares (as ember's
+  `apps/android/build.py` keeps hermesc), never committed; `out/core/hermes` links to it.
+- **The shell** is the crate's `cdylib` built as a static library (`cargo rustc --crate-type staticlib`), so ember's
+  Cargo.toml is untouched. What it needs from the system (`-framework Security -framework CoreFoundation … -liconv`) is
+  what rustc prints as `native-static-libs`, kept in `out/core/shell-<target>.libs`. There is no prebuilt one for
+  Apple's targets (scripts/native.ts's `shell` part is Android's): it is built once per machine (≈ 1 min, sccache).
+- **The bytecode** is Android's exactly (`hermes`: esbuild to ES2020, Babel's class transform, hermesc 0.81.4 `-O
+  -block-scoping`), kept with a stamp of its inputs.
+- **The engine** (`engine`): `src/host/apple_core.mm` compiled for the target (`-std=c++20 -fobjc-arc -fexceptions
+  -frtti`) against the tarball's headers into `libmbui_core.a`. moon does not see it: `scripts/mac.sh` touches the
+  app's `core_engine.m` when it is made again, so the app is linked again.
+- The macOS apps find the framework where it is (`-rpath` to `out/core/hermes/…/macosx` from the executable, and
+  `@executable_path/../Frameworks` for an app bundle); an iOS app would carry it in its `Frameworks`.
 
 The smoke test starts the core with a temporary data directory and cloud `https://app.still.fail`, sends
 `{"id":1,"subscribe":{"topic":"accounts"}}`, then `{"id":2,"call":"auth.begin","params":{"redirect_uri":
 "stillfail://auth/callback","return_to":"/"}}`, prints everything that comes back and the login URL (never opened),
 stops the core and prints timings and the process's memory footprint.
 
-## The engine (apple_core.m)
+## The engine (apple_core.mm)
 
-- One thread, `still.fail core`, with an 8 MB stack and a CFRunLoop: tasks (`mb_core_send`, the shell's answers) are
-  `CFRunLoopPerformBlock`s, in order; timers are `CFRunLoopTimer`s. A dispatch queue would serialize just as well, but
-  its workers have 512 KB stacks and the core parses (markdown, JSON) recursively; React Native's JSC thread and the
-  Android engine (Hermes, 8 MB) make the same choice. JavaScriptCore drains promise jobs itself when each call into it
-  returns, so there is no explicit microtask step.
-- `__native` is ember's `HermesNative` (hosts/hermes-globals.ts) as it is, plus `os` (`macos`, `ios`), so the script
-  starts the core the way Android's does: `startEngine(modules, os)` (ember hosts/engine.ts, since ember 524baa05).
-  Bytes are ArrayBuffers both ways: `call(id, op, json, ArrayBuffer?)`, `emitBytes(client, json, ArrayBuffer)`,
-  `__stillfail.receiveBytes(client, json, ArrayBuffer)`, `complete(id, json, error, ArrayBuffer?)`, `random(n)`.
-  Bytes from the JS are read in place (the ArrayBuffer's pointer); bytes into the JS are one malloc'd copy handed over
-  with `JSObjectMakeArrayBufferWithBytesNoCopy` (freed by the GC). engine.ts copies what goes out of a view first.
+- Android's engine (`apps/android/core/src/main/cpp/engine.cpp`) without JNI, as `bench/hermes-host` is: one thread,
+  `still.fail core`, with an 8 MB stack (the core's parsers recurse); a queue of tasks (`mb_core_send`, the shell's
+  answers, the host's own) and the timers, under one lock and condition variable; after each task or timer the
+  microtasks drained (`withMicrotaskQueue`). The runtime is `makeHermesRuntime` with the Android app's configuration
+  (microtask queue, block scoping, Intl).
+- Timers run on `CLOCK_MONOTONIC`, which on Apple's systems goes on while the machine sleeps (as Android's
+  CLOCK_BOOTTIME): a 10 s wait begun before a sleep is over after it.
+- `__native` is ember's `HermesNative` (hosts/hermes-globals.ts) as it is, plus `os`; the engine starts the core with
+  `__stillfail.start(cloudOrigin, beta, os)` (`macos`, `ios`; hosts/engine.ts takes the third over hermes-start.ts's
+  `android`). Bytes are ArrayBuffers both ways: `call(id, op, json, ArrayBuffer?)`, `emitBytes(client, json,
+  ArrayBuffer)`, `__stillfail.receiveBytes(client, json, ArrayBuffer)`, `complete(id, json, error, ArrayBuffer?)`,
+  `random(n)`.
 - The shell's answers come on tokio's threads; they go through a `Gate` (as engine.cpp's) closed by `mb_core_stop`, so
   an answer arriving after a stop is dropped instead of touching a dead core.
 - `secure.*` and `listen.*` are the app's, not the shell's (on Android too): answered here (the Keychain, below;
   apple_listen.m, under Login).
 - An exception that escapes to the engine, or the core's own `fatal`, sends `{"fatal": reason}` once; the host then
   stops this core and starts another (as Android does).
-- `on_message` runs on the core thread. The MoonBit host must copy and hop to its UI thread (on macOS
-  `dispatch_async(dispatch_get_main_queue(), …)` and then request a frame), and must not wait on the UI thread for the
-  core while the core waits for it.
-- Timers run on the run loop's clock (mach absolute time), which stops while the machine sleeps; Android uses
-  CLOCK_BOOTTIME so a 10 s wait begun before a sleep is over after it. On macOS a wake should probably nudge the core
-  (the shell's `reset` op, `resetConnections`) — not done yet.
+- `on_message` runs on the core thread. The MoonBit host copies and hops to its UI thread (core_native.c), and must
+  not wait on the UI thread for the core while the core waits for it.
+- `MBUI_SECURE_TEST=1` (src/coredemo) round-trips `secure.set`, `get`, `delete` and `get` again through the engine's
+  own Keychain code and logs `SECURE_TEST …`, as Android's CoreHost does.
+- `MB_CORE_TRACE=1` prints every operation and its answer, `MB_CORE_DEBUG=1` the core's debug log; the start says
+  what it took (`[core] Hermes: shell … ms, script … ms (… bytes), start … ms`).
+- Not yet: Hermes's sampling profiler (Android's `HermesNative.profile`), a debugger (the release framework has none;
+  the `hermes-ios-debug` tarball has CDP), a `reset` on wake (the shell's `resetConnections`).
 
 ## Measurements
 
-`scripts/core.sh smoke` on Studio (Apple silicon, macOS, release shell, ember dda655bbf), 2026-10-19; three
-first runs on an empty data directory, and runs again over what one left:
+`scripts/core.sh smoke` on Studio (M2 Max, macOS 26.4), 2026-10-19, two runs on one data directory, against
+JavaScriptCore's before it (same machine, ember dda655bbf):
 
-| | |
-|---|---|
-| `core.js` | 2,140,827 bytes (595,185 gzip -9); esbuild 0.1 s |
-| `libstillfail_shell.a` (aarch64-apple-darwin) | 66.2 MB archive (57.0 MB `strip -S -x`); release build ≈ 45 s from clean |
-| `libstillfail_shell.a` for iOS | aarch64-apple-ios 65.4 MB, aarch64-apple-ios-sim 65.2 MB (≈ 56 MB stripped); both build, ≈ 41 s each; `apple_core.m` compiles for iphoneos and iphonesimulator |
-| what the shell adds to a binary | smoke linked with `-dead_strip`: 19.8 MB, 15.3 MB stripped (apple_core + smoke are a few KB of it) |
-| cold start to first message | 105–124 ms (first run), 68–76 ms (again, warm file cache): shell start 9–31 ms, `evaluateScript` 47–80 ms, `start` + `connect` 4–6 ms, then the core's own first storage reads |
-| `auth.begin` → URL | 6–10 ms (made locally, with PKCE; the cloud is asked when the browser opens it) |
-| memory | phys_footprint 1.8 MB before start → 26–30 MB running; peak footprint 34 MB; max RSS 55–59 MB (shared JavaScriptCore pages included) |
-| stop | 2–18 ms |
+| | Hermes 0.81.4 (`core.hbc`) | JavaScriptCore (`core.js`, before) |
+|---|---|---|
+| the script | 3,605,259 bytes of bytecode (the media entry) | 2,140,827 bytes of JS |
+| cold start to first message | **23–24 ms**: shell 2–3 ms, script 10 ms, `start` + `connect` 0.3 ms | 105–124 ms (first run), 68–76 ms (again) |
+| `auth.begin` → URL | 6–12 ms (made locally, with PKCE) | 6–10 ms |
+| memory | phys_footprint 1.9 MB before start → **21 MB** running; peak 22 MB; max RSS 33 MB | 26–30 MB running; peak 34 MB; max RSS 55–59 MB |
+| stop | 0.8–0.9 ms | 2–18 ms |
+| what the engine adds | `libmbui_core.a` 155 KB; `hermes.framework` 4.7 MB (arm64) | the system's |
 
-Both directions of bytes are exercised: `storage.set` with 171 and 31,233 bytes out of the JS, `fetch` (the changelog,
-31,224 bytes) and `storage.get` (31,233 bytes, the second run) into it. `MB_CORE_TRACE=1` prints every shell
-operation.
+`libstillfail_shell.a` (aarch64-apple-darwin) is a 66.4 MB archive (57.2 MB `strip -S -x`); linked with `-dead_strip`
+into the smoke test it adds about 15 MB stripped.
 
 ## mbui/core (src/core)
 
@@ -120,31 +140,17 @@ fn view(c : @ui.Ctx) {
 }
 ```
 
-Still to do: ship `core.js` in an app bundle (`Contents/Resources/core.js`; today `MB_CORE_BUNDLE`, which
-`scripts/mac.sh` sets), the iOS build (`scripts/ios.sh`: `core_engine.m`'s two includes, the shell for the device and
-simulator, `-framework JavaScriptCore -framework AuthenticationServices`), bytes beside messages (dropped by the queue
-for now), a call's progress values.
+Still to do: a macOS app bundle (`Contents/Resources/core.hbc`, `Contents/Frameworks/hermes.framework`; today
+`MB_CORE_BUNDLE`, which `scripts/mac.sh` sets), a call's progress values.
 
 ## iOS
 
-The same `apple_core.m` (it names the OS `ios` under `TARGET_OS_IPHONE`; it compiles for iphoneos and
-iphonesimulator as is), `core.js` as a resource of the app, and the shell for the device and the simulator:
-
-```sh
-scripts/core.sh shell aarch64-apple-ios       # out/core/aarch64-apple-ios/libstillfail_shell.a
-scripts/core.sh shell aarch64-apple-ios-sim   # out/core/aarch64-apple-ios-sim/libstillfail_shell.a
-```
-
-`scripts/ios.sh` links the MoonBit objects by hand; add `apple_core.o`, the shell's `.a`, the libraries in
-`out/core/shell-<target>.libs` (for iOS: Network, SystemConfiguration, Security, CoreFoundation, Foundation, iconv) and
-`-framework JavaScriptCore`, and copy `out/core/core.js` into `MBUI.app/`. An xcframework of the two `.a`s is the
-tidy form once there is an Xcode project.
+The same `apple_core.mm` (it names the OS `ios` under `TARGET_OS_IPHONE`), built for the simulator or the device
+(`scripts/core.sh engine aarch64-apple-ios-sim`, `… aarch64-apple-ios`), linked with Hermes's xcframework slice, the
+shell built for the same target (`scripts/core.sh shell aarch64-apple-ios-sim`) and `core.hbc` as a resource of the app.
 
 What differs from macOS:
-- JIT: a third-party iOS app's JSContext runs without JIT (LLInt/baseline interpreter only), so evaluating the
-  2 MB script and the core's own work are slower than the macOS numbers here; measure on a device. If the script's
-  start matters, look at JSC's `JSScript` (a bytecode cache file; check it is usable from public API first) or at
-  loading less script before the first answer.
+- Hermes runs bytecode, so there is no JIT to miss on iOS (JavaScriptCore would have run without one there).
 - Lifecycle: a suspended app's timers and sockets stop. On becoming active again, the core's cloud socket notices on
   its own ping; a `mb_core_reset` sending the shell's `reset` (BridgeHost.resetConnections) would make it immediate.
 - `secure.*` → the Keychain (below).
@@ -254,7 +260,7 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
 
 The core's own `listen.*` (`listen.open/next/respond/close`, ember client/core-ts hosts/bridge.ts) is the other way
 round: this device taking a station's login callback for it (`canRelay`; machine logins on the station page and in
-login cards). apple_core.m answers it on the same listener, as Android's Loopback.kt does there; `scripts/core.sh
+login cards). apple_core.mm answers it on the same listener, as Android's Loopback.kt does there; `scripts/core.sh
 listen` tests it with core/listen-test.js in the core's place (`scripts/android.sh listen-test` on Android's).
 
 `secure.*` is the other gap: at start the core asks `secure.get` twice (the lock's signing key `lock-signer`, and the

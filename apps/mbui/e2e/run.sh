@@ -34,6 +34,9 @@ rm -rf $CORE && mkdir -p $CORE
 # this run's mark, put in the words the flows send (their {T}; the checks' $TAG): a run's messages are its own, however
 # many runs (and platforms) the same station has had
 TAG=$(date +%H%M%S)
+# the port of the web service a flow has the agent start (47's {SVC}, the checks' $SVC): this backend's own, beside its
+# cloud's ports (a fixed one was taken by another run's service on the same machine)
+SVC=$((E2E_PORT + 7))
 # the mock account, fresh for this run: a sign-in's refresh token goes once (a core that took an older copy and
 # refreshed it has used it up), so each run's first app takes one of its own
 export E2E_ACCOUNT_B64=$(curl -sf "$MBUI_CLOUD/__dev/account?user=alice" | base64 | tr -d '\n')
@@ -137,14 +140,14 @@ if [ $PLATFORM = mac ]; then
   [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/mac.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
   # (E2E_EXE: another build of it, as the app bundle's, out/mac/still.fail mbui.app/Contents/MacOS/stillfail-mbui)
   EXE=${E2E_EXE:-$ROOT/_build/native/release/build/stillfail/stillfail/stillfail.exe}
-  export MB_CORE_BUNDLE=$ROOT/out/core/core.js
+  export MB_CORE_BUNDLE=$ROOT/out/core/core.hbc
 fi
 
 # runs a flow in the app; its log as it goes, `log do:` acted on. A flow's `#env K=V` lines are put in the app's
 # environment for that run (MBUI_OPEN_PAGE=files: the drive's 文件 pushed over Home)
 run_flow() {
   local name=$1 log=$OUT/$name.log script=$OUT/$name.drive
-  sed "s/{T}/$TAG/g" $2 > $script
+  sed "s/{T}/$TAG/g; s/{SVC}/$SVC/g" $2 > $script
   mkdir -p $OUT/$name
   local extra=$(grep '^#env ' $script | sed 's/^#env //' | tr '\n' ' ')
   # what the runner does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, as a chat made elsewhere)

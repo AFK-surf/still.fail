@@ -7,7 +7,7 @@ until =studio
 until 发消息
 wait 1000
 tap 发消息
-type 开个网页 {T} serve:e2e-web|18978|网页开好了 {T}
+type 开个网页 {T} serve:e2e-web|{SVC}|网页开好了 {T}
 tap icon:arrow-up
 gone 正在发送
 timeout 120000
