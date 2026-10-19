@@ -486,7 +486,15 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
     fun toggle() { if (awake) { rest?.cancel(); awake = false } else wake(TAP_REST_MS) }
     LaunchedEffect(file.path) { wake() }
 
-    val zoom = remember(file.path) { ZoomState(density) }
+    // Fitted from the first frame it is drawn in (stepped to, it has no frame of its own blank): in the stage as it is,
+    // at the size it was sent with, else its picture's here (ImageStage reads its own size later, if it differs).
+    var stageSize by remember { mutableStateOf(IntSize.Zero) }
+    val zoom = remember(file.path) {
+        ZoomState(density).apply {
+            fitBox(stageSize)
+            fitNatural(sentSize(file) ?: FileData.keptPicture(fullId, 4096)?.let { IntSize(it.width, it.height) })
+        }
+    }
     val marks = remember(file.path) { ImageMarks(zoom, density) }
 
     // The one shown and those beside it move as one strip, GAP apart (web: FilePreview.tsx go): a step slides it out to
@@ -494,14 +502,13 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
     // its picture where it was.
     val strip = remember { Animatable(0f) }
     var leaving by remember { mutableStateOf<Leaving?>(null) }
-    var width by remember { mutableIntStateOf(0) }
     val near by rememberUpdatedState(before to after)
     val gap = with(LocalDensity.current) { SLIDE_GAP.toPx() }
     val chatLongest = with(LocalDensity.current) { 360.dp.roundToPx() }
     fun back(v: Float = 0f) { scope.launch { strip.animateTo(0f, SLIDE, v) } }
     fun go(dir: Int, v: Float = 0f) {
         val to = (if (dir < 0) near.first else near.second) ?: return back(v)
-        val w = width + gap
+        val w = stageSize.width + gap
         val from = strip.value
         val was = shown
         leaving = zoom.rect()?.let { r -> leavingPicture(station, was, chatLongest)?.let { Leaving(it, r, dir, w) } }
@@ -523,7 +530,7 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
                 scope.launch(start = CoroutineStart.UNDISPATCHED) { strip.snapTo(if (none) dx / 3 else dx) }
             }
             override fun end(dx: Float, vx: Float) {
-                val far = abs(dx) > min(80 * density, width / 5f)
+                val far = abs(dx) > min(80 * density, stageSize.width / 5f)
                 val flung = abs(vx) > 300 * density && sign(vx) == sign(dx) && abs(dx) > 10 * density
                 if (dx != 0f && (far || flung)) go(if (dx > 0) -1 else 1, vx) else back(vx)
             }
@@ -558,12 +565,12 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
         else -> ({ null })
     }
     val ground = when { dark -> Color.Black; kind == PreviewKind.Pdf -> lerp(C.bg, C.ink, 0.05f); else -> chatInk().canvas }
-    Box(Modifier.fillMaxSize().onSizeChanged { videoZoom.fitBox(it); width = it.width }.drawBehind { drawRect(ground, alpha = flight.chrome) }) {
+    Box(Modifier.fillMaxSize().onSizeChanged { videoZoom.fitBox(it); stageSize = it }.drawBehind { drawRect(ground, alpha = flight.chrome) }) {
         Box(Modifier.fillMaxSize().hazeSource(haze)) {
             leaving?.let { l -> Canvas(Modifier.fillMaxSize()) { l.draw(this, strip.value) } }
             // The ones beside it, out of sight until a swipe brings them in (while one goes, it is drawn in their place).
             if (known.kind == PreviewKind.Image && !marks.on && leaving == null) {
-                val w = width + gap
+                val w = stageSize.width + gap
                 before?.let { key(it.file.path) { Beside(station, it, chatLongest) { strip.value - w } } }
                 after?.let { key(it.file.path) { Beside(station, it, chatLongest) { strip.value + w } } }
             }
@@ -608,11 +615,13 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
         }
         // A page's taps are its own (they do not reach here to bring the bar back): over one, the bar stays.
         val show = awake || coming || marks.on || kind == PreviewKind.Html && !source
+        // They fade, as the web's (FilePreview.css.ts fpHead): in quickly, out slowly; a step wakes them without a flash.
+        val bars by animateFloatAsState(if (show) 1f else 0f, tween(if (show) 120 else 320, easing = Ease.Out), label = "bars")
         // Over the image's sides, in the middle: to the one before and after.
         if ((before != null || after != null) && !marks.on) {
             listOf(before to Alignment.CenterStart, after to Alignment.CenterEnd).forEachIndexed { i, (to, side) ->
                 if (to != null) Box(
-                    Modifier.align(side).padding(horizontal = 8.dp).graphicsLayer { alpha = flight.chrome }.alpha(if (show) 1f else 0f).size(36.dp).shadow(1.dp, CircleShape)
+                    Modifier.align(side).padding(horizontal = 8.dp).graphicsLayer { alpha = flight.chrome * bars }.size(36.dp).shadow(1.dp, CircleShape)
                         .clip(CircleShape).background(DarkCanvas.copy(alpha = 0.8f)).clickable(enabled = show) { go(if (i == 0) -1 else 1) },
                     contentAlignment = Alignment.Center,
                 ) { IconIn(if (i == 0) Icons.ChevronLeft else Icons.ChevronRight, 22.dp, DarkText) }
@@ -627,7 +636,7 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
             Row(
                 Modifier.widthIn(min = with(LocalDensity.current) { widest.toDp() }, max = maxWidth - 16.dp).width(IntrinsicSize.Max)
                     .onSizeChanged { if (it.width > widest) widest = it.width }
-                    .alpha(if (show) 1f else 0f)
+                    .graphicsLayer { alpha = bars }
                     .then(if (dark) darkGlass(haze, shape) else pageGlass(haze, shape))
                     .height(44.dp).padding(start = 12.dp, end = 2.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
