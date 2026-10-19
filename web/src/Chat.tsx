@@ -13,7 +13,7 @@ import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, Button, Dialog, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
@@ -1208,19 +1208,32 @@ function InstallAction({ install }: { install: RuntimeInstall }) {
 }
 
 /** Sending a failure notice to the still.fail team, a word at its end (out of its words, so a long one cut short keeps
- * it): what it was filed as is said once sent. */
+ * it): asked first, saying when to and what goes; what it was filed as is said once sent. */
 function ReportAction({ thread, seq }: { thread: number; seq: number }) {
   const station = useStation().address;
   const busy = useDoing("chat.report", { station, thread, seq });
   const call = useCall();
   const toast = useToast();
   const act = useAct();
+  const [asking, setAsking] = useState(false);
   const action = t("common.report.action");
-  const run = () => act(call("chat.report", { station, thread, seq }).then((a) => {
-    const answer = a as { number?: number; duplicate?: boolean } | null;
-    toast(t(answer?.duplicate ? "common.report.again" : "common.report.done", { number: answer?.number ?? "?" }));
-  }), action);
-  return <span className={css.msgSystemEnd}><span className={css.blockedDot} aria-hidden>·</span><button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} title={t("common.report.note")} onClick={run}>{action}</button></span>;
+  const run = () => {
+    setAsking(false);
+    act(call("chat.report", { station, thread, seq }).then((a) => {
+      const answer = a as { number?: number; duplicate?: boolean } | null;
+      toast(t(answer?.duplicate ? "common.report.again" : "common.report.done", { number: answer?.number ?? "?" }));
+    }), action);
+  };
+  return (
+    <span className={css.msgSystemEnd}>
+      <span className={css.blockedDot} aria-hidden>·</span>
+      <button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} onClick={() => setAsking(true)}>{action}</button>
+      <Dialog open={asking} title={t("common.report.title")} description={t("common.report.lead")} onClose={() => setAsking(false)}
+        footer={<><Button variant="ghost" onClick={() => setAsking(false)}>{t("common.cancel")}</Button><Button variant="primary" onClick={run}>{action}</Button></>}>
+        <p className={css.reportSends}>{t("common.report.sends")}</p>
+      </Dialog>
+    </span>
+  );
 }
 
 /** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says; `route` (where it

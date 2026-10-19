@@ -110,6 +110,8 @@ globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit"
 /** A notice's words and what is done at their end (reporting it): the words cut short before it, not it. */
 export const msgSystemLine = style({ display: "flex", alignItems: "baseline", minWidth: "0" });
 export const msgSystemEnd = style({ flex: "none", whiteSpace: "nowrap" });
+/** What reporting a notice sends, in its dialog's body: the dialog's own words. */
+export const reportSends = style({ margin: "0", fontSize: vars.textUi, color: vars.muted, textWrap: "pretty" });
 /**
  * A draft past its viewport-aware height scrolls: its cut edges fade over a narrow strip.
  * It wraps plainly, not `pretty` as the page does: that weighs the whole draft again at every letter typed, and the

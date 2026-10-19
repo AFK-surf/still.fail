@@ -16,7 +16,9 @@ team, shows them the report, and sends it once they agree. The reports wait in t
   `stillfail-station-feedback-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>`.
 - **From a failure notice** (station/src/feedback/notice.ts): a red ⚠️ notice in a chat (a turn that failed, an agent
   that could not start) ends in 「上报」 where the station takes reports (its overview's `feedback: true`; the core marks
-  the message `reportable`, web Chat.tsx and Android Chat.kt `ReportAction`). Pressed, `chat.report` asks the station
+  the message `reportable`, web Chat.tsx and Android Chat.kt `ReportAction`). Pressed, it asks first, saying to report
+  only what the person takes for still.fail's own problem (not their network, proxy, quota or model provider) and what
+  goes; confirmed, `chat.report` asks the station
   (`POST /threads/<id>/report {n}`; a read-only member may) to send it, made there with nobody writing it: the
   notice as title and quoted, the failed turn (its kind, times and `reason: message`; the session's, of the thread's,
   whose failed turn ended nearest before the notice), the agent (runtime, profile, model), the versions of the station

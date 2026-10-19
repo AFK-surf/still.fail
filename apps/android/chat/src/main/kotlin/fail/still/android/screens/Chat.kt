@@ -1344,7 +1344,10 @@ private fun InstallAction(install: fail.still.android.data.RuntimeInstall, stati
     )
 }
 
-/** Sending a failure notice to the still.fail team (web Chat.tsx ReportAction), a word at its end: what it was filed as is said once sent. */
+/**
+ * Sending a failure notice to the still.fail team (web Chat.tsx ReportAction), a word at its end: asked first, saying
+ * when to and what goes; what it was filed as is said once sent.
+ */
 @Composable
 private fun ReportAction(thread: Long, seq: Long, station: String, ink: Color) {
     val app = LocalApp.current
@@ -1355,7 +1358,7 @@ private fun ReportAction(thread: Long, seq: Long, station: String, ink: Color) {
         Text(
             action, fontSize = 15.sp, lineHeight = 24.75.sp, fontWeight = FontWeight.SemiBold, color = ink, textDecoration = TextDecoration.Underline, maxLines = 1,
             modifier = Modifier.clickable(enabled = !busy) {
-                app.act(action) {
+                confirm(app, t("common.report.title"), t("common.report.lead") + "\n\n" + t("common.report.sends"), action, what = action) {
                     val (number, again) = app.api(station).reportNotice(thread, seq)
                     app.toast = t(if (again) "common.report.again" else "common.report.done", "number" to (number ?: "?"))
                 }
