@@ -106,6 +106,9 @@ priv struct Reading {
   linger : Map[String, (Agent, Double)]
   /// the agents running as last drawn
   running : Map[String, Agent]
+  /// a message gone to (a notification's), flashing since when ("" none: ChatMotion.kt flashed)
+  mut flash : String
+  mut flash_at : Double
 }
 
 ///|
@@ -140,6 +143,8 @@ fn reading_of(key : String) -> Reading {
         sent: {},
         linger: {},
         running: {},
+        flash: "",
+        flash_at: 0.0,
       }
       readings[key] = r
       r
@@ -310,6 +315,9 @@ fn messages(
   rd.head = head
   rd.head_at = head_at
   let n = list.length()
+  // a message gone to, flashing: its words' bubble (yours) or a ground under its row (flash.mbt's underlay)
+  flashing.val = (rd.flash, flash_of(c, rd, rd.flash))
+  flash_row.val = None
   // a new chat's list comes up out of the composer as it becomes this chat (newchat.mbt)
   c.box(w=Fill(1.0), h=Fill(1.0), ty=new_chat_rise(c, r), fn() {
     c.list(
@@ -379,6 +387,11 @@ fn messages(
               entry_view(c, src, here, e, list)
             })
             flying.val = None
+            match e {
+              Said(m) if m.ts == flashing.val.0 && flashing.val.1 > 0.0 && !m.system && !(m.mine && m.text != "") =>
+                flash_under(c, ri, top, flashing.val.1)
+              _ => ()
+            }
             match flight {
               Some(_) if flies => {
                 // flown in, it does not rise in as well
@@ -448,6 +461,51 @@ fn messages(
           offset=-(chat_bar_h + 14.0 + v.at_offset.unwrap_or(0.0)),
         )
       }
+    }
+    // opened at a message (a notification's), once the list is in place (a frame after): there, its top under the bar,
+    // flashing; the pages before brought in until it is (none left, or it is gone: where the chat opened). Chat.kt
+    // LaunchedEffect(host.goTo)
+    let gk = r.station + "\u{1}" + r.session
+    match go_tos.get(gk) {
+      Some(target) if rd.placed && c.now() > rd.placed_at => {
+        let mut at = -1
+        let mut first = -1.0
+        for i, e in list {
+          match e {
+            Said(m) => {
+              if first < 0.0 {
+                first = m.seq
+              }
+              if m.seq == target {
+                at = i
+                rd.flash = m.ts
+                break
+              }
+            }
+            _ => ()
+          }
+        }
+        if at >= 0 {
+          go_tos.remove(gk)
+          rd.flash_at = c.now()
+          c.list_scroll_to(key, at, offset=-(chat_bar_h + 14.0))
+          @host.log("chat: gone to message \{target.to_int()}")
+        } else {
+          match v.thread {
+            Some(thread) if v.more && first > target =>
+              if rd.asked != first {
+                rd.asked = first
+                (src.call)(
+                  "chat.older",
+                  { "station": Json::string(r.station), "thread": Json::number(thread) },
+                  fn(res) { if res is Err(_) { go_tos.remove(gk) } },
+                )
+              }
+            _ => go_tos.remove(gk)
+          }
+        }
+      }
+      _ => ()
     }
     let info = c.list_info(key)
     // near the top: the page before comes in, once per page
@@ -628,6 +686,57 @@ fn row_keys(
   }
   rd.drawn = true
   keys
+}
+
+///|
+/// The message each chat is to go to once its list is in place (Screen.Chat.at: a notification's), by chat.
+let go_tos : Map[String, Double] = {}
+
+///|
+/// The chat `r`, once open and in place, goes to its message `seq` (the pages before it brought in until it is
+/// there), which flashes (ChatHost.kt goTo).
+fn go_to(r : ChatRef, seq : Double) -> Unit {
+  go_tos[r.station + "\u{1}" + r.session] = seq
+}
+
+///|
+/// A chat opened over Home from the start at its message `seq`, as a notification opens it; `held`: its flash kept at
+/// its peak (screenshots of it).
+pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
+  flash_held.val = held
+  go_to(r, seq)
+  app.nav.push(Chat(r))
+}
+
+///|
+let flash_held : Ref[Bool] = Ref(false)
+
+///|
+/// How much a message gone to is lit now (ChatMotion.kt flash: the accent's ground in over 160 ms on Ease.Out, held
+/// to 900, gone by 1700 on the standard curve; with motion reduced there at once, as long, then gone); 0 for any
+/// other message.
+fn flash_of(c : @ui.Ctx, rd : Reading, ts : String) -> Double {
+  if rd.flash == "" || rd.flash != ts {
+    return 0.0
+  }
+  if flash_held.val {
+    return 1.0
+  }
+  let t = c.now() - rd.flash_at
+  if t >= 1700.0 {
+    rd.flash = ""
+    return 0.0
+  }
+  c.request_frame()
+  if @ui.reduced_motion() {
+    1.0
+  } else if t < 160.0 {
+    @motion.Ease::Out.at(t / 160.0)
+  } else if t < 900.0 {
+    1.0
+  } else {
+    1.0 - @motion.Ease::Standard.at((t - 900.0) / 800.0)
+  }
 }
 
 ///|

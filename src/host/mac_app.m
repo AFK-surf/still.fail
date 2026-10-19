@@ -622,6 +622,71 @@ void mb_host_set_dark(int32_t dark) {
   if (w) w.appearance = [NSAppearance appearanceNamed:dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua];
 }
 
+// ---- notifications (notify.mbt) ----
+// Not the system's yet: this is a bare executable, and UNUserNotificationCenter wants an app bundle. What would be shown
+// is kept (one per tag, as the system's would be) and said on the log (NOTICE <tag>\t<title>\t<body>); a scripted run
+// taps one by its words (drive 6), which gives the app what it opens as a tap would.
+static NSMutableArray<NSArray<NSString *> *> *notices;
+static NSString *notice_opened = @"";
+
+static void notice_drop(NSString *tag) {
+  NSIndexSet *at = [notices indexesOfObjectsPassingTest:^BOOL(NSArray<NSString *> *n, NSUInteger i, BOOL *stop) {
+    return [n[0] isEqualToString:tag];
+  }];
+  [notices removeObjectsAtIndexes:at];
+}
+
+void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit_string_t title, moonbit_string_t body,
+                         moonbit_string_t opens) {
+  (void)channel;
+  if (!notices) notices = [NSMutableArray array];
+  NSString *t = mb_ns_from_string(tag);
+  notice_drop(t);
+  NSArray<NSString *> *n = @[ t, mb_ns_from_string(title), mb_ns_from_string(body), mb_ns_from_string(opens) ];
+  [notices addObject:n];
+  fprintf(stdout, "NOTICE %s\t%s\t%s\n", n[0].UTF8String, n[1].UTF8String, n[2].UTF8String);
+  fflush(stdout);
+}
+
+void mb_host_notice_cancel(moonbit_string_t tag) {
+  NSString *t = mb_ns_from_string(tag);
+  NSUInteger before = notices.count;
+  notice_drop(t);
+  if (notices.count < before) {
+    fprintf(stdout, "NOTICE CANCEL %s\n", t.UTF8String);
+    fflush(stdout);
+  }
+}
+
+// What the system allows (unknown here), asking it (no way here), its answer (none).
+int32_t mb_host_notice_state(int32_t what) { return what == 2 ? -1 : 0; }
+
+// A notification tapped, once; no push token or push here.
+moonbit_string_t mb_host_notice_text(int32_t what) {
+  if (what != 0) return mb_string_from_ns(@"");
+  NSString *o = notice_opened;
+  notice_opened = @"";
+  return mb_string_from_ns(o);
+}
+
+static int32_t notice_drive(int tap, NSString *words) {
+  NSArray<NSString *> *found = nil;
+  for (NSArray<NSString *> *n in notices) {
+    if ([n[1] containsString:words] || [n[2] containsString:words]) {
+      found = n;
+      break;
+    }
+  }
+  if (!found) return 0;
+  if (!tap) return 1;
+  notice_opened = found[3];
+  fprintf(stdout, "NOTICE TAP %s\n", found[0].UTF8String);
+  fflush(stdout);
+  [notices removeObject:found];
+  [the_view requestFrame];
+  return 1;
+}
+
 // A scripted run's input (src/ui/drive.mbt), sent as the system sends it: the input method's calls on the view
 // (insertText, setMarkedText, insertNewline:, deleteBackward:), Cmd+V as a key event through keyDown (the
 // pasteboard read there), the window's picture saved.
@@ -646,6 +711,9 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
       break;
     }
     case 5: [v doCommandBySelector:@selector(deleteBackward:)]; break;
+    // a notification kept here (below), by its words: tapped (6) or looked for (7)
+    case 6:
+    case 7: return notice_drive(kind == 6, s);
     default: return 0;
   }
   [v requestFrame];

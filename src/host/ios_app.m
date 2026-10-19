@@ -475,6 +475,26 @@ int32_t mb_host_system_dark(void) {
 // The app drawn dark (@host.set_dark): nothing of the host's own follows it here yet.
 void mb_host_set_dark(int32_t dark) { (void)dark; }
 
+// Notifications (notify.mbt): none shown here yet (UNUserNotificationCenter and APNs are a later slice's): nothing kept, nothing tapped, no push; what the
+// system allows unknown.
+void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit_string_t title, moonbit_string_t body,
+                         moonbit_string_t opens) {
+  (void)channel;
+  (void)tag;
+  (void)title;
+  (void)body;
+  (void)opens;
+}
+
+void mb_host_notice_cancel(moonbit_string_t tag) { (void)tag; }
+
+int32_t mb_host_notice_state(int32_t what) { return what == 2 ? -1 : 0; }
+
+moonbit_string_t mb_host_notice_text(int32_t what) {
+  (void)what;
+  return mb_string_from_ns(@"");
+}
+
 // Scripted runs' input given to the host (src/ui/drive.mbt): none of its paths here yet (the app is sent it itself).
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   (void)kind;

@@ -5,6 +5,8 @@
     <!-- LoginService: the app held up while a loopback listener waits for the browser (BrowserLogin, the core's listen.*) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- the system's notifications (Notices: a chat's notices, as still.fail's Android app shows them) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- BrowserLogin asks whether there is a browser to open a login page in -->
     <queries>
         <intent>

@@ -1,0 +1,16 @@
+# On Home, alice's other device says something the agent does not answer in the chat: the station says so (⚠, the
+# fake claude only echoes), and the core says to show a notice that something went wrong (failed). Tapped, the chat
+# opens at what the station said.
+timeout 90000
+until 端到端测试
+log do: peer send 这一条不会有回复 {T}
+timeout 150000
+noticed 出错 ·
+shot 1-home
+timeout 30000
+notice 出错 ·
+until 发消息
+wait 1500
+shot 2-chat
+back
+until 端到端测试

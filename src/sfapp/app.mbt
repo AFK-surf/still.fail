@@ -172,6 +172,9 @@ fn reset() -> Unit {
   decide_reset()
   close_now()
   @settings.reset()
+  go_tos.clear()
+  flash_held.val = false
+  notices_reset()
 }
 
 ///|
@@ -249,6 +252,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
   match current {
     Some(w) => {
       attend(src, w.id)
+      // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off
+      notices_frame(src, w)
       c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
       |> ignore
       // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
@@ -436,6 +441,8 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       app.toast_at = -1.0
     },
     picture: fn(url) { (src.picture)(url) },
+    notify_ask: fn() { ask_from_switch() },
+    push_sync: fn(wanted) { if !src.read_only { push_sync(src, wanted) } },
     under: fn() {
       let pages = app.nav.pages()
       if pages.length() < 2 {
@@ -793,6 +800,7 @@ fn attend(src : Source, workspace : String) -> Unit {
         Some(s) => attend(s, attention.workspace)
         None => ()
       }
+      notices_app_change(@ui.app_visible())
     })
   }
   attention.src = Some(src)

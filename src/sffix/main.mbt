@@ -4,7 +4,8 @@
 // row's chat open over Home); files, drive…, reader… (the drive's pages, src/sfapp/drive_fixture.mbt); newchat,
 // newchat-station, newchat-model (a new chat, its sheets), home-bars (the bottom bar's panel of the other bars),
 // home-sheet (the workspaces' sheet), place (the 文件 place); settings, settings-<page> (a page of the settings over
-// it: src/sfapp/settings/fixture.mbt), -dark after either for the dark theme.
+// it: src/sfapp/settings/fixture.mbt), -dark after either for the dark theme; chat-flash, chat-flash-mine (the chat
+// opened at a message from a notification, flashing), settings-notify-off (settings, notifications off).
 
 ///|
 fn main {
@@ -14,13 +15,17 @@ fn main {
   }
   let mode = @host.env("MBUI_FIXTURE")
   let src = @sfapp.fixture(mode)
-  if mode.has_prefix("chat") {
-    @sfapp.open_chat({
-      station: "ws1/st1",
-      session: "s-c1",
-      title: "整理发布清单",
-      station_name: "Studio",
-    })
+  let rich : @sfapp.ChatRef = {
+    station: "ws1/st1",
+    session: "s-c1",
+    title: "整理发布清单",
+    station_name: "Studio",
+  }
+  if mode == "chat-flash" || mode == "chat-flash-mine" {
+    // opened from a notification at a message (Ana's, or yours), its flash held at its peak (slice 10's)
+    @sfapp.open_chat_at(rich, if mode == "chat-flash" { 4.0 } else { 6.0 }, held=true)
+  } else if mode.has_prefix("chat") {
+    @sfapp.open_chat(rich)
   }
   // the drive's pages (src/sfapp/drive_fixture.mbt): files, drive…, reader…
   @sfapp.open_drive_fixture(mode)

@@ -34,6 +34,11 @@ pub(all) struct Core {
   say : (String) -> Unit
   /// a person's picture by its URL: an image's key once it is here, "" until then
   picture : (String) -> String
+  /// notifications turned on here: the system asked to allow them (Notices.kt rememberNotificationAsk)
+  notify_ask : () -> Unit
+  /// this device's push registration as the core now wants it (Push.sync): what `notify.set` answered (`push`), or
+  /// None for what the core's `notify` says
+  push_sync : (Bool?) -> Unit
   /// what the page under this one is: "chats" (Home), "settings", or "" (another)
   under : () -> String
 }
@@ -400,6 +405,7 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  notify_switched.val = None
   opening_lock.val = false
   memories.clear()
   connects_mine.val = false

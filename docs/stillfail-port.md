@@ -562,8 +562,57 @@ Not yet, against the current app (each drawn as there and not opened, or left ou
 connect (and signing a subscription in), a station's mark picker, its screens, adb lending, drive, updates and macOS
 grants; a profile's "…", its sharing and workspaces; a connect's sheets and Slack app page; a vault item's page, its
 editor, setting the vault up and its recovery words; the automatic decisions, the bottom bars' settings, kept files and
-the changelog (their rows only); notifications switched (slice 10); the prices page; adding people to the workspace and
+the changelog (their rows only); the prices page; adding people to the workspace and
 its mark; the language changing the app's own words (they are the Chinese catalog's); the sheets' drag.
+
+Slice 10, notifications and pushes (branch notify, 2026-10-19; ember apps/android app/Notices.kt, Push.kt, App.kt,
+MainActivity.kt, screens/SettingsHome.kt Notify; docs/notifications.md → Clients): src/sfapp/notices.mbt over the host's
+notifications (src/host/notify.mbt).
+
+- While the app is shown it follows the core's `notify {workspace}` (client/core-ts attend.ts decides: none while
+  off, none for the chat looked at, only the workspace in view), takes each notice (`notice.claim`) and has the system
+  show the ones it took: one channel (消息, IMPORTANCE_HIGH), one notification per chat (its `tag`, the same id: a newer
+  one replaces the older), still.fail's mark as the small icon in the accent, the chat's title, its one line
+  (BigTextStyle), CATEGORY_MESSAGE, gone once tapped. Hidden, the topic is left (Notices.kt's flow ends with onStop).
+- A tap brings MainActivity back (singleTask, the notification's PendingIntent) with its link: the core reads it
+  (`link.parse`), its workspace is switched to, Home is the root and the chat is pushed over it (Back: Home), and the
+  chat goes to the message it is about once its list is in place (Screen.Chat.at, ChatHost.kt goTo: the pages before
+  brought in until it is there), which flashes (ChatMotion.kt flash: the accent's ground round someone's message, 10
+  past it each side and 8 above and below, corners of 14, in over 160 ms on Ease.Out, held to 900, gone by 1700 on the
+  standard curve; your bubble takes it instead; with motion reduced held as long, then gone). The flash is only drawn
+  (under the list's rows: @ui.on_list_underlay, Ctx::paint_rect), never laid out.
+- A chat on top takes its notification off (App.kt), however it was opened.
+- What the system lets the app show is told to the core as the app starts and each time it is shown again
+  (`notify.permission`: granted, denied, or default while Android 13+ was never asked); the system is asked once, the
+  first time signed in with notifications on (`notify.set {asked}`, POST_NOTIFICATIONS), and again as they are turned
+  on in settings, where a refusal says 在系统设置里允许 still.fail 发通知.
+- Settings → 通知 switches them (`notify.set {on}`): at once, a spinner while the core has not answered (its `doing`),
+  back with 无法开启/关闭通知：… when it fails; the push registration then follows what the core answered (Push.sync:
+  `push.unregister` while off, `push.register {kind: fcm, token}` with the host's token while on), as it does at
+  every start.
+- A push delivered while the app runs is shown unless the core says not (`notice.pushed`: off, a page in view, another
+  workspace's, its kind off), and what it is about is brought onto the device (`notice.bring`).
+- `APP=sffix MBUI_FIXTURE=chat-flash|chat-flash-mine` (a message gone to, its flash held at its peak) and
+  `settings-notify-off`: `scripts/shots.sh notify web-notify` (mac-notify-*, web-notify-* goldens).
+
+Hosts (@host.notice_show, notice_cancel, notice_permission, notice_ask, notice_answer, notice_opened, push_token,
+push_next): Android is the system's (android/…/Notices.java, POST_NOTIFICATIONS in the manifest, the activity's
+permission answer and the tap's intent). macOS keeps what would be shown and says it on the log (`NOTICE <tag>\t<title>\t
+<body>`, `NOTICE CANCEL`, `NOTICE TAP`): the app there is a bare executable, which UNUserNotificationCenter does not
+take (it wants a bundle); what it allows is unknown. iOS and Windows show none yet (UNUserNotificationCenter and APNs,
+toast notifications and WNS: a later slice's), nor the web page (it logs). A scripted run looks for and taps a
+notification by its words on Android (the app's own active notifications; the tap its PendingIntent sent) and on
+macOS (the kept ones): drive.mbt `noticed`, `nonotice`, `notice`.
+
+Not yet, against the current app: Firebase Cloud Messaging. The Android app sets Firebase up by hand from its build's
+FCM_* settings and shows pushes from its FirebaseMessagingService (PushService) while it is not in front, starting its
+core headless to ask `notice.pushed` and `notice.bring`. Here no push service is linked: this app (dev.mbui.demo, later
+fail.still.mbui) would need its own app in still.fail's Firebase project, and its core runs only inside the activity's
+process (no headless start for a service yet). `push_token` says none and `push_next` delivers nothing, so the app
+registers no device (and takes it off the accounts while off, as the Android app does); the app's own side of a
+delivered push (notice.pushed, the notification, notice.bring) is there and tested (src/sfapp/notices_wbtest.mbt). Also
+not: the client.wake before notice.bring (the app is awake when a push reaches it here), the notification's language
+when the app is not running (KeptLang: the app's words are the Chinese catalog's).
 
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
@@ -675,6 +724,11 @@ while the card moved the list):
 | 37 workspace-members | settings → Workspace: its people, alice among them | the cloud's workspace has alice as a member |
 | 38 preview | the other device makes a chat with a picture, a PDF, a video and a page (`peer createfiles`: put up in parts, then the chat made with them, so the test chat's end stays as the other flows know it); opened from Home, each file opened in the preview, shot, closed | the station's entry has the four files; the app's log: the picture and the page read through the core, the PDF's 2 pages drawn, the player's reads through the core (`station.file.part`) and its first frame, the page loaded in the web view; each shot shows something in its place (e2e/pngstat.py) |
 | 39 send-flying | two messages sent back to back, the second while the first's words still fly to their bubble | both at the station, once each, in order; the flight in the motion log |
+| 40 notice-wait | on Home, the other device asks the agent for a card: the system shows the test chat's notice (待你决定 · …); tapped, the chat opens over Home at the card, which flashes; the notification gone; back, Home | the agent's card at the station; the core said to show it and the app took it (notice.claim); the notice was the test chat's (its tag); the chat opened at the card's seq and went to it; the station marks alice read to its end |
+| 41 notice-failed | on Home, the other device says something the fake agent does not answer: the station's ⚠ makes a notice that something went wrong (出错 · …); tapped, the chat opens at it | the station's ⚠ entry after the words; the notice was the test chat's; the chat opened at the ⚠ entry's seq |
+| 42 notice-looking | the test chat open while the other device asks for a card in it: no notice, the card comes in the chat | the card at the station; no NOTICE for it; the app told the core it shows the chat (client.focus) |
+| 43 notify-off | settings → 通知 off (不接收通知); a card asked meanwhile shows no notice; on again | notify.set answered on false, then on true; push.unregister called; no NOTICE for the card; the card at the station; the core's store on the device keeps notifications on |
+| 44 notice-cancel | a notice shown on Home; the chat then opened from its row: its notification goes | the test chat's NOTICE, then its NOTICE CANCEL |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once

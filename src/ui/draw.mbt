@@ -613,6 +613,25 @@ fn Ctx::paint_underlay(self : Ctx, i : Int) -> Unit {
 }
 
 ///|
+/// A rounded rect painted where painting is now (an underlay hook's: under a list's rows), at (x, y, w, h) in the
+/// window as laid out, cut to what cuts what is painted there: a ground that is only drawn (a message gone to,
+/// flashing), never laid out.
+pub fn Ctx::paint_rect(
+  self : Ctx,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  radius~ : Double,
+  color : Int64,
+) -> Unit {
+  if dr.mode == mode_hits {
+    return
+  }
+  self.emit_rect(x, y, w, h, radius, color, 0.0, 0L, 1.0)
+}
+
+///|
 /// Draws `d` again, relative to node `rel`'s corner, with `look` over it (about its rect), cut to what cuts what is
 /// painted now.
 pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Unit {

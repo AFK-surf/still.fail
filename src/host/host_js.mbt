@@ -391,6 +391,35 @@ fn pk_end(_id : Int) -> Unit {
 
 }
 
+// Notifications (notify.mbt): not shown by a page yet; what would be is said on the log.
+
+///|
+fn nt_show(channel : String, tag : String, title : String, body : String, opens : String) -> Unit {
+  ignore(channel)
+  ignore(opens)
+  log("NOTICE " + tag + "\t" + title + "\t" + body)
+}
+
+///|
+fn nt_cancel(tag : String) -> Unit {
+  ignore(tag)
+}
+
+///|
+fn nt_state(what : Int) -> Int {
+  if what == 2 {
+    -1
+  } else {
+    0
+  }
+}
+
+///|
+fn nt_text(what : Int) -> String {
+  ignore(what)
+  ""
+}
+
 // Native views over the canvas (see host_native.mbt): DOM elements under the canvas (web/host.js), shown through its
 // holes; PDFs: none drawn here.
 

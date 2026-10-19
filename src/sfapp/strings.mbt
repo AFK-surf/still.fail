@@ -99,6 +99,8 @@ let zh : Map[String, String] = {
   "android-chat.save.failed": "无法保存：{error}",
   "android-chat.search.field": "搜索全部内容",
   "android-misc.bar.place.archive": "已归档",
+  "android-misc.notify.allowInSettings": "在系统设置里允许 {app} 发通知",
+  "android-misc.notify.channel": "消息",
   "android-misc.bar.place.chats": "对话",
   "android-misc.bar.place.connects": "连接",
   "android-misc.bar.place.decisions": "奏",

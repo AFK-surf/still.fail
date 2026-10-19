@@ -27,6 +27,9 @@
 //   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, once it holds still
 //   shot NAME                   the window's picture as $MBUI_SHOT_DIR/NAME.png (where the host cannot, "SHOT NAME"
 //                               is logged and the run waits 1.5 s for whoever takes it: adb's screencap)
+//   noticed TEXT                one of the app's notifications (the system's, @host.notice_show) holds TEXT in its
+//                               title or words, within the timeout       nonotice TEXT   none does
+//   notice TEXT                 that notification, once there, tapped (as the system's shade sends the tap)
 //   log TEXT                    DRIVE LOG TEXT on the log (a mark for whoever watches it)
 //   exit                        ends the run: DRIVE PASS, exit 0
 // A step that fails logs DRIVE FAIL (its line, what was on screen), takes a shot "fail" and exits 1.
@@ -370,6 +373,24 @@ fn drive_frame(c : Ctx) -> Unit {
           next()
         } else if waited > d.timeout {
           drive_fail(c, d, "not so after \{d.timeout.to_int()} ms")
+          return
+        } else {
+          return
+        }
+      }
+      "notice" | "noticed" | "nonotice" => {
+        // the host's notifications (@host.drive 6: tapped, 7: looked for)
+        let ok = match cmd {
+          "notice" => h_drive(6, arg)
+          "noticed" => h_drive(7, arg)
+          _ => !h_drive(7, arg)
+        }
+        if ok {
+          h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+          next()
+          return
+        } else if waited > d.timeout {
+          drive_fail(c, d, "no such notification after \{d.timeout.to_int()} ms")
           return
         } else {
           return

@@ -30,14 +30,14 @@ static struct {
 } cb;
 
 static JavaVM *vm;
-static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, pdfs_cls;
+static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, pdfs_cls, notices_cls;
 static jmethodID m_reduce_motion;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
-    m_save, m_system_dark, m_set_dark;
+    m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -114,6 +114,12 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_pdf_size = (*env)->GetStaticMethodID(env, pdfs_cls, "pageSize", "(II[D)V");
   m_pdf_load = (*env)->GetStaticMethodID(env, pdfs_cls, "pageLoad", "(IIII)V");
   m_pdf_close = (*env)->GetStaticMethodID(env, pdfs_cls, "close", "(I)V");
+  notices_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Notices"));
+  m_nt_show = (*env)->GetStaticMethodID(env, notices_cls, "show",
+                                        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+  m_nt_cancel = (*env)->GetStaticMethodID(env, notices_cls, "cancel", "(Ljava/lang/String;)V");
+  m_nt_state = (*env)->GetStaticMethodID(env, notices_cls, "state", "(I)I");
+  m_nt_text = (*env)->GetStaticMethodID(env, notices_cls, "text", "(I)Ljava/lang/String;");
   shape_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 4 * 8192));
   small_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 16));
   return JNI_VERSION_1_6;
@@ -1151,6 +1157,41 @@ int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) {
   (*env)->DeleteLocalRef(env, n);
   (*env)->DeleteLocalRef(env, b);
   return ok ? 1 : 0;
+}
+
+// Notifications (notify.mbt): dev.mbui.Notices over the system's NotificationManager; the tap comes back to
+// MainActivity, which keeps what it opens until the app asks (Notices.text 0).
+
+void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit_string_t title, moonbit_string_t body,
+                         moonbit_string_t opens) {
+  JNIEnv *env = env_();
+  jstring c = jstr(env, channel), t = jstr(env, tag), h = jstr(env, title), b = jstr(env, body), o = jstr(env, opens);
+  (*env)->CallStaticVoidMethod(env, notices_cls, m_nt_show, c, t, h, b, o);
+  (*env)->DeleteLocalRef(env, c);
+  (*env)->DeleteLocalRef(env, t);
+  (*env)->DeleteLocalRef(env, h);
+  (*env)->DeleteLocalRef(env, b);
+  (*env)->DeleteLocalRef(env, o);
+}
+
+void mb_host_notice_cancel(moonbit_string_t tag) {
+  JNIEnv *env = env_();
+  jstring t = jstr(env, tag);
+  (*env)->CallStaticVoidMethod(env, notices_cls, m_nt_cancel, t);
+  (*env)->DeleteLocalRef(env, t);
+}
+
+int32_t mb_host_notice_state(int32_t what) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, notices_cls, m_nt_state, what);
+}
+
+moonbit_string_t mb_host_notice_text(int32_t what) {
+  JNIEnv *env = env_();
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, notices_cls, m_nt_text, what);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  return out;
 }
 
 // PDFs (host_native.mbt `pdf_*`): dev.mbui.Pdfs over the system's PdfRenderer; a page drawn is an image of the table

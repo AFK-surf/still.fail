@@ -121,6 +121,8 @@ public class MainActivity extends Activity {
         Host.view = view;
         Host.systemDark = night(getResources().getConfiguration());
         if (Host.script != null) Script.start(view);
+        // started by a notification's tap (Notices): what it opens, for the app
+        Notices.from(getIntent());
     }
 
     private boolean imeMoving;
@@ -141,6 +143,7 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        Notices.from(intent);
         Host.log("activity onNewIntent " + (intent.getData() != null ? intent.getData().getScheme() + "://" + intent.getData().getHost() : "(in front again)"));
         Host.requestFrame();
     }
@@ -198,6 +201,16 @@ public class MainActivity extends Activity {
     @SuppressWarnings("deprecation")
     protected void onActivityResult(int request, int result, Intent data) {
         if (!Picks.answered(request, result, data)) super.onActivityResult(request, result, data);
+    }
+
+    /** The system's answer to POST_NOTIFICATIONS (Notices: asked as notifications are turned on, or once at first). */
+    @Override
+    public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        if (request == Notices.ASK) {
+            Notices.answered(results.length > 0 && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED);
+            return;
+        }
+        super.onRequestPermissionsResult(request, permissions, results);
     }
 
     /** Whether a configuration is in night mode (the system's dark theme). */

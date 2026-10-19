@@ -1,0 +1,3 @@
+CHAT=$(python3 -c "import json; c=json.load(open('$WORK/peer/chat.json')); print(c['station'] + '/' + c['session'])")
+check "the system showed the test chat's notice" 'grep -F "NOTICE $CHAT	" $OUT/$name.log | grep -qF "看一眼就行 $TAG"'
+check "opened from Home, its notification was taken off" 'grep -qF "NOTICE CANCEL $CHAT" $OUT/$name.log'

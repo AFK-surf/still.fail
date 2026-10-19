@@ -113,6 +113,9 @@ if [ $PLATFORM = android ]; then
   scripts/android.sh emu >$OUT/emu.log 2>&1 || { tail $OUT/emu.log; exit 1; }
   $ADB install -r ${E2E_APK:-android/app/build/outputs/apk/debug/app-debug.apk} >/dev/null || exit 1
   $ADB shell pm clear $E2E_PKG >/dev/null
+  # notifications allowed, as a person who said yes once has them (else the first sign-in's ask is a system dialog over
+  # the flows; 40-44 look at what is shown)
+  $ADB shell pm grant $E2E_PKG android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
   $ADB reverse tcp:$E2E_PORT tcp:$E2E_PORT >/dev/null
   $ADB reverse tcp:$E2E_RELAY tcp:$E2E_RELAY >/dev/null
   if [ -z "${E2E_APK:-}" ]; then

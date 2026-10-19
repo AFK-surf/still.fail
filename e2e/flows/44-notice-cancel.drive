@@ -1,0 +1,13 @@
+# A notice shown on Home; the chat then opened from its row, not from the notice: its notification goes (App.kt: a
+# chat on top takes its notification off).
+timeout 90000
+until 端到端测试
+log do: peer send 打开就消失 {T} card:看一眼就行 {T}|好 {T}|不好 {T}
+timeout 150000
+noticed 看一眼就行 {T}
+shot 1-noticed
+timeout 60000
+tap 端到端测试
+until =不好 {T}
+nonotice 看一眼就行 {T}
+shot 2-chat

@@ -1,0 +1,7 @@
+CHAT=$(python3 -c "import json; c=json.load(open('$WORK/peer/chat.json')); print(c['station'] + '/' + c['session'])")
+THREAD=$(python3 -c "import json; print(json.load(open('$WORK/peer/chat.json'))['thread'])")
+ASKED=$(sql "select n from entries where thread = $THREAD and text = '这一条不会有回复 $TAG'")
+WARN=$(sql "select min(n) from entries where thread = $THREAD and n > ${ASKED:-0} and text like '⚠️%'")
+check "the station said the agent did not answer (⚠)" '[ -n "$WARN" ]'
+check "the system showed the test chat's notice that something went wrong" 'grep -F "NOTICE $CHAT	" $OUT/$name.log | grep -qF "出错 · "'
+check "tapped, it opened the test chat at what the station said" 'grep -qF "notice opens ${CHAT%/*}|${CHAT##*/} at $WARN" $OUT/$name.log'

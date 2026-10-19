@@ -26,13 +26,16 @@
 # `newchat` and `web-newchat` are a new chat, its sheets, the bottom bar's panel and a place
 # (MBUI_FIXTURE=newchat|newchat-station|newchat-model|home-bars|place, src/sfapp/newchat_fixture.mbt):
 # mac-newchat-<state>, web-newchat-<state>.
+# `notify` and `web-notify` are slice 10's: a message gone to from a notification, flashing at its peak (someone
+# else's: the ground round it; yours: its bubble), and settings with notifications off
+# (MBUI_FIXTURE=chat-flash|chat-flash-mine|settings-notify-off): mac-notify-<state>, web-notify-<state>.
 # `preview` and `web-preview` are a file of it open in the preview
 # (MBUI_FIXTURE=chat-preview-image|pdf|video|html|code|md|csv|none): mac-preview-<what>, web-preview-<what>.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat preview settings web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-settings ios android}
+PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat preview settings notify web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-settings web-notify ios android}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
 SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security vault stations station profiles profile connects memory memory-doc usage archive}
@@ -198,6 +201,21 @@ for p in $PLATFORMS; do
       for m in compose attach quote sending failed; do
         QUERY=MBUI_FIXTURE=chat-$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-composer-$m.png
         names="$names web-composer-$m"
+      done ;;
+    notify)
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-notify; mkdir -p out/shot-notify
+      for m in chat-flash chat-flash-mine settings-notify-off; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-notify ./_build/native/release/build/sffix/sffix.exe >/dev/null
+        cp out/shot-notify/$m.png out/shots/mac-notify-${m#chat-}.png
+      done
+      names="mac-notify-flash mac-notify-flash-mine mac-notify-settings-notify-off" ;;
+    web-notify)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=""
+      for m in chat-flash chat-flash-mine settings-notify-off; do
+        QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-notify-${m#chat-}.png
+        names="$names web-notify-${m#chat-}"
       done ;;
     web-chat)
       APP=sffix bash scripts/web.sh build >/dev/null

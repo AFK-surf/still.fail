@@ -330,8 +330,9 @@ pub fn set_dark(dark : Bool) -> Unit {
 /// A scripted run's input given to the host to send as its own (src/ui/drive.mbt): `drive_insert` words committed and
 /// `drive_mark` composed by the input method (macOS: NSTextInputClient's insertText and setMarkedText; Android: the
 /// view's InputConnection), `drive_newline` its Enter, `drive_paste` the system's paste of the clipboard (Cmd+V,
-/// KEYCODE_PASTE), `drive_backspace`, `drive_shot` the window's picture saved at `text` (a path). False where the host
-/// has no such path (the caller sends it to the app itself).
+/// KEYCODE_PASTE), `drive_backspace`, `drive_shot` the window's picture saved at `text` (a path); 6 and 7 one of the
+/// app's notifications (notify.mbt) whose title or words hold `text`, tapped (6) or only looked for (7), false when none
+/// does. False where the host has no such path (the caller sends it to the app itself).
 pub fn drive(kind : Int, text : String) -> Bool {
   ffi_drive(kind, text) != 0
 }
@@ -415,6 +416,31 @@ extern "C" fn pk_bytes(id : Int, i : Int) -> Bytes = "mb_host_pick_bytes"
 
 ///|
 extern "C" fn pk_end(id : Int) -> Unit = "mb_host_pick_end"
+
+// Notifications (notify.mbt): dev.mbui.Notices on Android (android_host.c), kept and said on the log elsewhere.
+
+///|
+#borrow(channel, tag, title, body, opens)
+extern "C" fn nt_show(
+  channel : String,
+  tag : String,
+  title : String,
+  body : String,
+  opens : String,
+) -> Unit = "mb_host_notice_show"
+
+///|
+#borrow(tag)
+extern "C" fn nt_cancel(tag : String) -> Unit = "mb_host_notice_cancel"
+
+///|
+/// 0: what the system allows (0 unknown, 1 granted, 2 denied, 3 can be asked); 1: ask it (1 asked); 2: its answer,
+/// once (-1 none yet, 0 refused, 1 allowed)
+extern "C" fn nt_state(what : Int) -> Int = "mb_host_notice_state"
+
+///|
+/// 0: a notification tapped (its `opens`), once; 1: the push token; 2: a push delivered, once
+extern "C" fn nt_text(what : Int) -> String = "mb_host_notice_text"
 
 // Native views over the canvas (src/ui/native.mbt): a system view (a video player, a web page) the host keeps in the
 // window under the app's surface, shown through a hole the app paints in it (instances of kind 9: transparent,
