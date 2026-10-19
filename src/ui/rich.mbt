@@ -24,6 +24,8 @@ pub(all) struct Run {
   code : Bool
   /// the code face alone
   mono : Bool
+  /// the serif face (a reader's words)
+  serif : Bool
   /// of the paragraph's size
   scale : Double
   /// 0: the paragraph's (a link's own colour, a code run's)
@@ -44,6 +46,7 @@ pub fn span(
   italic? : Bool = false,
   code? : Bool = false,
   mono? : Bool = false,
+  serif? : Bool = false,
   scale? : Double = 1.0,
   color? : Int64 = 0L,
   bg? : Int64 = 0L,
@@ -57,6 +60,7 @@ pub fn span(
     italic,
     code,
     mono,
+    serif,
     scale,
     color,
     bg,
@@ -172,7 +176,8 @@ fn RichLayout::hard_end(self : RichLayout, i : Int) -> Bool {
 ///|
 fn run_style(r : Run) -> Int {
   (if r.italic { @host.style_italic } else { 0 }) |
-  (if r.code || r.mono { @host.style_mono } else { 0 })
+  (if r.code || r.mono { @host.style_mono } else { 0 }) |
+  (if r.serif && !r.code && !r.mono { @host.style_serif } else { 0 })
 }
 
 ///|

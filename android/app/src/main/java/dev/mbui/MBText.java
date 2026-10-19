@@ -53,12 +53,17 @@ final class MBText {
         generation++;
     }
 
+    /** The face of style bits: 2 the monospaced (code) face, 4 the serif one (Noto Serif, its CJK for Han), else the system's. */
+    static Typeface face(int style) {
+        return (style & 2) != 0 ? Typeface.MONOSPACE : (style & 4) != 0 ? Typeface.SERIF : Typeface.DEFAULT;
+    }
+
     static Paint paint(float size, int weight, int style) {
         String k = size + "/" + weight + "/" + style;
         Paint p = paints.get(k);
         if (p == null) {
             p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
-            Typeface base = (style & 2) != 0 ? Typeface.MONOSPACE : Typeface.DEFAULT;
+            Typeface base = face(style);
             p.setTypeface(Typeface.create(base, weight, (style & 1) != 0));
             p.setTextSize(size);
             // ligatures as the system draws them: shape() tells MoonBit which clusters a ligature covers
@@ -268,8 +273,7 @@ final class MBText {
         if (refCanvas == null) return;
         float d = refScale;
         TextPaint p = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-        Typeface face = (style & 2) != 0 ? Typeface.MONOSPACE : Typeface.DEFAULT;
-        p.setTypeface(Typeface.create(face, weight, (style & 1) != 0));
+        p.setTypeface(Typeface.create(face(style), weight, (style & 1) != 0));
         p.setTextSize((float) size * d);
         p.setColor(0xFF000000 | color);
         StaticLayout l = StaticLayout.Builder.obtain(text, 0, text.length(), p, 1 << 20)

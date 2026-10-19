@@ -19,6 +19,7 @@
 
 static const WCHAR *FAMILY = L"Segoe UI";
 static const WCHAR *MONO = L"Consolas";  // the code face (style & 2)
+static const WCHAR *SERIF = L"SimSun";   // the serif face (style & 4): 宋体, its Latin too
 static const int RT_SIZE = 512;  // largest cluster bitmap, in pixels
 
 typedef struct {
@@ -88,7 +89,7 @@ static IDWriteTextFormat *format_for(double size, int weight, int style) {
   for (int i = 0; i < n_formats; i++)
     if (formats[i].size == size && formats[i].weight == weight && formats[i].style == style) return formats[i].f;
   IDWriteTextFormat *f = NULL;
-  dw->CreateTextFormat((style & 2) ? MONO : FAMILY, NULL, (DWRITE_FONT_WEIGHT)weight,
+  dw->CreateTextFormat((style & 2) ? MONO : (style & 4) ? SERIF : FAMILY, NULL, (DWRITE_FONT_WEIGHT)weight,
                        (style & 1) ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
                        DWRITE_FONT_STRETCH_NORMAL, (FLOAT)size, L"zh-cn", &f);
   f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -126,7 +127,7 @@ extern "C" void mb_host_font_metrics(double size, int32_t weight, int32_t style,
   m.ascent = 2210;
   m.descent = 514;
   dw->GetSystemFontCollection(&fc, FALSE);
-  if (SUCCEEDED(fc->FindFamilyName((style & 2) ? MONO : FAMILY, &i, &found)) && found &&
+  if (SUCCEEDED(fc->FindFamilyName((style & 2) ? MONO : (style & 4) ? SERIF : FAMILY, &i, &found)) && found &&
       SUCCEEDED(fc->GetFontFamily(i, &fam)) &&
       SUCCEEDED(fam->GetFirstMatchingFont((DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STRETCH_NORMAL,
                                           (style & 1) ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, &font)))

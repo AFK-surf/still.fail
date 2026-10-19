@@ -46,6 +46,21 @@ static double last_size = -1;
 static int last_weight = -1, last_style = -1;
 static CTFontRef last_font;
 
+// The serif face (style & 4): Songti SC (宋体, its Latin too) at the weight nearest; the system's face where there is
+// no Songti.
+static CTFontRef serif_font(double size, int weight) {
+  NSString *face = weight >= 600 ? @"STSongti-SC-Bold" : weight <= 300 ? @"STSongti-SC-Light" : @"STSongti-SC-Regular";
+  CTFontRef f = CTFontCreateWithName((__bridge CFStringRef)face, size, NULL);
+  if (f) {
+    CFStringRef got = CTFontCopyPostScriptName(f);
+    BOOL ok = got && [(__bridge NSString *)got hasPrefix:@"STSongti"];
+    if (got) CFRelease(got);
+    if (ok) return f;
+    CFRelease(f);
+  }
+  return mb_platform_font(size, weight, 0);
+}
+
 static CTFontRef font_for(double size, int weight, int style) {
   // the font asked for last, without building its key (most calls)
   if (size == last_size && weight == last_weight && style == last_style) return last_font;
@@ -53,7 +68,7 @@ static CTFontRef font_for(double size, int weight, int style) {
   NSString *k = [NSString stringWithFormat:@"%g/%d/%d", size, weight, style];
   id f = fonts[k];
   if (!f) {
-    CTFontRef base = mb_platform_font(size, weight, (style & 2) != 0);
+    CTFontRef base = (style & 4) && !(style & 2) ? serif_font(size, weight) : mb_platform_font(size, weight, (style & 2) != 0);
     if (style & 1) {
       CTFontRef it = CTFontCreateCopyWithSymbolicTraits(base, 0, NULL, kCTFontTraitItalic, kCTFontTraitItalic);
       if (it) {

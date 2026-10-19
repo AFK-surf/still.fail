@@ -105,13 +105,13 @@ fn check_atlas() -> Unit {
 
 ///|
 /// Ascent, descent and line height of the system font at this size (its
-/// code face, slanted: `style`, @host.style_mono and style_italic).
+/// code face, slanted, its serif face: `style`, @host.style_mono, style_italic, style_serif).
 fn font_metrics(
   size : Double,
   weight : Int,
   style? : Int = 0,
 ) -> (Double, Double, Double) {
-  let key = ((size * 10.0).to_int() * 1000 + weight) * 4 + style
+  let key = ((size * 10.0).to_int() * 1000 + weight) * 8 + style
   match text_cache.metrics.get(key) {
     Some(m) => m
     None => {

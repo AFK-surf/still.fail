@@ -4,6 +4,8 @@
 (() => {
   const FAMILY = 'system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", "Segoe UI", sans-serif';
   // the code face (style bit 2), its Han from the system's sans
+  // the serif face (style bit 4): a reader's 宋体
+  const SERIF = '"Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", SimSun, serif';
   const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, "JetBrains Mono", "PingFang SC", "Noto Sans CJK SC", monospace';
   const ATLAS = 2048;
   const params = new URLSearchParams(location.search);
@@ -672,7 +674,7 @@
   const rc = document.createElement('canvas');
   const rctx = rc.getContext('2d', { willReadFrequently: true });
   // style: 1 slanted, 2 the code face
-  const font = (size, weight, style) => `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${style & 2 ? MONO : FAMILY}`;
+  const font = (size, weight, style) => `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${style & 2 ? MONO : style & 4 ? SERIF : FAMILY}`;
 
   H.fontMetrics = (size, weight, style, out) => {
     mctx.font = font(size, weight, style);
