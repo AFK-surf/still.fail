@@ -24,11 +24,11 @@ D="$(cd "$(dirname "$0")" && pwd)"
 cd "$A"
 mkdir -p out/shots goldens
 PLATFORMS=${*:-kit home chat cards composer drive decide glass newchat preview settings wide web-kit web-home web-chat web-cards web-composer web-drive web-decide web-glass web-newchat web-preview web-settings}
-DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
+DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-download drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref chat-station-file chat-station-sheet"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
 PLAYER_MODES="video audio ended opening"
 SERVICE_MODES="service service-sized service-restart service-stopped"
-SHARE_MODES="share-in share-in-stations"
+SHARE_MODES="share-in share-in-stations share-in-files"
 WIDE_MODES=${WIDE_MODES:-home chat settings-appearance files decisions}
 SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security vault stations station profiles profile connects memory memory-doc usage archive}
 if [ ! -d out/node/node_modules/pixelmatch ]; then
@@ -198,7 +198,7 @@ shoot() {
       build_mac sffix
       rm -rf out/shot-preview; mkdir -p out/shot-preview
       names=
-      for m in image pdf video audio html code md csv none; do
+      for m in image pdf video audio html code md csv none step swipe; do
         at=60; [ $m = html ] && at=150
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-preview-$m MBUI_SCRIPT=shot MBUI_SHOT_AT=$at MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-preview ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-preview/$m.png out/shots/mac-preview-$m.png
@@ -207,7 +207,7 @@ shoot() {
     web-preview)
       WAPP=sffix
       names=
-      for m in image pdf video audio html code md csv none; do
+      for m in image pdf video audio html code md csv none step swipe; do
         web_shot "MBUI_FIXTURE=chat-preview-$m" out/shots/web-preview-$m.png
         names="$names web-preview-$m"
       done ;;

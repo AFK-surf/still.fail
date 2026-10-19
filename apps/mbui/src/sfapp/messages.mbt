@@ -877,14 +877,18 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
   // tapped, it opens in the preview (preview.mbt)
   let open = c.id("file-open/" + a.path)
   if c.clicked(open) {
-    open_preview(here.station, owner_of(here, a), a)
+    // an image steps through the chat's (the core tells those beside it: imageNear)
+    open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session))
   }
   match kind_of(a.name) {
     "image" => {
       let (bw, bh, letterbox) = image_box(a, 16.0)
       let h = bh * w / bw
       let key = (src.file)(here.station, owner_of(here, a), base_name(a.path))
-      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=t.p.chip, id=open, fn() {
+      // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
+      let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
+      note_thumb(c, thumb, open, 10.0)
+      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=t.p.chip, id=open, opacity=if pv_hidden.val == thumb { 0.0 } else { 1.0 }, fn() {
         if key != "" && key != "!" {
           c.image(
             key,

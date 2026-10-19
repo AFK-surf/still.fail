@@ -206,9 +206,9 @@ PastedText.kt; SendText.kt; MessagePick.kt):
   文件 its documents UI (ACTION_OPEN_DOCUMENT) on Android, the open panel on
   macOS (`@host.pick`, src/host/pick.mbt; Picks.java); the camera tile takes
   a photo on Android (ACTION_IMAGE_CAPTURE's picture, as the app's
-  TakePicturePreview). Not yet (the same tiles, a toast saying so): the
-  recent photos (they need the gallery's permission and its thumbnails),
-  Station 文件 (slice 12's drive), any picker on iOS, Windows and the web.
+  TakePicturePreview); the recent photos across the top and Station 文件 (both
+  branch mbui-media-complete, below). Not yet: any picker on iOS, Windows and
+  the web (a toast says so).
 - Quoting: a message's words held still a long press's time (400 ms) pick the word under the finger, widened by
   words as it slides on (the list holds still meanwhile: `Ctx::take_press`), the passage drawn behind the words in the
   accent at 26%; lifted, handles at its ends (a line down its side with a knob, the finger's room 36 round it) move
@@ -235,7 +235,7 @@ PastedText.kt; SendText.kt; MessagePick.kt):
 
 Not yet, against the current app: `@` references to
 other chats and pasted chat links as marks (chat.ref, chatSearch), sharing
-what they refer to before sending, the recent photos' strip, Station 文件 (slice 12's drive, below), a
+what they refer to before sending, a
 picture's preview from its tile, files pasted or sent by the keyboard (only
 words are), the text toolbar of the field
 (select, cut, copy by touch; the keyboard's own paste works), links drawn but not tapped while words are picked (a tap
@@ -283,14 +283,11 @@ DriveScreen.kt, Reader.kt, TextModel.kt, Novel.kt, ReaderMarkdown.kt; chat/scree
   made-up drive that takes renames, deletes, new folders and uploads while it runs): `scripts/shots.sh drive
   web-drive` compares them with goldens/mac-<mode>.png and web-<mode>.png.
 
-Not yet, against the current app: downloading a file to the device, sharing it
-to another app, a folder as a zip (each says so in a toast: no host API to keep a file yet), GB18030 text (no
-table here: such a file opens as UTF-8 with replacement characters), the serif face (the reader draws its sans
-face either way), 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light one),
-the system bars' icons following the paper, the frosted glass of the bars and sheets (their tint only), the
+Not yet, against the current app (GB18030, the serif face, the system bars following the paper: branch
+mbui-media-complete, below): 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light
+one), the frosted glass of the bars and sheets (their tint only), the
 system's back closing a sheet or ending a choice (it goes back a page), dragging sheets by the grabber, the
-long-press ripple, a station file sent as a file (`drive.stage`, the card's sheet, 此对话默认发送文件) and station
-files kept with the draft on the device, the station page's way into a drive (slice 13).
+long-press ripple, station files kept with the draft on the device, the station page's way into a drive (slice 13).
 
 The rest of slice 12, the player (branch player-share, 2026-10-19; ember apps/android drive/Player.kt, Playlist.kt,
 chat/screens/VideoViewer.kt AudioViewer): a video or a song of a drive, or a song of a chat, played as it streams through
@@ -475,9 +472,8 @@ drive/DriveScreen.kt hand; docs/share-in.md): src/sfapp/share.mbt, Shares.java.
 
 Not yet, against the current app: the sheet over the app it came from (Android's ShareActivity is an activity of its own,
 translucent over that app; here still.fail comes to the front and shows it over itself), signing in first from the sheet
-(signed out, the app's sign-in page shows and the share waits), a file shared in (only text and links, as the Android
-app takes), how far a drive's file has come while it is read for sharing (its row's progress), downloading a drive's
-file to the device, sharing on iOS, Windows and the web (no share sheet there yet).
+(signed out, the app's sign-in page shows and the share waits), sharing on iOS, Windows and the web (no share sheet
+there yet).
 
 Glass (branch glass, 2026-10-19): frosted glass and liquid glass, a pass of every renderer (Metal on macOS and iOS,
 GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
@@ -657,11 +653,8 @@ FileData; Zoom.kt):
   script, code, Markdown, a table, a file of no kind): `scripts/shots.sh preview web-preview` compares them with
   goldens/mac-preview-*.png and web-preview-*.png.
 
-Not yet, against the current app: the flight from the chat's thumbnail and back (a video closed into its thumbnail at
-the frame it was left at), stepping through the chat's images (`imageNear`) and swiping between them, pinching on iOS (its host
-tells no second finger yet), marking an image (ImageMarks.kt), a video's
-frame-exact steps (the file's frames' times, MediaExtractor; here steps of a 60th of a second), saving a frame,
-landscape, code highlighting and a code file's sideways scroll,
+Not yet, against the current app (the viewer's flight, stepping, pinching on iOS, marking, a video's frames and
+landscape: branch mbui-media-complete, below): code highlighting and a code file's sideways scroll,
 installing an APK, an SVG drawn by a page when it is not a bitmap, the progress of a whole file coming (`progress`), a
 big file read to the disk, a web view's own scrolling under the canvas on macOS while something is painted over it,
 the frosted glass over a picture or a document (where nothing native is under it: `@sf` glass could take it).
@@ -771,6 +764,115 @@ registers no device (and takes it off the accounts while off, as the Android app
 delivered push (notice.pushed, the notification, notice.bring) is there and tested (src/sfapp/notices_wbtest.mbt). Also
 not: the client.wake before notice.bring (the app is awake when a push reaches it here), the notification's language
 when the app is not running (KeptLang: the app's words are the Chinese catalog's).
+
+Files and media, kept on the device (branch mbui-media-complete, 2026-10-19; ember apps/android shared/screens/
+FileKinds.kt download, drive/DriveScreen.kt saveToDownloads, saveZip, DriveFetches, ui/Parts.kt DownloadChip):
+
+- mbui's host keeps a file the app has read (@host.keep_begin / append / finish, src/host/keep.mbt): its bytes put a
+  part at a time into a file of the host's temporary directory (never whole in memory), then moved where the person
+  keeps files: Android's MediaStore Downloads (no permission asked; `Choose` the documents UI's ACTION_CREATE_DOCUMENT),
+  macOS's ~/Downloads (`Choose` a save panel over the window), iOS's Files sheet either way, Windows' Downloads known
+  folder; MBUI_DOWNLOADS_DIR the downloads for scripted runs. How it went comes back a frame later (Keeping, KeptAt,
+  CalledOff, Failed).
+- A drive's file 下载 (its sheet, or several chosen: 下载 n 个文件, each at once): 正在下载「名字」, read through the core
+  a part at a time (`drive.read`) straight into the keep, how far on its row meanwhile (n% in the accent's filling box,
+  DownloadChip, moving smoothly over 500 ms), then 已保存到「下载」 or 下载失败; 无法获取「名字」：… when the station could
+  not give it (src/sfapp/keep.mbt). A folder's 下载为 zip: the station zips it (`drive.zip`: where the zip is, a root of
+  its own), then it is read and kept as any file; the folder's row shows it under way (0% while zipped, then how far:
+  the Android app shows nothing there). 分享 reads the same way, its row's progress shown too. The chat's preview's 下载
+  keeps its file through the same host (a save panel nowhere: Downloads as the Android app has it).
+- `APP=sffix MBUI_FIXTURE=drive-download` (a file and a folder under way): goldens/mac-drive-download.png,
+  web-drive-download.png.
+
+Not yet: the bytes downloaded kept for the drive's next open (DriveCache: each download reads through the core again),
+a big file's download going on while the app is away (it is the app's: Android stops it with the process).
+
+Files shared in (branch mbui-media-complete): another app's share sheet hands still.fail files, not only words and
+links (the Android app takes text only; its sheet and composer are the reference): ACTION_SEND with a stream and
+ACTION_SEND_MULTIPLE of any type, read whole by mbui's host (Shares.java; 1 GB each at most, as the composer takes)
+and taken by the app (@host.shared_in's `files`, shared_in_file). The sheet heads with them as the composer shows files
+(pictures as 56 tiles, a file's mark, its name and size, n 个文件 and their names for several), 发到 the chats as for a
+link (the site's last chat not said: files have none); a tap opens that chat (or a new chat on that station, made the
+one new chats start on: `newChat.pick`) with the files in its composer, going up at once as ＋'s do; words shared with
+them still go in through `shareIn.open`. MBUI_SHARE_FILES (paths split by |) stands for another app on macOS.
+`APP=sffix MBUI_FIXTURE=share-in-files`: goldens/mac-share-in-files.png, web-share-in-files.png. Flow 93 share-files
+(Android: an ACTION_SEND intent with the photo through the app's own provider, `#android-intent`; macOS: a photo and a
+PDF).
+
+Recent photos and Station 文件 in ＋'s sheet (branch mbui-media-complete; Attach.kt RecentPhotos, latest; StationFiles.kt
+RefCard, openRefSheet, sendUp):
+
+- The recent photos: across the top of ＋'s sheet after the camera, the gallery's latest 30 (mbui's @host.gallery_*:
+  MediaStore's images and their times, read off the app's thread; ranked here as Attach.kt `latest` does: each by the
+  latest of its times that can be believed, one in milliseconds taken as the seconds it means, one ahead of now left
+  out), each its thumbnail as the gallery has it (Images.java loads a content:// source by loadThumbnail), 92 × 122 on
+  14 corners; a tap reads it whole (@host.pick_photo) into the draft, up at once. Without leave to read the gallery
+  the last tile asks (显示最近照片: the system's dialog; asked and refused for good, the app's settings), with only the
+  photos chosen for the app (Android 14 on) it chooses more (选择更多照片); read again as the sheet opens and as the
+  system answers. The strip moves sideways under a finger and glides on once let go (a drag area: it is no list).
+  macOS, iOS and Windows have no gallery here: the tile says so (as before). Apple's own Photos picker is not used yet
+  (照片 is the open panel on macOS; iOS has no picker).
+- Station 文件: ticked files go in named by their path, or as files where the chat says so (此对话默认发送文件: the
+  core's prefs `dropFiles` by the chat's key, else `dropAs`); a card tapped opens its sheet (where it is, 发送方式 路径 /
+  文件 (a folder of the chat's own station: zip), the chat's say as a switch). As a file it is staged on the chat's
+  own station (`drive.stage`: a folder zipped there) or read from the station that has it (`drive.read`) and put up to
+  the chat's (`station.upload.part`); the card turns the bubble's grey with a spinner, how far, its size once up, why it
+  failed; the message carries it as an attachment, nothing goes while it goes up.
+- `APP=sffix MBUI_FIXTURE=chat-station-file | chat-station-sheet` (one sent as a file, a folder as a zip going up; a
+  card's sheet); the recent photos' strip is Android's (its shots from the emulator, flow 95). Flows 94
+  station-file-sent, 95 recent-photos (Android).
+
+The image viewer, complete (branch mbui-media-complete; FilePreview.kt ViewerLayer, Viewer, Gallery, Leaving, Beside;
+VideoViewer.kt frameStarts, saveFrame, landscape; ImageMarks.kt):
+
+- Stepping through a chat's images: the core says those beside the one shown (`imageNear` by the chat's thread, else
+  its session: each with the session that keeps it), a drive's folder its pictures in its order. The one shown and those
+  beside it are one strip, the stage's width and 24 apart: fitted (not zoomed), a finger sideways carries it (past the
+  first or the last a third as far), let go past 80 (or a fifth of the width) or flung that way it goes on to that one,
+  else back, on SLIDE (critically damped, stiffness 400) at the finger's speed; the one going is drawn from its
+  picture where it was. Over the image's sides, in the middle, while the bars show, the ways to the one before and
+  after (36 discs of the dark canvas at 80%). Those beside it are read ahead (and the last few read kept), so a step
+  shows the next at once; their thumbnails stand in meanwhile.
+- The flight: an image opened from the chat grows from its thumbnail (its box, its corners, the picture cropped as the
+  chat crops it) to its place on the stage in 320 ms on (.2, .8, .2, 1), the black and the bars coming with it; closed,
+  it shrinks back into its thumbnail in 280 ms (from where a flight in had got to); the thumbnail hidden meanwhile (one
+  picture on the screen, never two). With no thumbnail on the screen (or its size not known yet) it fades as before.
+- Pinching on iOS: the host tells a second finger now (4 down, 5 moved, 6 up, as Android's).
+- Marking an image (标注图片, its whole picture here): 选择, 框, 箭头, 画笔, 文字 at the foot on the dark glass, the
+  colour (seven, each with the halo that edges its words), 删除 the picked mark, 撤销 / 重做; boxes and arrows numbered,
+  a pin on each (tapped: its note), the note written in a box at the foot (完成, 删除), the notes as cards over the tools.
+  The marks are in the picture's own pixels, drawn on the screen at its zoom (boxes bordered, lines and arrows as dots
+  along them, words with their halo round them); a picked mark moves with the finger, an arrow's end stretches it. 取消
+  / 下载标注后的图片 / 添加到对话 in the bar: the host draws the marks on the picture at its own size (mbui's
+  @host.draw_marks: Android's Canvas, Core Graphics), then it is kept with the downloads or put in the chat's draft with
+  a quote per numbered mark (图片 … 标注 n: where it is, on which image, what was said), and the viewer closes to the
+  chat (已添加到对话，返回对话发送). Back steps out of a note, the words, the colours, the pick, then marking.
+- A video's frames: their times read from the file as the system reads it (mbui's NativeView::frames: Android's
+  MediaExtractor over the same reads as the player, Apple's sample cursor), so ‹ › step to the very next frame the file
+  has whatever its rate, and n / N 帧 counts them (正在读取帧 meanwhile; a 60th of a second where none are read). 保存此帧
+  (paused): the frame showing grabbed at its own size (MediaMetadataRetriever, AVAssetImageGenerator) and kept with the
+  downloads as name-n.png. 横屏: the phone turned for it, upright again as the viewer closes.
+- `APP=sffix MBUI_FIXTURE=chat-preview-step | chat-preview-swipe` (a second picture beside the first: the ways to it;
+  halfway to it under a finger): goldens/mac-preview-step.png, mac-preview-swipe.png; mac-preview-image changed on
+  purpose (标注图片 in its bar, as the Android app's).
+
+Not yet: a video flown back into its thumbnail at the frame it was left at (videos fade), marks' text drawn with the
+words' own shaping on the image (the host's face, not mbui's), a marked image bigger than memory (the Android app
+draws it in bands), Windows' marks, frames and grabs.
+
+The reader, the rest (branch mbui-media-complete; TextModel.kt decodeText, Reader.kt PaperBars, FontFamily.Serif; the
+web's reader's download):
+
+- GB18030: a text that is neither marked nor UTF-8 is read as GB18030 by the system's own tables (mbui's
+  @host.decode_charset: java.nio's Charset, CoreFoundation's encodings, Windows' code page 54936, the browser's
+  TextDecoder), a character the end of a cut file halves dropped, as the Android app reads it.
+- The serif face: 字体 宋体 draws the text in the serif face (mbui's run `serif`: Noto Serif and its CJK on Android,
+  Songti SC on Apple, SimSun on Windows).
+- 下载 in the top bar's right end (the web's reader has it): the whole file kept on the device as the drive's 下载 keeps
+  it (keep.mbt), a novel cut at 16 MB too. reader-bars' golden changed on purpose.
+- The system bars follow the paper: a reader's as dark as its paper (night on a light theme, white on a dark one), the
+  viewer over a picture or a video dark, the player dark; the theme's again as each goes.
+- Flow 98 reader.
 
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
@@ -922,6 +1024,15 @@ while the card moved the list):
 | 73 pick-words | held still on the agent's words: a word picked, 复制 (已复制); held again, 引用, sent with words (flow 11 now takes 全选 first) | alice's message quotes a passage of the agent's words, not all of them; on macOS the pasteboard holds just a word of them |
 | 74 markdown | the agent's Markdown (e2e/fake `md:`): a table, TypeScript highlighted, its long line scrolled sideways by a finger; a link held: its menu, 复制链接 | the entry has the table and the code; the motion log has the code scrolled across; the link was not handed to the browser; on macOS the pasteboard has the address |
 | 75 open-link | a link in a message tapped: handed to the system (a scripted macOS run only logs it; Android's ACTION_VIEW) | `open-url:` with the address on the app's log |
+| 90 drive-download | a file of the lent folder held, ⋯ → 下载: 正在下载「说明.txt」, then 已保存到「下载」 | drive.read through the core; the device keeps the station's file byte for byte (macOS: MBUI_DOWNLOADS_DIR; Android: the emulator's Download/, as MediaStore named it) |
+| 91 drive-download-many | in a folder of its own (drive-big), a 48 MB file and a small one chosen, 下载 2 个文件: the big one's row says how far, then gone; 已保存到「下载」 | the big file read in a dozen parts; both kept byte for byte |
+| 92 drive-zip | a folder held, ⋯ → 下载为 zip: 正在下载「子文件夹.zip」, 已保存到「下载」 | the station zipped it (drive.zip); the kept zip holds the folder's file, its words the same |
+| 93 share-files | files shared in (Android: an ACTION_SEND intent of a photo; macOS: a photo and a PDF): the sheet heads with them, the test chat tapped, the files in its composer going up, sent with words | the entry's attachments; the photo at the station byte for byte; on Android the intent's file taken in |
+| 94 station-file-sent | ＋ → Station 文件, the novel ticked, 添加; its card's sheet: 文件; sent with words | drive.stage called; the entry's attachment is the file, no path line; the station keeps it byte for byte |
+| 95 recent-photos | (Android) the photo put in the emulator's gallery; ＋: the strip shows it after the camera; tapped, it goes up; sent | the gallery read and ranked; the entry's attachment, the photo byte for byte at the station |
+| 96 viewer | two pictures from the other device: the first grows from its thumbnail; ›; a swipe back; a box marked, its note said, 下载标注后的图片, 添加到对话, sent | imageNear stepped; the marks drawn by the host; the marked PNG kept on the device; the entry's attachment and the note's quote |
+| 97 video-frames | a video from the other device: 120 帧 read from the file (wherever it has played to), ‹ ‹ ›, 保存此帧 | 120 frames read; ‹ then › one frame apart; the kept frame a PNG of 640 × 360 named by that frame |
+| 98 reader | a novel in GB18030 (drive-gb) opened: its words; 排版 → 宋体; 下载 in the top bar | drive.read through the core; the serif face kept in the core's prefs; the kept file byte for byte |
 
 Flows 70–75 (branch mbui-chat-complete, 2026-10-20, Studio): the whole suite on macOS 63 of 67 at first, then the four
 again: 70 and 73 had checks macOS's grep and pbpaste read wrongly (fixed), 29 passed again (its composer row was 0.10,

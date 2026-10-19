@@ -223,9 +223,17 @@ fn play_back(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// Whether the page on top is dark whatever the theme (the player): the system bars' icons light over it.
-fn dark_page() -> Bool {
-  app.nav.top() is DrivePlay(_)
+/// Whether what is on top is dark or light whatever the theme (the system bars' icons follow it): the player and the
+/// viewer over a picture or a video dark; a reader as its paper. None: as the theme.
+fn page_dark(src : Source) -> Bool? {
+  match viewer.val {
+    Some(v) if v.closing < 0.0 && v.dark() => return Some(true)
+    _ => ()
+  }
+  if app.nav.top() is DrivePlay(_) {
+    return Some(true)
+  }
+  reader_paper_dark(src)
 }
 
 ///|

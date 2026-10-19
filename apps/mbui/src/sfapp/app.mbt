@@ -282,6 +282,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       update_first(src)
       // what another app shared in (share.mbt)
       share_in_frame(c)
+      // files being kept on the device, said once kept (keep.mbt)
+      keeps_frame(c)
       if wide_on.val {
         // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them
         wide_frame(c, src, w, all, invited)
@@ -537,8 +539,12 @@ fn appearance(src : Source) -> Unit {
     // (said on the log for scripted runs: e2e/flows checks the theme was taken)
     @host.log(if dark { "theme: dark" } else { "theme: light" })
   }
-  // the system bars follow the page under them: the player's is dark whatever the theme
-  let bars = dark || dark_page()
+  // the system bars follow the page under them: the player's and a picture's or a video's in the viewer are dark
+  // whatever the theme, a reader's as dark as its paper
+  let bars = match page_dark(src) {
+    Some(d) => d
+    None => dark
+  }
   if prefs is Some(_) && told_bars.val != Some(bars) {
     told_bars.val = Some(bars)
     @host.set_dark(bars)

@@ -59,8 +59,9 @@ test "a video plays in a native view, its bytes read through the core; its contr
   let (x, _, w, h) = holes[0]
   assert_eq(x, 12.0)
   assert_true((w - 366.0).abs() < 0.5 && (h - 366.0 * 720.0 / 1280.0).abs() < 0.5)
-  // the fake host's 10 s at 60 a second
-  assert_true(t.find(" / 600 帧") is Some(_))
+  // its frames' times asked of the host and counted (the fake host's file: three frames a 30th of a second apart)
+  assert_true(t.views().iter().any(fn(l) { l.has_prefix("control 1 20 ") }))
+  assert_true(t.find(" / 3 帧") is Some(_))
   t.back()
   t.settle() |> ignore
   assert_true(t.views().contains("close 1"))
@@ -125,4 +126,58 @@ test "two fingers pinch an image round the point between them; no tap comes of i
   t.touch(2, 150.0, 422.0)
   t.settle() |> ignore
   assert_eq(v.awake, awake)
+}
+
+///|
+test "stepping through the chat's images: the way to the next (imageNear), a tap goes there" {
+  let t = preview_tester("step")
+  assert_true(t.find("界面草图.png") is Some(_))
+  // fitted 600 × 400 in 366 wide: the way to the one after on the right
+  let v = viewer.val.unwrap()
+  let (_, after) = v.near(fixture("chat-preview-step"))
+  assert_true(after is Some(_))
+  t.tap(390.0 - 8.0 - 18.0, 422.0)
+  t.settle() |> ignore
+  assert_true(t.find("第二版.png") is Some(_))
+  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+}
+
+///|
+test "a swipe past a fifth of the stage goes to the next; a short one comes back" {
+  let t = preview_tester("step")
+  t.drag(300.0, 422.0, 260.0, 422.0)
+  t.settle() |> ignore
+  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  t.drag(300.0, 422.0, 100.0, 422.0)
+  t.settle() |> ignore
+  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+}
+
+///|
+test "marking: a box drawn on the picture is numbered, its note kept, its quote says where it is" {
+  let t = preview_tester("image")
+  marks_start()
+  t.settle() |> ignore
+  let v = viewer.val.unwrap()
+  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let k = w / v.zoom.nw
+  // from (100, 100) to (300, 200) in the picture's pixels
+  t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
+  t.settle() |> ignore
+  assert_eq(marking.shapes.length(), 1)
+  assert_eq(marking.shapes[0].kind, "box")
+  assert_eq(mark_numbers(marking.shapes).get(marking.shapes[0].id), Some(1))
+  // what is said of it, then its quote
+  marking.comments[marking.shapes[0].id] = "这里对齐"
+  let q = marks_quotes("界面草图-标注.png", "界面草图.png", v.zoom.nw, v.zoom.nh)
+  assert_eq(q.length(), 1)
+  assert_eq(q[0].0, "图片 界面草图.png 标注 1")
+  assert_true(q[0].1.has_prefix("框 · 左上角 ("))
+  assert_eq(q[0].2, "这里对齐")
+  // undone, none; redone, back
+  marks_undo()
+  assert_eq(marking.shapes.length(), 0)
+  marks_redo()
+  assert_eq(marking.shapes.length(), 1)
+  marks_leave()
 }

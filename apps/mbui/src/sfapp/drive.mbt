@@ -825,10 +825,13 @@ fn entry_row(
         }
       })
       |> ignore
+      let fetching = dv_fetches.get(dv_fetch_key(at.station, root, path))
       if busy {
         @sf.spinner(c, size=12.0) |> ignore
       } else if failed is Some(_) {
         @sf.icon(c, "info", size=12.0, color=t.p.red) |> ignore
+      } else if fetching is Some(n) {
+        download_chip(c, dv_fetch_key(at.station, root, path), n)
       } else if e.kind == "text" || e.kind == "markdown" {
         read_share(c, src, at.station, root, path)
       } else if e.dir {

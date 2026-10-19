@@ -23,7 +23,9 @@ $ADB logcat -c
 $ADB shell "screenrecord --time-limit 180 /sdcard/e2e-$NAME.mp4" >/dev/null 2>&1 &
 REC=$!
 sleep 1
-$ADB shell am start -n $PKG/dev.mbui.MainActivity --es env "'$ENVS'" >/dev/null
+# a flow's `#android-intent ARGS`: the intent it starts with (another app's share: -a …SEND --eu …STREAM content://…)
+INTENT=$(sed -n 's/^#android-intent //p' $SCRIPT | head -1)
+$ADB shell am start -n $PKG/dev.mbui.MainActivity $INTENT --es env "'$ENVS'" >/dev/null
 result=1
 deadline=$(($(date +%s) + ${E2E_FLOW_TIMEOUT:-300}))
 # the log, line by line (into a file, read as it grows: macOS's bash has no way to end a process substitution), until

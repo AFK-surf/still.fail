@@ -207,8 +207,8 @@ fn entry_sheet(
       if dv_pick_row(c, "entry/download", tr("android-misc.drive.download"), icon="download") {
         dv_close(c)
         done()
-        // nowhere to keep a file on this device yet: said so (the Android app saves it into 下载)
-        say(c, "这个版本还不能把文件下载到这台设备")
+        say(c, fill("android-misc.drive.downloading", [("name", e.name)]))
+        download_drive_file(c, src, at.station, root, path, e.name, e.mime)
       }
       if dv_pick_row(c, "entry/share", tr("android-misc.drive.share"), icon="external") {
         dv_close(c)
@@ -220,7 +220,8 @@ fn entry_sheet(
       dv_pick_row(c, "entry/zip", tr("web-pages.drive.downloadZip"), icon="download") {
       dv_close(c)
       done()
-      say(c, "这个版本还不能把文件下载到这台设备")
+      say(c, fill("android-misc.drive.downloading", [("name", e.name + ".zip")]))
+      download_drive_zip(c, src, at.station, root, path)
     }
     if dv_pick_row(c, "entry/copy", tr("web-pages.drive.copyPath"), icon="copy") {
       dv_close(c)
@@ -263,7 +264,7 @@ fn chosen_sheet(
       dv_pick_row(c, "chosen/download", dv_count("web-pages.drive.downloadMany", files.length()), icon="download") {
       dv_close(c)
       done()
-      say(c, "这个版本还不能把文件下载到这台设备")
+      download_drive_files(c, src, at.station, root, at.path, files)
     }
     if dv_pick_row(c, "chosen/copy", tr("web-pages.drive.copyPaths"), icon="copy") {
       dv_close(c)
