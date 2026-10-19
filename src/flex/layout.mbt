@@ -119,11 +119,9 @@ fn box_of(s : Style, cb_w : Double, cb_h : Double) -> Box {
   let pbw = pad_l + pad_r + bor_l + bor_r
   let pbh = pad_t + pad_b + bor_t + bor_b
   // content-box sizes grow by the padding and border (NaN stays NaN)
-  let (adj_w, adj_h) = if s.box_sizing == ContentBox {
-    (pbw, pbh)
-  } else {
-    (0.0, 0.0)
-  }
+  let content_box = s.box_sizing == ContentBox
+  let adj_w = if content_box { pbw } else { 0.0 }
+  let adj_h = if content_box { pbh } else { 0.0 }
   let mut min_w = resolve(s.min_width, cb_w) + adj_w
   let mut min_h = resolve(s.min_height, cb_h) + adj_h
   // a box is never smaller than its padding and border
@@ -186,6 +184,15 @@ fn touch(node : Node) -> Unit {
 }
 
 ///|
+/// The height size_node (size_uncached, layout_flex) found, beside the
+/// width it returns: read at once, before sizing anything else.
+let out_h : Ref[Double] = { val: 0.0 }
+
+///|
+/// The space between items distribute found, beside the lead it returns.
+let out_b : Ref[Double] = { val: 0.0 }
+
+///|
 /// Whether the current compute() reuses what nodes kept from the last.
 let reusing : Ref[Bool] = { val: false }
 
@@ -238,7 +245,8 @@ pub fn compute(
   // without a size, the root may grow up to its max size (Yoga)
   let aw = if known(w) { w } else if known(b.max_w) { b.max_w } else { width }
   let ah = if known(h) { h } else if known(b.max_h) { b.max_h } else { height }
-  let (fw, fh) = size_node(root, w, h, aw, ah, aw, ah, true)
+  let fw = size_node(root, w, h, aw, ah, aw, ah, true)
+  let fh = out_h.val
   root.width = fw
   root.height = fh
   let s = root.style
@@ -340,7 +348,7 @@ fn reusable(
 }
 
 ///|
-/// The border-box size of `node`. `kw`/`kh`: sizes already decided by the
+/// The border-box width of `node` (its height in out_h). `kw`/`kh`: sizes already decided by the
 /// parent (NaN if not). `aw`/`ah`: the space available (NaN: unbounded).
 /// `cb_w`/`cb_h`: the containing block, for percentages. With `perform`,
 /// also places its children.
@@ -357,7 +365,7 @@ fn size_node(
   cb_w : Double,
   cb_h : Double,
   perform : Bool,
-) -> (Double, Double) {
+) -> Double {
   touch(node)
   let c = node.cache
   if perform {
@@ -373,7 +381,8 @@ fn size_node(
       same(node.p_cbh, cb_h) {
       node.skip_gen = generation.val
       counters[1] = counters[1] + 1
-      return (node.p_w, node.p_h)
+      out_h.val = node.p_h
+      return node.p_w
     }
   } else {
     let mut k = 0
@@ -383,13 +392,15 @@ fn size_node(
         reusable(kw, aw, c[k], c[k + 2], c[k + 6]) &&
         reusable(kh, ah, c[k + 1], c[k + 3], c[k + 7]) {
         counters[1] = counters[1] + 1
-        return (c[k + 6], c[k + 7])
+        out_h.val = c[k + 7]
+        return c[k + 6]
       }
       k = k + 8
     }
   }
   counters[0] = counters[0] + 1
-  let (w, h) = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, perform)
+  let w = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, perform)
+  let h = out_h.val
   if perform {
     node.p_ok = true
     node.p_kw = kw
@@ -411,7 +422,8 @@ fn size_node(
   c.push(cb_h)
   c.push(w)
   c.push(h)
-  (w, h)
+  out_h.val = h
+  w
 }
 
 ///|
@@ -424,7 +436,7 @@ fn size_uncached(
   cb_w : Double,
   cb_h : Double,
   perform : Bool,
-) -> (Double, Double) {
+) -> Double {
   let s = node.style
   let b = box_for(node, cb_w, cb_h)
   let mut w = if known(kw) { kw } else { b.w }
@@ -457,7 +469,8 @@ fn size_uncached(
     Some(m) =>
       if node.children.length() == 0 {
         if known(w) && known(h) {
-          return (w, h)
+          out_h.val = h
+          return w
         }
         let iw = if known(w) {
           w - pbw
@@ -496,7 +509,8 @@ fn size_uncached(
         )
         let fw = if known(w) { w } else { clamp_size(mw + pbw, b.min_w, b.max_w) }
         let fh = if known(h) { h } else { clamp_size(mh + pbh, b.min_h, b.max_h) }
-        return (fw, fh)
+        out_h.val = fh
+        return fw
       }
     None => ()
   }
@@ -504,13 +518,16 @@ fn size_uncached(
 }
 
 ///|
+/// A flex item while its container is laid out. Items (and lines) are kept
+/// for the next container laid out at the same depth (item_pool), not made
+/// anew for each.
 priv struct Item {
-  node : Node
-  b : Box
-  auto_l : Bool
-  auto_t : Bool
-  auto_r : Bool
-  auto_b : Bool
+  mut node : Node
+  mut b : Box
+  mut auto_l : Bool
+  mut auto_t : Bool
+  mut auto_r : Bool
+  mut auto_b : Bool
   mut basis : Double
   mut hyp : Double // hypothetical main size (clamped basis)
   mut main : Double
@@ -520,15 +537,15 @@ priv struct Item {
   mut line : Int
   mut main_pos : Double
   mut cross_pos : Double
-  min_main : Double
-  max_main : Double
-  min_cross : Double
-  max_cross : Double
-  margin_main : Double
-  margin_cross : Double
-  stretch : Bool
-  align : Align
-  row : Bool
+  mut min_main : Double
+  mut max_main : Double
+  mut min_cross : Double
+  mut max_cross : Double
+  mut margin_main : Double
+  mut margin_cross : Double
+  mut stretch : Bool
+  mut align : Align
+  mut row : Bool
   mut ascent : Double
   // how far resolve_flexible's clamping moved it this round
   mut clamped : Double
@@ -536,11 +553,91 @@ priv struct Item {
 
 ///|
 priv struct Line {
-  start : Int
-  end : Int
+  mut start : Int
+  mut end : Int
   mut cross : Double
   mut pos : Double
   mut ascent : Double
+}
+
+///|
+/// Per depth of containers being laid out (each lays out its children,
+/// one level down, before it is done): the items and lines in use, and
+/// the ones made so far to take them from.
+priv struct Pool {
+  items : Array[Item]
+  item_store : Array[Item]
+  lines : Array[Line]
+  line_store : Array[Line]
+}
+
+///|
+let pools : Array[Pool] = []
+
+///|
+let depth : Ref[Int] = { val: 0 }
+
+///|
+/// Item `k` of pool `p` (from the store, or made), for `node` and its box.
+fn Pool::item(self : Pool, node : Node, b : Box) -> Item {
+  let k = self.items.length()
+  let it = if k < self.item_store.length() {
+    let it = self.item_store[k]
+    it.node = node
+    it.b = b
+    it
+  } else {
+    let it = {
+      node,
+      b,
+      auto_l: false,
+      auto_t: false,
+      auto_r: false,
+      auto_b: false,
+      basis: 0.0,
+      hyp: 0.0,
+      main: 0.0,
+      cross: 0.0,
+      frozen: false,
+      target: 0.0,
+      line: 0,
+      main_pos: 0.0,
+      cross_pos: 0.0,
+      min_main: 0.0,
+      max_main: 0.0,
+      min_cross: 0.0,
+      max_cross: 0.0,
+      margin_main: 0.0,
+      margin_cross: 0.0,
+      stretch: false,
+      align: Auto,
+      row: false,
+      ascent: 0.0,
+      clamped: 0.0,
+    }
+    self.item_store.push(it)
+    it
+  }
+  self.items.push(it)
+  it
+}
+
+///|
+fn Pool::line(self : Pool, start : Int, end : Int) -> Unit {
+  let k = self.lines.length()
+  let ln = if k < self.line_store.length() {
+    self.line_store[k]
+  } else {
+    let ln = { start: 0, end: 0, cross: 0.0, pos: 0.0, ascent: 0.0 }
+    self.line_store.push(ln)
+    ln
+  }
+  ln.start = start
+  ln.end = end
+  ln.cross = 0.0
+  ln.pos = 0.0
+  ln.ascent = 0.0
+  self.lines.push(ln)
 }
 
 ///|
@@ -561,7 +658,7 @@ fn layout_flex(
   aw : Double,
   ah : Double,
   perform : Bool,
-) -> (Double, Double) {
+) -> Double {
   let s = node.style
   let row = is_row(s.direction)
   let pbw = b.pbw()
@@ -593,8 +690,16 @@ fn layout_flex(
   // percentages of children resolve against this content box
   let cb_w = inner_w
   let cb_h = inner_h
-  // flex items
-  let items : Array[Item] = []
+  // flex items, from the pool of this depth
+  let d = depth.val
+  depth.val = d + 1
+  if d >= pools.length() {
+    pools.push({ items: [], item_store: [], lines: [], line_store: [] })
+  }
+  let pool = pools[d]
+  let items = pool.items
+  items.clear()
+  pool.lines.clear()
   let flow = flow_children(node)
   for c in flow {
     let cs = c.style
@@ -611,34 +716,31 @@ fn layout_flex(
     } else {
       cs.margin.left == Auto || cs.margin.right == Auto
     }
-    let item = {
-      node: c,
-      b: cb,
-      auto_l: cs.margin.left == Auto,
-      auto_t: cs.margin.top == Auto,
-      auto_r: cs.margin.right == Auto,
-      auto_b: cs.margin.bottom == Auto,
-      basis: 0.0,
-      hyp: 0.0,
-      main: 0.0,
-      cross: 0.0,
-      frozen: false,
-      target: 0.0,
-      line: 0,
-      main_pos: 0.0,
-      cross_pos: 0.0,
-      min_main: if row { cb.min_w } else { cb.min_h },
-      max_main: if row { cb.max_w } else { cb.max_h },
-      min_cross: if row { cb.min_h } else { cb.min_w },
-      max_cross: if row { cb.max_h } else { cb.max_w },
-      margin_main,
-      margin_cross,
-      stretch: al == Stretch && !known(cross_style) && !auto_cross_margin,
-      align: al,
-      row,
-      ascent: 0.0,
-      clamped: 0.0,
-    }
+    let item = pool.item(c, cb)
+    item.auto_l = cs.margin.left == Auto
+    item.auto_t = cs.margin.top == Auto
+    item.auto_r = cs.margin.right == Auto
+    item.auto_b = cs.margin.bottom == Auto
+    item.basis = 0.0
+    item.hyp = 0.0
+    item.main = 0.0
+    item.cross = 0.0
+    item.frozen = false
+    item.target = 0.0
+    item.line = 0
+    item.main_pos = 0.0
+    item.cross_pos = 0.0
+    item.min_main = if row { cb.min_w } else { cb.min_h }
+    item.max_main = if row { cb.max_w } else { cb.max_h }
+    item.min_cross = if row { cb.min_h } else { cb.min_w }
+    item.max_cross = if row { cb.max_h } else { cb.max_w }
+    item.margin_main = margin_main
+    item.margin_cross = margin_cross
+    item.stretch = al == Stretch && !known(cross_style) && !auto_cross_margin
+    item.align = al
+    item.row = row
+    item.ascent = 0.0
+    item.clamped = 0.0
     // flex base size
     let basis_style = resolve(cs.basis, inner_main)
     let main_style = if row { cb.w } else { cb.h }
@@ -659,7 +761,7 @@ fn layout_flex(
       if !known(kc) && item.stretch && known(inner_cross) && s.wrap == NoWrap {
         kc = fmax(inner_cross - margin_cross, 0.0)
       }
-      let (cw, ch) = if row {
+      let cw = if row {
         size_node(
           c,
           undef,
@@ -682,16 +784,16 @@ fn layout_flex(
           false,
         )
       }
+      let ch = out_h.val
       basis = if row { cw } else { ch }
     }
     let pb_main = if row { cb.pbw() } else { cb.pbh() }
     basis = fmax(basis, pb_main)
     item.basis = basis
     item.hyp = clamp_size(basis, item.min_main, item.max_main)
-    items.push(item)
   }
   // lines
-  let lines : Array[Line] = []
+  let lines = pool.lines
   let wrap = s.wrap != NoWrap
   let line_limit = if known(inner_main) { inner_main } else { avail_main }
   let mut start = 0
@@ -702,7 +804,7 @@ fn layout_flex(
       i > start &&
       known(line_limit) &&
       sum + gap_main + outer > line_limit + 0.0001 {
-      lines.push({ start, end: i, cross: 0.0, pos: 0.0, ascent: 0.0 })
+      pool.line(start, i)
       start = i
       sum = outer
     } else {
@@ -710,7 +812,7 @@ fn layout_flex(
     }
   }
   if items.length() > 0 || lines.length() == 0 {
-    lines.push({ start, end: items.length(), cross: 0.0, pos: 0.0, ascent: 0.0 })
+    pool.line(start, items.length())
   }
   // resolve flexible lengths, line by line
   let mut max_line_main = 0.0
@@ -779,11 +881,12 @@ fn layout_flex(
         continue
       }
       let ac = if known(avail_cross) { avail_cross - it.margin_cross } else { undef }
-      let (cw, ch) = if row {
+      let cw = if row {
         size_node(it.node, it.main, kc, it.main, ac, cb_w, cb_h, false)
       } else {
         size_node(it.node, kc, it.main, ac, it.main, cb_w, cb_h, false)
       }
+      let ch = out_h.val
       ignore(cs)
       it.cross = clamp_size(if row { ch } else { cw }, it.min_cross, it.max_cross)
     }
@@ -802,8 +905,10 @@ fn layout_flex(
         if reusing.val {
           abort("flex: compute(reuse=true) with an item aligned by baseline")
         }
-        let (iw, ih) = (it.main, it.cross)
-        let (rw, rh) = size_node(it.node, iw, ih, iw, ih, cb_w, cb_h, true)
+        let iw = it.main
+        let ih = it.cross
+        let rw = size_node(it.node, iw, ih, iw, ih, cb_w, cb_h, true)
+        let rh = out_h.val
         it.node.width = rw
         it.node.height = rh
         it.ascent = node_baseline(it.node) + it.b.mar_t
@@ -864,12 +969,13 @@ fn layout_flex(
     total_cross = total_cross + ln.cross
   }
   let free_cross = cross_size - total_cross
-  let (lead, between) = distribute(
+  let lead = distribute(
     if wrap { s.align_content } else { FlexStart },
     free_cross,
     nl,
     true,
   )
+  let between = out_b.val
   let mut cp = lead
   for ln in lines {
     ln.pos = cp
@@ -907,19 +1013,20 @@ fn layout_flex(
     } else {
       0.0
     }
-    let (lead, between) = if auto_margins > 0 {
-      (0.0, 0.0)
+    let lead = if auto_margins > 0 {
+      out_b.val = 0.0
+      0.0
     } else {
       distribute(s.justify, free, n, false)
     }
+    let between = out_b.val
     let mut p = lead
     for k in ln.start..<ln.end {
       let it = items[k]
-      let (m_start, m_end, a_start, a_end) = if row {
-        (it.b.mar_l, it.b.mar_r, it.auto_l, it.auto_r)
-      } else {
-        (it.b.mar_t, it.b.mar_b, it.auto_t, it.auto_b)
-      }
+      let m_start = if row { it.b.mar_l } else { it.b.mar_t }
+      let m_end = if row { it.b.mar_r } else { it.b.mar_b }
+      let a_start = if row { it.auto_l } else { it.auto_t }
+      let a_end = if row { it.auto_r } else { it.auto_b }
       let ms = m_start + (if a_start { per_auto } else { 0.0 })
       let me = m_end + (if a_end { per_auto } else { 0.0 })
       if reverse {
@@ -929,11 +1036,10 @@ fn layout_flex(
       }
       p = p + ms + it.main + me + gap_main + between
       // cross axis within the line
-      let (c_start, c_end, ca_start, ca_end) = if row {
-        (it.b.mar_t, it.b.mar_b, it.auto_t, it.auto_b)
-      } else {
-        (it.b.mar_l, it.b.mar_r, it.auto_l, it.auto_r)
-      }
+      let c_start = if row { it.b.mar_t } else { it.b.mar_l }
+      let c_end = if row { it.b.mar_b } else { it.b.mar_r }
+      let ca_start = if row { it.auto_t } else { it.auto_l }
+      let ca_end = if row { it.auto_b } else { it.auto_r }
       let free_c = ln.cross - it.cross - c_start - c_end
       let off = if ca_start && ca_end {
         fmax(free_c, 0.0) / 2.0
@@ -966,15 +1072,14 @@ fn layout_flex(
     let ox = b.bor_l + b.pad_l
     let oy = b.bor_t + b.pad_t
     for it in items {
-      let (iw, ih) = if row { (it.main, it.cross) } else { (it.cross, it.main) }
-      let (rw, rh) = size_node(it.node, iw, ih, iw, ih, cb_w, cb_h, true)
+      let iw = if row { it.main } else { it.cross }
+      let ih = if row { it.cross } else { it.main }
+      let rw = size_node(it.node, iw, ih, iw, ih, cb_w, cb_h, true)
+      let rh = out_h.val
       it.node.width = rw
       it.node.height = rh
-      let (x, y) = if row {
-        (it.main_pos, it.cross_pos)
-      } else {
-        (it.cross_pos, it.main_pos)
-      }
+      let x = if row { it.main_pos } else { it.cross_pos }
+      let y = if row { it.cross_pos } else { it.main_pos }
       it.node.left = ox + x + inset_offset(it.node.style, fw - pbw, fh - pbh, true)
       it.node.top = oy + y + inset_offset(it.node.style, fw - pbw, fh - pbh, false)
     }
@@ -985,7 +1090,9 @@ fn layout_flex(
       }
     }
   }
-  (fw, fh)
+  depth.val = d
+  out_h.val = fh
+  fw
 }
 
 ///|
@@ -1029,35 +1136,39 @@ fn zero(n : Node) -> Unit {
 }
 
 ///|
-/// Leading space and space between items for justify / align-content.
-fn distribute(a : Align, free : Double, n : Int, content : Bool) -> (Double, Double) {
+/// Leading space for justify / align-content; the space between items in
+/// out_b.
+fn distribute(a : Align, free : Double, n : Int, content : Bool) -> Double {
   ignore(content)
+  out_b.val = 0.0
   if n <= 0 {
-    return (0.0, 0.0)
+    return 0.0
   }
   let nd = n.to_double()
   match a {
-    FlexEnd => (free, 0.0)
-    Center => (free / 2.0, 0.0)
-    SpaceBetween =>
+    FlexEnd => free
+    Center => free / 2.0
+    SpaceBetween => {
       if n > 1 && free > 0.0 {
-        (0.0, free / (nd - 1.0))
-      } else {
-        (0.0, 0.0)
+        out_b.val = free / (nd - 1.0)
       }
+      0.0
+    }
     SpaceAround =>
       if free > 0.0 {
-        (free / nd / 2.0, free / nd)
+        out_b.val = free / nd
+        free / nd / 2.0
       } else {
-        (0.0, 0.0)
+        0.0
       }
     SpaceEvenly =>
       if free > 0.0 {
-        (free / (nd + 1.0), free / (nd + 1.0))
+        out_b.val = free / (nd + 1.0)
+        free / (nd + 1.0)
       } else {
-        (0.0, 0.0)
+        0.0
       }
-    _ => (0.0, 0.0)
+    _ => 0.0
   }
 }
 
@@ -1230,7 +1341,7 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
   if known(h) {
     h = clamp_size(h, b.min_h, b.max_h)
   }
-  let (fw, fh) = size_node(
+  let fw = size_node(
     c,
     w,
     h,
@@ -1240,7 +1351,9 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
     ch,
     false,
   )
-  let (rw, rh) = size_node(c, fw, fh, fw, fh, cw, ch, true)
+  let fh = out_h.val
+  let rw = size_node(c, fw, fh, fw, fh, cw, ch, true)
+  let rh = out_h.val
   c.width = rw
   c.height = rh
   // static position: where it would sit in its parent's content box
