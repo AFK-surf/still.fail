@@ -1458,7 +1458,7 @@ private fun Out(ctx: Here, o: Outgoing) {
             // another sent soon after it says so for both.
             val flight = LocalFlight.current
             val host = LocalFlightHost.current
-            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { UnderWay(t("android-chat.chat.sending")) }
+            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { UnderWay(o.waits ?: t("android-chat.chat.sending")) }
         }
     }
 }

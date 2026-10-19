@@ -1956,7 +1956,10 @@ data class Outgoing (
 	/// Another sent soon after it: as a message's `followed` (sending, it says so under the last only).
 	val followed: Boolean? = null,
 	/// Sent soon after the viewer's message or outgoing one before it: as a message's `joined`.
-	val joined: Boolean? = null
+	val joined: Boolean? = null,
+	/// Sending, why it has not reached the station yet (its station is updating), in words: under it in place of
+	/// 正在发送. Absent otherwise.
+	val waits: String? = null
 )
 
 /// A station's mesh link: connecting | online | offline | error.

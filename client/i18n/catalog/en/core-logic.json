@@ -479,6 +479,7 @@
   "core-logic.looks.update.sending": "{progress}; messages still sending, they continue once reconnected",
   "core-logic.looks.update.updating": "Updating",
   "core-logic.looks.update.updating.text": "“{name}” is updating",
+  "core-logic.looks.update.waits": "Station is updating; sends once it finishes",
   "core-logic.looks.working": "{n} working",
   "core-logic.mesh.bad_device_key": "Device key must be 32 bytes",
   "core-logic.mesh.bad_relay": "Invalid relay address: {error}",

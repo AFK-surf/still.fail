@@ -294,6 +294,20 @@ const followed: DemoExtension = {
     return { ...chat, messages: [...chat.messages, ...said] };
   },
 };
+/** A message sent while the chat's station updates: it waits for the update to finish, saying so under it
+ *  (`Outgoing.waits`), and the chat's head says the station is updating. */
+const sentUpdating: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "chat" || !value) return undefined;
+    const chat = value as ChatView;
+    const at = Date.now() - 20_000;
+    return {
+      ...chat,
+      outbox: [{ id: "o-updating", text: "更新完把首页的图换成新的", attachments: [], quotes: [], createdAt: at, state: "sending", time: { createdAt: stamp(at) }, waits: "station 正在更新，完成后发送" }],
+      stationUpdate: { tone: "busy", label: "更新中", text: "「Studio」正在更新", station: "Studio", detail: "正在等待 station 重新连接；消息仍在发送，连接恢复后自动继续", from: "0.1.3640", to: "0.1.3650", open: false, canUpdate: false, dismissible: false },
+    };
+  },
+};
 /** One login's card, as an agent's message has it. */
 const loginCard = (id: string, padding?: number) => loginCards([id], padding);
 /** A chat's login cards, one for each login, as an agent's message has them. */
@@ -546,6 +560,8 @@ export const stories: Story[] = [
   { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
   { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
   { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
+  { id: "app-chat-sent-updating", group: "应用", title: "对话 · station 更新时发出的消息", app: true, demo: sentUpdating },
+  { id: "phone-chat-sent-updating", group: "手机", title: "对话 · station 更新时发出的消息", app: true, phone: true, demo: sentUpdating },
   { id: "phone-chat-files", group: "手机", title: "对话 · 消息里的附件", app: true, phone: true, files: true },
   { id: "app-chat-history", group: "应用", title: "执行历史", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }] },
   { id: "app-chat-history-turns", group: "应用", title: "执行历史 · 一轮一轮", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }], demo: historyTurns },

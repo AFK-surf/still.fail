@@ -374,6 +374,7 @@
   "core-logic.looks.update.sending": "{progress}；消息仍在发送，连接恢复后自动继续",
   "core-logic.looks.update.updating": "更新中",
   "core-logic.looks.update.updating.text": "「{name}」正在更新",
+  "core-logic.looks.update.waits": "station 正在更新，完成后发送",
   "core-logic.looks.working": "{n} 台运行中",
   "core-logic.mesh.bad_device_key": "设备密钥应为 32 字节",
   "core-logic.mesh.bad_relay": "中继地址无效：{error}",

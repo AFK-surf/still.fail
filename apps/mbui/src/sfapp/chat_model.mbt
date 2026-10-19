@@ -320,6 +320,8 @@ pub(all) struct Outgoing {
   followed : Bool
   /// the message's seq once the station has it (-1 before)
   seq : Double
+  /// why it has not reached the station yet, in place of 正在发送 ("" none)
+  waits : String
 }
 
 ///|
@@ -416,6 +418,7 @@ pub fn chat_view(v : Json) -> ChatView {
         joined: flag(s, "joined"),
         followed: flag(s, "followed"),
         seq: opt_number(s, "seq").unwrap_or(-1.0),
+        waits: text(s, "waits"),
       }
     }),
     offline: flag(s, "offline"),

@@ -1351,13 +1351,14 @@ fn outgoing(c : @ui.Ctx, src : Source, here : Here, o : Outgoing) -> Unit {
       })
       |> ignore
     } else if !o.followed {
+      let sending = if o.waits != "" { o.waits } else { tr("android-chat.chat.sending") }
       // not seen while its words fly here, its room kept (Chat.kt Out: a layer at no opacity)
       match flying.val {
         Some(_) => {
-          let w = c.box(fn() { under_way(c, tr("android-chat.chat.sending")) })
+          let w = c.box(fn() { under_way(c, sending) })
           c.look(w, @ui.look(alpha=0.0))
         }
-        None => under_way(c, tr("android-chat.chat.sending"))
+        None => under_way(c, sending)
       }
     }
   })

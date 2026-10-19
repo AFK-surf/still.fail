@@ -174,6 +174,13 @@ export function memorySections(text: string): J[] {
   });
 }
 
+/// The outbox as its station's update leaves it (`notice`, stationUpdate's): what has not reached the station waits for
+/// the update to finish, said under it (`waits`) in place of 正在发送.
+export function outboxWaits(outbox: J[], notice: J): J[] {
+  if (get(notice, "tone") !== "busy") return outbox;
+  return outbox.map((e) => (get(e, "state") === "sending" && (get(e, "seq") === undefined || get(e, "seq") === null) ? { ...e, waits: t("core-logic.looks.update.waits") } : e));
+}
+
 /// Kept overview progress survives a handover's disconnected interval. No update is inferred from a disconnect.
 /// `name` is the station's as its workspace has it, so people can tell which one it is.
 export function stationUpdate(overview: J, chat: J, dismissed: string | null, open: boolean, manager: boolean, name = ""): J {

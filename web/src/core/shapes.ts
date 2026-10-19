@@ -1982,6 +1982,11 @@ export interface Outgoing {
 	followed?: boolean;
 	/** Sent soon after the viewer's message or outgoing one before it: as a message's `joined`. */
 	joined?: boolean;
+	/**
+	 * Sending, why it has not reached the station yet (its station is updating), in words: under it in place of
+	 * 正在发送. Absent otherwise.
+	 */
+	waits?: string;
 }
 
 /** A station's mesh link: connecting | online | offline | error. */

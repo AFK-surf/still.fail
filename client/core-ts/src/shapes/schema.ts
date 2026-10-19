@@ -2212,6 +2212,7 @@ export const SHAPES: Record<string, Shape> = {
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`, `lastActiveAt`, …)." }],
     ["followed", opt("bool"), { doc: "Another sent soon after it: as a message's `followed` (sending, it says so under the last only)." }],
     ["joined", opt("bool"), { doc: "Sent soon after the viewer's message or outgoing one before it: as a message's `joined`." }],
+    ["waits", opt("String"), { doc: "Sending, why it has not reached the station yet (its station is updating), in words: under it in place of\n正在发送. Absent otherwise." }],
   ], { doc: "A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it." }),
   Person: struct([
     ["id", "String"],
