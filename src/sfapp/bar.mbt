@@ -462,7 +462,7 @@ fn set_bars(src : Source, ws : String, sets : Array[Array[String]], cur : Int) -
     "sets": Json::array(sets.map(fn(s) { Json::array(s.map(fn(p) { Json::string(p) })) })),
     "current": Json::number(cur.to_double()),
   })
-  let by : Map[String, Json] = Map::new()
+  let by : Map[String, Json] = Map([])
   by[ws] = whole
   (src.call)("prefs.set", Json::object({ "barsBy": Json::object(by) }), fn(_) {  })
 }
@@ -719,7 +719,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(ws.id) })
   let decisions = count(field(field(marks.value, "workspaces"), ws.id), "decisions")
   let chats = (src.topic)("chats", { "scope": Json::string(ws.id), "mine": Json::boolean(false) })
-  let dots : Map[String, Int64] = Map::new()
+  let dots : Map[String, Int64] = Map([])
   if decisions > 0 {
     dots["decisions"] = t.p.accent
   }

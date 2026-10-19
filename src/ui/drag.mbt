@@ -44,7 +44,7 @@ pub(all) struct Drag {
 
 ///|
 /// The drag areas drawn, by id.
-let drags : Map[Int, Drag] = Map::new()
+let drags : Map[Int, Drag] = Map([])
 
 ///|
 /// A box that takes the drags landing on it (see the file's head), as `Ctx::box` otherwise lays out what it holds;
