@@ -72,7 +72,7 @@ extern "js" fn js_clipboard_set(s : String) -> Unit =
   #|(s) => globalThis.__mbhost.clipboardSet(s)
 
 extern "js" fn js_log(s : String) -> Unit =
-  #|(s) => globalThis.__mbhost.log(s)
+  #|(s) => globalThis.__mbhost ? globalThis.__mbhost.log(s) : console.log(s)
 
 extern "js" fn js_bench_mode() -> Int =
   #|() => globalThis.__mbhost.benchMode()
