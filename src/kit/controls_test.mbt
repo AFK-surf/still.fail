@@ -128,6 +128,108 @@ test "toggle group that slides: its thumb behind the pressed item, getting there
 }
 
 ///|
+/// A sliding group (its thumb drawn 0x123456) in a box that cuts what is outside it, moved `x` sideways; what is
+/// pressed in `v`, the last item's words in `last`.
+fn slid_group(x : Ref[Double], v : Ref[Array[String]], last? : Ref[String] = Ref("Right")) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
+        c.box(tx=x.val, fn() {
+          v.val = toggle_group(
+            c,
+            "seg",
+            [item("l", label="Left"), item("m", label="Middle"), item("r", label=last.val)],
+            v.val,
+            slide=true,
+            thumb=fn(c, w, h) { c.box(w=Px(w), h=Px(h), bg=0x123456FFL, fn() {  }) |> ignore },
+            label="Seg",
+          ).value
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=200.0,
+  )
+}
+
+///|
+/// The thumb's box (x, y, w, h), drawn once.
+fn thumb_of(t : @ui.Tester) -> (Double, Double, Double, Double) {
+  let rs = t.drawn_rects().filter(fn(r) { r.4 == 0x123456FFL })
+  if rs.length() != 1 {
+    abort("the thumb drawn \{rs.length()} times")
+  }
+  (rs[0].0, rs[0].1, rs[0].2, rs[0].3)
+}
+
+///|
+/// Whether the thumb is where the words `s` are, to a hundredth of a point either way.
+fn thumb_on(t : @ui.Tester, s : String) -> Bool {
+  let (x, _, w, _) = thumb_of(t)
+  let (ix, _, iw, _) = t.rect_of(s).unwrap()
+  x <= ix + 0.01 && ix + iw <= x + w + 0.01
+}
+
+///|
+test "a sliding group coming in past an edge that cuts it: its thumb whole from the first, nothing to grow on after" {
+  // (a page sliding in: the group's last item cut at the edge from the first frame, halfway across it)
+  let (rx, rw, full) = {
+    let at_rest = slid_group(Ref(0.0), Ref(["r"]))
+    at_rest.draw()
+    let (rx, _, rw, _) = at_rest.rect_of("Right").unwrap()
+    (rx, rw, thumb_of(at_rest).2)
+  }
+  let x = Ref(300.0 - rx - rw / 2.0)
+  let v = Ref(["r"])
+  let t = slid_group(x, v)
+  t.draw()
+  let (_, _, w0, _) = thumb_of(t)
+  assert_eq(w0, full)
+  x.val = 0.0
+  t.draw()
+  let (_, _, w1, _) = thumb_of(t)
+  assert_eq(w0, w1)
+  assert_true(thumb_on(t, "Right"))
+  t.assert_idle()
+}
+
+///|
+test "the pressed item laid out anew (its words longer): its thumb on it in the same frame, no motion" {
+  let last = Ref("Right")
+  let t = slid_group(Ref(0.0), Ref(["r"]), last~)
+  t.draw()
+  last.val = "Right of it"
+  t.draw()
+  assert_true(thumb_on(t, "Right of it"))
+  t.assert_idle()
+}
+
+///|
+test "another item pressed: the thumb on its way between the two, and another chosen mid-way it goes on from there" {
+  let v = Ref(["l"])
+  let t = slid_group(Ref(0.0), v)
+  t.draw()
+  t.click(@ui.Radio, label="Right")
+  assert_eq(v.val, ["r"])
+  // a moment on its way
+  let mid_way = 60.0
+  t.run_for(mid_way)
+  let before = thumb_of(t)
+  assert_false(thumb_on(t, "Left"))
+  assert_false(thumb_on(t, "Right"))
+  // another chosen at the same moment (the view's choice): from where it is, not from an item
+  v.val = ["m"]
+  t.draw()
+  let after = thumb_of(t)
+  assert_true((after.0 - before.0).abs() < 0.000001 && (after.2 - before.2).abs() < 0.000001)
+  t.run_for(t.motion_end() - t.time())
+  assert_true(thumb_on(t, "Middle"))
+  t.assert_idle()
+}
+
+///|
 test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment and Decrement; held in range" {
   let v = Ref(50.0)
   let t = @ui.Tester::new(fn(c) {

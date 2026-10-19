@@ -129,9 +129,9 @@ pub fn toggle_group(
   let gi = c.box(fn() {
     c.roving(key, orientation~, wrap~, current~, fn() {
       ground(c, { vertical, disabled }, fn() {
-        if slide {
-          slid_thumb(c, key, id, first_on, thumb)
-        }
+        // the thumb behind the items, laid out over the one pressed (Ctx::cover)
+        let holder = if slide { c.layer(fn() {  }) } else { -1 }
+        let nodes : Array[Int] = []
         for k, it in items {
           let iid = part_id(id, k)
           let off = disabled || it.disabled
@@ -164,6 +164,7 @@ pub fn toggle_group(
             last: k == items.length() - 1,
           }
           let i = c.box(id=if off { 0 } else { iid }, fn() { look(c, st) })
+          nodes.push(i)
           if multiple {
             c.semantics(i, Button, id=iid, label=it.label, pressed=on, disabled=off, actions=pick(off, [], [Activate]))
           } else {
@@ -174,49 +175,18 @@ pub fn toggle_group(
             ))
           }
         }
+        if slide {
+          match items.search_by(fn(it) { now.contains(it.value) }) {
+            Some(k) => c.cover(key + "/thumb", holder, nodes, k, thumb)
+            None => ()
+          }
+        }
       })
     })
   })
   c.semantics(gi, Group, label~, disabled~)
   let changed = now.length() != value.length() || now.iter().any(fn(v) { !value.contains(v) })
   { value: now, response: { ..any, id, changed: told(c, changed) } }
-}
-
-///|
-/// A sliding group's thumb (see `toggle_group`): over its whole ground, behind its items, at item `on`'s place of the
-/// last frame (measured from the ground's own), getting there on a spring; none until it has been drawn once.
-fn slid_thumb(
-  c : @ui.Ctx,
-  key : String,
-  id : Int,
-  on : Int?,
-  thumb : (@ui.Ctx, Double, Double) -> Unit,
-) -> Unit {
-  let area = c.id(key + "/thumb-area")
-  let at = match (on, c.rect_of(area)) {
-    (Some(k), Some((gx, gy, _, _))) =>
-      match c.rect_of(part_id(id, k)) {
-        Some((x, y, w, h)) => Some((x - gx, y - gy, w, h))
-        None => None
-      }
-    _ => None
-  }
-  c.layer(fn() {
-    c.box(id=area, w=Fill(1.0), h=Fill(1.0), fn() {
-      match at {
-        Some((x, y, w, h)) => {
-          let x = c.spring(key + "/thumb-x", x)
-          let y = c.spring(key + "/thumb-y", y)
-          let w = c.spring(key + "/thumb-w", w)
-          let h = c.spring(key + "/thumb-h", h)
-          c.box(w=Px(0.0), h=Px(0.0), tx=x, ty=y, fn() { thumb(c, w, h) }) |> ignore
-        }
-        None => if on is Some(_) { c.request_frame() }
-      }
-    })
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|

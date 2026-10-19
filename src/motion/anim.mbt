@@ -26,6 +26,8 @@ pub struct Anim {
   /// the frame it was last stepped in, and last used in
   mut stepped : Int
   mut used : Int
+  /// what it is said to move by (Ctx::moving)
+  id : Int
 }
 
 ///|
@@ -46,6 +48,7 @@ pub fn Anim::new(v : Double) -> Anim {
     running: false,
     stepped: -1,
     used: -1,
+    id: @ui.current().mover_id(),
   }
 }
 
@@ -66,10 +69,12 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
   }
   if self.start < 0.0 {
     if frame <= self.asked {
-      c.request_frame()
+      // it starts at the next frame
       return
     }
     self.start = c.now()
+    // (said to move again: not read in the frame it was to start in, it had been let be)
+    c.moving(self.id, self as &@ui.Moving)
   }
   let ms = c.now() - self.start
   match (self.gen, self.spec) {
@@ -77,7 +82,6 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
       // as Motion plays it: its generator at the time since it started (whole ms), done when it says so
       let t = ms.floor() - tr.delay
       if t < 0.0 {
-        c.request_frame()
         return
       }
       let st = g.next(t)
@@ -85,8 +89,6 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
       self.velocity = g.velocity(t, initial=self.v0)
       if st.done || ms.floor() >= self.dur {
         self.finish()
-      } else {
-        c.request_frame()
       }
       return
     }
@@ -97,8 +99,6 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
   self.velocity = v
   if ms.floor() >= self.dur {
     self.finish()
-  } else {
-    c.request_frame()
   }
 }
 
@@ -107,6 +107,24 @@ fn Anim::finish(self : Anim) -> Unit {
   self.value = self.end
   self.velocity = 0.0
   self.running = false
+}
+
+///|
+/// When it is there (whole ms, as its time goes), asked at each frame's end while it moves (and by whoever wants the
+/// last end: Tester::motion_end): read only, the same whoever asks first. Told to go, it starts at the first frame
+/// after (its first step there): until then +inf; not read in that frame (nothing shows it), at rest, said to move
+/// again by its first step.
+pub impl @ui.Moving for Anim with rest_at(self, now, frame) {
+  ignore(now)
+  if !self.running {
+    -1.0
+  } else if self.start >= 0.0 {
+    self.start + self.dur.ceil()
+  } else if frame <= self.asked {
+    @double.infinity
+  } else {
+    -1.0
+  }
 }
 
 ///|
@@ -163,7 +181,8 @@ pub fn Anim::animate(self : Anim, target : Double, spec : Spec, velocity? : Doub
     self.finish()
   } else {
     self.running = true
-    c.request_frame()
+    // said once, as it is told to go: frames until it is there (it starts at the next frame)
+    c.moving(self.id, self as &@ui.Moving)
   }
 }
 

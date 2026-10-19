@@ -146,3 +146,35 @@ test "the pager turns on a tap at either side, a drag, and the arrow keys" {
   t.press("Left")
   assert_eq(index[0], 1)
 }
+
+///|
+/// A pager over three blank pages, its index kept in `index`.
+fn blank_pager(key : String, index : Array[Int]) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      index[0] = c.pager(key, 3, index[0], fn(_) {  })
+    },
+    w=300.0,
+    h=500.0,
+  )
+}
+
+///|
+test "a turned page slides by the clock: where it is at 120 ms is the same in one frame or in seven" {
+  // a moment mid-slide (the slide is at rest in about 200 ms)
+  let mid_slide = 120.0
+  let a = [0]
+  let one = blank_pager("one", a)
+  one.tap(280.0, 250.0)
+  one.frame(ms=mid_slide)
+  let at_once = one.dump()
+  let b = [0]
+  let seven = blank_pager("seven", b)
+  seven.tap(280.0, 250.0)
+  seven.run_for(mid_slide)
+  assert_eq(seven.dump(), at_once)
+  // on its way still, then at rest, and no frame after
+  assert_true(at_once.contains("item=1") && !at_once.contains("col 0,0 300x500 item=1"))
+  seven.run_for(seven.motion_end() - seven.time())
+  seven.assert_idle()
+}

@@ -51,10 +51,7 @@
       "src/kit/menu.mbt": 1,
       "src/kit/popover.mbt": 1,
       "src/kit/progress.mbt": 1,
-      "src/kit/sheet.mbt": 5,
-      "src/kit/toggle.mbt": 1,
       "src/kitdemo/foundation.mbt": 1,
-      "src/motion/anim.mbt": 5,
       "src/motion/layer.mbt": 2,
       "src/textdiff/main.mbt": 1,
       "src/ui/code_field.mbt": 1,
@@ -68,7 +65,7 @@
       "src/ui/native.mbt": 3,
       "src/ui/nav.mbt": 5,
       "src/ui/overlay.mbt": 5,
-      "src/ui/reader.mbt": 4,
+      "src/ui/reader.mbt": 1,
       "src/ui/scroll.mbt": 6,
       "src/ui/semantics.mbt": 2,
       "src/ui/sideways.mbt": 1
@@ -149,7 +146,7 @@
       "src/kit/menu.mbt": 2,
       "src/kit/popover.mbt": 2,
       "src/kit/progress.mbt": 1,
-      "src/kit/sheet.mbt": 5,
+      "src/kit/sheet.mbt": 1,
       "src/kit/time.mbt": 2
     },
     "wall-clock": {},

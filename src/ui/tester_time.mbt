@@ -61,3 +61,11 @@ fn by_of(l : SourceLoc?) -> String {
     None => ""
   }
 }
+
+///|
+/// When the last motion said is at rest (the frames' clock, as `time`; -1: none moves): a test runs to it by
+/// run_for(motion_end() - time()).
+pub fn Tester::motion_end(self : Tester) -> Double {
+  ignore(self)
+  g().motion_end()
+}

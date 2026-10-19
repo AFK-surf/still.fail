@@ -97,14 +97,6 @@ struct EditorState {
 }
 
 ///|
-struct Spring {
-  mut x : Double
-  mut v : Double
-  mut target : Double
-  mut frame : Int
-}
-
-///|
 pub struct Ctx {
   nodes : Array[Node]
   mut count : Int
@@ -166,7 +158,14 @@ pub struct Ctx {
   // persistent widget state
   lists : Map[Int, ListState]
   editors : Map[Int, EditorState]
-  springs : Map[Int, Spring]
+  springs : Map[Int, SpringPath]
+  /// what is said to move (motion_data.mbt), the last id given to one, and whether a cycle was read this frame
+  movers : Map[Int, &Moving]
+  mut mover_ids : Int
+  mut cycling : Bool
+  /// covers by their ids, and those asked for this frame (cover.mbt)
+  covers : Map[Int, CoverState]
+  cover_asks : Array[CoverAsk]
   // the page being built (a page of a Nav, by its serial; 0 none), and the
   // ids of the state each page's widgets made, forgotten with the page
   mut owner : Int
@@ -276,6 +275,11 @@ fn Ctx::new() -> Ctx {
     lists: Map::new(),
     editors: Map::new(),
     springs: Map::new(),
+    movers: Map([]),
+    mover_ids: 0,
+    cycling: false,
+    covers: Map::new(),
+    cover_asks: [],
     owner: 0,
     owned: Map::new(),
     back: None,
@@ -691,36 +695,18 @@ pub fn Ctx::spring(
   let s = match self.springs.get(id) {
     Some(s) => s
     None => {
-      let x = match from {
-        Some(f) => f
-        None => target
-      }
-      let s = { x, v: 0.0, target, frame: -1 }
+      let s = SpringPath::new(from.unwrap_or(target), k=stiffness, c=damping)
       self.springs[id] = s
       self.own(id)
       s
     }
   }
-  s.target = target
-  if s.frame != self.frame_no {
-    s.frame = self.frame_no
-    let mut t = dmin(self.dt, 64.0) / 1000.0
-    let h = 1.0 / 240.0
-    while t > 0.0 {
-      let step = dmin(h, t)
-      let a = -stiffness * (s.x - s.target) - damping * s.v
-      s.v = s.v + a * step
-      s.x = s.x + s.v * step
-      t = t - step
-    }
-    if (s.x - s.target).abs() < 0.001 && s.v.abs() < 0.001 {
-      s.x = s.target
-      s.v = 0.0
-    } else {
-      self.request_frame()
-    }
+  // where it is now: a function of the time since it set out (motion_data.mbt); a new target (or one born away from
+  // it) sets it out again from here, as fast as it goes
+  if target != s.target() {
+    s.go(self.now, target)
   }
-  s.x
+  s.value(self.now)
 }
 
 ///|

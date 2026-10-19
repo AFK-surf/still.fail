@@ -376,10 +376,10 @@ fn Ctx::paint_page(self : Ctx, n : Node, alpha : Double) -> Unit {
 priv struct PagerState {
   mut index : Int
   mut count : Int
-  /// how far the pages are dragged, or still sliding, in points (positive:
-  /// the previous page shows)
-  mut offset : Double
-  mut vel : Double
+  /// how far the pages are dragged, or still sliding back to 0, in points
+  /// (positive: the previous page shows): critically damped, at rest in
+  /// about 200 ms, solved for the frame's time (motion_data.mbt)
+  slide : SpringPath
   mut width : Double
   mut dragging : Bool
   /// a turn past the first (-1) or last (1) page, for the app to handle
@@ -415,8 +415,7 @@ pub fn Ctx::pager(
       let s = {
         index,
         count,
-        offset: 0.0,
-        vel: 0.0,
+        slide: SpringPath::new(0.0, k=400.0, c=40.0, rest=0.3),
         width: 0.0,
         dragging: false,
         edge: 0,
@@ -432,8 +431,7 @@ pub fn Ctx::pager(
   // other than the pager last told it
   if index != st.told && !st.dragging {
     st.index = index
-    st.offset = 0.0
-    st.vel = 0.0
+    st.slide.put(0.0)
   }
   // turned past the first or last page since the last frame
   if st.edge != 0 {
@@ -442,24 +440,6 @@ pub fn Ctx::pager(
     on_edge(e)
   }
   st.index = imax(0, imin(st.index, count - 1))
-  // let go: slide to rest on a spring
-  if !st.dragging && (st.offset != 0.0 || st.vel != 0.0) {
-    // critically damped, settling in about 200 ms; stepped a millisecond
-    // at a time so a long frame can't make it blow up
-    let k = 0.0004 // stiffness per ms²
-    let d = 0.04 // damping per ms
-    let steps = dmin(self.dt, 64.0).to_int()
-    for _ in 0..<steps {
-      st.vel = st.vel + (-k * st.offset - d * st.vel)
-      st.offset = st.offset + st.vel
-    }
-    if st.offset.abs() < 0.3 && st.vel.abs() < 0.01 {
-      st.offset = 0.0
-      st.vel = 0.0
-    } else {
-      self.request_frame()
-    }
-  }
   let i = self.alloc(kind_box)
   let n = self.nodes[i]
   n.id = id
@@ -508,8 +488,9 @@ fn Ctx::turn(self : Ctx, st : PagerState, dir : Int) -> Unit {
   }
   st.index = next
   // the page that showed is now one width away, and slides in from there
-  st.offset = st.offset + dir.to_double() * st.width
-  self.request_frame()
+  let (x, v) = st.slide.at(self.now)
+  st.slide.put(x + dir.to_double() * st.width)
+  st.slide.go(self.now, 0.0, v~)
 }
 
 ///|
@@ -521,7 +502,7 @@ fn Ctx::place_pager_slot(self : Ctx, i : Int) -> Unit {
     Some(st) => {
       let p = self.nodes[n.parent]
       st.width = p.fw
-      n.tx = (n.item - st.index).to_double() * p.fw + st.offset
+      n.tx = (n.item - st.index).to_double() * p.fw + st.slide.value(self.now)
     }
     None => ()
   }
@@ -535,10 +516,10 @@ fn Ctx::pager_drag(self : Ctx, id : Int, dx : Double) -> Bool {
     Some(st) => {
       st.dragging = true
       // resisting past the first and last page
-      let at_end = (st.index == 0 && st.offset + dx > 0.0) ||
-        (st.index == st.count - 1 && st.offset + dx < 0.0)
-      st.offset = st.offset + (if at_end { dx * 0.35 } else { dx })
-      st.vel = 0.0
+      let offset = st.slide.value(self.now)
+      let at_end = (st.index == 0 && offset + dx > 0.0) ||
+        (st.index == st.count - 1 && offset + dx < 0.0)
+      st.slide.put(offset + (if at_end { dx * 0.35 } else { dx }))
       true
     }
     None => false
@@ -553,14 +534,15 @@ fn Ctx::pager_release(self : Ctx, id : Int, vel : Double) -> Unit {
     Some(st) => {
       st.dragging = false
       let w = dmax(st.width, 1.0)
+      let offset = st.slide.value(self.now)
       // past the last or first page, turn() hands it to the app
-      if st.offset < -w / 3.0 || vel < -0.4 {
+      if offset < -w / 3.0 || vel < -0.4 {
         self.turn(st, 1)
-      } else if st.offset > w / 3.0 || vel > 0.4 {
+      } else if offset > w / 3.0 || vel > 0.4 {
         self.turn(st, -1)
       }
-      st.vel = vel
-      self.request_frame()
+      // (vel a millisecond)
+      st.slide.go(self.now, 0.0, v=vel * 1000.0)
     }
     None => ()
   }
