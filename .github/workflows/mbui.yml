@@ -6,7 +6,7 @@
 # one after the other, and the checks take longer than this app's whole release), and nothing of the pipeline waits
 # for it or fails with it (deployed/beta, put, done). As asked (2026-10-19), its tests do not hold it back: it is a
 # test app. The feed moves only once its APK is fetched back from where it is served, the same bytes.
-# Warm on mini1 (apps/mbui/scripts/beta.sh): the latest MoonBit (installed again only when there is a newer one), the
+# main's on mini1-6 (label mbui), a branch's on mini1's four. Warm on mini1 (apps/mbui/scripts/beta.sh): the latest MoonBit (installed again only when there is a newer one), the
 # pinned mbui, core.hbc by its inputs, moonc's and the compiler's outputs and Gradle's in ~/stillfail-ci/mbui (out of
 # the checkout, which other jobs clean), Gradle's daemon for its idle timeout.
 name: mbui
@@ -32,7 +32,9 @@ jobs:
   beta:
     # Trusted repository pushes only (as pipeline.yml): never pull_request here, the job has production's secrets.
     if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: [self-hosted, mini1]
+    # mini1-6, a runner of its own on mini1 (label mbui, nothing else): it never waits behind the pipeline's jobs on
+    # mini1's four, nor holds up their natives on mini1-5 (quick)
+    runs-on: mbui
     environment: production
     timeout-minutes: 10
     steps:
