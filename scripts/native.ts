@@ -396,7 +396,12 @@ function engineWin(out: string) {
   mkdirSync(work, { recursive: true });
   if (!existsSync(join(src, ".stillfail-tag")) || readFileSync(join(src, ".stillfail-tag"), "utf8") !== HERMES.tag) {
     rmSync(src, { recursive: true, force: true });
-    run("git", ["clone", "-q", "--depth", "1", "--branch", HERMES.tag, "https://github.com/facebook/hermes", src]);
+    // the tag's tarball, tried again on the way (a clone over Studio's TLS broke off, 2026-10-19)
+    mkdirSync(src, { recursive: true });
+    const tgz = join(work, "hermes.tar.gz");
+    run("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", "--retry-delay", "5", "-o", tgz, `https://github.com/facebook/hermes/archive/refs/tags/${HERMES.tag}.tar.gz`]);
+    run(TAR, ["-xzf", tgz, "-C", src, "--strip-components=1"]);
+    rmSync(tgz, { force: true });
     // the loop in Hermes's tree, as one of its directories (it links Hermes's own targets)
     writeFileSync(join(src, "CMakeLists.txt"), readFileSync(join(src, "CMakeLists.txt"), "utf8") + "\nadd_subdirectory(stillfail-engine)\n");
     writeFileSync(join(src, ".stillfail-tag"), HERMES.tag);
