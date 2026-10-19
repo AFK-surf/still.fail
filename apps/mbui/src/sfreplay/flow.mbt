@@ -24,7 +24,8 @@ pub fn run_flow(
     r.deliver(at_most~) |> ignore
     app(c)
   })
-  let log = t.drive(without_shots(script))
+  // its steps as the host's that recorded it took them: waiting for nothing settling
+  let log = t.drive(without_shots(script), settles=false)
   (r, t, log)
 }
 

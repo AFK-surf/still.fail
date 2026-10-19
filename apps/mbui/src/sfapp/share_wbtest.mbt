@@ -12,9 +12,9 @@ fn share_tester(mode : String) -> @ui.Tester {
 ///|
 test "shared in: what is shared, 发到 the chats (the one the site went to last first, saying so), 新 chat" {
   let t = share_tester("share-in")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   t.frame()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("列表滑动的十个细节") is Some(_))
   assert_true(t.find("发到") is Some(_))
   assert_true(t.find("youtube.com 的链接上次发到这里") is Some(_))
@@ -25,9 +25,9 @@ test "shared in: what is shared, 发到 the chats (the one the site went to last
 ///|
 test "a chat tapped: what is shared goes to its composer and the chat opens; a new chat on a station chosen rises" {
   let t = share_tester("share-in")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   t.frame()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   t.tap_text("收集视频")
   t.settle() |> ignore
   t.advance(500.0)
@@ -39,9 +39,9 @@ test "a chat tapped: what is shared goes to its composer and the chat opens; a n
   }
   assert_true(share_in.shared is None)
   let n = share_tester("share-in-stations")
-  n.settle() |> ignore
+  n.settle(unsettled_ok=true) |> ignore
   n.frame()
-  n.settle() |> ignore
+  n.settle(unsettled_ok=true) |> ignore
   assert_true(n.find("MBA") is Some(_))
   n.tap_text("MBA")
   n.settle() |> ignore

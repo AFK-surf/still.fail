@@ -236,7 +236,8 @@ fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
         dui.failed.remove(key)
         false
       } else {
-        c.wake_in(left)
+        // (its going is not what is shown waits for: a screenshot of it failing shows the mark)
+        c.wake_in(left, later=true)
         true
       }
     }

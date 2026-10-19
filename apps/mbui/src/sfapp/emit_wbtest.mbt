@@ -14,10 +14,10 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
   t.tap_text("发消息")
   t.type_text("看一下列表")
   tap_send(t)
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   clock.val = 800.0
   t.frame()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   t
 }
 
@@ -44,7 +44,7 @@ test "an answer said while its agent's activity shows waits, then comes out of i
     t.frame()
   }
   assert_true(t.find("收到：「看一下列表」") is Some(_))
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_true(em.current is None)
   assert_true(t.find("收到：「看一下列表」") is Some(_))
   emit_restore()

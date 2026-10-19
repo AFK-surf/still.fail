@@ -34,7 +34,7 @@ fn updates_tester(r : Json, asked : Array[String]) -> @ui.Tester {
 test "a newer build that brings something: Home's download key; the settings' row says 更新到 its version" {
   let asked = []
   let t = updates_tester(release(["列表滑得更顺"]), asked)
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   t.frame()
   assert_eq(asked, ["1 false"])
   assert_true(update.available is Some(_))

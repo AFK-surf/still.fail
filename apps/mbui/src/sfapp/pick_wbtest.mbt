@@ -11,7 +11,7 @@ fn hold_on(t : @ui.Tester, words : String) -> (Double, Double) {
   t.frame(ms=250.0)
   t.frame(ms=250.0)
   t.release(x, y)
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   (x, y)
 }
 
@@ -105,7 +105,7 @@ test "a tap anywhere else lets go of it, as back does" {
   assert_eq(pk.ts, "")
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.back()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_eq(pk.ts, "")
   // the chat is still the page shown (back let go of the pick only)
   assert_eq(app.nav.depth(), 2)

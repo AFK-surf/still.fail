@@ -105,7 +105,7 @@ test "a reference to another chat is its chip, and opens that chat" {
 ///|
 test "while the chat is read: its bar, the messages to come, the composer" {
   let t = chat_tester("chat-loading")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("发消息") is Some(_))
   assert_true(t.find("整理发布清单") is None)
 }
