@@ -911,6 +911,12 @@ while the card moved the list):
 | 74 markdown | the agent's Markdown (e2e/fake `md:`): a table, TypeScript highlighted, its long line scrolled sideways by a finger; a link held: its menu, 复制链接 | the entry has the table and the code; the motion log has the code scrolled across; the link was not handed to the browser; on macOS the pasteboard has the address |
 | 75 open-link | a link in a message tapped: handed to the system (a scripted macOS run only logs it; Android's ACTION_VIEW) | `open-url:` with the address on the app's log |
 
+Flows 70–75 (branch mbui-chat-complete, 2026-10-20, Studio): the whole suite on macOS 63 of 67 at first, then the four
+again: 70 and 73 had checks macOS's grep and pbpaste read wrongly (fixed), 29 passed again (its composer row was 0.10,
+the bar at 0.1), 47's fixed service port 18978 was another run's server; on Android (the emulator) 11 and 70–73 passed,
+74 passed once run again (the app was gone once after its sideways drag), 75 hands the link over and so now ends at the
+tap (the browser comes in front), passing on both. Android's words are ICU's (选 alone where macOS's tokenizer has 选中).
+
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once
 alice's other device found its chat by all its words: it had taken an earlier run's of the same title). 36

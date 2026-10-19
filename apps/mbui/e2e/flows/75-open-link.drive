@@ -12,6 +12,6 @@ gone 正在发送
 timeout 120000
 until example.com/e2e
 wait 1500
+shot 1-before
+# (tapped, the run ends: on Android the browser comes in front and the app is no longer drawn; the check reads the log)
 tap example.com/e2e
-wait 1500
-shot 1-tapped
