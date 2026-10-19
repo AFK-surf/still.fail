@@ -139,7 +139,14 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
   let t = @sf.theme()
   let ws = here.workspace
   let signs = flag(lock, "signs")
-  let requests = items(lock, "requests")
+  let me = field(lock, "me")
+  // the devices waiting for someone to approve them: not this one's own request (said above as this device's), and
+  // only where this device can approve (an untrusted one lists none: it has nothing to do with them)
+  let requests = if signs {
+    items(lock, "requests").filter(fn(r) { text(Some(r), "device") != text(me, "device") })
+  } else {
+    []
+  }
   let blocks : Array[() -> Unit] = [
     fn() {
       list_card(c, fn() {
@@ -156,7 +163,16 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
               ("stations", count(lock, "protected").to_string()),
             ]),
           )
-          if !signs {
+          if flag(me, "waiting") {
+            // this device waits to be approved: its code, as its approver sees it, and how it comes in (the
+            // waiting page in the chats' place: 发送批准请求)
+            note(c, tr("web-pages.security.waitingTitle") + " · " + tr("mbui.security.waitingWhere"))
+            c.box(dir=Row, gap=8.0, align=ACenter, fn() {
+              c.text(tr("web-pages.security.thisDevice"), size=13.0, color=t.p.muted, line=18.0, wrap=false) |> ignore
+              mono(c, text(me, "code"), size=13.0, weight=600)
+            })
+            |> ignore
+          } else if !signs {
             note(
               c,
               tr(

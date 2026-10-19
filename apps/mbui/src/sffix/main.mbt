@@ -36,6 +36,11 @@ fn main {
   if mode.has_prefix("settings") {
     @sfapp.open_setting(@settings.fixture_page(mode))
   }
+  // a device not yet confirmed in the workspace's safe mode: lock-waiting, lock-finding, lock-code, lock-wrong (its
+  // waiting page in the chats' place), lock-security (its security page)
+  if mode == "lock-security" {
+    @sfapp.open_setting(@settings.fixture_page("settings-security"))
+  }
   @sfapp.desktop_window()
   @ui.run("still.fail", fn(c) { @sfapp.view(c, src) })
 }

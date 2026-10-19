@@ -402,6 +402,19 @@ test("a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_o
   core.close();
 });
 
+test("an_app_of_its_own_names_the_device_by_itself_not_by_still_fail", async () => {
+  // still.fail mbui (apps/mbui) runs this core too: those approving its device tell it apart from still.fail's own app
+  const { host, core } = await started();
+  const ui = core.connect();
+  call(core, ui, 1, "client.device", { app: "android", build: "0.1.3628", model: "OPPO PLP110", client: "still.fail mbui", locale: "zh-CN" });
+  call(core, ui, 2, "auth.begin", { redirect_uri: "r", return_to: "/" });
+  await host.settle();
+  const emitted = host.takeEmitted().map(([, m]) => m as J);
+  const url = String(emitted.find((m) => m.id === 2 && "ok" in m).ok.url);
+  assert.ok(url.includes(`name=${encode("still.fail mbui Android · OPPO PLP110")}`), url);
+  core.close();
+});
+
 test("the_device_says_what_it_is_once_and_the_core_decides_what_follows", async () => {
   const { host, core } = await started();
   stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? { n: 4 } : undefined));

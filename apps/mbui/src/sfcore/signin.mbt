@@ -60,6 +60,9 @@ pub fn start() -> Bool {
   } else {
     @core.start()
   }
+  if started {
+    tell_device()
+  }
   state.auto = @host.env("MBUI_CORE_SIGNIN") == "1"
   state.login = @host.env("MBUI_AUTH_LOGIN") == "1"
   state.by_hand = if @host.env("MBUI_AUTH_BEGIN") == "1" {
@@ -68,6 +71,35 @@ pub fn start() -> Bool {
     @host.env("MBUI_AUTH_COMPLETE")
   }
   started
+}
+
+///|
+/// What the device is, to the core (`client.device`, as still.fail's apps tell it): the name the people who approve it
+/// in a workspace's safe mode see (and a sign-in's device) is still.fail mbui's, not still.fail's own app's: "still.fail
+/// mbui Android · <maker model>" (the model CoreHost.java puts in MBUI_DEVICE_MODEL), "still.fail mbui 桌面版 · macOS".
+fn tell_device() -> Unit {
+  let facts : Map[String, Json] = { "client": Json::string("still.fail mbui") }
+  match @host.platform() {
+    2 => {
+      facts["app"] = Json::string("android")
+      facts["model"] = Json::string(@host.env("MBUI_DEVICE_MODEL"))
+    }
+    0 => {
+      facts["app"] = Json::string("desktop")
+      facts["userAgent"] = Json::string("Macintosh; Mac OS X")
+    }
+    3 => {
+      facts["app"] = Json::string("desktop")
+      facts["userAgent"] = Json::string("Windows")
+    }
+    // (iOS and the browser: no kind of the core's for them yet)
+    _ => return
+  }
+  let version = @host.app_version()
+  if version > 0 {
+    facts["build"] = Json::string("0.1." + version.to_string())
+  }
+  @core.call("client.device", params=Json::object(facts))
 }
 
 ///|

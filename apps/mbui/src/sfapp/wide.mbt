@@ -119,7 +119,10 @@ fn wide_frame(
   // a desktop's page: the wheel and the trackpad scroll, a drag is the pointer's own
   c.mouse_drags_lists(false)
   wide_keys(c, src, w)
-  let side = side_now()
+  // a device waiting to be confirmed in the workspace's safe mode: beside the rail (the workspaces, settings) only
+  // what it waits on, no chats' list (its stations refuse it), unless a settings page is open
+  let gated = lit_place() != "settings" && @settings.lock_waiting(settings_core(src, w), w.id)
+  let side = if gated { 0.0 } else { side_now() }
   let main_w = dmax(0.0, c.width - rail_w - side)
   // the core's chat last open, else a new chat: there is always a page beside the list (workspace.tsx WorkspaceHome)
   land(src, w)
@@ -135,8 +138,12 @@ fn wide_frame(
       c.sized(main_w, c.height, fn() {
         // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not)
         c.selectable(color=@sf.alpha(t.p.blue, 0.28), fn() {
-          c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
-          |> ignore
+          if gated {
+            c.box(w=Px(main_w), h=Px(c.height), bg=t.p.bg, fn() { lock_gate(c, src, w) |> ignore }) |> ignore
+          } else {
+            c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
+            |> ignore
+          }
         })
       })
     })
