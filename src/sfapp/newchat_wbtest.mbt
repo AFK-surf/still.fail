@@ -176,7 +176,15 @@ test "the notch's icon swaps with a short scale and fade while it stays open; cl
   let face = Ref::new("ling")
   let out = Ref::new(true)
   let p = Ref::new(1.0)
-  let t = @ui.Tester::new(fn(c) { p.val = show_icon(c, face.val, out.val) }, w=390.0, h=844.0)
+  // as the bar has it: stepped by what it was told before this frame, then told
+  let t = @ui.Tester::new(
+    fn(c) {
+      bar.step(c.frame_dt() / 1000.0)
+      p.val = show_icon(c, face.val, out.val)
+    },
+    w=390.0,
+    h=844.0,
+  )
   t.settle() |> ignore
   assert_eq(m_face.val, "ling")
   face.val = "plus"

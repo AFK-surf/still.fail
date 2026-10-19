@@ -8,9 +8,13 @@ tapxy 133 -50
 wait 1200
 tapxy 50 -50
 wait 1200
-drag 50 -50 0 -64 1000
+drag 50 -50 0 -64 150
+wait 1000
+tapxy 50 -106
 wait 1500
-drag 50 -50 0 -64 1000
+drag 50 -50 0 -64 150
+wait 1000
+tapxy 50 -106
 wait 1500
 until 整理发布清单
 tap 整理发布清单

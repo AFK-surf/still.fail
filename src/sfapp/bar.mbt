@@ -254,7 +254,7 @@ fn Glide::step(self : Glide, dt : Double) -> Unit {
 /// A bar chosen in the panel, sliding down into the bar's place (Bar.kt Swap): which (`i`), its row in the panel
 /// (`n`), how open the panel was (`from`), the place tapped in it; the bars as they were (`sets`, `cur`), which the
 /// stack sliding down is laid out by; the rows' fade and offset then and how lit each place was, which it starts
-/// from; `still`: chosen from a panel at rest (its first frame is as it was).
+/// from.
 priv struct Swap {
   i : Int
   n : Int
@@ -265,7 +265,6 @@ priv struct Swap {
   alpha : Double
   drop : Double
   lit : Map[String, Double]
-  mut still : Bool
 }
 
 ///|
@@ -346,8 +345,9 @@ priv struct BarModel {
   /// a bar chosen sliding down into the bar's place; a finger that went down meanwhile (the finger's once it lands)
   mut swap : Swap?
   mut waits : Bool
-  /// the notch's icon going as another swaps in ("" none)
+  /// the notch's icon going as another swaps in ("" none), how far the swap is (0 to 1)
   mut icon_was : String
+  icon_swap : Glide
 }
 
 ///|
@@ -382,6 +382,7 @@ let bar : BarModel = {
   swap: None,
   waits: false,
   icon_was: "",
+  icon_swap: glide(1.0),
 }
 
 ///|
@@ -402,6 +403,8 @@ fn bar_reset() -> Unit {
   bar.swap = None
   bar.waits = false
   bar.icon_was = ""
+  bar.icon_swap.value = 1.0
+  bar.icon_swap.target = 1.0
   m_face.val = ""
   bars_picked.val = None
 }
@@ -430,6 +433,7 @@ fn BarModel::moving(self : BarModel) -> Bool {
   self.vis.value != self.vis.target ||
   self.ball_alpha.value != self.ball_alpha.target ||
   self.ball_scale.value != self.ball_scale.target ||
+  self.icon_swap.value != self.icon_swap.target ||
   self.bvx != 0.0 ||
   self.bvy != 0.0 ||
   self.bx != self.gx ||
@@ -440,17 +444,12 @@ fn BarModel::moving(self : BarModel) -> Bool {
 
 ///|
 fn BarModel::step(self : BarModel, dt : Double) -> Unit {
-  // the frame a bar is chosen from a panel at rest, the stack is drawn as the rows were: it slides from the next
-  match self.swap {
-    Some(s) if s.still => s.still = false
-    _ => if self.o.moving() { self.o.step(dt) }
-  }
-  for s in [self.k, self.held] {
+  for s in [self.o, self.k, self.held] {
     if s.moving() {
       s.step(dt)
     }
   }
-  for g in [self.vis, self.ball_alpha, self.ball_scale] {
+  for g in [self.vis, self.ball_alpha, self.ball_scale, self.icon_swap] {
     g.step(dt)
   }
   for _, g in self.tints {
@@ -494,7 +493,7 @@ fn BarModel::jump(self : BarModel) -> Unit {
     s.x = s.to
     s.v = 0.0
   }
-  for g in [self.vis, self.ball_alpha, self.ball_scale] {
+  for g in [self.vis, self.ball_alpha, self.ball_scale, self.icon_swap] {
     g.value = g.target
   }
   for _, g in self.tints {
@@ -802,6 +801,11 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     _ => ()
   }
   let m = bar
+  // the frame's motion, by what the bar was told before this frame (Bar.kt: told as it is composed, stepped by its
+  // loop from the next frame on; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
+  if m.placed && !c.stable() {
+    m.step(c.frame_dt() / 1000.0)
+  }
   // told each frame: shown or not, the notch as the place has it
   m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { 380.0 } else { 300.0 }, 1)
   if !shown {
@@ -879,12 +883,10 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     })
   m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, 200.0, 0)
   m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, 250.0, 0)
-  // the frame's motion
+  // first drawn (or a screenshot): everything where it goes, at once
   if !m.placed || c.stable() {
     m.placed = true
     m.jump()
-  } else {
-    m.step(c.frame_dt() / 1000.0)
   }
   if m.moving() {
     c.request_frame()
@@ -892,7 +894,9 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     if m.vis.value != m.vis.target {
       @motion.log_frame(c, "bar/vis", "value=\{m.vis.value} to=\{m.vis.target}")
     }
-    if m.o.moving() || m.swap is Some(_) {
+    if m.swap is Some(_) {
+      @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=\{m.o.to}")
+    } else if m.o.moving() {
       @motion.log_frame(c, "bar/panel", "value=\{m.o.x} to=\{m.o.to}")
     }
   }
@@ -1138,30 +1142,32 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
 }
 
 ///|
-/// The notch's icon this frame: `next` swapping in for the one shown (Bar.kt showIcon: 300 ms on the bar's clock, the
-/// one going out by 120 ms, the one coming from 60 ms in); at once when none was shown or the notch is closed (nothing
-/// to see). How far the swap is (0 to 1).
+/// The notch's icon this frame: `next` swapping in for the one shown (Bar.kt showIcon: 300 ms on the bar's clock,
+/// linear; the one going out by 120 ms, the one coming in from 60 ms); at once when none was shown or the notch is
+/// closed (nothing to see). How far the swap is (0 to 1).
 fn show_icon(c : @ui.Ctx, next : String, out : Bool) -> Double {
-  let sw = @motion.anim(c, "bar/icon-swap", 1.0, global=true)
+  let sw = bar.icon_swap
   if next != "" && next != m_face.val {
     if m_face.val == "" || !out {
       m_face.val = next
       bar.icon_was = ""
-      sw.snap(1.0)
+      sw.value = 1.0
+      sw.target = 1.0
     } else {
       bar.icon_was = m_face.val
       m_face.val = next
-      sw.snap(0.0)
-      sw.animate(1.0, @motion.tween(300.0, ease=Linear))
+      sw.value = 0.0
+      sw.target = 0.0
+      sw.go(1.0, 300.0, 2)
     }
   }
-  if sw.moving() {
+  if sw.value != sw.target {
     c.request_frame()
-    @motion.log_frame(c, "bar/icon-swap", "value=\{sw.get()} to=1")
+    @motion.log_frame(c, "bar/icon-swap", "value=\{sw.value} to=1")
   } else {
     bar.icon_was = ""
   }
-  sw.get()
+  sw.value
 }
 
 ///|
@@ -1254,7 +1260,6 @@ fn bar_gesture(
       alpha: rows_alpha(m.o.x),
       drop: rows_shift(m.o.x, reach),
       lit,
-      still: !m.o.moving(),
     })
     m.mode = false
     m.o.go(0.0, 200.0, 28.0)

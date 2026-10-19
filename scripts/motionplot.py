@@ -105,7 +105,8 @@ def flight(t, d0=0.0):
     return 1.0 - CURVES["flight"](max((fly - 0.12) / 0.88, 0.0))
 
 
-# key pattern, field, what it is, what is left of its way at t (ms from its start), its frame's lag, its rest
+# key pattern, field, what it is, what is left of its way at t (ms from its start), its frame's lag (Compose's: a frame
+# from being asked to moving; the bar's own loop (Bar.kt) none: told as it is composed, stepped the next frame), its rest
 SPECS = [
     (r"^home/.*\x01r/", "fy", "a Home row to its new place (ListMotion.kt: spring(1, 350), 100 ms late closing over one gone)",
      [spring(350.0), spring(350.0, delay=100.0)], 1, 0.0),
@@ -121,11 +122,11 @@ SPECS = [
     (r"^toast", "alpha", "a toast (Sheet.kt ToastHost: 200 ms, CSS's ease)", [tween(200, "css")], 1, None),
     (r"^fly$", "dy", "words sent, up (ChatHost.kt Flight: Ease.Flight, 12% late, over 80% of 600 ms)", [flight], 1, "fly"),
     (r"^bar/icon-swap", "value", "the notch's icon swapping (Bar.kt showIcon: 300 ms on the bar's clock, linear)",
-     [tween(300, "linear")], 1, "to"),
+     [tween(300, "linear")], 0, "to"),
     (r"^bar/vis", "value", "the bar going down and coming back (Bar.kt: out 300 ms, in 380, Ease.Arrive)",
-     [tween(300, "arrive"), tween(380, "arrive")], 1, "to"),
-    (r"^bar/panel", "value", "the panel (Bar.kt BarSpring: open 260/17, closed 320/26, a bar chosen landing 200/28)",
-     [rspring(260.0, 17.0), rspring(320.0, 26.0), rspring(200.0, 28.0)], 1, "to"),
+     [tween(300, "arrive"), tween(380, "arrive")], 0, "to"),
+    (r"^bar/swap", "value", "a bar chosen in the panel landing (Bar.kt pick: the panel closing on BarSpring 200/28)",
+     [rspring(200.0, 28.0)], 0, "to"),
     (r"^settings-sheet/offset", "value", "a settings sheet (Sheet.kt: SheetSpring)", [spring((2 * math.pi / (1.2 * 0.32)) ** 2, threshold=0.5)], 1, "to"),
     (r"^settings-sheet/scrim", "value", "a settings sheet's scrim (Sheet.kt: 300 ms, CSS's ease)", [tween(300, "css")], 1, "to"),
 ]
