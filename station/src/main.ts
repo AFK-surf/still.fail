@@ -41,6 +41,7 @@ import { LoginsLive } from "./logins/module.ts";
 import { UsageLive } from "./usage/module.ts";
 import { SearchLive } from "./search/module.ts";
 import { SlackLive } from "./slack/module.ts";
+import { FeishuLive } from "./feishu/module.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
@@ -142,7 +143,7 @@ function run() {
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
   const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
-    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, PublishLive, LoginsLive, UsageLive, SearchLive, SlackLive)),
+    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, PublishLive, LoginsLive, UsageLive, SearchLive, SlackLive, FeishuLive)),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     // The drive, the admin API's and the modules' local API's (modules/local.ts): the platform's, before the agents.

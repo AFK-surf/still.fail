@@ -190,8 +190,13 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   if (text === "" && paths.length === 0) throw new Error("text is empty");
   const thread = target(hub, key, args.to);
   if (store.manuallyArchived(thread.thread.id)) throw new Error(`${threadAddress(thread.thread.channel, thread.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
-  if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE) {
-    throw new Error('cards (options, a text field) are shown only in still.fail chats (EMBER/…); in a Slack thread, write the choices or the question in the text and end with kind "need_human"');
+  const chat = hub.chat(thread.connect);
+  if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE && !(chat.cards === true && (card.type === "options" || card.type === "text"))) {
+    throw new Error(
+      chat.cards === true
+        ? 'a login card is shown only in still.fail chats (EMBER/…); here post its link in the text and end with kind "need_human"'
+        : 'cards (options, a text field) are shown only in still.fail and Feishu chats; in a Slack thread, write the choices or the question in the text and end with kind "need_human"',
+    );
   }
   if (card !== null && text === "") throw new Error("text is required with a card: what it asks and the facts it turns on, so it can be answered from this message alone");
   let about: [number, number, string] | null = null;
@@ -216,11 +221,10 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   };
   const files = await keep(paths.length === 0 ? [] : attach(hub, key, paths), thumbsDir(hub.config().dataDir));
   const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
-  const chat = hub.chat(thread.connect);
   let posted: string;
   if (slack) {
     try {
-      posted = await chat.post(here, text, files);
+      posted = await chat.post(here, text, files, card);
       text = placeFigures(text, files);
     } catch (error) {
       if (!String((error as Error).message).includes("missing_scope")) throw error;
@@ -228,7 +232,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
       posted = await chat.post(here, sent, []);
       text = kept;
     }
-  } else posted = await chat.post(here, text, files);
+  } else posted = await chat.post(here, text, files, card);
   const offered = card !== null ? cardSaid(card) : "";
   const [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card });
   hub.shared(thread.thread.id, n, key, text);

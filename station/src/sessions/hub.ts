@@ -30,7 +30,7 @@ import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, transcriptPaths } from "../read/transcript.ts";
-import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, slackSurface, type ThreadRow } from "../store/store.ts";
+import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type ThreadRow } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
@@ -467,8 +467,9 @@ export class Hub {
       // As the broker did: a new session says first where it can be followed. Once, as it starts; not waited for. In
       // Slack's own link form: what the station posts is sent as written.
       const link = single ? undefined : this.link(key);
-      if (link !== undefined) {
-        chat.post(here, `<${link}|${tr(stationLang(), "station.slack.viewSession")}>`, []).catch((error) => log.warn("hub", "session link not posted", { session: key, error: (error as Error).message }));
+      const said = link === undefined ? null : chat.sessionLink ? chat.sessionLink(link, tr(stationLang(), "station.slack.viewSession")) : `<${link}|${tr(stationLang(), "station.slack.viewSession")}>`;
+      if (said !== null) {
+        chat.post(here, said, []).catch((error) => log.warn("hub", "session link not posted", { session: key, error: (error as Error).message }));
       }
     }
     const thread = existing ?? (await this.openSlackThread(chat, surface, message, createdBy, key));
@@ -799,9 +800,11 @@ export class Hub {
     return this.options.chats(connect);
   }
 
-  /// Where a connect's threads live; the rule the v10 migration follows too.
+  /// Where a connect's threads live; the rule the v10 migration follows too. A Feishu connect's are its own (its people's
+  /// ids are the app's own, so another bot's in the same chat are other people: docs/feishu.md).
   surface(connect: string): string {
     if (connect === INTERNAL_CONNECT) return STILLFAIL_SURFACE;
+    if (this.config().connects.find((c) => c.id === connect)?.kind === "feishu") return feishuSurface(connect);
     return slackSurface(connect, this.chatOf(connect)?.workspace() ?? null);
   }
 
@@ -955,6 +958,7 @@ export class Hub {
       },
       settled: (key, state, words) => settled(this, key, state, words),
       toolStatus,
+      pageOf: (key) => this.link(key),
       places: this.places,
       runtimeMissing: (runtime) => this.runtimeMissing(runtime),
       nextTs: () => this.nextTs(),

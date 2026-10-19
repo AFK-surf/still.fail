@@ -19,6 +19,9 @@ export function slackSurface(connect: string, teamId: string | null): string {
   return teamId ? `slack:${teamId}` : `slack:${connect}`;
 }
 
+/// Where a Feishu connect's threads live: the connect's own (docs/feishu.md).
+export const feishuSurface = (connect: string): string => `feishu:${connect}`;
+
 export type SessionScope = "thread" | "all";
 
 /// Who looks, as far as the station's workspaces go (docs/multi-workspace.md): their workspace, and whether it is the

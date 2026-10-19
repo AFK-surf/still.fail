@@ -28,20 +28,28 @@ function readJson<T>(path: string, empty: T, shape: (v: Json) => T): T {
   return value;
 }
 
-/// Each connect's Slack workspace (`slack.team`), as config.json has it.
-function teams(s: Store): Map<string, { id: string; name: string }> {
+/// Each connect's Slack workspace (`slack.team`), as config.json has it; a Feishu connect's names are keyed by the
+/// connect itself (src/feishu: its people's ids are its app's own), its company its team.
+type Team = { id: string; name: string; feishu: boolean };
+function teams(s: Store): Map<string, Team> {
   return readJson(join(s.dataDir, "config.json"), new Map(), (raw) => {
-    const out = new Map<string, { id: string; name: string }>();
+    const out = new Map<string, Team>();
     for (const c of Array.isArray(raw?.connects) ? raw.connects : []) {
+      if (typeof c?.id !== "string") continue;
+      if (c?.kind === "feishu") {
+        out.set(c.id, { id: c.id, name: typeof c?.feishu?.tenant?.name === "string" ? c.feishu.tenant.name : "", feishu: true });
+        continue;
+      }
       const team = c?.slack?.team;
-      if (typeof c?.id === "string" && typeof team?.id === "string" && team.id !== "") out.set(c.id, { id: team.id, name: typeof team.name === "string" ? team.name : "" });
+      if (typeof team?.id === "string" && team.id !== "") out.set(c.id, { id: team.id, name: typeof team.name === "string" ? team.name : "", feishu: false });
     }
     return out;
   });
 }
 
-function book(s: Store): Record<string, Json> {
-  return readJson(join(s.dataDir, "slack-names.json"), {}, (v) => (v !== null && typeof v === "object" && !Array.isArray(v) ? v : {}));
+/// The names book a connect's are in: Slack's (<data>/slack-names.json), or Feishu's (feishu-names.json).
+function book(s: Store, feishu = false): Record<string, Json> {
+  return readJson(join(s.dataDir, feishu ? "feishu-names.json" : "slack-names.json"), {}, (v) => (v !== null && typeof v === "object" && !Array.isArray(v) ? v : {}));
 }
 
 /// A connect's Slack workspace's name, when known.
@@ -52,16 +60,16 @@ export function teamName(s: Store, connect: string): string | null {
 
 /// A Slack person of a connect, as far as known: their name and email.
 export function knownPerson(s: Store, connect: string, user: string): { name: string; email: string } | null {
-  const team = teams(s).get(connect)?.id ?? "?";
-  const person = book(s)[`u:${team}:${user}`]?.person;
+  const t = teams(s).get(connect);
+  const person = book(s, t?.feishu)[`u:${t?.id ?? "?"}:${user}`]?.person;
   return person && typeof person.name === "string" ? { name: person.name, email: typeof person.email === "string" ? person.email : "" } : null;
 }
 
 /// A channel's name of a connect's Slack, as far as known (null for a direct message, or not known yet).
 export function knownChannel(s: Store, connect: string | null, channel: string): string | null {
   if (connect === null) return null;
-  const team = teams(s).get(connect)?.id ?? "?";
-  const name = book(s)[`c:${team}:${channel}`]?.channel;
+  const t = teams(s).get(connect);
+  const name = book(s, t?.feishu)[`c:${t?.id ?? "?"}:${channel}`]?.channel;
   return typeof name === "string" ? name : null;
 }
 
@@ -74,5 +82,5 @@ export function slackCreator(s: Store, reference: string): Json | null {
   if (colon <= 0 || colon >= rest.length - 1) return null;
   const [connect, user] = [rest.slice(0, colon), rest.slice(colon + 1)];
   const person = knownPerson(s, connect, user);
-  return { id: reference, name: person?.name ? person.name : user, email: person?.email ? person.email : null, via: "slack" };
+  return { id: reference, name: person?.name ? person.name : user, email: person?.email ? person.email : null, via: teams(s).get(connect)?.feishu ? "feishu" : "slack" };
 }

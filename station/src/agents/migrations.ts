@@ -59,6 +59,7 @@ export const NOTES: [number, string][] = [
   [52, "Before a login {command}, read the stillfail-login skill: which command each common CLI (gh, gcloud, aws, az, npm, docker…) takes so the card can finish it. A command that prints a page and then asks for its code (gcloud --no-launch-browser) is the person's to paste on the login card: do not answer that prompt yourself."],
   [53, "station_task start with a dir whose sync takes longer than about 40 s now answers syncing: true while the sync goes on: call start again with the same key (it waits on that sync; a new key or a retry no longer restarts it)."],
   [54, "A new built-in skill, stillfail-cron: anything on a schedule or at a set time (每天 9 点、每周一、提醒我) is one background job with watch whose loop checks the clock and wakes you with stillfail-job notify; read it before setting one up, instead of crontab, launchd or your runtime's own scheduler."],
+  [55, "Messages can come from Feishu (Lark) chats, via=\"feishu\": write them the still.fail chat's Markdown (mentions as <at id=OPEN_ID></at>); options and text cards show there as buttons and a field. New tool feishu_api calls Feishu's OpenAPI as your bot."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

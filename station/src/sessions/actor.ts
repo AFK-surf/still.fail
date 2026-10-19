@@ -71,7 +71,8 @@ export type SessionStore = {
 export type Surface = {
   post(thread: { channel: string; threadTs: string }, text: string, files: unknown[]): Promise<string>;
   userName?(user: string): Promise<string | null>;
-  working?(thread: { channel: string; threadTs: string }, messageTs: string | null, status: string): void;
+  working?(thread: { channel: string; threadTs: string }, messageTs: string | null, status: string, page?: string | null): void;
+  mention?(user: string): string;
   botName?(): string;
   botUserId?(): string;
 };
@@ -116,6 +117,8 @@ export type SessionDeps = {
   /// Archived: ends every job and service of the session.
   endJobs(key: string): Promise<void>;
   toolStatus(tool: string): string;
+  /// A session's page in still.fail, when the station is in a workspace: what a platform's status line points to.
+  pageOf?(key: string): string | undefined;
   /// How a directory it is to run in is looked at (ops/places.ts); default: without still.fail Helper.
   places?: Places;
   /// Its runtime was not found on PATH as it started.
@@ -611,7 +614,8 @@ export class SessionActor {
   }
 
   private say(status: string) {
-    for (const w of this.workingFor) this.deps.chat(w.connect)?.working?.({ channel: w.channel, threadTs: w.threadTs }, w.ts, status);
+    const page = this.deps.pageOf?.(this.key) ?? null;
+    for (const w of this.workingFor) this.deps.chat(w.connect)?.working?.({ channel: w.channel, threadTs: w.threadTs }, w.ts, status, page);
   }
 
   /// A live step of the running turn, for its threads' status line.
@@ -659,7 +663,7 @@ export class SessionActor {
       if (selves.has(m.connect)) continue;
       const chat = this.deps.chat(m.connect);
       const [name, user] = [chat?.botName?.() ?? "", chat?.botUserId?.() ?? ""];
-      if (name !== "") selves.set(m.connect, user === "" ? name : `${name} (<@${user}>)`);
+      if (name !== "") selves.set(m.connect, user === "" ? name : `${name} (${chat?.mention?.(user) ?? `<@${user}>`})`);
     }
     const text = formatInbound(said, newThreads, names, selves);
     const models = store.untoldWidgetModels(this.key);

@@ -26,6 +26,13 @@ export type SlackView = {
   apps(viewer: Viewer): unknown[];
 };
 
+/// How a connect of another kind than Slack shows (src/feishu): its connection, and what it is known by (`name`,
+/// `team`, `botImage`, and its kind's own fields, its secrets masked).
+export type ConnectView = {
+  connection(connect: any): unknown;
+  shown(connect: any): Record<string, unknown>;
+};
+
 export type OverviewDeps = {
   store: Store;
   hub: Hub;
@@ -34,6 +41,8 @@ export type OverviewDeps = {
   accounts?: Accounts;
   updates?: Updates;
   slack?: SlackView;
+  /// The other kinds' connects, by kind.
+  connectViews?: Map<string, ConnectView>;
   /// What macOS lets still.fail Helper do here, as the viewer is told it (routes/permissions.ts); none where there is no
   /// helper (not a Mac), or before the first look.
   permissions?: (viewer: Viewer) => unknown;
@@ -89,7 +98,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     const slack = c.slack ?? {};
     const runtime = c.bind?.runtime;
     const nonEmpty = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
-    return {
+    const shown = {
       // What it is known by: its bot's name in its Slack workspace, and that workspace.
       id: c.id,
       name: nonEmpty(slack.botName) ?? c.id,
@@ -106,6 +115,10 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
       sessions: sessions.filter((s) => s.connect === c.id).length,
       session: mode === "single-session" ? d.store.binding(c.id) : null,
     };
+    // Another kind's: its own connection and names (a station without that part says it is starting).
+    const other = typeof c.kind === "string" && c.kind !== "slack" ? d.connectViews?.get(c.kind) : undefined;
+    if (other !== undefined) return { ...shown, ...other.shown(c), connection: other.connection(c) ?? (c.enabled === false ? { state: "disabled" } : { state: "starting" }) };
+    return shown;
   });
   const states = sessions.map((s) => d.hub.processState(s.key));
   return {

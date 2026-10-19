@@ -13,7 +13,7 @@
 - 线程地址 `CHANNEL/THREAD_TS`：CHANNEL 是飞书的 `chat_id`（`oc_…`）。
 - 群里和私聊里不在话题里的话，算一个长期会话：THREAD_TS 是这段会话开头那条消息的 id（`om_…`），station 记在 `<data>/feishu-threads.json`。第一次 @ 机器人（私聊不用 @）开会话，之后这个群里的每条消息都交给它，不用再 @：hub 现有的「已有会话的线程，每条都投递」。
 - 「新会话」：@机器人 说「新会话」（或 `/new`），这条消息成为新会话的开头，THREAD_TS 换成它的 id，旧会话留在 still.fail 里照常归档。
-- 话题（话题群的每个话题，普通群里「回复到话题」开出来的）：THREAD_TS 是 `thread_id`（`omt_…`），和 Slack 的 thread 一样，要 @ 才开会话，中途进来的读一遍之前的消息。
+- 话题群（群设置里的「话题」模式）的每个话题：THREAD_TS 是 `thread_id`（`omt_…`），和 Slack 的 thread 一样，要 @ 才开会话，中途进来的读一遍之前的消息，回复发到话题里。普通群里「回复到话题」的消息仍算这个群的会话（他原来的 bot 就是按群分的），回复发在群里。
 - 消息的 ts 是飞书的 `message_id`；卡片按钮的回答不是消息，ts 是 `card-<event_id>`。
 - surface 是 `feishu:<connect id>`：两个机器人在同一个群里各是各的线程（飞书的 open_id 按应用分，人也对不上）。
 - 人：`slack:<connect>:<open_id>`（这串的前缀本来就只是「connect 的人」，沿用，不改客户端的解析）；名字和邮箱从通讯录接口取，取不到时用群成员列表里的名字，记在 `<data>/feishu-names.json`；creator 的 `via` 是 `"feishu"`。
@@ -30,7 +30,7 @@
 
 - 文字一律发成卡片（JSON 2.0 的 markdown 组件）：飞书卡片的 Markdown 和 still.fail 的写法基本一样（标题、列表、表格、代码块），agent 照 still.fail chat 的写法写。太长的分成几张（每张 6000 字以内）。@人写 `<at id=ou_xxx></at>`。
 - 文件跟在文字后面各发一条：图片 `im/v1/images` 上传后发图片消息，其他 `im/v1/files` 上传后发文件消息。
-- 在话题里就回到话题（`reply_in_thread`），否则直接发到群里。
+- 话题群的话题里就回到话题（`reply_in_thread`），否则直接发到群里。
 - 选项卡片（`card.type` 为 options）：按钮，推荐的那个是主按钮，点了就当那个人说了这个选项（addressed），卡片换成「已选：…」不再能点；文字卡片（text）：一个输入框加提交按钮。login 卡片不在飞书里出，agent 只发链接。
 - 「工作中」：一轮开始时发一张状态卡片（CardKit 卡片实体，不受消息编辑次数的限制），跟着 agent 当前在做的事更新（读文件、跑命令……，最多一秒一次），结束时变成一行「完成 · 用时」和执行历史的链接。
 - 新会话开始时不另发「查看会话」链接：状态卡片上有。
@@ -73,7 +73,7 @@ config.json 的 connect：
 - `POST /feishu/registrations {domain?, name?}` → `{id, url, expiresAt, overview}`：开始扫码创建，station 自己轮询。进展在 overview 的 `feishuRegistrations`（只有发起的人看得到），`overviewChanged` 推给页面：`{id, url, expiresAt, state: "waiting" | "done" | "denied" | "expired" | "failed", error, appId, domain}`。`DELETE /feishu/registrations/:id` 取消。
 - `POST /feishu/verify {appId, appSecret, domain?}` → `{identity: {botName, botImage, botOpenId, tenant: {key, name}} | null, errors: string[]}`。
 - `POST /feishu/connects {feishu: {appId, appSecret, domain?} | {registration}, bind, mode?, owner?}` → `{id, overview}`：id 由机器人名字来。
-- 改：`PUT /connects/:id`（启用、模式、bind 和 Slack 一样；`feishu: {appSecret}` 换密钥，空的不动）；删：`DELETE /connects/:id`。
+- 改：`PUT /connects/:id`（启用、模式、bind 和 Slack 一样；`feishu: {appSecret}` 换密钥，空的不动）；换密钥并先验证：`PUT /feishu/connects/:id/secret {appSecret}`；删：`DELETE /connects/:id`。
 - overview 的 `connects[]`：`kind: "feishu"`，`name` 是机器人名字，`team` 是企业名，`feishu: {appId, appSecret（遮住）, domain}`，`connection` 和 Slack 的一样（`workspace.teamId` 是 tenant key，`botUserId` 是机器人的 open_id）。
 
 ## agent 看到的
