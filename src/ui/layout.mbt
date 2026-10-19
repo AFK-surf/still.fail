@@ -324,8 +324,18 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   // changes the width, grow, basis or alignment; with the parent's
   // direction, which changes the parent; with a text's wrapping or kind.
   // A node's own size does not depend on it, only its parent's layout)
+  // in what scrolls sideways, as wide as it is (Ctx::sideways)
+  if (in_row || in_col) && n.parent >= 0 && self.nodes[n.parent].sideways {
+    shrink = 0.0
+  }
   if s.shrink != shrink {
     s.shrink = shrink
+    ch = true
+  }
+  let flow : @flex.Overflow = if n.sideways { Scroll } else { Visible }
+  if s.overflow != flow {
+    s.overflow = flow
+    ch = true
   }
   if is_auto(s.basis) == basis0 {
     s.basis = if basis0 { @flex.pt_zero } else { Auto }

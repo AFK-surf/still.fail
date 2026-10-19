@@ -436,6 +436,16 @@ pub fn measured(c : @ui.Ctx, key : String) -> Double? {
 }
 
 ///|
+/// Where the node kept as `key` (measure) was last laid out, in the window: x, y, w, h (None before it was, or once it
+/// has not been for a frame).
+pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
+  match mo.recs.get(motion_key("measure\u{1}" + key)) {
+    Some(r) if r.seen >= c.frame_number() - 1 => Some((r.x, r.y, r.w, r.h))
+    _ => None
+  }
+}
+
+///|
 /// The motion scope node `i` is in, if any (its entry).
 fn scope_above(c : @ui.Ctx, i : Int) -> Moving? {
   let mut p = c.node_parent(i)

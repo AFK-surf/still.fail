@@ -166,3 +166,45 @@ test "a list item's text keeps going under it, and a list ends at a heading" {
     Heading(1, [Text("After")]),
   ])
 }
+
+///|
+test "tables: a head, its columns' alignment, rows padded or cut to its columns" {
+  let doc = @md.parse(
+    (
+      #|改了这些：
+      #|| 页面 | 状态 | 耗时 |
+      #||:--|:-:|--:|
+      #|| 首页 | `done` | 1.2 s |
+      #|| 聊天 \| 详情 | 进行中 |
+      #|| 设置 | 完成 | 3 s | 多出来的 |
+      #|
+      #|之后的段落
+    ),
+  )
+  assert_eq(doc, [
+    Paragraph([Text("改了这些：")]),
+    Table({
+      align: [Left, Center, Right],
+      head: [[Text("页面")], [Text("状态")], [Text("耗时")]],
+      rows: [
+        [[Text("首页")], [Code("done")], [Text("1.2 s")]],
+        [[Text("聊天 | 详情")], [Text("进行中")], []],
+        [[Text("设置")], [Text("完成")], [Text("3 s")]],
+      ],
+    }),
+    Paragraph([Text("之后的段落")]),
+  ])
+}
+
+///|
+test "tables: no delimiter row, or a row of another width, is no table; outer pipes are optional" {
+  assert_eq(@md.parse("a | b\nc | d"), [
+    Paragraph([Text("a | b"), SoftBreak, Text("c | d")]),
+  ])
+  assert_eq(@md.parse("a | b\n--- | --- | ---"), [
+    Paragraph([Text("a | b"), SoftBreak, Text("--- | --- | ---")]),
+  ])
+  assert_eq(@md.parse("a | b\n--- | ---\n1 | 2"), [
+    Table({ align: [Plain, Plain], head: [[Text("a")], [Text("b")]], rows: [[[Text("1")], [Text("2")]]] }),
+  ])
+}

@@ -6,7 +6,8 @@
 // CommonMark's delimiter rules), ~~strikethrough~~, links, images (their
 // words), autolinks and bare web addresses (ending where a reader sees them
 // end: at a space or at Chinese, as still.fail's bareLinks has it), hard and
-// soft line breaks, backslash escapes. Tables and HTML stay as their text.
+// soft line breaks, backslash escapes, GFM's tables (a head, its columns'
+// alignment, rows of cells). HTML stays as its text.
 
 ///|
 pub(all) enum Inline {
@@ -41,6 +42,24 @@ pub(all) struct ListBlock {
 } derive(Eq, Debug)
 
 ///|
+/// A table (GFM): its columns' alignment, its head's cells, its rows' cells (each row as many as the head has).
+pub(all) struct TableBlock {
+  /// each column's: Left (`:--`), Center (`:-:`), Right (`--:`), Plain (`---`)
+  align : Array[Align]
+  head : Array[Array[Inline]]
+  rows : Array[Array[Array[Inline]]]
+} derive(Eq, Debug)
+
+///|
+/// How a table's column is aligned; `Plain` where its delimiter says nothing (drawn from its start).
+pub(all) enum Align {
+  Plain
+  Left
+  Center
+  Right
+} derive(Eq, Debug)
+
+///|
 pub(all) enum Block {
   Paragraph(Array[Inline])
   /// its level (1-6), its words
@@ -50,6 +69,7 @@ pub(all) enum Block {
   /// its language ("" none), its code
   CodeBlock(String, String)
   Rule
+  Table(TableBlock)
 } derive(Eq, Debug)
 
 ///|
@@ -352,6 +372,121 @@ fn starts_block(l : String) -> Bool {
 }
 
 ///|
+/// A table's row split into its cells' words (GFM): on `|` not escaped, a leading and a trailing one dropped, each
+/// cell trimmed; `\|` is a `|` in its cell (in code too).
+fn table_cells(l : String) -> Array[String] {
+  let t = trim(l)
+  let cells = []
+  let sb = StringBuilder()
+  let n = t.length()
+  let mut i = if n > 0 && u(t, 0) == 124 { 1 } else { 0 }
+  // where the words not yet taken into `sb` begin
+  let mut seg = i
+  let mut last_pipe = false
+  while i < n {
+    let c = u(t, i)
+    if c == 92 && i + 1 < n && u(t, i + 1) == 124 {
+      sb.write_string(sub(t, seg, i))
+      sb.write_char('|')
+      i = i + 2
+      seg = i
+      last_pipe = false
+      continue
+    }
+    if c == 124 {
+      sb.write_string(sub(t, seg, i))
+      cells.push(trim(sb.to_string()))
+      sb.reset()
+      seg = i + 1
+      last_pipe = true
+    } else {
+      last_pipe = false
+    }
+    i = i + 1
+  }
+  sb.write_string(sub(t, seg, n))
+  let rest = sb.to_string()
+  if !last_pipe || rest != "" {
+    cells.push(trim(rest))
+  }
+  cells
+}
+
+///|
+/// A table's delimiter row (`| --- | :-: | --: |`): each column's alignment, or None when `l` is not one.
+fn table_delims(l : String) -> Array[Align]? {
+  if indent(l) >= 4 || !l.contains("-") {
+    return None
+  }
+  let t = trim(l)
+  // a row with one column needs a pipe somewhere
+  let cells = table_cells(t)
+  if cells.length() == 0 || (cells.length() == 1 && !t.contains("|")) {
+    return None
+  }
+  let out : Array[Align] = []
+  for c in cells {
+    let n = c.length()
+    if n == 0 {
+      return None
+    }
+    let left = u(c, 0) == 58
+    let right = u(c, n - 1) == 58
+    let a = if left { 1 } else { 0 }
+    let b = if right { n - 1 } else { n }
+    if b <= a {
+      return None
+    }
+    for k in a..<b {
+      if u(c, k) != 45 {
+        return None
+      }
+    }
+    let a : Align = if left && right {
+      Center
+    } else if right {
+      Right
+    } else if left {
+      Left
+    } else {
+      Plain
+    }
+    out.push(a)
+  }
+  Some(out)
+}
+
+///|
+/// Whether lines `i` and `i + 1` begin a table: a row of as many cells as the delimiter row under it has columns.
+fn table_at(lines : Array[String], i : Int) -> Array[Align]? {
+  if i + 1 >= lines.length() || indent(lines[i]) >= 4 || !lines[i].contains("|") {
+    return None
+  }
+  match table_delims(lines[i + 1]) {
+    Some(al) if table_cells(lines[i]).length() == al.length() => Some(al)
+    _ => None
+  }
+}
+
+///|
+/// The table that begins at line `i` (table_at said so): its rows until a blank line or another block.
+fn parse_table(lines : Array[String], i0 : Int, align : Array[Align]) -> (TableBlock, Int) {
+  let cols = align.length()
+  let row = fn(l : String) -> Array[Array[Inline]] {
+    let cells = table_cells(l)
+    Array::makei(cols, fn(k) { if k < cells.length() { parse_inline(cells[k]) } else { [] } })
+  }
+  let head = row(lines[i0])
+  let rows = []
+  let mut i = i0 + 2
+  while i < lines.length() && !is_blank(lines[i]) && !starts_block(lines[i]) && indent(lines[i]) < 4 {
+    rows.push(row(lines[i]))
+    i = i + 1
+  }
+  ({ align, head, rows }, i)
+}
+
+///|
 fn parse_blocks(lines : Array[String]) -> Array[Block] {
   let out = []
   let n = lines.length()
@@ -435,7 +570,16 @@ fn parse_blocks(lines : Array[String]) -> Array[Block] {
       }
       None => ()
     }
-    // a paragraph, until a blank line or another block (or its underline)
+    match table_at(lines, i) {
+      Some(align) => {
+        let (t, next) = parse_table(lines, i, align)
+        out.push(Table(t))
+        i = next
+        continue
+      }
+      None => ()
+    }
+    // a paragraph, until a blank line or another block (or its underline, or a table's head)
     let words = [trim(l)]
     i = i + 1
     let mut level = 0
@@ -446,7 +590,7 @@ fn parse_blocks(lines : Array[String]) -> Array[Block] {
         i = i + 1
         break
       }
-      if starts_block(lines[i]) {
+      if starts_block(lines[i]) || table_at(lines, i) is Some(_) {
         break
       }
       words.push(dedent(lines[i], lines[i].length()))

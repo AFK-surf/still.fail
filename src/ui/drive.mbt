@@ -132,9 +132,20 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
         })
     }
     if hit && n.fw > 0.0 && n.fh > 0.0 && !c.in_draw_only(i) {
-      // where it is laid out: where it is tapped (a look moves only what is drawn: draw.mbt)
-      let x = n.x + n.fw / 2.0
-      let y = n.y + n.fh / 2.0
+      // where it is laid out: where it is tapped (a look moves only what is drawn: draw.mbt); in rich text, the
+      // middle of the words looked for (a link in a paragraph, a word in a long line of code)
+      let (x, y) = match (n.rl, exact) {
+        (Some(rl), None) =>
+          match n.text.find(what) {
+            Some(k) =>
+              match rl.rects(k, k + what.length()).get(0) {
+                Some(r) => (n.x + n.pad_l + r.0 + r.2 / 2.0, n.y + n.pad_t + r.1 + r.3 / 2.0)
+                None => (n.x + n.fw / 2.0, n.y + n.fh / 2.0)
+              }
+            None => (n.x + n.fw / 2.0, n.y + n.fh / 2.0)
+          }
+        _ => (n.x + n.fw / 2.0, n.y + n.fh / 2.0)
+      }
       if x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
         found.push((x, y))
       }

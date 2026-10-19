@@ -132,6 +132,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.drawing_after_layout()
   // what words marked as selectable hold, as laid out (words.mbt)
   c.words_after_layout()
+  // how far what scrolls sideways can (sideways.mbt)
+  c.sideways_after_layout()
   c.clicked.clear()
   if scroll_logging() {
     c.log_scroll()
@@ -323,6 +325,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     track_x.add(t, x)
     track_y.add(t, y)
     c.drag_scroll = hit_in(c.scroll_ids, c.scroll_rects, x, y)
+    sideways_down(c, c.drag_scroll, x, y)
     c.editor_drag = false
     c.edge = if c.on_edge(x, y) { 1 } else { 0 }
     // a drag area (a sheet's top, the bottom bar) is the finger's from here: no edge swipe under it
@@ -390,6 +393,10 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
             }
           None => ()
         }
+      } else if sideways.contains(c.drag_scroll) &&
+        !sideways_move(c, c.drag_scroll, x, y) {
+        // dragged sideways (or not yet past the slop); moved up or down first, the list takes it below
+        ()
       } else if drags.contains(c.drag_scroll) {
         if drag_move(c.drag_scroll, x, y) && !c.dragging {
           c.dragging = true
@@ -452,6 +459,11 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
           c.release(st, dclamp(-track_y.velocity(), -max_fling, max_fling))
         None => ()
       }
+      sideways_up(
+        c.drag_scroll,
+        dclamp(track_x.velocity(), -max_fling, max_fling),
+        dclamp(track_y.velocity(), -max_fling, max_fling),
+      )
       if pagers.contains(c.drag_scroll) {
         c.pager_release(
           c.drag_scroll,
@@ -478,6 +490,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         Some(st) => c.release(st, 0.0)
         None => ()
       }
+      sideways_up(c.drag_scroll, 0.0, 0.0)
       if pagers.contains(c.drag_scroll) {
         c.pager_release(c.drag_scroll, 0.0)
       }
@@ -581,9 +594,17 @@ fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
 }
 
 ///|
-fn on_wheel(x : Double, y : Double, _dx : Double, dy : Double, phase : Int) -> Unit {
+fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
   let c = g
-  let target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
+  let mut target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
+  // over what scrolls sideways: its sideways part moves it, the rest goes to the list it lies in
+  if sideways.contains(target) {
+    if sideways_wheel(target, dx, dy) {
+      h_request_frame()
+      return
+    }
+    target = outer_scroll(c, x, y)
+  }
   if captures.contains(target) {
     // a box that takes the pointer keeps the wheel (native.mbt `wheel`)
     wheels[target] = wheels.get(target).unwrap_or(0.0) + dy

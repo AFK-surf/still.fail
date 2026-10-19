@@ -126,6 +126,8 @@ struct Node {
   mut pager : Int
   // laid over its parent rather than beside its siblings
   mut layer : Bool
+  // what it holds laid out as wide as it is, scrolled sideways inside it (Ctx::sideways)
+  mut sideways : Bool
   // layout results, absolute, in logical pixels, kept from frame to frame
   // in the slot (a subtree laid out as last frame is moved, not laid out)
   mut x : Double
@@ -226,6 +228,7 @@ fn Node::new() -> Node {
     page_no: -1,
     pager: 0,
     layer: false,
+    sideways: false,
     x: 0.0,
     y: 0.0,
     fw: 0.0,
@@ -276,6 +279,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.page_no = -1
   self.pager = 0
   self.layer = false
+  self.sideways = false
   self.rich = None
   self.item = -1
 }

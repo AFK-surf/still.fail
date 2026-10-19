@@ -111,6 +111,8 @@ priv struct Drawn {
   mut keep_rel : Int
   /// drawn only as its bottom this tall (-1 whole)
   mut bottom : Double
+  /// drawn only as its top this tall (-1 whole)
+  mut top : Double
 }
 
 ///|
@@ -245,7 +247,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
   if dr.stamp[i] == self.frame_no && dr.at[i] >= 0 {
     return dr.entries[dr.at[i]]
   }
-  let e : Drawn = { node: i, look: still_look, z: 0, only: false, keep: None, keep_rel: -1, bottom: -1.0 }
+  let e : Drawn = { node: i, look: still_look, z: 0, only: false, keep: None, keep_rel: -1, bottom: -1.0, top: -1.0 }
   dr.stamp[i] = self.frame_no
   dr.at[i] = dr.entries.length()
   dr.entries.push(e)
@@ -323,6 +325,13 @@ pub fn Ctx::draw_only(self : Ctx, i : Int) -> Unit {
 /// tapped whole, where it is laid out.
 pub fn Ctx::cut_to_bottom(self : Ctx, i : Int, h : Double) -> Unit {
   self.drawn_of(i).bottom = dmax(h, 0.0)
+}
+
+///|
+/// Node `i` drawn only as its top `h` (what is below cut off, as something unrolling from its top shows it), and tapped
+/// whole, where it is laid out.
+pub fn Ctx::cut_to_top(self : Ctx, i : Int, h : Double) -> Unit {
+  self.drawn_of(i).top = dmax(h, 0.0)
 }
 
 ///|
@@ -423,7 +432,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   let look = e.look
   let keep = e.keep is Some(_)
-  let cutting = e.bottom >= 0.0 && e.bottom < self.nodes[i].fh
+  let cutting = (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
+    (e.top >= 0.0 && e.top < self.nodes[i].fh)
   if look.is_still() && e.z != 2 && !keep && !e.only && !cutting {
     return false
   }
@@ -477,10 +487,11 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     // as laid out (a look moves the cut with what it cuts)
     let k = clip_stack.length() - 4
     let top = clip_stack[k + 1]
+    let bottom = clip_stack[k + 3]
     clip_stack.push(clip_stack[k])
-    clip_stack.push(dmax(top, n.y + n.fh - e.bottom))
+    clip_stack.push(if e.bottom >= 0.0 { dmax(top, n.y + n.fh - e.bottom) } else { top })
     clip_stack.push(clip_stack[k + 2])
-    clip_stack.push(clip_stack[k + 3])
+    clip_stack.push(if e.top >= 0.0 { dmin(bottom, n.y + e.top) } else { bottom })
   }
   let was = dr.mode
   if !look.is_still() || e.z == 2 || e.only || cutting {

@@ -292,7 +292,10 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if n.kind == kind_list ||
     (
       n.id != 0 &&
-      (pagers.contains(n.id) || drags.contains(n.id) || captures.contains(n.id))
+      (pagers.contains(n.id) ||
+      drags.contains(n.id) ||
+      captures.contains(n.id) ||
+      sideways.contains(n.id))
     ) {
     self.next_scroll_ids.push(n.id)
     self.next_scroll_rects.push(dmax(n.x, cx0))
