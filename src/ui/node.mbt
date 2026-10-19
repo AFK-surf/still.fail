@@ -92,6 +92,10 @@ struct Node {
   // moved sideways by this share of its own width (a page sliding in)
   mut slide : Double
   mut opacity : Double
+  // its ground made of what is under it (glass.mbt), and whether the liquid
+  // glass inside it is one group (drawn first, merging)
+  mut glass : Glass?
+  mut glass_group : Bool
   // text
   mut text : String
   mut font_size : Double
@@ -194,6 +198,8 @@ fn Node::new() -> Node {
     ty: 0.0,
     slide: 0.0,
     opacity: 1.0,
+    glass: None,
+    glass_group: false,
     text: "",
     font_size: 14.0,
     weight: 400,
@@ -289,6 +295,8 @@ fn Node::reset_look(self : Node) -> Unit {
   self.tx = 0.0
   self.ty = 0.0
   self.opacity = 1.0
+  self.glass = None
+  self.glass_group = false
 }
 
 ///|

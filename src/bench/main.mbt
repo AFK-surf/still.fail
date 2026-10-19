@@ -245,7 +245,7 @@ fn main {
     let out = []
     for part in wanted.split(",") {
       let p = part.to_string()
-      if scene_names.contains(p) {
+      if scene_names.contains(p) || glass_scene_names.contains(p) {
         out.push(p)
       } else {
         println("unknown scene: \{p}")

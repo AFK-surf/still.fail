@@ -58,6 +58,7 @@ fn reset_globals() -> Unit {
   c.ninst = 0
   c.ime_sig = ""
   c.bench_list = 0
+  reset_glass()
   clear_shapes()
   text_cache.fonts.clear()
   text_cache.metrics.clear()
@@ -94,6 +95,7 @@ pub fn Tester::new(
     clipboard: "",
     back_on: false,
     platform,
+    reduce_transparency: false,
     logs: [],
     image_sizes: {},
     image_loads: [],
@@ -628,6 +630,53 @@ pub fn Tester::release(self : Tester, x : Double, y : Double) -> Unit {
 pub fn Tester::press_at(self : Tester, x : Double, y : Double) -> Unit {
   on_pointer(0, x, y, 0)
   self.frame()
+}
+
+///|
+/// The system asks for less transparency from now on, or no longer.
+pub fn Tester::set_reduce_transparency(self : Tester, on : Bool) -> Unit {
+  self.fake.reduce_transparency = on
+  glass_paint.checked_at = -1000
+}
+
+///|
+/// The glass drawn in the last frame: (x, y, w, h, kind (5 frosted, 6
+/// liquid), the capture it shares (1, 2, …)).
+pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Double, Int, Int)] {
+  ignore(self)
+  let c = g
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    let kind = c.inst[b + 5].to_int()
+    if kind == 5 || kind == 6 {
+      out.push(
+        (
+          c.inst[b],
+          c.inst[b + 1],
+          c.inst[b + 2],
+          c.inst[b + 3],
+          kind,
+          (-c.inst[b + 20]).to_int(),
+        ),
+      )
+    }
+  }
+  out
+}
+
+///|
+/// How many glyphs of the last frame are inked by the glass under them.
+pub fn Tester::adaptive_glyphs(self : Tester) -> Int {
+  ignore(self)
+  let c = g
+  let mut n = 0
+  for k in 0..<c.ninst {
+    if c.inst[k * inst_size + 5] == 7.0 {
+      n = n + 1
+    }
+  }
+  n
 }
 
 ///|

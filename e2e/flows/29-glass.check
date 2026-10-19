@@ -1,0 +1,10 @@
+# On macOS the shots are the window's (390 points wide, at its scale): a row just above the bar's hairline (y 50), and one in
+# the composer's capsule under its words and buttons (y 830). (Android's screencaps have the system's bars round
+# the app: only what the station has is checked there.) Drawn solid (MBUI_GLASS=solid) both rows are flat, 0.00; as
+# glass they were 1.05 and 0.36 on 2026-10-19.
+glass_row() { python3 "$D/pngrow.py" "$OUT/$name/$1.png" $2 $3 $4 | cut -d' ' -f1; }
+check "the station has the four messages sent from the glass composer, as alice's" '[ "$(sql "select count(*) from entries where author_kind=\"person\" and author=\"alice@example.test\" and text like \"玻璃下的%$TAG\"")" = 4 ]'
+if [ $PLATFORM = mac ]; then
+  check "the top bar frosts what runs under it (its ground is not flat)" 'awk "BEGIN{exit !($(glass_row 1-under-bar 50 0 390) > 0.1)}"'
+  check "scrolled up, the composer frosts what runs under it" 'awk "BEGIN{exit !($(glass_row 2-under-composer 830 60 330) > 0.1)}"'
+fi

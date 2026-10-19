@@ -91,6 +91,12 @@ extern "js" fn js_set_back(
 extern "js" fn js_back_enabled(on : Bool) -> Unit =
   #|(on) => globalThis.__mbhost && globalThis.__mbhost.backEnabled && globalThis.__mbhost.backEnabled(on)
 
+extern "js" fn js_reduce_transparency() -> Bool =
+  #|() => !!(globalThis.__mbhost && globalThis.__mbhost.reduceTransparency && globalThis.__mbhost.reduceTransparency())
+
+extern "js" fn js_gpu_ms() -> Double =
+  #|() => (globalThis.__mbhost && globalThis.__mbhost.gpuMs) ? globalThis.__mbhost.gpuMs() : -1
+
 extern "js" fn js_env(name : String) -> String =
   #|(n) => (typeof location !== "undefined" && new URLSearchParams(location.search).get(n)) || ""
 
@@ -225,6 +231,19 @@ pub fn set_back(back : FuncRef[(Int, Double, Double, Int) -> Unit]) -> Unit {
 ///|
 pub fn back_enabled(on : Bool) -> Unit {
   js_back_enabled(on)
+}
+
+///|
+/// Whether the system asks for less transparency (glass drawn solid): the
+/// browser's prefers-reduced-transparency.
+pub fn reduce_transparency() -> Bool {
+  js_reduce_transparency()
+}
+
+///|
+/// The GPU's time for the last frame drawn, in ms (-1: not known here).
+pub fn gpu_ms() -> Double {
+  js_gpu_ms()
 }
 
 ///|

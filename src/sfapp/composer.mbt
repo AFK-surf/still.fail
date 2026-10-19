@@ -726,7 +726,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
       pad=composer_inset,
       gap=8.0,
       radius=composer_corner,
-      bg=floating_ground(),
+      glass=@sf.glass_floating(),
       shadow=2.0,
       shadow_color=0x0000004DL,
       shadow_y=0.5,

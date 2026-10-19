@@ -5,6 +5,7 @@
 #include <jni.h>
 #include <GLES3/gl3.h>
 #include <android/log.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -151,37 +152,109 @@ static const char *VS =
     "layout(location=2) in vec4 a_color;\n"
     "layout(location=3) in vec4 a_c2;\n"
     "layout(location=4) in vec4 a_clip;\n"
+    "layout(location=5) in vec4 a_pad;\n"
     "uniform vec2 u_vp;\n"
+    "uniform vec4 u_gb;\n"
     "out vec2 v_pos;\n"
-    "flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip;\n"
+    "flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;\n"
     "void main() {\n"
     "  int vid = gl_VertexID;\n"
     "  vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);\n"
     "  int kind = int(a_p.y + 0.5);\n"
-    "  float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4) ? 1.0 : 0.0);\n"
+    "  float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);\n"
     "  vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);\n"
+    "  if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);\n"
     "  gl_Position = vec4(pos.x / u_vp.x * 2.0 - 1.0, 1.0 - pos.y / u_vp.y * 2.0, 0.0, 1.0);\n"
-    "  v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip;\n"
+    "  v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad;\n"
     "}\n";
 
 static const char *FS =
     "#version 300 es\n"
     "precision highp float;\n"
     "in vec2 v_pos;\n"
-    "flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip;\n"
+    "flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;\n"
     "uniform float u_scale;\n"
     "uniform sampler2D u_atlas;\n"
     "uniform sampler2D u_img;\n"
+    "// glass (src/ui/glass.mbt): the blurred copy under it and where a point is in it (uv = p * u_map.xy + u_map.zw, kept\n"
+    "// in u_uvc), a liquid group's shapes and corners, how many\n"
+    "uniform sampler2D u_bd;\n"
+    "uniform vec4 u_map;\n"
+    "uniform vec4 u_uvc;\n"
+    "uniform vec4 u_shape[8];\n"
+    "uniform vec4 u_rad[2];\n"
+    "uniform int u_n;\n"
     "out vec4 o;\n"
+    "float sd_rr(vec2 p, vec4 r, float rad) {\n"
+    "  vec2 hs = r.zw * 0.5;\n"
+    "  float rr = min(rad, min(hs.x, hs.y));\n"
+    "  vec2 q = abs(p - r.xy - hs) - hs + rr;\n"
+    "  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
+    "}\n"
+    "float smin_k(float a, float b, float k) {\n"
+    "  if (k <= 0.0) return min(a, b);\n"
+    "  float h = max(k - abs(a - b), 0.0) / k;\n"
+    "  return min(a, b) - h * h * k * 0.25;\n"
+    "}\n"
+    "float sd_group(vec2 p, float k) {\n"
+    "  float d = 1e9;\n"
+    "  for (int i = 0; i < 8; i++) {\n"
+    "    if (i >= u_n) break;\n"
+    "    d = smin_k(d, sd_rr(p, u_shape[i], u_rad[i / 4][i % 4]), k);\n"
+    "  }\n"
+    "  return d;\n"
+    "}\n"
+    "vec3 backdrop(vec2 p) {\n"
+    "  return texture(u_bd, clamp(p * u_map.xy + u_map.zw, u_uvc.xy, u_uvc.zw)).rgb;\n"
+    "}\n"
+    "float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }\n"
     "void main() {\n"
     "  vec2 p = v_pos;\n"
     "  if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;\n"
     "  int kind = int(v_p.y + 0.5);\n"
     "  vec4 col = v_color;\n"
-    "  if (kind == 1 || kind == 3) {\n"
+    "  if (kind == 1 || kind == 3 || kind == 7) {\n"
     "    vec2 uv = (v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw) / 2048.0;\n"
     "    vec4 t = texture(u_atlas, uv);\n"
+    "    if (kind == 7) {\n"
+    "      // inked by how light what is under its glass is, looked at round the glass's middle\n"
+    "      vec2 c = v_pad.yz; float r = v_pad.w * 0.5;\n"
+    "      float l = (luma(backdrop(c)) + luma(backdrop(c + vec2(r, 0.0))) + luma(backdrop(c - vec2(r, 0.0))) +\n"
+    "                 luma(backdrop(c + vec2(0.0, r))) + luma(backdrop(c - vec2(0.0, r)))) / 5.0;\n"
+    "      vec3 ink = mix(vec3(1.0), vec3(0.11, 0.11, 0.12), smoothstep(0.42, 0.6, l));\n"
+    "      o = vec4(ink, 1.0) * (t.a * col.a);\n"
+    "      return;\n"
+    "    }\n"
     "    o = kind == 1 ? vec4(col.rgb, 1.0) * (t.a * col.a) : t * col.a;\n"
+    "    return;\n"
+    "  }\n"
+    "  if (kind == 6) {\n"
+    "    // liquid: one shape of the group's, merged; what is under it bent along the bezel, the colours split a little\n"
+    "    float k = v_pad.w;\n"
+    "    float d = sd_group(p, k);\n"
+    "    float a = clamp(0.5 - d * u_scale, 0.0, 1.0);\n"
+    "    if (a <= 0.0) discard;\n"
+    "    float e = 0.5;\n"
+    "    vec2 grad = vec2(sd_group(p + vec2(e, 0.0), k) - sd_group(p - vec2(e, 0.0), k),\n"
+    "                     sd_group(p + vec2(0.0, e), k) - sd_group(p - vec2(0.0, e), k));\n"
+    "    vec2 n = grad / max(length(grad), 1e-4);\n"
+    "    float bezel = max(v_c2.y, 1.0);\n"
+    "    float edge = 1.0 - clamp(-d / bezel, 0.0, 1.0);\n"
+    "    float disp = v_pad.y * (1.0 - sqrt(max(1.0 - edge * edge, 0.0)));\n"
+    "    vec2 off = -n * disp;\n"
+    "    float ch = v_pad.z;\n"
+    "    vec3 c = vec3(backdrop(p + off * (1.0 + ch)).r, backdrop(p + off).g, backdrop(p + off * (1.0 - ch)).b);\n"
+    "    c = max(mix(vec3(luma(c)), c, v_p.z), 0.0);\n"
+    "    c = c * (1.0 - col.a) + col.rgb * col.a;\n"
+    "    // the rim lit from the top left, and less across from it\n"
+    "    float ndl = dot(n, vec2(-0.6, -0.8));\n"
+    "    float band = clamp(1.0 + d / 2.5, 0.0, 1.0);\n"
+    "    float spec = v_c2.x * (band * (0.9 * pow(max(ndl, 0.0), 1.5) + 0.45 * pow(max(-ndl, 0.0), 1.5)) +\n"
+    "                           0.3 * edge * edge * max(ndl, 0.0));\n"
+    "    // the edge shaded, more on the side away from the light, so the shape reads over a light ground too\n"
+    "    c *= 1.0 - v_c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));\n"
+    "    c = c + (1.0 - c) * clamp(spec, 0.0, 1.0);\n"
+    "    o = vec4(c, 1.0) * (a * v_c2.w);\n"
     "    return;\n"
     "  }\n"
     "  vec2 hs = v_rect.zw * 0.5;\n"
@@ -197,10 +270,33 @@ static const char *FS =
     "  if (kind == 2) {\n"
     "    float b = max(v_p.w, 0.5);\n"
     "    float a = 1.0 - smoothstep(-b, b, d);\n"
+    "    // glass's: only outside its box (c2.y above it)\n"
+    "    if (v_c2.x > 0.5) {\n"
+    "      vec2 qb = abs(p - c + vec2(0.0, v_c2.y)) - hs + r;\n"
+    "      float db = length(max(qb, 0.0)) + min(max(qb.x, qb.y), 0.0) - r;\n"
+    "      a *= clamp(0.5 + db * u_scale, 0.0, 1.0);\n"
+    "    }\n"
     "    o = vec4(col.rgb, 1.0) * col.a * a;\n"
     "    return;\n"
     "  }\n"
     "  float a = clamp(0.5 - d * u_scale, 0.0, 1.0);\n"
+    "  if (kind == 5) {\n"
+    "    // frosted: the blurred copy, saturated, the tint over it; the rim (a hairline inside the edge, the top left lit,\n"
+    "    // the foot and right less), 0.5 wide\n"
+    "    vec3 g3 = backdrop(p);\n"
+    "    g3 = max(mix(vec3(luma(g3)), g3, v_p.z), 0.0);\n"
+    "    g3 = g3 * (1.0 - col.a) + col.rgb * col.a;\n"
+    "    if (v_c2.x + v_c2.y + v_c2.z > 0.0) {\n"
+    "      float edge = clamp(0.5 + (d + 0.5) * u_scale, 0.0, 1.0);\n"
+    "      float lit = clamp(0.5 + sd_rr(p - 0.5, v_rect, v_p.x) * u_scale, 0.0, 1.0);\n"
+    "      float back = clamp(0.5 + sd_rr(p + 0.5, v_rect, v_p.x) * u_scale, 0.0, 1.0);\n"
+    "      g3 = mix(g3, vec3(1.0), v_c2.x * edge);\n"
+    "      g3 = mix(g3, vec3(1.0), v_c2.y * lit);\n"
+    "      g3 = mix(g3, vec3(1.0), v_c2.z * back);\n"
+    "    }\n"
+    "    o = vec4(g3, 1.0) * (a * v_c2.w);\n"
+    "    return;\n"
+    "  }\n"
     "  vec4 fill = vec4(col.rgb, 1.0) * col.a;\n"
     "  if (v_p.z > 0.0) {\n"
     "    float inner = clamp(0.5 - (d + v_p.z) * u_scale, 0.0, 1.0);\n"
@@ -210,12 +306,61 @@ static const char *FS =
     "  o = fill * a;\n"
     "}\n";
 
-static GLuint prog, vao, vbo, atlas;
-static GLint u_vp, u_scale, u_atlas, u_img;
+// glass's passes over its copy of what is under it
+static const char *PVS =
+    "#version 300 es\n"
+    "void main() {\n"
+    "  gl_Position = vec4(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0, 0.0, 1.0);\n"
+    "}\n";
+
+static const char *PFS =
+    "#version 300 es\n"
+    "precision highp float;\n"
+    "// The backdrop's passes: u_a.xy the source's texel, u_a.z 1 halving (dual Kawase's down), 2 a Gaussian along u_b.zw\n"
+    "// of deviation u_a.w (texels); u_b.xy the last texel's centre of what the source holds\n"
+    "uniform sampler2D u_src;\n"
+    "uniform vec4 u_a;\n"
+    "uniform vec4 u_b;\n"
+    "out vec4 o;\n"
+    "void main() {\n"
+    "  vec2 ts = u_a.xy;\n"
+    "  vec2 lo = ts * 0.5, hi = u_b.xy;\n"
+    "  if (u_a.z < 1.5) {\n"
+    "    vec2 uv = gl_FragCoord.xy * 2.0 * ts;\n"
+    "    vec4 s = texture(u_src, clamp(uv, lo, hi)) * 4.0;\n"
+    "    s += texture(u_src, clamp(uv - ts, lo, hi));\n"
+    "    s += texture(u_src, clamp(uv + ts, lo, hi));\n"
+    "    s += texture(u_src, clamp(uv + vec2(ts.x, -ts.y), lo, hi));\n"
+    "    s += texture(u_src, clamp(uv + vec2(-ts.x, ts.y), lo, hi));\n"
+    "    o = s / 8.0;\n"
+    "    return;\n"
+    "  }\n"
+    "  vec2 uv = gl_FragCoord.xy * ts;\n"
+    "  vec2 dir = u_b.zw * ts;\n"
+    "  float sg = u_a.w;\n"
+    "  float k = -0.5 / (sg * sg);\n"
+    "  vec4 s = texture(u_src, clamp(uv, lo, hi));\n"
+    "  float wsum = 1.0;\n"
+    "  int n = int(ceil(sg * 3.0));\n"
+    "  for (int i = 1; i <= 64; i += 2) {\n"
+    "    if (i > n) break;\n"
+    "    float w1 = exp(float(i * i) * k), w2 = exp(float((i + 1) * (i + 1)) * k);\n"
+    "    float w = w1 + w2;\n"
+    "    float off = (float(i) * w1 + float(i + 1) * w2) / w;\n"
+    "    s += (texture(u_src, clamp(uv + dir * off, lo, hi)) + texture(u_src, clamp(uv - dir * off, lo, hi))) * w;\n"
+    "    wsum += 2.0 * w;\n"
+    "  }\n"
+    "  o = s / wsum;\n"
+    "}\n";
+
+static GLuint prog, vao, vbo, atlas, post;
+static GLint u_vp, u_scale, u_atlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b;
 static float *fbuf;
 static size_t fcap;
 static int fb_w, fb_h;
 static double cur_w, cur_h, cur_scale;
+
+static void glass_lost(void);
 
 static GLuint compile(GLenum type, const char *src) {
   GLuint s = glCreateShader(type);
@@ -240,11 +385,26 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   u_scale = glGetUniformLocation(prog, "u_scale");
   u_atlas = glGetUniformLocation(prog, "u_atlas");
   u_img = glGetUniformLocation(prog, "u_img");
+  u_bd = glGetUniformLocation(prog, "u_bd");
+  u_map = glGetUniformLocation(prog, "u_map");
+  u_uvc = glGetUniformLocation(prog, "u_uvc");
+  u_gb = glGetUniformLocation(prog, "u_gb");
+  u_shape = glGetUniformLocation(prog, "u_shape");
+  u_rad = glGetUniformLocation(prog, "u_rad");
+  u_n = glGetUniformLocation(prog, "u_n");
+  post = glCreateProgram();
+  glAttachShader(post, compile(GL_VERTEX_SHADER, PVS));
+  glAttachShader(post, compile(GL_FRAGMENT_SHADER, PFS));
+  glLinkProgram(post);
+  pu_src = glGetUniformLocation(post, "u_src");
+  pu_a = glGetUniformLocation(post, "u_a");
+  pu_b = glGetUniformLocation(post, "u_b");
+  glass_lost();
   glGenVertexArrays(1, &vao);
   glBindVertexArray(vao);
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 6; i++) {
     glEnableVertexAttribArray(i);
     glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 96, (void *)(intptr_t)(i * 16));
     glVertexAttribDivisor(i, 1);
@@ -268,13 +428,174 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_resize(JNIEnv *env, jclass c, jint w
   fb_h = h;
 }
 
+// ---------------------------------------------------------------------------
+// Glass (src/ui/glass.mbt): when the instances reach a run of glass (slot 20 negative: the capture it shares), what
+// is drawn so far under it (its rects with room for the blur round them) is copied out of the surface, halved down
+// to where the blur is a few texels wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what
+// deviation is left, and drawn through. Level j is 1/2^j of the surface, [4] a Gaussian's first half.
+
+typedef struct { GLuint t, fb; int w, h; } level;
+static level lv[5];
+static int lv_w, lv_h;
+static GLuint bd_tex;
+static float gmap[4], guvc[4], ggb[4], gshape[32], grad[8];
+static int gn;
+// the app's part of the surface (MBView: the soft keyboard over the rest), in its pixels from the foot
+static int vy0, vhp;
+
+// a new context has none of the old textures
+static void glass_lost(void) {
+  memset(lv, 0, sizeof lv);
+  lv_w = lv_h = 0;
+}
+
+static level level_tex(int w, int h) {
+  level l = {0, 0, w > 0 ? w : 1, h > 0 ? h : 1};
+  glGenTextures(1, &l.t);
+  glBindTexture(GL_TEXTURE_2D, l.t);
+  glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, l.w, l.h);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glGenFramebuffers(1, &l.fb);
+  glBindFramebuffer(GL_FRAMEBUFFER, l.fb);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, l.t, 0);
+  return l;
+}
+
+static void ensure_levels(int w, int h) {
+  if (lv[0].t && lv_w >= w && lv_h >= h) return;
+  for (int j = 0; j < 5; j++)
+    if (lv[j].t) {
+      glDeleteTextures(1, &lv[j].t);
+      glDeleteFramebuffers(1, &lv[j].fb);
+    }
+  lv_w = w > lv_w ? w : lv_w;
+  lv_h = h > lv_h ? h : lv_h;
+  for (int j = 0; j < 4; j++) lv[j] = level_tex((lv_w + (1 << j) - 1) >> j, (lv_h + (1 << j) - 1) >> j);
+  lv[4] = level_tex(lv_w, lv_h);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int mode, float sg, float dx, float dy) {
+  glBindFramebuffer(GL_FRAMEBUFFER, dst->fb);
+  glViewport(0, 0, w, h);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, src->t);
+  glUniform1i(pu_src, 0);
+  glUniform4f(pu_a, 1.0f / src->w, 1.0f / src->h, (float)mode, sg);
+  glUniform4f(pu_b, (sw - 0.5f) / src->w, (sh - 0.5f) / src->h, dx, dy);
+  glDrawArrays(GL_TRIANGLES, 0, 3);
+}
+
+// what the run [start, end) of glass sees; 0 when none of it shows
+static int capture(const float *f, int32_t start, int32_t end) {
+  const float *a = f + start * 24;
+  float blur = a[7];
+  int kind = (int)(a[5] + 0.5f);
+  float margin = 3.0f * blur + a[21] * (1.0f + a[22]) + a[23] + 2.0f;
+  float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+  gn = 0;
+  for (int32_t i = start; i < end; i++) {
+    const float *b = f + i * 24;
+    float bx0 = b[0] > b[16] ? b[0] : b[16], by0 = b[1] > b[17] ? b[1] : b[17];
+    float bx1 = b[0] + b[2] < b[18] ? b[0] + b[2] : b[18], by1 = b[1] + b[3] < b[19] ? b[1] + b[3] : b[19];
+    if (kind == 6) {
+      bx0 = b[0] - a[23]; by0 = b[1] - a[23]; bx1 = b[0] + b[2] + a[23]; by1 = b[1] + b[3] + a[23];
+      if (gn < 8) {
+        for (int k = 0; k < 4; k++) gshape[gn * 4 + k] = b[k];
+        grad[gn] = b[4];
+        gn++;
+      }
+    }
+    if (bx0 < x0) x0 = bx0;
+    if (by0 < y0) y0 = by0;
+    if (bx1 > x1) x1 = bx1;
+    if (by1 > y1) y1 = by1;
+  }
+  ggb[0] = x0 - 2; ggb[1] = y0 - 2; ggb[2] = x1 + 2; ggb[3] = y1 + 2;
+  float sc = (float)cur_scale;
+  // in the surface's pixels, from its foot (GL's way up)
+  int top = vy0 + vhp;
+  int px0 = (int)floorf((x0 - margin) * sc), px1 = (int)ceilf((x1 + margin) * sc);
+  int pb0 = top - (int)ceilf((y1 + margin) * sc), pb1 = top - (int)floorf((y0 - margin) * sc);
+  if (px0 < 0) px0 = 0;
+  if (px1 > fb_w) px1 = fb_w;
+  if (pb0 < vy0) pb0 = vy0;
+  if (pb1 > top) pb1 = top;
+  if (px1 <= px0 || pb1 <= pb0 || x1 <= x0 || y1 <= y0) return 0;
+  int w = px1 - px0, h = pb1 - pb0;
+  ensure_levels(fb_w, fb_h);
+  glDisable(GL_BLEND);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lv[0].fb);
+  glBlitFramebuffer(px0, pb0, px1, pb1, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+  glUseProgram(post);
+  float sp = blur * sc;
+  int k = 0;
+  while (k < 3 && sp / (float)(1 << (k + 1)) >= 2.0f) k++;
+  int lw[4] = {w}, lh[4] = {h};
+  for (int j = 1; j <= k; j++) {
+    lw[j] = (lw[j - 1] + 1) / 2;
+    lh[j] = (lh[j - 1] + 1) / 2;
+    post_pass(&lv[j - 1], lw[j - 1], lh[j - 1], &lv[j], lw[j], lh[j], 1, 0, 0, 0);
+  }
+  // what is left of the deviation once the halvings' and the last look's (bilinear) spread are taken out
+  float sk = sp / (float)(1 << k);
+  float pre = k > 0 ? 0.75f * (1.0f - powf(0.25f, (float)k)) / 3.0f + 1.0f / 6.0f : 0.0f;
+  float sg = sqrtf(sk * sk - pre > 0 ? sk * sk - pre : 0);
+  if (sg > 0.3f) {
+    post_pass(&lv[k], lw[k], lh[k], &lv[4], lw[k], lh[k], 2, sg, 1, 0);
+    post_pass(&lv[4], lw[k], lh[k], &lv[k], lw[k], lh[k], 2, sg, 0, 1);
+  }
+  level *L = &lv[k];
+  float d = (float)(1 << k);
+  bd_tex = L->t;
+  gmap[0] = sc / d / L->w; gmap[1] = -sc / d / L->h;
+  gmap[2] = -(float)px0 / d / L->w; gmap[3] = (float)(top - pb0) / d / L->h;
+  guvc[0] = 0.5f / L->w; guvc[1] = 0.5f / L->h; guvc[2] = (lw[k] - 0.5f) / L->w; guvc[3] = (lh[k] - 0.5f) / L->h;
+  return 1;
+}
+
+// the main program's state (after the passes)
+static void main_state(void) {
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0, vy0, fb_w, vhp);
+  glEnable(GL_BLEND);
+  glUseProgram(prog);
+  glBindVertexArray(vao);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glUniform2f(u_vp, (float)cur_w, (float)cur_h);
+  glUniform1f(u_scale, (float)cur_scale);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, atlas);
+  glUniform1i(u_atlas, 0);
+  glUniform1i(u_img, 1);
+  glActiveTexture(GL_TEXTURE2);
+  glBindTexture(GL_TEXTURE_2D, bd_tex ? bd_tex : atlas);
+  glUniform1i(u_bd, 2);
+  glUniform4fv(u_map, 1, gmap);
+  glUniform4fv(u_uvc, 1, guvc);
+  glUniform4fv(u_gb, 1, ggb);
+  glUniform4fv(u_shape, 8, gshape);
+  glUniform4fv(u_rad, 2, grad);
+  glUniform1i(u_n, gn);
+}
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   glViewport(0, 0, fb_w, fb_h);
   glClearColor((float)r, (float)g, (float)b, 1);
   glClear(GL_COLOR_BUFFER_BIT);
   // the app drawn in the surface's top part, as tall as it was told (the soft keyboard over the rest: MBView)
   int vh = (int)(cur_h * cur_scale + 0.5);
-  if (vh > 0 && vh < fb_h) glViewport(0, fb_h - vh, fb_w, vh);
+  vy0 = 0;
+  vhp = fb_h;
+  if (vh > 0 && vh < fb_h) {
+    vy0 = fb_h - vh;
+    vhp = vh;
+  }
+  glViewport(0, vy0, fb_w, vhp);
   if (count <= 0) return;
   size_t n = (size_t)count * 24;
   if (fcap < n) {
@@ -282,29 +603,44 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
     fbuf = realloc(fbuf, fcap * sizeof(float));
   }
   for (size_t i = 0; i < n; i++) fbuf[i] = (float)buf[i];
+  bd_tex = 0;
+  memset(gmap, 0, sizeof gmap);
+  memset(guvc, 0, sizeof guvc);
+  memset(ggb, 0, sizeof ggb);
+  gn = 0;
   glUseProgram(prog);
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, n * sizeof(float), fbuf, GL_STREAM_DRAW);
-  glUniform2f(u_vp, (float)cur_w, (float)cur_h);
-  glUniform1f(u_scale, (float)cur_scale);
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, atlas);
-  glUniform1i(u_atlas, 0);
-  glUniform1i(u_img, 1);
-  // one draw per run of instances showing the same image (slot 20; 0: none,
-  // the atlas stands in); GLES has no base instance, so the attributes start
-  // at the run instead
+  main_state();
+  // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in), or sharing one
+  // capture of glass (negative); GLES has no base instance, so the attributes start at the run instead
   int32_t start = 0;
+  int bound = 0, shows = 0;
   while (start < count) {
     int tid = (int)fbuf[start * 24 + 20];
     int32_t end = start + 1;
     while (end < count && (int)fbuf[end * 24 + 20] == tid) end++;
+    if (tid < 0) {
+      if (tid != bound) {
+        shows = capture(fbuf, start, end);
+        bound = tid;
+        main_state();
+      }
+      if (shows) {
+        for (int i = 0; i < 6; i++)
+          glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 96, (void *)(intptr_t)(start * 96 + i * 16));
+        // liquid: the group as one shape, drawn once
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (int)(fbuf[start * 24 + 5] + 0.5f) == 6 ? 1 : end - start);
+      }
+      start = end;
+      continue;
+    }
     GLuint t = tid ? image_tex(tid) : atlas;
     if (t) {  // 0: lost with the context, decoding again
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, t);
-      for (int i = 0; i < 5; i++)
+      for (int i = 0; i < 6; i++)
         glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 96, (void *)(intptr_t)(start * 96 + i * 16));
       glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);
     }
@@ -508,6 +844,12 @@ moonbit_string_t mb_host_env(moonbit_string_t name) {
   free(tmp);
   return out;
 }
+
+// Android has no setting asking for less transparency (MBUI_GLASS=solid stands in for it); the GPU's time is not
+// measured here.
+int32_t mb_host_reduce_transparency(void) { return 0; }
+
+double mb_host_gpu_ms(void) { return -1; }
 
 double mb_host_mem_bytes(void) {
   FILE *f = fopen("/proc/self/statm", "r");

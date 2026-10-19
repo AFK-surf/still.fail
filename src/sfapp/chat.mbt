@@ -566,7 +566,7 @@ fn jump_to_latest(
         radius=18.0,
         align=ACenter,
         justify=JCenter,
-        bg=floating_ground(),
+        glass=@sf.glass_floating(),
         shadow=2.0,
         shadow_color=0x0000004DL,
         shadow_y=0.5,
@@ -594,14 +594,6 @@ fn jump_to_latest(
     |> ignore
   })
   |> ignore
-}
-
-///|
-/// What floats over the list (Glass.kt floating): the raised ground at 72% over the page's, as glass with nothing to
-/// blur.
-fn floating_ground() -> Int64 {
-  let t = @sf.theme()
-  @sf.over(t.p.bg, @sf.alpha(t.p.raised, 0.72))
 }
 
 ///|
@@ -681,7 +673,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   room = room + (if v.thread is Some(_) { 34.0 } else { 0.0 }) +
     (if has_jobs { 34.0 } else { 0.0 }) +
     (if archive { 34.0 } else { 0.0 })
-  c.box(w=Fill(1.0), bg=@sf.alpha(t.p.bg, 0.94), fn() {
+  c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     bar_frame(
       c,
       v.title,

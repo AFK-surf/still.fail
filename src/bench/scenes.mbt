@@ -23,6 +23,10 @@ fn scene_view(name : String) -> (@ui.Ctx) -> Unit {
     "text" => text
     "scroll" => scroll
     "list" => list
+    "glass" => glass_scene
+    "glass-solid" => glass_solid_scene
+    "liquid" => liquid_scene
+    "liquid-flat" => liquid_flat_scene
     _ => dashboard
   }
 }

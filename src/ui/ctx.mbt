@@ -354,6 +354,8 @@ pub fn Ctx::box(
   tx? : Double = 0.0,
   ty? : Double = 0.0,
   opacity? : Double = 1.0,
+  glass? : Glass,
+  glass_group? : Bool = false,
   id? : Int = 0,
   body : () -> Unit,
 ) -> Int {
@@ -387,6 +389,8 @@ pub fn Ctx::box(
   n.tx = tx
   n.ty = ty
   n.opacity = opacity
+  n.glass = glass
+  n.glass_group = glass_group
   if id != 0 {
     n.id = id
     n.hit = true

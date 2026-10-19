@@ -5,6 +5,10 @@
 
 ///|
 fn main {
+  // MBUI_DARK=1: the dark theme
+  if @host.env("MBUI_DARK") == "1" {
+    @sf.set_dark(Some(true))
+  }
   let mode = @host.env("MBUI_FIXTURE")
   let src = @sfapp.fixture(mode)
   if mode.has_prefix("chat") {

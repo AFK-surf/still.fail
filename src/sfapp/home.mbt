@@ -228,9 +228,8 @@ fn top_bar(
   invited : Bool,
 ) -> Unit {
   let t = @sf.theme()
-  // frosted glass on the phone (the page's ground at 70%, blurred): its ground nearly whole here, where nothing
-  // blurs what scrolls under it
-  c.box(w=Fill(1.0), bg=@sf.alpha(t.p.bg, 0.94), fn() {
+  // frosted glass over the list (the page's paper at 70% over a 24px blur), a hairline under it
+  c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="home-settings") {
         app.nav.push(Settings)

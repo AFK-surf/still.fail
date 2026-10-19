@@ -9,7 +9,8 @@
   const params = new URLSearchParams(location.search);
   const H = {};
   let cb = null;
-  let canvas, gl, prog, vao, instBuf, atlasTex, ta;
+  let canvas, gl, prog, post, vao, instBuf, atlasTex, ta;
+  const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
   let f32 = new Float32Array(24 * 4096);
   let pending = false;
@@ -47,35 +48,107 @@
   layout(location=2) in vec4 a_color;
   layout(location=3) in vec4 a_c2;
   layout(location=4) in vec4 a_clip;
+  layout(location=5) in vec4 a_pad;
   uniform vec2 u_vp;
+  uniform vec4 u_gb;
   out vec2 v_pos;
-  flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip;
+  flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;
   void main() {
     int vid = gl_VertexID;
     vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);
     int kind = int(a_p.y + 0.5);
-    float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4) ? 1.0 : 0.0);
+    float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);
     vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);
+    if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);
     gl_Position = vec4(pos.x / u_vp.x * 2.0 - 1.0, 1.0 - pos.y / u_vp.y * 2.0, 0.0, 1.0);
-    v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip;
+    v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad;
   }`;
   const FS = `#version 300 es
   precision highp float;
   in vec2 v_pos;
-  flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip;
+  flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;
   uniform float u_scale;
   uniform sampler2D u_atlas;
   uniform sampler2D u_img;
+  // glass (src/ui/glass.mbt): the blurred copy under it and where a point is in it (uv = p * u_map.xy + u_map.zw, kept
+  // in u_uvc), a liquid group's shapes and corners, how many
+  uniform sampler2D u_bd;
+  uniform vec4 u_map;
+  uniform vec4 u_uvc;
+  uniform vec4 u_shape[8];
+  uniform vec4 u_rad[2];
+  uniform int u_n;
   out vec4 o;
+  float sd_rr(vec2 p, vec4 r, float rad) {
+    vec2 hs = r.zw * 0.5;
+    float rr = min(rad, min(hs.x, hs.y));
+    vec2 q = abs(p - r.xy - hs) - hs + rr;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
+  }
+  float smin_k(float a, float b, float k) {
+    if (k <= 0.0) return min(a, b);
+    float h = max(k - abs(a - b), 0.0) / k;
+    return min(a, b) - h * h * k * 0.25;
+  }
+  float sd_group(vec2 p, float k) {
+    float d = 1e9;
+    for (int i = 0; i < 8; i++) {
+      if (i >= u_n) break;
+      d = smin_k(d, sd_rr(p, u_shape[i], u_rad[i / 4][i % 4]), k);
+    }
+    return d;
+  }
+  vec3 backdrop(vec2 p) {
+    return texture(u_bd, clamp(p * u_map.xy + u_map.zw, u_uvc.xy, u_uvc.zw)).rgb;
+  }
+  float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
   void main() {
     vec2 p = v_pos;
     if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;
     int kind = int(v_p.y + 0.5);
     vec4 col = v_color;
-    if (kind == 1 || kind == 3) {
+    if (kind == 1 || kind == 3 || kind == 7) {
       vec2 uv = (v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw) / ${ATLAS}.0;
       vec4 t = texture(u_atlas, uv);
+      if (kind == 7) {
+        // inked by how light what is under its glass is, looked at round the glass's middle
+        vec2 c = v_pad.yz; float r = v_pad.w * 0.5;
+        float l = (luma(backdrop(c)) + luma(backdrop(c + vec2(r, 0.0))) + luma(backdrop(c - vec2(r, 0.0))) +
+                   luma(backdrop(c + vec2(0.0, r))) + luma(backdrop(c - vec2(0.0, r)))) / 5.0;
+        vec3 ink = mix(vec3(1.0), vec3(0.11, 0.11, 0.12), smoothstep(0.42, 0.6, l));
+        o = vec4(ink, 1.0) * (t.a * col.a);
+        return;
+      }
       o = kind == 1 ? vec4(col.rgb, 1.0) * (t.a * col.a) : t * col.a;
+      return;
+    }
+    if (kind == 6) {
+      // liquid: one shape of the group's, merged; what is under it bent along the bezel, the colours split a little
+      float k = v_pad.w;
+      float d = sd_group(p, k);
+      float a = clamp(0.5 - d * u_scale, 0.0, 1.0);
+      if (a <= 0.0) discard;
+      float e = 0.5;
+      vec2 grad = vec2(sd_group(p + vec2(e, 0.0), k) - sd_group(p - vec2(e, 0.0), k),
+                       sd_group(p + vec2(0.0, e), k) - sd_group(p - vec2(0.0, e), k));
+      vec2 n = grad / max(length(grad), 1e-4);
+      float bezel = max(v_c2.y, 1.0);
+      float edge = 1.0 - clamp(-d / bezel, 0.0, 1.0);
+      float disp = v_pad.y * (1.0 - sqrt(max(1.0 - edge * edge, 0.0)));
+      vec2 off = -n * disp;
+      float ch = v_pad.z;
+      vec3 c = vec3(backdrop(p + off * (1.0 + ch)).r, backdrop(p + off).g, backdrop(p + off * (1.0 - ch)).b);
+      c = max(mix(vec3(luma(c)), c, v_p.z), 0.0);
+      c = c * (1.0 - col.a) + col.rgb * col.a;
+      // the rim lit from the top left, and less across from it
+      float ndl = dot(n, vec2(-0.6, -0.8));
+      float band = clamp(1.0 + d / 2.5, 0.0, 1.0);
+      float spec = v_c2.x * (band * (0.9 * pow(max(ndl, 0.0), 1.5) + 0.45 * pow(max(-ndl, 0.0), 1.5)) +
+                             0.3 * edge * edge * max(ndl, 0.0));
+      // the edge shaded, more on the side away from the light, so the shape reads over a light ground too
+      c *= 1.0 - v_c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));
+      c = c + (1.0 - c) * clamp(spec, 0.0, 1.0);
+      o = vec4(c, 1.0) * (a * v_c2.w);
       return;
     }
     vec2 hs = v_rect.zw * 0.5;
@@ -91,10 +164,33 @@
     if (kind == 2) {
       float b = max(v_p.w, 0.5);
       float a = 1.0 - smoothstep(-b, b, d);
+      // glass's: only outside its box (c2.y above it)
+      if (v_c2.x > 0.5) {
+        vec2 qb = abs(p - c + vec2(0.0, v_c2.y)) - hs + r;
+        float db = length(max(qb, 0.0)) + min(max(qb.x, qb.y), 0.0) - r;
+        a *= clamp(0.5 + db * u_scale, 0.0, 1.0);
+      }
       o = vec4(col.rgb, 1.0) * col.a * a;
       return;
     }
     float a = clamp(0.5 - d * u_scale, 0.0, 1.0);
+    if (kind == 5) {
+      // frosted: the blurred copy, saturated, the tint over it; the rim (a hairline inside the edge, the top left lit,
+      // the foot and right less), 0.5 wide
+      vec3 g3 = backdrop(p);
+      g3 = max(mix(vec3(luma(g3)), g3, v_p.z), 0.0);
+      g3 = g3 * (1.0 - col.a) + col.rgb * col.a;
+      if (v_c2.x + v_c2.y + v_c2.z > 0.0) {
+        float edge = clamp(0.5 + (d + 0.5) * u_scale, 0.0, 1.0);
+        float lit = clamp(0.5 + sd_rr(p - 0.5, v_rect, v_p.x) * u_scale, 0.0, 1.0);
+        float back = clamp(0.5 + sd_rr(p + 0.5, v_rect, v_p.x) * u_scale, 0.0, 1.0);
+        g3 = mix(g3, vec3(1.0), v_c2.x * edge);
+        g3 = mix(g3, vec3(1.0), v_c2.y * lit);
+        g3 = mix(g3, vec3(1.0), v_c2.z * back);
+      }
+      o = vec4(g3, 1.0) * (a * v_c2.w);
+      return;
+    }
     vec4 fill = vec4(col.rgb, 1.0) * col.a;
     if (v_p.z > 0.0) {
       float inner = clamp(0.5 - (d + v_p.z) * u_scale, 0.0, 1.0);
@@ -102,6 +198,49 @@
       fill = mix(bc, fill, inner);
     }
     o = fill * a;
+  }`;
+  // glass's passes over its copy of what is under it
+  const PVS = `#version 300 es
+  void main() {
+    gl_Position = vec4(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0, 0.0, 1.0);
+  }`;
+  const PFS = `#version 300 es
+  precision highp float;
+  // The backdrop's passes: u_a.xy the source's texel, u_a.z 1 halving (dual Kawase's down), 2 a Gaussian along u_b.zw
+  // of deviation u_a.w (texels); u_b.xy the last texel's centre of what the source holds
+  uniform sampler2D u_src;
+  uniform vec4 u_a;
+  uniform vec4 u_b;
+  out vec4 o;
+  void main() {
+    vec2 ts = u_a.xy;
+    vec2 lo = ts * 0.5, hi = u_b.xy;
+    if (u_a.z < 1.5) {
+      vec2 uv = gl_FragCoord.xy * 2.0 * ts;
+      vec4 s = texture(u_src, clamp(uv, lo, hi)) * 4.0;
+      s += texture(u_src, clamp(uv - ts, lo, hi));
+      s += texture(u_src, clamp(uv + ts, lo, hi));
+      s += texture(u_src, clamp(uv + vec2(ts.x, -ts.y), lo, hi));
+      s += texture(u_src, clamp(uv + vec2(-ts.x, ts.y), lo, hi));
+      o = s / 8.0;
+      return;
+    }
+    vec2 uv = gl_FragCoord.xy * ts;
+    vec2 dir = u_b.zw * ts;
+    float sg = u_a.w;
+    float k = -0.5 / (sg * sg);
+    vec4 s = texture(u_src, clamp(uv, lo, hi));
+    float wsum = 1.0;
+    int n = int(ceil(sg * 3.0));
+    for (int i = 1; i <= 64; i += 2) {
+      if (i > n) break;
+      float w1 = exp(float(i * i) * k), w2 = exp(float((i + 1) * (i + 1)) * k);
+      float w = w1 + w2;
+      float off = (float(i) * w1 + float(i + 1) * w2) / w;
+      s += (texture(u_src, clamp(uv + dir * off, lo, hi)) + texture(u_src, clamp(uv - dir * off, lo, hi))) * w;
+      wsum += 2.0 * w;
+    }
+    o = s / wsum;
   }`;
 
   function compile(type, src) {
@@ -119,11 +258,18 @@
     gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    post = gl.createProgram();
+    gl.attachShader(post, compile(gl.VERTEX_SHADER, PVS));
+    gl.attachShader(post, compile(gl.FRAGMENT_SHADER, PFS));
+    gl.linkProgram(post);
+    if (!gl.getProgramParameter(post, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(post));
+    for (const n of ['u_vp', 'u_scale', 'u_atlas', 'u_img', 'u_bd', 'u_map', 'u_uvc', 'u_gb', 'u_shape', 'u_rad', 'u_n']) U[n] = gl.getUniformLocation(prog, n);
+    for (const n of ['u_src', 'u_a', 'u_b']) PU[n] = gl.getUniformLocation(post, n);
     vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     instBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       const loc = i;
       // instance layout: rect, p, color, c2, clip, pad (vec4 each)
       gl.enableVertexAttribArray(loc);
@@ -141,6 +287,131 @@
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
 
+  // ---- glass (src/ui/glass.mbt) ----
+  // When the instances reach a run of glass (slot 20 negative: the capture it shares), what is drawn so far under it
+  // (its rects with room for the blur round them) is copied out of the canvas, halved down to where the blur is a
+  // few texels wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what deviation is left,
+  // and drawn through. Level j is 1/2^j of the canvas, tmp a Gaussian's first half.
+  let lv = null, lvW = 0, lvH = 0, bdTex = null;
+  const gmap = new Float32Array(4), guvc = new Float32Array(4), ggb = new Float32Array(4);
+  const gshape = new Float32Array(32), grad = new Float32Array(8);
+  let gn = 0;
+  function levelTex(w, h) {
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, Math.max(1, w), Math.max(1, h));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    return { t, fb, w: Math.max(1, w), h: Math.max(1, h) };
+  }
+  function ensureLevels(w, h) {
+    if (lv && lvW >= w && lvH >= h) return;
+    if (lv) for (const l of lv) { gl.deleteTexture(l.t); gl.deleteFramebuffer(l.fb); }
+    lvW = Math.max(w, lvW); lvH = Math.max(h, lvH);
+    lv = [];
+    for (let j = 0; j < 4; j++) lv.push(levelTex((lvW + (1 << j) - 1) >> j, (lvH + (1 << j) - 1) >> j));
+    lv.push(levelTex(lvW, lvH));
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+  function postPass(src, sw, sh, dst, w, h, mode, sg, dx, dy) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb);
+    gl.viewport(0, 0, w, h);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, src.t);
+    gl.uniform1i(PU.u_src, 0);
+    gl.uniform4f(PU.u_a, 1 / src.w, 1 / src.h, mode, sg);
+    gl.uniform4f(PU.u_b, (sw - 0.5) / src.w, (sh - 0.5) / src.h, dx, dy);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  // what the run [start, end) of glass sees; false when none of it shows
+  function capture(start, end) {
+    const a = start * 24;
+    const blur = f32[a + 7], kind = Math.round(f32[a + 5]);
+    const margin = 3 * blur + f32[a + 21] * (1 + f32[a + 22]) + f32[a + 23] + 2;
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    gn = 0;
+    for (let i = start; i < end; i++) {
+      const b = i * 24;
+      let bx0 = Math.max(f32[b], f32[b + 16]), by0 = Math.max(f32[b + 1], f32[b + 17]);
+      let bx1 = Math.min(f32[b] + f32[b + 2], f32[b + 18]), by1 = Math.min(f32[b + 1] + f32[b + 3], f32[b + 19]);
+      if (kind === 6) {
+        const m = f32[a + 23];
+        bx0 = f32[b] - m; by0 = f32[b + 1] - m; bx1 = f32[b] + f32[b + 2] + m; by1 = f32[b + 1] + f32[b + 3] + m;
+        if (gn < 8) {
+          for (let k = 0; k < 4; k++) gshape[gn * 4 + k] = f32[b + k];
+          grad[gn] = f32[b + 4];
+          gn++;
+        }
+      }
+      x0 = Math.min(x0, bx0); y0 = Math.min(y0, by0); x1 = Math.max(x1, bx1); y1 = Math.max(y1, by1);
+    }
+    ggb[0] = x0 - 2; ggb[1] = y0 - 2; ggb[2] = x1 + 2; ggb[3] = y1 + 2;
+    const W = canvas.width, Hh = canvas.height, sc = dpr;
+    // in the canvas's pixels, from its foot (GL's way up)
+    const px0 = Math.max(0, Math.floor((x0 - margin) * sc)), px1 = Math.min(W, Math.ceil((x1 + margin) * sc));
+    const pb0 = Math.max(0, Hh - Math.ceil((y1 + margin) * sc)), pb1 = Math.min(Hh, Hh - Math.floor((y0 - margin) * sc));
+    if (px1 <= px0 || pb1 <= pb0 || x1 <= x0 || y1 <= y0) return false;
+    const w = px1 - px0, h = pb1 - pb0;
+    ensureLevels(W, Hh);
+    gl.disable(gl.BLEND);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, lv[0].fb);
+    gl.blitFramebuffer(px0, pb0, px1, pb1, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    gl.useProgram(post);
+    const sp = blur * sc;
+    let k = 0;
+    while (k < 3 && sp / (1 << (k + 1)) >= 2) k++;
+    const lw = [w], lh = [h];
+    for (let j = 1; j <= k; j++) {
+      lw[j] = (lw[j - 1] + 1) >> 1;
+      lh[j] = (lh[j - 1] + 1) >> 1;
+      postPass(lv[j - 1], lw[j - 1], lh[j - 1], lv[j], lw[j], lh[j], 1, 0, 0, 0);
+    }
+    // what is left of the deviation once the halvings' and the last look's (bilinear) spread are taken out
+    const sk = sp / (1 << k);
+    const pre = k > 0 ? 0.75 * (1 - Math.pow(0.25, k)) / 3 + 1 / 6 : 0;
+    const sg = Math.sqrt(Math.max(sk * sk - pre, 0));
+    if (sg > 0.3) {
+      postPass(lv[k], lw[k], lh[k], lv[4], lw[k], lh[k], 2, sg, 1, 0);
+      postPass(lv[4], lw[k], lh[k], lv[k], lw[k], lh[k], 2, sg, 0, 1);
+    }
+    const L = lv[k], d = 1 << k;
+    bdTex = L.t;
+    gmap[0] = sc / d / L.w; gmap[1] = -sc / d / L.h;
+    gmap[2] = -px0 / d / L.w; gmap[3] = (Hh - pb0) / d / L.h;
+    guvc[0] = 0.5 / L.w; guvc[1] = 0.5 / L.h; guvc[2] = (lw[k] - 0.5) / L.w; guvc[3] = (lh[k] - 0.5) / L.h;
+    return true;
+  }
+  // the main program's state, after the passes
+  function mainState() {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.enable(gl.BLEND);
+    gl.useProgram(prog);
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
+    gl.uniform2f(U.u_vp, cssW, cssH);
+    gl.uniform1f(U.u_scale, dpr);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+    gl.uniform1i(U.u_atlas, 0);
+    gl.uniform1i(U.u_img, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, bdTex || atlasTex);
+    gl.uniform1i(U.u_bd, 2);
+    gl.uniform4fv(U.u_map, gmap);
+    gl.uniform4fv(U.u_uvc, guvc);
+    gl.uniform4fv(U.u_gb, ggb);
+    gl.uniform4fv(U.u_shape, gshape);
+    gl.uniform4fv(U.u_rad, grad);
+    gl.uniform1i(U.u_n, gn);
+  }
+
   H.present = (buf, n, r, g, b) => {
     const len = n * 24;
     if (f32.length < len) f32 = new Float32Array(len * 2);
@@ -149,27 +420,38 @@
     gl.clearColor(r, g, b, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     if (n === 0) return;
+    bdTex = null;
+    gmap.fill(0); guvc.fill(0); ggb.fill(0); gn = 0;
     gl.useProgram(prog);
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
     gl.bufferData(gl.ARRAY_BUFFER, f32.subarray(0, len), gl.STREAM_DRAW);
-    gl.uniform2f(gl.getUniformLocation(prog, 'u_vp'), cssW, cssH);
-    gl.uniform1f(gl.getUniformLocation(prog, 'u_scale'), dpr);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, atlasTex);
-    gl.uniform1i(gl.getUniformLocation(prog, 'u_atlas'), 0);
-    gl.uniform1i(gl.getUniformLocation(prog, 'u_img'), 1);
-    // one draw per run of instances showing the same image (slot 20); WebGL
-    // has no base instance, so the attributes start at the run instead
-    let start = 0;
+    mainState();
+    // one draw per run of instances showing the same image (slot 20), or sharing one capture of glass (negative);
+    // WebGL has no base instance, so the attributes start at the run instead
+    let start = 0, bound = 0, shows = false;
     while (start < n) {
       const tid = f32[start * 24 + 20] | 0;
       let end = start + 1;
       while (end < n && (f32[end * 24 + 20] | 0) === tid) end++;
+      if (tid < 0) {
+        if (tid !== bound) {
+          shows = capture(start, end);
+          bound = tid;
+          mainState();
+        }
+        if (shows) {
+          for (let i = 0; i < 6; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 96, start * 96 + i * 16);
+          // liquid: the group as one shape, drawn once
+          gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, Math.round(f32[start * 24 + 5]) === 6 ? 1 : end - start);
+        }
+        start = end;
+        continue;
+      }
       const im = tid ? images.get(tid) : null;
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
-      for (let i = 0; i < 5; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 96, start * 96 + i * 16);
+      for (let i = 0; i < 6; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 96, start * 96 + i * 16);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - start);
       start = end;
     }
@@ -431,6 +713,8 @@
   H.benchMode = () => Number(params.get('bench') || 0);
   H.exit = (code) => { window.__done = code; document.title = 'DONE ' + code; };
   H.eventTime = () => evT;
+  H.reduceTransparency = () => !!(window.matchMedia && matchMedia('(prefers-reduced-transparency: reduce)').matches);
+  H.gpuMs = () => -1;
   H.memBytes = () => (performance.memory ? performance.memory.usedJSHeapSize : 0);
 
   // ---- back ----

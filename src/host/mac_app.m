@@ -585,6 +585,11 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   return 1;
 }
 
+// The system's Reduce Transparency (glass drawn solid).
+int32_t mb_host_reduce_transparency(void) {
+  return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceTransparency] ? 1 : 0;
+}
+
 double mb_host_mem_bytes(void) {
   task_vm_info_data_t info;
   mach_msg_type_number_t n = TASK_VM_INFO_COUNT;

@@ -12,6 +12,7 @@ let bench : Bench = {
   frames: 0,
   cpu: [],
   present: [],
+  gpu: [],
   start: 0.0,
   speed: 0.0,
   phases: [0.0, 0.0, 0.0],
@@ -23,6 +24,8 @@ struct Bench {
   mut frames : Int
   cpu : Array[Double]
   present : Array[Double]
+  // the GPU's time per frame (the last frame it finished), where the host knows it
+  gpu : Array[Double]
   mut start : Double
   mut speed : Double
   // build, layout and paint time summed over the measured frames
@@ -133,6 +136,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.next_hit_rects.clear()
   c.next_scroll_ids.clear()
   c.next_scroll_rects.clear()
+  c.glass_frame()
   c.paint(root, 1.0)
   // back goes where the stack drawn now says (Ctx::nav, while building)
   c.back = c.back_next
@@ -183,6 +187,10 @@ fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
     bench.phases[2] = bench.phases[2] + c.t_paint
     bench.cpu.push(cpu)
     bench.present.push(present)
+    let gms = h_gpu_ms()
+    if gms >= 0.0 {
+      bench.gpu.push(gms)
+    }
   }
   if bench.frames == 630 {
     let wall = c.now - bench.start
@@ -226,6 +234,18 @@ fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
       "present_avg=\{psum / n.to_double()} present_p99=\{p(ps, 0.99)} present_max=\{ps[n - 1]} " +
       "nodes=\{c.count} instances=\{c.ninst} rss_mb=\{@host.mem_bytes() / 1048576.0}",
     )
+    if bench.gpu.length() > 0 {
+      let gs = bench.gpu.copy()
+      gs.sort_by(fn(a, b) { a.compare(b) })
+      let mut gsum = 0.0
+      for x in gs {
+        gsum = gsum + x
+      }
+      let gn = gs.length()
+      h_log(
+        "BENCH gpu_avg=\{gsum / gn.to_double()} gpu_p50=\{gs[gn / 2]} gpu_p99=\{gs[imin(gn - 1, gn * 99 / 100)]} gpu_max=\{gs[gn - 1]} glass_captures=\{glass_paint.run}",
+      )
+    }
     if bench.mode == 1 {
       @host.exit(0)
     } else {

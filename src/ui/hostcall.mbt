@@ -17,6 +17,8 @@ struct FakeHost {
   mut back_on : Bool
   // the system it plays (as @host.platform: 0 macOS, 1 iOS, 2 Android)
   platform : Int
+  // the system asks for less transparency (glass drawn solid)
+  mut reduce_transparency : Bool
   logs : Array[String]
   // images: sources the test made up, with their size in pixels; loads
   // asked for (source, max_px); decodes, ready from the next frame on
@@ -209,6 +211,22 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   match fake.val {
     Some(f) => f.instances = count
     None => @host.present(buf, count, 0.961, 0.961, 0.969)
+  }
+}
+
+///|
+fn h_reduce_transparency() -> Bool {
+  match fake.val {
+    Some(f) => f.reduce_transparency
+    None => @host.reduce_transparency() || @host.env("MBUI_GLASS") == "solid"
+  }
+}
+
+///|
+fn h_gpu_ms() -> Double {
+  match fake.val {
+    Some(_) => -1.0
+    None => @host.gpu_ms()
   }
 }
 

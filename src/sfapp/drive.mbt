@@ -89,7 +89,7 @@ fn under_page() -> Page? {
 /// 文件's top bar as a place's (PlacePage.kt TopGlassBar): settings, its name.
 fn files_top_bar(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
-  c.box(w=Fill(1.0), bg=@sf.alpha(t.p.bg, 0.94), fn() {
+  c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="files-settings") {
         app.nav.push(Settings)

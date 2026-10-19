@@ -76,6 +76,10 @@ extern "C" fn ffi_exit(code : Int) -> Unit = "mb_host_exit"
 
 extern "C" fn ffi_mem_bytes() -> Double = "mb_host_mem_bytes"
 
+extern "C" fn ffi_reduce_transparency() -> Int = "mb_host_reduce_transparency"
+
+extern "C" fn ffi_gpu_ms() -> Double = "mb_host_gpu_ms"
+
 extern "C" fn ffi_set_back(
   back : FuncRef[(Int, Double, Double, Int) -> Unit],
 ) -> Unit = "mb_host_set_back"
@@ -233,6 +237,21 @@ pub fn set_back(back : FuncRef[(Int, Double, Double, Int) -> Unit]) -> Unit {
 /// system does what it does (Android leaves the app).
 pub fn back_enabled(on : Bool) -> Unit {
   ffi_back_enabled(if on { 1 } else { 0 })
+}
+
+///|
+/// Whether the system asks for less transparency (glass drawn solid):
+/// macOS's and iOS's Reduce Transparency, Windows' transparency effects
+/// turned off; Android has no such setting (never).
+pub fn reduce_transparency() -> Bool {
+  ffi_reduce_transparency() != 0
+}
+
+///|
+/// The GPU's time for the last frame it finished, in ms (-1: not known on
+/// this host).
+pub fn gpu_ms() -> Double {
+  ffi_gpu_ms()
 }
 
 ///|

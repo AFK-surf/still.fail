@@ -17,11 +17,15 @@
 # modes): the 奏 page (an options card, a text card, none left), an execution history (its steps, its details), the
 # chat's sheets (its own, an agent's card, its jobs, a job) and Home with the jobs left up: mac-decide-<mode>,
 # web-decide-<mode>.
+# `glass` and `web-glass` are the demo's glass screen (MBUI_SCREEN=glass:
+# frosted and liquid glass over bands of colour), light and dark (mac-glass, mac-glass-dark); `home` and `chat` also
+# give their dark looks (mac-home-dark, mac-chat-dark), `chat` a picture under the bar's glass (mac-chat-glass) and
+# its glass drawn solid (mac-chat-solid, as where the system asks for less transparency).
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home chat composer drive decide web web-kit web-home web-chat web-composer web-drive web-decide ios android}
+PLATFORMS=${*:-mac kit home chat composer drive decide glass web web-kit web-home web-chat web-composer web-drive web-decide web-glass ios android}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
 if [ ! -d out/node/node_modules/pixelmatch ]; then
@@ -50,7 +54,9 @@ for p in $PLATFORMS; do
       cp out/shot-home/home-1.png out/shots/mac-home.png
       cp out/shot-home/home-2-workspaces.png out/shots/mac-home-sheet.png
       cp out/shot-home/home-4-swipe.png out/shots/mac-home-swipe.png
-      names="mac-home mac-home-sheet mac-home-swipe" ;;
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_DARK=1 MBUI_SCRIPT=shot MBUI_SHOT_NAME=home-dark MBUI_SHOT_DIR=$PWD/out/shot-home ./_build/native/release/build/sffix/sffix.exe >/dev/null
+      cp out/shot-home/home-dark.png out/shots/mac-home-dark.png
+      names="mac-home mac-home-sheet mac-home-swipe mac-home-dark" ;;
     chat)
       APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
       rm -rf out/shot-chat; mkdir -p out/shot-chat
@@ -59,7 +65,26 @@ for p in $PLATFORMS; do
       cp out/shot-chat/chat-1.png out/shots/mac-chat.png
       cp out/shot-chat/chat-2-up.png out/shots/mac-chat-up.png
       cp out/shot-chat/loading.png out/shots/mac-chat-loading.png
-      names="mac-chat mac-chat-up mac-chat-loading" ;;
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_DARK=1 MBUI_SCRIPT=shot MBUI_SHOT_NAME=dark MBUI_SHOT_DIR=$PWD/out/shot-chat ./_build/native/release/build/sffix/sffix.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_GLASS=solid MBUI_SCRIPT=shot MBUI_SHOT_NAME=solid MBUI_SHOT_DIR=$PWD/out/shot-chat ./_build/native/release/build/sffix/sffix.exe >/dev/null
+      # scrolled so a picture is under the bar's glass and messages under the composer's
+      rm -rf out/shot-chat-glass; mkdir -p out/shot-chat-glass
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_CHAT_UP=1000 MBUI_SCRIPT=chat MBUI_SHOT_DIR=$PWD/out/shot-chat-glass ./_build/native/release/build/sffix/sffix.exe >/dev/null
+      cp out/shot-chat-glass/chat-2-up.png out/shots/mac-chat-glass.png
+      cp out/shot-chat/dark.png out/shots/mac-chat-dark.png
+      cp out/shot-chat/solid.png out/shots/mac-chat-solid.png
+      names="mac-chat mac-chat-up mac-chat-loading mac-chat-glass mac-chat-dark mac-chat-solid" ;;
+    glass)
+      MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-glass; mkdir -p out/shot-glass
+      MBUI_BENCH=-1 MBUI_SCREEN=glass MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_NAME=glass MBUI_SHOT_DIR=$PWD/out/shot-glass ./_build/native/release/build/demo/demo.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_SCREEN=glass MBUI_DARK=1 MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_NAME=glass-dark MBUI_SHOT_DIR=$PWD/out/shot-glass ./_build/native/release/build/demo/demo.exe >/dev/null
+      cp out/shot-glass/glass.png out/shots/mac-glass.png
+      cp out/shot-glass/glass-dark.png out/shots/mac-glass-dark.png
+      names="mac-glass mac-glass-dark" ;;
+    web-glass)
+      bash scripts/web.sh build >/dev/null
+      QUERY=MBUI_SCREEN=glass NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-glass.png ;;
     composer)
       # the composer's states over the made-up chat (src/sfapp/chat_fixture.mbt's modes): words of several lines, a
       # picture and a file with them, a quote, a message sending, one failed

@@ -3,8 +3,10 @@
 //   0-3 rect x y w h · 4 radius · 5 kind · 6 border width · 7 blur
 //   8-11 color rgba · 12-15 border color, or the glyph's atlas rect
 //   16-19 clip x0 y0 x1 y1 · 20 image id · 21-23 unused
-// kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow, 3 color glyph,
-// 4 image (12-15 its uv rect, 0-1).
+// kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow (12 > 0: only
+// outside its box, which is 13 above it), 3 color glyph, 4 image (12-15 its
+// uv rect, 0-1), 5 frosted glass, 6 liquid glass, 7 a glyph in liquid glass
+// inked by what is under it (glass.mbt).
 
 ///|
 let inst_size = 24
@@ -138,13 +140,14 @@ fn Ctx::emit_text(
     }
     let gx = ((ox + dx + tl.xs[c] + g.ox) * sc).round() / sc
     let gy = ((top + tl.ascent + g.oy) * sc).round() / sc
+    let adaptive = glass_paint.ink_r > 0.0 && !g.color
     self.push_inst(
       gx,
       gy,
       g.gw,
       g.gh,
       0.0,
-      if g.color { 3.0 } else { 1.0 },
+      if g.color { 3.0 } else if adaptive { 7.0 } else { 1.0 },
       0.0,
       0.0,
       if g.color { 0xFFFFFFFFL } else { color },
@@ -154,6 +157,12 @@ fn Ctx::emit_text(
       g.gw * sc,
       g.gh * sc,
     )
+    if adaptive {
+      let b = (self.ninst - 1) * inst_size
+      self.inst[b + 21] = glass_paint.ink_x
+      self.inst[b + 22] = glass_paint.ink_y
+      self.inst[b + 23] = glass_paint.ink_r
+    }
   }
 }
 
@@ -173,7 +182,11 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if n.x > cx1 || n.y > cy1 || n.x + n.fw < cx0 || n.y + n.fh < cy0 {
     return
   }
-  if n.shadow > 0.0 {
+  match n.glass {
+    Some(gl) => self.paint_glass(n, gl, alpha)
+    None => ()
+  }
+  if n.shadow > 0.0 && n.glass is None {
     self.push_inst(
       n.x,
       n.y + (if n.shadow_y >= 0.0 { n.shadow_y } else { n.shadow * 0.35 }),
@@ -261,10 +274,32 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     clip_stack.push(dmin(n.y + n.fh, cy1))
   }
   let first_inst = self.ninst
+  // liquid glass in a group: all of it first, so it merges; text in
+  // adaptive liquid glass inked by what is under it
+  let group = n.glass_group && !glass_paint.solid
+  if group {
+    self.emit_group_glass(i, alpha)
+    glass_paint.in_group = glass_paint.in_group + 1
+  }
+  let ink = (glass_paint.ink_x, glass_paint.ink_y, glass_paint.ink_r)
+  match n.glass {
+    Some(gl) if gl.liquid && gl.adaptive && !glass_paint.solid => {
+      glass_paint.ink_x = n.x + n.fw / 2.0
+      glass_paint.ink_y = n.y + n.fh / 2.0
+      glass_paint.ink_r = dmax(dmin(n.fw, n.fh) / 2.0, 1.0)
+    }
+    _ => ()
+  }
   let mut c = n.first
   while c >= 0 {
     self.paint(c, alpha)
     c = self.nodes[c].next
+  }
+  glass_paint.ink_x = ink.0
+  glass_paint.ink_y = ink.1
+  glass_paint.ink_r = ink.2
+  if group {
+    glass_paint.in_group = glass_paint.in_group - 1
   }
   if n.kind == kind_list {
     // Android's stretch past an end (scroll.mbt)

@@ -21,6 +21,7 @@
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "imm32.lib")
 #pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "advapi32.lib")
 
 mb_callbacks mb_cb;
 
@@ -535,6 +536,15 @@ moonbit_string_t mb_host_env(moonbit_string_t name) {
   moonbit_string_t out = moonbit_make_string_raw(len);
   if (len) memcpy(out, v, (size_t)len * sizeof(WCHAR));
   return out;
+}
+
+// Windows' transparency effects (Settings > Personalization > Colors) turned off: glass drawn solid.
+int32_t mb_host_reduce_transparency(void) {
+  DWORD v = 1, n = sizeof v;
+  if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                   L"EnableTransparency", RRF_RT_REG_DWORD, NULL, &v, &n) != ERROR_SUCCESS)
+    return 0;
+  return v == 0;
 }
 
 double mb_host_mem_bytes(void) {

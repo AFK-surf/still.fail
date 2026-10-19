@@ -92,8 +92,7 @@ otherwise Home at the root of a `@ui.Nav` (src/sfapp, Home.kt and its parts):
   compares it with goldens/mac-home*.png and web-home.png.
 
 Not yet, against the current app: the bottom bar (slice 7: 奏 N and 令 in
-it, so no new-chat button here), the frosted glass (the top bar is the page's
-ground at 94%), the search page, the long-press menu (pin, rename, copy link)
+it, so no new-chat button here), the search page, the long-press menu (pin, rename, copy link)
 and swiping a row away, the rows' motion as the list changes, the open jobs
 banner and the changelog's note, pull to refresh (the app has none either),
 the update button, inviting and new workspaces in the sheet, English (the
@@ -166,7 +165,7 @@ motion (rising in, coming out of an agent's avatar, the activity's glide and
 its floor); a new message followed from its top when it is taller than the
 screen; the asks' bell; the chat's sheets ("…", the agent's card, jobs);
 images on Android (no decoding there yet: their boxes and likenesses only);
-the station's update control in the bar; the frosted glass.
+the station's update control in the bar.
 
 Slice 5, the composer (branch composer, 2026-10-19): the chat's composer takes
 words and sends them (src/sfapp/composer.mbt; Composer.kt ComposerBar,
@@ -233,7 +232,7 @@ bubble (and the capsule's morph as it changes height), `@` references to
 other chats and pasted chat links as marks (chat.ref, chatSearch), sharing
 what they refer to before sending, the recent photos' strip, Station 文件 (slice 12's drive, below), a
 picture's preview from its tile, files pasted or sent by the keyboard (only
-words are), the composer's frosted glass, the text toolbar of the field
+words are), the text toolbar of the field
 (select, cut, copy by touch; the keyboard's own paste works), a new chat
 (slice 6).
 
@@ -340,6 +339,45 @@ reply on the 奏 page takes words only (no files, quotes or its own draft kept b
 nor shrinks as it goes (boxes have no rotation or scale yet); a sheet dragged by its grabber; the segmented control's
 sliding thumb; a history opened at an entry; a Slack user's 这是我.
 
+Glass (branch glass, 2026-10-19): frosted glass and liquid glass, a pass of every renderer (Metal on macOS and iOS,
+GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
+
+- A box takes `glass=` (`@ui.Glass::frosted(blur=, tint=, solid=, saturation=, rim_*=)` or `@ui.Glass::liquid(…)`)
+  in place of its `bg`. Painted, it is an instance of its own (kind 5 frosted, 6 liquid) that shares a capture with
+  the glass right before it (nothing drawn between, the same blur, not over it): slot 20 carries the capture's
+  number, negative, so the renderers' runs of one image are runs of one capture too. When a renderer reaches a run it
+  ends its pass, copies what is drawn so far under the run's rects (with three deviations of room round them) out of
+  the target, halves it down to where the blur's deviation is two texels or more (dual Kawase's downsample, 1/2 to
+  1/8), blurs it there with a Gaussian of what deviation is left once the halvings' and the bilinear look's spread
+  are taken out, and draws on through it: the copy saturated, the tint over it, the rim (a hairline inside the edge,
+  the top left lit, the foot and right less: Bar.kt's) on top. A glass box's shadow is drawn after it and only
+  outside it, so the glass does not frost its own shadow (Haze's source is the page alone).
+- still.fail's glass is src/sf/glass.mbt, from Glass.kt (Haze: `cssBlur(px)` is a deviation of px dp, CSS
+  blur()'s), Bar.kt, Sheet.kt and the web's mobile/styles/pages.css.ts: `glass_bar` (the page's paper at 70% over a
+  24px blur: Home's, 文件's (a place's) and the chat's top bars, the hairline the bar's own), `glass_floating` (`raised` at 72% over a
+  20px blur: the composer's capsule, the way to the newest), `glass_bottom_bar`, `glass_bar_ball`, `glass_action`
+  (Bar.kt's, rims lit) and `glass_sheet` (the surface at 80% over 28px) for the bar and sheets to take.
+- Liquid glass (the demo's MBUI_SCREEN=glass, not on still.fail's pages): each shape's rounded-box distance, the
+  shapes of a `glass_group=true` box drawn first as one capture and merged by a smooth minimum (`merge`); what is
+  under it bent along a bezel (`bezel` wide, by up to `refraction`, a circle's profile), the colours split by
+  `chroma`, a rim lit from the top left; text in it (`adaptive`) is a glyph kind of its own (7) whose ink the
+  renderer picks from how light the copy is round the glass's middle.
+- Solid where the system asks for less transparency: macOS's and iOS's Reduce Transparency, Windows' transparency
+  effects off, the browser's prefers-reduced-transparency (asked every 30 frames); Android has no such setting.
+  MBUI_GLASS=solid (or `@ui.set_glass_solid`) forces it; solid is the glass's `solid` ground (the paper under its tint).
+- `@host.gpu_ms` (Metal's command buffers' times; -1 elsewhere) goes into the in-app bench's lines (MBUI_BENCH=1);
+  src/bench has `glass`, `glass-solid` and `liquid` scenes (BENCH_SCENES=…, not in the default set).
+- What it costs (Studio, M2 Max, 2026-10-19, Metal). Offscreen, 900×640 at 2x (src/bench, 300 frames, median): the
+  list scene with a top bar, a jump button and a composer of glass (three captures) 0.56 ms of GPU and 0.15 ms of
+  encoding a frame, against 0.12 and 0.01 drawn solid; liquid glass (a merged group and a capsule) 0.49 and 0.11;
+  building, laying out and painting the same (0.06-0.08 ms). The copies take about 26 MB at that size (the level
+  textures are the target's size, kept). In the app's window (390×844 at 1x, MBUI_BENCH=1, 600 frames scrolled, two
+  runs each): Home (one capture) 0.26-0.28 ms of GPU and 0.15-0.19 ms presenting, against 0.09-0.10 and 0.10-0.11
+  solid; a long chat (bar and composer, two captures) 0.42-0.56 and 0.21-0.43, against 0.09-0.10 and 0.08-0.10. On
+  the Android emulator (SwiftShader, so only a smoke test) both looks draw.
+- Shots: mac-glass, mac-glass-dark, web-glass (the demo's screen), mac-home-dark, mac-chat-dark, mac-chat-glass (a
+  picture under the chat's bar), mac-chat-solid; MBUI_DARK=1 for sffix and the demo.
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
@@ -438,6 +476,7 @@ while the card moved the list):
 | 26 history | the agent does steps (e2e/fake: `steps:` writes its transcript); "…" → its row → its card → 历史: received and posted, the group opened, the command opened to what it printed | the agent's post; its transcript (what the history is read from) has the steps |
 | 27 pin | "…" → 固定到列表顶部, then 取消固定 | the station's `pins` has alice's for the chat, then none |
 | 28 decisions-page | the 奏 page (MBUI_OPEN_PAGE=decisions, a flow's `#env`); the other device asks with a card; the option tapped there; 奏折已全部批完 | alice's answer quoting the post |
+| 29 glass | four long messages sent from the composer's glass; the newest run under the top bar's glass, then, scrolled up, under the composer's | the four entries, as alice's; on macOS the bar's and the capsule's rows in the shots are not flat (what is under them shows through, blurred) |
 
 Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
 never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however
