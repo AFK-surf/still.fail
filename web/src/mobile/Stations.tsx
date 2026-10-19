@@ -1,7 +1,7 @@
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
-// with the buddy's face for its state and its load as rings; one station's page is the machine (its load, network,
+// with its mark and what it is doing, and its load as rings; one station's page is the machine (its load, network,
 // versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
 import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
@@ -15,7 +15,6 @@ import { illustrationUrl } from "../brand.tsx";
 import { Check, ChevronRight, Close, ImageUpload, More } from "@stillfail/ui/icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
 import { track } from "../telemetry.ts";
-import { useDark } from "../theme.ts";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { GoRow } from "./Settings.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
@@ -24,7 +23,6 @@ import { joinedText, MachineDetails, Net, useStationNet } from "../cloud/Station
 import { ColorRow, EmojiGrid, GlyphGrid } from "../cloud/MarkPick.tsx";
 import { glyphColor, isPicture, MarkOrLetter, StationMark, stationGlyph } from "../StationMark.tsx";
 import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, pictureOf, same, type Kind, type Mark } from "../stationPick.ts";
-import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import { Button, Card, FailedMark, Field, Illustration, LinkButton, ListCard, ListRow, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg } from "./parts.tsx";
@@ -49,14 +47,6 @@ import * as newChatCss from "./styles/new-chat.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
-const BASE = import.meta.env.BASE_URL;
-
-/** The buddy's face for a station: at work, idle, or asleep. */
-export function Buddy({ s, size = 40 }: { s: StationView; size?: number }) {
-  const dark = useDark();
-  const face = s.face ?? "idle";
-  return <img className={css.mBuddy} src={`${BASE}${face}${dark ? "-dark" : ""}.svg`} alt="" width={size} height={size} />;
-}
 
 export function StationsScreen() {
   const app = useApp();
@@ -78,8 +68,9 @@ export function StationsScreen() {
       {!list ? <Waiting shape="cards" count={2} text={t("common.readingStations")} error={stations.error?.message} /> : list.map((s) => (
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
           <span className={css.mStationHead}>
-            <Buddy s={s} />
-            <span className={partsCss.mGrow}><b className={css.mStationName}>{(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={16} className={markCss.inline} />}{s.name}</b><span className={css.mStationSummary}>{[joinedText(s), s.summary].filter(Boolean).join(" · ")}</span></span>
+            {/* Its own mark leads, the server's where it has none (what it is doing is said under its name). */}
+            <StationMark emoji={s.emoji} icon={s.icon} size={28} className={css.mMark} />
+            <span className={partsCss.mGrow}><b className={css.mStationName}>{s.name}</b><span className={css.mStationSummary}>{[joinedText(s), s.summary].filter(Boolean).join(" · ")}</span></span>
             {s.reconnecting && <Reconnecting />}
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </span>

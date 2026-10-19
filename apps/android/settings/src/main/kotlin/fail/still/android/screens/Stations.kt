@@ -1,4 +1,4 @@
-// The workspace's stations: each with the buddy's face for its state and its
+// The workspace's stations: each with its mark and what it is doing, and its
 // load as rings; one station's page is the machine (its load, network,
 // versions), with how many connects and profiles run on it (settings' lists
 // have them, SettingsHome.kt).
@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -126,18 +127,6 @@ import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import fail.still.android.ui.stationName
 
-/** The buddy's face for a station: at work, idle, or asleep. */
-@Composable
-internal fun Buddy(s: StationView, size: Int = 40) {
-    val dark = C.dark
-    val face = when (s.face) {
-        "offline" -> if (dark) R.drawable.buddy_offline_dark else R.drawable.buddy_offline
-        "working" -> if (dark) R.drawable.buddy_working_dark else R.drawable.buddy_working
-        else -> if (dark) R.drawable.buddy_idle_dark else R.drawable.buddy_idle
-    }
-    Image(painterResource(face), null, Modifier.size(size.dp))
-}
-
 /** Where a station this workspace joined is at home (docs/multi-workspace.md), as grey words before what is said of it; null for one at home here. */
 internal fun joinedMark(s: StationView): String? =
     if (s.joined != true) null else s.home?.let { t("web-pages.stations.joinedFrom", "name" to it) } ?: t("web-pages.stations.joinedElsewhere")
@@ -177,13 +166,14 @@ fun StationsScreen(current: WorkspaceEntry) {
             list.forEach { s ->
                 Card(onClick = { app.push(Screen.Station(s.station)) }) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Buddy(s)
+                        // Its own mark leads, the server's where it has none (what it is doing is said under its name).
+                        // In a box as large whatever it is: an emoji is drawn wider than an icon, and the names line up.
+                        Box(Modifier.size(MARK_SIZE), contentAlignment = Alignment.Center) {
+                            StationMark(s.emoji, s.icon, MARK_SIZE, C.ink, Modifier.wrapContentSize(unbounded = true), none = Icons.Server)
+                        }
                         Column(Modifier.weight(1f)) {
                             // Line heights set: a line in Chinese is otherwise a little taller than one in Latin.
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (hasStationMark(s.emoji, s.icon)) StationMark(s.emoji, s.icon, 16.dp, C.ink)
-                                Text(s.name, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
+                            Text(s.name, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             // A station this workspace joined: where it is at home first (the line is cut short at its end).
                             Text(listOfNotNull(joinedMark(s), s.summary.takeIf { it.isNotEmpty() }).joinToString(" · "), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -199,6 +189,9 @@ fun StationsScreen(current: WorkspaceEntry) {
     }
     }
 }
+
+/** A station's mark at the head of its card in the list. */
+private val MARK_SIZE = 28.dp
 
 /** Laid out unseen while a station has no network to show, so that its card keeps the room (its path in Chinese, as tall as a real one). */
 private val noNet = StationNet(path = "直连", rtt = NetFigure("0 ms", "ok"), rttHistory = emptyList(), down = " ", up = " ", total = "")

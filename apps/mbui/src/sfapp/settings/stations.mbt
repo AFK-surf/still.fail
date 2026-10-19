@@ -1,24 +1,7 @@
-// The workspace's stations (settings/Stations.kt): a card each with its buddy's face for its state, what of its load
+// The workspace's stations (settings/Stations.kt): a card each with its mark and what it is doing, what of its load
 // runs low and its network; one station's page is the machine (its load large, its network, its details), with how
 // many connects and profiles run on it and its memory. Its owners and admins rename it (`workspace.renameStation`),
 // pick its mark or take it out from its "…" (Settings.kt openStationMenu).
-
-///|
-/// The buddy's face for a station (Stations.kt Buddy): offline, at work or idle.
-fn buddy(c : @ui.Ctx, face : String, size? : Double = 40.0) -> Unit {
-  let t = @sf.theme()
-  let name = match face {
-    "offline" => "buddy_offline"
-    "working" => "buddy_working"
-    _ => "buddy_idle"
-  }
-  let pic = if t.dark { name + "_dark" } else { name }
-  if @sf.has_drawable(pic) {
-    @sf.drawable(c, pic, size) |> ignore
-  } else {
-    c.box(w=Px(size), h=Px(size), radius=size / 2.0, bg=t.p.neutral_bg, fn() {  }) |> ignore
-  }
-}
 
 ///|
 /// Where a station this workspace joined is at home (Stations.kt joinedMark), as grey words before what is said of it.
@@ -90,20 +73,26 @@ fn first_station(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// A station in the list: its face, its mark and name, what is said of it, and its body (StationBody).
+/// A station in the list: its mark (the server's where it has none), its name, what is said of it, and its body (StationBody).
 fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
   let t = @sf.theme()
   let s = Some(st)
   let address = text(s, "station")
   if card(c, key="station/" + address, fn() {
       c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, fn() {
-        buddy(c, text(s, "face"))
+        let emoji = text(s, "emoji")
+        let icon = text(s, "icon")
+        // In a box as large whatever it is: an emoji is drawn wider than an icon, and the names line up.
+        c.box(w=Px(28.0), h=Px(28.0), align=ACenter, justify=JCenter, fn() {
+          if @sf.has_station_mark(emoji, icon) {
+            @sf.station_mark(c, emoji, icon, 28.0, t.p.text)
+          } else {
+            @sf.icon(c, "server", size=28.0, color=t.p.text) |> ignore
+          }
+        })
+        |> ignore
         c.box(w=Fill(1.0), fn() {
-          c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
-            station_mark(c, s, 16.0, t.p.text)
-            c.text(text(s, "name"), size=16.0, weight=700, color=t.p.text, wrap=false, line=22.0) |> ignore
-          })
-          |> ignore
+          c.text(text(s, "name"), size=16.0, weight=700, color=t.p.text, wrap=false, line=22.0) |> ignore
           c.text(join([joined_mark(s), text(s, "summary")], " · "), size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0)
           |> ignore
         })

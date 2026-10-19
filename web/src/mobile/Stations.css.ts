@@ -4,7 +4,7 @@ import { mGrow } from "./styles/parts.css.ts";
 import { connectionRetry } from "../Connection.css.ts";
 
 export const mPad20 = style({ padding: "20px" });
-export const mBuddy = style({ display: "block", flex: "none" });
+export const mMark = style({ flex: "none" });
 export const mStationHead = style({ display: "flex", alignItems: "center", gap: "12px" });
 export const mStationName = style({ fontSize: vars.textTitle, fontWeight: "600" });
 /** What the machine is and what its agents do: one line however long, so no card grows as it changes. */
