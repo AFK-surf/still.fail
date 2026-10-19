@@ -512,6 +512,30 @@ fn pk_photo(_src : String) -> Int {
   0
 }
 
+// Text in a legacy encoding (charset.mbt): the page's TextDecoder.
+
+///|
+extern "js" fn js_cs_known(charset : String) -> Bool =
+  #|(l) => { try { new TextDecoder(l); return true } catch (e) { return false } }
+
+///|
+extern "js" fn js_cs_decode(data : Bytes, charset : String) -> String =
+  #|(d, l) => new TextDecoder(l).decode(d)
+
+///|
+fn cs_known(charset : String) -> Int {
+  if js_cs_known(charset) {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+fn cs_decode(data : Bytes, charset : String) -> String {
+  js_cs_decode(data, charset)
+}
+
 // Notifications (notify.mbt): not shown by a page yet; what would be is said on the log.
 
 ///|

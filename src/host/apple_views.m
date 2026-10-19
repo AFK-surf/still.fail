@@ -1149,6 +1149,41 @@ void mb_views_draw_under(CGContextRef ctx, double scale) {
 // the app's Documents (MBUI_DOWNLOADS_DIR instead, for tests); a name taken
 // gets " (2)", " (3)"… before its extension.
 
+// Text in a legacy encoding (charset.mbt): the encoding CoreFoundation names by IANA's name, its bytes decoded (a
+// byte with no mapping: U+FFFD, through a lossy conversion where the strict one refuses).
+static CFStringEncoding cs_of(moonbit_string_t charset) {
+  NSString *n = mb_ns_from_string(charset);
+  if (!n.length) return kCFStringEncodingInvalidId;
+  return CFStringConvertIANACharSetNameToEncoding((__bridge CFStringRef)n);
+}
+
+int32_t mb_host_charset_known(moonbit_string_t charset) {
+  CFStringEncoding e = cs_of(charset);
+  return e != kCFStringEncodingInvalidId && CFStringIsEncodingAvailable(e) ? 1 : 0;
+}
+
+moonbit_string_t mb_host_charset_decode(moonbit_bytes_t data, moonbit_string_t charset) {
+  CFStringEncoding e = cs_of(charset);
+  NSData *d = [NSData dataWithBytesNoCopy:data length:Moonbit_array_length(data) freeWhenDone:NO];
+  NSStringEncoding ns = CFStringConvertEncodingToNSStringEncoding(e);
+  NSString *s = [[NSString alloc] initWithData:d encoding:ns];
+  if (!s) {
+    // a few bytes it cannot map (a corrupt file, a character of a newer standard): the rest as it is
+    NSString *out = nil;
+    BOOL lossy = NO;
+    [NSString stringEncodingForData:d
+                    encodingOptions:@{
+                      NSStringEncodingDetectionSuggestedEncodingsKey : @[ @(ns) ],
+                      NSStringEncodingDetectionUseOnlySuggestedEncodingsKey : @YES,
+                      NSStringEncodingDetectionAllowLossyKey : @YES
+                    }
+                    convertedString:&out
+                usedLossyConversion:&lossy];
+    s = out;
+  }
+  return mb_string_from_ns(s ?: @"");
+}
+
 // a file name of the app's made safe for a folder: its last part, no separators, never empty
 static NSString *keep_safe(NSString *n) {
   n = [[n.lastPathComponent stringByReplacingOccurrencesOfString:@"/" withString:@"_"]

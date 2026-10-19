@@ -582,6 +582,16 @@ extern "C" fn ga_read_end(id : Int) -> Unit = "mb_host_gallery_read_end"
 #borrow(src)
 extern "C" fn pk_photo(src : String) -> Int = "mb_host_pick_photo"
 
+// Text in a legacy encoding (charset.mbt).
+
+///|
+#borrow(charset)
+extern "C" fn cs_known(charset : String) -> Int = "mb_host_charset_known"
+
+///|
+#borrow(data, charset)
+extern "C" fn cs_decode(data : Bytes, charset : String) -> String = "mb_host_charset_decode"
+
 // Notifications (notify.mbt): dev.mbui.Notices on Android (android_host.c), kept and said on the log elsewhere.
 
 ///|

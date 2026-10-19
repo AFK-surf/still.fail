@@ -41,6 +41,7 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways;
 static jclass updates_cls, shares_cls, keeps_cls;
 static jclass gallery_cls;
+static jmethodID m_cs_known, m_cs_decode;
 static jmethodID m_v_text, m_v_still;
 static jmethodID m_ga_access, m_ga_ask, m_ga_answers, m_ga_read, m_ga_state, m_ga_rows, m_ga_end, m_pk_photo;
 static jmethodID m_kp_begin, m_kp_append, m_kp_finish, m_kp_state, m_kp_where, m_kp_end;
@@ -148,6 +149,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_v_site_load = (*env)->GetStaticMethodID(env, views_cls, "siteLoad", "(ILjava/lang/String;)V");
   m_save = (*env)->GetStaticMethodID(env, views_cls, "save", "(Ljava/lang/String;[B)Z");
   m_v_text = (*env)->GetStaticMethodID(env, views_cls, "text", "(II)Ljava/lang/String;");
+  m_cs_known = (*env)->GetStaticMethodID(env, host_cls, "charsetKnown", "(Ljava/lang/String;)Z");
+  m_cs_decode = (*env)->GetStaticMethodID(env, host_cls, "charsetDecode", "([BLjava/lang/String;)Ljava/lang/String;");
   m_v_still = (*env)->GetStaticMethodID(env, views_cls, "still", "(I)[B");
   pdfs_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Pdfs"));
   m_pdf_open = (*env)->GetStaticMethodID(env, pdfs_cls, "open", "([B)I");
@@ -1326,6 +1329,28 @@ void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, dou
   jbyteArray b = jbytes(env, data);
   (*env)->CallStaticVoidMethod(env, views_cls, m_v_read_answer, id, req, b, total);
   (*env)->DeleteLocalRef(env, b);
+}
+
+// Text in a legacy encoding (charset.mbt): java.nio's Charset (Host.charsetDecode).
+
+int32_t mb_host_charset_known(moonbit_string_t charset) {
+  JNIEnv *env = env_();
+  jstring c = jstr(env, charset);
+  jboolean ok = (*env)->CallStaticBooleanMethod(env, host_cls, m_cs_known, c);
+  (*env)->DeleteLocalRef(env, c);
+  return ok ? 1 : 0;
+}
+
+moonbit_string_t mb_host_charset_decode(moonbit_bytes_t data, moonbit_string_t charset) {
+  JNIEnv *env = env_();
+  jstring c = jstr(env, charset);
+  jbyteArray b = jbytes(env, data);
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, host_cls, m_cs_decode, b, c);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  (*env)->DeleteLocalRef(env, b);
+  (*env)->DeleteLocalRef(env, c);
+  return out;
 }
 
 // A video's frames' times and a frame grabbed (native.mbt `frames`, `grabbed`): NativeViews.Video.

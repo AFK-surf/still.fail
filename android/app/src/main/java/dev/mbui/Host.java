@@ -198,4 +198,22 @@ final class Host {
             System.exit(code);
         });
     }
+
+    /** Whether java.nio knows `name` (charset.mbt). */
+    static boolean charsetKnown(String name) {
+        try {
+            return java.nio.charset.Charset.isSupported(name);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** `data` decoded as `name`, a byte it cannot map U+FFFD (charset.mbt). */
+    static String charsetDecode(byte[] data, String name) {
+        try {
+            return new String(data, java.nio.charset.Charset.forName(name));
+        } catch (Exception e) {
+            return "";
+        }
+    }
 }

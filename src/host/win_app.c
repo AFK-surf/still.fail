@@ -961,3 +961,37 @@ void mb_host_keep_end(int32_t id) {
   if (k && k->state == 0) keep_fail(k);
   if (k) k->state = -1;
 }
+
+// Text in a legacy encoding (charset.mbt): Windows' code pages by IANA's names (those a reader meets), decoded by
+// MultiByteToWideChar (a byte with no mapping: U+FFFD).
+#include <wctype.h>
+static UINT cs_page(moonbit_string_t charset) {
+  static const struct { const wchar_t *name; UINT page; } pages[] = {
+    {L"gb18030", 54936}, {L"gbk", 936}, {L"gb2312", 936}, {L"big5", 950}, {L"shift_jis", 932},
+    {L"euc-kr", 949}, {L"windows-1252", 1252}, {L"iso-8859-1", 28591}, {L"utf-8", 65001},
+  };
+  int n = Moonbit_array_length(charset);
+  wchar_t name[32];
+  if (n <= 0 || n >= 32) return 0;
+  for (int i = 0; i < n; i++) name[i] = (wchar_t)towlower((wint_t)charset[i]);
+  name[n] = 0;
+  for (size_t i = 0; i < sizeof pages / sizeof pages[0]; i++)
+    if (!wcscmp(name, pages[i].name)) return pages[i].page;
+  return 0;
+}
+
+int32_t mb_host_charset_known(moonbit_string_t charset) {
+  UINT p = cs_page(charset);
+  return p && IsValidCodePage(p) ? 1 : 0;
+}
+
+moonbit_string_t mb_host_charset_decode(moonbit_bytes_t data, moonbit_string_t charset) {
+  UINT p = cs_page(charset);
+  int len = Moonbit_array_length(data);
+  if (!p || len == 0) return moonbit_make_string_raw(0);
+  int n = MultiByteToWideChar(p, 0, (const char *)data, len, NULL, 0);
+  if (n <= 0) return moonbit_make_string_raw(0);
+  moonbit_string_t s = moonbit_make_string_raw(n);
+  MultiByteToWideChar(p, 0, (const char *)data, len, (wchar_t *)s, n);
+  return s;
+}
