@@ -236,6 +236,7 @@
   "station.profile.addressNeeded": "Enter a valid endpoint URL (starting with http or https)",
   "station.profile.cannotRun": "“{profile}” can't run {runtime}",
   "station.profile.chatgptSubscription": "ChatGPT subscription",
+  "station.profile.grokSubscription": "SuperGrok subscription",
   "station.profile.changedRecheck": "The profile changed. Check it again.",
   "station.profile.checkError": "Check failed: {error}",
   "station.profile.checkFailed": "Verification failed: {detail}",
@@ -262,6 +263,7 @@
     "other": "Works, {n} models"
   },
   "station.quota.chatgptNoWindows": "ChatGPT returned no usage limits",
+  "station.quota.grokNoWindows": "SuperGrok returned no usage limits",
   "station.quota.envUnsupported": "Can't check limits for custom env accounts",
   "station.quota.noCredit": "No resets left",
   "station.quota.nothingToReset": "Nothing to reset now",

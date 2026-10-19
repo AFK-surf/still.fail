@@ -80,7 +80,7 @@ function PreviewMessage({ message: m, ticking }: { message: PublishMessage; tick
   };
   // As the chat draws them (Chat.tsx MessageAvatar): an agent by its maker's mark, a person by their picture.
   const avatar = m.agent
-    ? <AgentAvatar maker={m.maker ?? null} runtime={m.runtime === "claude" || m.runtime === "codex" || m.runtime === "dsh" ? m.runtime : null} />
+    ? <AgentAvatar maker={m.maker ?? null} runtime={m.runtime === "claude" || m.runtime === "codex" || m.runtime === "dsh" || m.runtime === "grok" ? m.runtime : null} />
     : m.picture
       ? <img className={chatCss2.msgAvatar} src={m.picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />
       : <span className={chatCss2.msgAvatar}><Avatar id={m.author} name={m.author} size={18} /></span>;

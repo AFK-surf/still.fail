@@ -135,6 +135,36 @@ const openCode = (signingIn: boolean): DemoExtension => ({
     };
   },
 });
+/** The demo's profile as a SuperGrok subscription (Grok Build's): signed in, or being signed in again (`signingIn`: xAI's
+ *  device code is up). The workspace's list has it under its own kind too. */
+const superGrok = (signingIn: boolean): DemoExtension => {
+  const at = Date.UTC(2026, 9, 19, 3, 0);
+  const login = { profile: "machine-claude", runtime: "grok", state: "needs_approval", url: "https://accounts.x.ai/device?user_code=QRST-5678", userCode: "QRST-5678", startedAt: at, expiresAt: at + 600_000 };
+  const models = ["grok-4.3", "grok-code-fast-2"];
+  const grok = (p: Record<string, unknown>) => ({
+    ...p, machine: false, runtime: "grok", runtimes: ["grok"], loginCommand: "grok login --device-auth", providerName: undefined,
+    access: { kind: "subscription", key: "" }, quota: null, trouble: null,
+    models, available: models, modelsText: "已启用 2 / 2 个模型", series: [{ name: "Grok", models }],
+    makers: Object.fromEntries(models.map((m) => [m, { id: "xai", name: "xAI" }])), names: { "grok-4.3": "Grok 4.3", "grok-code-fast-2": "Grok Code Fast 2" },
+    ...(signingIn
+      ? { login, check: { checkedAt: 0, state: "login", detail: "Grok 登录已失效", models: null }, checkText: "需要登录", checkTone: "amber" }
+      : { login: null, check: { checkedAt: 0, state: "ok", detail: "已登录", models }, checkText: "可用", checkTone: "green" }),
+  });
+  return {
+    then: (t, value) => {
+      if (!value || typeof value !== "object") return undefined;
+      if (t.topic === "overview") {
+        const o = value as { profiles: Record<string, unknown>[] };
+        return { ...o, profiles: o.profiles.map(grok) };
+      }
+      if (t.topic === "profiles") {
+        const v = value as { items: Record<string, unknown>[] };
+        return { ...v, items: v.items.map((e) => ({ ...e, group: "grok", groupTitle: "SuperGrok 订阅", profile: grok(e.profile as Record<string, unknown>) })) };
+      }
+      return undefined;
+    },
+  };
+};
 /** A new chat on a station this workspace joined that has no profile open to it (the core's `blocked: shared`). */
 const notShared: DemoExtension = {
   then: (t, value) => (t.topic === "newChat" && value && typeof value === "object"
@@ -448,7 +478,7 @@ export const stories: Story[] = [
     render: () => sheet([
       ["标签", <><Pill>普通</Pill><Pill tone="green">在线</Pill><Pill tone="blue">进行中</Pill><Pill tone="amber">等待</Pill><Pill tone="red">失败</Pill><Pill tone="accent">强调</Pill></>],
       ["状态", <><StatusDot state="online" label="在线" /><StatusDot state="busy" label="忙" /><StatusDot state="error" label="出错" /><StatusDot state="offline" label="离线" /><StatusText text="已连接 · 3 分钟前" /></>],
-      ["模型和运行时", <><ModelLogo maker={ANTHROPIC} runtime="claude" size={20} /><ModelLogo maker={OPENAI} runtime="codex" size={20} /><ModelLogo maker={null} runtime="dsh" size={20} /><AgentMark maker={ANTHROPIC} runtime="claude" badge={undefined} size={28} /><RuntimeTags runtimes={["claude", "codex", "dsh"]} /></>],
+      ["模型和运行时", <><ModelLogo maker={ANTHROPIC} runtime="claude" size={20} /><ModelLogo maker={OPENAI} runtime="codex" size={20} /><ModelLogo maker={null} runtime="dsh" size={20} /><ModelLogo maker={null} runtime="grok" size={20} /><AgentMark maker={ANTHROPIC} runtime="claude" badge={undefined} size={28} /><RuntimeTags runtimes={["claude", "codex", "dsh", "grok"]} /></>],
     ]),
   },
   {
@@ -534,6 +564,8 @@ export const stories: Story[] = [
   { id: "app-profile-add-model", group: "应用", title: "Profile · 按名称添加模型", app: true, demo: addModel, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-opencode", group: "应用", title: "Profile · OpenCode Go 账号登录", app: true, demo: openCode(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-opencode-signing-in", group: "应用", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, demo: openCode(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-supergrok", group: "应用", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, demo: superGrok(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-supergrok-signing-in", group: "应用", title: "Profile · SuperGrok 重新登录（设备码）", app: true, demo: superGrok(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "pick-workspace-models", group: "选模型", title: "模型 · 本机、借用的、可借用的", render: () => borrowStory(false), steps: [{ click: "text=Opus 5.5" }] },
   { id: "pick-borrow", group: "选模型", title: "模型 · 选了别的 station 的，借用", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }] },
   { id: "pick-phone-models", group: "选模型", title: "手机 · 模型列表（本机、借用的、可借用的）", phone: true, render: phoneModels },
@@ -829,6 +861,8 @@ export const stories: Story[] = [
   { id: "phone-memory-skill", group: "手机", title: "记忆 · 项目", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "acme-web" }] },
   { id: "phone-profile-workspaces", group: "手机", title: "Profile · 也给加入的 workspace 用", app: true, phone: true, demo: profileFor(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-opencode-signing-in", group: "手机", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, phone: true, demo: openCode(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-supergrok", group: "手机", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, phone: true, demo: superGrok(false), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-supergrok-signing-in", group: "手机", title: "Profile · SuperGrok 重新登录（设备码）", app: true, phone: true, demo: superGrok(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-new-chat-not-shared", group: "手机", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, phone: true, demo: notShared, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="新建对话"]' }] },
   { id: "phone-station-add-existing", group: "手机", title: "添加 station · 已有的", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
   { id: "phone-station-add-existing-done", group: "手机", title: "添加 station · 已加入", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },

@@ -10,9 +10,9 @@
 // The prices (what a call costs) are the usage page's: src/read/usage.ts.
 import { Clock, Effect, Fiber, Queue } from "effect";
 import { liveClock } from "../ops/fibers.ts";
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { type FileHandle, open, readdir, realpath, stat } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { createZstdDecompress } from "node:zlib";
 import { log } from "../ops/log.ts";
 import { parseIso, transcriptPath } from "../read/transcript.ts";
@@ -68,6 +68,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
     const wanted =
       runtime === "claude" ? line.includes('"usage"')
       : runtime === "dsh" ? line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')
+      : runtime === "grok" ? line.startsWith('{"type":"stillfail/usage"')
       : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
     if (!wanted) continue;
     let r: unknown;
@@ -78,7 +79,18 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
     }
     const stamp = str(get(r, "timestamp"));
     const at = (stamp === null ? null : parseIso(stamp)) ?? 0;
-    if (runtime === "dsh") {
+    if (runtime === "grok") {
+      // What the station kept of each Grok Build turn (agents/grok.ts usageLine): its counts already apart.
+      const usage = get(r, "usage");
+      const id = str(get(r, "id"));
+      if (usage === undefined || usage === null || id === null) continue;
+      const time = get(r, "time");
+      out.push({
+        id: `grok:${id}`, at: typeof time === "number" ? time : 0, model: str(get(r, "model")), subagent, fast: false,
+        input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
+        output: n(get(usage, "output")),
+      });
+    } else if (runtime === "dsh") {
       // dsh's counts are apart: input is what was not cached.
       const data = get(r, "data");
       const usage = get(data, "usage");
@@ -584,18 +596,21 @@ export class UsageCounter {
         added += await this.#readFile(path, "codex", false, s, known, turns);
       }
     }
-    // DeepSeek Harness: each runtime session's own file, looked for in every profile's home (dsh.ts).
+    // DeepSeek Harness: each runtime session's own file, looked for in every profile's home (dsh.ts); Grok Build: what the
+    // station kept of its turns beside each one's transcript (grok.ts).
     for (const s of sessions) {
-      if (s.runtime !== "dsh" || (wanted !== null && !wanted.has(s.key))) continue;
+      if ((s.runtime !== "dsh" && s.runtime !== "grok") || (wanted !== null && !wanted.has(s.key))) continue;
+      const runtime = s.runtime;
       const turns: { of: UsageTurn[] | null } = { of: null };
       for (const id of store.runtimeSessions(s.key)) {
         for (const p of config.profiles) {
-          const path = transcriptPath("dsh", p.home, id);
-          if (path === null) continue;
+          const transcript = transcriptPath(runtime, p.home, id);
+          const path = transcript !== null && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
+          if (path === null || (runtime === "grok" && !existsSync(path))) continue;
           const real = await canonical(path);
           if (seenFiles.has(real)) continue;
           seenFiles.add(real);
-          added += await this.#readFile(path, "dsh", false, s, known, turns);
+          added += await this.#readFile(path, runtime, false, s, known, turns);
         }
       }
     }

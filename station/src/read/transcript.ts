@@ -128,6 +128,7 @@ const entriesOf = (dir: string): string[] | null => {
 /// transcript_path: where a runtime keeps a session's transcript, if it is there.
 export function transcriptPath(runtime: RuntimeKind, home: string, id: string): string | null {
   if (runtime === "dsh") return dshTranscript(home, id);
+  if (runtime === "grok") return grokTranscript(home, id);
   if (runtime === "claude") {
     for (const dir of entriesOf(join(home, "projects")) ?? []) {
       const path = join(home, "projects", dir, `${id}.jsonl`);
@@ -162,6 +163,16 @@ function dshTranscript(home: string, id: string): string | null {
       .filter((f): f is readonly [string, string] => f[1] !== undefined)
       .sort((a, b) => Number(b[1]) - Number(a[1]));
     if (files.length > 0) return join(root, dir, id, files[0]![0]);
+  }
+  return null;
+}
+
+/// Grok Build's: its home's sessions/<working directory, escaped>/<id>/chat_history.jsonl (agents/grok.ts).
+function grokTranscript(home: string, id: string): string | null {
+  const root = join(home, "grok", "sessions");
+  for (const dir of entriesOf(root) ?? []) {
+    const path = join(root, dir, id, "chat_history.jsonl");
+    if (isFile(storage(path))) return path;
   }
   return null;
 }
@@ -215,6 +226,7 @@ export type ReadState = { inner: Map<string, number> };
 export function timelineOf(runtime: RuntimeKind, record: Json, state: ReadState, out: TimelineEntry[]): void {
   if (runtime === "claude") claudeTimeline(record, state, out);
   else if (runtime === "dsh") dshTimeline(record, out);
+  else if (runtime === "grok") grokTimeline(record, out);
   else codexTimeline(record, state, out);
 }
 
@@ -260,6 +272,54 @@ function dshTimeline(r: Json, out: TimelineEntry[]) {
   } else if (kind === "tool/result") {
     const e: TimelineEntry = { at, kind: "tool_result", text: clip(dshText(get(message, "content"))), ok: get(message, "isError") !== true };
     const id = stringOf(get(message, "toolCallId"));
+    if (id !== undefined) e.callId = id;
+    out.push(e);
+  }
+}
+
+/// What a person said as Grok Build keeps it: in a <user_query> it wraps it in.
+const grokQuery = (text: string): string => {
+  const m = /^\s*<user_query>\n?([\s\S]*?)\n?<\/user_query>\s*$/.exec(text);
+  return m ? m[1]! : text;
+};
+
+/// Grok Build's chat_history.jsonl: a line a message (system, user, reasoning, assistant with its tool calls,
+/// tool_result), with no time of its own.
+function grokTimeline(r: Json, out: TimelineEntry[]) {
+  const kind = stringOf(get(r, "type")) ?? "";
+  const content = get(r, "content");
+  if (kind === "user") {
+    // What the station said (a prompt), not the context Grok Build adds as a user's message.
+    if (get(r, "synthetic_reason") !== undefined || get(r, "prompt_index") === undefined) return;
+    const text = grokQuery(isStr(content) ? content : dshText(content));
+    if (trim(text) !== "") out.push({ at: null, kind: "user", text: clip(text) });
+  } else if (kind === "reasoning") {
+    const text = (Array.isArray(get(r, "summary")) ? get(r, "summary") : []).map((s: Json) => stringOf(get(s, "text")) ?? "").filter((t: string) => t !== "").join("\n\n");
+    if (trim(text) !== "") out.push({ at: null, kind: "thinking", text: clip(text) });
+  } else if (kind === "assistant") {
+    const text = isStr(content) ? content : dshText(content);
+    if (trim(text) !== "") out.push({ at: null, kind: "assistant", text: clip(text) });
+    for (const call of Array.isArray(get(r, "tool_calls")) ? get(r, "tool_calls") : []) {
+      let name = stringOf(get(call, "name")) ?? "";
+      const raw = stringOf(get(call, "arguments")) ?? "";
+      let input: Json = raw;
+      let args = raw;
+      try {
+        input = JSON.parse(raw);
+        // An MCP server's tool, reached through its use_tool: named as the tool itself, as Claude Code names one
+        // (mcp__server__tool; agents/live.ts acpCall).
+        if (name === "use_tool" && isStr(get(input, "tool_name"))) [name, input] = [`mcp__${get(input, "tool_name")}`, get(input, "tool_input") ?? {}];
+        args = pretty(input);
+      } catch {}
+      const e: TimelineEntry = { at: null, kind: "tool_call", text: isPosting(name) ? args : clip(args), tool: name };
+      const id = stringOf(get(call, "id"));
+      if (id !== undefined) e.callId = id;
+      out.push(withBrief(e, input));
+    }
+  } else if (kind === "tool_result") {
+    const text = isStr(content) ? content : toText(content ?? null);
+    const e: TimelineEntry = { at: null, kind: "tool_result", text: clip(text), ok: get(r, "is_error") !== true };
+    const id = stringOf(get(r, "tool_call_id"));
     if (id !== undefined) e.callId = id;
     out.push(e);
   }

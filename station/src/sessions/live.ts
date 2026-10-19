@@ -220,6 +220,9 @@ export class TranscriptTail {
         usage.contextTokens = input;
         const model = r.data?.message?.source?.model;
         if (typeof model === "string") usage.model = model;
+      } else if (this.runtime === "grok") {
+        // Grok Build's transcript says no counts (the station keeps them apart: agents/grok.ts), only the model.
+        if (r?.type === "assistant" && typeof r.model_id === "string") usage.model = r.model_id;
       } else {
         const p = r?.payload ?? null;
         if (r?.type === "turn_context" && typeof p?.model === "string") usage.model = p.model;

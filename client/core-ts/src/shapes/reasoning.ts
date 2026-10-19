@@ -7,6 +7,7 @@ export type Catalog = Record<string, Record<string, string[]>>;
 export function fallback(runtime: string): string[] {
   if (runtime === "codex") return ["minimal", "low", "medium", "high", "xhigh"];
   if (runtime === "dsh") return ["low", "medium", "high", "max"];
+  if (runtime === "grok") return ["low", "medium", "high", "xhigh", "max"];
   return ["low", "medium", "high", "xhigh", "max"];
 }
 

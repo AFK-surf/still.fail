@@ -818,7 +818,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
     val api = app.api(station)
     val job = p.login
     val active = job != null && job.state in SIGNING_IN
-    val provider = if (p.access.kind == "opencode-go") "OpenCode" else if (p.runtime == "claude") "Claude" else "ChatGPT"
+    val provider = if (p.access.kind == "opencode-go") "OpenCode" else when (p.runtime) { "claude" -> "Claude"; "grok" -> "Grok"; else -> "ChatGPT" }
     val busy = app.isDoing("profile.login", "station" to station, "id" to p.id)
     var manual by remember { mutableStateOf(false) }
     var previous by remember { mutableStateOf(job?.state) }
@@ -852,7 +852,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
 
 /**
  * What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude), or copy
- * the code and open the page (Codex).
+ * the code and open the page (Codex, Grok).
  */
 @Composable
 private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) -> Unit) {
@@ -884,7 +884,7 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
                 }
                 open(url)
             }
-            Text(if (provider == "OpenCode") t("android-settings.login.opencodeNote") else t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
+            Text(when (provider) { "OpenCode" -> t("android-settings.login.opencodeNote"); "Grok" -> t("android-settings.login.grokNote"); else -> t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME) }, fontSize = 13.sp, color = C.muted)
         }
         job.state == "needs_code" && url != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row {
@@ -987,8 +987,8 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     // The sign-in made its profile: on to it.
     LaunchedEffect(pending?.created) { pending?.created?.let { go(it, t("android-settings.profile.addedLogin")) } }
     // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
-    val runtime = d?.signIn?.runtime ?: if (d?.tile?.runtime == "codex") "codex" else "claude"
-    val provider = d?.signIn?.provider ?: if (runtime == "claude") "Claude" else "ChatGPT"
+    val runtime = d?.signIn?.runtime ?: d?.tile?.runtime?.takeIf { it == "codex" || it == "grok" } ?: "claude"
+    val provider = d?.signIn?.provider ?: when (runtime) { "claude" -> "Claude"; "grok" -> "Grok"; else -> "ChatGPT" }
     val access = d?.signIn?.access
     // A plan's sign-in starts when it is chosen; leaving before it made its profile leaves nothing behind.
     val planning = d?.step == "connect" && d.method == "plan"

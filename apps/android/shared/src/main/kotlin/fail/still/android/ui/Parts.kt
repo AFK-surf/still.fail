@@ -110,10 +110,10 @@ private val MAKER_MARKS = mapOf(
 /** Marks of one colour, drawn in the page's ink. */
 private val MONO = setOf("anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter", "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface", "nvidia", "baseten", "dsh")
 
-/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own). */
+/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own; xAI's for Grok Build). */
 @Composable
 fun MakerIcon(maker: Maker?, runtime: String?, size: Dp, modifier: Modifier = Modifier) {
-    val id = maker?.id?.takeIf { it in MAKER_MARKS } ?: when (runtime) { "codex" -> "openai"; "dsh" -> "dsh"; else -> "anthropic" }
+    val id = maker?.id?.takeIf { it in MAKER_MARKS } ?: when (runtime) { "codex" -> "openai"; "dsh" -> "dsh"; "grok" -> "xai"; else -> "anthropic" }
     Image(painterResource(MAKER_MARKS.getValue(id)), maker?.name, modifier.size(size), colorFilter = if (id in MONO) ColorFilter.tint(C.ink) else null)
 }
 
@@ -358,7 +358,7 @@ fun HostDetails(details: List<fail.still.android.data.HostDetail>, modifier: Mod
     }
 }
 
-/** Whose service a profile runs on: Anthropic or OpenAI for a subscription or a key, OpenCode for OpenCode Go. */
+/** Whose service a profile runs on: Anthropic, OpenAI or xAI for a subscription or a key, OpenCode for OpenCode Go. */
 @Composable
 fun ProviderMark(runtime: String, kind: String?, size: Dp = 16.dp, mark: String? = null) {
     if (kind == "opencode-go" || mark == "opencode") {
@@ -374,7 +374,7 @@ fun ProviderMark(runtime: String, kind: String?, size: Dp = 16.dp, mark: String?
         if (mark != null && mark in MAKER_MARKS) MakerIcon(Maker(mark, mark), runtime, size) else IconIn(Icons.Plug, size, C.ink)
         return
     }
-    MakerIcon(if (runtime == "claude" || kind == "anthropic-api") Maker("anthropic", "Anthropic") else Maker("openai", "OpenAI"), runtime, size)
+    MakerIcon(if (runtime == "claude" || kind == "anthropic-api") Maker("anthropic", "Anthropic") else if (runtime == "grok") Maker("xai", "xAI") else Maker("openai", "OpenAI"), runtime, size)
 }
 
 // ── controls ───────────────────────────────────────────────────────────

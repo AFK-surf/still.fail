@@ -325,6 +325,7 @@
   "web-mobile.profiles.claudeStep2": "2. 同意后页面会显示授权码，复制到此处：",
   "web-mobile.profiles.codexNote": "在打开的 OpenAI 页面上，使用要供 {name} 使用的 ChatGPT 账号登录并粘贴代码。完成后此处会自动继续。如果页面提示设备码登录未开启，请先在 ChatGPT 的安全设置中开启。",
   "web-mobile.profiles.opencodeNote": "在打开的 OpenCode 页面登录，确认页面上的代码与此处一致，选择订阅了 Go 的 workspace 并授权。完成后此处会自动继续，无需返回操作。",
+  "web-mobile.profiles.grokNote": "在打开的 xAI 页面，用订阅了 SuperGrok 或 X Premium+ 的账号登录，输入代码后批准。完成后此处会自动继续，无需返回操作。",
   "web-mobile.profiles.copyCodeFailed": "复制代码失败，请手动输入上方代码",
   "web-mobile.profiles.copyOpen": "复制代码并打开登录页",
   "web-mobile.profiles.credits": "积分余额",

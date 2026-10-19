@@ -2,6 +2,8 @@
 // runtime takes). How an access kind reaches its models (the environment, Codex's overrides) is agents/profiles.ts's.
 // The providers' addresses can be pointed elsewhere (`Urls`): tests give fake servers.
 import { execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Env } from "../agents/machine-logins.ts";
 import { linkCodexAuth } from "../agents/machine-logins.ts";
@@ -73,6 +75,8 @@ export function accessKinds(runtime: Runtime): AccessKind[] {
   if (runtime === "claude") return ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"];
   // DeepSeek Harness has no subscription to sign in to here: an account of its own is set up by variables.
   if (runtime === "dsh") return ["opencode-go", "anthropic-api", "api-provider", "env"];
+  // Grok Build: SuperGrok signed in to, an xAI key, or its own variables.
+  if (runtime === "grok") return ["subscription", "api-provider", "env"];
   return ["subscription", "opencode-go", "api-provider", "env"];
 }
 
@@ -99,7 +103,10 @@ export const runtimesFor = (access: Json, runtime: unknown): Runtime[] => profil
 /// The command to sign a subscription profile in, run on the station's machine.
 /// None for DeepSeek Harness, which has no subscription here.
 export const loginCommand = (runtime: Runtime, home: string) =>
-  runtime === "claude" ? `CLAUDE_CONFIG_DIR=${home} claude auth login` : runtime === "codex" ? `CODEX_HOME=${home} codex login` : "";
+  runtime === "claude" ? `CLAUDE_CONFIG_DIR=${home} claude auth login`
+  : runtime === "codex" ? `CODEX_HOME=${home} codex login`
+  : runtime === "grok" ? `GROK_HOME=${join(home, "grok")} grok login --device-auth`
+  : "";
 
 /// What a check is given: the account and where it lives.
 export type CheckOptions = {
@@ -218,7 +225,37 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     if (output.code !== 0) throw new Error(`Command failed: codex login status\n${text}`);
     return check("ok", text.split("\n")[0] || t("station.profile.signedIn"), null);
   }
+  if (o.kind === "subscription" && o.runtime === "grok") {
+    // `grok models` says whether it is signed in, and the account's models (* the default, - the rest).
+    const output = await statusOf("grok", ["models"], { ...o.env, GROK_HOME: join(o.home, "grok"), GROK_DISABLE_AUTOUPDATER: "1" });
+    const text = `${output.stdout}${output.stderr}`;
+    if (/not authenticated|not logged in|sign in/i.test(text)) return check("login", t("station.profile.signedOut"), null);
+    if (output.code !== 0) throw new Error(`Command failed: grok models\n${text.trim()}`);
+    const models = grokModels(text);
+    const email = grokEmail(o.home);
+    return check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), models.length > 0 ? models : null);
+  }
   return check("unknown", t("station.profile.envUnchecked"), null);
+}
+
+/// The models `grok models` lists: a line each, `* id (default)` or `- id`.
+export function grokModels(text: string): string[] {
+  return text.split("\n").flatMap((line) => {
+    const m = /^\s*[*-]\s+(\S+)/.exec(line);
+    return m ? [m[1]!] : [];
+  });
+}
+
+/// Whose account Grok Build is signed in with, as its auth.json says (agents/grok.ts: its home is the profile's grok/).
+export function grokEmail(home: string): string | null {
+  try {
+    const auth: Json = JSON.parse(readFileSync(join(home, "grok", "auth.json"), "utf8"));
+    for (const entry of Object.values(auth ?? {})) {
+      const email = (entry as Json)?.email;
+      if (typeof email === "string" && email !== "") return email;
+    }
+  } catch {}
+  return null;
 }
 
 /// The models a Claude subscription's OAuth token may use; null when Anthropic does not say.

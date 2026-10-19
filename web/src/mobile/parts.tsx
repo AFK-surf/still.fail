@@ -37,9 +37,9 @@ const MAKERS = new Set(["anthropic", "openai", "deepseek", "qwen", "zhipu", "gem
 /** Marks of one colour, drawn in the page's ink. */
 const MONO = new Set(["anthropic", "openai", "kimi", "xai", "dsh"]);
 
-/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own). */
+/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own; xAI's for Grok Build). */
 export function MakerIcon({ maker, runtime, size }: { maker?: Maker | undefined; runtime?: RuntimeKind | string | undefined; size: number }) {
-  const id = maker && MAKERS.has(maker.id) ? maker.id : runtime === "codex" ? "openai" : runtime === "dsh" ? "dsh" : "anthropic";
+  const id = maker && MAKERS.has(maker.id) ? maker.id : runtime === "codex" ? "openai" : runtime === "dsh" ? "dsh" : runtime === "grok" ? "xai" : "anthropic";
   return <img className={css.mMaker} src={`${BASE}models/${id}.svg`} alt={maker?.name ?? ""} width={size} height={size} data-mono={MONO.has(id) || undefined} />;
 }
 
@@ -117,7 +117,7 @@ export function QuotaRings({ quota }: { quota?: Quota | undefined }) {
   return <QuotaBars quota={quota} compact bare />;
 }
 
-/** Whose service a profile runs on: Anthropic or OpenAI for a subscription or a key, OpenCode for OpenCode Go. */
+/** Whose service a profile runs on: Anthropic, OpenAI or xAI for a subscription or a key, OpenCode for OpenCode Go. */
 export function ProviderMark({ runtime, kind, mark, size = 16 }: { runtime: string; kind?: string | undefined; mark?: string | null | undefined; size?: number }) {
   if (kind === "opencode-go" || mark === "opencode") {
     return (
@@ -128,7 +128,7 @@ export function ProviderMark({ runtime, kind, mark, size = 16 }: { runtime: stri
   }
   // A key on a listed provider: its maker's mark, or the generic plug where there is none.
   if (kind === "api-provider") return mark ? <MakerIcon maker={{ id: mark, name: mark }} runtime={runtime} size={size} /> : <Plug size={size} strokeWidth={1.7} aria-hidden="true" />;
-  const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : { id: "openai", name: "OpenAI" };
+  const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : runtime === "grok" ? { id: "xai", name: "xAI" } : { id: "openai", name: "OpenAI" };
   return <MakerIcon maker={maker} runtime={runtime} size={size} />;
 }
 

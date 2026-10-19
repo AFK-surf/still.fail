@@ -66,6 +66,24 @@ test("the_runtimes_a_chat_starts_on_are_offered_claude_codex_then_deepseek_harne
   assert.equal(machineMeta({ runtime: "dsh", cwd: "/tmp/x" }, 0).meta, "DeepSeek Harness · /tmp/x");
 });
 
+test("grok_build_is_offered_after_deepseek_harness_with_its_own_efforts_and_no_fast_mode", () => {
+  const overview = {
+    profiles: [
+      { id: "super", runtimes: ["grok"], models: ["grok-5"], access: { kind: "subscription" } },
+      { id: "xai", runtimes: ["grok", "dsh", "codex"], models: ["grok-5-fast"], access: { kind: "api-provider", provider: "xai" } },
+    ],
+  };
+  const list = models(overview, 0);
+  assert.deepEqual(list.find((m: J) => m.model === "grok-5-fast").runtimes, ["codex", "dsh", "grok"]);
+  const grok = list.find((m: J) => m.model === "grok-5");
+  assert.deepEqual([grok.runtimes, grok.efforts.grok], [["grok"], ["low", "medium", "high", "xhigh", "max"]]);
+  assert.equal(grok.maker?.id, "xai");
+  const options = [{ model: "grok-5", runtimes: ["grok"], efforts: { grok: ["low", "high"] }, accounts: {} }];
+  const r = resolve(options, { runtime: "grok", model: "grok-5", fast: true, effort: "high" });
+  assert.deepEqual([r.runtime, r.fast, r.effort], ["grok", null, "high"]);
+  assert.equal(machineMeta({ runtime: "grok", cwd: "/tmp/x" }, 0).meta, "Grok Build · /tmp/x");
+});
+
 test("model_efforts_follow_the_account_and_survive_resolving_saved_choices", () => {
   const overview = {
     profiles: [

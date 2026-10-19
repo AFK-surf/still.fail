@@ -328,3 +328,121 @@ export class LiveFromDsh {
     return out;
   }
 }
+
+export type AcpLiveState = { open: string[]; said: string | null; n: number; phase: Phase | null };
+
+/// What a content block of an ACP update says (its text; anything else nothing).
+const acpText = (content: Json): string => {
+  if (typeof content?.text === "string") return content.text;
+  if (content?.type === "content") return acpText(content.content);
+  return "";
+};
+
+/// A call as it is named and given: Grok Build reaches an MCP server's tools through its `use_tool` (the tool's full
+/// name, server__tool, and its input inside), named here as the tool itself, as Claude Code names one
+/// (mcp__server__tool).
+export function acpCall(name: string, input: Json): [string, Json] {
+  if (name === "use_tool" && typeof input?.tool_name === "string") return [`mcp__${input.tool_name}`, input.tool_input ?? {}];
+  return [name, input];
+}
+
+/// An ACP agent's `session/update`s as live steps (Grok Build's). What the model says streams in chunks with no id of
+/// their own: a run of chunks of one kind is a step, which ends when something else begins (a thought, a call) or the
+/// turn ends; a call starts with `tool_call` and ends with the update that says it completed or failed, which carries
+/// its output.
+export class LiveFromAcp {
+  private open = new Set<string>();
+  /// The step what is being said goes into (text or thinking), and how many steps were made.
+  private said: string | null = null;
+  private n = 0;
+  private phase: Phase | null = null;
+
+  constructor(state?: AcpLiveState) {
+    if (state) {
+      this.open = new Set(state.open);
+      this.said = state.said;
+      this.n = state.n;
+      this.phase = state.phase;
+    }
+  }
+
+  state(): AcpLiveState {
+    return { open: [...this.open], said: this.said, n: this.n, phase: this.phase };
+  }
+
+  private to(next: Phase, out: LiveEvent[]) {
+    if (this.phase !== next) {
+      this.phase = next;
+      out.push({ kind: "phase", phase: next });
+    }
+  }
+
+  /// Ends the step of what was being said (a call keeps going until its result).
+  private endSaid(out: LiveEvent[]) {
+    if (this.said === null) return;
+    this.open.delete(this.said);
+    out.push({ kind: "end", id: this.said });
+    this.said = null;
+  }
+
+  /// A prompt was given: the turn is with the model.
+  prompted(): LiveEvent[] {
+    const out: LiveEvent[] = [];
+    this.to("requesting", out);
+    return out;
+  }
+
+  feed(update: Json): LiveEvent[] {
+    const out: LiveEvent[] = [];
+    const kind = str(update?.sessionUpdate) ?? "";
+    if (kind === "agent_message_chunk" || kind === "agent_thought_chunk") {
+      const step: Step = kind === "agent_message_chunk" ? "text" : "thinking";
+      const text = acpText(update.content);
+      if (text === "") return out;
+      this.to("responding", out);
+      if (this.said === null || !this.said.endsWith(`/${step}`)) {
+        this.endSaid(out);
+        this.n += 1;
+        this.said = `said:${this.n}/${step}`;
+        this.open.add(this.said);
+        out.push(start(this.said, step));
+      }
+      out.push({ kind: "delta", id: this.said, field: "text", text });
+    } else if (kind === "tool_call") {
+      const callId = nonEmpty(update.toolCallId);
+      if (callId === undefined) return out;
+      const id = `call:${callId}`;
+      this.endSaid(out);
+      this.to("working", out);
+      if (!this.open.has(id)) {
+        this.open.add(id);
+        const [name, input] = acpCall(str(update._meta?.["x.ai/tool"]?.name) ?? str(update.title) ?? "", update.rawInput ?? null);
+        out.push(start(id, "tool", name, chars(pretty(input), INPUT_MOST)));
+      }
+      this.result(id, update, out);
+    } else if (kind === "tool_call_update") {
+      const callId = nonEmpty(update.toolCallId);
+      if (callId !== undefined && this.open.has(`call:${callId}`)) this.result(`call:${callId}`, update, out);
+    }
+    return out;
+  }
+
+  /// A call's output once it is done, and its end.
+  private result(id: string, update: Json, out: LiveEvent[]) {
+    if (update.status !== "completed" && update.status !== "failed") return;
+    const output = (Array.isArray(update.content) ? update.content : []).map(acpText).filter((t: string) => t !== "").join("\n");
+    if (output !== "") out.push({ kind: "delta", id, field: "output", text: chars(output, INPUT_MOST) });
+    this.open.delete(id);
+    out.push({ kind: "end", id });
+    if (![...this.open].some((o) => o.startsWith("call:"))) this.to("requesting", out);
+  }
+
+  /// The turn ended: whatever is still open ends with it.
+  ended(): LiveEvent[] {
+    const out: LiveEvent[] = [...this.open].map((id) => ({ kind: "end", id }) as LiveEvent);
+    this.open.clear();
+    this.said = null;
+    this.phase = null;
+    return out;
+  }
+}

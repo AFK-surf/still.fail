@@ -374,10 +374,10 @@ export function efforts(runtime: string): string[] {
 }
 
 /// The runtimes a chat can run on, in the order they are offered.
-export const RUNTIMES = ["claude", "codex", "dsh"];
+export const RUNTIMES = ["claude", "codex", "dsh", "grok"];
 
 /// The runtimes by name, the same in every language.
-const RUNTIME_NAMES: Record<string, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness" };
+const RUNTIME_NAMES: Record<string, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build" };
 
 export function runtimeLabel(runtime: string): string {
   return RUNTIME_NAMES[runtime] ?? "Claude Code";

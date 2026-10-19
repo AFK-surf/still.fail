@@ -127,6 +127,7 @@
   "core-logic.footprint.elsewhere.claude": "Claude Code (local)",
   "core-logic.footprint.elsewhere.codex": "Codex (local)",
   "core-logic.footprint.elsewhere.dsh": "DeepSeek Harness (local)",
+  "core-logic.footprint.elsewhere.grok": "Grok Build (local)",
   "core-logic.footprint.elsewhere.note": "Agents use these too. Not included in the total above and not cleaned up here",
   "core-logic.footprint.elsewhere.npm": "npm cache",
   "core-logic.footprint.elsewhere.playwright": "Playwright browsers",

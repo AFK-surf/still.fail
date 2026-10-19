@@ -452,7 +452,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     // ── the station's software, its memory, Slack apps (web/src/api.ts → stationApi) ──
 
-    /** Updates the station or a runtime (`id`: station | claude | codex | dsh), or installs a runtime not there; the overview says how it goes. */
+    /** Updates the station or a runtime (`id`: station | claude | codex | dsh | grok), or installs a runtime not there; the overview says how it goes. */
     suspend fun updateSoftware(id: String) { ops.softwareUpdate() { this.id = id } }
     /** Reads again what versions are out. */
     suspend fun checkSoftware() { ops.softwareCheck() }

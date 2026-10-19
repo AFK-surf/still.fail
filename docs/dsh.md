@@ -1,6 +1,6 @@
 # DeepSeek Harness (dsh) as a runtime
 
-A station runs three runtimes: Claude Code, Codex and DeepSeek Harness (`dsh`, [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness), npm `@deepseek-ai/dsh`, Node 22.19 or newer). The driver is `station/src/agents/dsh.ts`; the fake the tests run it against is `station/test/fake/dsh.mjs`.
+A station runs Claude Code, Codex, DeepSeek Harness and Grok Build (docs/grok.md); this is DeepSeek Harness (`dsh`, [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness), npm `@deepseek-ai/dsh`, Node 22.19 or newer). The driver is `station/src/agents/dsh.ts`; the fake the tests run it against is `station/test/fake/dsh.mjs`.
 
 ## How it is driven
 

@@ -748,7 +748,7 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
   const api = useApi();
   const job = p.login;
   const active = !!job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
-  const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.runtime === "claude" ? "Claude" : "ChatGPT";
+  const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.runtime === "claude" ? "Claude" : p.runtime === "grok" ? "Grok" : "ChatGPT";
   const busy = useDoing("profile.login", { station: useStation().address, id: p.id });
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
   const previous = useRef(job?.state);
@@ -798,7 +798,7 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
         {/* OpenCode's page has the code in its address: only compared there, not copied. */}
         <Button label={provider === "OpenCode" ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
           onClick={() => { if (provider === "OpenCode") return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : provider === "Grok" ? t("web-mobile.profiles.grokNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
       </>
     );
   }
@@ -886,8 +886,8 @@ export function NewProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const pending = login ? overview?.logins.find((l) => l.id === login) : undefined;
   // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
-  const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" ? "codex" : "claude");
-  const provider = d?.signIn?.provider ?? (runtime === "claude" ? "Claude" : "ChatGPT");
+  const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" || d?.tile?.runtime === "grok" ? d.tile.runtime : "claude");
+  const provider = d?.signIn?.provider ?? (runtime === "claude" ? "Claude" : runtime === "grok" ? "Grok" : "ChatGPT");
   const begin = () => api.newLogin(runtime, d?.signIn?.access).then(({ id }) => setLogin(id), (e: Error) => setError(e.message));
   const go = (id: string, message: string) => { app.toast(message); app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`); };
   // The sign-in made its profile: on to it.

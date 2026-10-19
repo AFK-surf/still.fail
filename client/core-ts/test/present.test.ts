@@ -98,6 +98,8 @@ test("a_profile_says_what_it_can_do_from_where_its_provider_speaks", () => {
   assert.equal(text({ runtimes: ["claude", "codex"], access: { kind: "opencode-go" } })[1], "Claude Code · Codex · 自动决策");
   assert.equal(text({ runtimes: ["claude"], access: { kind: "anthropic-api" } })[1], "Claude Code");
   assert.equal(text({ runtimes: ["claude", "dsh"], access: { kind: "anthropic-api" } })[1], "Claude Code · DeepSeek Harness");
+  assert.deepEqual(text({ runtimes: ["grok", "dsh", "codex"], access: { kind: "api-provider", provider: "xai" } }), ["api-provider", "Codex · DeepSeek Harness · Grok Build"]);
+  assert.deepEqual(text({ runtimes: ["grok"], access: { kind: "subscription" } }), ["subscription", ""]);
   assert.equal(text({ runtimes: ["dsh", "codex", "claude"], access: { kind: "opencode-go" } })[1], "Claude Code · Codex · DeepSeek Harness · 自动决策");
   assert.deepEqual(text({ runtimes: ["dsh"], access: { kind: "api-provider", provider: "deepseek" } }), ["api-provider", "DeepSeek Harness · 自动决策"]);
   assert.deepEqual(text({ runtimes: ["dsh"], access: { kind: "env" } }), ["env", ""]);
@@ -346,6 +348,7 @@ test("a_stations_profiles_come_by_kind_of_account_those_in_trouble_first_in_each
     profiles: [
       { id: "key", runtime: "claude", access: { kind: "anthropic-api" } },
       sub("gpt", "codex"),
+      sub("super", "grok"),
       sub("claude-ok", "claude"),
       { id: "key-failed", runtime: "codex", access: { kind: "env" }, check: { state: "failed", detail: "timeout" } },
       sub("claude-failed", "claude", { check: { state: "failed", detail: "timeout" } }),
@@ -356,6 +359,7 @@ test("a_stations_profiles_come_by_kind_of_account_those_in_trouble_first_in_each
     ["claude", "Claude 订阅", "claude-failed"],
     ["claude", "Claude 订阅", "claude-ok"],
     ["chatgpt", "ChatGPT 订阅", "gpt"],
+    ["grok", "SuperGrok 订阅", "super"],
     ["key", "API Key", "key-failed"],
     ["key", "API Key", "key"],
   ]);

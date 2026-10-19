@@ -112,6 +112,8 @@ export function fallbackEfforts(runtime: string): string[] {
   if (runtime === "codex") return ["minimal", "low", "medium", "high", "xhigh"];
   // DeepSeek Harness's, as dsh.ts gives each route them.
   if (runtime === "dsh") return ["low", "medium", "high", "max"];
+  // Grok Build's models offer these (grok.ts); a model's own list comes with it.
+  if (runtime === "grok") return ["low", "medium", "high", "xhigh"];
   return ["low", "medium", "high", "xhigh", "max"];
 }
 

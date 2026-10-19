@@ -5,7 +5,7 @@
 // build) when bundled. A workspace the station joined has its own, beside it (`workspaceAgentHome`,
 // docs/multi-workspace.md).
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { log } from "../ops/log.ts";
 import type { Runtime } from "./config.ts";
 
@@ -103,18 +103,24 @@ export function linkAgentHome(agentHome: string, profiles: ProfileHome[]) {
   for (const { runtimes, home } of profiles) {
     mkdirSync(home, { recursive: true });
     // Each runtime it runs reads the memory under its own name (Codex and DeepSeek Harness both AGENTS.md).
-    for (const name of new Set(runtimes.map((runtime) => (runtime === "claude" ? "CLAUDE.md" : "AGENTS.md")))) link(memory, join(home, name));
+    for (const name of new Set(runtimes.filter((r) => r !== "grok").map((runtime) => (runtime === "claude" ? "CLAUDE.md" : "AGENTS.md")))) link(memory, join(home, name));
     link(skills, join(home, "skills"));
+    // Grok Build's home is its own directory in the profile's (agents/grok.ts): AGENTS.md and skills/ there.
+    if (runtimes.includes("grok")) {
+      mkdirSync(join(home, "grok"), { recursive: true });
+      link(memory, join(home, "grok", "AGENTS.md"));
+      link(skills, join(home, "grok", "skills"));
+    }
   }
 }
 
 /// One place for each runtime's transcripts, shared by every profile that runs it: a session is the station's, not an
 /// account's, so any account can take it on (another, when one's quota is used up) with all it had. Each profile home's
 /// transcript directory (Claude Code's projects/, Codex's sessions/, DeepSeek Harness's dsh-sessions/ as dsh.ts sets
-/// it) is a link there. A real directory in its place is
+/// it, Grok Build's grok/sessions/) is a link there. A real directory in its place is
 /// left alone, with a warning (the profile then keeps its own).
 /// Where in a profile home a runtime keeps its transcripts.
-export const transcriptDir = (runtime: string) => (runtime === "claude" ? "projects" : runtime === "codex" ? "sessions" : "dsh-sessions");
+export const transcriptDir = (runtime: string) => (runtime === "claude" ? "projects" : runtime === "codex" ? "sessions" : runtime === "grok" ? "grok/sessions" : "dsh-sessions");
 
 export function linkTranscripts(dataDir: string, profiles: ProfileHome[]) {
   for (const { id, runtimes, home } of profiles) {
@@ -123,6 +129,7 @@ export function linkTranscripts(dataDir: string, profiles: ProfileHome[]) {
       mkdirSync(shared, { recursive: true });
       mkdirSync(home, { recursive: true });
       const path = join(home, transcriptDir(runtime));
+      mkdirSync(dirname(path), { recursive: true });
       if (!existsSync(path) && !isLink(path)) symlinkSync(shared, path);
       else if (!isLink(path) || readlinkSync(path) !== shared) log.warn("agent_home", "a profile's transcripts are not in the shared place", { profile: id, path });
     }

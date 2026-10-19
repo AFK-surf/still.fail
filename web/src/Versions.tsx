@@ -150,7 +150,7 @@ export function DownloadChip({ percent }: { percent: number }) {
 function SoftwareMark({ id }: { id: string }) {
   if (id === "station") return <Mark size={18} />;
   if (id === "claude" || id === "codex") return <ProviderLogo runtime={id} kind="subscription" size={18} />;
-  if (id === "dsh") return <RuntimeLogo runtime="dsh" size={18} />;
+  if (id === "dsh" || id === "grok") return <RuntimeLogo runtime={id} size={18} />;
   return <Server size={18} strokeWidth={1.7} />;
 }
 

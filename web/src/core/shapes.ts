@@ -142,8 +142,8 @@ export interface AgentEnvDraft {
 	pending: boolean;
 }
 
-/** A runtime: Claude Code, Codex or DeepSeek Harness. */
-export type RuntimeKind = "claude" | "codex" | "dsh";
+/** A runtime: Claude Code, Codex, DeepSeek Harness or Grok Build. */
+export type RuntimeKind = "claude" | "codex" | "dsh" | "grok";
 
 export interface AgentProcess {
 	pgid: number;
@@ -177,10 +177,10 @@ export interface ApiProvider {
 	mark?: string;
 	/** How a profile on it is made: api-provider | opencode-go | anthropic-api | env (variables by hand). */
 	kind?: string;
-	/** It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude). */
+	/** It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude; xAI: SuperGrok). */
 	hasKey?: boolean;
 	hasPlan?: boolean;
-	/** Of its subscription, or of the variables: the runtime (claude | codex | dsh). */
+	/** Of its subscription, or of the variables: the runtime (claude | codex | dsh | grok). */
 	runtime?: string;
 	/** Its address is the person's own: asked for with the key. */
 	endpointRequired?: boolean;
@@ -190,7 +190,7 @@ export interface ApiProvider {
 	protocols?: string[];
 	/** Works without a key. */
 	keyOptional?: boolean;
-	/** What a profile on it can do: `claude`, `codex`, `dsh`, `decision`. */
+	/** What a profile on it can do: `claude`, `codex`, `dsh`, `grok`, `decision`. */
 	uses?: string[];
 	/** What the core says of it: what it can do, in words. */
 	usesText?: string;
@@ -877,7 +877,7 @@ export interface Session {
 	boundTo?: string[];
 	creator?: Creator;
 	participants?: Creator[];
-	/** claude | codex | dsh */
+	/** claude | codex | dsh | grok */
 	runtime: RuntimeKind;
 	profile?: string;
 	profilePinned?: boolean;
@@ -1102,7 +1102,7 @@ export interface Profile {
 	/** The first problem to resolve, with its next step; absent when nothing needs attention. */
 	trouble?: ProfileTrouble;
 	/**
-	 * The kind of account it is listed under: claude (Claude's subscription), chatgpt, key (the rest). A station's
+	 * The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), key (the rest). A station's
 	 * profiles come by kind, in that order.
 	 */
 	group?: string;
@@ -1122,7 +1122,7 @@ export interface Profile {
 	/** What can be enabled on it: what its provider lists, then whatever is enabled already, each once. */
 	available?: string[];
 	/**
-	 * What it can do: `claude`, `codex`, `dsh`, `decision` (the automatic decisions). The core works it out from where its
+	 * What it can do: `claude`, `codex`, `dsh`, `grok`, `decision` (the automatic decisions). The core works it out from where its
 	 * provider speaks and what its check found.
 	 */
 	uses?: string[];
@@ -1618,7 +1618,7 @@ export interface ChatJobsView {
  * installed, the station gives the chat's waiting messages to the agent.
  */
 export interface RuntimeInstall {
-	/** claude | codex | dsh: what `software.update` installs ({station, id: runtime}). */
+	/** claude | codex | dsh | grok: what `software.update` installs ({station, id: runtime}). */
 	runtime: string;
 	/** missing | installing | failed | installed */
 	state: string;
@@ -1725,7 +1725,7 @@ export interface ChatMessage {
 	system: boolean;
 	/** still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it. */
 	profile?: string;
-	/** still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh). */
+	/** still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh | grok). */
 	runtime?: string;
 	/**
 	 * With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older
@@ -2563,7 +2563,7 @@ export interface FlowSignIn {
 	runtime: RuntimeKind;
 	/** opencode-go: the OpenCode Console instead (`login.new` access). */
 	access?: string;
-	/** Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode. */
+	/** Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Grok. */
 	provider: string;
 }
 
@@ -3548,10 +3548,10 @@ export interface PendingLogin {
 
 /**
  * A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a
- * runtime (`claude`, `codex`, `dsh`).
+ * runtime (`claude`, `codex`, `dsh`, `grok`).
  */
 export interface SoftwareVersion {
-	/** station | claude | codex | dsh */
+	/** station | claude | codex | dsh | grok */
 	id: string;
 	name: string;
 	/** On the machine (a runtime may not be: then `updatable` says it can be installed from here). */
@@ -4086,7 +4086,7 @@ export interface ShareStation {
 export interface WorkspaceProfile {
 	/** The share's id, or station/profile for one on a station only. */
 	key: string;
-	/** The kind of account it is listed under: claude (Claude's subscription), chatgpt, key (the rest). */
+	/** The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), key (the rest). */
 	group: string;
 	/** That kind in words: Claude 订阅. */
 	groupTitle: string;

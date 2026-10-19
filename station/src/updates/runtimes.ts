@@ -1,4 +1,4 @@
-// Claude Code, Codex and DeepSeek Harness on this machine (the Rust station's updates.rs): where the station's PATH finds
+// Claude Code, Codex, DeepSeek Harness and Grok Build on this machine (the Rust station's updates.rs): where the station's PATH finds
 // them, how each is updated the way it was installed (`claude update`, npm, Homebrew, Vite+, Codex's standalone
 // installer) or installed when it is not there, and running those commands.
 import { existsSync, realpathSync } from "node:fs";
@@ -20,7 +20,7 @@ export const RUNTIMES: Exclude<Kind, "station">[] = RUNTIME_KINDS;
 export const kindName = (k: Kind) => (k === "station" ? "Station" : runtimeLabel(k));
 export const kindCommand = (k: Kind) => (k === "station" ? "stillfail-station" : k);
 /// Where the latest is said: the npm registry's latest of the runtime's package.
-export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-code" : k === "codex" ? "@openai/codex" : k === "dsh" ? "@deepseek-ai/dsh" : "");
+export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-code" : k === "codex" ? "@openai/codex" : k === "dsh" ? "@deepseek-ai/dsh" : k === "grok" ? "@xai-official/grok" : "");
 
 /// How an update is done: a program and its arguments.
 export type How = { program: string; args: string[] };
@@ -95,9 +95,10 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
   };
   const using = (program: string | Unable, args: string[]): How | Unable => (program instanceof Unable ? program : { program, args });
   const pkg = `${kindPackage(kind)}@latest`;
-  // Homebrew has Claude Code and Codex (DeepSeek Harness is npm's only).
-  if (kind !== "dsh" && realPath.includes("/Caskroom/")) return using(brew(), ["upgrade", "--cask", kind === "claude" ? "claude-code" : "codex"]);
-  if (kind !== "dsh" && realPath.includes("/Cellar/")) return using(brew(), ["upgrade", kind === "claude" ? "claude-code" : "codex"]);
+  // Homebrew has Claude Code and Codex (DeepSeek Harness and Grok Build are npm's only here).
+  const npmOnly = kind === "dsh" || kind === "grok";
+  if (!npmOnly && realPath.includes("/Caskroom/")) return using(brew(), ["upgrade", "--cask", kind === "claude" ? "claude-code" : "codex"]);
+  if (!npmOnly && realPath.includes("/Cellar/")) return using(brew(), ["upgrade", kind === "claude" ? "claude-code" : "codex"]);
   if (realPath.includes("/node_modules/")) {
     // npm's shebang uses PATH's node; even the right npm can therefore choose another Node's global prefix. Explicitly
     // target the installation the station actually uses.
@@ -107,7 +108,7 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
     return using(npm(), ["install", "-g", pkg, "--prefix", found.real.slice(0, at)]);
   }
   if (kind === "claude") return { program: found.onPath, args: ["update"] };
-  if (kind === "dsh") return new Unable("station.updates.codexElsewhere", { path: realPath });
+  if (npmOnly) return new Unable("station.updates.codexElsewhere", { path: realPath });
   // Its installer is a shell script (install.sh): where the platform runs it.
   if (platform.codexStandalone && realPath.includes("/packages/standalone/releases/")) return standaloneCodexUpdate(found);
   return new Unable("station.updates.codexElsewhere", { path: realPath });
@@ -136,13 +137,14 @@ CODEX_HOME="$1" CODEX_INSTALL_DIR="$2" CODEX_NON_INTERACTIVE=1 sh -c "$installer
 }
 
 /// How a runtime the machine has not is installed, or why it cannot be from here: Claude Code by its own installer
-/// (into ~/.local/bin, on the station's PATH as install.ts sets it), Codex by npm, else Homebrew, DeepSeek Harness by npm.
+/// (into ~/.local/bin, on the station's PATH as install.ts sets it), Codex by npm, else Homebrew, DeepSeek Harness and
+/// Grok Build by npm.
 export function howToInstall(kind: Kind, env: Env): How | Unable {
   if (kind === "station") return new Unable("");
   if (kind === "claude") return platform.claudeInstall;
   const npm = findCommand("npm", env);
   // DeepSeek Harness is an npm package (it runs on the Node npm is of: 22.19 or newer).
-  if (kind === "dsh") return npm ? { program: npm.onPath, args: ["install", "-g", `${kindPackage(kind)}@latest`] } : new Unable("station.updates.noNpm", { name: kindName(kind) });
+  if (kind === "dsh" || kind === "grok") return npm ? { program: npm.onPath, args: ["install", "-g", `${kindPackage(kind)}@latest`] } : new Unable("station.updates.noNpm", { name: kindName(kind) });
   if (npm) return { program: npm.onPath, args: ["install", "-g", "@openai/codex@latest"] };
   const brew = findCommand("brew", env);
   if (brew) return { program: brew.onPath, args: ["install", "--cask", "codex"] };

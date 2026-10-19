@@ -680,7 +680,7 @@ function uses(p: J): [string[], [string, string | null] | null] {
   return [list, provider];
 }
 
-/// What a profile can do (`claude`, `codex`, `dsh`, `decision`), in words: Claude Code · DeepSeek Harness · 自动决策.
+/// What a profile can do (`claude`, `codex`, `dsh`, `grok`, `decision`), in words: Claude Code · DeepSeek Harness · 自动决策.
 export function usesText(list: string[]): string {
   return list.map((u) => (u === "decision" ? t("core-views.present.uses.decision") : format.runtimeLabel(u))).join(" · ");
 }

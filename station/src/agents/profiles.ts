@@ -60,6 +60,8 @@ export function accessEnv(runtime: Runtime, kind: AccessKind, key: string, model
   // The provider's session key keeps the name of before the rename: its sessions go on under it.
   if (kind === "opencode-go" && runtime === "codex") return { OPENCODE_GO_KEY: key, OPENCODE_SESSION: "ember-{route}" };
   if ((kind === "opencode-go" || kind === "anthropic-api") && runtime === "dsh") return { [DSH_KEY]: key };
+  // Grok Build on SuperGrok signs in in its own home (grok.ts); on an xAI key, it is given it.
+  if (runtime === "grok") return kind === "api-provider" && via.provider === "xai" ? { XAI_API_KEY: key } : {};
   if (kind === "anthropic-api") return { ANTHROPIC_API_KEY: key };
   if (kind === "api-provider") return apiEnv(runtime, key, model, via);
   return {};
@@ -164,7 +166,9 @@ export function profileRuntimes(p: Profile): Runtime[] {
   const kind = accessKind(p);
   if (kind === "api-provider") {
     const found = apiSource(profileVia(p));
-    return found ? runtimesOf(found[1]) : [];
+    if (!found) return [];
+    // xAI's key runs Grok Build too (its own API, not one of the protocols).
+    return found[0].id === "xai" ? [...runtimesOf(found[1]), "grok"] : runtimesOf(found[1]);
   }
   if (kind === "opencode-go") return ["claude", "codex", "dsh"];
   if (kind === "anthropic-api") return ["claude", "dsh"];

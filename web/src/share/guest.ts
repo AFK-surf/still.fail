@@ -126,7 +126,7 @@ export function parseSnapshot(bytes: Uint8Array): Snapshot {
     const x = e as Record<string, unknown>;
     // Its maker's mark: a known maker's name only (it names a file the page has, public/models).
     const maker = typeof x.maker === "string" && /^[a-z0-9-]{1,40}$/.test(x.maker) ? { maker: x.maker } : {};
-    const runtime = x.runtime === "claude" || x.runtime === "codex" || x.runtime === "dsh" ? { runtime: x.runtime } : {};
+    const runtime = x.runtime === "claude" || x.runtime === "codex" || x.runtime === "dsh" || x.runtime === "grok" ? { runtime: x.runtime } : {};
     return [{ n: count(x.n), at: count(x.at), authorKind: text(x.authorKind, "person"), author: text(x.author), text: text(x.text), files: (Array.isArray(x.files) ? x.files : []).flatMap(fileOf), ...maker, ...runtime }];
   });
   return { v: SNAPSHOT_VERSION, title: text(o.title), station: text(o.station), at: count(o.at), by: text(o.by), entries, redacted: count(o.redacted) };

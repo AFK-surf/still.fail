@@ -137,12 +137,12 @@ test("reported_levels_aliases_empty_and_legacy", () => {
 
 test("deepseek_harness_is_named_thinks_at_its_own_levels_and_runs_on_any_endpoint", () => {
   assert.deepEqual(["claude", "codex", "dsh"].map(f.runtimeLabel), ["Claude Code", "Codex", "DeepSeek Harness"]);
-  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh"]);
+  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh", "grok"]);
   assert.deepEqual(fallback("dsh"), ["low", "medium", "high", "max"]);
   assert.deepEqual(available("dsh", "deepseek-v4", { codex: { "deepseek-v4": ["low"] } }), fallback("dsh"));
   const runs = (id: string, endpoint: string | null = null, protocol: string | null = null) => {
     const at = providers.endpoints(providers.find(id)!, endpoint, protocol);
-    return at === null ? null : providers.runtimes(providers.uses(at));
+    return at === null ? null : providers.runtimes(providers.uses(at, id));
   };
   assert.deepEqual(runs("opencode-go"), ["claude", "codex", "dsh"]);
   assert.deepEqual(runs("anthropic"), ["claude", "dsh"]);
@@ -150,6 +150,18 @@ test("deepseek_harness_is_named_thinks_at_its_own_levels_and_runs_on_any_endpoin
   assert.deepEqual(runs("deepseek"), ["dsh"]);
   assert.deepEqual(runs("jev"), []);
   assert.deepEqual(runs("cloudflare-ai-gateway", "https://gateway.ai.cloudflare.com/v1/a/b/compat", "chat_completions"), ["dsh"]);
+});
+
+test("grok_build_is_named_thinks_up_to_max_and_runs_on_xais_own_api_alone", () => {
+  assert.equal(f.runtimeLabel("grok"), "Grok Build");
+  assert.deepEqual(fallback("grok"), ["low", "medium", "high", "xhigh", "max"]);
+  assert.deepEqual(available("grok", "grok-5", { codex: { "grok-5": ["low"] } }), fallback("grok"));
+  assert.deepEqual(available("grok", "grok-5", { grok: { "grok-5": ["low", "high"] } }), ["low", "high"]);
+  const runs = (id: string) => providers.runtimes(providers.uses(providers.endpoints(providers.find(id)!, null, null)!, id));
+  assert.deepEqual(runs("xai"), ["codex", "dsh", "grok"]);
+  // Another provider speaking the same protocol does not run it, nor xAI's endpoints said with no provider.
+  assert.deepEqual(runs("openai"), ["codex", "dsh"]);
+  assert.deepEqual(providers.runtimes(providers.uses(providers.endpoints(providers.find("xai")!, null, null)!)), ["codex", "dsh"]);
 });
 
 test("fills_and_counts", () => {

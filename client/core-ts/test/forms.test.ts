@@ -255,6 +255,44 @@ test("deepseek_harness_is_offered_where_the_station_runs_it_on_any_endpoint", ()
   assert.equal(flows.value(topic).usesLine, "添加后可用于：自动决策");
 });
 
+test("supergrok_is_xais_plan_and_an_xai_key_runs_grok_build_where_the_station_runs_it", () => {
+  const { s, flows, topic } = flow();
+  flows.change(topic, 1, "open", {});
+  s.set(overview, { ok: { apiProviders: [{ id: "xai" }], updates: [{ id: "station" }, { id: "grok" }] } });
+  let view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  const tiles = view.groups.flatMap((g: J) => g.providers);
+  const xai = tiles.find((p: J) => p.id === "xai");
+  assert.deepEqual([xai.hasKey, xai.hasPlan, xai.runtime, xai.usesText], [true, true, "grok", "Codex · Grok Build"]);
+  assert.equal(tiles.find((p: J) => p.id === "openai").usesText, "Codex");
+  assert.deepEqual(view.groups.find((g: J) => g.id === "local").providers.map((p: J) => p.id), ["env-claude", "env-codex", "env-grok"]);
+  // The plan or the key.
+  flows.change(topic, 1, "edit", { provider: "xai" });
+  view = flows.value(topic);
+  assert.deepEqual([view.step, view.choices.map((c: J) => [c.id, c.title])], ["method", [["plan", "订阅 · SuperGrok"], ["key", "API key"]]]);
+  assert.equal(view.choices[0].hint, "SuperGrok / X Premium+，用于运行 Grok Build。用设备码登录一次。");
+  flows.change(topic, 1, "edit", { method: "plan" });
+  view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  assert.deepEqual([view.step, view.signIn, view.usesLine], ["connect", { runtime: "grok", provider: "Grok" }, "添加后可用于：Grok Build"]);
+  flows.change(topic, 1, "edit", { method: "key" });
+  flows.change(topic, 1, "edit", { key: "xai-1" });
+  view = flows.value(topic);
+  assert.deepEqual([view.showKey, view.usesLine], [true, "添加后可用于：Codex · Grok Build"]);
+  assert.deepEqual(flows.begin(topic, 1), { access: { kind: "api-provider", key: "xai-1", provider: "xai" } });
+  flows.finish(topic, 1, null);
+  flows.change(topic, 1, "edit", { provider: "env-grok" });
+  assert.deepEqual(flows.value(topic).usesLine, "添加后可用于：Grok Build");
+  assert.deepEqual(flows.begin(topic, 1), { runtime: "grok", access: { kind: "env" } });
+  flows.finish(topic, 1, null);
+  // A station from before it: no plan, the key straight to its form, for what that station runs.
+  s.set(overview, { ok: { apiProviders: [{ id: "xai" }], updates: [{ id: "station" }] } });
+  assert.throws(() => flows.change(topic, 1, "edit", { provider: "env-grok" }));
+  flows.change(topic, 1, "edit", { provider: "xai" });
+  view = flows.value(topic);
+  assert.deepEqual([view.step, view.tile.hasPlan, view.tile.runtime, view.showKey, view.usesLine], ["connect", false, null, true, "添加后可用于：Codex"]);
+});
+
 test("jev_is_added_for_the_decisions_alone_and_its_key_is_not_tried_on_adding", () => {
   const { s, flows, topic } = flow();
   flows.change(topic, 1, "open", {});

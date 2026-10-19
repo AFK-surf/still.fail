@@ -548,10 +548,10 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
 }
 
 /** Who a profile signs in to: OpenCode for OpenCode Go, else its runtime's vendor. */
-const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.runtime === "claude" ? "Claude" : "ChatGPT");
+const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.runtime === "claude" ? "Claude" : profile.runtime === "grok" ? "Grok" : "ChatGPT");
 
 /**
- * A device sign-in (Codex's, OpenCode's): the code comes first and is copied as the login page opens, so it is pasted
+ * A device sign-in (Codex's, Grok's, OpenCode's): the code comes first and is copied as the login page opens, so it is pasted
  * there with no trip back; the rest finishes by itself. OpenCode's page has the code in its address: it is only
  * compared there, not copied.
  */
@@ -568,7 +568,7 @@ function DeviceCode({ url, code, provider }: { url: string; code: string; provid
     <div className={css.deviceCode}>
       <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>
       <Button variant="primary" icon={External} onClick={go}>{filled ? t("web-pages.profiles.openAuth") : copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
-      <p className={shellCss.muted}>{provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
+      <p className={shellCss.muted}>{provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : provider === "Grok" ? t("web-pages.profiles.deviceCodeNoteGrok") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
     </div>
   );
 }

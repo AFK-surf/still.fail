@@ -613,27 +613,39 @@ export class ConnectFlows {
 
 // ── the add-profile pages (profile_flow.rs) ──
 
-const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.dsh, "dsh"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
+const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.dsh, "dsh"], [u.grok, "grok"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
 const usesTextOf = present.usesText;
 const runtimeName = format.runtimeLabel;
 
-/// The runtimes a station can run: Claude Code and Codex on any; DeepSeek Harness on one that lists its version (a station
-/// from before it does not, and is not offered it).
+/// The runtimes a station runs only where its overview's `updates` lists them.
+const LISTED = ["dsh", "grok"];
+
+/// The runtimes a station can run: Claude Code and Codex on any; DeepSeek Harness and Grok Build each on one that lists its
+/// version (a station from before it does not, and is not offered it).
 export function stationRuntimes(overview: J): string[] {
-  const known = arr(get(overview, "updates")).some((u) => get(u, "id") === "dsh");
-  return format.RUNTIMES.filter((r) => r !== "dsh" || known);
+  const listed = (id: string) => arr(get(overview, "updates")).some((u) => get(u, "id") === id);
+  return format.RUNTIMES.filter((r) => !LISTED.includes(r) || listed(r));
 }
+
+/// A runtime's subscription: the plan as the picker names it, and who is signed in to, as the steps name it.
+const PLANS: Record<string, { plan: string; provider: string }> = {
+  claude: { plan: "Claude", provider: "Claude" },
+  codex: { plan: "ChatGPT", provider: "ChatGPT" },
+  grok: { plan: "SuperGrok", provider: "Grok" },
+};
+const planOf = (runtime: string) => PLANS[runtime] ?? PLANS.claude!;
 
 function usesOf(source: providers.Source, endpoint: string | null, protocol: string | null, runtimes: string[]): string[] {
   const own = source.endpointRequired ? (endpoint ?? providers.example(source.id)) : null;
   const p = protocol ?? source.protocols?.[0] ?? null;
   const at = providers.endpoints(source, own, source.endpointRequired ? p : null);
-  return at !== null ? usesNames(providers.uses(at)).filter((u) => u === "decision" || runtimes.includes(u)) : [];
+  return at !== null ? usesNames(providers.uses(at, source.id)).filter((u) => u === "decision" || runtimes.includes(u)) : [];
 }
 
 function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean, runtimes: string[]): J {
   const kind = source.legacy === "opencode-go" ? "opencode-go" : source.legacy === "anthropic-api" ? "anthropic-api" : "api-provider";
-  const runtime = source.id === "openai" ? "codex" : source.id === "anthropic" ? "claude" : null;
+  // xAI's plan (SuperGrok) runs Grok Build.
+  const runtime = source.id === "openai" ? "codex" : source.id === "anthropic" ? "claude" : source.id === "xai" && hasPlan ? "grok" : null;
   const uses = usesOf(source, null, null, runtimes);
   const cn = providers.chinaOf(source.id);
   return {
@@ -656,14 +668,15 @@ function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean, run
 }
 
 /// The picker's groups: every provider the station can take a key for, those with a plan, the variables by hand (for
-/// each runtime it can run, `runtimes`). `console`: the station signs OpenCode Go in to the OpenCode Console (its plan).
+/// each runtime it can run, `runtimes`). `console`: the station signs OpenCode Go in to the OpenCode Console (its plan). xAI
+/// has a plan (SuperGrok) where the station runs Grok Build.
 export function groups(supported: string[] | null, runtimes: string[] = format.RUNTIMES, console = false): J[] {
   const listed = (id: string) => supported !== null && supported.includes(id);
   const out: J[] = [];
   for (const group of providers.GROUPS) {
     const tiles = providers.SOURCES.filter((s) => s.group === group && !providers.isChinaVariant(s.id)).flatMap((s) => {
       const hasKey = s.legacy !== undefined || listed(s.id);
-      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console);
+      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "xai" && runtimes.includes("grok"));
       return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan, runtimes)] : [];
     });
     if (group === "local") {
@@ -705,7 +718,7 @@ function profileView(station: string, draft: J, overview: J): J {
   // OpenCode Go's plan is signed in to with the person's OpenCode account, and runs every runtime its key does.
   const opencode = tile.id === "opencode-go";
   if (method === null) {
-    const plan = opencode ? "OpenCode Go" : runtime === "claude" ? "Claude" : "ChatGPT";
+    const plan = opencode ? "OpenCode Go" : planOf(runtime).plan;
     out.step = "method";
     out.choices = [
       { id: "plan", title: t("core-views.flow.plan", { plan }), hint: t(`core-views.flow.plan_hint.${opencode ? "opencode" : runtime}`) },
@@ -721,7 +734,7 @@ function profileView(station: string, draft: J, overview: J): J {
       out.usesLine = t("core-views.flow.uses", { uses: usesTextOf(arr(tile.uses).filter((u: unknown) => u !== "decision")) });
       return out;
     }
-    out.signIn = { runtime, provider: runtime === "claude" ? "Claude" : "ChatGPT" };
+    out.signIn = { runtime, provider: planOf(runtime).provider };
     out.usesLine = t("core-views.flow.uses", { uses: runtimeName(runtime) });
     return out;
   }

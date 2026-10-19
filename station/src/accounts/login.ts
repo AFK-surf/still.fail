@@ -5,6 +5,8 @@
 //   pastes back and the station types in.
 // - Codex: `codex login --device-auth` prints a link and a one-time code; the person enters the code on that page and
 //   the command finishes by itself.
+// - Grok Build: `grok login --device-auth` the same, its link at accounts.x.ai with the code in it; its home is the
+//   profile's grok/ (agents/grok.ts).
 // - OpenCode Go (`startConsole`): no command; the station asks the OpenCode Console for a code itself (console.ts) and
 //   keeps asking until it is approved, then leaves the tokens in the profile's home. The page shows it as Codex's.
 // A stand-in `open` on PATH keeps the commands from opening a browser on the server. Who follows hears each change of a
@@ -39,10 +41,10 @@ export type LoginJob = {
 
 const TIMEOUT_MS = 15 * 60_000;
 /// Variables that would make the login command talk to something other than the subscription.
-const SCRUBBED = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "OPENAI_API_KEY"];
+const SCRUBBED = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "OPENAI_API_KEY", "GROK_HOME", "GROK_AUTH", "GROK_AUTH_PATH", "XAI_API_KEY"];
 
 /// The login commands, by runtime.
-export type LoginCommands = { claude: string; codex: string };
+export type LoginCommands = { claude: string; codex: string; grok?: string };
 
 /// What a sign-in is for: a profile's id, the runtime it signs in to, and its home.
 export type LoginProfile = { id: string; runtime: Runtime; home: string };
@@ -99,6 +101,11 @@ export class LoginManager {
       env.CLAUDE_CONFIG_DIR = profile.home;
       fileCredentials(env);
       [command, args] = [this.commands.claude, ["auth", "login", "--claudeai"]];
+    } else if (profile.runtime === "grok") {
+      env.GROK_HOME = join(profile.home, "grok");
+      env.GROK_DISABLE_AUTOUPDATER = "1";
+      mkdirSync(env.GROK_HOME, { recursive: true });
+      [command, args] = [this.commands.grok ?? "grok", ["login", "--device-auth"]];
     } else {
       env.CODEX_HOME = profile.home;
       [command, args] = [this.commands.codex, ["login", "--device-auth"]];
@@ -306,7 +313,8 @@ export function parse(job: LoginJob, output: string): boolean {
       return true;
     }
   } else {
-    const url = urls.find((u) => u.startsWith("https://auth.openai.com/") && u.includes("device"));
+    const site = job.runtime === "grok" ? "https://accounts.x.ai/" : "https://auth.openai.com/";
+    const url = urls.find((u) => u.startsWith(site) && u.includes("device"));
     const code = deviceCode(output);
     if (url !== undefined && code !== null) {
       job.url = url;
