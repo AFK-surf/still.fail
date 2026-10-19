@@ -40,7 +40,8 @@ build_number() { git -C "$REPO" rev-list --count HEAD; }
 moon_tools() {
   local base=https://cli.moonbitlang.com tag dir
   mkdir -p "$C/moon" "$C/tools"
-  tag=$( { curl -sfI --max-time 5 $base/binaries/latest/moonbit-darwin-aarch64.tar.gz; curl -sfI --max-time 5 $base/cores/core-latest.tar.gz; } \
+  # (a curl that fails, as mini1's line now and then does, is an answer missing: the MoonBit there is kept below)
+  tag=$( { curl -sfI --max-time 5 $base/binaries/latest/moonbit-darwin-aarch64.tar.gz || true; curl -sfI --max-time 5 $base/cores/core-latest.tar.gz || true; } \
     | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
   if [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c | tr -d ' ')" != 4 ]; then
     dir=$(readlink "$C/tools/moon" 2>/dev/null || true)
