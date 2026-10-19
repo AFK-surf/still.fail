@@ -7,9 +7,12 @@ use stillfail_shell::sf_utc_offset_min;
 fn zone(tz: &str) {
     #[cfg(unix)]
     {
+        unsafe extern "C" {
+            fn tzset();
+        }
         // SAFETY: this test is the only thing in its process (its file's one test) reading the environment.
         unsafe { std::env::set_var("TZ", tz) };
-        unsafe { libc::tzset() };
+        unsafe { tzset() };
     }
     #[cfg(windows)]
     {

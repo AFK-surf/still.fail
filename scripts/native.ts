@@ -31,7 +31,7 @@
 import { execFileSync, spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
-  copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync,
+  copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync,
 } from "node:fs";
 import { homedir, hostname, platform as osPlatform, arch as osArch, tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
@@ -354,7 +354,10 @@ function engineWin(out: string) {
     writeFileSync(join(src, ".stillfail-tag"), HERMES.tag);
   }
   rmSync(join(src, "stillfail-engine"), { recursive: true, force: true });
-  cpSync(join(ROOT, "apps/mbui/engine"), join(src, "stillfail-engine"), { recursive: true, filter: (p) => basename(p) !== "target" });
+  mkdirSync(join(src, "stillfail-engine"));
+  for (const e of readdirSync(join(ROOT, "apps/mbui/engine"), { withFileTypes: true })) {
+    if (e.isFile()) copyFileSync(join(ROOT, "apps/mbui/engine", e.name), join(src, "stillfail-engine", e.name));
+  }
   const build = join(work, "build");
   run("cmake", ["-S", src, "-B", build, ...HERMES_CMAKE]);
   run("cmake", ["--build", build, "--target", "stillfail_engine", "hermesc"]);
