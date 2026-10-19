@@ -28,7 +28,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="dev.mbui.demo" android:host="back" />
+                <data android:scheme="${applicationId}" android:host="back" />
             </intent-filter>
         </activity>
         <service android:name=".LoginService" android:exported="false" android:foregroundServiceType="specialUse">

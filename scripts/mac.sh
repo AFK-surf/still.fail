@@ -9,7 +9,9 @@
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
-cd "$D/.."
+# MBUI_APP_MOD: an app of a module outside this repository (its moon.work naming mbui; scripts/android.sh says more)
+ROOT=$(cd "$D/.." && pwd)
+cd "${MBUI_APP_MOD:-$ROOT}"
 MODE=${MODE:-release}
 FLAG=""; [ "$MODE" = release ] && FLAG=--release
 PKG=${APP:-demo}
@@ -22,7 +24,7 @@ if [ $PKG = coredemo ] || [ $PKG = stillfail ]; then
   [ -f out/core/core.js ] || "$D/core.sh" bundle
   export MB_CORE_BUNDLE=${MB_CORE_BUNDLE:-$PWD/out/core/core.js}
 fi
-EXE=_build/native/$MODE/build/$PKG/$PKG.exe
+EXE=$(pkg_build $PKG native $MODE)/$PKG.exe
 # the photos app shows made-up pictures from out/pictures (src/photos/pictures_native.mbt)
 [ $PKG = photos ] && [ "${1:-build}" != build ] && gallery_pictures
 case "${1:-build}" in

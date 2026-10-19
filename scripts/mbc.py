@@ -19,6 +19,8 @@
     mbc.py check --cc CC --cflags FLAGS [--nm NM] --obj DIR FILE.c
         The self-check: FILE.c compiled whole and split; the global symbols each defines must be the same, none
         defined twice among the units.
+    mbc.py work MOON.WORK COPY
+        A workspace's moon.work for a copy of its module elsewhere: the module ".", its other members by absolute path.
 
 moonbit_init (every global's initial value, tens of thousands of lines, run once) is a unit of its own, compiled with
 --init-flags (MBC_INIT_FLAGS) after the others' flags: by default -O0 (/Od), as optimising it is most of the time
@@ -126,13 +128,17 @@ def with_link_flags(args, flags):
 def cmd_gen(a):
     mod = os.path.abspath(a.dir)
     with open(os.path.join(mod, 'moon.mod'), encoding='utf-8') as f:
-        m = re.search(r'^\s*source\s*=\s*"([^"]*)"', f.read(), re.M)
+        text = f.read()
+    m = re.search(r'^\s*source\s*=\s*"([^"]*)"', text, re.M)
     source = m.group(1) if m else '.'
+    # a workspace's (moon.work) packages are built under their module's name
+    name = re.search(r'^\s*name\s*=\s*"([^"]*)"', text, re.M)
+    in_work = os.path.isfile(os.path.join(mod, 'moon.work')) and name
     pkg = a.pkg.rstrip('/')
     rel = os.path.relpath(pkg, source) if source not in ('', '.') else pkg
     mode = 'debug' if a.debug else 'release'
     target = os.path.abspath(a.target_dir) if a.target_dir else os.path.join(mod, '_build')
-    out = os.path.join(target, 'native', mode, 'build', rel, os.path.basename(rel) + '.c')
+    out = os.path.join(target, 'native', mode, 'build', *([name.group(1)] if in_work else []), rel, os.path.basename(rel) + '.c')
     env = dict(os.environ)
     stub = os.path.join(HERE, 'mbc-stub.sh')
     env['MOON_CC'] = stub
@@ -154,6 +160,21 @@ def cmd_gen(a):
             'output above; if moon now puts it elsewhere, mbc.py gen needs to know')
     log(f'{os.path.relpath(out)}: {os.path.getsize(out) // 1024} KB in {time.time() - t0:.1f} s (moon exit {p.returncode})')
     print(out)
+
+
+# ---------------------------------------------------------------- work
+
+def cmd_work(a):
+    """A copy of a workspace's moon.work for a copy of its module elsewhere (scripts/android.sh's out/android/mod):
+    the module itself stays ".", every other member by its absolute path. Written only when it changes."""
+    base = os.path.dirname(os.path.abspath(a.src))
+    with open(a.src, encoding='utf-8') as f:
+        text = f.read()
+    new = re.sub(r'"([^"]*)"', lambda m: '"."' if m.group(1) == '.' else
+                 json.dumps(os.path.realpath(os.path.join(base, m.group(1)))), text)
+    if not os.path.isfile(a.dst) or open(a.dst, encoding='utf-8').read() != new:
+        with open(a.dst, 'w', encoding='utf-8') as f:
+            f.write(new)
 
 
 # ---------------------------------------------------------------- compile
@@ -654,6 +675,9 @@ def main():
     ln.add_argument('--dep', action='append', default=[], help='a file or directory the link reads unnamed (-L)')
     ln.add_argument('--stamp', help='where to keep what the link was made of (default OUT.mbc-link)')
     ln.add_argument('argv', nargs=argparse.REMAINDER)
+    wk = sub.add_parser('work')
+    wk.add_argument('src')
+    wk.add_argument('dst')
     sh = sub.add_parser('shim')
     sh.add_argument('dir')
     k = sub.add_parser('check')
@@ -668,7 +692,7 @@ def main():
     if a.cmd == 'wrap' and a.args and a.args[0] == '--':
         a.args = a.args[1:]
     {'gen': cmd_gen, 'compile': cmd_compile, 'link': cmd_link, 'wrap': cmd_wrap, 'shim': cmd_shim,
-     'check': cmd_check}[a.cmd](a)
+     'check': cmd_check, 'work': cmd_work}[a.cmd](a)
 
 
 if __name__ == '__main__':

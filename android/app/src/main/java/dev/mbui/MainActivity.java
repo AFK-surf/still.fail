@@ -26,7 +26,10 @@ public class MainActivity extends Activity {
         Host.activity = this;
         // `--es env K=V;K2=V2`: environment variables for the app's MoonBit (as a desktop run has them: the core
         // demo's MBUI_AUTH_BEGIN, MBUI_CORE_DUMP…), set before it starts.
-        String env = getIntent().getStringExtra("env");
+        // The test hooks (env, script, bench) come in an intent any app on the device may send this exported
+        // activity: a release build (the beta app) takes them only on an emulator (e2e/run.sh with E2E_APK).
+        boolean hooks = testHooks();
+        String env = hooks ? getIntent().getStringExtra("env") : null;
         if (env != null) {
             for (String kv : env.split(";")) {
                 int eq = kv.indexOf('=');
@@ -49,8 +52,8 @@ public class MainActivity extends Activity {
             ((android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE))
                     .setPrimaryClip(android.content.ClipData.newPlainText("mbui", b.toString()));
         }
-        Host.script = getIntent().getStringExtra("script");
-        Host.bench = getIntent().getIntExtra("bench", 0);
+        Host.script = hooks ? getIntent().getStringExtra("script") : null;
+        Host.bench = hooks ? getIntent().getIntExtra("bench", 0) : 0;
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(245, 245, 247));
         MBView view = new MBView(this);
@@ -235,5 +238,11 @@ public class MainActivity extends Activity {
         super.onWindowFocusChanged(has);
         Host.focused = has;
         Host.tellAppState();
+    }
+
+    /** A debug build, or any build on the emulator (its hardware ranchu, goldfish before it). */
+    private boolean testHooks() {
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) return true;
+        return Build.HARDWARE.equals("ranchu") || Build.HARDWARE.equals("goldfish");
     }
 }

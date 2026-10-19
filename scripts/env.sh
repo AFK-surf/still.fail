@@ -6,6 +6,15 @@ if [ -d "$TOOLS" ]; then
   export PATH=$MOON_HOME/bin:$TOOLS/go/bin:$HOME/.local/bin:$PATH
 fi
 
+# Where moon builds package $1 (its directory under src) for target $2 (native, js) in mode $3 (release, debug), from
+# the module's directory: a workspace's (moon.work: an app of a module outside mbui, MBUI_APP_MOD) under its module's
+# name.
+pkg_build() {
+  local mod=
+  [ -f moon.work ] && mod=$(sed -n 's/^name *= *"\(.*\)"/\1/p' moon.mod)/
+  echo "_build/$2/$3/build/$mod$1"
+}
+
 # The photos app's made-up pictures beyond test/images (scripts/test_images.swift --gallery), made once into
 # out/pictures on macOS.
 gallery_pictures() {
