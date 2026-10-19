@@ -35,6 +35,8 @@ priv struct KitState {
   bars : Map[Int, Int]
   /// a form's state (form.mbt), by its id
   forms : Map[Int, FormState]
+  /// a sheet's springs and scrim (sheet.mbt), by its id
+  sheets : Map[Int, SheetKept]
   /// the pointer this frame and the last (whether it moved: what moves a menu's highlight), as of frame `ptr_frame`
   mut ptr : (Double, Double)
   mut ptr_was : (Double, Double)
@@ -54,6 +56,7 @@ fn KitState::new() -> KitState {
     at: {},
     bars: {},
     forms: {},
+    sheets: {},
     ptr: (-1.0, -1.0),
     ptr_was: (-1.0, -1.0),
     ptr_frame: -1,

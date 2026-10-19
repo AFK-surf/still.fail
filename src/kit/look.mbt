@@ -124,3 +124,8 @@ fn chevron(c : @ui.Ctx, up : Bool, color : Int64) -> Unit {
   })
   |> ignore
 }
+
+///|
+fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
+  dmax(lo, dmin(v, hi))
+}

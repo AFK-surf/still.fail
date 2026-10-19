@@ -257,11 +257,17 @@ test "toasts: each goes after its time, paused under the pointer; closed, acted 
 }
 
 ///|
-test "sheet: up from the bottom, the page hidden; a press above it, Escape and a drag down by its grabber close it" {
+test "sheet: up from the bottom, the page hidden; a press above it, Escape and a drag down by its top close it" {
   let open = Ref(true)
+  let drags : Array[SheetDrag] = []
   let t = @ui.Tester::new(fn(c) {
     c.text("Page") |> ignore
-    open.val = sheet(c, "s", open.val, 300.0, label="Chat info", fn() { button(c, "Pin") |> ignore }).value
+    let r = sheet(c, "s", open.val, h=300.0, label="Chat info", fn() { button(c, "Pin") |> ignore })
+    open.val = r.open
+    match r.dragged {
+      Some(d) => drags.push(d)
+      None => ()
+    }
   })
   t.settle() |> ignore
   let (_, y, _, h) = t.get(@ui.Dialog, label="Chat info").rect
@@ -272,18 +278,66 @@ test "sheet: up from the bottom, the page hidden; a press above it, Escape and a
   assert_true(open.val)
   t.tap(100.0, 100.0)
   assert_false(open.val)
+  t.settle() |> ignore
+  assert_true(t.query(@ui.Dialog) is None)
   open.val = true
   t.frame()
   t.settle() |> ignore
   t.press("Escape")
   assert_false(open.val)
+  t.settle() |> ignore
   open.val = true
   t.frame()
   t.settle() |> ignore
   // a short drag goes back; a long one closes it
-  t.drag(195.0, 552.0, 195.0, 590.0)
+  t.drag(195.0, 560.0, 195.0, 600.0)
   t.settle() |> ignore
   assert_true(open.val)
-  t.drag(195.0, 552.0, 195.0, 700.0)
+  t.drag(195.0, 560.0, 195.0, 700.0)
   assert_false(open.val)
+  assert_eq(drags, [DraggedBack, DraggedClosed])
+}
+
+///|
+test "sheet with detents: let go nearer the top it goes full; low enough it closes; another height on the spring" {
+  let open = Ref(true)
+  let tall = Ref(0.5)
+  let t = @ui.Tester::new(fn(c) {
+    open.val = sheet(c, "s", open.val, share=tall.val, detents=[0.55, 0.94], label="Workspaces", fn() {  }).open
+  })
+  t.settle() |> ignore
+  assert_true((t.get(@ui.Dialog, label="Workspaces").rect.3 - 422.0).abs() < 1.0)
+  // dragged up past the middle: full
+  t.drag(195.0, 430.0, 195.0, 200.0)
+  t.settle() |> ignore
+  assert_true((t.get(@ui.Dialog, label="Workspaces").rect.3 - 844.0 * 0.94).abs() < 1.0)
+  // asked another height: there
+  tall.val = 0.7
+  t.frame()
+  t.settle() |> ignore
+  assert_true((t.get(@ui.Dialog, label="Workspaces").rect.3 - 844.0 * 0.7).abs() < 1.0)
+  // dragged down to under 30%: closed
+  t.drag(195.0, 260.0, 195.0, 700.0)
+  assert_false(open.val)
+}
+
+///|
+test "sheet: closed by the view, it sinks away and is gone" {
+  let open = Ref(true)
+  let shown = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let r = sheet(c, "s", open.val, h=300.0, fn() { button(c, "OK") |> ignore })
+    shown.val = r.shown
+    if r.open != open.val {
+      open.val = r.open
+    }
+  })
+  t.settle() |> ignore
+  assert_true(shown.val)
+  open.val = false
+  t.frame()
+  assert_true(shown.val)
+  t.settle() |> ignore
+  assert_false(shown.val)
+  assert_true(t.query(@ui.Dialog) is None)
 }
