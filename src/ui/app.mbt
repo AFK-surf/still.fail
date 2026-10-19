@@ -63,6 +63,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let t0 = frame_body(c, w, h, scale, t)
   let t3 = h_now()
   h_present(c.inst, c.ninst)
+  log_drawn(w, h, scale, t)
   c.trim_images()
   let t4 = h_now()
   c.t_present = t4 - t3

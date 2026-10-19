@@ -29,6 +29,7 @@ fn reset_globals() -> Unit {
   text_cache.metrics.clear()
   text_cache.glyphs.clear()
   text_cache.generation = -1
+  text_table.val = None
   image_cache.clear()
   pagers.clear()
   code_fields.clear()
@@ -92,6 +93,9 @@ fn leaked_state() -> Array[String] {
 /// `platform`: the system it plays, as @host.platform has them (0 macOS,
 /// 1 iOS, 2 Android: how lists scroll). `seed`: the order the runtime's ready
 /// fibers run in is drawn from it (fx.mbt; without, the order they became ready).
+/// `text`: a real host's text as it kept it (MBUI_TEXT_RECORD's lines, textrec.mbt): its metrics, shaping and glyphs
+/// in place of the fake host's. `scale`: device pixels a point. `time`: the clock before the first frame (drawn 16 ms
+/// later). `stable`: output the same on every run, as a host asked by MBUI_BENCH=-1 makes it (Ctx::stable).
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
@@ -103,9 +107,14 @@ pub fn Tester::new(
   images? : Array[(String, Int, Int)] = [],
   platform? : Int = 0,
   seed? : Int,
+  text? : String,
+  scale? : Double = 2.0,
+  time? : Double = 1000.0,
+  stable? : Bool = false,
 ) -> Tester {
   let f = {
-    time: 1000.0,
+    time,
+    scale,
     wants: false,
     wake: -1.0,
     instances: 0,
@@ -138,6 +147,13 @@ pub fn Tester::new(
   }
   fake.val = Some(f)
   reset_globals()
+  match text {
+    Some(lines) => text_table.val = Some(text_table_of(lines))
+    None => ()
+  }
+  if stable {
+    bench.mode = -1
+  }
   fx_reset(seed)
   g_view.val = view
   let t = { fake: f, w, h, frames: 0 }
@@ -166,7 +182,7 @@ pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
     }
     None => ()
   }
-  on_frame(self.w, self.h, 2.0, self.fake.time)
+  on_frame(self.w, self.h, self.fake.scale, self.fake.time)
   self.frames = self.frames + 1
 }
 

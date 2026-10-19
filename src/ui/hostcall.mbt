@@ -5,6 +5,8 @@
 ///|
 struct FakeHost {
   mut time : Double
+  /// device pixels a point, as a host's window has them (2: a Retina screen; a recording host's, Tester::new(scale=))
+  mut scale : Double
   mut wants : Bool
   mut wake : Double
   mut instances : Int
@@ -143,12 +145,16 @@ fn h_font_metrics(
   out : FixedArray[Double],
 ) -> Unit {
   match fake.val {
+    Some(_) if kept_metrics(size, weight, style, out) => ()
     Some(_) => {
       out[0] = size * 0.8
       out[1] = size * 0.2
       out[2] = (size * 1.42).round()
     }
-    None => @host.font_metrics(size, weight, style, out)
+    None => {
+      @host.font_metrics(size, weight, style, out)
+      rec_metrics(size, weight, style, out)
+    }
   }
 }
 
@@ -164,6 +170,7 @@ fn h_shape(
   out : FixedArray[Double],
 ) -> Int {
   match fake.val {
+    Some(_) if kept_shape(text, size, weight, style, out) is Some(k) => k
     Some(f) => {
       let n = text.length()
       let cap = out.length() / 4
@@ -200,7 +207,11 @@ fn h_shape(
       }
       k
     }
-    None => @host.shape(text, size, weight, style, out)
+    None => {
+      let k = @host.shape(text, size, weight, style, out)
+      rec_shape(text, size, weight, style, out, k)
+      k
+    }
   }
 }
 
@@ -208,14 +219,20 @@ fn h_shape(
 /// The key of `text` drawn as one piece (a word of a joining script).
 fn h_text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
   match fake.val {
+    Some(_) if kept_key(text, size, weight, style) is Some(k) => k
     Some(_) => text.at(0).to_int()
-    None => @host.text_key(text, size, weight, style)
+    None => {
+      let k = @host.text_key(text, size, weight, style)
+      rec_key(text, size, weight, style, k)
+      k
+    }
   }
 }
 
 ///|
 fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
   match fake.val {
+    Some(_) if kept_glyph(key, out) => ()
     Some(_) => {
       // a glyph box per cluster, so painting is exercised
       out[0] = 0.0
@@ -226,7 +243,10 @@ fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
       out[5] = -10.0
       out[6] = if key >= 0x1F000 { 1.0 } else { 0.0 }
     }
-    None => @host.glyph(key, out)
+    None => {
+      @host.glyph(key, out)
+      rec_glyph(key, out)
+    }
   }
 }
 
