@@ -45,3 +45,7 @@ built, signed with every still.fail Android release's key and put out by `.githu
 (`scripts/beta.sh`), its feed `android/mbui/latest.json` (still.fail's `AppRelease`):
 
 https://app.still.fail/releases/latest/android-mbui
+
+Measured (2026-10-19, mini1-6, push to main → the feed out): ~70 s with a fresh build directory and no Gradle daemon
+(build 28.5 s, of it Gradle 17.5 s; the put and its check 9 s), ~38 s warm with nothing of the app changed (build
+3.6 s, put and check 11 s); the rest is GitHub's: the run made (~7 s) and the job picked up (~6 s), the checkout.
