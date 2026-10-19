@@ -24,6 +24,11 @@
 //        (gh, main only); --outbox copies the artifacts the release lacks there (a branch's run artifact)
 //        The default leaves out what only Windows builds (MSVC's: the mbui app's shell and engine); --windows is those.
 //   node scripts/native.ts prune [N]                   the release keeps the newest N (20) of each part and target
+//   node scripts/native.ts prebuild [--release] [part:target…]   a development machine's: each (default: the Windows
+//        parts) the store (STORE: the releases bucket's natives/) lacks, got or built here (a Mac cross-builds the
+//        Windows ones), then put there (scripts/release-put.sh: CLOUDFLARE_API_TOKEN, the releases bucket's), for CI to
+//        fetch: CI never builds those (`msvc`), it says to prebuild them. --release: in the release native-artifacts
+//        instead (gh), which native.ts fetches from after the store, for a machine without the bucket's token.
 //
 // STILLFAIL_NATIVE=build never downloads (builds what the cache lacks); STILLFAIL_NATIVE=offline neither downloads nor
 // builds. Builds go to $CARGO_TARGET_DIR/native/<part> when it is set, else the crate's own target/ (a worktree's own:
@@ -48,6 +53,9 @@ const ANDROID_API = 29;
 const ZIG = "0.16.0";
 const REPO = process.env.STILLFAIL_NATIVE_REPO ?? "AFK-surf/still.fail";
 const RELEASE = process.env.STILLFAIL_NATIVE_RELEASE ?? "native-artifacts";
+/// The store of the parts prebuilt on a development machine (`prebuild`): the releases bucket's natives/, served by
+/// still.fail cloud (install.ts releaseType) to anyone, as the release is by GitHub.
+const STORE = process.env.STILLFAIL_NATIVE_STORE ?? "https://app.still.fail/releases/natives";
 const HELPER_ICON = "apps/desktop/icon.png";
 const VENDORED = ["vendor/iroh", "vendor/iroh-mdns-address-lookup", "vendor/noq-udp", "vendor/swarm-discovery"];
 /// The Hermes Windows' engine is built from (there is no prebuilt one with its C++ API): facebook/hermes at the tag React
@@ -199,23 +207,15 @@ const PARTS: Record<string, Part> = {
   // The core's native shell (client/shell): HTTP, the cloud's socket, files, SQLite and iroh, behind a C ABI. Android's,
   // and the mbui app's on Windows (MSVC's: a DLL and its import library, which the engine links).
   shell: {
-    files: (t) => (t === "win32-x64" ? ["stillfail_shell.dll", "stillfail_shell.dll.lib"] : ["libstillfail_shell.so"]),
+    // Windows': with its tests, built beside it, for a Windows machine to run (CI's natives-win)
+    files: (t) => (t === "win32-x64" ? ["stillfail_shell.dll", "stillfail_shell.dll.lib", "tests"] : ["libstillfail_shell.so"]),
     targets: ["android-arm64", "win32-x64"],
     msvc: true,
     inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", ...VENDORED],
-    recipe: (t) => (t === "win32-x64" ? { cargo: shellWinCommand() } : { ndk: NDK, api: ANDROID_API, cargo: shellCommand(), rustflags: SHELL_RUSTFLAGS }),
+    recipe: (t) => (t === "win32-x64" ? { cargo: shellWinCommand(), tests: SHELL_TESTS, xwin: XWIN } : { ndk: NDK, api: ANDROID_API, cargo: shellCommand(), rustflags: SHELL_RUSTFLAGS }),
     build(t, out) {
       const target = targetDir(join(ROOT, "client/target"), "shell");
-      if (t === "win32-x64") {
-        // One build: its tests where it runs (files, the accounts' SQLite, iroh on loopback, the time zone's offset: what
-        // the core's engine leans on, which nothing else runs on Windows), whose library is the DLL (the crate's cdylib),
-        // rather than a release build and then a test build compiling a dozen crates again for the dev-dependencies'
-        // features.
-        cargo(shellWinCommand(), join(ROOT, "client"), { CARGO_TARGET_DIR: target });
-        const release = join(target, "x86_64-pc-windows-msvc/release");
-        for (const f of P("shell").files(t)) copyFileSync(existsSync(join(release, f)) ? join(release, f) : join(release, "deps", f), join(out, f));
-        return;
-      }
+      if (t === "win32-x64") return shellWin(out);
       cargo(shellCommand(), join(ROOT, "client"), { CARGO_TARGET_DIR: target, ...ndkEnv() });
       copyFileSync(join(target, "aarch64-linux-android/release/libstillfail_shell.so"), join(out, "libstillfail_shell.so"));
     },
@@ -338,16 +338,58 @@ const shellCommand = () => [
   // Named by its file (SONAME): the engine that links it is then given its name, not where it was built.
   "--", "-C", "link-arg=-Wl,-soname,libstillfail_shell.so",
 ];
-/// The Windows shell: the crate's cdylib (a DLL with its import library, which the engine links), as built for its
-/// tests, which it runs.
-const shellWinCommand = () => ["test", "--release", "--locked", "-p", "stillfail-shell", "--target", "x86_64-pc-windows-msvc"];
+/// The Windows shell: the crate's cdylib (a DLL with its import library, which the engine links); and its tests, built
+/// beside it, not run (a Mac builds them; CI's Windows runs them).
+const shellWinCommand = () => ["rustc", "--locked", "-p", "stillfail-shell", "--lib", "--crate-type", "cdylib", "--target", "x86_64-pc-windows-msvc", "--release"];
+const SHELL_TESTS = ["test", "--release", "--locked", "-p", "stillfail-shell", "--target", "x86_64-pc-windows-msvc", "--no-run", "--message-format=json-render-diagnostics"];
+/// cargo-xwin, which cross-builds the Windows parts on a Mac with the Windows SDK and MSVC's CRT (Microsoft's, which it
+/// downloads: xwin), clang-cl and lld-link (Homebrew's llvm and lld).
+const XWIN = "0.23.1";
+/// Where a development machine keeps the cross-builds' tools and output (cargo-xwin, the SDK, cargo's target, Hermes's
+/// checkout and builds): beside the cache, shared by every worktree, so a change builds only what it changed.
+const BUILD = () => process.env.STILLFAIL_NATIVE_BUILD ?? join(CACHE, ".build");
+const LLVM = "/opt/homebrew/opt/llvm/bin";
+/// cargo-xwin's environment on a Mac (installed into BUILD once): the SDK it keeps there, clang-cl first on PATH.
+function xwinEnv(): { XWIN_CACHE_DIR: string; PATH: string } {
+  const tools = join(BUILD(), "tools");
+  const env = { XWIN_CACHE_DIR: join(BUILD(), "xwin"), PATH: [join(tools, "bin"), join(homedir(), ".cargo/bin"), LLVM, "/opt/homebrew/bin", process.env.PATH].join(delimiter) };
+  if (!existsSync(join(tools, "bin", "cargo-xwin"))) {
+    if (!existsSync(join(LLVM, "clang-cl"))) throw new Error("cross-building for Windows needs Homebrew's llvm and lld (brew install llvm lld)");
+    run("cargo", ["install", "--locked", "--root", tools, "cargo-xwin", "--version", XWIN], { env: rustEnv(env) });
+  }
+  return env;
+}
+/// The Windows shell and its tests, here: natively on Windows, with cargo-xwin on a Mac.
+function shellWin(out: string) {
+  const cross = osPlatform() === "darwin";
+  const target = cross ? join(BUILD(), "target") : targetDir(join(ROOT, "client/target"), "shell");
+  const env = { CARGO_TARGET_DIR: target, ...(cross ? xwinEnv() : {}) };
+  const xwin = (args: string[]) => (cross ? ["xwin", ...args] : args);
+  cargo(xwin(shellWinCommand()), join(ROOT, "client"), env);
+  const release = join(target, "x86_64-pc-windows-msvc/release");
+  for (const f of ["stillfail_shell.dll", "stillfail_shell.dll.lib"]) copyFileSync(existsSync(join(release, f)) ? join(release, f) : join(release, "deps", f), join(out, f));
+  // the tests' executables, from cargo's own account of what it built
+  rustTarget("x86_64-pc-windows-msvc");
+  const done = spawnSync("cargo", xwin(SHELL_TESTS), { cwd: join(ROOT, "client"), env: rustEnv(env), encoding: "utf8", maxBuffer: 256 << 20, stdio: ["ignore", "pipe", "inherit"] });
+  if (done.status !== 0) throw new Error(`cargo ${xwin(SHELL_TESTS).join(" ")}: exit ${done.status}`);
+  mkdirSync(join(out, "tests"));
+  for (const line of done.stdout.split("\n")) {
+    if (!line.startsWith("{")) continue;
+    const m = JSON.parse(line);
+    if (m.reason !== "compiler-artifact" || !m.profile?.test || !m.executable) continue;
+    copyFileSync(m.executable, join(out, "tests", `${m.target.kind.includes("lib") ? "lib" : m.target.name}.exe`));
+  }
+  if (readdirSync(join(out, "tests")).length === 0) throw new Error("the shell's tests were not built");
+}
 /// The Windows engine (apps/mbui/engine) in Hermes's own CMake build (its libhermes, static, linked into the DLL),
 /// linked to the shell by name (an import library made from the shell's C ABI, stillfail_shell.def: the shell itself
 /// is not needed to build it). The checkout and the build stay in the part's target directory, so a change to the loop
 /// alone compiles only it.
 function engineWin(out: string) {
   if (tomlVersion("hermes") !== HERMES.rn) throw new Error(`Android's Hermes is ${tomlVersion("hermes")}, Windows' tag is React Native ${HERMES.rn}'s: move HERMES with it`);
-  const work = targetDir(join(ROOT, "apps/mbui/engine/target"), "engine");
+  // natively on Windows; on a Mac with clang-cl and xwin's SDK (cargo-xwin's), Hermes's own tools built for the Mac
+  const cross = osPlatform() === "darwin";
+  const work = cross ? join(BUILD(), "hermes") : targetDir(join(ROOT, "apps/mbui/engine/target"), "engine");
   const src = join(work, "hermes");
   mkdirSync(work, { recursive: true });
   if (!existsSync(join(src, ".stillfail-tag")) || readFileSync(join(src, ".stillfail-tag"), "utf8") !== HERMES.tag) {
@@ -363,10 +405,44 @@ function engineWin(out: string) {
     if (e.isFile()) copyFileSync(join(ROOT, "apps/mbui/engine", e.name), join(src, "stillfail-engine", e.name));
   }
   const build = join(work, "build");
-  run("cmake", ["-S", src, "-B", build, ...HERMES_CMAKE]);
+  run("cmake", ["-S", src, "-B", build, ...(cross ? hermesCross(src, work) : HERMES_CMAKE)]);
   run("cmake", ["--build", build, "--target", "stillfail_engine", "hermesc"]);
   for (const f of ["stillfail_engine.dll", "stillfail_engine.lib"]) copyFileSync(join(build, "stillfail-engine", f), join(out, f));
   copyFileSync(join(build, "bin", "hermesc.exe"), join(out, "hermesc.exe"));
+}
+/// Hermes for Windows from a Mac: the hermesc it compiles its own JS with built for the Mac first (Hermes's cross build
+/// imports it), then a CMake toolchain of clang-cl, lld-link and llvm-lib on xwin's SDK and CRT (the release CRT: xwin
+/// has no debug one, so CMake's own test compiles are release builds too).
+function hermesCross(src: string, work: string): string[] {
+  const env = xwinEnv();
+  const sdk = join(env.XWIN_CACHE_DIR, "xwin");
+  if (!existsSync(join(sdk, "crt"))) run("cargo", ["xwin", "env", "--target", "x86_64-pc-windows-msvc"], { env: rustEnv(env), stdio: ["ignore", "ignore", process.stderr] });
+  if (!existsSync(join(sdk, "crt"))) throw new Error(`no Windows SDK in ${sdk} (cargo-xwin's)`);
+  const host = join(work, "hermesc-host");
+  run("cmake", ["-S", src, "-B", host, "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF"]);
+  run("cmake", ["--build", host, "--target", "hermesc"]);
+  const inc = ["crt/include", "sdk/include/ucrt", "sdk/include/um", "sdk/include/shared"].map((d) => `/imsvc${join(sdk, d)}`).join(" ");
+  const libs = ["crt/lib/x86_64", "sdk/lib/um/x86_64", "sdk/lib/ucrt/x86_64"].map((d) => `/libpath:${join(sdk, d)}`).join(" ");
+  const toolchain = join(work, "clang-cl-windows.cmake");
+  writeFileSync(toolchain, [
+    "set(CMAKE_SYSTEM_NAME Windows)",
+    "set(CMAKE_SYSTEM_PROCESSOR AMD64)",
+    `set(CMAKE_C_COMPILER ${LLVM}/clang-cl)`,
+    `set(CMAKE_CXX_COMPILER ${LLVM}/clang-cl)`,
+    `set(CMAKE_LINKER ${existsSync(join(LLVM, "lld-link")) ? join(LLVM, "lld-link") : "/opt/homebrew/bin/lld-link"})`,
+    `set(CMAKE_AR ${LLVM}/llvm-lib)`,
+    `set(CMAKE_RC_COMPILER ${LLVM}/llvm-rc)`,
+    `set(CMAKE_MT ${LLVM}/llvm-mt)`,
+    `set(CMAKE_C_FLAGS_INIT "--target=x86_64-pc-windows-msvc ${inc}")`,
+    `set(CMAKE_CXX_FLAGS_INIT "--target=x86_64-pc-windows-msvc ${inc}")`,
+    ...["EXE", "SHARED", "MODULE"].map((k) => `set(CMAKE_${k}_LINKER_FLAGS_INIT "${libs} /manifest:no")`),
+    "set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)",
+    "set(CMAKE_TRY_COMPILE_CONFIGURATION Release)",
+    "set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)",
+    "set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)",
+    "",
+  ].join("\n"));
+  return ["-G", "Ninja", `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`, "-DCMAKE_BUILD_TYPE=Release", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF", `-DIMPORT_HERMESC=${join(host, "ImportHermesc.cmake")}`];
 }
 const P = (name: string): Part => PARTS[name] ?? fail(`no such part: ${name} (${Object.keys(PARTS).join(", ")})`);
 const inputsFor = (p: Part, t: Target): string[] => (typeof p.inputs === "function" ? p.inputs(t) : p.inputs ?? []);
@@ -494,17 +570,20 @@ async function download(part: string, target: Target, k: string): Promise<string
     log(`${part} ${target} ${k}: from ${inbox}`);
     return unpack(join(inbox, name), part, target, k, "inbox");
   }
-  const url = `https://github.com/${REPO}/releases/download/${RELEASE}/${name}`;
+  // a prebuilt one's store, then the release CI publishes to
   const started = Date.now();
-  let response: Response;
-  try {
-    response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
-  } catch (e) {
-    log(`${part} ${target}: could not reach GitHub (${(e as Error).message})`);
-    return null;
+  let url = "";
+  let response: Response | null = null;
+  for (const at of [`${STORE}/${name}`, `https://github.com/${REPO}/releases/download/${RELEASE}/${name}`]) {
+    try {
+      const r = await fetch(at, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
+      if (r.ok) { url = at; response = r; break; }
+      if (r.status !== 404) log(`${part} ${target}: ${at} answered ${r.status}`);
+    } catch (e) {
+      log(`${part} ${target}: could not reach ${new URL(at).host} (${(e as Error).message})`);
+    }
   }
-  if (response.status === 404) return null;
-  if (!response.ok) { log(`${part} ${target}: ${url} answered ${response.status}`); return null; }
+  if (!response) return null;
   const bytes = Buffer.from(await response.arrayBuffer());
   const tgz = join(tmpdir(), `${name}.${process.pid}`);
   writeFileSync(tgz, bytes);
@@ -517,7 +596,7 @@ async function download(part: string, target: Target, k: string): Promise<string
 
 function buildHere(part: string, target: Target, k: string): string {
   const started = Date.now();
-  if (onWindows(part, target) && osPlatform() !== "win32") throw new Error(`${part} ${target} ${k} is not prebuilt, and only Windows builds it (MSVC's: CI's natives-win job)`);
+  if (onWindows(part, target) && !["win32", "darwin"].includes(osPlatform())) throw new Error(`${part} ${target} ${k} is not prebuilt: Windows builds it, or a Mac cross-builds it (node scripts/native.ts prebuild ${part}:${target})`);
   log(`${part} ${target} ${k}: not prebuilt; building it here${P(part).inputs && P(part).rust !== false ? " (cargo)" : ""}…`);
   const tmp = fresh(part);
   try {
@@ -545,6 +624,8 @@ async function get(part: string, target: Target, mode: "any" | "fetch" | "build"
       if (got) return got;
     }
     if (mode === "fetch" || policy === "offline") throw new Error(`${part} ${target} ${k} is not prebuilt (STILLFAIL_NATIVE=${policy || "-"}, ${mode})`);
+    // What a development machine prebuilds is never built on CI: said, with how.
+    if (onWindows(part, target) && process.env.CI) throw new Error(`${part} ${target} ${k} is not prebuilt: prebuild it on a Mac (Studio), node scripts/native.ts prebuild ${part}:${target}`);
     // n0's relay is downloaded from n0 whatever the policy: "building" it is that.
     return buildHere(part, target, k);
   });
@@ -642,6 +723,15 @@ function published(): Set<string> | null {
 async function exists(name: string): Promise<boolean> {
   const r = await fetch(`https://github.com/${REPO}/releases/download/${RELEASE}/${name}`, { method: "HEAD", redirect: "manual" });
   return r.status === 302 || r.status === 200;
+}
+/// Whether the store of prebuilt parts has it.
+async function inStore(name: string): Promise<boolean> {
+  try {
+    const r = await fetch(`${STORE}/${name}`, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(30_000) });
+    return r.ok;
+  } catch {
+    return false;
+  }
 }
 function pack(dir: string, name: string, into: string): string {
   const file = join(into, name);
@@ -760,6 +850,30 @@ async function main(argv: string[]) {
       }
       rmSync(work, { recursive: true, force: true });
       for (const line of summary) console.log(line);
+      return;
+    }
+    case "prebuild": {
+      const toRelease = args.includes("--release");
+      const wanted: [string, Target][] = [];
+      for (const a of args.filter((a) => a !== "--release")) { const [p, t] = a.split(":"); wanted.push(pair(t ? [p!, t] : [p!])); }
+      if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t)) wanted.push([p, t]);
+      const work = join(tmpdir(), `stillfail-prebuild-${process.pid}`);
+      mkdirSync(join(work, "natives"), { recursive: true });
+      let any = false;
+      for (const [p, t] of wanted) {
+        const k = key(p, t);
+        const name = asset(p, t, k);
+        if (toRelease ? await exists(name) : await inStore(name)) { console.log(`${p} ${t} ${k}: there already`); continue; }
+        const started = Date.now();
+        const dir = await get(p, t);
+        pack(dir, name, join(work, "natives"));
+        console.log(`${p} ${t} ${k}: ready (${((Date.now() - started) / 1000).toFixed(0)} s), putting it in the store`);
+        any = true;
+      }
+      try {
+        if (any && toRelease) for (const f of readdirSync(join(work, "natives"))) gh(["release", "upload", RELEASE, join(work, "natives", f), "-R", REPO]);
+        else if (any) run("sh", [join(ROOT, "scripts/release-put.sh"), "--files", work], { stdio: "inherit" });
+      } finally { rmSync(work, { recursive: true, force: true }); }
       return;
     }
     case "prune": {

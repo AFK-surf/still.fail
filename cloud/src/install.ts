@@ -94,6 +94,10 @@ const APP_FILES: [RegExp, string][] = [
   // and its macOS app (apps/mbui/scripts/mac-app.sh): the same kind of feed, the zips it names
   [/^mac\/mbui\/latest\.json$/, "application/json"],
   [/^mac\/stillfail-mbui-[0-9]+-arm64-mac\.zip$/, "application/zip"],
+  // The native parts prebuilt on a development machine (scripts/native.ts prebuild: the mbui app's Windows shell and
+  // engine), each named by the hash of what it is made of, for CI and the builds to fetch (native.ts never builds them
+  // there).
+  [/^natives\/[a-z][a-z0-9-]{0,31}-(darwin-arm64|linux-x64|linux-arm64|win32-x64|wasm32|android-arm64)-[0-9a-f]{24}\.tar\.gz$/, "application/gzip"],
 ];
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
