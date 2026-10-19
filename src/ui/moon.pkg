@@ -2,6 +2,7 @@ import {
   "mbui/host",
   "mbui/text",
   "mbui/flex",
+  "mbui/effect",
   "moonbitlang/core/math",
   "moonbitlang/core/json",
 }

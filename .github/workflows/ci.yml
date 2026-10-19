@@ -25,6 +25,11 @@ jobs:
         run: moon version --all && moon check --target js --output-json 2>&1 | python3 scripts/errs.py
       - name: ui, motion and Markdown tests
         run: moon test --target js -p mbui/ui -p mbui/motion -p mbui/md 2>&1 | tail -3
+      - name: "effect.mb on native and JS, and the demo of a screen and its logic on one clock over seeds (SEED=<n> replays a failure)"
+        run: |
+          set -o pipefail
+          moon test --target native -p mbui/effecttest 2>&1 | tail -3
+          moon test --target js -p mbui/effecttest -p mbui/effectdemo 2>&1 | tail -3
       - name: "Unicode text (UAX #29, #14, #9 against Unicode's own tests)"
         run: |
           set -o pipefail

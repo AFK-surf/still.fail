@@ -1,0 +1,3 @@
+import {
+  "mbui/effect",
+} for "test"

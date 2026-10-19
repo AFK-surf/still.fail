@@ -115,6 +115,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.scroll_list(c.bench_list, bench.speed)
   }
   let t0 = h_now()
+  // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
+  fx_frame_start(c)
   drawing_begin()
   desk_frame_start()
   c.count = 0
@@ -175,6 +177,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.next_scroll_rects = sr
   c.desk_frame_end()
   c.sync_ime()
+  fx_frame_end(c)
   match frame_hook.val {
     Some(f) => f()
     None => ()

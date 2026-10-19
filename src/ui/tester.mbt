@@ -86,13 +86,15 @@ fn reset_globals() -> Unit {
 /// already drawn the first frame. `images`: sources views may load, with
 /// their size in pixels (others fail to load).
 /// `platform`: the system it plays, as @host.platform has them (0 macOS,
-/// 1 iOS, 2 Android: how lists scroll).
+/// 1 iOS, 2 Android: how lists scroll). `seed`: the order the runtime's ready
+/// fibers run in is drawn from it (fx.mbt; without, the order they became ready).
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
   h? : Double = 844.0,
   images? : Array[(String, Int, Int)] = [],
   platform? : Int = 0,
+  seed? : Int,
 ) -> Tester {
   let f = {
     time: 1000.0,
@@ -124,6 +126,7 @@ pub fn Tester::new(
   }
   fake.val = Some(f)
   reset_globals()
+  fx_reset(seed)
   g_view.val = view
   let t = { fake: f, w, h, frames: 0 }
   t.frame()
