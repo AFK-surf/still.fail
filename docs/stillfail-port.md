@@ -237,6 +237,89 @@ words are), the composer's frosted glass, the text toolbar of the field
 (select, cut, copy by touch; the keyboard's own paste works), a new chat
 (slice 6).
 
+## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
+
+`scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
+only on this machine, never the real account: ember's local cloud (cloud/test/dev.ts: its Workers in Miniflare,
+Google mocked, the test identities, alice in the workspace "Dev"), an iroh-relay of its own (dev mode, loopback), and
+a test station enrolled there from a clone of ember (built in it, never in ember-src), its agent ember's fake claude
+(station/test/fake: it answers `post:<words>` with those words through the agents' door, as an agent's chat_post).
+Every part has its own ports (E2E_PORT, the cloud from 18787 to 18792; E2E_RELAY, 18740) and directories (E2E_WORK,
+e2e-local beside the checkout; the station's data and HOME under /tmp/mbui-e2e-<uid>, short, as its runners' sockets
+need); the station starts with what the shell has of the machine's own station (EMBER_*, STILLFAIL_* …) taken out.
+
+- `up` clones ember (or brings the clone to ember-src's commit), installs and builds it once, starts the relay, the
+  cloud and the station (each in a session of its own: they outlive the task that started them until `down`), enrolls
+  the station with the cloud's printed token, and has alice's other device (e2e/peer.ts: ember's TS core in Node, on
+  the station's mesh addon, signed in with the cloud's mock account) make the test chat; it writes
+  `<work>/run/e2e-env.sh`: MBUI_CLOUD and the account (MBUI_CORE_ACCOUNT_B64, from /__dev/account?user=alice).
+- The app takes them: MBUI_CLOUD=<origin> is the cloud it starts its core on (src/sfcore; Android logs "cloud
+  http://127.0.0.1:18787"), and MBUI_CORE_ACCOUNT (or _B64), only with MBUI_CLOUD, is taken in as signed in (the
+  core's `migrate`, as the web app's accounts were) when none is. e2e/run.sh takes a fresh one from the cloud for each run: a
+  sign-in's refresh token goes once, so a copy another core has refreshed is used up. The browser sign-in itself is not run: the local
+  cloud's Google is mocked only for its own tests (a browser would be sent to the real Google).
+- The flows are scripts for src/ui/drive.mbt (MBUI_DRIVE, or MBUI_DRIVE_B64): a step a line, finding what to tap by
+  its words on screen (`tap 发消息`, `icon:arrow-up`, `=重试` for words that are exactly so), waiting on what should
+  come (`until`, `untiln 2 …`, `gone`, `field` for a field's words), typing through the system's own ways (`mark`
+  and `type`: on macOS the input method's setMarkedText and insertText; on Android the view's InputConnection;
+  `paste`: the clipboard and Cmd+V, KEYCODE_PASTE), shots (`shot`), and `log do: …`, which has the runner do
+  something beside the app (`peer send …`, `peer create …`, `freeze` / `thaw` the station, `reads`). It runs on any
+  host; `Tester::drive` runs a script in tests.
+- e2e/run.sh runs each flow (e2e/flows/NN-name.drive) in the app, in order, on one sign-in, then its check
+  (NN-name.check) against the backend's own state, not the screen: the station's database (entries: the words, the
+  author, the attachments' and quotes' JSON; reads: how far alice has read), the files it keeps (the photo and the
+  9 MB file the same byte for byte; the long paste's 18000 bytes), the core's store on the device (drafts), and prints
+  PASS or FAIL per flow (out/e2e/<platform>.txt; shots in out/e2e/<platform>/<flow>/). `scripts/e2e-local.sh mac`
+  runs the flows against what `up` started (E2E_NOBUILD=1: the app as built), `android` the same on an emulator of
+  our own (AVD=mbui-avd-e2e EMU_PORT=5586 by default: adb reverse brings the cloud's and the relay's ports to the
+  emulator's 127.0.0.1, the files to attach go into the app's own files, MBUI_PICK_FILES answers the pickers, each
+  flow recorded with screenrecord). `down` stops all of it.
+
+To check a later slice the same way: add its flows and checks to e2e/flows, and what the runner must do beside the
+app to `scripts/e2e-local.sh` (as `peer`, `freeze`, `reads`).
+
+The flows (macOS, 390×844, and Android on the emulator, Pixel 7 size). On 2026-10-19 all 14 passed on macOS; on
+Android 13 of 14 in the full run and 11 (the quote) alone, twice, once it waited for the all-done card (it had held
+while the card moved the list):
+
+| Flow | What the app does | Checked on the backend's side |
+|---|---|---|
+| 01 signin | signed in with the mock account; Home lists the test chat, the agent's answer as where it stands | the core's store holds alice's sign-in |
+| 02 home-new-chat | on Home while alice's other device makes a chat: its row comes in, then its agent's answer as the row's last words | the station has the second chat and the agent's answer in it |
+| 03 send-text | a chat opened from Home, words typed and sent (正在发送, then sent) | the station's entry: the words, once, as alice's |
+| 04 chinese-enter | Chinese composed and committed through the input method, Enter a new line, sent | one entry of both lines; none of the first line alone |
+| 05 agent-reply | a question; the fake agent's answer comes while the chat shows, the list following its end | the agent's entry; the answer shown in the window |
+| 06 draft | words left in the field, the chat left and opened again: they are back | the draft in the core's store on the device, nothing of it at the station |
+| 07 draft-restart | the app started again: the draft is back; emptied | the core keeps no draft of it any more |
+| 08 paste-short | a short paste (Cmd+V, KEYCODE_PASTE) goes into the field, sent | the entry's words are the pasted ones |
+| 09 paste-long | 6000 characters pasted become a text file's card (6000 字符), put up at once, sent with words | the entry's attachment, a .txt; the station keeps it whole (18000 bytes) |
+| 10 attachments | ＋ → 文件: a photo and a 9 MB file, each put up at once in 4 MB parts (three for the file), sent | the entry's two attachments; both files at the station, byte for byte |
+| 11 quote | the agent's words held still: 引用, a comment on the quote, sent | the entry's quote: the agent's words, its role, the comment |
+| 12 offline-retry | the station frozen (SIGSTOP) as a message goes: 未发送 after some 30 s; thawed, 重试 | the station has the message, once |
+| 13 delete-failed | the same, 删除 | the station never gets it, even once thawed |
+| 14 mark-read | on Home, the other device asks; the answer comes unread; the chat opened at its end | the station's reads: alice unread before, read to the end after |
+
+Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
+never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however
+often it had been read) and held back no notice for the chat on screen; it now does, as Home shows a workspace and as
+the system says the app came to the front or left it (@host.set_app_state). A scripted run counts as in front: on
+Studio, whose screen is locked, the window is reported covered. Also corrected on Android: while a composition was under way the field
+told the input method its words without it and no composing region (`updateSelection(…, -1, -1)`), against
+InputMethodManager's contract; Host.setIme now gives it the words with the composition in, the selection after it and
+its region (MBInput keeps what it composes; MBUI_IME_LOG=1 logs what passes). On the emulator Gboard ends any
+composition it did not make itself (finishComposingText at once, with or without the region), so flow 04 turns the
+emulator's keyboard off while it composes (`log do: android-ime off`): the run is then the only input method.
+
+Each run marks the words its flows send with its own tag (`{T}` in a flow, `$TAG` in its check), so the same station
+can take any number of runs, on either platform, and a check counts only its own run's messages.
+
+What the fake backend shows that the real one would not: a message without `post:` gets the station's ⚠ notice (本轮
+agent 未在对话中回复…) as the fake claude only echoes it, and a station frozen for a minute ends its agent's turn
+(出错：意外停止). Not checked here: the browser sign-in itself (the local cloud's Google is mocked only inside its own
+tests; the mock account is taken in through `migrate` instead), pushes, the camera and the system's photo picker
+(MBUI_PICK_FILES stands for the pickers), the soft keyboard's own typing (the InputConnection is driven, not the
+keyboard), and anything only a real agent runtime does.
+
 ## What the hosts need (platform)
 
 Hermes + shell on Android; secure storage with biometrics (`secure.*`);

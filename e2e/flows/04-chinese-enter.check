@@ -1,0 +1,2 @@
+check "the station has both lines in one message" '[ "$(sql "select count(*) from entries where text=\"你好\" || char(10) || \"第二行 $TAG\"")" = 1 ]'
+check "Enter sent nothing by itself" '[ "$(sql "select count(*) from entries where text=\"你好\"")" = 0 ]'

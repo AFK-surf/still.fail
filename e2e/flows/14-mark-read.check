@@ -1,0 +1,2 @@
+check "before: alice had not read the answer" 'grep "^READS" $OUT/$name.log | head -1 | grep -q unread'
+check "after: the station marks it read to its end" 'grep "^READS" $OUT/$name.log | tail -1 | grep -q " read"'

@@ -1,0 +1,2 @@
+check "the station has the chat made elsewhere, its first words" '[ -n "$(sql "select thread from entries where text like '"'"'另一台设备新建的对话 $TAG post:%'"'"'")" ]'
+check "its agent answered there" '[ -n "$(sql "select n from entries where author_kind=\"agent\" and text=\"新对话里的回复 $TAG\"")" ]'
