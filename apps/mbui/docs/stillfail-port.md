@@ -878,6 +878,13 @@ while the card moved the list):
 | 52 drive-sheet-closing | a file held, ⋯ → its sheet, the scrim tapped, the sheet's rows tapped where they are drawn as it closes | no rename asked; the station keeps the file, its name and words |
 | 53 settings-sheet-sinking | settings → Station → the test station → … → 重命名, a name typed, the scrim tapped, 保存 tapped where it is drawn as the sheet goes down | the station's page as it was; still.fail cloud has the old name |
 | 54 bar-going-down | the test chat opened from Home, the composer tapped under the bar still going down, words sent | the words at the station, once, alice's; the bar going down in the motion log |
+| 60 wide-send | (1280×800) the test chat pressed in the sidebar's list opens beside it; words typed, Enter sends them | the station's entry: the words, once, alice's, in the test chat |
+| 61 wide-newline | (1280×800) ⇧Enter a new line in the composer, Enter sends both | one entry of both lines; none of the first alone |
+| 62 wide-row-menu | (1280×800) the row hovered, right clicked: its menu; 固定 (the row goes under 已固定), then 取消固定 from the menu again | the station's `pins` has alice's for the chat, then none |
+| 63 wide-switcher | (1280×800) ⌘K, words typed, Enter opens the chat; ⌘K again, Esc closes it; words sent there | the entry in the test chat, once |
+| 64 wide-new-chat | (1280×800) ⌘N: a new chat beside the list; its first words sent with Enter make the chat, the page becomes it, the agent answers (in the chat and its row) | the first message once, in a thread of its own; the agent's answer there |
+| 65 wide-places | (1280×800) the rail: 文件 (the stations' folders in the sidebar), the chats, settings (外观: 深色, then 跟随系统), back to the chats | the host told dark; the core's store on the device keeps appearance system |
+| 66 wide-resize | 390 wide: Home; the window resized to 1280 (the wide frame; the chat pressed in the sidebar), then to 390 again: the same chat, a phone's page; words sent | the window resized twice (the host's RESIZED); the words at the station, once, in the test chat |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once
@@ -905,6 +912,43 @@ agent 未在对话中回复…) as the fake claude only echoes it, and a station
 tests; the mock account is taken in through `migrate` instead), pushes, the camera and the system's photo picker
 (MBUI_PICK_FILES stands for the pickers), the soft keyboard's own typing (the InputConnection is driven, not the
 keyboard), and anything only a real agent runtime does.
+
+## The PC (wide) frame (branch mbui-pc, 2026-10-19)
+
+On macOS and Windows the app is a desktop's window (@sfapp.desktop_window: 1280×820 at first, as still.fail's desktop app
+opens, at least 360×560, its size not kept, the system's title bar). Above the web's breakpoint (701 wide) it is the web
+app's wide frame (web/src/cloud/workspace.tsx WorkspaceShell), src/sfapp/wide*.mbt; below it the phone's pages as
+before, live as the window is resized: both draw the same stack (app.nav) over the same topics, the wide frame its top
+page alone in its pane (@ui Ctx::nav_flat), the phone's sliding.
+
+- The rail (Rail.tsx: 56 wide; 待处理's panel, 对话, 文件, Station, Profile, 连接, 用量, as the prefs' `rails` keep them;
+  the workspaces' squares, the one in view marked; settings), the sidebar beside it on the same ground (240, its edge
+  dragged from 180 to 480, pressed to fold it to the rail, ⌘\): the chats' list (新建对话 and the filter in its frosted
+  band, the core's days, a row each: Sidebar.tsx ChatRow at 54 high, its time and 归档 on hover), or the settings' pages
+  (SettingsNav: 返回会话, 客户端 / Station / Cloud, those in the rail left out), the stations' folders (FilesSidebar), the
+  decisions waiting (奏's rows).
+- The pane: a chat (ChatPage.tsx: its bar 45 high, the messages in a column 760 wide at most in its middle, the composer
+  804 at most, Enter sends and ⇧Enter is a new line, 按空格输入 until it has the keyboard); the core's chat last open
+  when the chats are come to, else a new chat (the web has no empty state: WorkspaceHome); every other page the phone's
+  own under the web's page bar (settings' pages under the web's page head, in its column: wide_head, scroll_page).
+- What opens over it (wide_pop.mbt): a row's menu from its right click (固定 / 取消固定, 重命名 in place, 保留 / 取消保留,
+  复制会话链接, 归档), the filter's menu, 待处理's panel, ⌘K's switcher (the chats by their titles), ⌘/'s shortcuts.
+- Keys (keymap.ts): ⌘K, ⌘N, ⌥↑ / ⌥↓ the chat before or after, ⌘\, ⌘,, ⌘/, Esc (what is open closed), Space (the
+  composer), Enter / ⇧Enter; the list under the pointer scrolls by the arrows and Page keys.
+- The pointer (mbui's desktop input): hover grounds as the web's (--hover; --selected on what is open), the hand on what
+  is pressed, the I-beam on fields and the pane's words, col-resize on the sidebar's edge; the pane's words selected with
+  a drag and copied with ⌘C (Ctx::selectable); a mouse wheel's notch eased in as a browser does, a trackpad's as it
+  comes; a drag scrolls no list.
+
+Not as the web yet: the new chat's composer is at the page's foot (the web's in its middle); the chat's side panel
+(histories, jobs, files), its find bar and the drive's columns are the phone's sheets and pages; ⌘K finds chats by
+their titles only (not messages, actions or settings); the rail is not changed from its menu (its places as the prefs
+keep them); the macOS window has the system's title bar (mbui's @host.window_setup `inset` puts the buttons in the
+app's top row as the desktop app's are, not used yet); 复制 session 文件路径 is not in the row's menu.
+
+Shots: `scripts/shots.sh wide` (mac-wide-<mode>[-dark] at WIDE_WIN 1280x800 over sffix's home, chat,
+settings-appearance, files, decisions); `scripts/web-ref.mjs` takes the web's stories at the same sizes. Windows:
+mbui's windows.yml run with `stillfail_ref` builds sffix against that mbui and shoots its wide frame.
 
 ## Motion (branch motion, 2026-10-19)
 

@@ -1,0 +1,24 @@
+#env MBUI_WIN=1280x800
+# ⌘K (Switcher.tsx): the switcher over the frame; words typed narrow it to the test chat, Enter opens it beside the
+# list; Esc closes it when opened again; words sent from the chat it opened.
+timeout 60000
+until 新建对话
+until 端到端测试
+key cmd+k
+until 搜索全部内容和操作
+type 端到端
+wait 500
+shot 1-switcher
+enter
+gone 搜索全部内容和操作
+until 按空格输入
+key cmd+k
+until 搜索全部内容和操作
+key esc
+gone 搜索全部内容和操作
+tap 按空格输入
+type 从切换器打开后发出 {T}
+enter
+until 从切换器打开后发出 {T}
+gone 正在发送
+shot 2-sent

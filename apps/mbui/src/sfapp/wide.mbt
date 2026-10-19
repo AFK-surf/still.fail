@@ -118,6 +118,7 @@ fn wide_frame(
   let t = @sf.theme()
   // a desktop's page: the wheel and the trackpad scroll, a drag is the pointer's own
   c.mouse_drags_lists(false)
+  wide_keys(c, src, w)
   let side = side_now()
   let main_w = dmax(0.0, c.width - rail_w - side)
   // the core's chat last open, else a new chat: there is always a page beside the list (workspace.tsx WorkspaceHome)
@@ -132,8 +133,11 @@ fn wide_frame(
     |> ignore
     c.box(w=Px(main_w), h=Fill(1.0), clip=true, fn() {
       c.sized(main_w, c.height, fn() {
-        c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
-        |> ignore
+        // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not)
+        c.selectable(color=@sf.alpha(t.p.blue, 0.28), fn() {
+          c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
+          |> ignore
+        })
       })
     })
     |> ignore

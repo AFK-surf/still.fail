@@ -1,0 +1,17 @@
+#env MBUI_WIN=1280x800
+# In the wide frame ⇧Enter is a new line in the composer and Enter sends both lines as one message.
+timeout 60000
+until 端到端测试
+tap 端到端测试
+until 按空格输入
+wait 800
+tap 按空格输入
+type 第一行 {T}
+key shift+enter
+type 第二行 {T}
+field 第一行 {T}\n第二行 {T}
+shot 1-two-lines
+enter
+until 第二行 {T}
+gone 正在发送
+shot 2-sent

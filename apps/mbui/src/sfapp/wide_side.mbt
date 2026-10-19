@@ -287,10 +287,18 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
   let key = item.station + "/" + item.id
   let id = c.id("side/row/" + key)
   c.cursor(id, Hand)
-  if c.clicked(id) {
+  if c.clicked(id) && wide.renaming != key {
     open_row(item)
   }
   let menu = item.offline is None && !item.pending
+  match c.right_clicked(id) {
+    Some((x, y)) if menu => {
+      wide.menu = Some((key, item, x, y))
+      wide.filter_open = false
+      wide.attention_open = false
+    }
+    _ => ()
+  }
   let hover = c.hovered(id) || c.hovered(c.id("side/archive/" + key))
   let dim = if item.offline is Some(_) { 0.5 } else { 1.0 }
   c.box(w=Fill(1.0), pb=2.0, fn() {
@@ -318,7 +326,10 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
             if tone != "" {
               c.box(w=Px(10.0), align=ACenter, fn() { chat_mark(c, tone, pop=key) }) |> ignore
             }
-            c.box(w=Fill(1.0), opacity=dim, fn() {
+            if wide.renaming == key {
+              side_rename(c, src, item)
+            } else {
+              c.box(w=Fill(1.0), opacity=dim, fn() {
                 c.text(
                   item.title,
                   size=13.0,
@@ -330,6 +341,7 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
                 |> ignore
               })
               |> ignore
+            }
             if @sf.has_station_mark(item.station_emoji, item.station_icon) {
               c.box(w=Px(16.0), align=ACenter, opacity=dim, fn() {
                 @sf.station_mark(c, item.station_emoji, item.station_icon, 12.0, t.p.muted)

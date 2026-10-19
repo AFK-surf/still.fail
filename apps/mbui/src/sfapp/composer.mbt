@@ -1019,6 +1019,9 @@ fn composer_bar(
   let placeholder = match (fresh, v) {
     (Some(_), _) => tr("android-chat.new.placeholder")
     (_, Some(view)) if view.archived => tr("android-chat.composer.archived.placeholder")
+    // with a mouse and nothing focused, the web's says Space takes the keyboard there (Chat.tsx)
+    _ if wide_on.val && !c.field_focused() =>
+      fill("web-main.composer.pressToTypeCjk", [("key", tr("web-main.keymap.space"))])
     _ => tr("android-chat.chat.placeholder")
   }
   let field = fn() {
@@ -1047,9 +1050,26 @@ fn composer_bar(
           color=t.p.text,
           placeholder_color=@sf.alpha(t.p.subtle, hint.get()),
           caret_color=t.p.accent,
-          enter_sends=false,
+          // at a desktop's width Enter sends and ⇧Enter is a new line (the web's); on a phone Enter is a new line
+          enter_sends=wide_on.val,
           paste_limit=if locked { 0 } else { paste_threshold },
         )
+        match res.submitted {
+          Some(words) => {
+            // the field gave its words up as sent: the draft has them until they go
+            d.text = words
+            if draft_ready(d, locked) {
+              match (fresh, v) {
+                (Some(f), _) => (f.send)(d)
+                (None, Some(view)) => send_draft(c, src, r, view, d)
+                _ => c.set_editor_text(field_key, words)
+              }
+            } else {
+              c.set_editor_text(field_key, words)
+            }
+          }
+          None => ()
+        }
         if res.text != d.text {
           // drawn again: what shows (opened, send ready) follows the words at once
           c.request_frame()

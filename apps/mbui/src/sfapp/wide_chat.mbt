@@ -23,6 +23,10 @@ fn row_side(c : @ui.Ctx) -> Double {
 fn wide_chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   let t = @sf.theme()
   let (view, list, error) = view_of_chat(src, r)
+  if focus_composer.val {
+    focus_composer.val = false
+    c.focus_editor(field_key)
+  }
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     match view {
       None => {

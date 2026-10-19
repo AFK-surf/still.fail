@@ -507,56 +507,64 @@ fn seg(
       (c.spring(key + "/x", r.0 - tr.0 - inset), c.spring(key + "/w", r.2))
     _ => (0.0, 0.0)
   }
-  c.box(
-    dir=Row,
-    w=if fill { Fill(1.0) } else { Auto },
-    h=Px(height),
-    pad=inset,
-    radius~,
-    bg=@sf.alpha(t.p.text, 0.06),
-    id=base,
-    fn() {
-      if w > 0.0 {
-        c.layer(pad=inset, fn() {
-          c.box(
-            w=Px(w),
-            h=Fill(1.0),
-            tx=x,
-            radius=dmax(radius - inset, 0.0),
-            bg=thumb,
-            border=0.5,
-            border_color=t.p.line,
-            fn() {  },
-          )
-          |> ignore
-        })
-        |> ignore
-      }
-      for i, label in options {
-        let id = base + i + 1
-        c.box(
-          w=if fill { Fill(1.0) } else { Auto },
-          h=Fill(1.0),
-          min_w=if pill { 101.0 } else { 0.0 },
-          padx=if fill { 12.0 } else { 10.0 },
-          align=ACenter,
-          justify=JCenter,
-          id~,
-          fn() {
-            c.text(
-              label,
-              size=if fill { 14.0 } else { 13.0 },
-              color=if i == picked { t.p.text } else { t.p.muted },
-              wrap=false,
+  let track = fn() {
+    c.box(
+      dir=Row,
+      w=if fill { Fill(1.0) } else { Auto },
+      h=Px(height),
+      pad=inset,
+      radius~,
+      bg=@sf.alpha(t.p.text, 0.06),
+      id=base,
+      fn() {
+        if w > 0.0 {
+          c.layer(pad=inset, fn() {
+            c.box(
+              w=Px(w),
+              h=Fill(1.0),
+              tx=x,
+              radius=dmax(radius - inset, 0.0),
+              bg=thumb,
+              border=0.5,
+              border_color=t.p.line,
+              fn() {  },
             )
             |> ignore
-          },
-        )
-        |> ignore
-      }
-    },
-  )
-  |> ignore
+          })
+          |> ignore
+        }
+        for i, label in options {
+          let id = base + i + 1
+          c.box(
+            w=if fill { Fill(1.0) } else { Auto },
+            h=Fill(1.0),
+            min_w=if pill { 101.0 } else { 0.0 },
+            padx=if fill { 12.0 } else { 10.0 },
+            align=ACenter,
+            justify=JCenter,
+            id~,
+            fn() {
+              c.text(
+                label,
+                size=if fill { 14.0 } else { 13.0 },
+                color=if i == picked { t.p.text } else { t.p.muted },
+                wrap=false,
+              )
+              |> ignore
+            },
+          )
+          |> ignore
+        }
+      },
+    )
+    |> ignore
+  }
+  // (in a row, as wide as its options: not stretched to its parent's width)
+  if pill {
+    c.box(dir=Row, w=Fill(1.0), fn() { track() }) |> ignore
+  } else {
+    track()
+  }
   picked
 }
 

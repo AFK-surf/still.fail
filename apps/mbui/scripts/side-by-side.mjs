@@ -1,7 +1,9 @@
 // Pictures side by side, 16 apart on grey, for comparing (the web's and the app's at one size):
-//   node apps/mbui/scripts/side-by-side.mjs OUT.png A.png B.png [C.png …]   (NODE_PATH with pngjs)
+//   node scripts/side-by-side.mjs OUT.png A.png B.png [C.png …]   (from apps/mbui: pngjs in out/node, as shots.sh has it)
+import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { PNG } from 'pngjs';
+import path from 'node:path';
+const { PNG } = createRequire(import.meta.url)(path.resolve('out/node/node_modules/pngjs'));
 const [out, ...ins] = process.argv.slice(2);
 const imgs = ins.map((p) => PNG.sync.read(readFileSync(p)));
 const gap = 16;

@@ -110,8 +110,11 @@ fn menu_line(c : @ui.Ctx) -> Unit {
 ///|
 /// Everything open over the wide frame, drawn after it.
 fn wide_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  row_menu(c, src)
   wide_filter_menu(c, src, w)
   attention_panel(c, src, w)
+  switcher(c, src, w)
+  keys_dialog(c)
 }
 
 ///|
