@@ -76,15 +76,41 @@ hermesc() {
   echo "$OUT/hermesc/package/$bin"
 }
 
+# core.hbc's stamp: the bundle's inputs (esbuild's metafile), the entry and hermesc, by mtime and size
+hbc_stamp() {
+  python3 - "$OUT/core-hermes.meta.json" "${ENTRY:-$ROOT/core/hermes.ts}" "$1" <<'PY'
+import json, os, sys
+meta, entry, hermesc = sys.argv[1:4]
+try:
+    inputs = sorted(json.load(open(meta))['inputs'])
+except (OSError, ValueError, KeyError):
+    sys.exit(1)
+def st(p):
+    try:
+        s = os.stat(p)
+        return [s.st_mtime_ns, s.st_size]
+    except OSError:
+        return None
+print(json.dumps({'entry': entry, 'hermesc': [hermesc, st(hermesc)], 'inputs': {p: st(p) for p in inputs}}))
+PY
+}
+
 hermes() {
   local t0=$(now)
+  local hc="$(hermesc)"
+  # the same inputs as the last build's: that build's core.hbc
+  if [ -f $OUT/core.hbc ] && [ -f $OUT/core.hbc.stamp ] && [ "$(hbc_stamp "$hc" 2>/dev/null)" = "$(cat $OUT/core.hbc.stamp)" ]; then
+    echo "hermes: core.hbc as it was (its inputs unchanged)"
+    return 0
+  fi
   # never an old core.hbc after a failed step (it would hide a module gone missing)
-  rm -f $OUT/core-hermes.js $OUT/core.hbc
+  rm -f $OUT/core-hermes.js $OUT/core.hbc $OUT/core.hbc.stamp
   # npm imports of an app's modules from the core's node_modules, as in bundle()
   NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild ${ENTRY:-$ROOT/core/hermes.ts} --bundle \
     --format=iife --platform=neutral --main-fields=module,main --target=es2020 --minify --legal-comments=none \
     --alias:@core=$CORE_TS/src --alias:@ember=$EMBER --resolve-extensions=.ts,.js,.mjs \
-    --outfile=$OUT/core-hermes.js --log-level=warning || { echo "hermes: bundle failed"; return 1; }
+    --outfile=$OUT/core-hermes.js --metafile=$OUT/core-hermes.meta.json --log-level=warning \
+    || { echo "hermes: bundle failed"; return 1; }
   # Classes as functions (and `extends Error` as Babel's wrapped native super), with ember's Babel.
   (cd $CORE_TS && node --input-type=module -e "
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -93,8 +119,9 @@ const f = process.argv[1];
 const out = transformSync(readFileSync(f, 'utf8'), { babelrc: false, configFile: false, compact: true, plugins: ['@babel/plugin-transform-classes'] });
 if (!out || !out.code) throw new Error('babel made nothing');
 writeFileSync(f, out.code);" $OUT/core-hermes.js) || { echo "hermes: class transform failed"; return 1; }
-  "$(hermesc)" -emit-binary -O -block-scoping -out $OUT/core.hbc $OUT/core-hermes.js \
+  "$hc" -emit-binary -O -block-scoping -out $OUT/core.hbc $OUT/core-hermes.js \
     || { echo "hermes: hermesc failed"; rm -f $OUT/core.hbc; return 1; }
+  hbc_stamp "$hc" > $OUT/core.hbc.stamp || rm -f $OUT/core.hbc.stamp
   echo "hermes in $(since $t0) s: $(wc -c < $OUT/core-hermes.js | tr -d ' ') bytes of script, $(wc -c < $OUT/core.hbc | tr -d ' ') of bytecode"
 }
 

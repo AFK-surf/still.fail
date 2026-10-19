@@ -1,6 +1,6 @@
 #!/bin/bash
-# Android: build libmbui.so from the C that moon generates plus the runtime
-# and src/host/android_host.c, package it with Gradle, and run it on an
+# Android: build libmbui.so from the C that moon generates (split and compiled in parallel: scripts/mbc.py) plus the
+# runtime and src/host/android_host.c, package it with Gradle, and run it on an
 # emulator of our own (AVD mbui-avd, port 5580). APP=demo|photos|coredemo|stillfail|sffix picks the app (coredemo and
 # stillfail with the still.fail core in them);
 # ENV="K=V;K2=V2" gives `run` the app's environment variables (MainActivity sets them before the app starts).
@@ -32,18 +32,11 @@ CFLAGS="-I$MOON_HOME/include -Isrc/host -fPIC -fwrapv -fno-strict-aliasing -Wno-
 sync() {
   mkdir -p $M/src
   cp -p moon.mod $M/
-  cp -rp src/. $M/src/
+  # exactly src/: a file gone from it goes from the copy too (then the copy's own files, after)
+  if command -v rsync >/dev/null; then rsync -a --delete src/ $M/src/; else rm -rf $M/src && cp -rp src $M/src; fi
   cp -p src/photos/pictures/android.mbt $M/src/photos/pictures_native.mbt
-  # moon still links a (macOS) program of the copy, which nothing runs: only its C is taken. The apps with the core
-  # need the Apple shell (scripts/core.sh shell), which an Android build has no use for; its symbols are left unresolved.
-  for app in coredemo stillfail; do
-    sed -e 's|out/core/aarch64-apple-darwin/libstillfail_shell.a|-Wl,-undefined,dynamic_lookup|' \
-      src/$app/moon.pkg > $M/src/$app/moon.pkg
-    if ! grep -q dynamic_lookup $M/src/$app/moon.pkg; then
-      echo "android.sh: src/$app/moon.pkg no longer links the shell as expected" >&2
-      exit 1
-    fi
-  done
+  # only moonc's C of the copy is used (scripts/mbc.py gen): moon compiles and links nothing of it, so the apps'
+  # macOS link flags (the core's Apple shell among them) stay as they are
 }
 
 # the photos app's pictures (see pictures/android.mbt): copied into the
@@ -89,13 +82,17 @@ aar_lib() {
 # bytecode (scripts/core.sh hermes; ENTRY picks the core's entry, by default the one with the media module). For the other apps it stays empty.
 has_core() { [ $PKG = coredemo ] || [ $PKG = stillfail ]; }
 
-core_parts() {
-  local apk=$OUT/apk
+# Two parts, run alongside the C's compile: core_libs (the .so files, which libmbui.so links against) and core_hbc
+# (the core's bytecode, which only Gradle needs).
+core_dirs() {
+  apk=$OUT/apk
   jni=$OUT/apk/jniLibs/arm64-v8a
   rm -rf $apk
   mkdir -p $jni $apk/assets
-  has_core || return 0
-  EMBER=${EMBER:-$(cd "$TOOLS/.." 2>/dev/null && pwd)/ember-src}
+  if has_core; then EMBER=${EMBER:-$(cd "$TOOLS/.." 2>/dev/null && pwd)/ember-src}; fi
+}
+
+core_libs() {
   local engine shell
   engine=$(cd "$EMBER" && node scripts/native.ts path engine android-arm64)
   shell=$(cd "$EMBER" && node scripts/native.ts path shell android-arm64)
@@ -104,6 +101,10 @@ core_parts() {
   # fbjni's AAR carries an older copy of)
   aar_lib com.facebook.react/hermes-android 0.81.4 hermes-android-0.81.4-release.aar libhermes.so
   aar_lib com.facebook.fbjni/fbjni 0.7.0 fbjni-0.7.0.aar libfbjni.so
+  echo "core parts: $(cd $jni && for f in *.so; do printf '%s %s, ' $f $(size $f); done)"
+}
+
+core_hbc() {
   if [ -n "${CORE_SCRIPT:-}" ]; then
     # a script in the core's place (listen-test: core/listen-test.js)
     EMBER=$EMBER "$D/core.sh" hermes-script "$CORE_SCRIPT" || { echo "android.sh: $CORE_SCRIPT did not compile" >&2; exit 1; }
@@ -112,42 +113,67 @@ core_parts() {
       || { echo "android.sh: no core for the app (scripts/core.sh hermes failed)" >&2; exit 1; }  # with media, as on macOS
   fi
   cp -p out/core/core.hbc $apk/assets/
-  echo "core parts: $(cd $jni && for f in *.so; do printf '%s %s, ' $f $(size $f); done)core.hbc $(size $apk/assets/core.hbc)"
+  echo "core.hbc $(size $apk/assets/core.hbc)"
 }
+
+now() { python3 -c 'import time;print(time.time())'; }
+secs() { python3 -c "print(f'{$2-$1:.1f}')"; }
 
 case "${1:-build}" in
   build)
-    T0=$(python3 -c 'import time;print(time.time())')
+    # The C that moonc generates, without moon's compile of it for this machine (scripts/mbc.py gen: 2 s where moon's
+    # own build took a minute), compiled split into units, all at once, with the runtime, the host and the core's C
+    # (scripts/mbc.py compile: an object whose inputs did not change is kept); the core's parts alongside; then Gradle
+    # (its daemon and build cache: android/gradle.properties). MBC_SPLIT=0 compiles the C whole, as one unit.
+    T0=$(now)
     sync
-    core_parts
+    core_dirs
+    LIBS= HBC=
+    if has_core; then
+      core_libs > $OUT/core-libs.log 2>&1 &
+      LIBS=$!
+      core_hbc > $OUT/core-hbc.log 2>&1 &
+      HBC=$!
+    fi
     # Gradle keeps what it merged from out/android/apk (the core's .so files, core.hbc) in its intermediates, and a
     # build of an app without the core after one with it would still pack them: built anew when that changes.
     kind=$(has_core && echo core || echo plain)
     if [ "$(cat $OUT/apk-kind 2>/dev/null)" != "$kind" ]; then rm -rf android/app/build; fi
     echo $kind > $OUT/apk-kind
-    rm -f $M/_build/native/release/build/$PKG/$PKG.c  # never an old one's
-    (cd $M && moon build --target native --release src/$PKG 2>&1) | python3 "$D/errs.py" | grep -v '^errors: 0' || true
+    GEN=$(python3 "$D/mbc.py" gen --dir $M src/$PKG 2>$OUT/moon.log) \
+      || { python3 "$D/errs.py" < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
+    python3 "$D/errs.py" < $OUT/moon.log | grep -v '^errors: 0' || true
+    T1=$(now)
     mkdir -p $OUT/obj android/app/src/main/jniLibs/arm64-v8a
-    rm -f $OUT/obj/*.o
-    $CC $CFLAGS -Dmain=mbui_main -c $M/_build/native/release/build/$PKG/$PKG.c -o $OUT/obj/$PKG.o
-    for f in runtime env utf sync_io backtrace; do
-      $CC $CFLAGS -c $MOON_HOME/lib/runtime/$f.c -o $OUT/obj/rt_$f.o 2>$OUT/rt_$f.err \
-        || { echo "skip runtime/$f.c: $(grep error $OUT/rt_$f.err | head -1)"; rm -f $OUT/obj/rt_$f.o; }
-    done
-    $CC $CFLAGS -c src/host/android_host.c -o $OUT/obj/android_host.o
+    R=$MOON_HOME/lib/runtime
+    EXTRA="--extra=src/host/android_host.c"
     CORE_LIBS=
     if has_core; then
       # mbui/core's queue and the app's engine (src/<app>/android_engine.c, which includes src/sfcore/android_engine.c)
-      $CC $CFLAGS -c src/core/core_native.c -o $OUT/obj/core_native.o
-      $CC $CFLAGS -c src/$PKG/android_engine.c -o $OUT/obj/android_engine.o
+      EXTRA="$EXTRA --extra=src/core/core_native.c --extra=src/$PKG/android_engine.c"
       CORE_LIBS="-L$OUT/apk/jniLibs/arm64-v8a -lstillfail_hermes"
     fi
-    $CC -shared -o android/app/src/main/jniLibs/arm64-v8a/libmbui.so $OUT/obj/*.o \
+    python3 "$D/mbc.py" compile "--cc=$CC" "--cflags=$CFLAGS" --gen-flags=-Dmain=mbui_main --obj=$OUT/obj \
+      --link-flags=$OUT/link-flags.txt \
+      --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
+      $EXTRA "$GEN" > $OUT/objs.txt
+    T2=$(now)
+    if [ -n "$LIBS" ]; then wait $LIBS || { cat $OUT/core-libs.log; exit 1; }; cat $OUT/core-libs.log; fi
+    T3=$(now)
+    # (ThinLTO's backends run here: scripts/mbc.py's link flags), unless the same command made libmbui.so of the same
+    # objects and the core's .so files already (scripts/mbc.py link: by content)
+    SO=android/app/src/main/jniLibs/arm64-v8a/libmbui.so
+    python3 "$D/mbc.py" link --out=$SO --dep=$jni -- $CC -shared -o $SO $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) \
       $CORE_LIBS -lGLESv3 -llog -lm -Wl,--no-undefined
-    T1=$(python3 -c 'import time;print(time.time())')
-    echo "libmbui.so $(size android/app/src/main/jniLibs/arm64-v8a/libmbui.so) bytes in $(python3 -c "print(round($T1-$T0,2))") s"
-    (cd android && ./gradlew --no-daemon -q assembleDebug 2>&1 | grep -v '^$' | tail -20)
+    T4=$(now)
+    echo "libmbui.so $(size android/app/src/main/jniLibs/arm64-v8a/libmbui.so) bytes in $(secs $T0 $T4) s"
+    if [ -n "$HBC" ]; then wait $HBC || { cat $OUT/core-hbc.log; exit 1; }; cat $OUT/core-hbc.log; fi
+    T5=$(now)
+    (cd android && ./gradlew -q assembleDebug 2>&1 | grep -v '^$' | tail -20)
+    T6=$(now)
     ls -la android/app/build/outputs/apk/debug/*.apk
+    echo "android.sh: APP=$PKG APK in $(secs $T0 $T6) s: moonc $(secs $T0 $T1) s, cc $(secs $T1 $T2) s," \
+      "core's .so wait $(secs $T2 $T3) s, link $(secs $T3 $T4) s, core.hbc wait $(secs $T4 $T5) s, gradle $(secs $T5 $T6) s"
     ;;
   emu)
     if ! $SDK/emulator/emulator -list-avds | grep -qx $AVD; then
