@@ -16,7 +16,9 @@
 # `decide` and `web-decide` are slice 8's (src/sfapp/decide_fixture.mbt's
 # modes): the 奏 page (an options card, a text card, none left), an execution history (its steps, its details), the
 # chat's sheets (its own, an agent's card, its jobs, a job) and Home with the jobs left up: mac-decide-<mode>,
-# web-decide-<mode>.
+# web-decide-<mode>. `settings` and `web-settings` are the settings' pages over made-up ones
+# (MBUI_FIXTURE=settings-<page>, src/sfapp/settings/fixture.mbt; home-dark the settings in the dark theme):
+# mac-settings-<page>, web-settings-<page>.
 # `glass` and `web-glass` are the demo's glass screen (MBUI_SCREEN=glass:
 # frosted and liquid glass over bands of colour), light and dark (mac-glass, mac-glass-dark); `home` and `chat` also
 # give their dark looks (mac-home-dark, mac-chat-dark), `chat` a picture under the bar's glass (mac-chat-glass) and
@@ -30,9 +32,10 @@ D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat preview web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview ios android}
+PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat preview settings web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-settings ios android}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
+SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security vault stations station profiles profile connects memory memory-doc usage archive}
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
 fi
@@ -172,6 +175,22 @@ for p in $PLATFORMS; do
       for m in image pdf video html code md csv none; do
         QUERY=MBUI_FIXTURE=chat-preview-$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-preview-$m.png
         names="$names web-preview-$m"
+      done ;;
+    settings)
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-settings; mkdir -p out/shot-settings
+      names=
+      for m in $SETTINGS_PAGES; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=settings-$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-settings ./_build/native/release/build/sffix/sffix.exe >/dev/null
+        cp out/shot-settings/$m.png out/shots/mac-settings-$m.png
+        names="$names mac-settings-$m"
+      done ;;
+    web-settings)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in $SETTINGS_PAGES; do
+        QUERY=MBUI_FIXTURE=settings-$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-settings-$m.png
+        names="$names web-settings-$m"
       done ;;
     web-composer)
       APP=sffix bash scripts/web.sh build >/dev/null

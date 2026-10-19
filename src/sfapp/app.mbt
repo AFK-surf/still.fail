@@ -30,6 +30,8 @@ pub(all) enum Page {
   /// a place of the bottom bar's other than the chats, 奏 and 文件 (stations, profiles, connects, usage, archive):
   /// its page at the stack's root
   Place(String)
+  /// a page under settings (src/sfapp/settings: me, appearance, stations, the workspace…)
+  Setting(@settings.Route)
 } derive(Eq)
 
 ///|
@@ -74,7 +76,35 @@ let left_pages : Array[Page] = []
 
 ///|
 fn new_nav() -> @ui.Nav[Page] {
-  @ui.Nav::new(Home, on_leave=fn(p) { left_pages.push(p) })
+  @ui.Nav::new(Home, on_leave=fn(p) {
+    left_pages.push(p)
+    match p {
+      Setting(r) => @settings.left(r)
+      Archived => @settings.left(@settings.Route::Archive)
+      Settings => @settings.left(@settings.Route::Home)
+      // a place of the bar's whose page is the settings' (bar.mbt place_page)
+      Place(name) =>
+        match @settings.route_of(name) {
+          Some(r) => @settings.left(r)
+          None => ()
+        }
+      _ => ()
+    }
+  })
+}
+
+///|
+/// A page of the settings opened over Home from the start (screenshots of them, a scripted run): by its name
+/// (@settings.route_of).
+pub fn open_setting(name : String) -> Unit {
+  match @settings.route_of(name) {
+    Some(@settings.Route::Home) => app.nav.push(Settings)
+    Some(r) => {
+      app.nav.push(Settings)
+      app.nav.push(Setting(r))
+    }
+    None => ()
+  }
 }
 
 ///|
@@ -141,6 +171,7 @@ fn reset() -> Unit {
   dv_reset()
   decide_reset()
   close_now()
+  @settings.reset()
 }
 
 ///|
@@ -160,6 +191,7 @@ fn home() -> Unit {
 ///|
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
+  appearance(src)
   let t = @sf.begin(c)
   track_press(c)
   for p in left_pages {
@@ -241,6 +273,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       })
       // a chat's sheets (slice 8's: sheets.mbt, framed in decide.mbt)
       sheets(c, src, w)
+      @settings.overlay(c, settings_core(src, w))
       toast(c)
     }
     None =>
@@ -302,13 +335,14 @@ fn page_view(
           new_chat_leaving(c, src, w, r)
         }
         NewChat => new_chat_page(c, src, w)
-        Place(p) => place_page(c, p)
+        Place(p) => place_page(c, src, w, p)
         // 文件: a place of the bar at the stack's root, else a page pushed
         Files => files_page(c, src, w, place=app.nav.depth() == 1)
         Drive(at) => drive_page(c, src, w, at)
         DriveRead(at) => reader_page(c, src, at)
-        Archived => placeholder_page(c, tr("android-chat.home.filter.archived"))
-        Settings => placeholder_page(c, tr("android-chat.home.settings"))
+        Archived => setting_page(c, src, w, @settings.Route::Archive)
+        Settings => setting_page(c, src, w, @settings.Route::Home)
+        Setting(r) => setting_page(c, src, w, r)
         // 奏: a place of the bar at the stack's root, else a page pushed
         Decisions => decisions_page(c, src, w)
         History(r, key) => history_page(c, src, r, key)
@@ -357,6 +391,85 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
   }
   app.nav.replace(page)
 }
+
+///|
+/// A page of the settings (src/sfapp/settings), over the workspace in view.
+fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -> Unit {
+  let core = settings_core(src, w)
+  @settings.page(c, core, @settings.here_of(core, w.id, w.name), r)
+}
+
+///|
+/// What the settings' pages read and call, and how they move: the core as the app has it (Source), the app's stack.
+fn settings_core(src : Source, w : Workspace) -> @settings.Core {
+  {
+    topic: fn(name, params) {
+      let t = (src.topic)(name, params)
+      { value: t.value, error: t.error, version: t.version }
+    },
+    call: fn(name, params, done) { (src.call)(name, params, done) },
+    push: fn(r) {
+      match r {
+        @settings.Route::Home => app.nav.push(Settings)
+        _ => app.nav.push(Setting(r))
+      }
+    },
+    pop: fn() { app.nav.pop() |> ignore },
+    home: fn() { home() },
+    open_chat: fn(station, session, title) {
+      // its station's name, as the chats' rows have it
+      let stations = (src.topic)("stations", { "scope": Json::string(w.id) })
+      let mut name = ""
+      match stations.value {
+        Some(Array(a)) =>
+          for x in a {
+            if text(Some(x), "station") == station {
+              name = text(Some(x), "name")
+            }
+          }
+        _ => ()
+      }
+      app.nav.push(Chat({ station, session, title, station_name: name }))
+    },
+    open_drive: fn(station) { app.nav.push(Drive({ station, root: None, path: "" })) },
+    sign_in: fn() { (src.sign_in)() },
+    say: fn(words) {
+      app.toast = words
+      app.toast_at = -1.0
+    },
+    picture: fn(url) { (src.picture)(url) },
+    under: fn() {
+      let pages = app.nav.pages()
+      if pages.length() < 2 {
+        return ""
+      }
+      match pages[pages.length() - 2] {
+        Home => "chats"
+        Settings | Setting(@settings.Route::Home) => "settings"
+        _ => ""
+      }
+    },
+  }
+}
+
+///|
+/// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@host.system_dark)
+/// when it follows it; the host told when it changes (its bars follow).
+fn appearance(src : Source) -> Unit {
+  let prefs = (src.topic)("prefs", {}).value
+  let dark = @settings.dark(prefs, @host.system_dark())
+  @sf.set_dark(Some(dark))
+  // (the host told once the prefs are read: not the system's first, then the one chosen)
+  if prefs is Some(_) && told_dark.val != Some(dark) {
+    told_dark.val = Some(dark)
+    @host.set_dark(dark)
+    // (said on the log for scripted runs: e2e/flows checks the theme was taken)
+    @host.log(if dark { "theme: dark" } else { "theme: light" })
+  }
+}
+
+///|
+let told_dark : Ref[Bool?] = Ref(None)
 
 ///|
 /// What a write said (Sheet.kt ToastHost): over the foot, in ink, 2.6s.

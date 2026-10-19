@@ -10,6 +10,9 @@
 priv struct Fixture {
   mode : String
   mut workspace : String
+  /// the theme chosen (the prefs' `appearance`): light unless the mode ends in -dark or MBUI_DARK=1, so that
+  /// screenshots do not follow the machine's own
+  mut appearance : String
   archived : Map[String, Bool]
   filters : Map[String, String]
   mut version : Int
@@ -257,7 +260,11 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
       for k, v in f.filters {
         lf[k] = Json::string(v)
       }
-      Some({ "workspace": Json::string(f.workspace), "listFilter": Json::object(lf) })
+      Some({
+        "workspace": Json::string(f.workspace),
+        "listFilter": Json::object(lf),
+        "appearance": Json::string(f.appearance),
+      })
     }
     "chats" => fixture_chats(f, params)
     "workspaceMarks" =>
@@ -273,10 +280,20 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
     _ =>
       match decide_fixture_topic(f, name, params) {
         Some(v) => v
-        None => fixture_chat_topic(f, name, params)
+        // the settings' pages (src/sfapp/settings/fixture.mbt): theirs first on their own screenshots, else the chats'
+        None if f.mode.has_prefix("settings") =>
+          match @settings.fixture_topic(f.mode, name, params) {
+            Some(v) => Some(v)
+            None => fixture_chat_topic(f, name, params)
+          }
+        None =>
+          match fixture_chat_topic(f, name, params) {
+            Some(v) => Some(v)
+            None => @settings.fixture_topic(f.mode, name, params)
+          }
       }
   }
-  { value, error: None, version: f.version }
+  { value, error: None, version: f.version + @settings.fixture_version() }
 }
 
 ///|
@@ -286,6 +303,11 @@ pub fn fixture(mode : String) -> Source {
   let f : Fixture = {
     mode: if mode == "" { "home" } else { mode },
     workspace: "ws1",
+    appearance: if mode.has_suffix("-dark") || @host.env("MBUI_DARK") == "1" {
+      "dark"
+    } else {
+      "light"
+    },
     archived: {},
     filters: {},
     version: 1,
@@ -294,6 +316,13 @@ pub fn fixture(mode : String) -> Source {
   {
     topic: fn(name, params) { fixture_topic(f, name, params) },
     call: fn(name, params, done) {
+      match @settings.fixture_call(name, params) {
+        Some(r) => {
+          done(r)
+          return
+        }
+        None => ()
+      }
       match name {
         "chat.archive" => {
           let session = text(Some(params), "session")
@@ -309,6 +338,10 @@ pub fn fixture(mode : String) -> Source {
         "prefs.set" => {
           match field(Some(params), "workspace") {
             Some(String(w)) => f.workspace = w
+            _ => ()
+          }
+          match field(Some(params), "appearance") {
+            Some(String(a)) => f.appearance = a
             _ => ()
           }
           match field(Some(params), "listFilter") {

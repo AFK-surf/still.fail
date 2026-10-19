@@ -40,6 +40,30 @@ final class Host {
         if (view != null) view.toGL(() -> Native.appState(s));
     }
 
+    /** The system in night mode (MainActivity: its configuration's uiMode, kept as it changes): @host.system_dark. */
+    static volatile boolean systemDark;
+
+    static boolean systemDark() {
+        return systemDark;
+    }
+
+    /** The app drawn dark or light (@host.set_dark): the system bars' icons light over it or dark, as the Android app's. */
+    static void setDark(boolean dark) {
+        main.post(() -> {
+            if (activity == null) return;
+            android.view.WindowInsetsController c = activity.getWindow().getInsetsController();
+            if (c == null) return;
+            int light = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                    | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+            c.setSystemBarsAppearance(dark ? 0 : light, light);
+            // what shows under the bars (the app's view is inside them): the dark page's ground, else as it was
+            android.view.ViewGroup content = activity.findViewById(android.R.id.content);
+            if (content != null && content.getChildCount() > 0) {
+                content.getChildAt(0).setBackgroundColor(dark ? 0xFF1B1C1F : android.graphics.Color.rgb(245, 245, 247));
+            }
+        });
+    }
+
     static void requestFrame() {
         if (view != null) view.wantFrame();
     }

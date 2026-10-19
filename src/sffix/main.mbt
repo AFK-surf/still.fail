@@ -3,7 +3,8 @@
 // the web) picks what it shows: home (the default), signin, loading, empty; chat, chat-loading, chat-long (the first
 // row's chat open over Home); files, drive…, reader… (the drive's pages, src/sfapp/drive_fixture.mbt); newchat,
 // newchat-station, newchat-model (a new chat, its sheets), home-bars (the bottom bar's panel of the other bars),
-// home-sheet (the workspaces' sheet), place (the 文件 place).
+// home-sheet (the workspaces' sheet), place (the 文件 place); settings, settings-<page> (a page of the settings over
+// it: src/sfapp/settings/fixture.mbt), -dark after either for the dark theme.
 
 ///|
 fn main {
@@ -27,5 +28,8 @@ fn main {
   @sfapp.open_fixture(mode)
   // a new chat (with its sheets), the bar's panel, a place: newchat_fixture.mbt
   @sfapp.open_mode(mode)
+  if mode.has_prefix("settings") {
+    @sfapp.open_setting(@settings.fixture_page(mode))
+  }
   @ui.run("still.fail", fn(c) { @sfapp.view(c, src) })
 }

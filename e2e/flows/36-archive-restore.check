@@ -1,0 +1,3 @@
+session=$(grep -m1 "^ARCHIVED " $OUT/$name.log | awk '{print $2}')
+check "alice's other device archived it" '[ -n "$session" ]'
+check "restored: the station has it out of the archive (archived_at none)" '[ -n "$(sql "select id from threads where home = '"'"'$session'"'"'")" ] && [ -z "$(sql "select archived_at from threads where home = '"'"'$session'"'"'")" ]'

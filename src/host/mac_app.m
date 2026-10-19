@@ -499,6 +499,10 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
       [[NSNotificationCenter defaultCenter] addObserverForName:name object:nil queue:nil
                                                     usingBlock:^(NSNotification *n) { tell_state(); }];
     }
+    // the system's appearance switched (light, dark, auto at dusk): a frame, which asks it again (mb_host_system_dark)
+    [[NSDistributedNotificationCenter defaultCenter] addObserverForName:@"AppleInterfaceThemeChangedNotification"
+                                                                 object:nil queue:[NSOperationQueue mainQueue]
+                                                             usingBlock:^(NSNotification *n) { [the_view requestFrame]; }];
     dispatch_async(dispatch_get_main_queue(), ^{ tell_state(); });
     [NSApp run];
   }
@@ -570,6 +574,20 @@ static void tell_state(void) {
   int front = shown && NSApp.isActive && w.isKeyWindow;
   state_cb((shown ? 1 : 0) | (front ? 2 : 0));
   [the_view requestFrame];
+}
+
+// Whether the system's appearance is dark (@host.system_dark): the app's own (NSApp.appearance is never set, so this is
+// the system's even while the window is made to look otherwise below).
+int32_t mb_host_system_dark(void) {
+  NSAppearanceName n = [NSApp.effectiveAppearance
+      bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
+  return [n isEqualToString:NSAppearanceNameDarkAqua] ? 1 : 0;
+}
+
+// The app drawn dark or light (@host.set_dark): the window's title bar the same.
+void mb_host_set_dark(int32_t dark) {
+  NSWindow *w = the_view.window;
+  if (w) w.appearance = [NSAppearance appearanceNamed:dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua];
 }
 
 // A scripted run's input (src/ui/drive.mbt), sent as the system sends it: the input method's calls on the view

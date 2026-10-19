@@ -508,6 +508,63 @@ installing an APK, an SVG drawn by a page when it is not a bitmap, the progress 
 big file read to the disk, a web view's own scrolling under the canvas on macOS while something is painted over it,
 the frosted glass over a picture or a document (where nothing native is under it: `@sf` glass could take it).
 
+Slices 9 and 13, settings and the pages under it (branch settings, 2026-10-19): Home's gear pushes settings
+(src/sfapp/settings, a package of its own that the app hands what it reads and calls and how it moves: `Core`), and
+from it the pages the Android app has there (app/screens/SettingsHome.kt; settings/Me.kt, Archive.kt, Usage.kt,
+Stations.kt, Profiles.kt, Connects.kt, Vault.kt, Security.kt, Settings.kt's Workspace, Memory.kt), with their parts
+(Parts.kt NavBar, LargeTitle, SectionHeader, Card, ListCard, ListRow, Seg, Avatar; SettingParts.kt GoRow; PageParts.kt
+Switch, PresenceDot; Controls.kt Button, PickRow, DoingMark; Waiting.kt's cards and rows; Sheet.kt's sheet host and
+the menu from a button):
+
+- Settings: the account's card, the workspace's rows each saying how things stand (its people and who waits, security
+  mode, the vault, stations online, connects failing, profiles short of allowance), this device's (外观, notifications,
+  this build).
+- 外观: the theme (跟随系统 / 浅色 / 深色), motion, language, when a done chat is offered to archive, each the core's
+  prefs (`prefs.set`), shown at once. The theme is applied every frame: the prefs' `appearance`, or the system's when
+  it follows it, which the hosts now tell (`@host.system_dark`: macOS's effective appearance, asked again when the
+  system switches; Android's night mode, MainActivity's configuration; iOS's interface style; the browser's
+  prefers-color-scheme; Windows says light), and the host follows the app's (`@host.set_dark`: Android's status and
+  navigation bars' icons and the ground under them, the Mac window's title bar).
+- 账号: the accounts on the device (signing each out: `auth.signOut`, adding another), where the account is signed in
+  (`loginSessions`; one not this signed out: `loginSession.revoke`).
+- Workspace: its name (renamed by a tap: `workspace.rename`), its people, those added who have not signed in
+  (`workspace.removeAdded`), the invitations out (`workspace.revokeInvitation`), a person's sheet (their role:
+  `workspace.setRole`, moving them out), its relays (`workspace.setRelays`), leaving or deleting it.
+- 安全: off (what it is, who may turn it on) or on (how many sign, the devices waiting, each a sheet with its code:
+  `lock.confirm` / `lock.deny`; the people and their devices, a web page's renewed: `lock.renew`; the stations, one taken
+  in: `lock.joinStation`; turning it off once the workspace's name is typed: `lock.disable`); 开启 (`lockDraft`,
+  `lock.toggle`, `lock.open`).
+- 密钥 (the vault): what has to come first, then the requests waiting on the viewer (允许一次 / 一小时内 / 拒绝:
+  `vault.approve`, `vault.deny`), whether the library is locked, the profiles' accounts, each vault's items by kind,
+  the devices holding the keys.
+- Station: a card each (the buddy's face, its mark and name, what of its load runs low, its network; offline asleep);
+  a station's page (its machine's dials, network and details, or that it is offline with 重试: `client.wake`; what runs
+  on it, its drive's folders opening the drive's page), its "…" for owners and admins: 重命名 (`workspace.renameStation`), taking it out (`workspace.removeStation`).
+- Profile: the workspace's list by kind (the core's `profiles`), a station's; a profile's page: its check, its
+  allowance (read again: `profile.quota`), its models ticked on and off (`profile.put`), read again (`profile.check`),
+  who uses it, its key masked, its variables.
+- 连接: every station's (all or the viewer's, the filter's menu), the Slack apps waiting; a connect's page: who it is,
+  what is wrong with its link, how it runs, its recent sessions (each opening its chat).
+- 记忆: every station's, a station's (`memory.get`: the global memory by its parts, the projects', the skills, the
+  built-in ones folded), a page each (Markdown, its files as pills).
+- 用量: the totals, each day's cost as a bar split by person (tapped, its numbers), the lists by chat, person, model;
+  7 or 30 days in the bar.
+- 已归档 (from Home's filter menu): by the day archived, the words looked for, more as it is scrolled; restored
+  (`chat.archive` with archived false) or deleted (`session.delete`, asked first); a row opens its chat.
+- The bottom bar's places (slices 6 and 7) Station, Profile, 连接, 用量 and 已归档 are these pages at the stack's root,
+  under the place's top bar (bar.mbt `place_page`, PlacePage.kt): without their own compact bar, their actions (用量's
+  7 or 30 days, 连接's filter) in a row over what they show.
+- Every write goes through the core's own call, as the Android app's (`act`: said in a toast how it ended; spinners and
+  red marks from the core's `doing`). `APP=sffix MBUI_FIXTURE=settings-<page>` shows a page over made-up settings
+  (src/sfapp/settings/fixture.mbt): `scripts/shots.sh settings web-settings`.
+
+Not yet, against the current app (each drawn as there and not opened, or left out): adding a station, a profile or a
+connect (and signing a subscription in), a station's mark picker, its screens, adb lending, drive, updates and macOS
+grants; a profile's "…", its sharing and workspaces; a connect's sheets and Slack app page; a vault item's page, its
+editor, setting the vault up and its recovery words; the automatic decisions, the bottom bars' settings, kept files and
+the changelog (their rows only); notifications switched (slice 10); the prices page; adding people to the workspace and
+its mark; the language changing the app's own words (they are the Chinese catalog's); the sheets' drag.
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
@@ -611,7 +668,18 @@ while the card moved the list):
 | 30 new-chat | 令 in the bar's notch: the new chat rises; the first message typed and sent; the page becomes its chat; the agent's answer comes there; back on Home | the station's entry: the words, once, alice's, in a thread of their own; the agent's answer in that thread; alice's other device lists the chat |
 | 31 places | 文件 tapped on the bar (the drive's page in place); the bar drawn up into the other bar's panel and let go on 奏 (that bar, 奏's page); 用量; the panel again, back on the chats | the bar chosen kept as the workspace's in the core's store on the device (`prefs.set {barsBy}`) |
 | 32 sheet-drag | the workspaces' sheet drawn up to 94% and dragged closed; a new chat's station sheet dragged a little (back) and past 80 (closed), opened again and its station tapped | the sheet's settling as the app logs it; the core took the pick (`newChat.pick` answered) |
+| 33 settings-appearance | Home's gear → settings → 外观 → 深色: the app turns dark at once | the host told (the log's theme: dark); the core's store on the device keeps appearance dark |
+| 34 appearance-kept | the app started again: dark from its first frame; 跟随系统 chosen again | the first theme told is dark; the store keeps appearance system |
+| 35 station-rename | settings → Station → the test station → "…" → 重命名: the new name shown, then the old one back | still.fail cloud's workspace (read by alice's other device) has the new name, then the old |
+| 36 archive-restore | the other device archives a chat (chat.archive): it leaves Home; the filter → 已归档 shows it; 还原 from its row | the other device saw it in the archive; restored, the station's thread has no archived_at |
+| 37 workspace-members | settings → Workspace: its people, alice among them | the cloud's workspace has alice as a member |
 | 38 preview | the other device makes a chat with a picture, a PDF, a video and a page (`peer createfiles`: put up in parts, then the chat made with them, so the test chat's end stays as the other flows know it); opened from Home, each file opened in the preview, shot, closed | the station's entry has the four files; the app's log: the picture and the page read through the core, the PDF's 2 pages drawn, the player's reads through the core (`station.file.part`) and its first frame, the page loaded in the web view; each shot shows something in its place (e2e/pngstat.py) |
+
+Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
+the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once
+alice's other device found its chat by all its words: it had taken an earlier run's of the same title). 36
+archive-restore is not 25 archive: 25 archives a chat from the chat itself (归档此对话), 36 finds one archived elsewhere
+on the 已归档 page and restores it.
 
 Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
 never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however

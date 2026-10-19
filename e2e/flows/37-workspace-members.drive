@@ -1,0 +1,9 @@
+# Settings → Workspace: its name, its people (alice, 你), as still.fail cloud has them.
+timeout 60000
+until 端到端测试
+tap icon:settings
+until =Workspace
+tap =Workspace
+until alice@example.test
+until 成员
+shot 1-workspace

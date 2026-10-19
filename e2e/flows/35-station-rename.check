@@ -1,0 +1,2 @@
+check "still.fail cloud had the new name" 'grep -q "^STATION e2e-$TAG$" $OUT/$name.log'
+check "and has the old one back" '[ "$(peer station-name studio)" = "STATION studio" ]'

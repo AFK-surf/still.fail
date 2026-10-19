@@ -102,6 +102,10 @@ extern "C" fn ffi_drive(kind : Int, text : String) -> Int = "mb_host_drive"
 
 extern "C" fn ffi_set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit = "mb_host_set_app_state"
 
+extern "C" fn ffi_system_dark() -> Int = "mb_host_system_dark"
+
+extern "C" fn ffi_set_dark(dark : Int) -> Unit = "mb_host_set_dark"
+
 ///|
 pub fn run(
   title : String,
@@ -283,6 +287,21 @@ pub fn env(name : String) -> String {
 /// shown and in front.
 pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
   ffi_set_app_state(f)
+}
+
+///|
+/// Whether the system is set to dark (macOS's appearance, Android's night mode, iOS's interface style, the browser's
+/// prefers-color-scheme): what an app that follows the system shows. Asked each frame; a host asks for a frame when
+/// it changes. Hosts that cannot tell say light.
+pub fn system_dark() -> Bool {
+  ffi_system_dark() != 0
+}
+
+///|
+/// The app is drawn dark (or light) from now on: the host's own parts follow it (Android's status and navigation
+/// bars' icons, the Mac window's title bar). Said when it changes.
+pub fn set_dark(dark : Bool) -> Unit {
+  ffi_set_dark(if dark { 1 } else { 0 })
 }
 
 ///|

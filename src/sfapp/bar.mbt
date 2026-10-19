@@ -1124,11 +1124,21 @@ fn bar_gesture(
 
 ///|
 /// A place's top page other than the chats (PlacePage.kt, with the bar under it): Home's top bar over it (settings,
-/// the place's name), what it shows a later slice's.
-fn place_page(c : @ui.Ctx, place : String) -> Unit {
+/// the place's name), what it shows the settings' page of it (src/sfapp/settings).
+fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     place_top_bar(c, place)
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
+    // what it shows: the settings' page of the same place (src/sfapp/settings), under this bar in place of its own
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      match @settings.route_of(place) {
+        Some(r) => {
+          let core = settings_core(src, w)
+          @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
+        }
+        None => ()
+      }
+    })
+    |> ignore
   })
   |> ignore
 }

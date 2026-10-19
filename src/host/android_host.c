@@ -36,7 +36,7 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
-    m_save;
+    m_save, m_system_dark, m_set_dark;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -70,6 +70,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_exit = (*env)->GetStaticMethodID(env, host_cls, "exit", "(I)V");
   m_back_enabled = (*env)->GetStaticMethodID(env, host_cls, "backEnabled", "(Z)V");
   m_drive = (*env)->GetStaticMethodID(env, host_cls, "drive", "(ILjava/lang/String;)I");
+  m_system_dark = (*env)->GetStaticMethodID(env, host_cls, "systemDark", "()Z");
+  m_set_dark = (*env)->GetStaticMethodID(env, host_cls, "setDark", "(Z)V");
   m_metrics = (*env)->GetStaticMethodID(env, text_cls, "fontMetrics", "(DII[D)V");
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
@@ -754,6 +756,19 @@ void mb_host_request_frame(void) {
   want_frame = 1;
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_request_frame);
+}
+
+// Whether the system is in night mode (@host.system_dark), as MainActivity keeps it (Host.systemDark: the
+// configuration's uiMode, a frame asked for when it changes).
+int32_t mb_host_system_dark(void) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticBooleanMethod(env, host_cls, m_system_dark) ? 1 : 0;
+}
+
+// The app drawn dark or light (@host.set_dark): the status and navigation bars' icons light on it or dark (Host.setDark).
+void mb_host_set_dark(int32_t dark) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, host_cls, m_set_dark, (jboolean)(dark != 0));
 }
 
 void mb_host_wake_after(double ms) {

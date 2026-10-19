@@ -7,4 +7,5 @@ import {
   "mbui/sf",
   "mbui/gallery",
   "mbui/host",
+  "mbui/sfapp/settings",
 }

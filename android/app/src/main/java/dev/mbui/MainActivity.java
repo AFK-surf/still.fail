@@ -116,6 +116,7 @@ public class MainActivity extends Activity {
         }
         Host.activity = this;
         Host.view = view;
+        Host.systemDark = night(getResources().getConfiguration());
         if (Host.script != null) Script.start(view);
     }
 
@@ -194,6 +195,22 @@ public class MainActivity extends Activity {
     @SuppressWarnings("deprecation")
     protected void onActivityResult(int request, int result, Intent data) {
         if (!Picks.answered(request, result, data)) super.onActivityResult(request, result, data);
+    }
+
+    /** Whether a configuration is in night mode (the system's dark theme). */
+    private static boolean night(android.content.res.Configuration c) {
+        return (c.uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    /** The system's theme changed (configChanges has uiMode: the activity is not made again): the app asks it next frame. */
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration c) {
+        super.onConfigurationChanged(c);
+        boolean dark = night(c);
+        if (dark != Host.systemDark) {
+            Host.systemDark = dark;
+            Host.requestFrame();
+        }
     }
 
     @Override

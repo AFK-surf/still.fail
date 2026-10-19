@@ -465,6 +465,14 @@ void mb_host_back_enabled(int32_t on) { back_on = on; }
 // The app in front or not (@host.set_app_state): not told here yet (the app counts itself shown and in front).
 void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
 
+// Whether the system is set to dark (@host.system_dark): the screen's interface style.
+int32_t mb_host_system_dark(void) {
+  return UIScreen.mainScreen.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark ? 1 : 0;
+}
+
+// The app drawn dark (@host.set_dark): nothing of the host's own follows it here yet.
+void mb_host_set_dark(int32_t dark) { (void)dark; }
+
 // Scripted runs' input given to the host (src/ui/drive.mbt): none of its paths here yet (the app is sent it itself).
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   (void)kind;

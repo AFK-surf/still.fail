@@ -3,6 +3,7 @@ import {
   "mbui/ui",
   "mbui/sf",
   "mbui/sfapp",
+  "mbui/sfapp/settings",
 }
 
 options(

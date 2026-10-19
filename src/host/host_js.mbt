@@ -100,6 +100,9 @@ extern "js" fn js_reduce_transparency() -> Bool =
 extern "js" fn js_gpu_ms() -> Double =
   #|() => (globalThis.__mbhost && globalThis.__mbhost.gpuMs) ? globalThis.__mbhost.gpuMs() : -1
 
+extern "js" fn js_system_dark() -> Bool =
+  #|() => typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches
+
 extern "js" fn js_env(name : String) -> String =
   #|(n) => (typeof location !== "undefined" && new URLSearchParams(location.search).get(n)) || ""
 
@@ -265,6 +268,18 @@ pub fn env(name : String) -> String {
 /// and in front).
 pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
   ignore(f)
+}
+
+///|
+/// Whether the system is set to dark (see host_native.mbt): the browser's prefers-color-scheme.
+pub fn system_dark() -> Bool {
+  js_system_dark()
+}
+
+///|
+/// The app is drawn dark from now on (host_native.mbt): the page has nothing of its own to follow it.
+pub fn set_dark(dark : Bool) -> Unit {
+  ignore(dark)
 }
 
 ///|

@@ -1,0 +1,2 @@
+check "the app took 浅色 then 深色 (its host told so)" '[ "$(grep "^theme:" $OUT/$name.log | tail -2 | tr "\n" " ")" = "theme: light theme: dark " ]'
+check "the core keeps it on the device (its prefs: appearance dark)" 'grep -rqF "\"appearance\":\"dark\"" $CORE'

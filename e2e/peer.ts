@@ -13,6 +13,10 @@
 //   node e2e/peer.ts chats [WORDS]         the workspace's chats as Home lists them (JSON: title, session, last), once a
 //                                          row has WORDS
 //   node e2e/peer.ts newchat               the workspace's new-chat page as the core has it (the `newChat` topic)
+//   node e2e/peer.ts archive TITLE-WORDS   another chat made, then archived by hand (chat.archive): ARCHIVED <session>
+//   node e2e/peer.ts station-name [NAME]   the test station's name as still.fail cloud says it (the workspace topic):
+//                                          STATION <name>; with NAME, once it is that (or the time is up)
+//   node e2e/peer.ts members               the workspace's people as the cloud has them: MEMBER <email> <role>, a line each
 //
 // E2E_EMBER (the ember checkout), E2E_ORIGIN (the dev cloud), E2E_PEER_DATA (this core's own data directory).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -200,6 +204,29 @@ try {
   } else if (cmd === "newchat") {
     const v = await until({ topic: "newChat", scope: workspace }, (v) => v?.stations && v);
     console.log(JSON.stringify(v, null, 1));
+  } else if (cmd === "archive") {
+    const made = await make(workspace, station, rest.join(" "));
+    await call("chat.archive", { station, session: made.session, thread: made.thread, archived: true });
+    // in the archive as the core puts it together (the station has it)
+    await until({ topic: "archive", scope: workspace, limit: 60 }, (v) =>
+      (v?.days ?? []).some((d: J) => (d.items ?? []).some((it: J) => it.session === made.session)), 120_000);
+    console.log(`ARCHIVED ${made.session} ${made.thread} ${made.title}`);
+  } else if (cmd === "station-name") {
+    const id = station.split("/")[1];
+    const want = rest.join(" ");
+    let name = "";
+    try {
+      name = await until({ topic: "workspace", workspace }, (v) => {
+        const st = (v?.stations ?? []).find((s: J) => s.id === id);
+        return st && (!want || st.name === want) ? (st.name as string) : undefined;
+      }, want ? 60_000 : 20_000);
+    } catch (e) {
+      console.error(String(e));
+    }
+    console.log(`STATION ${name}`);
+  } else if (cmd === "members") {
+    const v = await until({ topic: "workspace", workspace }, (v) => (v?.members ?? []).length > 0 ? v : undefined);
+    for (const m of v.members) console.log(`MEMBER ${m.email} ${m.role}`);
   } else {
     throw new Error(`unknown command ${cmd}`);
   }
