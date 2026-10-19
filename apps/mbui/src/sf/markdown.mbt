@@ -872,7 +872,8 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
   for x in widths {
     total = total + x
   }
-  c.box(dir=Row, w=Fill(1.0), fn() {
+  // the row as wide as the message (what is measured: the room the table has), the table as wide as its columns
+  c.box(dir=Row, w=Fill(1.0), id~, fn() {
     c.box(
       w=Px(dmin(total + 2.0, dmax(avail + 2.0, 0.0))),
       radius=20.0,
@@ -881,7 +882,6 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
       bg=table_ground(),
       pad=1.0,
       clip=true,
-      id~,
       fn() {
         c.sideways(key, fn() {
           c.box(fn() {
