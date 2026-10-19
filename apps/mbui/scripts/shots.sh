@@ -131,7 +131,7 @@ shoot() {
       # the chat's cards as answered from it (src/sfapp/chat_fixture.mbt's modes): the card answered (你 选择了「…」) and
       # 保留 failed a moment ago (its red mark); an option under way (its spinner); an answer with a table and
       # highlighted code (md); a word picked, its handles and bar (pick); a link held, its menu (link-menu)
-      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      build_mac sffix
       rm -rf out/shot-cards; mkdir -p out/shot-cards
       names=
       for m in cards answering md pick link-menu; do
@@ -301,10 +301,10 @@ shoot() {
         names="$names web-composer-$m"
       done ;;
     web-cards)
-      APP=sffix bash scripts/web.sh build >/dev/null
+      WAPP=sffix
       names=
       for m in cards answering md pick link-menu; do
-        QUERY=MBUI_FIXTURE=chat-$m NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/web-shot.mjs" out/shots/web-chat-$m.png
+        web_shot "MBUI_FIXTURE=chat-$m" out/shots/web-chat-$m.png
         names="$names web-chat-$m"
       done ;;
     notify)
