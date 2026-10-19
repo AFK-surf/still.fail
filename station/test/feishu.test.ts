@@ -181,9 +181,9 @@ test("surface: what was said in a conversation's chat while the station was away
           items:
             s.query.container_id === "oc_g" && s.query.start_time === "1000"
               ? [
-                  { message_id: "om_old", create_time: "1000000", msg_type: "text", body: { content: JSON.stringify({ text: "已经听过" }) }, sender: { id: "ou_ada", sender_type: "user" } },
-                  { message_id: "om_away", create_time: "1000500", msg_type: "text", body: { content: JSON.stringify({ text: "@_user_1 不在时说的" }) }, sender: { id: "ou_ada", sender_type: "user" }, mentions: [{ key: "@_user_1", id: "ou_bot", name: "Bot" }] },
-                  { message_id: "om_mine", create_time: "1000600", msg_type: "interactive", body: { content: "{}" }, sender: { id: "cli_test", sender_type: "app" } },
+                  { message_id: "om_old", chat_id: "oc_g", create_time: "1000000", msg_type: "text", body: { content: JSON.stringify({ text: "已经听过" }) }, sender: { id: "ou_ada", sender_type: "user" } },
+                  { message_id: "om_away", chat_id: "oc_g", create_time: "1000500", msg_type: "text", body: { content: JSON.stringify({ text: "@_user_1 不在时说的" }) }, sender: { id: "ou_ada", sender_type: "user" }, mentions: [{ key: "@_user_1", id: "ou_bot", name: "Bot" }] },
+                  { message_id: "om_mine", chat_id: "oc_g", create_time: "1000600", msg_type: "interactive", body: { content: "{}" }, sender: { id: "cli_test", sender_type: "app" } },
                 ]
               : [],
         },
