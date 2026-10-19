@@ -72,6 +72,7 @@ import fail.still.android.data.rememberTopic
 import fail.still.android.data.t
 import fail.still.android.ui.C
 import fail.still.android.ui.CodeFont
+import fail.still.android.ui.Field
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SMOOTH_SCALE
@@ -211,6 +212,7 @@ private fun ActiveCard(app: AppState, station: String, login: MachineLoginShown,
             main = { Pill(if (login.listening) t("web-main.logins.openAgain") else t("web-main.logins.signIn"), filled = true, busy = opening) { relay(app, context, station, login) } }
         }
         step == "open" && login.url != null -> {
+            if (login.paste == true) Said(login.statusText)
             domain?.let { Said(it) }
             main = { Pill(t("web-main.logins.signIn"), filled = true) { LoginPages.open(context, login.url) } }
         }
@@ -222,6 +224,8 @@ private fun ActiveCard(app: AppState, station: String, login: MachineLoginShown,
             app.act(t("web-main.logins.cancelWhat")) { app.api(station).cancelMachineLogin(login.id) }
         }
     }
+    // Its page first, then what the page gave: under the buttons, in the order they are done.
+    if (step == "open" && login.url != null && login.paste == true) PasteCode(app, station, login.id)
 }
 
 /**
@@ -257,6 +261,23 @@ private fun CardCode(app: AppState, code: String) {
             .semantics { contentDescription = label; role = Role.Button }
             .padding(horizontal = TEXT_IN, vertical = 4.dp).testTag("login-code"),
     )
+}
+
+/**
+ * What the login's page gave (gcloud --no-launch-browser's verification code), pasted here and sent to the command, as a
+ * profile's sign-in takes Claude's code (Profiles.kt LoginSteps).
+ */
+@Composable
+private fun PasteCode(app: AppState, station: String, id: String) {
+    var code by remember { mutableStateOf("") }
+    val sending = app.isDoing("machineLogin.answer", "station" to station, "id" to id)
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Field(code, { code = it }, t("web-main.logins.pasteCode"), mono = true, modifier = Modifier.weight(1f).testTag("login-paste"), max = 2_000)
+        Pill(t("web-main.logins.finish"), filled = true, busy = sending) {
+            val text = code.trim()
+            if (text.isNotEmpty()) app.act(t("web-main.logins.answerWhat")) { app.api(station).answerMachineLogin(id, text); code = "" }
+        }
+    }
 }
 
 /** One of the card's buttons, a pill: the step's own filled (the accent's tint), 取消 plain. */

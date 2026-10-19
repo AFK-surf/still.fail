@@ -106,7 +106,9 @@ export function loginShown(l: J, station: string, stationName: string, now: numb
   const active = l.endedAt === undefined || l.endedAt === null;
   const code = str(l.code);
   const name = str(l.name) ?? "";
-  const waiting = l.waiting === true && active;
+  // Waiting for what its page gives (a code): the person's to enter, from the card, not its agent's to answer.
+  const paste = l.paste === true && active && step === "open" && https(l.url) !== null;
+  const waiting = l.waiting === true && active && !paste;
   const statusText = !active
     ? state === "done"
       ? t("core-logic.machineLogin.done")
@@ -122,7 +124,7 @@ export function loginShown(l: J, station: string, stationName: string, now: numb
           : step === "loopback"
             ? listening ? t("core-logic.machineLogin.comingBack") : t("core-logic.machineLogin.openBrowser")
             : step === "open"
-              ? t("core-logic.machineLogin.finishInBrowser")
+              ? paste ? t("core-logic.machineLogin.paste") : t("core-logic.machineLogin.finishInBrowser")
               : t("core-logic.machineLogin.starting");
   const url = https(l.url);
   const command = Array.isArray(l.command) ? l.command.filter((w: unknown) => typeof w === "string").join(" ") : String(l.command ?? "");
@@ -142,6 +144,7 @@ export function loginShown(l: J, station: string, stationName: string, now: numb
     ...(https(l.codeUrl) !== null && active ? { codeUrl: l.codeUrl } : {}),
     ...(typeof get(l.callback, "port") === "number" ? { port: get(l.callback, "port") } : {}),
     waiting,
+    ...(paste ? { paste: true } : {}),
     listening: listening && active,
     ...(refused !== null && active && !listening && step === "loopback" ? { relayText: refused } : {}),
     statusText,

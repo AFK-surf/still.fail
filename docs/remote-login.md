@@ -37,13 +37,14 @@ agent 在 station 上跑 `gh`、`gcloud`、`npm publish`、`docker push` 时常�
 2. **它打印的东西**：网址、设备码、提示语（`Paste code`、`Press Enter`、`? What account`）。
 3. **它在不在等输入**：PTY 里有提示停住、没有网址也没有设备码，就是在等人敲字。
 
-于是有四种情况，一次登录里可以先后出现几种：
+于是有五种情况，一次登录里可以先后出现几种：
 
 | 情况 | 怎么认出来 | 客户端做什么 |
 |---|---|---|
 | 回环回调 | 网址里的 `redirect_uri`（或同类参数）是 `http://localhost:<端口>`、`http://127.0.0.1:<端口>`、`http://[::1]:<端口>` | 本机临时监听同一个端口，用默认浏览器打开网址，回调经 mesh 转给 station 上的命令 |
 | 设备码 | 输出里有验证网址和一串码（`ABCD-1234` 之类，见「网址和端口的解析」） | 卡片上显示网址和码：复制码、打开网址 |
 | 只要打开网址 | 有网址，但没有回环回调，也没有码（如 `npm login` 的网页登录：命令自己去轮询 npm） | 用默认浏览器打开网址，等命令自己结束 |
+| 贴回网页给的码 | 给了要打开的网址（没有回环、没有设备码），接着 PTY 停在回显的提示上（gcloud `--no-launch-browser` 的「enter the verification code」） | 卡片上「在浏览器里登录」，下面一个输入框：人把网页给的码贴进来，客户端交给 station（`POST /machine-logins/<id>/answer`），station 打进命令再按回车。agent 不答这个提示 |
 | 要输入 | PTY 停在提示上（Y/n、选项、主机、用户名） | 由 agent 通过 `login` 工具答；卡片只说「等 agent 回答命令的问题」。不回显的提示（密码）谁也不写，agent 换浏览器或设备码方式 |
 
 浏览器那一步做完以后，命令自己写凭据、自己退出。退出码 0 就算完成（不再跑状态命令、不读账号）。
@@ -203,14 +204,15 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 | `GET /machine-logins` | `{logins: [Login]}`：进行中的，然后结束了的（内存里的，再接历史记录里的） |
 | `GET /machine-logins/<id>` | 一次登录 |
 | `DELETE /machine-logins/<id>` | 取消（结束命令）；记下是谁取消的 |
+| `POST /machine-logins/<id>/answer` | `{text}`：网页给的码（只在 `paste` 时收，一行），打进命令再按回车；记下是谁贴的。只读成员不行 |
 
-客户端没有「起登录」「往终端写」的接口：起登录和答命令的问题都是 agent 的（`login` 工具在 station 里直接调）。转发回调时记下是谁的浏览器回来的（`doneBy`）。
+客户端没有「起登录」的接口，往终端写也只有贴回网页给的码这一条：起登录和答命令的问题都是 agent 的（`login` 工具在 station 里直接调）。转发回调时记下是谁的浏览器回来的（`doneBy`）。
 | `POST /machine-logins/<id>/callback` | `{method, path, headers, body?}`（body 是 base64）→ 命令的回应 `{status, headers, body}`（body 是 base64，整份；回调页很小，不做流式） |
 | `GET /events?login=<id>` | 这次登录的终端（事件 `login-screen`），见上面「要输入」 |
 
 ```
 Login   = {id, name, command, state, step?, url?, domain?, callback?: {host, port, path, state, post},
-           code?, codeUrl?, waiting, by, workspace?, chat?, chatTitle?, doneBy?, startedAt, expiresAt, endedAt?, error?, timedOut?}
+           code?, codeUrl?, waiting, paste?, by, workspace?, chat?, chatTitle?, doneBy?, startedAt, expiresAt, endedAt?, error?, timedOut?}
 state   = starting | browser | code | input | verifying | done | failed | cancelled
 step    = loopback | device | open | terminal          // 现在要人做的那一步
 ```

@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { settledLine } from "./Decisions.css.ts";
 import { pillInner, surfaceCorner, TEXT_IN, PANEL_PILL } from "@stillfail/ui/styles/align.ts";
+import { input } from "@stillfail/ui/styles/controls.css.ts";
 
 // A station's logins (MachineLogins.tsx, docs/remote-login.md): the login card (a chat's, 奏's, and the station page's
 // for one under way) and the station page's rows of those ended. Grey but for what is off, and the code.
@@ -76,3 +77,14 @@ export const cardCodeText = style({
  */
 export const cardActions = style({ display: "flex", flexWrap: "nowrap", alignItems: "center", gap: "4px", marginTop: "6px" });
 globalStyle(`${card} :focus-visible`, { outlineOffset: "-2px" });
+/**
+ * What the page gave (a code), pasted back: a field as wide as the card allows, its 完成 beside it, under the card's
+ * buttons (the page is opened first); in from the card's edge as the pills are.
+ */
+export const cardPaste = style({ display: "flex", alignItems: "center", gap: "4px", width: "100%", minWidth: "min(100%, 344px)", marginTop: "6px" });
+export const cardPasteInput = style([input, {
+  // As tall as the pills: the row's foot as far from the card's as its side.
+  flex: "1", minWidth: 0, minHeight: PANEL_PILL, height: PANEL_PILL, paddingBlock: "0", boxSizing: "border-box", fontSize: vars.textMeta,
+  // The code in mono; what to paste said in the card's own letters.
+  selectors: { "&:not(:placeholder-shown)": { fontFamily: vars.fontMono } },
+}]);

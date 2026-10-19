@@ -91,13 +91,13 @@ fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Bool
 
 /** A line to type in, on a soft frame; `lines` above one: a few lines, of any length (a pasted list). */
 @Composable
-fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier, lines: Int = 1) {
+fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier, lines: Int = 1, max: Int = if (mono) 32 else 80) {
     Box(
         modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null)
         BasicTextField(
-            value, { onChange(if (lines > 1) it else it.take(if (mono) 32 else 80)) }, singleLine = lines == 1, minLines = lines, cursorBrush = SolidColor(C.accent),
+            value, { onChange(if (lines > 1) it else it.take(max)) }, singleLine = lines == 1, minLines = lines, cursorBrush = SolidColor(C.accent),
             textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null), modifier = Modifier.fillMaxWidth(),
         )
     }

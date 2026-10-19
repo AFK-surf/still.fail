@@ -101,7 +101,7 @@ test("a login's terminal: its stream asks for it while it is shown, all of it fi
   core.close();
 });
 
-test("cancelling: the station's answer is in place at once; nothing else a client writes but the callback", async () => {
+test("cancelling: the station's answer is in place at once; nothing else a client writes but the callback and a page's code", async () => {
   const { host, core } = await started(listed());
   const asked: { method: string; path: string }[] = [];
   stationReplies(host, (req) => {
@@ -125,6 +125,29 @@ test("cancelling: the station's answer is in place at once; nothing else a clien
   await host.settle();
   const emitted = host.takeEmitted();
   assert.ok(answers(emitted, 3)?.error && answers(emitted, 4)?.error);
+  core.close();
+});
+
+test("a page that gives a code to paste back: the person's on the card (not waiting on its agent), sent to the station as its answer", async () => {
+  const paste = { id: "l3", name: "gcloud", command: ["gcloud", "auth", "login", "--no-launch-browser"], state: "browser", step: "open", url: "https://accounts.google.com/o/oauth2/auth?redirect_uri=https%3A%2F%2Fsdk.cloud.google.com%2Fauthcode.html&state=s4", domain: "accounts.google.com", waiting: true, paste: true, by: { email: "a@x.com", name: "张三" }, startedAt: 3, expiresAt: 4 };
+  const { host, core } = await started({ ...base(), "GET /machine-logins": { logins: [paste] } });
+  const asked: { method: string; path: string; body: string }[] = [];
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (!path.startsWith("/machine-logins/")) return undefined;
+    asked.push({ method: req.method, path, body: new TextDecoder().decode(req.body as Uint8Array) });
+    return { ...paste, state: "verifying", waiting: false, paste: undefined };
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "machineLogin", station: ST, id: "l3" });
+  await host.settle();
+  drain(host, values);
+  assert.deepEqual([v(values, 1).paste, v(values, 1).waiting, v(values, 1).step, v(values, 1).statusText], [true, false, "open", "在浏览器里登录，再把页面给出的码贴回来"]);
+  call(core, ui, 2, "machineLogin.answer", { station: ST, id: "l3", text: "4/0AXlq" });
+  await host.settle();
+  drain(host, values);
+  assert.deepEqual(asked.map((a) => [a.method, a.path, JSON.parse(a.body).text]), [["POST", "/machine-logins/l3/answer", "4/0AXlq"]]);
   core.close();
 });
 

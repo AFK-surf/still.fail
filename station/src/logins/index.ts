@@ -46,6 +46,8 @@ export type Login = {
   code?: string;
   codeUrl?: string;
   waiting: boolean;
+  /// It waits for what its page gives (a code to paste back): entered by the person from their card (`answer`).
+  paste?: boolean;
   by: Person;
   workspace?: string;
   chat?: string;
@@ -257,6 +259,19 @@ export class Logins {
     } else throw new Refused(400, "text or key");
   }
 
+  /// What its page gave (a code), entered by the person `by` from their card, and Enter: only while it waits for one.
+  answer(id: string, text: unknown, by?: Person): Login {
+    const e = this.#entry(id);
+    if (!e.run.active) throw new Refused(409, tr(this.#lang(), "station.machineLogin.ended"));
+    if (!e.run.paste) throw new Refused(409, "this login does not wait for a code from its page");
+    if (typeof text !== "string" || text.trim() === "") throw new Refused(400, "text");
+    if (text.length > 10_000 || /[\r\n]/.test(text.trim())) throw new Refused(400, "one line of text");
+    e.run.input({ text: text.trim() });
+    e.run.input({ key: "Enter" });
+    if (by) e.doneBy = by;
+    return this.#shown(e);
+  }
+
   /// Waits until the command has gone quiet (what it waits on is known), it ended, or `ms` passed.
   async settle(id: string, ms: number): Promise<Login | null> {
     const e = this.#entries.get(id);
@@ -301,6 +316,7 @@ export class Logins {
       state: r.state,
       ...(r.step ? { step: r.step } : {}),
       waiting: r.waiting,
+      ...(r.paste ? { paste: true } : {}),
       by: e.starter.by,
       ...(e.starter.workspace ? { workspace: e.starter.workspace } : {}),
       ...(e.starter.chat ? { chat: e.starter.chat } : {}),

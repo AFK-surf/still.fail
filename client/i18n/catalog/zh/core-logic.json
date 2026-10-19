@@ -482,6 +482,7 @@
   "core-logic.machineLogin.comingBack": "等浏览器回来",
   "core-logic.machineLogin.openBrowser": "等你打开浏览器",
   "core-logic.machineLogin.finishInBrowser": "在浏览器里完成登录",
+  "core-logic.machineLogin.paste": "在浏览器里登录，再把页面给出的码贴回来",
   "core-logic.machineLogin.starting": "正在启动登录命令",
   "core-logic.machineLogin.title": "在 {station} 上登录 {name}",
   "core-logic.machineLogin.cannotRelay": "此页面无法接收登录回调：在 still.fail 桌面或安卓 app 里打开此登录",

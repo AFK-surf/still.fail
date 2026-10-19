@@ -35,7 +35,7 @@ export const LoginsLive = Layer.effectDiscard(
         if (!login) return;
         events.machineLogins({ login }, { login: Logins.limited(login) }, readOnly, `login\0${login.id}`);
         // Asking something again after its person's browser step (az picking a subscription, say): its agent answers.
-        const asks = login.waiting && login.endedAt === undefined && logins.hadBrowserStep(login.id);
+        const asks = login.waiting && login.paste !== true && login.endedAt === undefined && logins.hadBrowserStep(login.id);
         if (asks && !asking.has(login.id) && login.chat) {
           try {
             hub.notify(login.chat, promptNotice(logins, login, loginLink(login.chat, login.id)));

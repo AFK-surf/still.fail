@@ -87,6 +87,7 @@ export interface OperationParams {
   "drive.stage": { root: string; path: string; zip?: boolean | null | undefined };
   "software.auto": { on?: boolean | null | undefined };
   "machineLogin.cancel": { id: string };
+  "machineLogin.answer": { id: string; text: string };
   "workspace.create": { name?: string | null | undefined; invite_code?: string | null | undefined };
   "workspace.rename": { workspace: string; name?: string | null | undefined; emoji?: string | null | undefined; icon?: string | null | undefined };
   "workspace.setRelays": { workspace: string; relays?: string[] | null | undefined };
@@ -209,6 +210,7 @@ export function bindStationOperations(call: Call) {
     driveStage: <T = unknown>(params: OperationParams["drive.stage"]) => call("drive.stage", params) as Promise<T>,
     softwareAuto: <T = unknown>(params: OperationParams["software.auto"] = {}) => call("software.auto", params) as Promise<T>,
     machineLoginCancel: <T = unknown>(params: OperationParams["machineLogin.cancel"]) => call("machineLogin.cancel", params) as Promise<T>,
+    machineLoginAnswer: <T = unknown>(params: OperationParams["machineLogin.answer"]) => call("machineLogin.answer", params) as Promise<T>,
   };
 }
 

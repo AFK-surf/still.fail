@@ -131,7 +131,7 @@ function ActiveCard({ station, login, canRelay }: { station: string; login: Mach
       main = <CardButton label={relay.opened ? t("web-main.logins.openAgain") : t("web-main.logins.signIn")} busy={relay.busy} onClick={relay.open} />;
     }
   } else if (step === "open" && login.url) {
-    said = domain;
+    said = login.paste ? <><span className={css.cardStatus}>{login.statusText}</span>{domain}</> : domain;
     main = <CardButton label={t("web-main.logins.signIn")} onClick={() => openPage(login.url)} />;
   }
   return (
@@ -144,7 +144,32 @@ function ActiveCard({ station, login, canRelay }: { station: string; login: Mach
           {t("common.cancel")}
         </PanelButton>
       </span>
+      {/* Its page first, then what the page gave: under the buttons, in the order they are done. */}
+      {step === "open" && login.paste && <PasteCode station={station} id={login.id} />}
     </>
+  );
+}
+
+/**
+ * What the login's page gave (gcloud --no-launch-browser's verification code), pasted here and sent to the command, as a
+ * profile's sign-in takes Claude's code (pages/Accounts.tsx LoginSteps): Enter or 完成 sends it.
+ */
+function PasteCode({ station, id }: { station: string; id: string }) {
+  const call = useCall();
+  const act = useAct();
+  const sending = useDoing("machineLogin.answer", { station, id });
+  const [code, setCode] = useState("");
+  const send = () => {
+    if (!code.trim() || sending) return;
+    act(call("machineLogin.answer", { station, id, text: code.trim() }).then(() => setCode("")), t("web-main.logins.answerWhat"));
+  };
+  return (
+    <span className={css.cardPaste}>
+      <input className={css.cardPasteInput} spellCheck={false} autoComplete="off" value={code} placeholder={t("web-main.logins.pasteCode")}
+        aria-label={t("web-main.logins.pasteCode")} data-login-paste="" onChange={(e) => setCode(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) send(); }} />
+      <PanelButton tone="filled" disabled={!code.trim() || sending} aria-busy={sending || undefined} onClick={send}>{t("web-main.logins.finish")}</PanelButton>
+    </span>
   );
 }
 

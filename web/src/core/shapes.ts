@@ -3367,6 +3367,11 @@ export interface MachineLoginShown {
 	port?: number;
 	/** The command waits on a prompt: its agent answers it (等 agent 回答命令的问题). */
 	waiting: boolean;
+	/**
+	 * Open: after its page, the command waits for what the page gives (gcloud --no-launch-browser's verification code):
+	 * the person enters it on the card (`machineLogin.answer`). Then `waiting` is false.
+	 */
+	paste?: boolean;
 	/** This device listens for its loopback callback now (opened here, in the desktop or Android app): 等浏览器回来. */
 	listening: boolean;
 	/**

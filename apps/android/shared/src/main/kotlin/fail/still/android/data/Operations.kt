@@ -581,6 +581,12 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["id"] = JsonPrimitive(id)
         return call("machineLogin.cancel", JsonObject(values))
     }
+    suspend fun machineLoginAnswer(id: String, text: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["id"] = JsonPrimitive(id)
+        values["text"] = JsonPrimitive(text)
+        return call("machineLogin.answer", JsonObject(values))
+    }
 }
 
 class CloudOperations(private val call: suspend (String, JsonObject) -> JsonElement) {
