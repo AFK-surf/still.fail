@@ -528,6 +528,8 @@ export const stories: Story[] = [
   { id: "runtime-missing-member", group: "对话", title: "缺少运行时 · 成员", app: true, demo: installDemo("member") },
   { id: "runtime-missing-notice", group: "对话", title: "缺少运行时 · 别人的消息", app: true, demo: installDemo("notice") },
   { id: "phone-runtime-missing", group: "对话", title: "手机 · 缺少运行时 · 安装", app: true, phone: true, demo: installDemo("missing") },
+  { id: "turn-failed-report", group: "对话", title: "本轮出错 · 上报", app: true, demo: installDemo("report") },
+  { id: "phone-turn-failed-report", group: "对话", title: "手机 · 本轮出错 · 上报", app: true, phone: true, demo: installDemo("report") },
 
   // ── dialogs and toasts ──
   { id: "dialog", group: "弹窗", title: "弹窗", render: () => stage(<Dialog open title="添加 station" description="在要接入的机器上运行这条命令。" onClose={noop} footer={<><Button variant="ghost">取消</Button><Button variant="primary">完成</Button></>}><CopyCommand text="curl -fsSL https://still.fail/install.sh | sh" /></Dialog>) },

@@ -1308,11 +1308,14 @@ export class Views implements Owner {
     const updates = arr(get(this.ok({ topic: "overview", station }), "updates"));
     const role = get(this.ok({ topic: "workspace", workspace: scope }), "role");
     const manages = role === "owner" || role === "admin";
+    // A failure notice may be sent to the still.fail team where the station takes bug reports.
+    const reports = get(this.ok({ topic: "overview", station }), "feedback") === true;
     for (let i = 0; i < messages.length; i++) {
       const m = shownMessage(messages[i], agents, viewer, slackUsers, members_, bots, thread.creator);
       messages[i] = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
       const install = m.system === true && typeof m.runtime === "string" ? installView(m.runtime, updates, manages) : null;
       if (install !== null) messages[i].install = install;
+      else if (reports && m.system === true && u64(m.seq) !== null && (str(m.text) ?? "").startsWith("⚠️")) messages[i].reportable = true;
     }
     messages = blockedUnder(messages);
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered

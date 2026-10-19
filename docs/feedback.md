@@ -14,6 +14,17 @@ team, shows them the report, and sends it once they agree. The reports wait in t
   (sha256 of session, title and body) so a retried call is not a second report. The station posts it
   (station/src/cloud/signed.ts) to `<origin>/v1/feedback`, signed over
   `stillfail-station-feedback-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>`.
+- **From a failure notice** (station/src/feedback/notice.ts): a red ⚠️ notice in a chat (a turn that failed, an agent
+  that could not start) ends in 「上报」 where the station takes reports (its overview's `feedback: true`; the core marks
+  the message `reportable`, web Chat.tsx and Android Chat.kt `ReportAction`). Pressed, `chat.report` asks the station
+  (`POST /threads/<id>/report {n}`; a read-only member may) to send it, made there with nobody writing it: the
+  notice as title and quoted, the failed turn (its kind, times and `reason: message`; the session's, of the thread's,
+  whose failed turn ended nearest before the notice), the agent (runtime, profile, model), the versions of the station
+  and its runtimes, the **names** of the variables set for its agents (never their values), and the station log's
+  lines from a minute before the turn began to a minute after the notice that name the session, its runtime sessions
+  or its profile, or are its runtime's warnings and errors (the last 300, at most 48 KB, home directories as `~`).
+  The reporter is the person who pressed it (name and email). Its key is the notice's, so pressing it again answers
+  the same FB number; the toast says which.
 - **Not on the test channel**: a station updated on the beta channel (youdid.wtf; the team's own stations) has neither
   the skill nor the tool, decided as it starts (station/src/updates/channel.ts); a skill directory left from before is removed
   unless someone added files to it.

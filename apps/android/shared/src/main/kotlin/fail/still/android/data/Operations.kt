@@ -130,6 +130,12 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["option"] = JsonPrimitive(option)
         return call("decision.close", JsonObject(values))
     }
+    suspend fun chatReport(thread: Long, seq: Long): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["thread"] = JsonPrimitive(thread)
+        values["seq"] = JsonPrimitive(seq)
+        return call("chat.report", JsonObject(values))
+    }
     class SessionNewFields : OperationFields() {
         var runtime: String? by field<String>("runtime") { JsonPrimitive(it) }
         var profile: String? by field<String>("profile") { JsonPrimitive(it) }

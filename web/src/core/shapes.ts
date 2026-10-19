@@ -1733,6 +1733,11 @@ export interface ChatMessage {
 	 */
 	install?: RuntimeInstall;
 	/**
+	 * still.fail's notice of a failure, on a station that takes bug reports: sending it to the still.fail team
+	 * (`chat.report` {station, thread, seq}) is offered with it. Absent otherwise.
+	 */
+	reportable?: boolean;
+	/**
 	 * In a chat's page: the viewer's message waiting for a runtime the station does not have (the notices saying so,
 	 * folded into it): said under it in place of its waiting, with installing it. Absent otherwise.
 	 */

@@ -1721,6 +1721,9 @@ data class ChatMessage (
 	/// With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older
 	/// than it.
 	val install: RuntimeInstall? = null,
+	/// still.fail's notice of a failure, on a station that takes bug reports: sending it to the still.fail team
+	/// (`chat.report` {station, thread, seq}) is offered with it. Absent otherwise.
+	val reportable: Boolean? = null,
 	/// In a chat's page: the viewer's message waiting for a runtime the station does not have (the notices saying so,
 	/// folded into it): said under it in place of its waiting, with installing it. Absent otherwise.
 	val blocked: RuntimeInstall? = null,

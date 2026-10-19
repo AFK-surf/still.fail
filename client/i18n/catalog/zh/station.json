@@ -218,6 +218,8 @@
   "station.notice.auth": "认证失败，需要管理员检查账号：{error}",
   "station.notice.cannotStart": "无法启动 agent：{error}",
   "station.notice.exited": "agent 进程意外退出，回复即可恢复：{error}",
+  "station.feedback.notAFailure": "这条消息不是出错提示",
+  "station.feedback.notSent": "无法发送给 still.fail：{error}",
   "station.notice.failed": "本轮出错：{error}",
   "station.notice.file": "（文件）",
   "station.notice.noResult": "本轮未产出结果即停止，回复即可继续",

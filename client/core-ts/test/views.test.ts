@@ -1017,6 +1017,25 @@ test("an_items_page_is_its_agents_and_becomes_its_chat", async () => {
   assert.equal(v.messages.length, 1);
 });
 
+test("a_failure_notice_is_offered_to_report_where_the_station_takes_bug_reports", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  const ember = (n: number, text: string): J => ({ ...entry(n, text), authorKind: "ember", author: "ember" });
+  t.set(pageOf("ws/a", 7), { first: 1, last: 3, entries: [entry(1, "开始吧"), ember(2, "⚠️ 本轮出错：workspace routing discovery timed out"), ember(3, "已停止当前任务")], thread: null });
+  t.set(overview("ws/a"), overviewOf([], []));
+  await t.read(u, 1);
+  const reportable = () => u.value.messages.map((m: J) => [m.seq, m.reportable ?? false]);
+  // A station that takes none (another provider's, the beta channel, one from before): nothing offered.
+  assert.deepEqual(reportable(), [[1, false], [2, false], [3, false]]);
+  t.set(overview("ws/a"), { ...overviewOf([], []), feedback: true });
+  await t.read(u, 1);
+  assert.deepEqual(reportable(), [[1, false], [2, true], [3, false]]);
+});
+
 test("a_card_answered_from_here_stays_answered_once_its_message_leaves_the_outbox", () => {
   const t = setup();
   const views = t.views;

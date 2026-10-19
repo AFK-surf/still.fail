@@ -107,6 +107,9 @@ globalStyle(`${msgSystemBox} ${blockedAction}`, { color: "inherit", textDecorati
 /** What went wrong in a notice about a profile: a link to that profile's page, in the pill's own colour, underlined. */
 export const msgSystemLink = style({ textDecoration: "underline", textUnderlineOffset: "3px" });
 globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit" });
+/** A notice's words and what is done at their end (reporting it): the words cut short before it, not it. */
+export const msgSystemLine = style({ display: "flex", alignItems: "baseline", minWidth: "0" });
+export const msgSystemEnd = style({ flex: "none", whiteSpace: "nowrap" });
 /**
  * A draft past its viewport-aware height scrolls: its cut edges fade over a narrow strip.
  * It wraps plainly, not `pretty` as the page does: that weighs the whole draft again at every letter typed, and the

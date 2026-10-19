@@ -72,6 +72,7 @@ export const PARAMS: Record<string, string> = {
   "chat.pin": "pinned?:boolean session:string",
   "decision.dismiss": "thread:number seq:number",
   "decision.close": "thread:number seq:number option:string",
+  "chat.report": "thread:number seq:number",
   "session.new": "runtime?:string profile?:string model?:string effort?:string fast?:boolean",
   "chats.archived": "",
   "chat.forSession": "session?:string",
@@ -318,6 +319,11 @@ function stationOp(name: string, params: unknown): Request | null {
       const thread = p.u64("thread");
       const body = { n: p.u64("seq"), option: p.str("option") };
       return op("PUT", () => `/threads/${thread}/closed-card`, body, { kind: "session", key: null });
+    }
+    // A failure notice (its entry `seq`) sent to the still.fail team as a bug report: answered `{number, duplicate?}`.
+    case "chat.report": {
+      const thread = p.u64("thread");
+      return op("POST", () => `/threads/${thread}/report`, { n: p.u64("seq") }, NONE);
     }
     case "session.new":
       return op("POST", () => "/sessions", p.pick(["runtime", "profile", "model", "effort", "fast"]), { kind: "session", key: null });

@@ -190,6 +190,7 @@ export const SHAPES: Record<string, Shape> = {
     ["profile", opt("String"), { doc: "still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it." }],
     ["runtime", opt("String"), { doc: "still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh | grok)." }],
     ["install", opt("RuntimeInstall"), { doc: "With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older\nthan it." }],
+    ["reportable", opt("bool"), { doc: "still.fail's notice of a failure, on a station that takes bug reports: sending it to the still.fail team\n(`chat.report` {station, thread, seq}) is offered with it. Absent otherwise." }],
     ["blocked", opt("RuntimeInstall"), { doc: "In a chat's page: the viewer's message waiting for a runtime the station does not have (the notices saying so,\nfolded into it): said under it in place of its waiting, with installing it. Absent otherwise." }],
     ["by", "MessageBy"],
     ["waiting", "bool"],

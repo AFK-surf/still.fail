@@ -218,6 +218,8 @@
   "station.notice.auth": "Auth failed; an admin needs to check the account: {error}",
   "station.notice.cannotStart": "Couldn't start the agent: {error}",
   "station.notice.exited": "Agent process exited unexpectedly; reply to resume: {error}",
+  "station.feedback.notAFailure": "This message is not a failure notice",
+  "station.feedback.notSent": "Couldn't send it to still.fail: {error}",
   "station.notice.failed": "This turn failed: {error}",
   "station.notice.file": "(File)",
   "station.notice.noResult": "This turn stopped without a result; reply to continue",

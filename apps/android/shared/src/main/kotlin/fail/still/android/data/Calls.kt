@@ -17,6 +17,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
@@ -374,6 +376,11 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Dismisses a decision for the viewer, on every device of theirs: off their list, still pending for others. */
     suspend fun keepChat(thread: Long) { ops.chatKeep(thread) }
     suspend fun dismissDecision(thread: Long, seq: Long) { ops.decisionDismiss(thread, seq) }
+    /** A failure notice (its entry) sent to the still.fail team as a bug report: its number (FB-n), and whether it was sent before. */
+    suspend fun reportNotice(thread: Long, seq: Long): Pair<Long?, Boolean> {
+        val r = ops.chatReport(thread, seq) as? JsonObject
+        return (r?.get("number") as? JsonPrimitive)?.longOrNull to ((r?.get("duplicate") as? JsonPrimitive)?.booleanOrNull == true)
+    }
 
     // ── the archive (web/src/pages/Archive.tsx) ──
 

@@ -1000,7 +1000,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     );
   }
   // What still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} install={m.install} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
+  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} install={m.install} report={m.reportable ? { thread: m.thread, seq: m.seq } : undefined} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = m.by.here ? m.by.agent : undefined;
   return (
@@ -1139,7 +1139,7 @@ export function PersonWords({ text }: { text: string }) {
  * One saying the station does not have the chat's runtime, with none of the viewer's messages waiting for it (those say
  * it under them: BlockedLine), ends in installing it.
  */
-function SystemNotice({ text, profile, install, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; install: RuntimeInstall | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
+function SystemNotice({ text, profile, install, report, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; install: RuntimeInstall | undefined; /** A failure the viewer may report (core `reportable`): its entry. */ report?: { thread: number; seq: number } | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
   const station = useStation();
   const failed = /^⚠️\s*/u.exec(text);
   const words = failed ? text.slice(failed[0].length) : text;
@@ -1154,10 +1154,13 @@ function SystemNotice({ text, profile, install, time, ts, enter, caught, vk }: {
         role="button" tabIndex={0} aria-expanded={open}
         onClick={(e) => { if (!(e.target as Element).closest("a, button")) toggle(); }}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
-        <div className={conversationCss.markdown}>
-          {profile && colon >= 0
-            ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
-            : install ? <p>{said}<InstallAction install={install} /></p> : <Prose>{said}</Prose>}
+        <div className={css.msgSystemLine}>
+          <div className={conversationCss.markdown}>
+            {profile && colon >= 0
+              ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
+              : install ? <p>{said}<InstallAction install={install} /></p> : <Prose>{said}</Prose>}
+          </div>
+          {report && <ReportAction thread={report.thread} seq={report.seq} />}
         </div>
       </div>
       {open && <Time className={conversationCss.msgTime} stamp={time} />}
@@ -1202,6 +1205,22 @@ function InstallAction({ install }: { install: RuntimeInstall }) {
   const { busy, run } = useInstall(install);
   if (!install.action) return null;
   return <><span className={css.blockedDot} aria-hidden>·</span><button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} onClick={run}>{install.action}</button></>;
+}
+
+/** Sending a failure notice to the still.fail team, a word at its end (out of its words, so a long one cut short keeps
+ * it): what it was filed as is said once sent. */
+function ReportAction({ thread, seq }: { thread: number; seq: number }) {
+  const station = useStation().address;
+  const busy = useDoing("chat.report", { station, thread, seq });
+  const call = useCall();
+  const toast = useToast();
+  const act = useAct();
+  const action = t("common.report.action");
+  const run = () => act(call("chat.report", { station, thread, seq }).then((a) => {
+    const answer = a as { number?: number; duplicate?: boolean } | null;
+    toast(t(answer?.duplicate ? "common.report.again" : "common.report.done", { number: answer?.number ?? "?" }));
+  }), action);
+  return <span className={css.msgSystemEnd}><span className={css.blockedDot} aria-hidden>·</span><button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} title={t("common.report.note")} onClick={run}>{action}</button></span>;
 }
 
 /** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says; `route` (where it

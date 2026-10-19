@@ -1123,7 +1123,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
     val jump = rememberJump(list, rows)
     val ink = chatInk()
     // What still.fail itself says (role "ember", as the core sends it): a notice across the chat, apart from people's and agents' messages.
-    if (m.system) { SystemNotice(m.text, m.time?.get("createdAt"), m.profile?.let { p -> { app.push(Screen.Profile(ctx.station, p)) } }, m.install, ctx.station); return }
+    if (m.system) { SystemNotice(m.text, m.time?.get("createdAt"), m.profile?.let { p -> { app.push(Screen.Profile(ctx.station, p)) } }, m.install, ctx.station, if (m.reportable == true) m.thread to m.seq else null); return }
     val motion = LocalChatMotion.current
     val flash = accentBg()
     if (ctx.mine(m)) {
@@ -1248,7 +1248,7 @@ private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
  * them: BlockedLine), ends in installing it.
  */
 @Composable
-private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toProfile: (() -> Unit)?, install: fail.still.android.data.RuntimeInstall? = null, station: String = "") {
+private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toProfile: (() -> Unit)?, install: fail.still.android.data.RuntimeInstall? = null, station: String = "", report: Pair<Long, Long>? = null) {
     val failed = remember(text) { Regex("^⚠️\\s*").find(text) }
     val said = remember(text) { (failed?.let { text.substring(it.range.last + 1) } ?: text).replace(Regex("。\\s*$"), "") }
     var open by remember { mutableStateOf(false) }
@@ -1281,6 +1281,16 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toP
             } else if (install != null) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(said, fontSize = 15.sp, lineHeight = 24.75.sp, color = ink, maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 InstallAction(install, station, ink)
+            } else if (report != null) Row(verticalAlignment = Alignment.Bottom) {
+                // A failure the viewer may report (core `reportable`): its words cut short before the word that does it.
+                Box(Modifier.weight(1f, fill = false)) {
+                    if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
+                    else Text(
+                        plain(said.lineSequence().firstOrNull { it.isNotBlank() } ?: said), fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                ReportAction(report.first, report.second, station, ink)
             } else if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
             else Text(
                 plain(said.lineSequence().firstOrNull { it.isNotBlank() } ?: said), fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
@@ -1332,6 +1342,26 @@ private fun InstallAction(install: fail.still.android.data.RuntimeInstall, stati
         action, fontSize = 15.sp, lineHeight = 24.75.sp, fontWeight = FontWeight.SemiBold, color = ink, textDecoration = TextDecoration.Underline,
         modifier = Modifier.clickable(enabled = !busy) { app.act(action) { app.api(station).updateSoftware(install.runtime) } },
     )
+}
+
+/** Sending a failure notice to the still.fail team (web Chat.tsx ReportAction), a word at its end: what it was filed as is said once sent. */
+@Composable
+private fun ReportAction(thread: Long, seq: Long, station: String, ink: Color) {
+    val app = LocalApp.current
+    val action = t("common.report.action")
+    val busy = app.isDoing("chat.report", "station" to station, "thread" to thread, "seq" to seq)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(" · ", fontSize = 15.sp, lineHeight = 24.75.sp, color = ink.copy(alpha = 0.6f))
+        Text(
+            action, fontSize = 15.sp, lineHeight = 24.75.sp, fontWeight = FontWeight.SemiBold, color = ink, textDecoration = TextDecoration.Underline, maxLines = 1,
+            modifier = Modifier.clickable(enabled = !busy) {
+                app.act(action) {
+                    val (number, again) = app.api(station).reportNotice(thread, seq)
+                    app.toast = t(if (again) "common.report.again" else "common.report.done", "number" to (number ?: "?"))
+                }
+            },
+        )
+    }
 }
 
 /** A spinner and a word, small, under a message of yours: waiting for its agents, or on its way (the chat's own size, not WaitLine's). */
