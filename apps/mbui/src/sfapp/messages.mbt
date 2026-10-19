@@ -1052,22 +1052,26 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
     exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)),
     close=close_gap,
     fn() {
-      match m.card {
-        Some({ assignee_text: Some(a), .. }) => quiet(a)
-        _ => ()
-      }
-      match
-        decision_options(
-          c,
-          "options/" + m.ts,
-          options,
-          !resolved && !here.view.offline && !here.view.archived,
-          busy,
-          chosen~,
-        ) {
-        Some(o) if !resolved => answer_option(src, here.station, m.thread, m.seq, o.label)
-        _ => ()
-      }
+      // (who decides over the options as the message's column has them: 4 apart)
+      c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
+        match m.card {
+          Some({ assignee_text: Some(a), .. }) => quiet(a)
+          _ => ()
+        }
+        match
+          decision_options(
+            c,
+            "options/" + m.ts,
+            options,
+            !resolved && !here.view.offline && !here.view.archived,
+            busy,
+            chosen~,
+          ) {
+          Some(o) if !resolved => answer_option(src, here.station, m.thread, m.seq, o.label)
+          _ => ()
+        }
+      })
+      |> ignore
     },
   )
   let outcome = match m.decision {
