@@ -335,3 +335,32 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   t.click(@ui.Link, label="GitHub")
   assert_eq(followed.val, Some("github"))
 }
+
+///|
+test "dropdown menu: put by a rectangle, its own motion and a scrim; gone once its motion has played" {
+  let open = Ref(true)
+  let t = @ui.Tester::new(fn(c) {
+    open.val = dropdown_menu(
+      c,
+      "menu",
+      open.val,
+      0,
+      [menu_item("a", label="One"), menu_item("b", label="Two")],
+      label="Filter",
+      at=(200.0, 60.0, 40.0, 40.0),
+      along=End,
+      offset=6.0,
+      scrim=0x00000047L,
+      enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0),
+      exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0),
+    ).open
+  })
+  t.settle() |> ignore
+  let (x, y, w, _) = t.get(@ui.Menu, label="Filter").rect
+  assert_true((x + w - 240.0).abs() < 0.5)
+  assert_true((y - 106.0).abs() < 0.5)
+  t.press("Escape")
+  assert_false(open.val)
+  t.settle() |> ignore
+  assert_true(t.find("One") is None)
+}

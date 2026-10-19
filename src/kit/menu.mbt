@@ -112,6 +112,7 @@ fn menu_panel(
   min_w : Double,
   look : (@ui.Ctx, Double, () -> Unit) -> Unit,
   item_look : (@ui.Ctx, MenuItemState) -> Unit,
+  motion? : @ui.Look,
 ) -> PanelOut {
   let pid = c.id(key + "/panel")
   let ids = entries.mapi(fn(k, _) { part_id(pid, k) })
@@ -260,6 +261,11 @@ fn menu_panel(
     })
   })
   c.semantics(i, if listbox { Listbox } else { Menu }, id=pid, label~)
+  // the app's own coming and going (a scale, a fade: Motion's), in place of the default's
+  match motion {
+    Some(l) => c.look(i, l)
+    None => ()
+  }
   kit.val.subs[pid] = sub
   { chosen, back }
 }
@@ -338,8 +344,10 @@ fn imax(a : Int, b : Int) -> Int {
 
 ///|
 /// `key`'s dropdown menu (Radix's DropdownMenu, see the file's head), `open` or not, of `entries`, by the trigger
-/// `trigger` (its id: the view's button, which opens it); Down on the trigger opens it too, and the keyboard's
-/// opening focuses its first item. Whether it is open now, and what was chosen.
+/// `trigger` (its id: the view's button, which opens it; `at`: by this rectangle instead); Down on the trigger opens
+/// it too, and the keyboard's opening focuses its first item. `scrim`: the page under it dimmed so (in and out over 200
+/// ms); `enter` and `exit`: its own coming and going (Motion's transitions: a scale from a corner, a fade) in place of
+/// the default's. Whether it is open now, and what was chosen.
 pub fn dropdown_menu(
   c : @ui.Ctx,
   key : String,
@@ -353,6 +361,10 @@ pub fn dropdown_menu(
   min_w? : Double = 180.0,
   look? : (@ui.Ctx, Double, () -> Unit) -> Unit = menu_look,
   item_look? : (@ui.Ctx, MenuItemState) -> Unit = menu_item_look,
+  at? : (Double, Double, Double, Double),
+  scrim? : Int64 = 0L,
+  enter? : @motion.Trans,
+  exit? : @motion.Trans,
 ) -> Menu {
   install()
   let mut now = open
@@ -362,24 +374,39 @@ pub fn dropdown_menu(
   let by_key = c.focus_shown(trigger)
   let pid = c.id(key + "/panel")
   let p = presence(c, key, now, enter=@motion.tween(120.0, ease=Out), exit=@motion.tween(80.0, ease=LeaveFade))
+  // the app's own motion: Motion's presence (its look on the panel) decides how long it is drawn
+  let moved = match enter {
+    Some(e) => Some(@motion.presence(c, key + "/motion", now, enter=e, exit?=exit))
+    None => None
+  }
+  let built = match moved {
+    Some(m) => m is Some(_)
+    None => p.built
+  }
+  // the scrim, if any, in and out over 200 ms
+  let dim = if scrim != 0L { animate(c, key + "/scrim", if now { 1.0 } else { 0.0 }, transition=@motion.tween(200.0)) } else { 0.0 }
   let mut chosen = None
-  if p.built {
-    let o = c.overlay(key, modal=true, anchor=trigger, initial_focus=pick(by_key, first_item(c, key, entries), pid), inert=p.leaving(), fn() {
+  if built {
+    let o = c.overlay(key, modal=true, anchor=trigger, scrim=faded(scrim, dim), initial_focus=pick(by_key, first_item(c, key, entries), pid), inert=!now, fn() {
       let out = menu_panel(
         c,
         key,
         entries,
-        c.rect_of(trigger).unwrap_or((0.0, 0.0, 0.0, 0.0)),
+        at.unwrap_or(c.rect_of(trigger).unwrap_or((0.0, 0.0, 0.0, 0.0))),
         side,
         along,
         offset,
-        p.t,
+        if moved is Some(_) { 1.0 } else { p.t },
         label,
         0,
         false,
         min_w,
         look,
         item_look,
+        motion?=match moved {
+          Some(m) => m
+          None => None
+        },
       )
       chosen = out.chosen
     })
