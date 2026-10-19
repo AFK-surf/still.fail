@@ -490,8 +490,10 @@ FileData; Zoom.kt):
   browser and Windows draw none (said so on the page).
 - Images on Android are ImageDecoder's already (Images.java): the chat's pictures and the viewer's show there too.
 - The glass: the Android app blurs under the bar and the video's controls (Haze, darkGlass: 0x121214 at 62% over a
-  24 dp blur); a native view under them cannot be blurred, so here they are a deeper solid tint (0x121214 at 85%)
-  whatever is under them (the page's white at 92% over a document).
+  24 dp blur); a native view under them cannot be blurred (the glass pass copies the canvas, where a view is only
+  its hole), so here they are a deeper solid tint (0x121214 at 85%) whatever is under them (the page's white at 92%
+  over a document). In the renderers a hole is a run of its own inside the glass's runs: glass painted after a hole
+  sees the hole, not the view.
 - `APP=sffix MBUI_FIXTURE=chat-preview-image|pdf|video|html|code|md|csv|none` opens a made-up file
   (src/sfapp/preview_fixture.mbt: a picture, a PDF of two pages, a video whose reads are never answered, a page with a
   script, code, Markdown, a table, a file of no kind): `scripts/shots.sh preview web-preview` compares them with
@@ -504,7 +506,7 @@ frame-exact steps (the file's frames' times, MediaExtractor; here steps of a 60t
 landscape, audio's own small player (audio plays in the video's), code highlighting and a code file's sideways scroll,
 installing an APK, an SVG drawn by a page when it is not a bitmap, the progress of a whole file coming (`progress`), a
 big file read to the disk, a web view's own scrolling under the canvas on macOS while something is painted over it,
-the frosted glass.
+the frosted glass over a picture or a document (where nothing native is under it: `@sf` glass could take it).
 
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
