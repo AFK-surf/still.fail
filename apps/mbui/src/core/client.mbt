@@ -33,6 +33,13 @@ pub struct Client {
   mut version : Int
   /// The core's reason, once it has failed (`{fatal}`); cleared by `restarted`.
   mut fatal : String?
+  /// Who keeps what is awaited of the core (Client::track: mbui's effect.mb outside): a ticket for each call until
+  /// its answer, each subscription until its first value (or error)
+  priv mut start_wait : (String) -> Int
+  priv mut end_wait : (Int) -> Unit
+  /// the tickets: by call id, by subscription id
+  priv call_waits : Map[Int, Int]
+  priv sub_waits : Map[Int, Int]
 }
 
 ///|
@@ -53,6 +60,41 @@ pub fn Client::new(
     beside: None,
     version: 0,
     fatal: None,
+    start_wait: fn(_) { 0 },
+    end_wait: fn(_) {  },
+    call_waits: {},
+    sub_waits: {},
+  }
+}
+
+///|
+/// What is asked of the core is awaited until it is answered (a call) or first read (a subscription): `start` is told
+/// what it is and gives a ticket, `end` is given the ticket back (mbui's `@ui.runtime().outside_start` and
+/// `outside_end`, so a screen is not settled while it waits on the core).
+pub fn Client::track(self : Client, start : (String) -> Int, end : (Int) -> Unit) -> Unit {
+  self.start_wait = start
+  self.end_wait = end
+}
+
+///|
+fn Client::end_call_wait(self : Client, id : Int) -> Unit {
+  match self.call_waits.get(id) {
+    Some(t) => {
+      self.call_waits.remove(id)
+      (self.end_wait)(t)
+    }
+    None => ()
+  }
+}
+
+///|
+fn Client::end_sub_wait(self : Client, id : Int) -> Unit {
+  match self.sub_waits.get(id) {
+    Some(t) => {
+      self.sub_waits.remove(id)
+      (self.end_wait)(t)
+    }
+    None => ()
   }
 }
 
@@ -91,6 +133,8 @@ pub fn Client::subscribe(
 
 ///|
 fn Client::ask(self : Client, s : Sub) -> Unit {
+  self.end_sub_wait(s.id)
+  self.sub_waits[s.id] = (self.start_wait)("core: \{s.key}")
   // keyed: lists the core keys (threads, chats…) change item by item rather than as whole lists (delta.mbt applies both)
   let m : Map[String, Json] = {
     "id": Json::number(s.id.to_double()),
@@ -104,6 +148,7 @@ fn Client::ask(self : Client, s : Sub) -> Unit {
 /// Ends a subscription: the core stops sending it, and `subscribe` makes a new one.
 pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
   if self.subs.contains(s.id) {
+    self.end_sub_wait(s.id)
     self.subs.remove(s.id)
     self.by_key.remove(s.key)
     let m : Map[String, Json] = {
@@ -129,6 +174,7 @@ pub fn Client::call(
   let id = self.next_id
   self.next_id += 1
   self.calls[id] = on_done
+  self.call_waits[id] = (self.start_wait)("core: \{name} (call \{id})")
   let m : Map[String, Json] = {
     "id": Json::number(id.to_double()),
     "call": Json::string(name),
@@ -184,6 +230,7 @@ pub fn Client::cancel(self : Client, id : Int) -> Unit {
   if self.progress.contains(id) {
     self.progress.remove(id)
     self.calls.remove(id)
+    self.end_call_wait(id)
     let m : Map[String, Json] = { "id": Json::number(id.to_double()), "cancel": Json::boolean(true) }
     (self.send)(Json::object(m).stringify())
   }
@@ -223,6 +270,14 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       // What was asked of this core is not answered by the next one.
       let calls = self.calls.to_array()
       self.calls.clear()
+      for c in calls {
+        self.end_call_wait(c.0)
+      }
+      // the subscriptions wait for the next core (restarted asks them again)
+      let subs = self.sub_waits.keys().collect()
+      for id in subs {
+        self.end_sub_wait(id)
+      }
       let err = Json::object({
         "code": Json::string("fatal"),
         "message": Json::string(self.fatal.unwrap()),
@@ -260,6 +315,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       }
       s.version += 1
       self.version += 1
+      self.end_sub_wait(id)
     }
     None =>
       // A call's answer; a value before it says how it goes (to a `stream`'s `on_value`)
@@ -281,6 +337,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
 
 ///|
 fn Client::answer(self : Client, id : Int, r : Result[Json, Json]) -> Unit {
+  self.end_call_wait(id)
   match self.calls.get(id) {
     Some(f) => {
       self.calls.remove(id)

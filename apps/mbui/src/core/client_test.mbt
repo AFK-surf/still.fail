@@ -246,3 +246,41 @@ test "a streamed call: each value before its answer, with the bytes beside it; c
   c.receive_json({ "id": Json::number(id2.to_double()), "value": { "chunk": true } })
   assert_eq(heard.length(), 2)
 }
+
+///|
+test "what is asked of the core is awaited until answered or first read" {
+  let sent : Array[String] = []
+  let c = Client::new(fn(s) { sent.push(s) })
+  let waits : Map[Int, String] = {}
+  let n = Ref::new(0)
+  c.track(
+    fn(what) {
+      n.val += 1
+      waits[n.val] = what
+      n.val
+    },
+    fn(t) { waits.remove(t) },
+  )
+  let s = c.subscribe("overview", params={ "station": Json::string("st1") })
+  let id = c.call("chat.send", params=Json::object({}))
+  assert_eq(waits.length(), 2)
+  // the subscription's first value: no longer awaited
+  assert_true(c.receive("{\"id\":\{s.id},\"value\":{\"a\":1}}"))
+  assert_eq(waits.values().collect(), ["core: chat.send (call \{id})"])
+  // a delta later awaits nothing
+  assert_true(c.receive("{\"id\":\{id},\"ok\":true}"))
+  assert_eq(waits.length(), 0)
+  // a stream cancelled, a subscription ended before its value
+  let st = c.stream("station.preview", on_value=fn(_, _) {  })
+  let s2 = c.subscribe("jobs", params={ "station": Json::string("st1") })
+  assert_eq(waits.length(), 2)
+  c.cancel(st)
+  c.unsubscribe(s2)
+  assert_eq(waits.length(), 0)
+  // a fatal ends every call's wait; the core started again is asked again, and awaited
+  ignore(c.call("x"))
+  assert_true(c.receive("{\"fatal\":\"gone\"}"))
+  assert_eq(waits.length(), 0)
+  c.restarted()
+  assert_eq(waits.length(), 1)
+}

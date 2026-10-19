@@ -63,6 +63,13 @@ pub fn stop() -> Unit {
 }
 
 ///|
+/// What is asked of the core is awaited until answered or first read (see Client::track): an mbui app gives its
+/// runtime's `outside_start` and `outside_end`, so its screens are settled only once what they asked of the core is in.
+pub fn track(start : (String) -> Int, end : (Int) -> Unit) -> Unit {
+  client.track(start, end)
+}
+
+///|
 /// What to do when something changed: request a frame (the redraw hook; `@host.request_frame` in an mbui app).
 pub fn on_change(f : () -> Unit) -> Unit {
   engine.on_change = f
