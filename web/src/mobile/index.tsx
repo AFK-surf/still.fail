@@ -1,4 +1,4 @@
-import { ArchivingScreen } from "./Archiving.tsx";
+import { ArchivingScreen, StationArchivingScreen } from "./Archiving.tsx";
 import { AutomaticDecisionCompletionScreen, AutomaticDecisionPolicyScreen, AutomaticDecisionsScreen } from "./AutomaticDecisions.tsx";
 // A workspace on a narrow screen: the Android app's pages (./app.tsx), at the desktop's addresses where it has them, so
 // a link opens the same thing on either.
@@ -67,6 +67,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/stations" element={<StationsScreen />} />
       <Route path="settings/connects" element={<ConnectsScreen />} />
       <Route path="settings/archive" element={<ArchivingScreen />} />
+      <Route path="settings/archive/:station" element={<StationArchivingScreen />} />
       <Route path="settings/automatic-decisions" element={<AutomaticDecisionsScreen />} />
       <Route path="settings/automatic-decisions/completion" element={<AutomaticDecisionCompletionScreen />} />
       <Route path="settings/automatic-decisions/completion/:station" element={<AutomaticDecisionPolicyScreen />} />

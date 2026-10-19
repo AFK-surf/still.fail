@@ -48,7 +48,7 @@ import { NavAction, NavList, NavItem, NavSection, NavTop } from "../SidebarList.
 import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { VaultSettings } from "./Vault.tsx";
 import { VaultItemPage } from "./VaultItem.tsx";
-import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
+import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, StationArchivingSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, scopeOf, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Select, Tip, Spinner, Waiting } from "../ui.tsx";
@@ -179,6 +179,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/stations/:station" element={<StationSettings entry={entry} />} />
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
             <Route path="settings/archive" element={<ArchivingPage back={`/w/${entry.id}/settings`} workspace={entry.id} />} />
+            <Route path="settings/archive/:station" element={<StationArchivingSettings entry={entry} />} />
             <Route path="settings/automatic-decisions" element={<AutomaticDecisionsSettings entry={entry} />} />
             <Route path="settings/automatic-decisions/completion" element={<AutomaticDecisionCompletionSettings entry={entry} />} />
             <Route path="settings/automatic-decisions/completion/:station" element={<AutomaticDecisionPolicySettings entry={entry} />} />

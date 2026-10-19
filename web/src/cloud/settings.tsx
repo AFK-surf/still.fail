@@ -58,6 +58,7 @@ import * as css from "./settings.css.ts";
 import * as accountsCss from "../pages/Accounts.css.ts";
 
 import { NAME } from "../channel.ts";
+import { StationArchiving } from "../pages/Archiving.tsx";
 import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
@@ -1021,6 +1022,15 @@ export function AutomaticDecisionCompletionSettings({entry}:{entry:WorkspaceEntr
   return <Page title={t("web-pages.automaticDecisions.completion")} lead={t("web-pages.automaticDecisions.completionNote")} back={base} backLabel={t("web-pages.automaticDecisions.title")}
     actions={<Button variant="ghost" icon={Refresh} onClick={refresh}>{t("web-pages.automaticDecisions.refresh")}</Button>}>
     <AutomaticDecisionCompletion workspace={entry.id} />
+  </Page>;
+}
+
+/** 设置 › 归档 › a station: how it archives chats on its own (pages/Archiving.tsx). */
+export function StationArchivingSettings({entry}:{entry:WorkspaceEntry}) {
+  const {station=""}=useParams();
+  const name=useStations(entry.id).value?.find(s=>s.station===station)?.name;
+  return <Page title={name ? `${t("web-pages.archiving.auto.title")} · ${name}` : t("web-pages.archiving.auto.title")} back={`/w/${entry.id}/settings/archive`} backLabel={t("web-pages.archiving.title")}>
+    <StationArchiving workspace={entry.id} station={station} />
   </Page>;
 }
 

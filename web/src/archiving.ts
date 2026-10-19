@@ -28,6 +28,13 @@ export const modeOf = (v: ArchivingView): ArchiveMode => (v.days <= 0 ? "off" : 
 export const modeLabel = (m: ArchiveMode) => t(`web-pages.archiving.mode.${m}`);
 export const modeNote = (m: ArchiveMode) => t(`web-pages.archiving.mode.${m}Hint`);
 
+/** How a station archives on its own, in a line (its row in 设置 › 归档). */
+export function summaryOf(v: ArchivingView): string {
+  const mode = modeOf(v);
+  const how = mode === "off" ? modeLabel(mode) : `${modeLabel(mode)} · ${daysLabel(v.days)}`;
+  return t("web-pages.archiving.summary", { how, slack: daysLabel(v.slackDays) });
+}
+
 /** The days offered, with the one kept when it is none of them. */
 export function daysOffered(kept: number, base: number[]): number[] {
   return kept > 0 && !base.includes(kept) ? [...base, kept].sort((a, b) => a - b) : base;
@@ -36,12 +43,16 @@ export const IDLE_DAYS = [1, 3, 7, 30];
 export const SLACK_DAYS = [0, 3, 7, 30];
 export const daysLabel = (n: number) => (n <= 0 ? t("web-pages.archiving.never") : t("web-pages.archiving.days", { n }));
 
-/** What a station's row says of its archive review, and whether it is on. */
-export function reviewOf(s: StationView): { on: boolean; text: string } {
+/** What a station's page says of its archive review, and whether it is on. */
+export function reviewOf(s: StationView): { on: boolean; short: string } {
   const rule = s.overview?.automaticDecisions?.settings.completion;
   const on = rule?.enabled === true;
   const model = s.overview?.automaticDecisions?.models.find((m) => m.id === rule?.model)?.name ?? rule?.model ?? "";
-  return { on, text: on ? t("web-pages.archiving.reviewOn", { model }) : t("web-pages.archiving.reviewOff") };
+  return {
+    on,
+    // Under its own heading (归档建议): the state alone.
+    short: on ? t("web-pages.archiving.reviewOnShort", { model }) : t("web-pages.archiving.reviewOffShort"),
+  };
 }
 
 /** 按模型判断 goes by the stations' archive reviews (自动决策): none on, it can suggest nothing; some on, the others'
