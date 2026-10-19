@@ -72,6 +72,8 @@ test("an email signs up with a code sent to it, and signs in to the same account
     const b = await browser(h, "10.1.0.1");
     assert.match(b.page, /name="via" value="google"/, "Google is still there");
     assert.match(b.page, /type="email"/);
+    assert.match(b.page, /href="https:\/\/still\.fail\/(en\/)?terms"/, "signing in agrees to the terms, linked");
+    assert.match(b.page, /href="https:\/\/still\.fail\/(en\/)?privacy"/);
     const sent = await b.post({ via: "email", email: " New.Person@Example.TEST " });
     assert.equal(sent.status, 200);
     assert.match(await sent.text(), /new\.person@example\.test/, "the code page says where it went");

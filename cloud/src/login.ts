@@ -72,6 +72,10 @@ function redirect(location: string, cookies: string): Response {
     },
   });
 }
+/** A link to one of the legal pages on still.fail's site (web/public/terms.html, privacy.html; en/ the English), opened beside the sign-in. */
+function legalLink(lang: Lang, page: "terms" | "privacy"): string {
+  return `<a href="https://still.fail/${lang === "zh" ? "" : "en/"}${page}" target="_blank" rel="noopener">${tr(lang, `cloud.login.choose.${page}`)}</a>`;
+}
 
 /** One login attempt, single-use callback and PKCE code, removed on its alarm. */
 export class LoginAttempt extends DurableObject<Env> {
@@ -279,7 +283,8 @@ export class LoginAttempt extends DurableObject<Env> {
       `${device}<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="google"><button class="secondary">${tr(lang, "cloud.login.device.continue")}</button></form>` +
         `<p class="or">${tr(lang, "cloud.login.choose.or")}</p>` +
         `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="email"><input type="email" name="email" value="${escape(email)}" placeholder="${tr(lang, "cloud.login.email.placeholder")}" autocomplete="email" required maxlength="254"><button>${tr(lang, "cloud.login.email.send")}</button></form>` +
-        (error ? `<p class="error">${escape(error)}</p>` : ""),
+        (error ? `<p class="error">${escape(error)}</p>` : "") +
+        `<p class="legal">${tr(lang, "cloud.login.choose.agree", { terms: legalLink(lang, "terms"), privacy: legalLink(lang, "privacy") })}</p>`,
       cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
     );
   }
