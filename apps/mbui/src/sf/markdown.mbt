@@ -366,6 +366,30 @@ fn Md::piece(self : Md, b : @md.Block, tight : Bool, task : Bool?) -> Array[Piec
         draw: fn() { c.box(h=Px(1.0), bg=web().line, fn() {  }) |> ignore },
       },
     ]
+    // a table (GFM, as mbui's Markdown reads it): a row a line of words, its cells apart by a bar, until the chat
+    // page draws its grid
+    Table(t) => {
+      let out = []
+      let row = fn(cells : Array[Array[@md.Inline]]) {
+        let xs : Array[@md.Inline] = []
+        for k, cell in cells {
+          if k > 0 {
+            xs.push(Text(" | "))
+          }
+          for x in cell {
+            xs.push(x)
+          }
+        }
+        for p in self.piece(Paragraph(xs), true, None) {
+          out.push(p)
+        }
+      }
+      row(t.head)
+      for r in t.rows {
+        row(r)
+      }
+      out
+    }
   }
 }
 

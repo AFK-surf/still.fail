@@ -14,22 +14,6 @@ pub fn lock_waiting(core : Core, ws : String) -> Bool {
 }
 
 ///|
-/// What the code field has typed (the boxes' digits), by workspace.
-let typed_code : Map[String, String] = {}
-
-///|
-/// The code each field handed on last (cleared once the field holds less than six digits): one call a code typed.
-let code_sent : Map[String, String] = {}
-
-///|
-/// The code fields to empty at their next frame (a code refused: the boxes empty for the next try, as Android's).
-let code_clear : Map[String, Bool] = {}
-
-///|
-/// The code fields given the keys once, as they first showed (the keyboard up for them, as Android's).
-let code_focused : Map[String, Bool] = {}
-
-///|
 /// The page shown in the workspace's place while this device waits (SecurityWaitingScreen).
 pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let t = @sf.theme()
@@ -59,18 +43,27 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     |> ignore
     if typing {
       note_center(c, tr("web-pages.security.pairEnter"))
-      code_field(c, ws, state == "wrong", !checking, fn(code) {
-        (core.call)(
-          "lock.pairCode",
-          obj([("workspace", str(ws)), ("code", str(code))]),
-          fn(r) {
-            wake()
-            if r is Err(_) {
-              code_clear[ws] = true
-            }
-          },
-        )
-      })
+      let key = "lock-code/" + ws
+      // six digits in six boxes, three and three (Security.kt CodeField), handed on once a code typed
+      let typed = c.code_field(
+        key,
+        wrong=state == "wrong",
+        enabled=!checking,
+        color=t.p.text,
+        disabled_color=t.p.muted,
+        edge=@sf.alpha(t.p.text, 0.18),
+        next_edge=t.p.text,
+        wrong_edge=t.p.red,
+      )
+      if typed is Some(code) {
+        (core.call)("lock.pairCode", obj([("workspace", str(ws)), ("code", str(code))]), fn(r) {
+          wake()
+          // a code refused: the boxes empty for the next try
+          if r is Err(_) {
+            c.clear_code_field(key)
+          }
+        })
+      }
       if checking {
         wait_line(c, tr("web-pages.security.pairChecking"))
       } else if state == "wrong" {
@@ -124,86 +117,4 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 fn note_center(c : @ui.Ctx, words : String) -> Unit {
   let t = @sf.theme()
   c.text(words, size=12.0, color=t.p.subtle, line=18.0, w=Fill(1.0), center=true) |> ignore
-}
-
-///|
-/// Six digits in six boxes, three and three (Security.kt CodeField): the field under them takes the typing (digits
-/// only, six at most); the sixth hands the code on at once.
-fn code_field(c : @ui.Ctx, ws : String, wrong : Bool, enabled : Bool, done : (String) -> Unit) -> Unit {
-  let t = @sf.theme()
-  let key = "lock-code/" + ws
-  let value = typed_code.get(ws).unwrap_or("")
-  c.box(align=ACenter, fn() {
-    c.box(dir=Row, gap=8.0, align=ACenter, fn() {
-      let chars = value.to_array()
-      for i in 0..<6 {
-        if i == 3 {
-          c.box(w=Px(8.0), fn() {  }) |> ignore
-        }
-        let next = enabled && c.editor_focused(key) && i == (if chars.length() < 5 { chars.length() } else { 5 })
-        let edge = if wrong && value == "" {
-          t.p.red
-        } else if next {
-          t.p.text
-        } else {
-          @sf.alpha(t.p.text, 0.18)
-        }
-        c.box(w=Px(42.0), h=Px(52.0), radius=12.0, border=1.0, border_color=edge, align=ACenter, justify=JCenter, fn() {
-          if i < chars.length() {
-            mono(c, chars[i].to_string(), size=24.0, weight=600, color=if enabled { t.p.text } else { t.p.muted })
-          }
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-    // the field itself over the boxes, its words unseen: a tap there gives it the keys
-    c.layer(fn() {
-      let r = c.editor(
-        key,
-        font_size=24.0,
-        max_lines=1,
-        plain=true,
-        line=52.0,
-        color=0x00000000L,
-        placeholder_color=0x00000000L,
-        caret_color=0x00000000L,
-        enter_sends=true,
-      )
-      if !code_focused.contains(key) {
-        code_focused[key] = true
-        c.focus_editor(key)
-      }
-      // a code refused: the boxes empty for the next try
-      if code_clear.contains(ws) {
-        code_clear.remove(ws)
-        typed_code[ws] = ""
-        c.set_editor_text(key, "")
-      } else if enabled {
-        let digits = StringBuilder()
-        let mut n = 0
-        for ch in r.text {
-          if ch >= '0' && ch <= '9' && n < 6 {
-            digits.write_char(ch)
-            n += 1
-          }
-        }
-        let d = digits.to_string()
-        if d != r.text {
-          c.set_editor_text(key, d)
-        }
-        if d != value {
-          typed_code[ws] = d
-        }
-        if d.length() < 6 {
-          code_sent.remove(ws)
-        } else if code_sent.get(ws) != Some(d) {
-          code_sent[ws] = d
-          done(d)
-        }
-      }
-    })
-    |> ignore
-  })
-  |> ignore
 }
