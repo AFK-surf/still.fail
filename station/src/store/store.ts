@@ -1559,6 +1559,16 @@ export class Store {
     return this.#tx(() => usage.recordUsage(this.db, path, file, runtime, calls));
   }
 
+  /// A session's last `limit` main-thread calls, oldest first: the context each sent, on what (store/usage.ts).
+  lastContexts(session: string, limit: number): usage.ContextCall[] {
+    return usage.lastContexts(this.db, session, limit);
+  }
+
+  /// Where each model's context was compacted on this station since `since` (store/usage.ts).
+  compactionPoints(since: number, least: number): Map<string, number> {
+    return usage.compactionPoints(this.db, since, least);
+  }
+
   /// Tells whoever follows the store that calls were recorded.
   usageChanged(): void {
     this.#send([{ type: "usage" }]);

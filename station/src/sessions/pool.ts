@@ -5,9 +5,9 @@
 // to spend not to lose any of its long window (a week; left × window length ÷ time to refill), times what is left of
 // its short one. So what would be lost is spent first without all sessions crowding onto one account and running its
 // five hours out together (2026-10-19: a dozen sessions moved from one account to the next, emptying each in turn).
-// Even, the one picked least recently. A session keeps its profile while it is usable and its short window is not
-// nearly full (its runtime's cache is that account's); its transcripts are shared by all, so when it is not, another
-// takes it on.
+// Even, the one picked least recently. A session keeps its profile while it is usable (on another it starts afresh and
+// reads back what it needs: afresh.ts); on one nearly full it moves before a turn only when that loses little: its
+// runtime has just compacted its context, or is about to (`cheapToLeave`).
 // Also the reasoning levels a model offers (shapes reasoning.rs), which the pool's accounts decide.
 import { type Profile, runs, sameModel } from "./config.ts";
 
@@ -71,6 +71,29 @@ export function urgency(quota: Json | null | undefined, now: number): Urgency {
     return (left * length) / (length > DAY_MS ? Math.max(remaining, DAY_MS) : remaining);
   });
   return weighted({ crowded, pace: Math.min(...paces) });
+}
+
+/// A context falling under half of what the call before sent (at least this much), on the same account and model, was
+/// compacted.
+export const COMPACTED_FROM = 50_000;
+/// How near a session's context is to where its model is compacted (compactionPoints) to be about to be.
+const NEAR_COMPACTION = 0.75;
+
+type ContextCall = { turn: string | null; profile: string | null; model: string | null; context: number };
+
+/// Whether a session loses little by going on afresh on another account, by its last main-thread calls (oldest first)
+/// and where each model is compacted on this station: its runtime compacted its context in its last two turns (what
+/// it carries on with is a summary already), or its context is three quarters of the way to that (it is about to be).
+export function cheapToLeave(calls: ContextCall[], points: Map<string, number>): boolean {
+  const last = calls.at(-1);
+  if (!last) return false;
+  const point = last.model === null ? undefined : points.get(last.model);
+  if (point !== undefined && last.context >= point * NEAR_COMPACTION) return true;
+  const turns = [...new Set(calls.map((c) => c.turn))].slice(-2);
+  return calls.some((c, i) => {
+    const before = calls[i - 1];
+    return before !== undefined && turns.includes(c.turn) && before.context >= COMPACTED_FROM && c.context * 2 < before.context && c.profile === before.profile && c.model === before.model;
+  });
 }
 
 /// Whether a profile can run now: it signs in, its key was not rejected, none of its windows is used up, and no turn

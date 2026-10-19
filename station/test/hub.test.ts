@@ -1337,7 +1337,7 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await r.close();
 });
 
-test("a session leaves an account whose five hours are nearly full before its next turn, when another has room", async () => {
+test("a session leaves an account whose five hours are nearly full for one with room, when its context was just compacted or is about to be", async () => {
   const time = testClock();
   const r = new Rig({ clock: time.clock });
   const now = time.clock.currentTimeMillisUnsafe();
@@ -1366,31 +1366,57 @@ test("a session leaves an account whose five hours are nearly full before its ne
     r.claude.last().complete();
     await settle();
   };
+  // Its calls as the usage counter records them: [turn, context] each, on its profile.
+  let call = 0;
+  const calls = (session: string, profile: string, each: [string, number][]) =>
+    r.store.recordUsage(`/t/${session}`, { session, offset: call, model: "m" }, "claude", each.map(([turn, context]) => [
+      { id: `c${call++}`, at: now + call, model: "m", subagent: false, fast: false, input: 0, cacheRead: context, cacheWrite: 0, cacheWriteLong: 0, output: 1 },
+      { turn, person: null, thread: null, profile },
+    ]));
   await done();
+  // Both run its model.
+  r.edit((raw) => (raw.profiles[0].models = ["opus"]));
   r.edit(withProfile("cc2", "another", ["opus"]));
-  const first = r.claude.last();
   const own = r.session(key).profile;
   const other = own === "cc" ? "cc2" : "cc";
-  // Its account is nearly full: the next turn starts on the other, its process ended first.
+  // Where its model is compacted here: another session's went from 200k to 15k.
+  calls("ember:elsewhere", own, [["x", 200_000], ["x", 15_000]]);
+  // Nearly full, its context neither just compacted nor about to be: it stays, in the same process.
   used[own] = 85;
+  calls(key, own, [["t1", 60_000], ["t1", 90_000]]);
+  const first = r.claude.last();
   await turn("once more");
+  assert.equal(r.claude.last(), first);
+  assert.equal(r.session(key).profile, own);
+  await done();
+  // Its runtime compacted it: the next turn starts afresh on the other, its process ended first.
+  calls(key, own, [["t2", 120_000], ["t2", 20_000]]);
+  await turn("and again");
   assert.ok(first.disposed);
   assert.equal(r.session(key).profile, other);
   assert.equal(r.claude.last().options.profile.id, other);
   await done();
-  // Both nearly full: it stays where it is, in the same process.
+  // Both nearly full: it stays where it is, compacted or not.
   used[other] = 90;
   const second = r.claude.last();
-  await turn("and again");
+  calls(key, other, [["t3", 120_000], ["t3", 20_000]]);
+  await turn("on and on");
   assert.equal(r.claude.last(), second);
-  assert.ok(!second.disposed);
   assert.equal(r.session(key).profile, other);
   await done();
-  // Kept to it by hand: it stays however full.
+  // About to be compacted: three quarters of where its model is compacted here.
   used[own] = 10;
-  await configure(r.hub, key, { profile: other });
+  calls(key, other, [["t4", 100_000], ["t5", 140_000], ["t6", 151_000]]);
+  await turn("nearly full");
+  assert.equal(r.session(key).profile, own);
+  await done();
+  // Kept to it by hand: it stays however full.
+  used[own] = 90;
+  used[other] = 10;
+  await configure(r.hub, key, { profile: own });
+  calls(key, own, [["t7", 120_000], ["t7", 20_000]]);
   await turn("pinned");
-  assert.equal(r.session(key).profile, other);
+  assert.equal(r.session(key).profile, own);
   await done();
   await r.close();
 });

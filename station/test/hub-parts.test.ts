@@ -16,7 +16,7 @@ import { nextTsAt } from "../src/sessions/internal.ts";
 import { type Counted, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
 import { prepare } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
-import { availableEfforts, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
+import { availableEfforts, cheapToLeave, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
 import { spelling } from "../src/sessions/config.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
@@ -535,6 +535,20 @@ test("the pool shares sessions by what each account would lose, and keeps them o
   for (const id of ["s3", "s4"]) health[id] = { check: ok("ok"), quota: windows([2, 2], [0, 30]) };
   assert.equal(pickProfile([all[2]!, all[3]!], "m", signals({ s3: 1 }), true).id, "s4");
   assert.equal(pickProfile([all[2]!, all[3]!], "m", signals({}, { s3: 1, s4: 2 }), true).id, "s3");
+});
+
+test("a session loses little by moving when its context was just compacted, or is about to be", () => {
+  const at = (turn: string, context: number, profile = "p", model: string | null = "m") => ({ turn, profile, model, context });
+  const points = new Map([["m", 200_000]]);
+  assert.equal(cheapToLeave([], points), false, "nothing known");
+  assert.equal(cheapToLeave([at("1", 30_000), at("1", 90_000)], points), false, "growing, far from it");
+  assert.equal(cheapToLeave([at("1", 90_000), at("2", 150_000)], points), true, "three quarters of where m is compacted");
+  assert.equal(cheapToLeave([at("1", 90_000, "p", "other"), at("2", 190_000, "p", "other")], points), false, "where other is compacted is not known");
+  assert.equal(cheapToLeave([at("1", 180_000), at("2", 20_000), at("2", 30_000)], points), true, "compacted in its last turn");
+  assert.equal(cheapToLeave([at("1", 180_000), at("1", 20_000), at("2", 30_000)], points), true, "or the one before");
+  assert.equal(cheapToLeave([at("1", 180_000), at("1", 20_000), at("2", 30_000), at("3", 40_000)], points), false, "longer ago");
+  assert.equal(cheapToLeave([at("1", 180_000, "q"), at("2", 20_000)], points), false, "started over on another account, not compacted");
+  assert.equal(cheapToLeave([at("1", 40_000), at("2", 10_000)], points), false, "too little to say");
 });
 
 test("a model is served however a profile spells it", () => {

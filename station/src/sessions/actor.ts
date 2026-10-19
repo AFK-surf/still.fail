@@ -793,7 +793,7 @@ export class SessionActor {
 
   private async ensureAgent(): Promise<AgentSession> {
     // Before each turn the account is asked about again: one whose five hours are nearly full is left for one with
-    // room (accounts.ts runOn), before the turn runs into it.
+    // room when its context was just compacted or is about to be (accounts.ts runOn), before a turn runs into it.
     if (this.agent && !this.stale && !this.agent.session.busy()) {
       try {
         if (this.deps.runOn(this.key).id !== this.profile) this.stale = true;
