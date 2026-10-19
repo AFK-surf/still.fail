@@ -516,33 +516,33 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   if (!active) {
     return (
       <div className={pagesCss.card}>
-        <div className={pagesCss.cardRow}>
-          <div className={pagesCss.cardRowText}>
-            <strong>{needed ? t("web-pages.profiles.notSignedIn", { provider }) : t("web-pages.profiles.subscriptionSignIn", { provider })}</strong>
-            <span className={shellCss.muted}>
-              {job?.state === "failed" ? t("web-pages.profiles.lastFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-pages.profiles.signedInSwitch") : t("web-pages.profiles.signInNote", { name: NAME })}
-            </span>
-          </div>
-          <Button variant={needed ? "primary" : "secondary"} icon={LogIn} busy={start.busy} onClick={() => void start.run()}>
-            {job?.state === "done" || !needed ? t("web-pages.signIn.again") : t("web-pages.profiles.signIn")}
-          </Button>
+        <div className={pagesCss.cardRowText}>
+          <strong>{needed ? t("web-pages.profiles.notSignedIn", { provider }) : t("web-pages.profiles.subscriptionSignIn", { provider })}</strong>
+          <span className={shellCss.muted}>
+            {job?.state === "failed" ? t("web-pages.profiles.lastFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-pages.profiles.signedInSwitch") : t("web-pages.profiles.signInNote", { name: NAME })}
+          </span>
         </div>
         {start.error && <p className={controlsCss.fieldError} role="alert">{start.error.message}</p>}
-        {/* OpenCode's has no command to run by hand. */}
-        {profile.loginCommand && <button type="button" className={controlsCss.textToggle} onClick={() => setManual(!manual)}>{manual ? t("web-pages.profiles.collapse") : t("web-pages.profiles.manual")}</button>}
         {manual && profile.loginCommand && <CopyCommand text={profile.loginCommand} />}
+        {/* Its one button solid, signed in or not: the card's others are words (pageControls.css.ts). */}
+        <div className={pagesCss.cardFoot}>
+          <Button variant="primary" icon={LogIn} busy={start.busy} onClick={() => void start.run()}>
+            {job?.state === "done" || !needed ? t("web-pages.signIn.again") : t("web-pages.profiles.signIn")}
+          </Button>
+          {/* OpenCode's has no command to run by hand. */}
+          {profile.loginCommand && <Button variant="ghost" onClick={() => setManual(!manual)}>{manual ? t("web-pages.profiles.collapse") : t("web-pages.profiles.manual")}</Button>}
+        </div>
       </div>
     );
   }
 
   return (
     <div className={`${pagesCss.card} ${css.signIn}`} aria-live="polite">
-      <div className={pagesCss.cardRow}>
-        <div className={pagesCss.cardRowText}><strong>{t("web-pages.profiles.signingIn", { provider })}</strong><span className={shellCss.muted}>{t("web-pages.profiles.signingInNote")}</span></div>
-        <Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>{t("common.cancel")}</Button>
-      </div>
-      {cancel.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.cancelFailed", { error: cancel.error.message })}</p>}
+      <div className={pagesCss.cardRowText}><strong>{t("web-pages.profiles.signingIn", { provider })}</strong><span className={shellCss.muted}>{t("web-pages.profiles.signingInNote")}</span></div>
       <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
+      {cancel.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.cancelFailed", { error: cancel.error.message })}</p>}
+      {/* Under the steps, words: the steps' own buttons are what to press. */}
+      <div className={pagesCss.cardFoot}><Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>{t("common.cancel")}</Button></div>
     </div>
   );
 }

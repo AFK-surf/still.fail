@@ -759,17 +759,19 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
   return (
     <>
       <SectionHeader title={active ? t("web-mobile.profiles.loginActive", { provider }) : needed ? t("web-mobile.profiles.loginNeeded", { provider }) : t("web-mobile.profiles.subscription", { provider })} start={24} />
-      <div className={`${listsCss.mCard} ${settingsCss.mFormGroup}`}>
+      <div className={`${listsCss.mCard} ${settingsCss.mFormGroup} ${css.mSignIn}`}>
         {active ? (
           <>
             <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} />
-            <Button label={t("web-mobile.profiles.cancelLogin")} primary={false} busy={cancelling}
-              onClick={() => { api.cancelLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.cancelLoginFailed", { error: e.message }))); }} />
+            <button type="button" className={css.mSignInCancel} disabled={cancelling} aria-busy={cancelling || undefined}
+              onClick={() => { api.cancelLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.cancelLoginFailed", { error: e.message }))); }}>
+              {cancelling && <Spinner inline />}{t("web-mobile.profiles.cancelLogin")}
+            </button>
           </>
         ) : (
           <>
             <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? t("web-mobile.profiles.loginFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-mobile.profiles.loginDone") : t("web-mobile.profiles.loginWhere", { name: NAME })}</p>
-            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary={needed} busy={busy}
+            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary busy={busy}
               onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); }} />
             {/* OpenCode's has no command to run by hand. */}
             {p.loginCommand && <details className={css.mDetails}><summary>{t("web-mobile.profiles.manualLogin")}</summary><CommandBox text={p.loginCommand} /></details>}
@@ -805,7 +807,8 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
   if (job.state === "needs_code" && job.url) {
     return (
       <>
-        <p className={partsCss.mSmall}>{tNodes("web-mobile.profiles.claudeStep1", { link: <a href={job.url} target="_blank" rel="noopener">{t("web-mobile.profiles.openAuth")}</a> }, { name: NAME })}</p>
+        <p className={partsCss.mSmall}>{tNodes("web-mobile.profiles.claudeStep1", { link: t("web-mobile.profiles.openAuth") }, { name: NAME })}</p>
+        <Button label={t("web-mobile.profiles.openAuth")} primary onClick={() => void window.open(job.url!, "_blank", "noopener")} />
         <p className={partsCss.mSmall}>{t("web-mobile.profiles.claudeStep2")}</p>
         <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder={t("web-mobile.profiles.pasteCode")} onChange={(e) => setCode(e.target.value)} />
         {error && <p className={partsCss.mError}>{error}</p>}

@@ -135,6 +135,22 @@ const openCode = (signingIn: boolean): DemoExtension => ({
     };
   },
 });
+/** The demo's profile as a Claude subscription being signed in again: Claude's page is up and its code is pasted back. */
+const claudeSignIn: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "overview" || !value || typeof value !== "object") return undefined;
+    const o = value as { profiles: Record<string, unknown>[] };
+    const at = Date.UTC(2026, 9, 19, 3, 0);
+    const login = { profile: "machine-claude", runtime: "claude", state: "needs_code", url: "https://claude.ai/oauth/authorize?code=true&client_id=still.fail", startedAt: at, expiresAt: at + 600_000 };
+    return {
+      ...o,
+      profiles: o.profiles.map((p) => ({
+        ...p, machine: false, access: { kind: "subscription", key: "" }, quota: null, trouble: null,
+        login, check: { ...(p.check as object), state: "login", detail: "Claude 登录已失效", models: null }, checkText: "需要登录", checkTone: "amber",
+      })),
+    };
+  },
+};
 /** The demo's profile as a SuperGrok subscription (Grok Build's): signed in, or being signed in again (`signingIn`: xAI's
  *  device code is up). The workspace's list has it under its own kind too. */
 const superGrok = (signingIn: boolean): DemoExtension => {
@@ -565,6 +581,7 @@ export const stories: Story[] = [
   { id: "app-profile-opencode", group: "应用", title: "Profile · OpenCode Go 账号登录", app: true, demo: openCode(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-opencode-signing-in", group: "应用", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, demo: openCode(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-supergrok", group: "应用", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, demo: superGrok(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-claude-signing-in", group: "应用", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, demo: claudeSignIn, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-supergrok-signing-in", group: "应用", title: "Profile · SuperGrok 重新登录（设备码）", app: true, demo: superGrok(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "pick-workspace-models", group: "选模型", title: "模型 · 本机、借用的、可借用的", render: () => borrowStory(false), steps: [{ click: "text=Opus 5.5" }] },
   { id: "pick-borrow", group: "选模型", title: "模型 · 选了别的 station 的，借用", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }] },
@@ -867,6 +884,7 @@ export const stories: Story[] = [
   { id: "phone-profile-workspaces", group: "手机", title: "Profile · 也给加入的 workspace 用", app: true, phone: true, demo: profileFor(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-opencode-signing-in", group: "手机", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, phone: true, demo: openCode(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok", group: "手机", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, phone: true, demo: superGrok(false), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-claude-signing-in", group: "手机", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, phone: true, demo: claudeSignIn, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok-signing-in", group: "手机", title: "Profile · SuperGrok 重新登录（设备码）", app: true, phone: true, demo: superGrok(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-new-chat-not-shared", group: "手机", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, phone: true, demo: notShared, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="新建对话"]' }] },
   { id: "phone-station-add-existing", group: "手机", title: "添加 station · 已有的", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
