@@ -113,8 +113,11 @@ build() {
     printf '%s' "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$ANDROID_USER_HOME/debug.keystore"
   fi
   local r=0
-  # (the run's process tracking off for Gradle's daemon: it lives on to the next build, for its idle timeout)
-  env -u RUNNER_TRACKING_ID APP=stillfail VARIANT=release HBC_CACHE="$C/hbc" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
+  # MBUI_KEEP_DAEMON=1 (main's beta): the run's process tracking off for Gradle's daemon, which lives on to the next
+  # build for its idle timeout (~2 GB resident); a branch's build leaves it to the runner, which ends it with the job
+  local keep=
+  [ "${MBUI_KEEP_DAEMON:-}" != 1 ] || keep="-u RUNNER_TRACKING_ID"
+  env $keep APP=stillfail VARIANT=release HBC_CACHE="$C/hbc" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
     bash "$WORK/scripts/android.sh" build 2>&1 | tee "$C/build.log" || r=$?
   [ -z "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || rm -rf "$ANDROID_USER_HOME"
   [ $r = 0 ] || exit $r

@@ -44,6 +44,7 @@ jobs:
       - name: Build and sign
         env:
           ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+          MBUI_KEEP_DAEMON: 1
         run: bash apps/mbui/scripts/beta.sh build
       - name: Put it, check it, then its feed
         env:
