@@ -118,9 +118,29 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
   } catch (error) {
     if (cloud.peersCurrent) throw error;
   }
+  // Each request answered on its own, as it comes: answered one after another, a slow one (a sync while the station
+  // was loaded) held up every other one of the caller's, whose chats all share the connection; each timed out at 30 s,
+  // the caller dialed again and its next requests queued behind the same, while those left on the old connection were
+  // still run (2026-10-20, ccvm to Studio for hours after Studio's load came down). Idle only with none being answered.
+  // The stream being waited for stays the one waited for past each minute: one asked for again would be lost to it.
+  let answering = 0;
+  let next: Promise<Stream | null> | null = null;
   for (;;) {
-    const stream = await within(60_000, conn.acceptBi(), "peer idle");
+    next ??= conn.acceptBi();
+    let stream: Stream | null;
+    try {
+      stream = await within(60_000, next, "peer idle");
+    } catch (error) {
+      if (answering > 0) continue;
+      throw error;
+    }
+    next = null;
     if (stream === null) return;
+    answering++;
+    void answerStream(stream).finally(() => answering--);
+  }
+
+  async function answerStream(stream: Stream) {
     let answer: unknown;
     try {
       const envelope = JSON.parse((await within(15_000, readAll(stream, MAX_MESSAGE), "peer request timed out")).toString("utf8"));
@@ -138,8 +158,14 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
     } catch (error) {
       answer = { error: (error as Error).message };
     }
-    await stream.write(Buffer.from(JSON.stringify(answer)));
-    await stream.finish();
+    try {
+      await stream.write(Buffer.from(JSON.stringify(answer)));
+      await stream.finish();
+    } catch (error) {
+      // The caller gone (it gave up, the connection closed): nobody to answer.
+      log.info("mesh", "peer answer not sent", { error: (error as Error).message });
+      return;
+    }
     void within(10_000, stream.stopped(), "").catch(() => {});
   }
 }
