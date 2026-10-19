@@ -49,6 +49,18 @@ test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
   assert.equal(old[0].text, "yo");
 });
 
+test("a_message_the_station_cut_short_is_still_read_as_one", () => {
+  const cut = '<message via="ember" from="ember" ts="9.1">\nRemote task t1 on mini1: {"job":{"state":"done"\n… (1505 more characters)';
+  const [messages, note] = parsePrompt(cut);
+  assert.equal(note, "");
+  assert.deepEqual(
+    messages.map((m) => [m.station, m.text]),
+    [[true, 'Remote task t1 on mini1: {"job":{"state":"done"\n… (1505 more characters)']],
+  );
+  // Words not cut by the station and missing their closing tag are not a message.
+  assert.equal(parsePrompt('<message via="ember" from="ember" ts="9.1">\nhi')[0].length, 0);
+});
+
 test("a_station_notice_is_a_jobs_words_or_an_event_in_a_line", () => {
   const said = "OVER BUDGET: run 1 took 301 s\n\njobs:\n  +   0 s    13 s  plan";
   const notices = [
