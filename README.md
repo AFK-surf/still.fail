@@ -1,8 +1,17 @@
-# mbui — a MoonBit UI prototype
+# mbui — a MoonBit UI framework
 
-A small cross-platform UI framework written in MoonBit, to find out what a
-mygo-style toolkit costs in MoonBit: one core that builds, lays out and paints
-a tree every frame, and thin hosts that draw it and feed it input.
+mbui is a cross-platform UI framework written in MoonBit: one core that
+builds, lays out and paints a tree every frame and draws everything itself on
+the GPU, and thin hosts that put it on the screen and feed it input — macOS
+and iOS (Metal), Windows (Direct3D 11), Android (OpenGL ES), and a WebGL2
+host for tests and previews. Its flexbox passes Yoga's tests and its text
+segmentation Unicode's own. It is where [still.fail](https://still.fail)'s
+native clients are being rebuilt (`src/stillfail`, `src/sfapp`, `src/sf`).
+It is experimental: APIs change without notice.
+
+Open source under the MIT licence (`LICENSE`); what it includes or is
+derived from others' work is listed, with their licences, in
+`THIRD_PARTY_NOTICES.md`.
 
 ```
 src/ui      the framework (MoonBit, target independent)
@@ -76,3 +85,9 @@ scripts/shots.sh windows                        # screenshot compared with golde
 
 CI (`.github/workflows/windows.yml`) builds it on `windows-latest`, runs the
 `shot` and `ime` scripts and compares the screenshot with the golden.
+
+## Licence
+
+MIT, Copyright (c) 2026 still.fail contributors: see `LICENSE`. Third-party
+data, tests and code it carries keep their own licences
+(`THIRD_PARTY_NOTICES.md`).
