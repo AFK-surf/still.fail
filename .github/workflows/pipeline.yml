@@ -177,8 +177,8 @@ jobs:
   # The native parts only Windows builds (scripts/native.ts `msvc`: the mbui app's shell, MSVC's, and its engine, Hermes
   # built from its source with clang-cl), each whose key the release lacks in a job of its own on GitHub's Windows (no
   # runner of ours is Windows), side by side: main publishes them, a branch passes them on as a run artifact (the
-  # evidence for its merge; the mbui app's Windows job, mbui.yml, gets or builds its own). A cold shell is ~6 minutes,
-  # Hermes and the engine ~4.
+  # evidence for its merge; the mbui app's Windows job, mbui.yml, gets or builds its own). Cold (no cache), the shell is
+  # ~6 minutes and Hermes with the engine ~5; with the cache below, what changed alone.
   natives-win:
     needs: plan
     if: needs.plan.outputs.natives_win != '[]' && needs.plan.outputs.natives_win != ''
@@ -193,12 +193,25 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      # the part's build (cargo's target, Hermes's checkout and CMake build) where the cache below keeps it
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.ci-target
     steps:
       # the keys are git's blobs: the checkout as git has it
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
+      # What a build leaves, kept by what decides most of it (the lock, the toolchain and recipes: native.ts): a change to
+      # the part's own sources then compiles only them and what depends on them, not all 318 crates or all of Hermes.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            .ci-target
+          key: natives-win-${{ matrix.part }}-${{ hashFiles('client/Cargo.lock', 'scripts/native.ts') }}
+          restore-keys: natives-win-${{ matrix.part }}-
       - uses: ilammy/msvc-dev-cmd@v1
       # Git Bash's /usr/bin/link shadows MSVC's link.exe for cargo
       - run: echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"

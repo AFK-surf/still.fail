@@ -207,11 +207,13 @@ const PARTS: Record<string, Part> = {
     build(t, out) {
       const target = targetDir(join(ROOT, "client/target"), "shell");
       if (t === "win32-x64") {
+        // One build: its tests where it runs (files, the accounts' SQLite, iroh on loopback, the time zone's offset: what
+        // the core's engine leans on, which nothing else runs on Windows), whose library is the DLL (the crate's cdylib),
+        // rather than a release build and then a test build compiling a dozen crates again for the dev-dependencies'
+        // features.
         cargo(shellWinCommand(), join(ROOT, "client"), { CARGO_TARGET_DIR: target });
-        // Its tests where it runs (files, the accounts' SQLite, iroh on loopback, the time zone's offset: what the core's
-        // engine leans on), which nothing else runs on Windows.
-        cargo(["test", "--release", "--locked", "-p", "stillfail-shell", "--target", "x86_64-pc-windows-msvc"], join(ROOT, "client"), { CARGO_TARGET_DIR: target });
-        for (const f of P("shell").files(t)) copyFileSync(join(target, "x86_64-pc-windows-msvc/release", f), join(out, f));
+        const release = join(target, "x86_64-pc-windows-msvc/release");
+        for (const f of P("shell").files(t)) copyFileSync(existsSync(join(release, f)) ? join(release, f) : join(release, "deps", f), join(out, f));
         return;
       }
       cargo(shellCommand(), join(ROOT, "client"), { CARGO_TARGET_DIR: target, ...ndkEnv() });
@@ -336,8 +338,9 @@ const shellCommand = () => [
   // Named by its file (SONAME): the engine that links it is then given its name, not where it was built.
   "--", "-C", "link-arg=-Wl,-soname,libstillfail_shell.so",
 ];
-/// The Windows shell: a DLL with its import library (the engine links it), as the Android one is a cdylib.
-const shellWinCommand = () => ["rustc", "--locked", "-p", "stillfail-shell", "--lib", "--crate-type", "cdylib", "--target", "x86_64-pc-windows-msvc", "--release"];
+/// The Windows shell: the crate's cdylib (a DLL with its import library, which the engine links), as built for its
+/// tests, which it runs.
+const shellWinCommand = () => ["test", "--release", "--locked", "-p", "stillfail-shell", "--target", "x86_64-pc-windows-msvc"];
 /// The Windows engine (apps/mbui/engine) in Hermes's own CMake build (its libhermes, static, linked into the DLL),
 /// linked to the shell by name (an import library made from the shell's C ABI, stillfail_shell.def: the shell itself
 /// is not needed to build it). The checkout and the build stay in the part's target directory, so a change to the loop

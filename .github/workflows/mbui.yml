@@ -114,6 +114,8 @@ jobs:
     env:
       # apps/mbui/mbui, the pinned mbui's link, a real one
       MSYS: winsymlinks:nativestrict
+      # where a native part not prebuilt is built (kept by the cache below, as natives-win's in pipeline.yml)
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.ci-target
     steps:
       # the natives' keys are git's blobs: the checkout as git has it
       - run: git config --global core.autocrlf false
@@ -125,6 +127,16 @@ jobs:
           echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"
           powershell -NoProfile -Command 'irm https://cli.moonbitlang.com/install/powershell.ps1 | iex'
           echo "$USERPROFILE\.moon\bin" >> "$GITHUB_PATH"
+      # what building them leaves (cargo's registry and target, Hermes's build), by what decides most of it: a part's
+      # own sources changed compile alone
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            .ci-target
+          key: mbui-windows-build-${{ hashFiles('client/Cargo.lock', 'scripts/native.ts') }}
+          restore-keys: mbui-windows-build-
       # saved as soon as they are there (not only when the whole job passes)
       - id: natives
         uses: actions/cache/restore@v4
