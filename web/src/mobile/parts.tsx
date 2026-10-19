@@ -278,8 +278,13 @@ export function LargeTitle({ small, big }: { small: string; big: string }) {
 
 // ── lists and cards ────────────────────────────────────────────────────
 
-export function SectionHeader({ title, trailing, start = 20 }: { title: string; trailing?: string | undefined; start?: number }) {
-  return <div className={css.mSection} style={{ paddingLeft: start }}><b>{title}</b>{trailing !== undefined && <span>{trailing}</span>}</div>;
+/** A section's title; `mark`: what it holds at a glance (a vendor's mark), before it. */
+export function SectionHeader({ title, trailing, start = 20, mark }: { title: string; trailing?: string | undefined; start?: number; mark?: ReactNode }) {
+  return (
+    <div className={css.mSection} style={{ paddingLeft: start }}>
+      {mark && <span className={css.mSectionMark} aria-hidden="true">{mark}</span>}<b>{title}</b>{trailing !== undefined && <span>{trailing}</span>}
+    </div>
+  );
 }
 
 export function Card({ onClick, children }: { onClick?: () => void; children: ReactNode }) {

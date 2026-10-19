@@ -30,6 +30,9 @@ import fail.still.android.data.DriveRoot
 import fail.still.android.data.DriveRoots
 import fail.still.android.data.Me
 import fail.still.android.data.Overview
+import fail.still.android.data.Access
+import fail.still.android.data.Profile
+import fail.still.android.data.WorkspaceProfile
 import fail.still.android.data.ProfilesView
 import fail.still.android.data.StationState
 import fail.still.android.data.Topics
@@ -63,6 +66,24 @@ class PlacePagesTest {
         ),
     )
 
+    /** A workspace's account of a kind (its section, with that kind's mark before its title). */
+    private fun account(id: String, group: String, title: String, name: String, runtime: String, kind: String) = WorkspaceProfile(
+        key = "${Fixtures.WS}/st/$id", group = group, groupTitle = title, station = Fixtures.STATION, stationId = "st", stationName = "studio",
+        profile = Profile(
+            id = id, name = name, email = name, runtime = runtime, runtimes = listOf(runtime), access = Access(kind = kind, key = ""),
+            home = "/Users/alice/.stillfail/profiles/$id", homeExists = true, models = listOf("opus"), env = emptyList(), usedBy = emptyList(), loginCommand = "",
+            checkText = "可用", checkTone = "green", makers = emptyMap(), names = emptyMap(), series = emptyList(), modelsText = "1 个模型",
+        ),
+        shared = false, host = "st", hostName = "studio", hostOnline = true, usable = true, where = "仅在 studio", stations = emptyList(), editable = true, canShare = true,
+    )
+
+    private val accounts = listOf(
+        account("p1", "claude", "Claude 订阅", "alice@example.com", "claude", "subscription"),
+        account("p2", "chatgpt", "ChatGPT 订阅", "codex-alice", "codex", "subscription"),
+        account("p3", "grok", "SuperGrok 订阅", "alice@x.example", "grok", "subscription"),
+        account("p4", "key", "API Key", "OpenRouter", "claude", "api-provider"),
+    )
+
     private fun launch(stack: List<Screen>, dark: Boolean): Harness {
         val h = Harness(rule)
         h.fake.put(Topics.chats(Fixtures.WS, false), chats(12))
@@ -70,7 +91,7 @@ class PlacePagesTest {
         h.fake.put(Topics.chats(Fixtures.WS, false, watching = true), chats(0))
         h.fake.put(Topics.workspace(Fixtures.WS), WorkspaceView(id = Fixtures.WS, name = "Dev", role = "owner"))
         h.fake.put(Topics.connects(Fixtures.WS, false), ConnectsView(Me("alice", "alice@example.com"), emptyList(), wait = Fixtures.NO_WAIT))
-        h.fake.put(Topics.profiles(Fixtures.WS), ProfilesView(emptyList(), wait = Fixtures.NO_WAIT))
+        h.fake.put(Topics.profiles(Fixtures.WS), ProfilesView(accounts, wait = Fixtures.NO_WAIT))
         h.fake.put(Topics.usage(Fixtures.WS, 7), UsageView(7u, Fixtures.NO_WAIT, true, emptyList(), emptyList(), emptyList(), 0.0, emptyList(), listOf("没有读到 studio 的用量"), "按各家 API 价折算"))
         h.fake.put(Topics.archive(Fixtures.WS), ArchiveView(listOf(ArchiveDay("今天", (0 until 6).map {
             ArchiveItem(Fixtures.STATION, "a-$it", "ember:a-$it", 300L + it, listOf("旧的发版清单", "试一下新模型", "周报")[it % 3], "已完成", Fixtures.NOW.toDouble(), "10:0$it", "手动归档", true)
@@ -107,13 +128,15 @@ class PlacePagesTest {
     @Test fun pushedProfilesLight() = pushedProfiles(false)
     @Test fun pushedProfilesDark() = pushedProfiles(true)
 
-    /** Profile from settings: back to 设置, its name in the middle, its "+" at the right (no bar to hold it), adding one. */
+    /** Profile from settings: back to 设置, its name in the middle, its "+" at the right (no bar to hold it), its accounts a section each kind, adding one. */
     private fun pushedProfiles(dark: Boolean) {
         val h = launch(listOf(Screen.Home, Screen.Settings), dark)
         rule.onNodeWithText("Profile").performScrollTo().performClick()
         h.settle()
         assertEquals(listOf(Screen.Home, Screen.Settings, Screen.Profiles()), h.app.stack)
         shot(h, "place-pushed-profiles-" + if (dark) "dark" else "light")
+        // A section each kind of account, its mark before its title.
+        for (title in listOf("Claude 订阅", "ChatGPT 订阅", "SuperGrok 订阅", "API Key")) rule.onNodeWithText(title).assertExists()
         rule.onNodeWithTag("bar-glass").assertDoesNotExist()
         rule.onNodeWithText("设置").assertExists()
         rule.onNode(hasContentDescription("添加 Profile") and !hasTestTag("bar-action")).performClick()

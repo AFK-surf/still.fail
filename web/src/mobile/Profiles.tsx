@@ -8,7 +8,7 @@ import { stationApi, useAction, useMemberships, useOverview, useProfiles, useSta
 import type { MachineLogin, ProfileFlowView, RuntimeInstall, WorkspaceProfile } from "../core/shapes.ts";
 import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
-import { Check, ChevronRight, More } from "@stillfail/ui/icons.tsx";
+import { Check, ChevronRight, Key, More } from "@stillfail/ui/icons.tsx";
 import type { Choice } from "../pages/Accounts.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
 import { QuotaBars } from "../components.tsx";
@@ -80,7 +80,7 @@ export function ProfilesScreen() {
           ) : profileGroups(s.overview.profiles).map((g) => (
             // A section each kind of account, as the workspace's list (the core's order).
             <Fragment key={g[0]!.group}>
-              <SectionHeader title={g[0]!.groupTitle ?? ""} start={24} />
+              <SectionHeader title={g[0]!.groupTitle ?? ""} start={24} mark={<GroupMark group={g[0]!.group} />} />
               <ListCard>{g.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}</ListCard>
             </Fragment>
           ))}
@@ -96,6 +96,11 @@ export function ProfilesScreen() {
       <div style={{ height: 30 }} />
     </div>
   );
+}
+
+/** A kind of account's mark, before its section's title: its vendor's for a subscription, a key for keys. */
+function GroupMark({ group }: { group?: string | undefined }) {
+  return group === "key" ? <Key size={16} /> : <ProviderMark runtime={group === "chatgpt" ? "codex" : group ?? "claude"} kind="subscription" size={16} />;
 }
 
 /** The workspace's profiles in one list: a shared one once, where it is (登录在 / 只给 …) under it; one whose
@@ -117,7 +122,7 @@ function WorkspaceList({ scope }: { scope: string }) {
       {/* A section each kind of account (the core's order). */}
       {groups.map((g) => (
         <Fragment key={g[0]!.group}>
-          <SectionHeader title={g[0]!.groupTitle} start={24} />
+          <SectionHeader title={g[0]!.groupTitle} start={24} mark={<GroupMark group={g[0]!.group} />} />
           <ListCard>
             {g.map((e: WorkspaceProfile) => (
               <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>

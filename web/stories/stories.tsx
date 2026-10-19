@@ -152,6 +152,25 @@ const claudeSignIn: DemoExtension = {
     };
   },
 };
+/** The workspace's list with an account of each kind, a section each, its mark before its title. */
+const everyKind: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "profiles" || !value || typeof value !== "object") return undefined;
+    const v = value as { items: Record<string, unknown>[] };
+    const e = v.items[0]!;
+    const p = e.profile as Record<string, unknown>;
+    const as = (id: string, group: string, groupTitle: string, profile: Record<string, unknown>) => ({ ...e, key: `${String(e.key)}-${id}`, group, groupTitle, profile: { ...p, id, ...profile } });
+    return {
+      ...v,
+      items: [
+        ...v.items,
+        as("codex", "chatgpt", "ChatGPT 订阅", { name: "lin@acme.dev", runtime: "codex", runtimes: ["codex"], quota: null }),
+        as("grok", "grok", "SuperGrok 订阅", { name: "lin@acme.dev", runtime: "grok", runtimes: ["grok"], quota: null }),
+        as("key", "key", "API Key", { name: "OpenRouter", access: { kind: "api-provider", key: "sk-or…9f2c" }, providerMark: "openrouter", quota: null }),
+      ],
+    };
+  },
+};
 /** The demo's profile as a SuperGrok subscription (Grok Build's): signed in, or being signed in again (`signingIn`: xAI's
  *  device code is up). The workspace's list has it under its own kind too. */
 const superGrok = (signingIn: boolean): DemoExtension => {
@@ -922,6 +941,7 @@ export const stories: Story[] = [
   { id: "phone-chat-info", group: "手机", title: "对话信息", app: true, phone: true, steps: [{ click: '[aria-label="对话信息"]' }] },
   { id: "phone-files", group: "手机", title: "文件", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="文件"]' }] },
   { id: "phone-profile", group: "手机", title: "Profile", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
+  { id: "phone-profile-kinds", group: "手机", title: "Profile · 各类账号（分组带标记）", app: true, phone: true, demo: everyKind, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
   { id: "phone-memory", group: "手机", title: "记忆", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
   { id: "phone-memory-skill", group: "手机", title: "记忆 · 项目", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "acme-web" }] },
   { id: "phone-profile-add-install", group: "手机", title: "添加 Profile · SuperGrok · 先安装 Grok Build", app: true, phone: true, demo: installFlowDemo("missing"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },

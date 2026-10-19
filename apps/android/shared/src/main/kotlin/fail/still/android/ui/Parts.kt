@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.positionInParent
@@ -565,10 +566,27 @@ fun LargeTitle(small: String, big: String, lead: (@Composable () -> Unit)? = nul
 
 // ── lists and cards ────────────────────────────────────────────────────
 
+/**
+ * Text moved so its characters' ink, not its line, is in the middle of its box: the marks centred beside it are then
+ * centred on its words. A Chinese font's line has more room above its characters than below (its ascent is the line's),
+ * so they sit low in it; a character's ink is centred 0.38em above the baseline.
+ */
+fun Modifier.inkCentred(size: androidx.compose.ui.unit.TextUnit) = layout { m, c ->
+    val p = m.measure(c)
+    val base = p[androidx.compose.ui.layout.FirstBaseline]
+    val dy = if (base == androidx.compose.ui.layout.AlignmentLine.Unspecified) 0 else (p.height / 2f - base + 0.38f * size.toPx()).roundToInt()
+    layout(p.width, p.height) { p.place(0, dy) }
+}
+
+/** A section's title; `mark`: what it holds at a glance (a vendor's mark), before it, centred on its words. */
 @Composable
-fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp, action: (@Composable () -> Unit)? = null) {
+fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp, mark: (@Composable () -> Unit)? = null, action: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(start = start, end = 20.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom) {
-        Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        if (mark == null) Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            mark()
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.inkCentred(15.sp))
+        }
         Spacer(Modifier.weight(1f))
         if (trailing != null) Text(trailing, fontSize = 13.sp, color = C.muted)
         // What can be done to the whole section (取消登录), at its end.

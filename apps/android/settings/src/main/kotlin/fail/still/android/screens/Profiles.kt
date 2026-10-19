@@ -167,7 +167,7 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
             } else {
                 // A section each kind of account, as the workspace's list (the core lists them by kind, in order).
                 overview.profiles.groupBy { it.group }.forEach { (_, g) ->
-                    SectionHeader(g.first().groupTitle.orEmpty(), start = 24.dp)
+                    SectionHeader(g.first().groupTitle.orEmpty(), start = 24.dp, mark = { GroupMark(g.first().group) })
                     ListCard { g.forEach { ProfileRow(s.station, it) } }
                 }
             }
@@ -178,6 +178,13 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
         BarRoom()
     }
     }
+}
+
+/** A kind of account's mark, before its section's title: its vendor's for a subscription, a key for keys. */
+@Composable
+private fun GroupMark(group: String?) {
+    if (group == "key") IconIn(Icons.Key, 16.dp, C.ink)
+    else ProviderMark(if (group == "chatgpt") "codex" else group ?: "claude", "subscription", 16.dp)
 }
 
 /** The workspace's profiles, a section each kind of account: a shared one once, where it is under it; one whose
@@ -196,7 +203,7 @@ private fun WorkspaceList(scope: String) {
     }
     // A section each kind of account (the core lists them by kind, in order).
     view.items.groupBy { it.group }.forEach { (_, g) ->
-        SectionHeader(g.first().groupTitle, start = 24.dp)
+        SectionHeader(g.first().groupTitle, start = 24.dp, mark = { GroupMark(g.first().group) })
         ListCard {
             g.forEach { e ->
                 val p = e.profile

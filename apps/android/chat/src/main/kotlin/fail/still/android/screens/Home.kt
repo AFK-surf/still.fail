@@ -5,15 +5,13 @@
 package fail.still.android.screens
 
 import fail.still.android.data.t
-import androidx.compose.ui.layout.AlignmentLine
-import androidx.compose.ui.layout.FirstBaseline
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import android.content.Context
 import androidx.compose.ui.layout.boundsInRoot
+import fail.still.android.ui.inkCentred
 import fail.still.android.ui.pressText
 import fail.still.android.ui.MenuItem
 import fail.still.android.ui.MenuSpec
@@ -554,18 +552,6 @@ private fun rowBusy(app: AppState, item: ChatItem): Boolean =
 /** Why the row's menu's pin or archive failed a moment ago, if it did. */
 private fun rowFailed(app: AppState, item: ChatItem): String? =
     app.failedOf(setOf("chat.pin", "chat.archive"), "station" to item.station, "session" to item.session)
-
-/**
- * Text moved so its characters' ink, not its line, is in the middle of its box: the marks centred beside it are then
- * centred on its words. A Chinese font's line has more room above its characters than below (its ascent is the line's),
- * so they sit low in it; a character's ink is centred 0.38em above the baseline.
- */
-private fun Modifier.inkCentred(size: androidx.compose.ui.unit.TextUnit) = layout { m, c ->
-    val p = m.measure(c)
-    val base = p[FirstBaseline]
-    val dy = if (base == AlignmentLine.Unspecified) 0 else (p.height / 2f - base + 0.38f * size.toPx()).roundToInt()
-    layout(p.width, p.height) { p.place(0, dy) }
-}
 
 /** What a row shows, `lead` leading who is in it (RowPicture.kt); its station by its icon (the core gives one only with several stations); the time while it is `held`; `busy`: a spinner where its mark goes; `failed`: a red mark there a moment (DoingMark). */
 @Composable
