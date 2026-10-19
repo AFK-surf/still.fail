@@ -54,6 +54,7 @@ jobs:
       - name: A big JPEG for the photos app
         shell: powershell
         run: |
+          New-Item -ItemType Directory -Force test\images | Out-Null
           Add-Type -AssemblyName System.Drawing
           $b = New-Object System.Drawing.Bitmap 6000, 4000
           $g = [System.Drawing.Graphics]::FromImage($b)
@@ -68,6 +69,8 @@ jobs:
           "big.jpg: $((Get-Item test\images\big.jpg).Length) bytes"
       - name: Photos
         run: |
+          # one picture comes over http (src/photos/pictures/windows.mbt)
+          python -m http.server 5590 --bind 127.0.0.1 -d test/images >/dev/null 2>&1 &
           APP=photos scripts/win.sh build
           MBUI_BENCH=-1 APP=photos scripts/win.sh script photos
           ls -la out/photos

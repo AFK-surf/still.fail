@@ -1,7 +1,6 @@
 // Photos over made-up days (src/gallery, as src/coredemo has it over the
-// core): a few pictures over and over (macOS's desktop pictures natively,
-// JPEGs made from them on the web), some of them videos, 60 days back from
-// a fixed one.
+// core): a few made-up pictures over and over (scripts/test_images.swift),
+// some of them videos, 60 days back from a fixed one.
 
 ///|
 fn days_in(y : Int, m : Int) -> Int {

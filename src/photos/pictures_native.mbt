@@ -1,15 +1,14 @@
 ///|
-let dir = "/System/Library/Desktop Pictures/"
+/// Made-up pictures (scripts/test_images.swift --gallery, which scripts/mac.sh
+/// runs for APP=photos), read from where the app is started (the checkout).
+let dir = "out/pictures/"
 
 ///|
-/// HEIC: five 25 MB ones (6016 × 6016), small thumbnails, and one that
-/// isn't there.
+/// HEIC: five big ones (6016 × 6016), twelve of 800 px at most, the JPEGs and
+/// one that isn't there.
 let pictures : Array[String] = [
-  "iMac Blue.heic", "iMac Purple.heic", "iMac Pink.heic", "iMac Orange.heic", "iMac Green.heic",
-  ".thumbnails/Valley Light.heic", ".thumbnails/Iridescence Light.heic", ".thumbnails/Tree.heic",
-  ".thumbnails/The Beach.heic", ".thumbnails/Iridescence.heic", ".thumbnails/Catalina Sunset.heic",
-  ".thumbnails/Catalina Coast.heic", ".thumbnails/The Cliffs.heic", ".thumbnails/The Desert.heic",
-  ".thumbnails/Dome Light.heic", ".thumbnails/Grid Green.heic", ".thumbnails/Motion Blue Dark.heic",
+  "big0.heic", "big1.heic", "big2.heic", "big3.heic", "big4.heic", "0.heic", "1.heic", "2.heic", "3.heic",
+  "4.heic", "5.heic", "6.heic", "7.heic", "8.heic", "9.heic", "10.heic", "11.heic", "0.jpg", "5.jpg",
   "no such picture.heic",
 ]
 

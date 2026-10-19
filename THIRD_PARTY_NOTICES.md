@@ -29,11 +29,12 @@ the one in `LICENSE`, with the copyright line given here.
 
 ## Motion
 
-- What: the easing functions, generators (spring, inertia, keyframes),
-  transitions and projection in `src/motion` and their tests
-  (`motion_port_test.mbt`, `projection_port_test.mbt`, from Motion at
-  `ce1d082`), ported from Motion's TypeScript (on the `motion` branch until it
-  is merged).
+- What: the easing functions, utilities, generators (spring, inertia,
+  keyframes), transitions and layout projection in `src/motion`
+  (`easing.mbt`, `utils.mbt`, `generators.mbt`, `transition.mbt`,
+  `projection.mbt`) and their tests (`motion_port_test.mbt`,
+  `projection_port_test.mbt`, from Motion at `ce1d082`), ported from Motion's
+  TypeScript.
 - From: https://github.com/motiondivision/motion (motion.dev)
 - Licence: MIT. Copyright (c) 2024 Motion B.V.
 
@@ -119,7 +120,9 @@ AndroidX Media3 (Apache-2.0) from Maven Central; `scripts/core.sh` builds
 still.fail's client core from a still.fail checkout; the web tests install
 Playwright, pngjs and pixelmatch from npm. Their licences apply to those downloads.
 
-## Screenshots
+## Pictures and screenshots
 
-The screenshots in `goldens/` are mbui's own output over made-up data, drawn
-with the system's fonts.
+The pictures in `test/images` and those `scripts/test_images.swift --gallery`
+makes are drawn by that script from shapes (no photographs, no fonts) and
+dedicated to the public domain (CC0 1.0). The screenshots in `goldens/` are
+mbui's own output over made-up data, drawn with the system's fonts.

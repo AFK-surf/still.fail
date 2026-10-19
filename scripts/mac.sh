@@ -23,6 +23,8 @@ if [ $PKG = coredemo ] || [ $PKG = stillfail ]; then
   export MB_CORE_BUNDLE=${MB_CORE_BUNDLE:-$PWD/out/core/core.js}
 fi
 EXE=_build/native/$MODE/build/$PKG/$PKG.exe
+# the photos app shows made-up pictures from out/pictures (src/photos/pictures_native.mbt)
+[ $PKG = photos ] && [ "${1:-build}" != build ] && gallery_pictures
 case "${1:-build}" in
   build)
     # moon's build, with the C that moonc generates split and compiled in parallel (scripts/mbc.py: a `cc` first on

@@ -44,16 +44,10 @@ sync() {
 # the emulator itself takes 5580 and 5581)
 photos() {
   P=$OUT/photos
-  if [ ! -f $P/11.jpg ]; then
-    mkdir -p $P
-    i=0
-    for f in "/System/Library/Desktop Pictures/.thumbnails/"*.heic; do
-      [ $i -lt 12 ] || break
-      sips -s format jpeg "$f" --out $P/$i.jpg >/dev/null && i=$((i + 1))
-    done
-    cp "/System/Library/Desktop Pictures/iMac Blue.heic" $P/big.heic
-    sips -s format jpeg "/System/Library/Desktop Pictures/iMac Orange.heic" --out $P/big.jpg >/dev/null
-  fi
+  # the made-up pictures (scripts/test_images.swift --gallery): twelve JPEGs and a big HEIC and JPEG
+  gallery_pictures
+  mkdir -p $P
+  cp -p out/pictures/[0-9]*.jpg out/pictures/big.heic out/pictures/big.jpg $P/
   cp -p test/images/*.jpg $P/
   $ADB -s $SERIAL shell run-as dev.mbui.demo mkdir -p files/photos
   for f in $P/*.jpg $P/*.heic; do

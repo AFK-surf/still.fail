@@ -12,14 +12,11 @@ case "${1:-build}" in
     moon build --target js --release src/$APP 2>&1 | python3 "$D/errs.py"
     mkdir -p $OUT
     cp _build/js/release/build/$APP/$APP.js $OUT/demo.js
-    if [ $APP = photos ] && [ ! -f $OUT/photos/11.jpg ]; then
-      # JPEGs from macOS's desktop picture thumbnails
+    if [ $APP = photos ]; then
+      # the made-up pictures (scripts/test_images.swift --gallery)
+      gallery_pictures
       mkdir -p $OUT/photos
-      i=0
-      for f in "/System/Library/Desktop Pictures/.thumbnails/"*.heic; do
-        [ $i -lt 12 ] || break
-        sips -s format jpeg "$f" --out $OUT/photos/$i.jpg >/dev/null && i=$((i + 1))
-      done
+      cp -p out/pictures/*.jpg $OUT/photos/
     fi
     cp web/index.html web/host.js $OUT/
     T1=$(python3 -c 'import time;print(time.time())')
