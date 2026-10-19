@@ -978,6 +978,7 @@ pub unsafe extern "C" fn sf_shell_stop(shell: *mut Shell) {
 
 /// The viewer's time zone at `at_ms` (minutes east of UTC), from the C library, which on Android follows the system's
 /// zone setting and its DST rules (as the Rust core had them).
+#[cfg(not(windows))]
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_utc_offset_min(at_ms: f64) -> i32 {
     let at = (at_ms / 1000.0).floor() as libc::time_t;
@@ -987,6 +988,29 @@ pub extern "C" fn sf_utc_offset_min(at_ms: f64) -> i32 {
         return 0;
     }
     (tm.tm_gmtoff / 60) as i32
+}
+
+/// The same on Windows (the mbui app's core), whose C library has neither localtime_r nor tm_gmtoff: the local time the
+/// CRT makes of `at_ms` (the system's zone and its DST rules, or $TZ when set), read back as if it were UTC, less
+/// `at_ms`. 0 where the CRT has no local time (before 1970).
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub extern "C" fn sf_utc_offset_min(at_ms: f64) -> i32 {
+    unsafe extern "C" {
+        fn _localtime64_s(tm: *mut libc::tm, time: *const i64) -> i32;
+        fn _mkgmtime64(tm: *mut libc::tm) -> i64;
+    }
+    let at = (at_ms / 1000.0).floor() as i64;
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    // SAFETY: both pointers are valid for the calls.
+    if unsafe { _localtime64_s(&mut tm, &at) } != 0 {
+        return 0;
+    }
+    let local_as_utc = unsafe { _mkgmtime64(&mut tm) };
+    if local_as_utc == -1 {
+        return 0;
+    }
+    ((local_as_utc - at) / 60) as i32
 }
 
 #[cfg(test)]

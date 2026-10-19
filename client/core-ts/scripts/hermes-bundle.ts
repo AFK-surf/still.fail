@@ -6,13 +6,14 @@
 // `--entry`: an app's own entry, giving its modules to the core (hosts/hermes-start.ts); still.fail's is hosts/hermes.ts.
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { transformSync } from "@babel/core";
 import { build } from "esbuild";
 
 const args = process.argv.slice(2);
 const flag = args.indexOf("--entry");
-const entry = flag >= 0 ? resolve(args.splice(flag, 2)[1] ?? "") : new URL("../src/hosts/hermes.ts", import.meta.url).pathname;
+const entry = flag >= 0 ? resolve(args.splice(flag, 2)[1] ?? "") : fileURLToPath(new URL("../src/hosts/hermes.ts", import.meta.url));
 const [out, hbc] = args;
 if (!out) throw new Error("usage: hermes-bundle.ts [--entry <file>] <out.js> [<out.hbc>]");
 const built = await build({
@@ -33,9 +34,10 @@ const built = await build({
 });
 // What the app does not carry (apps/android/not-carried.txt: a change to only that runs no Android check) must not be
 // in it: a file that is would go unchecked. (Said of still.fail's app; another app's entry is checked the same.)
-const root = new URL("../../../", import.meta.url).pathname;
-const notCarried = readFileSync(`${root}apps/android/not-carried.txt`, "utf8").split("\n").filter((line) => line && !line.startsWith("#")).map((line) => new RegExp(line));
-const carried = Object.keys(built.metafile.inputs).map((input) => relative(root, resolve(input)));
+// (paths, not URLs' pathnames: on Windows those are /D:/…; and the patterns' slashes, whatever the system's)
+const root = fileURLToPath(new URL("../../../", import.meta.url));
+const notCarried = readFileSync(resolve(root, "apps/android/not-carried.txt"), "utf8").split(/\r?\n/).filter((line) => line && !line.startsWith("#")).map((line) => new RegExp(line));
+const carried = Object.keys(built.metafile.inputs).map((input) => relative(root, resolve(input)).split(sep).join("/"));
 const wrong = carried.filter((path) => notCarried.some((re) => re.test(path)));
 if (wrong.length) throw new Error(`the app carries what apps/android/not-carried.txt says it does not: ${wrong.join(", ")}`);
 // Classes as functions (and `extends Error` as Babel's wrapped native super, so `instanceof` still holds).
