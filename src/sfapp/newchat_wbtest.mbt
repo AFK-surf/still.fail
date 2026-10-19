@@ -14,7 +14,7 @@ test "the bar: 文件 tapped is its page in place of the chats', back is the cha
   t.tap(xs[1], y)
   t.settle() |> ignore
   assert_eq(app.nav.depth(), 1)
-  assert_true(app.nav.top() == Place("files"))
+  assert_true(app.nav.top() == Files)
   assert_true(t.find("文件") is Some(_))
   assert_true(t.find("整理发布清单") is None)
   // back goes to the chats, in place

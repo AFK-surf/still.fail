@@ -393,10 +393,11 @@ src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, S
   view (`prefs.set {barsBy}`) and its place opens. A place tapped is its page at the stack's root, in place, coming in
   30 from the side the ball goes to and fading in (220 ms; 180 from no side); back on another place's page goes to the
   chats. It goes down out of the way (300 ms) under a page pushed and comes back (380 ms). Home keeps its room at the
-  list's foot (BAR_ROOM, 126). 文件 is the drive's page (slice 12's, its ＋ in the notch) and 奏 the decisions page
-  (slice 8's, a place's top bar over it and the bar's room at its foot); the other places are their top bar over
-  nothing yet (PlacePage.kt; their pages are later slices'). The sheets of a chat (slice 8's, decide.mbt's frame) are
-  not yet on this sheet host: they neither drag nor snap.
+  list's foot (BAR_ROOM, 126). 文件 is the drive's page (drive.mbt `files_page` as a place), its ＋ (another folder
+  lent, `files_lend`) in the notch while it can lend; 奏 is the decisions page (slice 8's, a place's top bar over it
+  and the bar's room at its foot); the other places are their top bar over nothing yet (PlacePage.kt; their pages are
+  later slices'). The sheets of a chat (slice 8's, decide.mbt's frame) are not on this sheet host yet: they neither
+  drag nor snap.
 - The bar and its sheets with nothing blurred yet: `bar_ground` (bar.mbt) is the bar's colour where the Android app
   has no blur (Glass.kt floating: --raised at 72% over the paper; the ball that and white at 42%; 令 the accent at
   86%), the one place it is chosen, and `sheet_ground` (sheet.mbt) the sheet's (the paper, the scrim's black, the
@@ -435,7 +436,7 @@ src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, S
 
 Not yet, against the current app: the bar's and the sheets' frosted glass (see above), the bar chosen in the panel sliding
 down into the bar's place (here the panel closes and the bar is the chosen one at once), the notch's icon swapping
-between 令 and a page's "+" (no place page here has an action yet), the stations' place's glyph of their states (the
+between 令 and a page's ＋ with its short scale and fade (here it changes at once), the stations' place's glyph of their states (the
 server's mark here), the bar going away while the keyboard is up (no page with the bar has a field yet), the words
 flying from the composer into their bubble (the list comes up with them; the words leave the field at once), the
 machine's own sessions to go on with (MachineSessions), borrowing another station's model (the note only), a wide
@@ -543,7 +544,7 @@ while the card moved the list):
 | 28 decisions-page | the 奏 page (MBUI_OPEN_PAGE=decisions, a flow's `#env`); the other device asks with a card; the option tapped there; 奏折已全部批完 | alice's answer quoting the post |
 | 29 glass | four long messages sent from the composer's glass; the newest run under the top bar's glass, then, scrolled up, under the composer's | the four entries, as alice's; on macOS the bar's and the capsule's rows in the shots are not flat (what is under them shows through, blurred) |
 | 30 new-chat | 令 in the bar's notch: the new chat rises; the first message typed and sent; the page becomes its chat; the agent's answer comes there; back on Home | the station's entry: the words, once, alice's, in a thread of their own; the agent's answer in that thread; alice's other device lists the chat |
-| 31 places | 文件 tapped on the bar (its page in place); the bar drawn up into the other bar's panel and let go on 奏 (that bar, 奏's page); 用量; the panel again, back on the chats | the bar chosen kept as the workspace's in the core's store on the device (`prefs.set {barsBy}`) |
+| 31 places | 文件 tapped on the bar (the drive's page in place); the bar drawn up into the other bar's panel and let go on 奏 (that bar, 奏's page); 用量; the panel again, back on the chats | the bar chosen kept as the workspace's in the core's store on the device (`prefs.set {barsBy}`) |
 | 32 sheet-drag | the workspaces' sheet drawn up to 94% and dragged closed; a new chat's station sheet dragged a little (back) and past 80 (closed), opened again and its station tapped | the sheet's settling as the app logs it; the core took the pick (`newChat.pick` answered) |
 
 Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
