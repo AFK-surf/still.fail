@@ -3,6 +3,7 @@
 // room below), 180 wide and centred on the finger across, in Sheet.kt MenuHost's look: 固定 / 取消固定, 重命名, 复制会话链接,
 // 归档. None for a new chat its station has not made yet, one on a station offline, or one whose pin or archive is under
 // way (its spinner on the row). A chat keeping watch is archived only once asked (its watch runs on in the archive).
+// A row with nothing left in it is swiped left to archive it, too (SwipeToArchive).
 
 ///|
 /// The row whose menu is open: what it shows, where the finger held it across, the row's top and height (in the
@@ -172,7 +173,12 @@ fn home_row_menu(c : @ui.Ctx, src : Source) -> Unit {
 ///|
 /// Archives a row's chat (Home.kt archiveRow): its 归档 at the row's start or its menu's; one keeping watch only once
 /// asked, in the core's words (its watch runs on in the archive). Said once done; why not, when not.
-fn archive_from_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }) -> Unit {
+fn archive_from_row(
+  src : Source,
+  item : ChatItem,
+  then? : () -> Unit = fn() {  },
+  failed? : () -> Unit = fn() {  },
+) -> Unit {
   let params : Map[String, Json] = {
     "station": Json::string(item.station),
     "session": Json::string(item.session),
@@ -191,6 +197,7 @@ fn archive_from_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  
       "chat.archive",
       Json::object(params),
       done=tr("android-chat.archived"),
+      failed~,
     )
   }
   match item.watch_ask {
@@ -198,4 +205,93 @@ fn archive_from_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  
       @settings.confirm(fill("android-chat.archive.ask", [("title", item.title)]), ask, tr("android-chat.archive"), run)
     None => run()
   }
+}
+
+///|
+/// Let go past this share of its width (or flung left), a swiped row is archived.
+let archive_at : Double = 0.35
+
+///|
+/// How fast a fling left must be (points per ms) to archive a row that went at least `fling_from` across.
+let fling_speed : Double = 0.5
+
+///|
+let fling_from : Double = 16.0
+
+///|
+/// How long a swiped row takes to go off to the left, and its 归档 to fill in ink.
+let swipe_off_ms : Double = 200.0
+
+///|
+let swipe_fill_ms : Double = 140.0
+
+///|
+/// An archivable row (Home.kt SwipeToArchive), swiped left to archive it: it follows the finger, uncovering 归档 at the
+/// right edge (filled in ink once letting go would archive it); let go past `archive_at` of its width or flung left,
+/// it goes off to the left and is archived, else it springs back. Archiving refused, it comes back; one keeping watch
+/// springs back and asks first, as its menu's 归档. Across first it is the swipe (the row's tap and hold let go); up
+/// or down first it is the list's (`in_list`). `row` draws the row moved across by so much.
+fn swipe_to_archive(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool, row : (Double) -> Int) -> Int {
+  let t = @sf.theme()
+  let key = "swipe/" + item.station + "/" + item.id
+  let id = c.id(key)
+  let width = dmax(c.width, 1.0)
+  let off = @motion.anim(c, key, 0.0, global=true)
+  let back = fn(v : Double) { off.animate(0.0, @motion.move_spring, velocity=v) }
+  match c.drag_of(id) {
+    Some(d) => {
+      let (dx, _) = d.take_move()
+      if dx != 0.0 {
+        off.snap(dclamp(off.get() + dx, -width, 0.0))
+      }
+      if d.take_end() {
+        let at = off.get()
+        let v = d.vx * 1000.0
+        let fling = d.vx < -fling_speed && at < -fling_from
+        if at < -width * archive_at || fling {
+          if busy {
+            back(v)
+          } else if item.watch_ask is Some(_) {
+            back(v)
+            archive_from_row(src, item)
+          } else {
+            off.animate(-width, @motion.tween(swipe_off_ms, ease=Standard), velocity=v)
+            archive_from_row(src, item, failed=fn() { back(0.0) })
+          }
+        } else {
+          back(v)
+        }
+      }
+    }
+    None => ()
+  }
+  let at = off.get()
+  let fill = @motion.animate(c, key + "/fill", if at < -width * archive_at { 1.0 } else { 0.0 }, spec=@motion.tween(swipe_fill_ms))
+  let mut out = 0
+  c.drag_area(id, axis=Horizontal, in_list=true, w=Fill(1.0), h=Px(66.0), fn() {
+    c.box(w=Fill(1.0), h=Px(66.0), clip=true, fn() {
+      // under it, at the right edge it uncovers: 归档, quiet until letting go would archive it, then filled in ink
+      c.box(
+        dir=Row,
+        w=Fill(1.0),
+        h=Px(66.0),
+        min_h=66.0,
+        pr=22.0,
+        align=ACenter,
+        justify=JEnd,
+        bg=if at != 0.0 { @sf.mix(t.p.text, fill, t.p.chip) } else { 0L },
+        fn() {
+          if at != 0.0 {
+            c.text(tr("android-chat.archive"), size=15.0, weight=600, color=@sf.mix(t.p.bg, fill, t.p.muted), wrap=false)
+            |> ignore
+          }
+        },
+      )
+      |> ignore
+      c.box(w=Fill(1.0), h=Px(66.0), min_h=66.0, ty=-66.0, fn() { out = row(at) }) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+  out
 }

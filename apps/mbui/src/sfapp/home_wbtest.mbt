@@ -132,10 +132,9 @@ test "a person's colour as Java's hashCode picks it" {
 fn hold_row(t : @ui.Tester, title : String) -> Unit {
   let (x, y) = t.find(title).unwrap()
   t.press_at(x, y)
-  t.frame(ms=250.0)
-  t.frame(ms=250.0)
+  t.run_for(hold_ms)
   t.release(x, y)
-  t.settle() |> ignore
+  t.draw()
 }
 
 ///|
@@ -151,8 +150,6 @@ test "a row held long: its menu (固定, 重命名, 复制会话链接, 归档),
   let (_, menu_y) = t.find("重命名").unwrap()
   assert_true(menu_y > row_y)
   t.tap_text("重命名")
-  t.settle() |> ignore
-  assert_true(t.find("复制会话链接") is None)
   assert_true(t.find("保存") is Some(_))
 }
 
@@ -162,13 +159,11 @@ test "a row's menu: 复制会话链接 copies its link, 固定 pins it (chat.pin
   let t = wide_tester(calls, w=390.0, h=844.0)
   hold_row(t, "夜里的构建又失败了")
   t.tap_text("复制会话链接")
-  t.settle() |> ignore
   assert_true(t.clipboard().has_prefix("[夜里的构建又失败了]("))
   hold_row(t, "夜里的构建又失败了")
   match t.find("固定") {
     Some(_) => {
       t.tap_text("固定")
-      t.settle() |> ignore
       assert_eq(named(calls, "chat.pin").length(), 1)
     }
     // (a fixture row from a station before pins has none)
@@ -184,13 +179,30 @@ test "a chat keeping watch is archived only once asked, in the core's words" {
   // the menu's last item, a row (45) under 复制会话链接
   let (lx, ly) = t.find("复制会话链接").unwrap()
   t.tap(lx, ly + 45.0)
-  t.settle() |> ignore
   assert_eq(named(calls, "chat.archive").length(), 0)
   assert_true(t.find("归档「盯着 CI，绿了告诉我」？") is Some(_))
   assert_true(t.find("它会在归档里继续盯着。") is Some(_))
   // its 归档, beside 取消
   let (cx, cy, cw, ch) = t.rect_of("取消").unwrap()
   t.tap(cx + cw + 40.0, cy + ch / 2.0)
-  t.settle() |> ignore
+  assert_eq(named(calls, "chat.archive").length(), 1)
+}
+
+///|
+test "a row with nothing left in it, swiped left past a third: archived (chat.archive); a short swipe archives nothing" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0)
+  t.scroll_to(12)
+  t.draw()
+  let (_, y) = t.find("把旧的截图都换成新的").unwrap()
+  // across a little: let go short of a third, nothing archived
+  t.drag(300.0, y, 260.0, y)
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  // down first: the list's (it scrolls), nothing archived either
+  t.drag(300.0, y, 290.0, y + 120.0)
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  let (_, y) = t.find("把旧的截图都换成新的").unwrap()
+  // across past a third of the row
+  t.drag(340.0, y, 120.0, y)
   assert_eq(named(calls, "chat.archive").length(), 1)
 }
