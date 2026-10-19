@@ -224,13 +224,29 @@ object Crashes {
             emptyList()
         }
         val wanted = setOf(ApplicationExitInfo.REASON_CRASH, ApplicationExitInfo.REASON_CRASH_NATIVE, ApplicationExitInfo.REASON_ANR)
-        return exits.filter { it.timestamp > since && it.reason in wanted }.map { exit ->
+        return exits.filter { it.timestamp > since && (it.reason in wanted || killedInSight(it)) }.map { exit ->
             // The exception written down as it crashed: the file made just before the system recorded the end.
             val file = if (exit.reason == ApplicationExitInfo.REASON_CRASH) kept.filter { it.first in exit.timestamp - 10_000..exit.timestamp + 1_000 }.maxByOrNull { it.first } else null
             if (file != null) kept.remove(file)
             of(exit, file?.second)
         }.toMutableList()
     }
+
+    /** The reasons the system ends a process for that the person sees as a crash when the app is in front of them
+     *  (it vanishes to the home screen) and the app itself never gets to tell: out of memory, an OEM's resource manager. */
+    private val KILLED = mapOf(
+        ApplicationExitInfo.REASON_LOW_MEMORY to "low_memory",
+        ApplicationExitInfo.REASON_SIGNALED to "signaled",
+        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE to "excessive_resource_usage",
+        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE to "initialization_failure",
+        ApplicationExitInfo.REASON_DEPENDENCY_DIED to "dependency_died",
+        ApplicationExitInfo.REASON_OTHER to "other",
+    )
+
+    /** Killed for one of [KILLED] while on screen (killed in the background is how Android works, not a crash). */
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun killedInSight(exit: ApplicationExitInfo) =
+        exit.reason in KILLED && exit.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
 
     @RequiresApi(Build.VERSION_CODES.R)
     private fun of(exit: ApplicationExitInfo, kept: File?): Report {
@@ -243,7 +259,8 @@ object Crashes {
             put("reason", when (exit.reason) {
                 ApplicationExitInfo.REASON_CRASH -> "crash"
                 ApplicationExitInfo.REASON_CRASH_NATIVE -> "crash_native"
-                else -> "anr"
+                ApplicationExitInfo.REASON_ANR -> "anr"
+                else -> "killed_" + KILLED[exit.reason]
             })
             put("exit_status", exit.status)
             put("exit_description", exit.description)
@@ -251,11 +268,11 @@ object Crashes {
             put("importance", exit.importance)
             put("pss_kb", exit.pss)
             put("rss_kb", exit.rss)
-            if (exit.reason == ApplicationExitInfo.REASON_CRASH_NATIVE) {
+            if (exit.reason != ApplicationExitInfo.REASON_CRASH) {
                 // The system's WebView draws in the app's own render thread, and a crash in it has no symbols to read:
                 // its version says which Chromium it was, and what it logged before it ended says why.
-                webView()?.let { put("webview", it) }
-                logged(exit.pid)?.let { put("logcat", it) }
+                if (exit.reason == ApplicationExitInfo.REASON_CRASH_NATIVE) webView()?.let { put("webview", it) }
+                if (exit.reason != ApplicationExitInfo.REASON_ANR) logged(exit.pid)?.let { put("logcat", it) }
             }
         }
         val description = exit.description ?: ""
@@ -269,7 +286,12 @@ object Crashes {
                 val frames = trace?.let(Tombstone::frames).orEmpty()
                 Report(exit.timestamp, exit.pid, one(signal, trace?.let(Tombstone::headline) ?: description, "signalhandler"), fingerprint(signal, frames), trace, facts, null)
             }
-            else -> Report(exit.timestamp, exit.pid, one("ANR", description, "anr"), fingerprint("ANR", trace?.let(::mainFrames).orEmpty()), trace, facts, null)
+            ApplicationExitInfo.REASON_ANR -> Report(exit.timestamp, exit.pid, one("ANR", description, "anr"), fingerprint("ANR", trace?.let(::mainFrames).orEmpty()), trace, facts, null)
+            else -> {
+                val why = KILLED[exit.reason]
+                val memory = "pss ${exit.pss / 1024} MB, rss ${exit.rss / 1024} MB"
+                Report(exit.timestamp, exit.pid, one("Killed", listOf(why, description, memory).filter { !it.isNullOrEmpty() }.joinToString(": "), "generic"), "android:killed:$why", trace, facts, null)
+            }
         }
     }
 
