@@ -369,6 +369,8 @@ let zh : Map[String, String] = {
   "web-pages.security.request": "发送批准请求",
   "web-pages.security.waitingLead": "「{name}」已开启安全模式，新设备需由你的受信任设备批准",
   "web-pages.security.waitingTitle": "等待批准此设备",
+  // (this app's own: the 安全 page of a device that waits, where it asks: the chats' place)
+  "mbui.security.waitingWhere": "在对话页「发送批准请求」，再输入你的受信任设备上显示的安全码；批准前此设备看不到对话，也连不上 station",
   "web-pages.security.requestFailed": "此设备无法提交批准请求：{error}",
   "web-pages.security.pairEnter": "输入你的受信任设备上显示的安全码",
   "web-pages.security.pairChecking": "正在验证",

@@ -166,7 +166,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
           if flag(me, "waiting") {
             // this device waits to be approved: its code, as its approver sees it, and how it comes in (the
             // waiting page in the chats' place: 发送批准请求)
-            note(c, tr("web-pages.security.waitingTitle") + " · " + tr("web-pages.security.notAsked"))
+            note(c, tr("web-pages.security.waitingTitle") + " · " + tr("mbui.security.waitingWhere"))
             c.box(dir=Row, gap=8.0, align=ACenter, fn() {
               c.text(tr("web-pages.security.thisDevice"), size=13.0, color=t.p.muted, line=18.0, wrap=false) |> ignore
               mono(c, text(me, "code"), size=13.0, weight=600)

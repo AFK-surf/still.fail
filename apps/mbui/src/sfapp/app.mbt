@@ -281,11 +281,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // what another app shared in (share.mbt)
       share_in_frame(c)
       if wide_on.val {
-        // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them; a device waiting
-        // to be confirmed in the workspace's safe mode, only what it waits on
-        if lock_gate(c, src, w) {
-          wide_frame(c, src, w, all, invited)
-        }
+        // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them
+        wide_frame(c, src, w, all, invited)
         wide_overlays(c, src, w)
         preview(c, src)
       } else {
