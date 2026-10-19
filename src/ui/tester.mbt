@@ -86,6 +86,9 @@ fn leaked_state() -> Array[String] {
 /// A tester showing `view` in a window of w × h logical pixels; it has
 /// already drawn the first frame. `images`: sources views may load, with
 /// their size in pixels (others fail to load).
+/// `dark`, `window_inset`, `env`, `app_version`: what the app reads of where
+/// it runs (hostread.mbt): the system dark, the window's buttons in its top
+/// row, environment variables, the build's version code.
 /// `platform`: the system it plays, as @host.platform has them (0 macOS,
 /// 1 iOS, 2 Android: how lists scroll). `seed`: the order the runtime's ready
 /// fibers run in is drawn from it (fx.mbt; without, the order they became ready).
@@ -93,6 +96,10 @@ pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
   h? : Double = 844.0,
+  dark? : Bool = false,
+  window_inset? : Bool = false,
+  env? : Array[(String, String)] = [],
+  app_version? : Int = 0,
   images? : Array[(String, Int, Int)] = [],
   platform? : Int = 0,
   seed? : Int,
@@ -121,6 +128,10 @@ pub fn Tester::new(
     cursor: 0,
     window_drags: 0,
     opened: [],
+    dark,
+    inset: window_inset,
+    env: Map::from_array(env),
+    app_version,
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)

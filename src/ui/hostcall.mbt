@@ -38,6 +38,12 @@ struct FakeHost {
   mut window_drags : Int
   /// the URLs handed to the system (Ctx::open_url), oldest first
   opened : Array[String]
+  /// what the app reads of where it runs (hostread.mbt): the system dark, the window's buttons in the app's top row,
+  /// the environment, the build's version code
+  mut dark : Bool
+  mut inset : Bool
+  env : Map[String, String]
+  app_version : Int
 }
 
 ///|
@@ -244,7 +250,7 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
 fn h_reduce_transparency() -> Bool {
   match fake.val {
     Some(f) => f.reduce_transparency
-    None => @host.reduce_transparency() || @host.env("MBUI_GLASS") == "solid"
+    None => @host.reduce_transparency() || h_env("MBUI_GLASS") == "solid"
   }
 }
 
