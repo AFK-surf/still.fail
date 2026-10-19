@@ -66,6 +66,8 @@ object MemoryWatch {
             put("java_heap_mb", mb(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()))
             put("window_s", WINDOW_S)
             put("shell_calls", buildJsonObject { for ((op, n) in busiest) put(op, n) })
+            // Since the process started: a burst before the window (links opened over and over) shows here.
+            put("shell_calls_total", buildJsonObject { callsAfter.entries.sortedByDescending { it.value }.take(20).forEach { put(it.key, it.value) } })
             put("shell_unanswered", buildJsonObject {
                 (stats?.get("calls") as? JsonObject)?.map { (op, v) -> op to v.jsonArray[1].jsonPrimitive.long }?.filter { it.second > 0 }
                     ?.sortedByDescending { it.second }?.take(15)?.forEach { (op, open) -> put(op, open) }
