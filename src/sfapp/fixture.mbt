@@ -306,6 +306,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
         "appearance": Json::string(f.appearance),
       })
     }
+    "job" | "previewLoad" => fixture_service_topic(f, name, params)
     "chats" => fixture_chats(f, params)
     "workspaceMarks" =>
       Some({
@@ -450,6 +451,8 @@ pub fn fixture(mode : String) -> Source {
         None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
       }
     },
+    stream: fn(name, params, _bytes, on_value, done) { fixture_stream(name, params, on_value, done) },
+    cancel: fn(_) {  },
     call_bytes: fn(name, params, _bytes, done) {
       match fixture_chat_call(f, name, params) {
         Some(r) => done(r)

@@ -31,6 +31,8 @@ struct FakeHost {
   // native views: what was asked of them, a line each ("open 1 video/mp4", "place 1 0 0 390 220 shown"…)
   views : Array[String]
   mut view_ids : Int
+  /// what its sites say, oldest first (Tester::site_says), as a site view's host would (view_site_next)
+  site : Array[String]
 }
 
 ///|
@@ -418,6 +420,69 @@ fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
       1
     }
     None => @host.view_info(id, out)
+  }
+}
+
+///|
+fn h_view_site_next(id : Int) -> String {
+  match fake.val {
+    Some(f) => {
+      ignore(id)
+      if f.site.length() > 0 {
+        f.site.remove(0)
+      } else {
+        ""
+      }
+    }
+    None => @host.view_site_next(id)
+  }
+}
+
+///|
+fn h_view_site_body(id : Int, req : Int) -> Bytes {
+  match fake.val {
+    Some(_) => Bytes::new(0)
+    None => @host.view_site_body(id, req)
+  }
+}
+
+///|
+fn h_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
+  match fake.val {
+    Some(f) => f.views.push("site head \{id} \{req} \{status} \{headers}")
+    None => @host.view_site_head(id, req, status, headers)
+  }
+}
+
+///|
+fn h_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
+  match fake.val {
+    Some(f) => f.views.push("site chunk \{id} \{req} \{data.length()}")
+    None => @host.view_site_chunk(id, req, data)
+  }
+}
+
+///|
+fn h_view_site_end(id : Int, req : Int, error : String) -> Unit {
+  match fake.val {
+    Some(f) => f.views.push("site end \{id} \{req} \{error}")
+    None => @host.view_site_end(id, req, error)
+  }
+}
+
+///|
+fn h_view_site_state(id : Int) -> String {
+  match fake.val {
+    Some(_) => "{\"path\":\"/\",\"back\":false,\"forward\":false,\"loading\":false,\"title\":\"\"}"
+    None => @host.view_site_state(id)
+  }
+}
+
+///|
+fn h_view_site_load(id : Int, path : String) -> Unit {
+  match fake.val {
+    Some(f) => f.views.push("site load \{id} \{path}")
+    None => @host.view_site_load(id, path)
   }
 }
 

@@ -112,6 +112,7 @@ extern "C" fn ffi_set_dark(dark : Int) -> Unit = "mb_host_set_dark"
 ///|
 extern "C" fn ffi_set_sideways(on : Int) -> Unit = "mb_host_set_sideways"
 
+
 ///|
 pub fn run(
   title : String,
@@ -337,6 +338,7 @@ pub fn set_sideways(on : Bool) -> Unit {
   ffi_set_sideways(if on { 1 } else { 0 })
 }
 
+
 ///|
 /// A scripted run's input given to the host to send as its own (src/ui/drive.mbt): `drive_insert` words committed and
 /// `drive_mark` composed by the input method (macOS: NSTextInputClient's insertText and setMarkedText; Android: the
@@ -495,9 +497,81 @@ extern "C" fn ffi_view_read_next(id : Int, out : FixedArray[Double]) -> Int = "m
 extern "C" fn ffi_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit = "mb_host_view_read_answer"
 
 ///|
+extern "C" fn ffi_view_site_next(id : Int) -> String = "mb_host_view_site_next"
+
+///|
+extern "C" fn ffi_view_site_body(id : Int, req : Int) -> Bytes = "mb_host_view_site_body"
+
+///|
+#borrow(headers)
+extern "C" fn ffi_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit = "mb_host_view_site_head"
+
+///|
+#borrow(data)
+extern "C" fn ffi_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit = "mb_host_view_site_chunk"
+
+///|
+#borrow(error)
+extern "C" fn ffi_view_site_end(id : Int, req : Int, error : String) -> Unit = "mb_host_view_site_end"
+
+///|
+extern "C" fn ffi_view_site_state(id : Int) -> String = "mb_host_view_site_state"
+
+///|
+#borrow(path)
+extern "C" fn ffi_view_site_load(id : Int, path : String) -> Unit = "mb_host_view_site_load"
+
+///|
+/// What a site (a view of kind 3) has to say, oldest first: a JSON text, "" when nothing waits. `{"req":n,"method",
+/// "path","headers":[[k,v]…],"page":true|false}` a request of its own host the app answers (`view_site_head`, then
+/// `view_site_chunk`s, then `view_site_end`); `{"gone":n}` a request the page let go of (nothing more of it is taken);
+/// `{"leave":url}` a link to elsewhere tapped (not followed).
+pub fn view_site_next(id : Int) -> String {
+  ffi_view_site_next(id)
+}
+
+///|
+/// A request's body (empty when it has none, or the host's web view does not hand it over: Android's).
+pub fn view_site_body(id : Int, req : Int) -> Bytes {
+  ffi_view_site_body(id, req)
+}
+
+///|
+/// A request's answer begins: its status and headers (`[[k,v]…]` as JSON text).
+pub fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
+  ffi_view_site_head(id, req, status, headers)
+}
+
+///|
+/// The next piece of a request's answer's body.
+pub fn view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
+  ffi_view_site_chunk(id, req, data)
+}
+
+///|
+/// A request's answer ends ("" whole; else why it broke off). A request with no head yet fails with it.
+pub fn view_site_end(id : Int, req : Int, error : String) -> Unit {
+  ffi_view_site_end(id, req, error)
+}
+
+///|
+/// Where the site's page is: `{"path","back","forward","loading","title"}` as JSON text.
+pub fn view_site_state(id : Int) -> String {
+  ffi_view_site_state(id)
+}
+
+///|
+/// The site's page at `path` of its own host.
+pub fn view_site_load(id : Int, path : String) -> Unit {
+  ffi_view_site_load(id, path)
+}
+
+///|
 /// A native view of `kind`: 1 a video (and audio) player, its bytes read through the app (`view_read_next`), `arg`
 /// its MIME type ("video/mp4"); 2 a web page of `arg`'s HTML, its scripts on, nothing of the device's files or the
-/// app's reachable, its links not followed. Hidden until placed. 0 when this host has no such view.
+/// app's reachable, its links not followed; 3 a site served by the app: a web view at `arg` (a path) of a host of its
+/// own, each of whose requests the app answers (`view_site_next`). Hidden until placed. 0 when this host has no such
+/// view.
 pub fn view_open(kind : Int, arg : String) -> Int {
   ffi_view_open(kind, arg)
 }
@@ -528,7 +602,9 @@ pub fn view_close(id : Int) -> Unit {
 }
 
 ///|
-/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed.
+/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed; a
+/// site: 5 back, 6 forward, 7 reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's
+/// own size shown smaller).
 pub fn view_control(id : Int, op : Int, value : Double) -> Unit {
   ffi_view_control(id, op, value)
 }

@@ -6,7 +6,7 @@
 //
 // Not here yet, against the Android app: sharing the chat with other workspaces (its row is shown, not opened), making
 // it public (Publish.kt), a watched chat's question before archiving, the station's card (its row closes the sheet),
-// the run settings page (its row is shown), a service's page (Preview.kt), dragging a sheet by its grabber.
+// the run settings page (its row is shown), dragging a sheet by its grabber.
 
 // ── parts ───────────────────────────────────────────────────────────────
 
@@ -1069,8 +1069,8 @@ fn group_label(c : @ui.Ctx, label : String) -> Unit {
 }
 
 ///|
-/// Services, then background jobs (Jobs.kt JobGroups), each group's head with how many are up or alive; a service or
-/// a job opens its sheet (a service's page is not here yet).
+/// Services, then background jobs (Jobs.kt JobGroups), each group's head with how many are up or alive; a service up
+/// or being started again opens its page (service.mbt), one that did not start (or is over) and any job its sheet.
 fn job_groups(c : @ui.Ctx, r : ChatRef, view : Json?, jobs : Array[Json]) -> Unit {
   let services = jobs.filter(fn(j) { flag(Some(j), "service") })
   let plain = jobs.filter(fn(j) { !flag(Some(j), "service") })
@@ -1083,8 +1083,15 @@ fn job_groups(c : @ui.Ctx, r : ChatRef, view : Json?, jobs : Array[Json]) -> Uni
       for j in services {
         let id = text(Some(j), "id")
         if job_row(c, "job/" + id, Some(j)) {
-          dui.job_tab = 1
-          open_sheet(c, JobOf(r, id))
+          // up or being started again: its page (Preview.kt); else what it said and its output
+          let tone = text(Some(j), "tone")
+          if tone == "up" || tone == "restart" {
+            close_sheet(c)
+            app.nav.push(Service(r.station, id))
+          } else {
+            dui.job_tab = 1
+            open_sheet(c, JobOf(r, id))
+          }
         }
       }
     })
@@ -1498,6 +1505,10 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let row = c.id("open-job/" + station + "/" + id)
   if c.clicked(row) && chat is Some(Object(_)) {
     app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
+    // a service: its page over its chat (OpenJobs.kt OpenRow)
+    if flag(job, "service") {
+      app.nav.push(Service(station, id))
+    }
   }
   let skey = "job-stop/" + station + "/" + id
   let stop = c.id("open-job-stop/" + station + "/" + id)

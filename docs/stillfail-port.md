@@ -369,12 +369,47 @@ OpenJobs.kt, History.kt, ui/ToolStep.kt, ui/Sheet.kt):
 
 Not yet, against the current app: code highlighting in tool steps (code is drawn in the code face, in the ink) and a
 capped block's own scroll (it is cut at its height); the run settings page (RunSettings: its rows are shown, not
-opened); the station's card from an agent's; a service's page (Preview.kt) from its row; sharing the chat with other
+opened); the station's card from an agent's; sharing the chat with other
 workspaces and making it public (their rows are shown); a watched chat's question before archiving; opening a login's
 page in the browser (there is no URL hand-off on the hosts yet: its pill copies the link or the code and says so); the
 reply on the 奏 page takes words only (no files, quotes or its own draft kept by the core) and its card neither tilts
 nor shrinks as it goes (boxes have no rotation or scale yet); a sheet dragged by its grabber; the segmented control's
 sliding thumb; a history opened at an entry; a Slack user's 这是我.
+
+Slice 14's web previews, a service's page (branch player-share, 2026-10-19; ember apps/android chat/screens/Preview.kt,
+PreviewWeb.kt, PreviewLoad.kt): a web service an agent started (a dev server, a report it serves) opened over its chat
+(src/sfapp/service.mbt, Page `Service(station, job)`), from its row in the chat's jobs sheet (a service up or being
+started again; one that did not start, or is over, opens its sheet as before) or Home's services left up a long while
+(its chat, then its page over it).
+
+- Found by its job (the `job` topic), known by its name, never its port: the compact bar (对话 back, its name, its
+  station under it); 找不到此服务 / 正在读取 / 「名字」已停止 in its place while it cannot be shown.
+- The page is a site view (src/ui/native.mbt `NativeView::site`, host_native.mbt `view_site_*`): a web view of a host of
+  its own whose every request is said to the app and answered by it, head then body a piece at a time, let go when the
+  page lets go. Android: a WebView whose requests of https://preview.stillfail.invalid are intercepted
+  (shouldInterceptRequest; its thread waits for the head a minute at most, then reads the body as it comes:
+  NativeViews.Site); scripts and DOM storage on; a link elsewhere is said, not followed. macOS and iOS: a WKWebView with a
+  URL scheme of its own (stillfail-preview://svc, WKURLSchemeHandler), the requests' bodies handed over. The browser
+  and Windows open none. The app answers each from the station through the core (`station.preview` with `stream`: the
+  core client now hears a call's values before its answer, `@core.stream`, and stops one, `@core.cancel`; Source.stream
+  and cancel), the service's redirects followed here (to the service only, 5 at most, a 303 or a POST's 301/302 as GET),
+  its cookies kept here by name and sent along, a request with no answer said to the page in words (502, 508).
+- The page's bar: back and forward in its own history, reload, how far its resources came (the `previewLoad` topic's
+  ring, red with one failed; tapped, a sheet of each: its path, its status or 失败, how long), where it is (the 🌐, its
+  name, its path; tapped, typed, Enter goes there). The stage: all of the room, or the page laid out at a size of its
+  own (手机 390 × 844, 平板, 笔记本, 桌面) fitted on the canvas's grey, centred, 16 round it, its screen's corners
+  (the host lays it out at its rect over the scale and draws it scaled: view_control 8). The toolbar under it: 自适应, the
+  sizes, 自定义 (a sheet of them), turned; held half a second it folds away and the bar's size button opens it. A service
+  being started again is said over the page (its dot, 名字正在重启, 第 n 次 · 恢复后自动刷新), which loads anew once back.
+- `APP=sffix MBUI_FIXTURE=service|service-sized|service-restart|service-stopped` (src/sfapp/service_fixture.mbt: the first
+  row's chat's service, its station's answers made up): `scripts/shots.sh service web-service`.
+
+Not yet, against the current app: marking the page for the chat's agent (the edit key, the marks and their shots, into
+the draft), its page script (assets/preview/page.js: WebSockets, request bodies on Android, marks) and so a service's
+sockets (a dev server's hot reload), the sized page moved and pinched on its canvas, typing a size of one's own (自定义
+lists the sizes), the size and the toolbar's folding kept on the device (kept while the app runs), a visualization's
+page (PreviewFileScreen), a link elsewhere opened in the browser (no URL hand-off on the hosts: it is copied and said
+so), document.cookie (the cookies are the app's, not the web view's), the opening and closing motion of the page's own.
 
 Glass (branch glass, 2026-10-19): frosted glass and liquid glass, a pass of every renderer (Metal on macOS and iOS,
 GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:

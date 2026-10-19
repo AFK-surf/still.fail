@@ -294,6 +294,7 @@ pub fn set_sideways(on : Bool) -> Unit {
   ignore(on)
 }
 
+
 ///|
 /// A scripted run's input given to the host (see host_native.mbt): the browser has none of these paths.
 pub fn drive(kind : Int, text : String) -> Bool {
@@ -512,6 +513,55 @@ pub fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
 ///|
 pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
   js_view_read_answer(id, req, data, total)
+}
+
+///|
+/// A site's waiting requests (see host_native.mbt): the browser opens no site (a page cannot answer another's
+/// requests without a service worker of its own), so none.
+pub fn view_site_next(id : Int) -> String {
+  ignore(id)
+  ""
+}
+
+///|
+pub fn view_site_body(id : Int, req : Int) -> Bytes {
+  ignore(id)
+  ignore(req)
+  Bytes::new(0)
+}
+
+///|
+pub fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
+  ignore(id)
+  ignore(req)
+  ignore(status)
+  ignore(headers)
+}
+
+///|
+pub fn view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
+  ignore(id)
+  ignore(req)
+  ignore(data)
+}
+
+///|
+pub fn view_site_end(id : Int, req : Int, error : String) -> Unit {
+  ignore(id)
+  ignore(req)
+  ignore(error)
+}
+
+///|
+pub fn view_site_state(id : Int) -> String {
+  ignore(id)
+  ""
+}
+
+///|
+pub fn view_site_load(id : Int, path : String) -> Unit {
+  ignore(id)
+  ignore(path)
 }
 
 ///|

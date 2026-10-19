@@ -110,6 +110,7 @@ pub fn Tester::new(
     bold: 0.0,
     views: [],
     view_ids: 0,
+    site: [],
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
@@ -293,6 +294,14 @@ pub fn Tester::instances(self : Tester) -> Int {
 /// 390 844", "control 1 1 0", "close 1", "pdf 2400"…), in order.
 pub fn Tester::views(self : Tester) -> Array[String] {
   self.fake.views
+}
+
+///|
+/// A site view's host says `event` (its JSON text, as view_site_next gives it: a request, one let go, a link left by),
+/// taken on the next frame.
+pub fn Tester::site_says(self : Tester, event : String) -> Unit {
+  self.fake.site.push(event)
+  g.wants_frame = true
 }
 
 ///|

@@ -11,6 +11,7 @@ import android.view.TextureView;
 import android.view.View;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -30,11 +31,16 @@ import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.SeekParameters;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -104,16 +110,16 @@ final class NativeViews {
     // ---- the GL thread ----
 
     static int open(int kind, String arg) {
-        if (kind != 1 && kind != 2) return 0;
+        if (kind < 1 || kind > 3) return 0;
         int id = next.incrementAndGet();
-        NView v = kind == 1 ? new Video(id, arg) : new Page(id, arg);
+        NView v = kind == 1 ? new Video(id, arg) : kind == 2 ? new Page(id, arg) : new Site(id, arg);
         views.put(id, v);
-        Host.log("view " + id + ": open " + (kind == 1 ? "video " + arg : "page of " + arg.length() + " characters"));
+        Host.log("view " + id + ": open " + (kind == 1 ? "video " + arg : kind == 2 ? "page of " + arg.length() + " characters" : "site at " + arg));
         Host.main.post(() -> {
             if (v.closed || layer == null) return;
             v.clip = new FrameLayout(layer.getContext());
             v.clip.setClipChildren(true);
-            v.clip.setBackgroundColor(kind == 1 ? Color.BLACK : Color.WHITE);
+            v.clip.setBackgroundColor(kind == 1 ? Color.BLACK : kind == 2 ? Color.WHITE : Color.TRANSPARENT);
             v.clip.setVisibility(View.GONE);
             v.make(layer.getContext());
             layer.addView(v.clip, new FrameLayout.LayoutParams(0, 0));
@@ -216,6 +222,46 @@ final class NativeViews {
         } else if (total == -2) {
             Host.log("view " + id + ": read @" + r.offset + " failed");
         }
+    }
+
+    // ---- a site's (kind 3), on the GL thread ----
+
+    static String siteNext(int id) {
+        NView v = views.get(id);
+        if (!(v instanceof Site)) return null;
+        return ((Site) v).said.poll();
+    }
+
+    static byte[] siteBody(int id, int req) {
+        return new byte[0];
+    }
+
+    static void siteHead(int id, int req, int status, String headers) {
+        NView v = views.get(id);
+        if (v instanceof Site) ((Site) v).head(req, status, headers);
+    }
+
+    static void siteChunk(int id, int req, byte[] data) {
+        NView v = views.get(id);
+        if (v instanceof Site) ((Site) v).chunk(req, data);
+    }
+
+    static void siteEnd(int id, int req, String error) {
+        NView v = views.get(id);
+        if (v instanceof Site) ((Site) v).end(req, error);
+    }
+
+    static String siteState(int id) {
+        NView v = views.get(id);
+        return v instanceof Site ? ((Site) v).state() : null;
+    }
+
+    static void siteLoad(int id, String path) {
+        NView v = views.get(id);
+        if (v instanceof Site) Host.main.post(() -> {
+            Site s = (Site) v;
+            if (!s.closed && s.web != null) s.web.loadUrl("https://" + Site.HOST + path);
+        });
     }
 
     /** A file saved in the phone's Downloads (MediaStore), as the Android app's download() does. */
@@ -557,6 +603,357 @@ final class NativeViews {
                 web.destroy();
             }
             web = null;
+        }
+    }
+
+    // ---- a site: a web view whose own host is answered by the app ----
+
+    /**
+     * A site served by the app (still.fail's preview of a service, Preview.kt / PreviewWeb.kt): a WebView at a host of
+     * its own; every request it makes of that host is said to the app (`siteNext`, on the GL thread), which answers it
+     * (`siteHead`, `siteChunk`s, `siteEnd`) from the station through the core while the WebView's thread waits here for
+     * the head (a minute at most) and then reads the body as it comes. A body the page lets go of is said (`gone`). A
+     * link to anywhere else is not followed, only said (`leave`). Scripts and DOM storage on, as the Android app's.
+     * Request bodies are not handed over by a WebView: none here (the Android app's page script carries them).
+     */
+    static final class Site extends NView {
+        static final String HOST = "preview.stillfail.invalid";
+        static final Object END = new Object();
+        final String start;
+        WebView web;
+        final ConcurrentLinkedQueue<String> said = new ConcurrentLinkedQueue<>();
+        final ConcurrentHashMap<Integer, Req> reqs = new ConcurrentHashMap<>();
+        final AtomicInteger nextReq = new AtomicInteger();
+        volatile String path, title = "";
+        volatile boolean back, forward, loading = true;
+        float scale = 1;
+
+        /** One request: its head once the app gives it, its body's pieces as they come. */
+        static final class Req {
+            final int id;
+            boolean headed, failed;
+            int status;
+            String error;
+            final LinkedHashMap<String, String> headers = new LinkedHashMap<>();
+            final LinkedBlockingQueue<Object> body = new LinkedBlockingQueue<>();
+
+            Req(int id) {
+                this.id = id;
+            }
+        }
+
+        Site(int id, String start) {
+            super(id, 3);
+            this.start = start.isEmpty() ? "/" : start;
+            this.path = this.start;
+        }
+
+        static String pathOf(Uri u) {
+            String p = u.getEncodedPath();
+            String q = u.getEncodedQuery();
+            return (p == null || p.isEmpty() ? "/" : p) + (q != null ? "?" + q : "");
+        }
+
+        void say(String json) {
+            said.add(json);
+            Host.requestFrame();
+        }
+
+        /** On the WebView's own thread: the request said to the app, its head waited for. */
+        WebResourceResponse answer(WebResourceRequest r) {
+            Req q = new Req(nextReq.incrementAndGet());
+            reqs.put(q.id, q);
+            boolean page = r.isForMainFrame();
+            org.json.JSONArray hs = new org.json.JSONArray();
+            for (Map.Entry<String, String> h : r.getRequestHeaders().entrySet()) {
+                if (h.getKey().equalsIgnoreCase("accept") && h.getValue().startsWith("text/html")) page = true;
+                hs.put(new org.json.JSONArray().put(h.getKey()).put(h.getValue()));
+            }
+            try {
+                say(new org.json.JSONObject().put("req", q.id).put("method", r.getMethod()).put("path", pathOf(r.getUrl()))
+                        .put("headers", hs).put("page", page).toString());
+            } catch (org.json.JSONException e) {
+                reqs.remove(q.id);
+                return text(500, e.toString());
+            }
+            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+            synchronized (q) {
+                while (!q.headed && !q.failed && !closed) {
+                    long left = until - System.nanoTime();
+                    if (left <= 0) break;
+                    try {
+                        q.wait(Math.min(250, TimeUnit.NANOSECONDS.toMillis(left) + 1));
+                    } catch (InterruptedException e) {
+                        break;
+                    }
+                }
+            }
+            if (!q.headed) {
+                reqs.remove(q.id);
+                if (!q.failed) say("{\"gone\":" + q.id + "}");
+                return text(502, q.failed ? q.error : "no answer from the service in 60 s");
+            }
+            String type = null;
+            for (Map.Entry<String, String> h : q.headers.entrySet()) if (h.getKey().equalsIgnoreCase("content-type")) type = h.getValue();
+            if (type == null) type = "application/octet-stream";
+            String mime = type.split(";")[0].trim();
+            String charset = null;
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("charset=([^;]+)").matcher(type);
+            if (m.find()) charset = m.group(1).trim().replace("\"", "");
+            int status = q.status >= 200 && q.status <= 599 && (q.status < 300 || q.status > 399) ? q.status : 200;
+            return new WebResourceResponse(mime, charset, status, reason(status), q.headers, new Body(this, q));
+        }
+
+        static String reason(int status) {
+            return status >= 200 && status < 300 ? "OK" : status == 404 ? "Not Found" : status >= 500 ? "Error" : "Status";
+        }
+
+        static WebResourceResponse text(int status, String message) {
+            return new WebResourceResponse("text/plain", "utf-8", status, reason(status), new LinkedHashMap<>(),
+                    new ByteArrayInputStream((message == null ? "" : message).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        }
+
+        void head(int req, int status, String headers) {
+            Req q = reqs.get(req);
+            if (q == null) return;
+            try {
+                org.json.JSONArray a = new org.json.JSONArray(headers);
+                for (int i = 0; i < a.length(); i++) {
+                    org.json.JSONArray h = a.getJSONArray(i);
+                    String k = h.getString(0), v = h.getString(1);
+                    q.headers.put(k, q.headers.containsKey(k) ? q.headers.get(k) + ", " + v : v);
+                }
+            } catch (org.json.JSONException e) {
+                Host.log("view " + id + ": a head's headers unread: " + e);
+            }
+            synchronized (q) {
+                q.status = status;
+                q.headed = true;
+                q.notifyAll();
+            }
+        }
+
+        void chunk(int req, byte[] data) {
+            Req q = reqs.get(req);
+            if (q != null) q.body.add(data);
+        }
+
+        void end(int req, String error) {
+            Req q = reqs.remove(req);
+            if (q == null) return;
+            synchronized (q) {
+                if (!q.headed) {
+                    q.failed = true;
+                    q.error = error.isEmpty() ? "no answer" : error;
+                    q.notifyAll();
+                    return;
+                }
+            }
+            q.body.add(error.isEmpty() ? END : new IOException(error));
+        }
+
+        String state() {
+            try {
+                return new org.json.JSONObject().put("path", path).put("back", back).put("forward", forward)
+                        .put("loading", loading).put("title", title).toString();
+            } catch (org.json.JSONException e) {
+                return null;
+            }
+        }
+
+        /** Where the page is now, its history, whether it loads: on the main thread. */
+        void moved(WebView w, Boolean busy) {
+            String url = w.getUrl();
+            if (url != null) {
+                Uri u = Uri.parse(url);
+                path = HOST.equals(u.getHost()) ? pathOf(u) : url;
+            }
+            back = w.canGoBack();
+            forward = w.canGoForward();
+            if (busy != null) loading = busy;
+            String t = w.getTitle();
+            title = t == null ? "" : t;
+            Host.requestFrame();
+        }
+
+        @SuppressLint("SetJavaScriptEnabled")
+        @Override
+        void make(Context c) {
+            web = new WebView(c);
+            web.setBackgroundColor(Color.WHITE);
+            WebSettings st = web.getSettings();
+            st.setJavaScriptEnabled(true);
+            st.setDomStorageEnabled(true);
+            st.setAllowFileAccess(false);
+            st.setAllowContentAccess(false);
+            web.setWebViewClient(new WebViewClient() {
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                    Uri url = request.getUrl();
+                    if (HOST.equals(url.getHost()) && ("https".equals(url.getScheme()) || "http".equals(url.getScheme()))) return false;
+                    // a frame in the page shows what it likes; the page itself stays the site
+                    if (!request.isForMainFrame()) return false;
+                    if ("about".equals(url.getScheme())) return false;
+                    String sc = url.getScheme();
+                    if ("data".equals(sc) || "blob".equals(sc) || "javascript".equals(sc)) return true;
+                    try {
+                        say(new org.json.JSONObject().put("leave", url.toString()).toString());
+                    } catch (org.json.JSONException ignored) {
+                    }
+                    return true;
+                }
+
+                @Override
+                public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                    moved(view, null);
+                }
+
+                @Override
+                public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                    moved(view, true);
+                }
+
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    if (state == 0) {
+                        state = 1;
+                        framed = 1;
+                        Host.log("view " + id + ": site page loaded (" + path + ")");
+                    }
+                    moved(view, false);
+                }
+
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    return HOST.equals(request.getUrl().getHost()) ? answer(request) : null;
+                }
+            });
+            clip.addView(web, new FrameLayout.LayoutParams(0, 0));
+            web.loadUrl("https://" + HOST + start);
+        }
+
+        @Override
+        void moved() {
+            if (web == null) return;
+            FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) web.getLayoutParams();
+            int l = Math.round(at[0] - at[4]), t = Math.round(at[1] - at[5]);
+            // laid out at its rect over its scale, drawn at its scale from its top left
+            int w = Math.round(at[2] / scale), h = Math.round(at[3] / scale);
+            if (p.leftMargin != l || p.topMargin != t || p.width != w || p.height != h) {
+                p.leftMargin = l;
+                p.topMargin = t;
+                p.width = w;
+                p.height = h;
+                web.setLayoutParams(p);
+            }
+            web.setPivotX(0);
+            web.setPivotY(0);
+            web.setScaleX(scale);
+            web.setScaleY(scale);
+        }
+
+        @Override
+        void control(int op, double value) {
+            if (web == null) return;
+            switch (op) {
+                case 5: if (web.canGoBack()) web.goBack(); break;
+                case 6: if (web.canGoForward()) web.goForward(); break;
+                case 7: web.reload(); break;
+                case 8:
+                    if (value > 0) {
+                        scale = (float) value;
+                        moved();
+                    }
+                    break;
+                default: break;
+            }
+        }
+
+        @Override
+        void destroy() {
+            for (Req q : reqs.values()) {
+                synchronized (q) {
+                    q.failed = true;
+                    q.error = "closed";
+                    q.notifyAll();
+                }
+                q.body.add(END);
+            }
+            reqs.clear();
+            if (web != null) {
+                clip.removeView(web);
+                web.destroy();
+            }
+            web = null;
+        }
+    }
+
+    /** A request's body as the app sends it, read by the WebView; let go of before its end, the app is told. */
+    static final class Body extends InputStream {
+        final Site site;
+        final Site.Req q;
+        byte[] cur;
+        int at;
+        boolean ended, told;
+
+        Body(Site site, Site.Req q) {
+            this.site = site;
+            this.q = q;
+        }
+
+        private boolean next() throws IOException {
+            while (cur == null || at >= cur.length) {
+                if (ended) return false;
+                Object o;
+                try {
+                    o = q.body.poll(120, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    throw new InterruptedIOException();
+                }
+                if (o == null) throw new IOException("the service sent nothing for 120 s");
+                if (o == Site.END) {
+                    ended = true;
+                    return false;
+                }
+                if (o instanceof IOException) {
+                    ended = true;
+                    throw (IOException) o;
+                }
+                cur = (byte[]) o;
+                at = 0;
+            }
+            return true;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (!next()) return -1;
+            return cur[at++] & 0xff;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            if (len == 0) return 0;
+            if (!next()) return -1;
+            int n = Math.min(len, cur.length - at);
+            System.arraycopy(cur, at, b, off, n);
+            at += n;
+            return n;
+        }
+
+        @Override
+        public int available() {
+            return cur == null ? 0 : cur.length - at;
+        }
+
+        @Override
+        public void close() {
+            if (!ended && !told) {
+                told = true;
+                site.reqs.remove(q.id);
+                site.say("{\"gone\":" + q.id + "}");
+            }
+            ended = true;
         }
     }
 }

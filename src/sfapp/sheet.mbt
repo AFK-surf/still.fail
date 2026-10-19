@@ -15,6 +15,10 @@ priv enum SheetKind {
   PickStation(String)
   /// what a new chat runs on (NewChat.kt openRunPicker): 66%; its accounts' list in place of it while `accounts`
   RunPicker(String)
+  /// how a service's page's resources came (PreviewLoad.kt): its station and port, 62%
+  LoadOf(String, Int)
+  /// a service's page's sizes (Preview.kt openViewportSheet), by the service's key: 62%
+  PageSizes(String)
 } derive(Eq)
 
 ///|
@@ -24,6 +28,7 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
     Workspaces => (0.7, true)
     PickStation(_) => (0.5, false)
     RunPicker(_) => (0.66, false)
+    LoadOf(_, _) | PageSizes(_) => (0.62, false)
     NoSheet => (0.5, false)
   }
 }

@@ -620,6 +620,15 @@ int32_t mb_host_view_info(int32_t id, double *out) {
   return -1;
 }
 int32_t mb_host_view_read_next(int32_t id, double *out) { (void)id; (void)out; return 0; }
+moonbit_string_t mb_host_view_site_next(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
+moonbit_bytes_t mb_host_view_site_body(int32_t id, int32_t req) { (void)id; (void)req; return moonbit_make_bytes(0, 0); }
+void mb_host_view_site_head(int32_t id, int32_t req, int32_t status, moonbit_string_t headers) {
+  (void)id; (void)req; (void)status; (void)headers;
+}
+void mb_host_view_site_chunk(int32_t id, int32_t req, moonbit_bytes_t data) { (void)id; (void)req; (void)data; }
+void mb_host_view_site_end(int32_t id, int32_t req, moonbit_string_t error) { (void)id; (void)req; (void)error; }
+moonbit_string_t mb_host_view_site_state(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
+void mb_host_view_site_load(int32_t id, moonbit_string_t path) { (void)id; (void)path; }
 void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total) {
   (void)id; (void)req; (void)data; (void)total;
 }

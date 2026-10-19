@@ -3,4 +3,5 @@ import {
   "mbui/text",
   "mbui/flex",
   "moonbitlang/core/math",
+  "moonbitlang/core/json",
 }

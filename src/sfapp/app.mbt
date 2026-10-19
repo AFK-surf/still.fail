@@ -21,6 +21,8 @@ pub(all) enum Page {
   DriveRead(DriveAt)
   /// a video or a song of a drive, played (play.mbt)
   DrivePlay(DriveAt)
+  /// a web service an agent started, its page (service.mbt): its station, its job
+  Service(String, String)
   /// the decisions waiting for the viewer, one at a time (奏: decisions.mbt); the bar's 奏 place
   Decisions
   /// an agent's execution history (history.mbt): its chat, its session
@@ -156,6 +158,9 @@ fn reset() -> Unit {
   left_pages.clear()
   playing.clear()
   play_srcs.clear()
+  service_pages.clear()
+  svc_viewports.clear()
+  svc_folded.val = false
   splash_first.val = -1.0
   drafts.clear()
   cui.attach = false
@@ -206,6 +211,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
       Chat(r) => chat_left(src, r)
       DriveRead(at) => reader_left(at)
       DrivePlay(at) => play_left(at)
+      Service(station, job) => service_left(src, station, job)
       History(r, key) => history_left(src, r, key)
       _ => ()
     }
@@ -278,6 +284,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
           Workspaces => workspaces_sheet(c, src, w, all)
           PickStation(scope) => pick_station_sheet(c, src, scope)
           RunPicker(station) => run_picker_sheet(c, src, station)
+          LoadOf(station, port) => load_sheet(c, src, station, port)
+          PageSizes(key) => page_sizes_sheet(c, key)
           NoSheet => ()
         }
       })
@@ -351,6 +359,7 @@ fn page_view(
         Drive(at) => drive_page(c, src, w, at)
         DriveRead(at) => reader_page(c, src, at)
         DrivePlay(at) => play_page(c, src, at)
+        Service(station, job) => service_page(c, src, station, job)
         Archived => setting_page(c, src, w, @settings.Route::Archive)
         Settings => setting_page(c, src, w, @settings.Route::Home)
         Setting(r) => setting_page(c, src, w, r)

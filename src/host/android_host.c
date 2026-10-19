@@ -36,7 +36,8 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
-    m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
+    m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
+    m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
@@ -108,6 +109,13 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_v_info = (*env)->GetStaticMethodID(env, views_cls, "info", "(I[D)I");
   m_v_read_next = (*env)->GetStaticMethodID(env, views_cls, "readNext", "(I[D)I");
   m_v_read_answer = (*env)->GetStaticMethodID(env, views_cls, "readAnswer", "(II[BD)V");
+  m_v_site_next = (*env)->GetStaticMethodID(env, views_cls, "siteNext", "(I)Ljava/lang/String;");
+  m_v_site_body = (*env)->GetStaticMethodID(env, views_cls, "siteBody", "(II)[B");
+  m_v_site_head = (*env)->GetStaticMethodID(env, views_cls, "siteHead", "(IIILjava/lang/String;)V");
+  m_v_site_chunk = (*env)->GetStaticMethodID(env, views_cls, "siteChunk", "(II[B)V");
+  m_v_site_end = (*env)->GetStaticMethodID(env, views_cls, "siteEnd", "(IILjava/lang/String;)V");
+  m_v_site_state = (*env)->GetStaticMethodID(env, views_cls, "siteState", "(I)Ljava/lang/String;");
+  m_v_site_load = (*env)->GetStaticMethodID(env, views_cls, "siteLoad", "(ILjava/lang/String;)V");
   m_save = (*env)->GetStaticMethodID(env, views_cls, "save", "(Ljava/lang/String;[B)Z");
   pdfs_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Pdfs"));
   m_pdf_open = (*env)->GetStaticMethodID(env, pdfs_cls, "open", "([B)I");
@@ -1168,6 +1176,61 @@ int32_t mb_host_view_read_next(int32_t id, double *out) {
   jint req = (*env)->CallStaticIntMethod(env, views_cls, m_v_read_next, id, small_buf);
   if (req > 0) (*env)->GetDoubleArrayRegion(env, small_buf, 0, 2, out);
   return req;
+}
+
+// A site's (kind 3: NativeViews.Site): what it says, its requests answered, where its page is.
+moonbit_string_t mb_host_view_site_next(int32_t id) {
+  JNIEnv *env = env_();
+  jstring j = (jstring)(*env)->CallStaticObjectMethod(env, views_cls, m_v_site_next, id);
+  moonbit_string_t out = j ? mstr(env, j) : moonbit_make_string_raw(0);
+  if (j) (*env)->DeleteLocalRef(env, j);
+  return out;
+}
+
+moonbit_bytes_t mb_host_view_site_body(int32_t id, int32_t req) {
+  JNIEnv *env = env_();
+  jbyteArray a = (jbyteArray)(*env)->CallStaticObjectMethod(env, views_cls, m_v_site_body, id, req);
+  jsize n = a ? (*env)->GetArrayLength(env, a) : 0;
+  moonbit_bytes_t out = moonbit_make_bytes(n, 0);
+  if (n) (*env)->GetByteArrayRegion(env, a, 0, n, (jbyte *)out);
+  if (a) (*env)->DeleteLocalRef(env, a);
+  return out;
+}
+
+void mb_host_view_site_head(int32_t id, int32_t req, int32_t status, moonbit_string_t headers) {
+  JNIEnv *env = env_();
+  jstring h = jstr(env, headers);
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_site_head, id, req, status, h);
+  (*env)->DeleteLocalRef(env, h);
+}
+
+void mb_host_view_site_chunk(int32_t id, int32_t req, moonbit_bytes_t data) {
+  JNIEnv *env = env_();
+  jbyteArray b = jbytes(env, data);
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_site_chunk, id, req, b);
+  (*env)->DeleteLocalRef(env, b);
+}
+
+void mb_host_view_site_end(int32_t id, int32_t req, moonbit_string_t error) {
+  JNIEnv *env = env_();
+  jstring e = jstr(env, error);
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_site_end, id, req, e);
+  (*env)->DeleteLocalRef(env, e);
+}
+
+moonbit_string_t mb_host_view_site_state(int32_t id) {
+  JNIEnv *env = env_();
+  jstring j = (jstring)(*env)->CallStaticObjectMethod(env, views_cls, m_v_site_state, id);
+  moonbit_string_t out = j ? mstr(env, j) : moonbit_make_string_raw(0);
+  if (j) (*env)->DeleteLocalRef(env, j);
+  return out;
+}
+
+void mb_host_view_site_load(int32_t id, moonbit_string_t path) {
+  JNIEnv *env = env_();
+  jstring p = jstr(env, path);
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_site_load, id, p);
+  (*env)->DeleteLocalRef(env, p);
 }
 
 void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total) {

@@ -138,6 +138,19 @@ id mb_views_root(CGRect frame) {
 
 // ---------------------------------------------------------------------------
 
+@class MBSiteHandler;
+
+// One request of a site's page (kind 3): its scheme task, answered by the app.
+@interface MBSiteReq : NSObject
+@property(nonatomic) int32_t rid;
+@property(nonatomic, strong) id<WKURLSchemeTask> task;
+@property(nonatomic, strong) NSURL *url;
+@property(nonatomic, strong) NSData *body;
+@property(nonatomic) BOOL headed, gone;
+@end
+@implementation MBSiteReq
+@end
+
 @interface MBNative : NSObject <WKNavigationDelegate>
 @property(nonatomic) int32_t vid, kind;
 @property(nonatomic, strong) PView *box;      // clips: at the clip rect
@@ -168,6 +181,13 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) BOOL loaded;
 @property(nonatomic) int htmlLen;
 @property(nonatomic, strong) PImage *snap;
+// a site's
+@property(nonatomic, strong) MBSiteHandler *handler;
+@property(nonatomic, strong) NSMutableArray<NSString *> *said;
+@property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBSiteReq *> *reqs;
+@property(nonatomic) int32_t nextReq;
+@property(nonatomic) double scale;
+- (void)say:(NSDictionary *)event;
 - (void)advance:(MBLoad *)l;
 - (void)drop:(MBLoad *)l;
 - (void)end:(MBLoad *)l error:(BOOL)err;
@@ -176,6 +196,8 @@ id mb_views_root(CGRect frame) {
 @end
 
 static NSMutableDictionary<NSNumber *, MBNative *> *views;
+// a site's own scheme: nothing else answers it
+static NSString *const kSiteScheme = @"stillfail-preview";
 static int32_t next_vid;
 static void *kStatus = &kStatus, *kReady = &kReady;
 
@@ -444,13 +466,40 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
 - (void)webView:(WKWebView *)wv
     decidePolicyForNavigationAction:(WKNavigationAction *)a
                     decisionHandler:(void (^)(WKNavigationActionPolicy))decide {
+  if (self.kind == 3) {
+    // a site: its own scheme, and any frame in it; a link elsewhere is said to the app, not followed
+    NSString *sc = a.request.URL.scheme;
+    BOOL main = a.targetFrame == nil || a.targetFrame.isMainFrame;
+    BOOL mine = [sc isEqualToString:kSiteScheme] || [sc isEqualToString:@"about"];
+    if (!mine && main && ![sc isEqualToString:@"data"] && ![sc isEqualToString:@"blob"] &&
+        ![sc isEqualToString:@"javascript"] && a.request.URL.absoluteString)
+      [self say:@{@"leave" : a.request.URL.absoluteString}];
+    decide(mine || !main ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
+    return;
+  }
   // only the page given (about:blank, and its frames' about:srcdoc): no link followed, nothing else loaded
   BOOL ok = [a.request.URL.scheme isEqualToString:@"about"];
   if (!ok) vlog(@"view %d: navigation to %@ cancelled", self.vid, a.request.URL.absoluteString);
   decide(ok ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
 }
 
+- (void)say:(NSDictionary *)event {
+  NSData *d = [NSJSONSerialization dataWithJSONObject:event options:0 error:nil];
+  if (!d) return;
+  [self.said addObject:[[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding]];
+  mb_host_request_frame();
+}
+
+- (void)webView:(WKWebView *)wv didStartProvisionalNavigation:(WKNavigation *)n {
+  mb_host_request_frame();
+}
+
 - (void)webView:(WKWebView *)wv didFinishNavigation:(WKNavigation *)n {
+  if (self.kind == 3) {
+    [self refreshSnap];
+    mb_host_request_frame();
+    if (!self.loaded) vlog(@"view %d: site page loaded (%@)", self.vid, wv.URL.path);
+  }
   if (self.closed || self.loaded) return;
   self.loaded = YES;
   vlog(@"view %d: page loaded", self.vid);
@@ -586,12 +635,99 @@ static MBNative *open_web(int32_t vid, NSString *html) {
   return v;
 }
 
+// ---- a site (kind 3): its own scheme's requests answered by the app ----
+
+@interface MBSiteHandler : NSObject <WKURLSchemeHandler>
+@property(nonatomic, weak) MBNative *view;
+@end
+
+@implementation MBSiteHandler
+- (void)webView:(WKWebView *)wv startURLSchemeTask:(id<WKURLSchemeTask>)task {
+  MBNative *v = self.view;
+  if (!v || v.closed) {
+    [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCancelled userInfo:nil]];
+    return;
+  }
+  NSURLRequest *r = task.request;
+  MBSiteReq *q = [MBSiteReq new];
+  q.rid = ++v.nextReq;
+  q.task = task;
+  q.url = r.URL;
+  NSData *body = r.HTTPBody;
+  if (!body && r.HTTPBodyStream) {
+    NSMutableData *all = [NSMutableData new];
+    NSInputStream *in = r.HTTPBodyStream;
+    [in open];
+    uint8_t buf[16384];
+    NSInteger n;
+    while ((n = [in read:buf maxLength:sizeof buf]) > 0) [all appendBytes:buf length:(NSUInteger)n];
+    [in close];
+    body = all;
+  }
+  q.body = body ?: [NSData data];
+  v.reqs[@(q.rid)] = q;
+  NSURLComponents *c = [NSURLComponents componentsWithURL:r.URL resolvingAgainstBaseURL:NO];
+  NSString *path = c.percentEncodedPath.length ? c.percentEncodedPath : @"/";
+  if (c.percentEncodedQuery) path = [NSString stringWithFormat:@"%@?%@", path, c.percentEncodedQuery];
+  NSMutableArray *hs = [NSMutableArray new];
+  BOOL page = r.mainDocumentURL && [r.mainDocumentURL isEqual:r.URL];
+  [r.allHTTPHeaderFields enumerateKeysAndObjectsUsingBlock:^(NSString *k, NSString *val, BOOL *stop) {
+    [hs addObject:@[ k, val ]];
+  }];
+  NSString *accept = [r valueForHTTPHeaderField:@"Accept"];
+  if ([accept hasPrefix:@"text/html"]) page = YES;
+  [v say:@{@"req" : @(q.rid), @"method" : r.HTTPMethod ?: @"GET", @"path" : path, @"headers" : hs, @"page" : @(page)}];
+}
+
+- (void)webView:(WKWebView *)wv stopURLSchemeTask:(id<WKURLSchemeTask>)task {
+  MBNative *v = self.view;
+  for (NSNumber *k in v.reqs.allKeys) {
+    MBSiteReq *q = v.reqs[k];
+    if (q.task != task) continue;
+    q.gone = YES;
+    [v.reqs removeObjectForKey:k];
+    [v say:@{@"gone" : k}];
+  }
+}
+@end
+
+static MBNative *open_site(int32_t vid, NSString *start) {
+  MBNative *v = [MBNative new];
+  v.said = [NSMutableArray new];
+  v.reqs = [NSMutableDictionary new];
+  v.scale = 1;
+  v.handler = [MBSiteHandler new];
+  v.handler.view = v;
+  WKWebViewConfiguration *c = [WKWebViewConfiguration new];
+  c.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
+  c.defaultWebpagePreferences.allowsContentJavaScript = YES;
+  [c setURLSchemeHandler:v.handler forURLScheme:kSiteScheme];
+#if TARGET_OS_IOS
+  c.allowsInlineMediaPlayback = YES;
+#endif
+  WKWebView *wv = [[WKWebView alloc] initWithFrame:CGRectZero configuration:c];
+  wv.navigationDelegate = v;
+#if TARGET_OS_OSX
+  if (@available(macOS 12.0, *)) wv.underPageBackgroundColor = NSColor.whiteColor;
+#else
+  wv.opaque = YES;
+  wv.backgroundColor = UIColor.whiteColor;
+  wv.scrollView.backgroundColor = UIColor.whiteColor;
+#endif
+  v.web = wv;
+  v.content = wv;
+  NSString *s = start.length ? start : @"/";
+  [wv loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"%@://svc%@", kSiteScheme, s]]]];
+  vlog(@"view %d: open site at %@", vid, s);
+  return v;
+}
+
 int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
-  if (kind != 1 && kind != 2) return 0;
+  if (kind < 1 || kind > 3) return 0;
   if (!views) views = [NSMutableDictionary new];
   int32_t vid = ++next_vid;
   NSString *a = mb_ns_from_string(arg);
-  MBNative *v = kind == 1 ? open_video(vid, a) : open_web(vid, a);
+  MBNative *v = kind == 1 ? open_video(vid, a) : kind == 2 ? open_web(vid, a) : open_site(vid, a);
   v.vid = vid;
   v.kind = kind;
   v.box = new_box();
@@ -621,7 +757,7 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
   v.box.frame = CGRectMake(cx0, cy0, fmax(0, cx1 - cx0), fmax(0, cy1 - cy0));
   v.content.frame = CGRectMake(x - cx0, y - cy0, fmax(0, w), fmax(0, h));
   [CATransaction commit];
-  if (resized && v.kind == 2) [v refreshSnap];
+  if (resized && v.kind >= 2) [v refreshSnap];
 }
 
 void mb_host_view_close(int32_t vid) {
@@ -641,6 +777,8 @@ void mb_host_view_close(int32_t vid) {
   } else {
     [v.web stopLoading];
     v.web.navigationDelegate = nil;
+    for (MBSiteReq *q in v.reqs.allValues) q.gone = YES;
+    [v.reqs removeAllObjects];
     vlog(@"view %d: closed", vid);
   }
   [v.box removeFromSuperview];
@@ -648,6 +786,21 @@ void mb_host_view_close(int32_t vid) {
 
 void mb_host_view_control(int32_t vid, int32_t op, double value) {
   MBNative *v = views[@(vid)];
+  if (v && v.kind == 3) {
+    switch (op) {
+      case 5: if (v.web.canGoBack) [v.web goBack]; break;
+      case 6: if (v.web.canGoForward) [v.web goForward]; break;
+      case 7: [v.web reload]; break;
+      case 8:
+        // laid out at its rect over the scale (CSS pixels the bigger), drawn at the scale
+        if (value > 0) {
+          v.scale = value;
+          if (@available(macOS 11.0, iOS 14.0, *)) v.web.pageZoom = value;
+        }
+        break;
+    }
+    return;
+  }
   if (!v || v.kind != 1) return;
   switch (op) {
     case 1: {
@@ -685,6 +838,10 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
   out[0] = -1;
   MBNative *v = views[@(vid)];
   if (!v) return -1;
+  if (v.kind == 3) {
+    out[6] = v.loaded ? 1 : 0;
+    return v.failed ? -1 : v.loaded ? 1 : 0;
+  }
   if (v.kind == 2) {
     out[5] = v.htmlLen;
     out[6] = v.loaded ? 1 : 0;
@@ -736,11 +893,107 @@ void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, do
   [v answer:req data:(const uint8_t *)data length:Moonbit_array_length(data) total:total];
 }
 
+// ---- a site's API ----
+
+moonbit_string_t mb_host_view_site_next(int32_t vid) {
+  MBNative *v = views[@(vid)];
+  if (!v || v.kind != 3 || v.said.count == 0) return mb_string_from_ns(@"");
+  NSString *e = v.said.firstObject;
+  [v.said removeObjectAtIndex:0];
+  return mb_string_from_ns(e);
+}
+
+moonbit_bytes_t mb_host_view_site_body(int32_t vid, int32_t req) {
+  MBNative *v = views[@(vid)];
+  NSData *d = v.reqs[@(req)].body;
+  moonbit_bytes_t out = moonbit_make_bytes((int32_t)d.length, 0);
+  if (d.length) memcpy(out, d.bytes, d.length);
+  return out;
+}
+
+void mb_host_view_site_head(int32_t vid, int32_t req, int32_t status, moonbit_string_t headers) {
+  MBNative *v = views[@(vid)];
+  MBSiteReq *q = v.reqs[@(req)];
+  if (!q || q.gone || q.headed) return;
+  q.headed = YES;
+  NSData *d = [mb_ns_from_string(headers) dataUsingEncoding:NSUTF8StringEncoding];
+  NSArray *a = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+  NSMutableDictionary *hs = [NSMutableDictionary new];
+  for (NSArray *h in [a isKindOfClass:NSArray.class] ? a : @[]) {
+    if (h.count != 2) continue;
+    NSString *k = h[0], *val = h[1];
+    hs[k] = hs[k] ? [NSString stringWithFormat:@"%@, %@", hs[k], val] : val;
+  }
+  NSHTTPURLResponse *r = [[NSHTTPURLResponse alloc] initWithURL:q.url statusCode:status HTTPVersion:@"HTTP/1.1"
+                                                   headerFields:hs];
+  [q.task didReceiveResponse:r];
+}
+
+void mb_host_view_site_chunk(int32_t vid, int32_t req, moonbit_bytes_t data) {
+  MBNative *v = views[@(vid)];
+  MBSiteReq *q = v.reqs[@(req)];
+  if (!q || q.gone || !q.headed) return;
+  [q.task didReceiveData:[NSData dataWithBytes:data length:Moonbit_array_length(data)]];
+}
+
+void mb_host_view_site_end(int32_t vid, int32_t req, moonbit_string_t error) {
+  MBNative *v = views[@(vid)];
+  MBSiteReq *q = v.reqs[@(req)];
+  if (!q) return;
+  [v.reqs removeObjectForKey:@(req)];
+  if (q.gone) return;
+  NSString *e = mb_ns_from_string(error);
+  if (e.length == 0 && q.headed) {
+    [q.task didFinish];
+  } else if (!q.headed) {
+    // no head: a page that says why, as the Android host's
+    NSHTTPURLResponse *r = [[NSHTTPURLResponse alloc] initWithURL:q.url statusCode:502 HTTPVersion:@"HTTP/1.1"
+                                                     headerFields:@{@"Content-Type" : @"text/plain; charset=utf-8"}];
+    [q.task didReceiveResponse:r];
+    [q.task didReceiveData:[(e.length ? e : @"no answer") dataUsingEncoding:NSUTF8StringEncoding]];
+    [q.task didFinish];
+  } else {
+    [q.task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorNetworkConnectionLost
+                                             userInfo:@{NSLocalizedDescriptionKey : e}]];
+  }
+}
+
+moonbit_string_t mb_host_view_site_state(int32_t vid) {
+  MBNative *v = views[@(vid)];
+  if (!v || v.kind != 3) return mb_string_from_ns(@"");
+  NSURL *u = v.web.URL;
+  NSString *path = @"";
+  if ([u.scheme isEqualToString:kSiteScheme]) {
+    NSURLComponents *c = [NSURLComponents componentsWithURL:u resolvingAgainstBaseURL:NO];
+    path = c.percentEncodedPath.length ? c.percentEncodedPath : @"/";
+    if (c.percentEncodedQuery) path = [NSString stringWithFormat:@"%@?%@", path, c.percentEncodedQuery];
+  } else if (u.absoluteString) {
+    path = u.absoluteString;
+  }
+  NSDictionary *st = @{
+    @"path" : path,
+    @"back" : @(v.web.canGoBack),
+    @"forward" : @(v.web.canGoForward),
+    @"loading" : @(v.web.isLoading),
+    @"title" : v.web.title ?: @""
+  };
+  NSData *d = [NSJSONSerialization dataWithJSONObject:st options:0 error:nil];
+  return mb_string_from_ns(d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : @"");
+}
+
+void mb_host_view_site_load(int32_t vid, moonbit_string_t path) {
+  MBNative *v = views[@(vid)];
+  if (!v || v.kind != 3) return;
+  NSString *p = mb_ns_from_string(path);
+  NSURL *u = [NSURL URLWithString:[NSString stringWithFormat:@"%@://svc%@", kSiteScheme, p.length ? p : @"/"]];
+  if (u) [v.web loadRequest:[NSURLRequest requestWithURL:u]];
+}
+
 // ---- for the canvas's view and the renderer ----
 
 int mb_views_pass_through(double x, double y) {
   for (MBNative *v in views.allValues) {
-    if (v.kind != 2 || !v.shown || !v.placed) continue;
+    if (v.kind < 2 || !v.shown || !v.placed) continue;
     double x0 = fmax(v.cx0, v.x), y0 = fmax(v.cy0, v.y);
     double x1 = fmin(v.cx1, v.x + v.w), y1 = fmin(v.cy1, v.y + v.h);
     if (x >= x0 && x < x1 && y >= y0 && y < y1) return 1;
