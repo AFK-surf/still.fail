@@ -375,8 +375,9 @@ private fun StrokedLine(line: AnnotatedString, marks: List<TextMark>, size: Text
                 if (from >= to) return@forEachIndexed
                 val p = Ease.Standard.transform(((drawn.value - i * STROKE_GAP_MS) / STROKE_MS).coerceIn(0f, 1f))
                 if (p <= 0f) return@forEachIndexed
-                val left = l.getHorizontalPosition(from, true) - 2.dp.toPx()
-                val right = l.getHorizontalPosition(to, true) + 2.dp.toPx()
+                // The glyphs' own boxes (a position between two characters falls short of a bold one's).
+                val left = l.getBoundingBox(from).left - 2.dp.toPx()
+                val right = l.getBoundingBox(to - 1).right + 2.dp.toPx()
                 val y = l.getLineBaseline(0) + 3.dp.toPx()
                 val w = right - left
                 val stroke = Path().apply {
