@@ -18,8 +18,9 @@ let posthog: PostHog | null = null;
 let early: ((ph: PostHog) => void)[] | null = null;
 let loaded: Promise<void> = Promise.resolve();
 
-/** Whether this build has PostHog: only then is there anything to turn off (the switch in settings). */
-export const HAS_TELEMETRY = __POSTHOG__ !== null;
+/** Whether this build has PostHog: only then is there anything to turn off (the switch in settings). Undefined where
+ * nothing built it (node's tests import the module as it is). */
+export const HAS_TELEMETRY = typeof __POSTHOG__ !== "undefined" && __POSTHOG__ !== null;
 
 /** Whether this browser sends anything: as PostHog keeps it once it has loaded, as last set here (else on) till then. */
 let sending = true;
