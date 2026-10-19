@@ -82,7 +82,7 @@ final class NativeViews {
         volatile boolean closed;
         // how it stands, for info (the GL thread reads these)
         volatile int state;
-        volatile double duration = -1, position, playing, nw, nh, bytes, framed, buffering;
+        volatile double duration = -1, position, playing, nw, nh, bytes, framed, buffering, buffered, ended;
         // placed: x y w h cx0 cy0 cx1 cy1, in pixels; shown
         final float[] at = new float[8];
         boolean shown;
@@ -178,6 +178,8 @@ final class NativeViews {
         out[5] = v.bytes;
         out[6] = v.framed;
         out[7] = v.buffering;
+        out[8] = v.buffered;
+        out[9] = v.ended;
         return v.state;
     }
 
@@ -251,6 +253,7 @@ final class NativeViews {
             public void run() {
                 if (closed || player == null) return;
                 position = Math.max(0, player.getCurrentPosition());
+                buffered = Math.max(0, player.getBufferedPosition());
                 long dur = player.getDuration();
                 if (dur != C.TIME_UNSET) duration = dur;
                 Host.main.postDelayed(this, playing > 0 ? 33 : 250);
@@ -310,6 +313,7 @@ final class NativeViews {
                         Host.log("view " + id + ": ready, " + (long) duration + " ms");
                     }
                     buffering = s == Player.STATE_BUFFERING ? 1 : 0;
+                    ended = s == Player.STATE_ENDED ? 1 : 0;
                     if (s == Player.STATE_ENDED) playing = 0;
                     Host.requestFrame();
                 }

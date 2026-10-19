@@ -20,6 +20,7 @@
 #   scripts/e2e-local.sh wait-chat WORDS   until the test station has a chat whose first words begin with WORDS
 #   scripts/e2e-local.sh freeze|thaw  the test station stopped where it is (SIGSTOP: as if its network went) or started anew
 #   scripts/e2e-local.sh drive-seed TAG   the drive flows' folder in the test station's home (e2e-TAG)
+#   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
 #   scripts/e2e-local.sh status
 #
 # E2E_WORK (default: e2e-local beside this checkout), E2E_STATION (the station's data and HOME, /tmp/mbui-e2e-<uid>),
@@ -221,6 +222,20 @@ PY
   say "drive folder $d"
 }
 
+# the player's flows' folder (e2e/flows/45-…), 影音 in the drive flows' e2e-<tag>, which flow 15 lends: two episodes
+# (H.264 and AAC, their index first; the first 20 s with a subtitle beside it, the second 4 s) and a song of 5 s
+drive_media() {
+  local d=$STATION/home/e2e-${1:?a tag}/影音
+  mkdir -p $d
+  ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 \
+    -t 20 -c:v libx264 -profile:v baseline -pix_fmt yuv420p -c:a aac -movflags +faststart $d/第01集.mp4
+  ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=660:sample_rate=44100 \
+    -t 4 -c:v libx264 -profile:v baseline -pix_fmt yuv420p -c:a aac -movflags +faststart $d/第02集.mp4
+  ffmpeg -loglevel error -y -f lavfi -i sine=frequency=520:sample_rate=44100 -t 5 -c:a aac -movflags +faststart $d/片尾曲.m4a
+  printf '1\n00:00:00,200 --> 00:00:04,000\n第一句字幕\n\n2\n00:00:04,000 --> 00:00:07,500\n第二句字幕\n' > $d/第01集.srt
+  say "drive media $d"
+}
+
 # waits (a minute at most) until the test station has a chat whose first words begin with WORDS, said in it
 wait_chat() {
   local w="$*" i=0
@@ -285,6 +300,7 @@ case "${1:-all}" in
   freeze) freeze ;;
   thaw) thaw ;;
   drive-seed) shift; drive_seed "$@" ;;
+  drive-media) shift; drive_media "$@" ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   all)

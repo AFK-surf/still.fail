@@ -110,6 +110,9 @@ extern "C" fn ffi_system_dark() -> Int = "mb_host_system_dark"
 extern "C" fn ffi_set_dark(dark : Int) -> Unit = "mb_host_set_dark"
 
 ///|
+extern "C" fn ffi_set_sideways(on : Int) -> Unit = "mb_host_set_sideways"
+
+///|
 pub fn run(
   title : String,
   frame : FuncRef[(Double, Double, Double, Double) -> Unit],
@@ -327,6 +330,14 @@ pub fn set_dark(dark : Bool) -> Unit {
 }
 
 ///|
+/// Turned sideways for a film (still.fail's player, Player.kt): landscape asked for (a phone with rotation locked
+/// turns too) and the system's bars out of the way (a swipe brings them for a while); `false`, upright as it was.
+/// Android does it (the activity's requested orientation, its window's insets controller); elsewhere nothing turns.
+pub fn set_sideways(on : Bool) -> Unit {
+  ffi_set_sideways(if on { 1 } else { 0 })
+}
+
+///|
 /// A scripted run's input given to the host to send as its own (src/ui/drive.mbt): `drive_insert` words committed and
 /// `drive_mark` composed by the input method (macOS: NSTextInputClient's insertText and setMarkedText; Android: the
 /// view's InputConnection), `drive_newline` its Enter, `drive_paste` the system's paste of the clipboard (Cmd+V,
@@ -524,8 +535,9 @@ pub fn view_control(id : Int, op : Int, value : Double) -> Unit {
 
 ///|
 /// How the view stands: -1 failed (a file the player cannot play, a page that cannot load), 0 opening, 1 ready.
-/// `out` (8): its length in ms (-1 not known), where it is (ms), playing (1), the picture's own width and height
-/// (pixels), the bytes it has been given, whether a frame has been drawn (a page: loaded), buffering (1).
+/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1), the picture's own width and height
+/// (pixels), the bytes it has been given, whether a frame has been drawn (a page: loaded), buffering (1), how far on it
+/// has what it needs to play (ms; 0 not said), played to its end (1).
 pub fn view_info(id : Int, out : FixedArray[Double]) -> Int {
   ffi_view_info(id, out)
 }

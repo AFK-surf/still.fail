@@ -529,6 +529,9 @@ void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
 // Whether the system is set to dark (@host.system_dark): not read here yet (light).
 int32_t mb_host_system_dark(void) { return 0; }
 
+// Turned sideways for a film (@host.set_sideways): a window does not turn.
+void mb_host_set_sideways(int32_t on) { (void)on; }
+
 // The app drawn dark (@host.set_dark): nothing of the host's own follows it here yet.
 void mb_host_set_dark(int32_t dark) { (void)dark; }
 
@@ -613,7 +616,7 @@ void mb_host_view_close(int32_t id) { (void)id; }
 void mb_host_view_control(int32_t id, int32_t op, double value) { (void)id; (void)op; (void)value; }
 int32_t mb_host_view_info(int32_t id, double *out) {
   (void)id;
-  for (int i = 0; i < 8; i++) out[i] = 0;
+  for (int i = 0; i < 10; i++) out[i] = 0;
   return -1;
 }
 int32_t mb_host_view_read_next(int32_t id, double *out) { (void)id; (void)out; return 0; }

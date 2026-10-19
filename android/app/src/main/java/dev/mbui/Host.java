@@ -64,6 +64,25 @@ final class Host {
         });
     }
 
+    /**
+     * Turned sideways for a film (@host.set_sideways, still.fail's Player.kt): landscape asked for (a phone with rotation
+     * locked turns too) and the system bars away, a swipe bringing them for a while; off, upright and the bars back.
+     */
+    static void setSideways(boolean on) {
+        main.post(() -> {
+            if (activity == null) return;
+            android.view.WindowInsetsController c = activity.getWindow().getInsetsController();
+            if (c != null) {
+                c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                if (on) c.hide(android.view.WindowInsets.Type.systemBars());
+                else c.show(android.view.WindowInsets.Type.systemBars());
+            }
+            activity.setRequestedOrientation(on ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            log(on ? "sideways: landscape, the system bars away" : "sideways: upright");
+        });
+    }
+
     static void requestFrame() {
         if (view != null) view.wantFrame();
     }

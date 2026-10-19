@@ -472,6 +472,9 @@ int32_t mb_host_system_dark(void) {
   return UIScreen.mainScreen.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark ? 1 : 0;
 }
 
+// Turned sideways for a film (@host.set_sideways): the iPhone app does not turn yet.
+void mb_host_set_sideways(int32_t on) { (void)on; }
+
 // The app drawn dark (@host.set_dark): nothing of the host's own follows it here yet.
 void mb_host_set_dark(int32_t dark) { (void)dark; }
 

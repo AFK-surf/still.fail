@@ -412,6 +412,8 @@ fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
       out[5] = 0.0
       out[6] = 1.0
       out[7] = 0.0
+      out[8] = 0.0
+      out[9] = 0.0
       ignore(id)
       1
     }

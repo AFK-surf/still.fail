@@ -565,8 +565,13 @@
     if (v.kind === 1) {
       v.info[1] = v.el.currentTime * 1000;
       v.info[2] = v.el.paused || v.el.ended ? 0 : 1;
+      // how far on it has what it needs: the end of the buffered range the playhead is in; whether it played to its end
+      const b = v.el.buffered, t = v.el.currentTime;
+      v.info[8] = 0;
+      for (let i = 0; i < b.length; i++) if (b.start(i) <= t + 0.001) v.info[8] = Math.max(v.info[8], b.end(i) * 1000);
+      v.info[9] = v.el.ended ? 1 : 0;
     }
-    for (let i = 0; i < 8; i++) out[i] = v.info[i];
+    for (let i = 0; i < 10; i++) out[i] = v.info[i] || 0;
     return v.state;
   };
   H.viewReadNext = (id, out) => {

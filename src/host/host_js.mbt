@@ -289,6 +289,12 @@ pub fn set_dark(dark : Bool) -> Unit {
 }
 
 ///|
+/// Turned sideways for a film (see host_native.mbt): a browser's page does not turn.
+pub fn set_sideways(on : Bool) -> Unit {
+  ignore(on)
+}
+
+///|
 /// A scripted run's input given to the host (see host_native.mbt): the browser has none of these paths.
 pub fn drive(kind : Int, text : String) -> Bool {
   ignore(kind)

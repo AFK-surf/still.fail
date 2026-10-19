@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/string",
+  "mbui/ui",
+  "mbui/sf",
+  "mbui/motion",
+  "mbui/host",
+}

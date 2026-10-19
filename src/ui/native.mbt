@@ -46,7 +46,7 @@ fn NativeView::make(
   let v = {
     id: h_view_open(kind, arg),
     read,
-    info: FixedArray::make(8, 0.0),
+    info: FixedArray::make(10, 0.0),
     state: 0,
     painted: -1,
     at: FixedArray::make(8, 0.0),
@@ -173,6 +173,22 @@ pub fn NativeView::shown(self : NativeView) -> Bool {
 ///|
 pub fn NativeView::buffering(self : NativeView) -> Bool {
   self.info[7] > 0.0
+}
+
+///|
+/// How far on it has what it needs to play, in ms (its position when the host does not say).
+pub fn NativeView::buffered(self : NativeView) -> Double {
+  if self.info[8] > 0.0 {
+    self.info[8]
+  } else {
+    self.info[1]
+  }
+}
+
+///|
+/// Whether it has played to its end (and stopped there).
+pub fn NativeView::ended(self : NativeView) -> Bool {
+  self.info[9] > 0.0
 }
 
 ///|

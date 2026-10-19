@@ -19,6 +19,8 @@ pub(all) enum Page {
   Drive(DriveAt)
   /// a text of a drive, read (drive_reader.mbt)
   DriveRead(DriveAt)
+  /// a video or a song of a drive, played (play.mbt)
+  DrivePlay(DriveAt)
   /// the decisions waiting for the viewer, one at a time (奏: decisions.mbt); the bar's 奏 place
   Decisions
   /// an agent's execution history (history.mbt): its chat, its session
@@ -152,6 +154,8 @@ fn reset() -> Unit {
   read_chats.clear()
   readings.clear()
   left_pages.clear()
+  playing.clear()
+  play_srcs.clear()
   splash_first.val = -1.0
   drafts.clear()
   cui.attach = false
@@ -201,6 +205,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
     match p {
       Chat(r) => chat_left(src, r)
       DriveRead(at) => reader_left(at)
+      DrivePlay(at) => play_left(at)
       History(r, key) => history_left(src, r, key)
       _ => ()
     }
@@ -261,6 +266,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       if app.nav.depth() == 1 && root != Home && !app.menu && !sheet_open() {
         c.on_back(fn() { go_place(c, "chats", [], -1) })
       }
+      // the player sideways: back turns it upright first
+      play_back(c)
       // the bottom bar: on a place's top page with nothing over it
       bottom_bar(c, src, w, place_of(root), app.nav.depth() == 1 && place_of(root) is Some(_))
       // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
@@ -343,6 +350,7 @@ fn page_view(
         Files => files_page(c, src, w, place=app.nav.depth() == 1)
         Drive(at) => drive_page(c, src, w, at)
         DriveRead(at) => reader_page(c, src, at)
+        DrivePlay(at) => play_page(c, src, at)
         Archived => setting_page(c, src, w, @settings.Route::Archive)
         Settings => setting_page(c, src, w, @settings.Route::Home)
         Setting(r) => setting_page(c, src, w, r)
@@ -467,11 +475,19 @@ fn appearance(src : Source) -> Unit {
   // (the host told once the prefs are read: not the system's first, then the one chosen)
   if prefs is Some(_) && told_dark.val != Some(dark) {
     told_dark.val = Some(dark)
-    @host.set_dark(dark)
     // (said on the log for scripted runs: e2e/flows checks the theme was taken)
     @host.log(if dark { "theme: dark" } else { "theme: light" })
   }
+  // the system bars follow the page under them: the player's is dark whatever the theme
+  let bars = dark || dark_page()
+  if prefs is Some(_) && told_bars.val != Some(bars) {
+    told_bars.val = Some(bars)
+    @host.set_dark(bars)
+  }
 }
+
+///|
+let told_bars : Ref[Bool?] = Ref(None)
 
 ///|
 let told_dark : Ref[Bool?] = Ref(None)

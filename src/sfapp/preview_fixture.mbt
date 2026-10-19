@@ -1,6 +1,7 @@
 // The file preview over made-up files (APP=sffix MBUI_FIXTURE=chat-preview-<what>: the first row's chat with a file
 // of it open in the preview; scripts/shots.sh preview, web-preview): a picture, a PDF of two pages, a video (whose
-// reads are never answered: the player waits, as on a slow link, the same on every run), a page of HTML, code,
+// reads are never answered: the player waits, as on a slow link, the same on every run), a song (its reads the same,
+// how its player stands pinned), a page of HTML, code,
 // Markdown, a table, and a file of no kind that can be shown. Its bytes are made here; none is a real document.
 
 ///|
@@ -13,6 +14,7 @@ fn preview_files() -> Array[(Attachment, () -> Bytes)] {
     (at("界面草图.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
     (at("设计说明.pdf", 2400.0, 0.0, 0.0), fn() { fixture_pdf() }),
     (at("演示录屏.mp4", 5242880.0, 1280.0, 720.0), fn() { b"" }),
+    (at("会议录音.m4a", 1489000.0, 0.0, 0.0), fn() { b"" }),
     (at("报告.html", 900.0, 0.0, 0.0), fn() { utf8_bytes(fixture_html) }),
     (at("list.ts", 600.0, 0.0, 0.0), fn() { utf8_bytes(fixture_code) }),
     (at("说明.md", 500.0, 0.0, 0.0), fn() { utf8_bytes(fixture_md) }),
@@ -28,6 +30,7 @@ fn fixture_preview(mode : String) -> Unit {
     "chat-preview-image" => "界面草图.png"
     "chat-preview-pdf" => "设计说明.pdf"
     "chat-preview-video" => "演示录屏.mp4"
+    "chat-preview-audio" => "会议录音.m4a"
     "chat-preview-html" => "报告.html"
     "chat-preview-code" => "list.ts"
     "chat-preview-md" => "说明.md"
@@ -41,6 +44,20 @@ fn fixture_preview(mode : String) -> Unit {
       // its bars kept up: a shot taken late (a busy machine, the browser's) sees what one taken early does
       if viewer.val is Some(v) {
         v.rests = false
+        // the song paused at 0:31 of 1:35, the same on every run
+        if which.has_suffix(".m4a") {
+          v.pinned = Some({
+            state: 1,
+            duration: 95000.0,
+            position: 31000.0,
+            buffered: 95000.0,
+            playing: false,
+            buffering: false,
+            ended: false,
+            width: 0.0,
+            height: 0.0,
+          })
+        }
       }
     }
   }
@@ -72,7 +89,7 @@ fn fixture_fetch(
   match name {
     "station.file" => done(Ok(({ "type": "" }, bytes)))
     "station.file.part" => {
-      if lower(file).has_suffix(".mp4") {
+      if lower(file).has_suffix(".mp4") || lower(file).has_suffix(".m4a") {
         // the player waits on the network
         return
       }

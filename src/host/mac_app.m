@@ -616,6 +616,9 @@ int32_t mb_host_system_dark(void) {
   return [n isEqualToString:NSAppearanceNameDarkAqua] ? 1 : 0;
 }
 
+// Turned sideways for a film (@host.set_sideways): a window does not turn.
+void mb_host_set_sideways(int32_t on) { (void)on; }
+
 // The app drawn dark or light (@host.set_dark): the window's title bar the same.
 void mb_host_set_dark(int32_t dark) {
   NSWindow *w = the_view.window;

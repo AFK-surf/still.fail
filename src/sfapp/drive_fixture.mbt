@@ -417,6 +417,7 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       draft_refs["ws1/st1:s-c1"] = [
         { station: "ws1/st1", station_name: "Studio", path: fix_docs + "/发布清单.md", name: "发布清单.md", dir: false },
       ]
-    _ => ()
+    // the player (play_fixture.mbt)
+    _ => open_play_fixture(mode)
   }
 }

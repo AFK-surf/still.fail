@@ -277,7 +277,7 @@ DriveScreen.kt, Reader.kt, TextModel.kt, Novel.kt, ReaderMarkdown.kt; chat/scree
   made-up drive that takes renames, deletes, new folders and uploads while it runs): `scripts/shots.sh drive
   web-drive` compares them with goldens/mac-<mode>.png and web-<mode>.png.
 
-Not yet, against the current app: the player (the rest of slice 12), downloading a file to the device, sharing it
+Not yet, against the current app: downloading a file to the device, sharing it
 to another app, a folder as a zip (each says so in a toast: no host API to keep a file yet), GB18030 text (no
 table here: such a file opens as UTF-8 with replacement characters), the serif face (the reader draws its sans
 face either way), 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light one),
@@ -285,6 +285,44 @@ the system bars' icons following the paper, the frosted glass of the bars and sh
 system's back closing a sheet or ending a choice (it goes back a page), dragging sheets by the grabber, the
 long-press ripple, a station file sent as a file (`drive.stage`, the card's sheet, 此对话默认发送文件) and station
 files kept with the draft on the device, the station page's way into a drive (slice 13).
+
+The rest of slice 12, the player (branch player-share, 2026-10-19; ember apps/android drive/Player.kt, Playlist.kt,
+chat/screens/VideoViewer.kt AudioViewer): a video or a song of a drive, or a song of a chat, played as it streams through
+the core.
+
+- src/player, a package of its own that the media app can take as it is (it knows nothing of still.fail's core: a
+  `Track` is a name, a media type and a `read(offset, length, answer)`): `Player` over a page (Player.kt PlayerScreen) and
+  `audio_strip` (AudioViewer), the folder's order (`playlist_of`, numbers as numbers), `next_in`, `pick_subtitle`
+  (E01.srt for E01.mp4, a tag between, SubRip first), `clock`, `speed_label`, and subtitles read here (`parse_subtitles`:
+  SubRip, WebVTT, ASS/SSA's dialogue; their tags and overrides dropped) and drawn by the player, so every host shows them
+  alike (the Android app hands them to media3).
+- The player (Page `DrivePlay(DriveAt)`, src/sfapp/play.mbt; a folder's video or song row pushes it): black whatever the
+  theme, the system's player in a native view (slice 11's: ExoPlayer, AVPlayer), its bytes read through the core a part at a
+  time (`drive.read`), the picture fitted in the page; the bar at the top (back, the name, which of the folder's it is:
+  2 / 3), at the foot the time over the timeline (what is buffered lighter on it: the hosts now tell it, and whether it
+  played to its end; tapped or dragged along, the time follows the finger and the player goes there once let go), the
+  one before, 15 s back, play, 15 s on, the one after, the speed (1× 1.25× 1.5× 2× 0.5× 0.75×), the subtitle's key, fit or
+  fill (sideways), sideways (`@host.set_sideways`: Android asks for landscape and puts the system bars away; back turns it
+  upright first). Left alone while it plays, the controls fade (200 ms) after 2.5 s; a tap brings them back or sends them
+  away (waiting out a double tap's 300 ms); a double tap on the left or right third jumps 15 s (快退 / 快进 15 秒 said a
+  moment), in the middle it pauses or plays (已暂停 / 继续播放). 正在打开 and 正在缓冲 as a pill in the middle, 播放失败 with
+  重试, at its end 播放结束 with 下一个：<name>; the next or the one before take the page's place. A song: its mark and name
+  in the middle, the controls staying, no sideways. The system bars' icons are light over it (the host told the page is
+  dark). Where it is goes to the core (`drive.place` with its time and length in ms, every 5 s while it is open and as
+  the page goes; the drivePlace topic), and it opens there next time unless it was left within 5 s of its end.
+- A chat's song in the preview (FilePreview.kt's Audio, AudioViewer): its name and the capsule in the page's colours (play
+  on the ink, the timeline in the accent, `m:ss / m:ss` in the code face, 播放失败), read through the core a part at a time
+  (`station.file.part`); the preview's bar over it as over any file.
+- `APP=sffix MBUI_FIXTURE=player-video|player-audio|player-ended|player-opening` (src/sfapp/play_fixture.mbt: a folder
+  no listing shows, its films' reads never answered, how the player stands pinned for the shot) and `chat-preview-audio`:
+  `scripts/shots.sh player web-player` and `preview web-preview` compare them with goldens/mac-player-*.png,
+  web-player-*.png, mac-preview-audio.png and web-preview-audio.png.
+
+Not yet, against the current app: the frosted glass of the player's bars (a native view under them cannot be blurred: a
+deeper solid tint, as the preview's), the subtitle's shadow (a dark ground under its words only), the bytes played kept on
+the device to play again without the station (DriveCache's played: each play reads through the core again), why it
+failed in words (the host logs the player's error; the page says 播放失败), turning sideways on iOS (no host there turns
+yet), the tabular figures of the time (the UI face's own).
 
 Slice 8, decisions, history, tool steps, a chat's sheets, jobs (branch decisions, 2026-10-19): what a chat asks is
 answered from it, and an agent's work can be looked into (src/sfapp/decide.mbt, sheets.mbt, history.mbt,
@@ -511,7 +549,7 @@ FileData; Zoom.kt):
   its hole), so here they are a deeper solid tint (0x121214 at 85%) whatever is under them (the page's white at 92%
   over a document). In the renderers a hole is a run of its own inside the glass's runs: glass painted after a hole
   sees the hole, not the view.
-- `APP=sffix MBUI_FIXTURE=chat-preview-image|pdf|video|html|code|md|csv|none` opens a made-up file
+- `APP=sffix MBUI_FIXTURE=chat-preview-image|pdf|video|audio|html|code|md|csv|none` opens a made-up file
   (src/sfapp/preview_fixture.mbt: a picture, a PDF of two pages, a video whose reads are never answered, a page with a
   script, code, Markdown, a table, a file of no kind): `scripts/shots.sh preview web-preview` compares them with
   goldens/mac-preview-*.png and web-preview-*.png.
@@ -520,7 +558,7 @@ Not yet, against the current app: the flight from the chat's thumbnail and back 
 the frame it was left at), stepping through the chat's images (`imageNear`) and swiping between them, pinching on iOS (its host
 tells no second finger yet), marking an image (ImageMarks.kt), a video's
 frame-exact steps (the file's frames' times, MediaExtractor; here steps of a 60th of a second), saving a frame,
-landscape, audio's own small player (audio plays in the video's), code highlighting and a code file's sideways scroll,
+landscape, code highlighting and a code file's sideways scroll,
 installing an APK, an SVG drawn by a page when it is not a bitmap, the progress of a whole file coming (`progress`), a
 big file read to the disk, a web view's own scrolling under the canvas on macOS while something is painted over it,
 the frosted glass over a picture or a document (where nothing native is under it: `@sf` glass could take it).

@@ -650,10 +650,15 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
   MBNative *v = views[@(vid)];
   if (!v || v.kind != 1) return;
   switch (op) {
-    case 1:
+    case 1: {
+      // played again from its end: from the start, as the Android host's player does
+      double dur = [v durationMs];
+      CMTime t = v.player.currentTime;
+      if (dur > 0 && CMTIME_IS_NUMERIC(t) && CMTimeGetSeconds(t) * 1000.0 >= dur - 50) [v.player seekToTime:kCMTimeZero];
       [v.player play];
       if (v.speed != 1) v.player.rate = (float)v.speed;
       break;
+    }
     case 2: [v.player pause]; break;
     case 3: {
       __weak MBNative *wv = v;
@@ -676,7 +681,7 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
 }
 
 int32_t mb_host_view_info(int32_t vid, double *out) {
-  for (int i = 0; i < 8; i++) out[i] = 0;
+  for (int i = 0; i < 10; i++) out[i] = 0;
   out[0] = -1;
   MBNative *v = views[@(vid)];
   if (!v) return -1;
@@ -698,6 +703,15 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
   out[6] = v.playerLayer.readyForDisplay ? 1 : 0;
   BOOL waiting = v.player.timeControlStatus == AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate;
   out[7] = (waiting || (v.player.rate > 0 && !it.playbackLikelyToKeepUp)) ? 1 : 0;
+  // how far on it has what it needs: the end of the loaded range the playhead is in
+  double now = out[1];
+  for (NSValue *r in it.loadedTimeRanges) {
+    CMTimeRange tr = r.CMTimeRangeValue;
+    double a = CMTimeGetSeconds(tr.start) * 1000.0, b = CMTimeGetSeconds(CMTimeRangeGetEnd(tr)) * 1000.0;
+    if (a <= now + 1 && b > out[8]) out[8] = b;
+  }
+  // at its end and stopped there
+  out[9] = (v.player.rate == 0 && out[0] > 0 && out[1] >= out[0] - 50) ? 1 : 0;
   if (v.failed || it.status == AVPlayerItemStatusFailed) return -1;
   return it.status == AVPlayerItemStatusReadyToPlay ? 1 : 0;
 }

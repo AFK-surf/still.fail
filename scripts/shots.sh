@@ -30,14 +30,17 @@
 # else's: the ground round it; yours: its bubble), and settings with notifications off
 # (MBUI_FIXTURE=chat-flash|chat-flash-mine|settings-notify-off): mac-notify-<state>, web-notify-<state>.
 # `preview` and `web-preview` are a file of it open in the preview
-# (MBUI_FIXTURE=chat-preview-image|pdf|video|html|code|md|csv|none): mac-preview-<what>, web-preview-<what>.
+# (MBUI_FIXTURE=chat-preview-image|pdf|video|audio|html|code|md|csv|none): mac-preview-<what>, web-preview-<what>.
+# `player` and `web-player` are the drive's player over made-up films (MBUI_FIXTURE=player-video|audio|ended|opening,
+# src/sfapp/play_fixture.mbt): mac-player-<what>, web-player-<what>.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat preview settings notify web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-settings web-notify ios android}
+PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat preview player settings notify web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-player web-settings web-notify ios android}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
+PLAYER_MODES="video audio ended opening"
 SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security vault stations station profiles profile connects memory memory-doc usage archive}
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
@@ -166,7 +169,7 @@ for p in $PLATFORMS; do
       APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
       rm -rf out/shot-preview; mkdir -p out/shot-preview
       names=
-      for m in image pdf video html code md csv none; do
+      for m in image pdf video audio html code md csv none; do
         at=60; [ $m = html ] && at=150
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-preview-$m MBUI_SCRIPT=shot MBUI_SHOT_AT=$at MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-preview ./_build/native/release/build/sffix/sffix.exe >/dev/null
         cp out/shot-preview/$m.png out/shots/mac-preview-$m.png
@@ -175,9 +178,27 @@ for p in $PLATFORMS; do
     web-preview)
       APP=sffix bash scripts/web.sh build >/dev/null
       names=
-      for m in image pdf video html code md csv none; do
+      for m in image pdf video audio html code md csv none; do
         QUERY=MBUI_FIXTURE=chat-preview-$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-preview-$m.png
         names="$names web-preview-$m"
+      done ;;
+    player)
+      # the drive's player over made-up films (src/sfapp/play_fixture.mbt): an episode paused with its subtitle, a song,
+      # an episode at its end with the next offered, one still opening (its reads never answered)
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-player; mkdir -p out/shot-player
+      names=
+      for m in $PLAYER_MODES; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=player-$m MBUI_SCRIPT=shot MBUI_SHOT_AT=60 MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-player ./_build/native/release/build/sffix/sffix.exe >/dev/null
+        cp out/shot-player/$m.png out/shots/mac-player-$m.png
+        names="$names mac-player-$m"
+      done ;;
+    web-player)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in $PLAYER_MODES; do
+        QUERY=MBUI_FIXTURE=player-$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-player-$m.png
+        names="$names web-player-$m"
       done ;;
     settings)
       APP=sffix MODE=release bash scripts/mac.sh build >/dev/null

@@ -441,6 +441,10 @@ pub fn fixture(mode : String) -> Source {
         fixture_fetch(name, params, done)
         return
       }
+      // the player's made-up films (play_fixture.mbt)
+      if name == "drive.read" && fixture_play_read(params, done) {
+        return
+      }
       match fixture_drive_read(name, params) {
         Some(r) => done(r)
         None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))

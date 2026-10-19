@@ -37,7 +37,7 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
-    m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text;
+    m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -74,6 +74,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_drive = (*env)->GetStaticMethodID(env, host_cls, "drive", "(ILjava/lang/String;)I");
   m_system_dark = (*env)->GetStaticMethodID(env, host_cls, "systemDark", "()Z");
   m_set_dark = (*env)->GetStaticMethodID(env, host_cls, "setDark", "(Z)V");
+  m_set_sideways = (*env)->GetStaticMethodID(env, host_cls, "setSideways", "(Z)V");
   m_metrics = (*env)->GetStaticMethodID(env, text_cls, "fontMetrics", "(DII[D)V");
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
@@ -800,6 +801,12 @@ void mb_host_set_dark(int32_t dark) {
   (*env)->CallStaticVoidMethod(env, host_cls, m_set_dark, (jboolean)(dark != 0));
 }
 
+// Turned sideways for a film (@host.set_sideways): landscape and the system bars away, or upright (Host.setSideways).
+void mb_host_set_sideways(int32_t on) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, host_cls, m_set_sideways, (jboolean)(on != 0));
+}
+
 void mb_host_wake_after(double ms) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_wake_after, ms);
@@ -1152,7 +1159,7 @@ void mb_host_view_control(int32_t id, int32_t op, double value) {
 int32_t mb_host_view_info(int32_t id, double *out) {
   JNIEnv *env = env_();
   jint st = (*env)->CallStaticIntMethod(env, views_cls, m_v_info, id, small_buf);
-  (*env)->GetDoubleArrayRegion(env, small_buf, 0, 8, out);
+  (*env)->GetDoubleArrayRegion(env, small_buf, 0, 10, out);
   return st;
 }
 
