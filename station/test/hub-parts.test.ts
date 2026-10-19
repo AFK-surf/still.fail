@@ -1,7 +1,7 @@
 // The hub's parts that compute (ported with their Rust tests): splitting for Slack, commands, image sizes, local file
 // links, the live view, the agent home, the account pool, the decision protocol, references to other chats.
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -414,6 +414,29 @@ test("profile homes link to the shared memory and skills under their runtimes' n
   linkAgentHome(agent, [{ id: "made", runtimes: ["claude"], home: made }, { id: "kept", runtimes: ["claude"], home: kept }]);
   assert.equal(readlinkSync(join(made, "skills")), join(agent, "skills"));
   assert.equal(readFileSync(join(kept, "skills", "mine", "SKILL.md"), "utf8"), "mine");
+  // A home whose runtime keeps skills of its own there (Claude Code's synced ones, Codex's .system) takes the shared
+  // ones one by one, and lets go of one gone from the shared.
+  const synced = join(root, "synced");
+  mkdirSync(join(synced, "skills", "synced", "bucket", "pdf"), { recursive: true });
+  writeFileSync(join(synced, "skills", "synced", "bucket", "pdf", "SKILL.md"), "account's");
+  mkdirSync(join(agent, "skills", "team"), { recursive: true });
+  mkdirSync(join(agent, "skills", "gone"), { recursive: true });
+  const syncedProfile = [{ id: "synced", runtimes: ["claude" as const], home: synced }];
+  linkAgentHome(agent, syncedProfile);
+  assert.equal(readlinkSync(join(synced, "skills", "team")), join(agent, "skills", "team"));
+  assert.equal(readFileSync(join(synced, "skills", "synced", "bucket", "pdf", "SKILL.md"), "utf8"), "account's");
+  rmSync(join(agent, "skills", "gone"), { recursive: true });
+  linkAgentHome(agent, syncedProfile);
+  assert.ok(!lstatSync(join(synced, "skills")).isSymbolicLink());
+  assert.deepEqual(readdirSync(join(synced, "skills")).sort(), ["synced", "team"]);
+  // The same place under another name (~/.ember is ~/.stillfail) is the link it should be: left, and said nothing of.
+  const alias = join(root, "alias");
+  symlinkSync(agent, alias);
+  const named = join(root, "named");
+  mkdirSync(named);
+  symlinkSync(join(alias, "skills"), join(named, "skills"));
+  linkAgentHome(agent, [{ id: "named", runtimes: ["claude"], home: named }]);
+  assert.equal(readlinkSync(join(named, "skills")), join(alias, "skills"));
   rmSync(root, { recursive: true, force: true });
 });
 
