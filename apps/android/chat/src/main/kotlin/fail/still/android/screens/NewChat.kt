@@ -94,6 +94,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentric
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
@@ -369,7 +370,7 @@ private fun openRunPicker(app: AppState, station: String) {
                 }
                 Spacer(Modifier.height(12.dp))
             }
-            Column(Modifier.weight(1f).fillMaxHeight().clip(Smooth(14.dp)).background(C.surface).verticalScroll(rememberScrollState()).padding(4.dp)) {
+            Column(Modifier.weight(1f).fillMaxHeight().clip(Smooth(CASCADE_CORNER)).background(C.surface).verticalScroll(rememberScrollState()).padding(CASCADE_PAD)) {
                 if (v.runtimes.isNotEmpty()) {
                     CascadeLabel(t("android-chat.new.runtime"))
                     v.runtimes.forEach { r -> CascadeOption(RUNTIME_LABEL[r] ?: r, null, draft.runtime == r, leading = { MakerIcon(null, r, 16.dp) }) { set { put("runtime", r) } } }
@@ -437,10 +438,14 @@ private fun openRunPicker(app: AppState, station: String) {
 private fun CascadeLabel(text: String) = Text(text, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 10.dp, top = 10.dp, bottom = 2.dp))
 
 /** A choice in a column of the picker: the chosen one on the accent's pale ground, its words in the accent and bold. */
+/** The column of what goes with the model picked: its options' grounds CASCADE_PAD in, concentric with its corner. */
+private val CASCADE_CORNER = 14.dp
+private val CASCADE_PAD = 4.dp
+
 @Composable
 private fun CascadeOption(label: String, sub: String?, checked: Boolean, subColor: androidx.compose.ui.graphics.Color = C.muted, leading: (@Composable () -> Unit)? = null, tag: (@Composable () -> Unit)? = null, faint: Boolean = false, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(Smooth(10.dp)).background(if (checked) C.accentBg else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().clip(Smooth(concentric(CASCADE_CORNER, CASCADE_PAD))).background(if (checked) C.accentBg else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         leading?.invoke()

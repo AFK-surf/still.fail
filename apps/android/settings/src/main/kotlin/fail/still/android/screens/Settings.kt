@@ -99,6 +99,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.StationIcons
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentricOut
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
@@ -115,7 +116,8 @@ fun CommandBox(text: String) {
     val app = LocalApp.current
     val context = LocalContext.current
     Row(
-        Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface2).border(1.dp, C.line, Smooth(12.dp)).padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+        // Its copy button in its corner, 10 from both edges: the box's corner taken from the button's, concentric.
+        Modifier.fillMaxWidth().clip(Smooth(concentricOut(8.dp, 10.dp))).background(C.surface2).border(1.dp, C.line, Smooth(concentricOut(8.dp, 10.dp))).padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(text, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = CodeFont, color = C.ink, modifier = Modifier.weight(1f))

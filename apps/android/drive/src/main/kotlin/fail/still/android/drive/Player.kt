@@ -386,7 +386,7 @@ fun PlayerScreen(station: String, root: String, path: String) {
         val index = list.indexOf(name)
         Row(
             Modifier.align(Alignment.TopCenter).windowInsetsPadding(insets).padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth().alpha(shown)
-                .glass(haze, Smooth(16.dp)).height(48.dp).padding(start = 4.dp, end = 14.dp),
+                .glass(haze, Smooth(24.dp)).height(48.dp).padding(start = 4.dp, end = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Key(Icons.ChevronLeft, t("common.back"), enabled = shown > 0f) { if (sideways) sideways = false else app.pop() }
@@ -398,9 +398,9 @@ fun PlayerScreen(station: String, root: String, path: String) {
         val prev = if (index > 0) list[index - 1] else null
         Column(
             Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.displayCutout)).padding(horizontal = 8.dp, vertical = 8.dp)
-                .widthIn(max = 720.dp).fillMaxWidth().alpha(shown).glass(haze, Smooth(20.dp))
+                .widthIn(max = 720.dp).fillMaxWidth().alpha(shown).glass(haze, Smooth(26.dp))
                 .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); wake() } }
-                .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 4.dp),
+                .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 6.dp),
         ) {
             Text(
                 buildAnnotatedString {

@@ -111,6 +111,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentric
 import fail.still.android.ui.Progress
 import fail.still.android.ui.WaitPill
 import fail.still.core.CoreException
@@ -377,7 +378,8 @@ private fun BarIcon(icon: ImageVector, label: String, p: PaperInk, onClick: () -
 private fun TopBar(haze: HazeState, p: PaperInk, title: String, sub: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier.windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth()
-            .paperGlass(haze, Smooth(16.dp), p).height(52.dp).padding(horizontal = 4.dp),
+            // Its round keys (40) 6 from every edge: a capsule, concentric with them.
+            .paperGlass(haze, Smooth(26.dp), p).height(52.dp).padding(horizontal = 6.dp),
     ) {
         Box(Modifier.align(Alignment.CenterStart)) { BarIcon(Icons.ChevronLeft, t("common.back"), p, onBack) }
         Column(Modifier.align(Alignment.Center).padding(horizontal = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -391,7 +393,8 @@ private fun TopBar(haze: HazeState, p: PaperInk, title: String, sub: String, onB
 @Composable
 private fun FoundPill(haze: HazeState, p: PaperInk, r: Reading, modifier: Modifier = Modifier) {
     Row(
-        modifier.padding(top = 6.dp).paperGlass(haze, Smooth(18.dp), p).height(40.dp).padding(start = 14.dp, end = 4.dp),
+        // A capsule as high as its round keys, the last one its end.
+        modifier.padding(top = 6.dp).paperGlass(haze, Smooth(20.dp), p).height(40.dp).padding(start = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(t("android-misc.drive.reader.foundAt", "query" to r.query, "at" to r.hit + 1, "n" to r.matches.size), fontSize = 13.sp, color = p.ink, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 6.dp))
@@ -408,7 +411,8 @@ private fun BottomBar(haze: HazeState, p: PaperInk, r: Reading, onChapters: () -
     val ch = r.chapter
     Column(
         Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth()
-            .paperGlass(haze, Smooth(20.dp), p).padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 6.dp),
+            // Its keys BAR_PAD from every edge, rounded concentric with it.
+            .paperGlass(haze, Smooth(BAR_CORNER), p).padding(BAR_PAD),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (r.hasChapters) Row(verticalAlignment = Alignment.CenterVertically) {
@@ -433,12 +437,15 @@ private fun BottomBar(haze: HazeState, p: PaperInk, r: Reading, onChapters: () -
     }
 }
 
+private val BAR_CORNER = 20.dp
+private val BAR_PAD = 10.dp
+
 /** A small key on the bar (上一章, 下一章); faded and inert when there is nowhere to go. */
 @Composable
 private fun TextKey(label: String, p: PaperInk, onClick: (() -> Unit)?) {
     Text(
         label, fontSize = 13.sp, color = if (onClick != null) p.ink else p.ink.copy(alpha = 0.3f), maxLines = 1,
-        modifier = Modifier.clip(Smooth(10.dp)).background(p.ink.copy(alpha = if (onClick != null) 0.07f else 0.04f)).clickable(enabled = onClick != null) { onClick?.invoke() }
+        modifier = Modifier.clip(Smooth(concentric(BAR_CORNER, BAR_PAD))).background(p.ink.copy(alpha = if (onClick != null) 0.07f else 0.04f)).clickable(enabled = onClick != null) { onClick?.invoke() }
             .padding(horizontal = 12.dp, vertical = 6.dp),
     )
 }
@@ -446,7 +453,7 @@ private fun TextKey(label: String, p: PaperInk, onClick: (() -> Unit)?) {
 @Composable
 private fun RowScope.Tool(icon: ImageVector, label: String, p: PaperInk, onClick: () -> Unit) {
     Column(
-        Modifier.weight(1f).clip(Smooth(12.dp)).clickable(onClick = onClick).padding(vertical = 6.dp),
+        Modifier.weight(1f).clip(Smooth(concentric(BAR_CORNER, BAR_PAD))).clickable(onClick = onClick).padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         IconIn(icon, 20.dp, p.ink)

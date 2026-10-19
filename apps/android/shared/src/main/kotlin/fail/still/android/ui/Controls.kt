@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -53,9 +54,13 @@ fun DoingMark(running: Boolean, failed: String?, inline: Boolean = false) {
  */
 @Composable
 fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enabled: Boolean = true, busy: Boolean = false, done: Boolean = false, failed: String? = null, color: Color = C.ink, leading: (@Composable () -> Unit)? = null, mark: (@Composable () -> Unit)? = null, subLines: Int = Int.MAX_VALUE, onClick: () -> Unit) {
-    Column(Modifier.padding(horizontal = 12.dp)) {
+    // Its ground under the finger rounded as a list card's rows (Parts.kt ListRow), its words CARD_PAD from the edge of
+    // what it is on: a sheet's, or a list card's (whose padding has it LIST_PAD in already).
+    val onCard = LocalOnCard.current
+    Column(Modifier.padding(horizontal = if (onCard) 0.dp else 12.dp)) {
         Row(
-            Modifier.fillMaxWidth().clickable(enabled = enabled && !busy && !done, onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).clickable(enabled = enabled && !busy && !done, onClick = onClick)
+                .padding(horizontal = if (onCard) CARD_PAD - LIST_PAD else 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             leading?.invoke()
@@ -74,13 +79,16 @@ fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enable
     }
 }
 
+/** A button's height: a capsule, BUTTON_HEIGHT / 2 its corner (what a card's corner with one in it is taken from). */
+val BUTTON_HEIGHT = 38.dp
+
 @Composable
-fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, height: Dp = BUTTON_HEIGHT, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val on = enabled && !busy
     val ink = if (primary && danger && enabled) Color.White else if (primary) C.bg else C.ink
     // Its words in the middle: the same as wrapped round them, centred where `modifier` makes it wider (full width).
     Row(
-        modifier.height(38.dp).clip(Smooth(19.dp)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
+        modifier.height(height).clip(Smooth(height / 2)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
             .clickable(enabled = on, onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {

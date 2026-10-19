@@ -97,6 +97,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.RowsCard
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
@@ -621,7 +622,8 @@ private fun ProfileRecovery(station: StationView, p: Profile) {
     val checking = app.isDoing("profile.check", "station" to address, "id" to p.id)
     val refreshing = app.isDoing("profile.quota", "station" to address, "id" to p.id)
     SectionHeader(issue.title, start = 24.dp)
-    Card {
+    // Its button at the bottom, in the corner.
+    Card(foot = issue.action != "login") {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(issue.detail, fontSize = 13.sp, color = C.ink)
             Text(issue.next, fontSize = 13.sp, color = C.muted)
@@ -829,7 +831,8 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
         previous = job?.state
     }
     SectionHeader(if (active) t("android-settings.login.active", "provider" to provider) else if (needed) t("android-settings.login.needed", "provider" to provider) else t("android-settings.login.subscription", "provider" to provider), start = 24.dp)
-    Card {
+    // Its sign-in button last, in the corner, where there is no command to run by hand under it.
+    Card(foot = !active && p.loginCommand.isEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (active) {
                 LoginSteps(job, provider) { code -> api.loginCode(p.id, code) }
@@ -1044,7 +1047,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                     s?.overview?.let { o -> MachineLoginOffers(address, o, inset = 0.dp) { rt -> edit(buildJsonObject { put("provider", if (rt == "claude") "anthropic" else "openai"); put("method", "plan") }) } }
                     d.groups.forEach { g ->
                         Text(g.title, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 6.dp, top = 6.dp))
-                        Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
+                        RowsCard {
                             g.providers.forEach { p ->
                                 ListRow(onClick = { edit("provider", p.id) }) {
                                     ProviderMark(p.runtime ?: "claude", (p.kind?.ifEmpty { null } ?: "api-provider"), 18.dp, p.mark)
@@ -1055,7 +1058,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                         }
                     }
                 }
-                d.step == "method" -> Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
+                d.step == "method" -> RowsCard {
                     d.choices.forEach { c ->
                         PickRow(c.title, c.hint, leading = { ProviderMark(runtime, if (c.id == "plan" && d.tile?.kind != "opencode-go") "subscription" else d.tile?.kind ?: "api-provider", 18.dp, d.tile?.mark) }) { edit("method", c.id) }
                     }
@@ -1099,13 +1102,13 @@ private fun ColumnScope.ConnectForm(d: ProfileFlowView, edit: (String, String) -
     }
     if ((d.regions?.size ?: 0) > 1) {
         Text(t("web-mobile.profiles.region"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
+        RowsCard {
             d.regions.orEmpty().forEach { r -> PickRow(r.label, checked = r.id == d.region) { edit("region", r.id) } }
         }
     }
     if (d.protocols.size > 1) {
         Text(t("web-mobile.profiles.protocol"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
+        RowsCard {
             d.protocols.forEach { p -> PickRow(p.label, checked = p.id == d.protocol) { edit("protocol", p.id) } }
         }
     }
@@ -1135,7 +1138,7 @@ fun MachineLoginOffers(station: String, overview: Overview, inset: androidx.comp
     val offers = overview.machineLogins.orEmpty().filter { it.offered == true }
     if (offers.isEmpty()) return
     Text(t("android-settings.machine.title"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = inset + 12.dp, end = inset + 12.dp, top = 8.dp, bottom = 4.dp))
-    Column(Modifier.padding(horizontal = inset).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
+    RowsCard(Modifier.padding(horizontal = inset).padding(bottom = 10.dp)) {
         offers.forEach { l -> MachineLoginRow(l, app.isDoing("profile.useMachineLogin", "station" to station, "runtime" to l.runtime)) {
             if (l.usable == true) {
                 scope.launch {

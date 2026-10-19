@@ -74,6 +74,7 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.Strokes
 import fail.still.android.ui.ZoomState
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentricOut
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -825,17 +826,25 @@ private class PngRows(private val out: java.io.OutputStream, private val width: 
 
 // ── the bars ───────────────────────────────────────────────────────────
 
+/**
+ * The bars over a picture (44 high) and their keys (32, rounded PICTURE_KEY): each key PICTURE_BAR_PAD from the bar's
+ * edges every way, so the bar's corner is taken from theirs, concentric.
+ */
+val PICTURE_KEY = 12.dp
+val PICTURE_BAR_PAD = 6.dp
+val PictureBar = Smooth(concentricOut(PICTURE_KEY, PICTURE_BAR_PAD))
+
 /** In the top bar while marking: what to do with the marks. */
 @Composable
 fun MarksActions(marks: ImageMarks, canDraft: Boolean, onDownload: () -> Unit, onDraft: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         marks.error?.let { Text(it, fontSize = 13.sp, color = Color(0xFFFF7B6B), maxLines = 1, modifier = Modifier.padding(horizontal = 6.dp)) }
-        Box(Modifier.height(30.dp).clip(Smooth(15.dp)).clickable { marks.leave() }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.height(32.dp).clip(Smooth(PICTURE_KEY)).clickable { marks.leave() }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
             Text(t("common.cancel"), fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
         }
         PictureButton(Icons.Download, t("android-chat.marks.downloadMarked"), enabled = !marks.busy && marks.any, onClick = onDownload)
         if (canDraft) Row(
-            Modifier.padding(start = 4.dp).height(30.dp).clip(Smooth(15.dp)).background(INK).alpha(if (!marks.busy && marks.any) 1f else 0.4f)
+            Modifier.padding(start = 4.dp).height(32.dp).clip(Smooth(PICTURE_KEY)).background(INK).alpha(if (!marks.busy && marks.any) 1f else 0.4f)
                 .clickable(enabled = !marks.busy && marks.any, onClick = onDraft).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
@@ -857,12 +866,12 @@ fun MarksTools(marks: ImageMarks, glass: Modifier) {
                 ) { Swatch(c) }
             }
         }
-        Row(glass.then(Modifier.height(44.dp)).padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(glass.then(Modifier.height(44.dp)).padding(horizontal = PICTURE_BAR_PAD), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             listOf(MarkTool.Select to Icons.Cursor, MarkTool.Rect to Icons.Square, MarkTool.Arrow to Icons.ArrowUpRight, MarkTool.Pen to Icons.Scribble, MarkTool.Text to Icons.Text).forEach { (tool, icon) ->
                 PictureButton(icon, tool.label, pressed = marks.tool == tool) { marks.pickTool(tool) }
             }
             Gap()
-            Box(Modifier.size(32.dp).clip(Smooth(12.dp)).clickable { marks.palette = !marks.palette }.semantics { contentDescription = t("android-chat.marks.color") }, contentAlignment = Alignment.Center) { Swatch(marks.shownColor) }
+            Box(Modifier.size(32.dp).clip(Smooth(PICTURE_KEY)).clickable { marks.palette = !marks.palette }.semantics { contentDescription = t("android-chat.marks.color") }, contentAlignment = Alignment.Center) { Swatch(marks.shownColor) }
             marks.pickedShape?.let { s -> PictureButton(Icons.Trash, t("common.delete")) { marks.remove(s.id) } }
             Gap()
             PictureButton(Icons.Retry, t("android-chat.marks.undo"), enabled = marks.canUndo) { marks.undo() }
@@ -912,7 +921,7 @@ private fun Gap() = Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(1
 @Composable
 fun PictureButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, pressed: Boolean = false, tint: Color = Color.White.copy(alpha = 0.6f), onClick: () -> Unit) {
     Box(
-        Modifier.size(32.dp).clip(Smooth(12.dp)).background(if (pressed) Color.White.copy(alpha = 0.16f) else Color.Transparent)
+        Modifier.size(32.dp).clip(Smooth(PICTURE_KEY)).background(if (pressed) Color.White.copy(alpha = 0.16f) else Color.Transparent)
             .alpha(if (enabled) 1f else 0.35f).clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) { IconIn(icon, 18.dp, if (pressed) Color(0xFFF4F4F5) else tint) }

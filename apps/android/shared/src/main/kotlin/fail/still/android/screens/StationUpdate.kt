@@ -67,7 +67,9 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
             Text(notice.label ?: notice.text, fontSize = 12.sp, lineHeight = 18.sp, color = accent, maxLines = 1)
         }
         if (notice.open == true) {
-            val shape = Smooth(14.dp)
+            // Its close button (32, round) 8 from the top and side, its update pill (28) 10 from the bottom and side: both
+            // concentric with its corner, each's half and its distance.
+            val shape = Smooth(24.dp)
             val width = minOf(284.dp, with(density) { LocalWindowInfo.current.containerSize.width.toDp() } - 24.dp)
             val surface = Raised
             Popup(popupPositionProvider = position, onDismissRequest = { control("close") }, properties = PopupProperties(focusable = true)) {
@@ -81,7 +83,7 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
                         lineTo(x + half, edge + 1f)
                         close()
                     }, surface)
-                }.padding(12.dp).width(width).shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f)).clip(shape).background(Raised).padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                }.padding(12.dp).width(width).shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f)).clip(shape).background(Raised).padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             val name = notice.station
@@ -91,11 +93,11 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
                             } else Text(notice.text, fontSize = 13.sp, lineHeight = 19.sp, fontWeight = FontWeight.Medium, color = C.ink)
                             notice.detail?.let { Text(it, fontSize = 12.sp, lineHeight = 17.sp, color = C.muted) }
                         }
-                        Box(Modifier.size(32.dp).offset(y = (-6).dp).semantics { contentDescription = if (notice.dismissible == true) t("android-misc.stationUpdate.dismiss") else t("android-misc.stationUpdate.collapse") }.clickable(role = Role.Button) { control(if (notice.dismissible == true) "dismiss" else "close") }, contentAlignment = Alignment.Center) { IconIn(Icons.Close, 14.dp, C.muted) }
+                        Box(Modifier.size(32.dp).offset(y = (-4).dp).clip(CircleShape).semantics { contentDescription = if (notice.dismissible == true) t("android-misc.stationUpdate.dismiss") else t("android-misc.stationUpdate.collapse") }.clickable(role = Role.Button) { control(if (notice.dismissible == true) "dismiss" else "close") }, contentAlignment = Alignment.Center) { IconIn(Icons.Close, 14.dp, C.muted) }
                     }
                     if (notice.tone == "busy" && notice.station != null) Progress(notice.percent?.let { (it / 100).toFloat() }, Modifier.padding(end = 4.dp))
                     val versions = listOfNotNull(notice.from, notice.to).joinToString(" → ")
-                    if (versions.isNotEmpty() || notice.canUpdate == true) Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (versions.isNotEmpty() || notice.canUpdate == true) Row(Modifier.fillMaxWidth().padding(end = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(versions, Modifier.weight(1f), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = CodeFont, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (notice.canUpdate == true) Row(Modifier.clip(CircleShape).background(C.accentBg).clickable(enabled = !busy, role = Role.Button) { app.act(t("android-misc.stationUpdate.updateWhat")) { app.api(station).updateSoftware("station") } }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             DoingMark(busy, failed, inline = true)

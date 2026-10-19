@@ -57,6 +57,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -400,7 +402,7 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
         w.animateTo(tw, ease)
     }
     val density = LocalDensity.current
-    val thumbShape = Smooth((radius - inset).coerceAtLeast(0.dp))
+    val thumbShape = Smooth(concentric(radius, inset).coerceAtLeast(0.dp))
     Box(modifier.height(height).clip(Smooth(radius)).let { if (track) it.background(C.ink.copy(alpha = 0.06f)) else it }.padding(inset)) {
         if (w.value > 0f) Box(
             Modifier.offset { IntOffset(x.value.roundToInt(), 0) }.width(with(density) { w.value.toDp() }).fillMaxHeight().let {
@@ -572,25 +574,55 @@ fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp) {
     }
 }
 
+/**
+ * A card of words (web pages.css.ts card, docs/ui-panels.md 页面卡片): CARD_PAD on every side, its words and a solid
+ * button's ground on one line. `foot`: a button with a ground of its own (a capsule) sits in a corner, and the card's
+ * corner is taken from it, CARD_PAD and its half height, so they are concentric; else CARD_CORNER. `corner`: taken
+ * from something else with a ground in its corner (a Seg at its top).
+ */
 @Composable
-fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, foot: Boolean = false, corner: Dp? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(20.dp)).background(C.surface)
-            .let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(corner ?: if (foot) CARD_PAD + BUTTON_HEIGHT / 2 else CARD_CORNER)).background(C.surface)
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(CARD_PAD),
         content = content,
     )
 }
 
-/** Rows on one rounded card; the card groups them, no lines between. */
+/** A card of words' padding, on every side. */
+val CARD_PAD = 20.dp
+/** A card of words' corner, with nothing that has a ground of its own in it. */
+val CARD_CORNER = 22.dp
+
+/**
+ * Rows on one rounded card, to be pressed (web pages.css.ts listCard): each row's ground LIST_PAD from the card's edge,
+ * rounded LIST_ROW_CORNER, the card's corner concentric with theirs; their words CARD_PAD from the card's edge.
+ */
 @Composable
-fun ListCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(16.dp)).background(C.surface), content = content)
+fun ListCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) =
+    RowsCard(modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp), content = content)
+
+/** A list card where it is put (in a padded page, a sheet): its rows (ListRow, PickRow) know they are on one. */
+@Composable
+fun RowsCard(modifier: Modifier = Modifier, ground: Color = C.surface, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxWidth().clip(Smooth(LIST_CARD_CORNER)).background(ground).padding(LIST_PAD)) {
+        CompositionLocalProvider(LocalOnCard provides true) { content() }
+    }
 }
+
+/** On a list card: a row's ground is the card's padding in from its edge already. */
+val LocalOnCard = staticCompositionLocalOf { false }
+
+/** How far a list card's rows' ground is from its edge, and their corner. */
+val LIST_PAD = 8.dp
+val LIST_ROW_CORNER = 18.dp
+val LIST_CARD_CORNER = concentricOut(LIST_ROW_CORNER, LIST_PAD)
 
 @Composable
 fun ListRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .padding(horizontal = CARD_PAD - LIST_PAD, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = content,
     )
 }

@@ -94,6 +94,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.RowsCard
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import fail.still.android.data.errorText
@@ -689,7 +690,7 @@ fun NewConnectScreen(station: String) {
                     Text(t("android-settings.flow.manualInSlack"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("manual") })
                 } else {
                     Text(t("android-settings.flow.whichTeam"), fontSize = 14.sp, color = C.muted)
-                    Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
+                    RowsCard {
                         teams.forEach { t -> PickRow(t.name, t.owner?.let { o -> o.user + (o.teamDomain?.let { " · $it.slack.com" } ?: "") }, checked = chosen?.teamId == t.teamId) { flow.edit { put("team", t.teamId) } } }
                     }
                     Text(t("android-settings.flow.addTeamToken"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("token") })
@@ -750,7 +751,7 @@ fun NewConnectScreen(station: String) {
                 else -> {
                     GroupLabel(t("android-settings.connect.model"))
                     if (models.isEmpty()) Text(t("android-settings.flow.noModels"), fontSize = 13.sp, color = C.warn)
-                    else Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
+                    else RowsCard {
                         models.forEach { m -> PickRow(m.name, m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, checked = entry?.model == m.model, leading = { MakerIcon(m.maker, m.runtimes.first(), 18.dp) }) { flow.choose { put("model", m.model) } } }
                     }
                     if (entry != null && entry.runtimes.size > 1) {

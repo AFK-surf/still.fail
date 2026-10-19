@@ -503,7 +503,8 @@ fun ChangelogNews() {
     val news = topic.value?.news ?: return
     if (gone == news) return
     val lines = news.entries.flatMap { it.text }
-    Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
+    // Its close button, round, in its corner 6 from both edges: the card's corner taken from it (6 + its half).
+    Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).fillMaxWidth().clip(Smooth(6.dp + 16.dp)).background(C.surface)) {
         Column(Modifier.fillMaxWidth().clickable { app.push(Screen.Changelog) }.padding(start = 16.dp, end = 44.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(Modifier.padding(bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 IconIn(Icons.Sparks, 16.dp, C.ink)

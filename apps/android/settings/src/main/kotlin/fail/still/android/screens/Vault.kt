@@ -99,8 +99,10 @@ import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.Seg
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
+import fail.still.android.ui.SHEET_ACTION
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentricOut
 import fail.still.core.CoreException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -882,7 +884,7 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
     SheetGrab()
     SheetHead(
         if (was == null) t("android-settings.vault.newTitle") else t("android-settings.vault.editTitle", "name" to was.name),
-        trailing = { Button(t("common.save"), primary = true, busy = saving, enabled = ready) { save() } },
+        action = { Button(t("common.save"), primary = true, busy = saving, enabled = ready, height = SHEET_ACTION) { save() } },
     )
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (plainLibrary) Text(t("web-pages.vault.risk.editor"), fontSize = 13.sp, lineHeight = 19.sp, color = C.warn)
@@ -901,7 +903,8 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
                 Labeled(optional("totp")) { VaultField(fields["totp"].orEmpty(), { fields["totp"] = it }, "JBSWY3DPEHPK3PXP", mono = true, secret = true) }
             }
         }
-        Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Its fields (rounded 12) in its corners 16 from both edges: its corner taken from theirs, concentric.
+        Column(Modifier.fillMaxWidth().clip(Smooth(concentricOut(12.dp, 16.dp))).background(C.surface).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth().clickable { agent = !agent }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text(t("android-settings.vault.agent"), fontSize = 15.sp, color = C.ink)

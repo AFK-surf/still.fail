@@ -75,7 +75,6 @@ import fail.still.android.ui.CodeFont
 import fail.still.android.ui.Field
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
-import fail.still.android.ui.SMOOTH_SCALE
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.Spinner
@@ -93,8 +92,12 @@ private val CARD_PAD = 8.dp
 private val TEXT_IN = 10.dp
 /** Its buttons: pills this high. */
 private val PILL = 28.dp
-/** The card's corner as Smooth takes it: a pill's half and the padding, drawn (a quarter larger) round the pills. */
-private val CARD_CORNER: Dp = (CARD_PAD + PILL / 2) / SMOOTH_SCALE
+/**
+ * The card's corner: a pill's half and the padding, as the web's pillInner (align.ts) and a decision's number in its row
+ * (SettingParts.kt NUMBER_IN). Smooth draws it a quarter larger and squarer, so it clears the pill's round end; taken a
+ * quarter smaller it cut into it, a crescent beside the pill.
+ */
+private val CARD_CORNER: Dp = CARD_PAD + PILL / 2
 
 /** How long a marked card follows the page moving it, once shown (ns). */
 private const val MARKED_FOLLOW_NS = 2_000_000_000L

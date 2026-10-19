@@ -75,6 +75,8 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.BUTTON_HEIGHT
+import fail.still.android.ui.RowsCard
 import fail.still.android.ui.StationMark
 import fail.still.android.ui.hasStationMark
 import fail.still.core.CoreException
@@ -130,7 +132,8 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                 Title(t("android-misc.invite.received"))
                 pending.forEach { (account, invite) ->
                     Row(
-                        Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface).padding(horizontal = 16.dp, vertical = 12.dp),
+                        // A solid button at its end, in its corners: its padding the same all round, its corner from the button's.
+                        Modifier.fillMaxWidth().clip(Smooth(12.dp + BUTTON_HEIGHT / 2)).background(C.surface).padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -238,7 +241,7 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         if (current != null) {
             Label(t("android-misc.workspace.current"))
-            Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp).clip(Smooth(16.dp)).background(C.bg)) {
+            RowsCard(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp), ground = C.bg) {
                 PickRow(current.name, sub = currentOf.account.email, checked = true, leading = if (anyMarked) ({ WorkspaceIcon(current) }) else null) { app.sheet = null }
             }
         }
