@@ -6,6 +6,7 @@
 // (drivePlace) and opened at next time.
 package fail.still.android.drive
 
+import fail.still.android.ui.LIST_ROW_CORNER
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -562,7 +563,7 @@ private fun openSearch(app: AppState, r: Reading) {
                 val accent = C.accent
                 Text(
                     remember(m, ink, accent) { snippet(chunk, m, ink, accent) }, fontSize = 15.sp, lineHeight = 22.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().clickable { focused.clearFocus(); r.hit = i; r.jumpTo(m.chunk, m.start); app.sheet = null }.padding(horizontal = 20.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).clickable { focused.clearFocus(); r.hit = i; r.jumpTo(m.chunk, m.start); app.sheet = null }.padding(horizontal = 8.dp, vertical = 10.dp),
                 )
             }
         }

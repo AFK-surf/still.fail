@@ -182,7 +182,7 @@ fun WaitShapes(shape: WaitShape = WaitShape.Rows, count: Int? = null, still: Boo
         }
         WaitShape.Cards -> Column(m.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             // A page's card's corner (Parts.kt Card).
-            repeat(count ?: 3) { i -> Placeholder(Modifier.fillMaxWidth().height(CARDS[i % CARDS.size].dp), Smooth(20.dp)) }
+            repeat(count ?: 3) { i -> Placeholder(Modifier.fillMaxWidth().height(CARDS[i % CARDS.size].dp), Smooth(CARD_CORNER)) }
         }
     }
 }

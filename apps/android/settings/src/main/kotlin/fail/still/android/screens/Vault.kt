@@ -8,6 +8,7 @@
 // host, never from here. What an item holds is shown only on its page, while it is up, never kept.
 package fail.still.android.screens
 
+import fail.still.android.ui.pressText
 import fail.still.android.ui.Spinner
 import fail.still.android.ui.WaitLine
 import fail.still.android.ui.WaitShape
@@ -102,6 +103,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SHEET_ACTION
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.Card
 import fail.still.android.ui.concentricOut
 import fail.still.core.CoreException
 import kotlinx.coroutines.delay
@@ -328,10 +330,11 @@ private fun Library(ws: String, view: VaultsView) {
     val left = view.plainLeft?.toInt() ?: 0
     if (!plain && left > 0) PlainLeft(ws, left)
     ProfileAccounts(ws)
-    if (!plain && view.vaults.isEmpty()) ListCard {
-        Body {
+    // Words and its button under them, in the corner.
+    if (!plain && view.vaults.isEmpty()) Card(foot = true) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Para(t("android-settings.vault.none"))
-            WideButton(t("android-settings.vault.create"), primary = true, modifier = Modifier.fillMaxWidth(), busy = app.isDoing("vault.create", "workspace" to ws)) { createFirst(app, ws) }
+            Button(t("android-settings.vault.create"), primary = true, modifier = Modifier.fillMaxWidth(), busy = app.isDoing("vault.create", "workspace" to ws)) { createFirst(app, ws) }
         }
     }
     // A vault this device has no key to: what is known of it, and how to get the key.
@@ -349,14 +352,14 @@ private fun RequestCard(ws: String, view: VaultsView, r: VaultRequest) {
     val app = LocalApp.current
     // The request's keeper is the station its vault is on (docs/vault.md: the agent asks there); its chat is the session's.
     val station = view.vaults.firstOrNull { it.id == r.vault }?.station?.ifEmpty { null }
-    ListCard {
-        Body {
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(t("android-settings.vault.request.title", "name" to (r.itemName ?: t("android-settings.vault.request.someItem"))), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
             Text(r.reason, fontSize = 14.sp, lineHeight = 20.sp, color = C.ink)
             r.command?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = CodeFont, color = C.ink) }
             Text(howLine(r.mode, r.hosts), fontSize = 13.sp, color = C.muted)
             if (station != null) Row(
-                Modifier.clickable { app.push(Screen.Chat("$ws/$station", ChatOf.Session(r.session))) },
+                Modifier.pressText { app.push(Screen.Chat("$ws/$station", ChatOf.Session(r.session))) },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(t("android-settings.vault.request.openChat"), fontSize = 14.sp, color = C.accent)
@@ -482,9 +485,10 @@ private fun LibraryState(plain: Boolean) {
 @Composable
 private fun PlainLeft(ws: String, n: Int) {
     val app = LocalApp.current
-    ListCard {
-        ListRow {
-            Column(Modifier.weight(1f)) {
+    // Its words, its button under them in the corner.
+    Card(foot = true) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column {
                 Text(t("android-settings.vault.migrate.title", "n" to n), fontSize = 15.sp, color = C.ink)
                 Text(t("android-settings.vault.migrate.body"), fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
             }
@@ -766,7 +770,7 @@ private fun UseRow(ws: String, u: VaultUse) {
 
 /** A link in words in a card's body: no ground, flush with the text around it. */
 @Composable
-private fun Link(label: String, onClick: () -> Unit) = Text(label, fontSize = 15.sp, color = C.accent, modifier = Modifier.clickable(onClick = onClick))
+private fun Link(label: String, onClick: () -> Unit) = Text(label, fontSize = 15.sp, color = C.accent, modifier = Modifier.pressText(onClick = onClick))
 
 /** A field of an opened item: its name over its value (dots until shown, when secret), shown and copied from beside it. */
 @Composable
@@ -905,7 +909,7 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
         }
         // Its fields (rounded 12) in its corners 16 from both edges: its corner taken from theirs, concentric.
         Column(Modifier.fillMaxWidth().clip(Smooth(concentricOut(12.dp, 16.dp))).background(C.surface).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth().clickable { agent = !agent }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().clip(Smooth(12.dp)).clickable { agent = !agent }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text(t("android-settings.vault.agent"), fontSize = 15.sp, color = C.ink)
                     Text(t("android-settings.vault.agentNote"), fontSize = 13.sp, color = C.muted)

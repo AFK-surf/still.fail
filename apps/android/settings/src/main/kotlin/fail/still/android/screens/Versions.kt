@@ -3,6 +3,7 @@
 // workspace's owner or admin). Grey but for what wants doing: a newer version out, an update going on, one that failed.
 package fail.still.android.screens
 
+import fail.still.android.ui.pressText
 import fail.still.android.ui.Spinner
 import fail.still.android.data.I18n
 import fail.still.android.data.t
@@ -123,7 +124,7 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
     val action = @Composable { label: String ->
         if (manager && v.updatable) {
             if (busy) Spinner(inline = true)
-            else Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accent, modifier = Modifier.clickable(onClick = onUpdate))
+            else Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accent, modifier = Modifier.pressText(onClick = onUpdate))
         }
     }
     ListRow {

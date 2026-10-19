@@ -2,6 +2,7 @@
 // the sheet that publishes it (web mobile/Chat.tsx PublishList / PublishSheet).
 package fail.still.android.screens
 
+import fail.still.android.ui.concentric
 import fail.still.android.ui.WaitLine
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -208,6 +209,9 @@ private fun PreviewMessage(station: String, m: PublishMessage, off: Set<String>,
  * An attachment in the preview as the chat shows it (web Publish.tsx FileToggle): an image's box, else its card, with
  * the app's checkbox in its top right corner; a tap anywhere on it ticks or unticks it (nothing opens), unticked it fades.
  */
+/** A file's card's corner (ChatFiles.kt FileCard), its tick's taken from it. */
+private val FILE_CORNER = 8.dp
+
 @Composable
 private fun FileToggle(station: String, f: PublishFile, on: Boolean, toggle: () -> Unit) {
     val owner = f.file.owner
@@ -215,11 +219,12 @@ private fun FileToggle(station: String, f: PublishFile, on: Boolean, toggle: () 
         if (owner != null && kindOf(f.name).kind == PreviewKind.Image) StationImage(station, owner, f.file, Modifier.width(160.dp).aspectRatio(imageBox(f.file).let { it.width / it.height }))
         else FileCard(f.name, f.size.toLong(), onClick = null)
         // Over it all: a tap ticks, rather than opening the file.
-        Box(Modifier.matchParentSize().clickable(onClick = toggle))
+        Box(Modifier.matchParentSize().clip(Smooth(FILE_CORNER)).clickable(onClick = toggle))
         // The app's checkbox (web global.css.ts): a soft square, ink with a check when ticked.
         Box(
-            Modifier.align(Alignment.TopEnd).padding(8.dp).size(18.dp).clip(Smooth(6.dp)).background(if (on) C.ink else C.bg)
-                .border(1.dp, if (on) C.ink else C.line, Smooth(6.dp)),
+            // In its corner, 4 from both edges: concentric with the file's corner.
+            Modifier.align(Alignment.TopEnd).padding(4.dp).size(18.dp).clip(Smooth(concentric(FILE_CORNER, 4.dp))).background(if (on) C.ink else C.bg)
+                .border(1.dp, if (on) C.ink else C.line, Smooth(concentric(FILE_CORNER, 4.dp))),
             contentAlignment = Alignment.Center,
         ) { if (on) IconIn(Icons.Check, 12.dp, C.bg) }
     }
