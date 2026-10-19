@@ -831,13 +831,22 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (active) {
                 LoginSteps(job, provider) { code -> api.loginCode(p.id, code) }
-                Button(t("android-settings.login.cancel"), primary = false, busy = app.isDoing("profile.cancelLogin", "station" to station, "id" to p.id)) { app.act(t("android-settings.login.cancelWhat")) { api.cancelLogin(p.id) } }
+                // Not a step of its own: a quiet text button under them, in the middle.
+                val cancelling = app.isDoing("profile.cancelLogin", "station" to station, "id" to p.id)
+                Row(
+                    Modifier.align(Alignment.CenterHorizontally).height(38.dp).clip(Smooth(19.dp))
+                        .clickable(enabled = !cancelling) { app.act(t("android-settings.login.cancelWhat")) { api.cancelLogin(p.id) } }.padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    DoingMark(cancelling, app.failedOf("profile.cancelLogin", "station" to station, "id" to p.id), inline = true)
+                    Text(t("android-settings.login.cancel"), fontSize = 14.sp, color = C.muted)
+                }
             } else {
                 Text(
                     when (job?.state) { "failed" -> t("android-settings.login.failed", "error" to job.error); "done" -> t("android-settings.login.signedIn"); else -> t("android-settings.login.note", "app" to BuildConfig.APP_NAME) },
                     fontSize = 13.sp, color = C.muted,
                 )
-                Button(if (job?.state == "done" || !needed) t("android-settings.login.again") else t("android-settings.login.signIn"), primary = needed, busy = busy) {
+                Button(if (job?.state == "done" || !needed) t("android-settings.login.again") else t("android-settings.login.signIn"), primary = true, busy = busy, modifier = Modifier.fillMaxWidth()) {
                     scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = t("android-settings.signIn.beginFailed", "error" to errorText(e)) } }
                 }
                 // OpenCode's has no command to run by hand.
@@ -861,7 +870,7 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
     val scope = rememberCoroutineScope()
     var code by remember { mutableStateOf("") }
     val operation = remember(app) { Action(app) }
-        val busy = operation.busy
+    val busy = operation.busy
     val error = operation.error?.message
     var copied by remember { mutableStateOf(false) }
     val open = { url: String -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
@@ -873,11 +882,12 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
         job.state == "verifying" -> waiting(t("android-settings.login.finishing"))
         job.state == "done" -> waiting(t("android-settings.login.adding"))
         job.state == "needs_approval" && url != null && userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = CodeFont, color = C.ink,
-                modifier = Modifier.clip(Smooth(10.dp)).background(C.chip).padding(horizontal = 14.dp, vertical = 8.dp))
+            Box(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.chip).padding(horizontal = 14.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+                Text(userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = CodeFont, color = C.ink)
+            }
             // OpenCode's page has the code in its address: only compared there, not copied.
             val filled = provider == "OpenCode"
-            Button(if (filled) t("android-settings.login.openPage") else if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true) {
+            Button(if (filled) t("android-settings.login.openPage") else if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true, modifier = Modifier.fillMaxWidth()) {
                 if (!filled) {
                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", userCode))
                     copied = true
@@ -887,16 +897,13 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
             Text(when (provider) { "OpenCode" -> t("android-settings.login.opencodeNote"); "Grok" -> t("android-settings.login.grokNote"); else -> t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME) }, fontSize = 13.sp, color = C.muted)
         }
         job.state == "needs_code" && url != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row {
-                Text("1. ", fontSize = 13.sp, color = C.ink)
-                Text(t("android-settings.login.openPage"), fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { open(url) })
-                Text(t("android-settings.login.openPageRest", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.ink)
-            }
-            Text(t("android-settings.login.step2"), fontSize = 13.sp, color = C.ink)
+            // Each step's words, then what it is done with: its page's button, the field and its button.
+            Text("1. " + t("web-pages.profiles.step1", "name" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.ink)
+            Button(t("android-settings.login.openPage"), primary = true, modifier = Modifier.fillMaxWidth()) { open(url) }
+            Text(t("android-settings.login.step2"), fontSize = 13.sp, color = C.ink, modifier = Modifier.padding(top = 4.dp))
             Field(code, { code = it }, t("android-settings.login.pasteCode"), mono = true)
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
-            Button(t("android-settings.login.finish"), primary = true, busy = busy, enabled = code.isNotBlank()) {
-
+            Button(t("android-settings.login.finish"), primary = true, busy = busy, enabled = code.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
                 operation.run { send(code.trim()); code = "" }
             }
         }

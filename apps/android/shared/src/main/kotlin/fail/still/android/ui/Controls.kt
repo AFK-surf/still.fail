@@ -75,13 +75,14 @@ fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enable
 }
 
 @Composable
-fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
+fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val on = enabled && !busy
     val ink = if (primary && danger && enabled) Color.White else if (primary) C.bg else C.ink
+    // Its words in the middle: the same as wrapped round them, centred where `modifier` makes it wider (full width).
     Row(
-        Modifier.height(38.dp).clip(Smooth(19.dp)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
+        modifier.height(38.dp).clip(Smooth(19.dp)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
             .clickable(enabled = on, onClick = onClick).padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
         // A solid one's spinner in its words' colour.
         BusyIcon(busy, solid = if (primary) ink else null)
