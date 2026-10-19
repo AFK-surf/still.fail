@@ -206,9 +206,9 @@ PastedText.kt; SendText.kt; MessagePick.kt):
   文件 its documents UI (ACTION_OPEN_DOCUMENT) on Android, the open panel on
   macOS (`@host.pick`, src/host/pick.mbt; Picks.java); the camera tile takes
   a photo on Android (ACTION_IMAGE_CAPTURE's picture, as the app's
-  TakePicturePreview). Not yet (the same tiles, a toast saying so): the
-  recent photos (they need the gallery's permission and its thumbnails),
-  Station 文件 (slice 12's drive), any picker on iOS, Windows and the web.
+  TakePicturePreview); the recent photos across the top and Station 文件 (both
+  branch mbui-media-complete, below). Not yet: any picker on iOS, Windows and
+  the web (a toast says so).
 - Quoting: a message's words held still half a second are picked (all of
   them: the Android app picks a word and widens it by words, with handles),
   a bar over them with 引用 (into the draft as a quote) and 复制.
@@ -230,7 +230,7 @@ PastedText.kt; SendText.kt; MessagePick.kt):
 Not yet, against the current app: the words flying from the field into their
 bubble (and the capsule's morph as it changes height), `@` references to
 other chats and pasted chat links as marks (chat.ref, chatSearch), sharing
-what they refer to before sending, the recent photos' strip, Station 文件 (slice 12's drive, below), a
+what they refer to before sending, a
 picture's preview from its tile, files pasted or sent by the keyboard (only
 words are), the text toolbar of the field
 (select, cut, copy by touch; the keyboard's own paste works), a new chat
@@ -282,8 +282,7 @@ table here: such a file opens as UTF-8 with replacement characters), the serif f
 face either way), 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light one),
 the system bars' icons following the paper, the frosted glass of the bars and sheets (their tint only), the
 system's back closing a sheet or ending a choice (it goes back a page), dragging sheets by the grabber, the
-long-press ripple, a station file sent as a file (`drive.stage`, the card's sheet, 此对话默认发送文件) and station
-files kept with the draft on the device, the station page's way into a drive (slice 13).
+long-press ripple, station files kept with the draft on the device, the station page's way into a drive (slice 13).
 
 The rest of slice 12, the player (branch player-share, 2026-10-19; ember apps/android drive/Player.kt, Playlist.kt,
 chat/screens/VideoViewer.kt AudioViewer): a video or a song of a drive, or a song of a chat, played as it streams through
@@ -785,6 +784,29 @@ them still go in through `shareIn.open`. MBUI_SHARE_FILES (paths split by |) sta
 (Android: an ACTION_SEND intent with the photo through the app's own provider, `#android-intent`; macOS: a photo and a
 PDF).
 
+Recent photos and Station 文件 in ＋'s sheet (branch mbui-media-complete; Attach.kt RecentPhotos, latest; StationFiles.kt
+RefCard, openRefSheet, sendUp):
+
+- The recent photos: across the top of ＋'s sheet after the camera, the gallery's latest 30 (mbui's @host.gallery_*:
+  MediaStore's images and their times, read off the app's thread; ranked here as Attach.kt `latest` does: each by the
+  latest of its times that can be believed, one in milliseconds taken as the seconds it means, one ahead of now left
+  out), each its thumbnail as the gallery has it (Images.java loads a content:// source by loadThumbnail), 92 × 122 on
+  14 corners; a tap reads it whole (@host.pick_photo) into the draft, up at once. Without leave to read the gallery
+  the last tile asks (显示最近照片: the system's dialog; asked and refused for good, the app's settings), with only the
+  photos chosen for the app (Android 14 on) it chooses more (选择更多照片); read again as the sheet opens and as the
+  system answers. The strip moves sideways under a finger and glides on once let go (a drag area: it is no list).
+  macOS, iOS and Windows have no gallery here: the tile says so (as before). Apple's own Photos picker is not used yet
+  (照片 is the open panel on macOS; iOS has no picker).
+- Station 文件: ticked files go in named by their path, or as files where the chat says so (此对话默认发送文件: the
+  core's prefs `dropFiles` by the chat's key, else `dropAs`); a card tapped opens its sheet (where it is, 发送方式 路径 /
+  文件 (a folder of the chat's own station: zip), the chat's say as a switch). As a file it is staged on the chat's
+  own station (`drive.stage`: a folder zipped there) or read from the station that has it (`drive.read`) and put up to
+  the chat's (`station.upload.part`); the card turns the bubble's grey with a spinner, how far, its size once up, why it
+  failed; the message carries it as an attachment, nothing goes while it goes up.
+- `APP=sffix MBUI_FIXTURE=chat-station-file | chat-station-sheet` (one sent as a file, a folder as a zip going up; a
+  card's sheet); the recent photos' strip is Android's (its shots from the emulator, flow 95). Flows 94
+  station-file-sent, 95 recent-photos (Android).
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
@@ -921,6 +943,8 @@ while the card moved the list):
 | 91 drive-download-many | in a folder of its own (drive-big), a 48 MB file and a small one chosen, 下载 2 个文件: the big one's row says how far, then gone; 已保存到「下载」 | the big file read in a dozen parts; both kept byte for byte |
 | 92 drive-zip | a folder held, ⋯ → 下载为 zip: 正在下载「子文件夹.zip」, 已保存到「下载」 | the station zipped it (drive.zip); the kept zip holds the folder's file, its words the same |
 | 93 share-files | files shared in (Android: an ACTION_SEND intent of a photo; macOS: a photo and a PDF): the sheet heads with them, the test chat tapped, the files in its composer going up, sent with words | the entry's attachments; the photo at the station byte for byte; on Android the intent's file taken in |
+| 94 station-file-sent | ＋ → Station 文件, the novel ticked, 添加; its card's sheet: 文件; sent with words | drive.stage called; the entry's attachment is the file, no path line; the station keeps it byte for byte |
+| 95 recent-photos | (Android) the photo put in the emulator's gallery; ＋: the strip shows it after the camera; tapped, it goes up; sent | the gallery read and ranked; the entry's attachment, the photo byte for byte at the station |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once

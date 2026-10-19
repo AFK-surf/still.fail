@@ -23,6 +23,7 @@
 #   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
 #   scripts/e2e-local.sh drive-big TAG    the downloads' folder in it (e2e-TAG/大文件: 48 MB and a small file)
 #   scripts/e2e-local.sh android-stage FILE…  files to attach put where the app's provider serves them (a share's intent)
+#   scripts/e2e-local.sh android-gallery FILE…  files put in the emulator's gallery, the app let read it
 #   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
 #   scripts/e2e-local.sh status
 #
@@ -235,6 +236,19 @@ android_stage() {
   say "staged $* for $E2E_PKG"
 }
 
+# files of e2e/run.sh's (FILES) put in the emulator's gallery (Pictures, scanned into MediaStore) and the app let read
+# it, as a person who said yes has it (＋'s recent photos: a flow's #before): EMU_PORT, E2E_PKG
+android_gallery() {
+  local adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb -s emulator-${EMU_PORT:-5586}" f
+  $adb get-state >/dev/null 2>&1 || return 0
+  for f in "$@"; do
+    $adb push $WORK/files/$f /sdcard/Pictures/e2e-$(date +%s)-$f < /dev/null >/dev/null
+  done
+  $adb shell content call --uri content://media --method scan_volume --arg external_primary < /dev/null >/dev/null 2>&1
+  $adb shell pm grant ${E2E_PKG:?} android.permission.READ_MEDIA_IMAGES < /dev/null
+  say "gallery: $* for $E2E_PKG"
+}
+
 # the downloads' flow's folder (e2e/flows/91-…), 大文件 in the drive flows' e2e-<tag>: a file of 48 MB (read in a dozen
 # parts) and a small one beside it
 drive_big() {
@@ -341,6 +355,7 @@ case "${1:-all}" in
   drive-media) shift; drive_media "$@" ;;
   drive-big) shift; drive_big "$@" ;;
   android-stage) shift; android_stage "$@" ;;
+  android-gallery) shift; android_gallery "$@" ;;
   release-seed) release_seed ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;

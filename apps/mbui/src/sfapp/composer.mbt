@@ -308,7 +308,7 @@ fn keep_draft_soon(c : @ui.Ctx, src : Source, d : Draft) -> Unit {
 
 ///|
 fn uploading(d : Draft) -> Bool {
-  d.files.iter().any(fn(f) { f.done is None && f.error is None })
+  d.files.iter().any(fn(f) { f.done is None && f.error is None }) || refs_uploading(d.key)
 }
 
 ///|
@@ -471,7 +471,7 @@ fn upload_part(
   have : Int,
 ) -> Unit {
   // taken out of the draft meanwhile: nothing more goes
-  if !d.files.iter().any(fn(f) { f.id == p.id }) && p.done is None {
+  if !d.files.iter().any(fn(f) { f.id == p.id }) && !ref_upload(d.key, p.id) && p.done is None {
     return
   }
   let size = bytes.length()
@@ -659,9 +659,13 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   }
   // the station files named by their paths, a line each under the words
   let words = with_link_words(with_ref_words(d.text.trim(chars=" \n\t").to_string(), d.key), d)
+  // (the station files sent as files with them, taken before the draft lets go of its refs)
+  let files = up_files(d)
+  for a in ref_attachments(d.key) {
+    files.push(a)
+  }
   let taken_refs = refs_of(d.key)
   draft_refs.remove(d.key)
-  let files = up_files(d)
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   // what was taken, to put back
   let taken_text = d.text
@@ -879,6 +883,12 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
       }
     None => ()
   }
+  // its station files switched to go as files: up (station_files.mbt)
+  for x in refs_of(d.key) {
+    if x.mode == "file" && x.up is None {
+      ref_send_up(c, src, d, r.station, x)
+    }
+  }
   // files another app shared into this chat (share.mbt), up as ＋'s are
   match shared_into.get(d.key) {
     Some(list) => {
@@ -895,6 +905,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   attach_sheet(c, src, r, d)
   // ＋'s Station 文件 (station_files.mbt)
   station_files_sheet(c, src, workspace_of(r.station), d.key)
+  ref_sheet(c, src, d.key, r.station)
 }
 
 ///|
@@ -1486,8 +1497,8 @@ fn file_icon(name : String) -> String {
 let attach_h : Double = 25.0 + 4.0 + 122.0 + 12.0 + 70.0 + 18.0
 
 ///|
-/// ＋'s sheet: the recent photos across the top (the camera first; reading the gallery is not in this build, so its
-/// tile only says so), then 照片, 文件 and Station 文件 (station_files.mbt). As tall as those two rows.
+/// ＋'s sheet: the recent photos across the top (the camera first, recent.mbt), then 照片, 文件 and Station 文件
+/// (station_files.mbt). As tall as those two rows.
 fn attach_sheet(
   c : @ui.Ctx,
   src : Source,
@@ -1513,25 +1524,44 @@ fn attach_sheet(
         )
     }
   }
-  ignore(src)
   ignore(r)
-  let camera = c.id("attach/camera")
-  let recent = c.id("attach/recent")
+  // the gallery's recent photos (recent.mbt), read again as the sheet opens
+  recent_frame(c, src, cui.attach)
+  let tapped_tile = fn(i : Int) {
+    if i == 0 {
+      ask(Camera)
+    } else if i > 0 {
+      cui.attach = false
+      let pick = match recent.photos.get(i - 1) {
+        Some(photo) => @host.pick_photo(photo.src)
+        None => None
+      }
+      match pick {
+        Some(p) => {
+          cui.picking = Some(p)
+          cui.picking_for = d.key
+        }
+        None => ()
+      }
+    } else {
+      match recent.access {
+        // no gallery on this host: said so
+        NoGallery => {
+          cui.attach = false
+          say(c, "这个版本还不能读相册的最近照片")
+        }
+        _ => @host.gallery_ask()
+      }
+    }
+  }
   let photos = c.id("attach/photos")
   let files = c.id("attach/files")
   let station = c.id("attach/station")
-  if c.clicked(camera) {
-    ask(Camera)
-  }
   if c.clicked(photos) {
     ask(Photos)
   }
   if c.clicked(files) {
     ask(Files)
-  }
-  if c.clicked(recent) {
-    cui.attach = false
-    say(c, "这个版本还不能读相册的最近照片")
   }
   if c.clicked(station) {
     cui.attach = false
@@ -1552,24 +1582,8 @@ fn attach_sheet(
           c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
         })
         |> ignore
-        c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pt=4.0, pb=12.0, gap=6.0, fn() {
-          attach_tile(c, camera, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
-          attach_tile(c, recent, fn() {
-            c.box(padx=8.0, gap=8.0, align=ACenter, fn() {
-              @sf.icon(c, "photo", size=22.0, color=t.p.muted) |> ignore
-              c.text(
-                tr("android-chat.attach.recent.allow"),
-                size=12.0,
-                color=t.p.muted,
-                line=16.0,
-                center=true,
-              )
-              |> ignore
-            })
-            |> ignore
-          })
-        })
-        |> ignore
+        // the camera, the gallery's recent photos, the tile that asks for them (recent.mbt)
+        recent_strip(c, tapped_tile)
         c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pb=18.0, gap=8.0, fn() {
           for item in [
             (photos, tr("android-chat.attach.photos"), "photo"),
@@ -1603,23 +1617,6 @@ fn attach_sheet(
   if cui.attach && !sheet.open {
     cui.attach = false
   }
-}
-
-///|
-/// A tile of the recent photos' strip (92 × 122).
-fn attach_tile(c : @ui.Ctx, id : Int, body : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  c.box(
-    w=Px(92.0),
-    h=Px(122.0),
-    radius=14.0,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.1) } else { t.p.chip },
-    align=ACenter,
-    justify=JCenter,
-    id~,
-    body,
-  )
-  |> ignore
 }
 
 // ── picking a message's words (MessagePick.kt) ───────────────────────────

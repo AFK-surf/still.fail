@@ -7,7 +7,8 @@
 // drive-entry (a file's sheet), drive-upload (files going up, one whose name is taken, one failed), drive-download (a
 // file and a folder being downloaded: their rows' progress), drive-empty, reader
 // (a novel read), reader-bars (with its bars), reader-contents, reader-layout, reader-md (a Markdown file read);
-// chat-station-files (＋'s Station 文件 in a folder, a file ticked), chat-station-ref (a station's file in the draft).
+// chat-station-files (＋'s Station 文件 in a folder, a file ticked), chat-station-ref (a station's file in the draft),
+// chat-station-file (one sent as a file, a folder as a zip going up), chat-station-sheet (its card's sheet).
 
 ///|
 let fix_home : String = "/Users/lin"
@@ -228,6 +229,11 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
       Some(Ok(Json::object({})))
     }
     "drive.refresh" | "drive.setRoots" => Some(Ok(Json::object({})))
+    // a file put among the station's uploads, as one sent up would be (a folder zipped there)
+    "drive.stage" => {
+      let name = dv_name(text(p, "path")) + (if flag(p, "zip") { ".zip" } else { "" })
+      Some(Ok({ "name": Json::string(name), "path": Json::string("uploads/" + name), "size": 4210 }))
+    }
     // a folder zipped (as a station puts it among its zips): read as any file of the drive
     "drive.zip" => {
       let name = dv_name(text(p, "path")) + ".zip"
@@ -415,19 +421,47 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       sfs.at = -1.0e9
       sfs.draft = "ws1/st1:s-c1"
       sfs.place = Some({ station: "ws1/st1", station_name: "Studio", root: fix_docs, root_name: "文档", path: "" })
-      let r : DraftRef = {
-        station: "ws1/st1",
-        station_name: "Studio",
-        path: fix_docs + "/发布清单.md",
-        name: "发布清单.md",
-        dir: false,
-      }
+      let r = draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)
       sfs.ticked[r.station + "\n" + r.path] = r
     }
     "chat-station-ref" =>
-      draft_refs["ws1/st1:s-c1"] = [
-        { station: "ws1/st1", station_name: "Studio", path: fix_docs + "/发布清单.md", name: "发布清单.md", dir: false },
-      ]
+      draft_refs["ws1/st1:s-c1"] = [draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)]
+    // one sent as a file (staged on the chat's station: up), a folder as a zip still going; a card's sheet open
+    "chat-station-file" | "chat-station-sheet" => {
+      let file = draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)
+      file.mode = "file"
+      file.up = Some({
+        id: 9001,
+        name: "发布清单.md",
+        size: 4210,
+        image: "",
+        width: 0,
+        height: 0,
+        pasted: None,
+        done: Some({ "name": "发布清单.md", "path": "uploads/发布清单.md", "size": 4210 }),
+        sent: 4210,
+        error: None,
+      })
+      let folder = draft_ref("ws1/st1", "Studio", fix_docs, "设计稿", "设计稿", true)
+      folder.mode = "file"
+      folder.up = Some({
+        id: 9002,
+        name: "设计稿.zip",
+        size: 0,
+        image: "",
+        width: 0,
+        height: 0,
+        pasted: None,
+        done: None,
+        sent: 0,
+        error: None,
+      })
+      draft_refs["ws1/st1:s-c1"] = [file, folder]
+      if mode == "chat-station-sheet" {
+        sfs.ref = Some(("ws1/st1:s-c1", file))
+        sfs.ref_at = -1.0e9
+      }
+    }
     // the player (play_fixture.mbt), a service's page (service_fixture.mbt)
     _ => {
       open_play_fixture(mode)

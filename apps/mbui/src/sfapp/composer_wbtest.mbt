@@ -142,6 +142,35 @@ test "a long paste goes as a text file, up to the station, and with the message"
 }
 
 ///|
+test "a station's file sent as a file: staged on the chat's station, the message carries it" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  let r = draft_ref("ws1/st1", "Studio", "/Users/lin/文档", "发布清单.md", "发布清单.md", false, size=4096.0)
+  r.mode = "file"
+  draft_refs["ws1/st1:s-c1"] = [r]
+  t.frame()
+  t.settle() |> ignore
+  let staged = named(calls, "drive.stage")
+  assert_eq(staged.length(), 1)
+  assert_eq(text(Some(staged[0].params), "path"), "发布清单.md")
+  (staged[0].done)(Ok({ "name": "发布清单.md", "path": "uploads/u1/发布清单.md", "size": 4096 }))
+  t.frame()
+  t.settle() |> ignore
+  t.tap_text("发消息")
+  t.type_text("作为文件")
+  tap_send(t)
+  let sent = named(calls, "chat.send")
+  assert_eq(sent.length(), 1)
+  // as a file: an attachment, and no line naming its path
+  assert_eq(text(Some(sent[0].params), "text"), "作为文件")
+  match field(Some(sent[0].params), "attachments") {
+    Some(Array([a])) => assert_eq(text(Some(a), "path"), "uploads/u1/发布清单.md")
+    _ => fail("the station's file did not go with the message")
+  }
+  assert_eq(refs_of("ws1/st1:s-c1").length(), 0)
+}
+
+///|
 test "refused before the outbox, the words come back and why is said" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
