@@ -63,7 +63,7 @@ config.json 的 connect：
 
 要的东西（`addons`）：
 
-- 权限（tenant）：`im:message`、`im:message:send_as_bot`、`im:message.group_msg`（群里不 @ 的消息也收到，群即会话靠它）、`im:message.p2p_msg:readonly`、`im:message.group_at_msg:readonly`、`im:resource`、`im:chat:readonly`、`im:chat.members:read`、`contact:user.base:readonly`、`contact:user.email:readonly`、`cardkit:card:write`。
+- 权限（tenant）：`im:message`、`im:message:send_as_bot`、`im:message.group_msg`（群里不 @ 的消息也收到，群即会话靠它）、`im:message.p2p_msg:readonly`、`im:message.group_at_msg:readonly`、`im:resource`、`im:chat:readonly`、`im:chat.members:read`、`contact:user.base:readonly`、`contact:user.email:readonly`、`cardkit:card:write`、`tenant:tenant:readonly`（企业名）。
 - 事件（tenant）：`im.message.receive_v1`。回调：`card.action.trigger`。
 
 已有应用的，也可以填 App ID 和 App Secret 建 connect（station 先换一次 token、读一次机器人信息验证）。手建的应用要在开放平台自己开：机器人能力、长连接、上面的事件和回调、权限，然后发版。

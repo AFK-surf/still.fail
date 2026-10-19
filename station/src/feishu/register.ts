@@ -28,6 +28,7 @@ export const ADDONS = {
       "contact:user.base:readonly",
       "contact:user.email:readonly",
       "cardkit:card:write",
+      "tenant:tenant:readonly",
     ],
   },
   events: { items: { tenant: ["im.message.receive_v1"] } },
