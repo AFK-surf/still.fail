@@ -277,8 +277,7 @@ DriveScreen.kt, Reader.kt, TextModel.kt, Novel.kt, ReaderMarkdown.kt; chat/scree
   made-up drive that takes renames, deletes, new folders and uploads while it runs): `scripts/shots.sh drive
   web-drive` compares them with goldens/mac-<mode>.png and web-<mode>.png.
 
-Not yet, against the current app: downloading a file to the device, sharing it
-to another app, a folder as a zip (each says so in a toast: no host API to keep a file yet), GB18030 text (no
+Not yet, against the current app: GB18030 text (no
 table here: such a file opens as UTF-8 with replacement characters), the serif face (the reader draws its sans
 face either way), 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light one),
 the system bars' icons following the paper, the frosted glass of the bars and sheets (their tint only), the
@@ -753,6 +752,28 @@ delivered push (notice.pushed, the notification, notice.bring) is there and test
 not: the client.wake before notice.bring (the app is awake when a push reaches it here), the notification's language
 when the app is not running (KeptLang: the app's words are the Chinese catalog's).
 
+Files and media, kept on the device (branch mbui-media-complete, 2026-10-19; ember apps/android shared/screens/
+FileKinds.kt download, drive/DriveScreen.kt saveToDownloads, saveZip, DriveFetches, ui/Parts.kt DownloadChip):
+
+- mbui's host keeps a file the app has read (@host.keep_begin / append / finish, src/host/keep.mbt): its bytes put a
+  part at a time into a file of the host's temporary directory (never whole in memory), then moved where the person
+  keeps files: Android's MediaStore Downloads (no permission asked; `Choose` the documents UI's ACTION_CREATE_DOCUMENT),
+  macOS's ~/Downloads (`Choose` a save panel over the window), iOS's Files sheet either way, Windows' Downloads known
+  folder; MBUI_DOWNLOADS_DIR the downloads for scripted runs. How it went comes back a frame later (Keeping, KeptAt,
+  CalledOff, Failed).
+- A drive's file 下载 (its sheet, or several chosen: 下载 n 个文件, each at once): 正在下载「名字」, read through the core
+  a part at a time (`drive.read`) straight into the keep, how far on its row meanwhile (n% in the accent's filling box,
+  DownloadChip, moving smoothly over 500 ms), then 已保存到「下载」 or 下载失败; 无法获取「名字」：… when the station could
+  not give it (src/sfapp/keep.mbt). A folder's 下载为 zip: the station zips it (`drive.zip`: where the zip is, a root of
+  its own), then it is read and kept as any file; the folder's row shows it under way (0% while zipped, then how far:
+  the Android app shows nothing there). 分享 reads the same way, its row's progress shown too. The chat's preview's 下载
+  keeps its file through the same host (a save panel nowhere: Downloads as the Android app has it).
+- `APP=sffix MBUI_FIXTURE=drive-download` (a file and a folder under way): goldens/mac-drive-download.png,
+  web-drive-download.png.
+
+Not yet: the bytes downloaded kept for the drive's next open (DriveCache: each download reads through the core again),
+a big file's download going on while the app is away (it is the app's: Android stops it with the process).
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
@@ -885,6 +906,9 @@ while the card moved the list):
 | 64 wide-new-chat | (1280×800) ⌘N: a new chat beside the list; its first words sent with Enter make the chat, the page becomes it, the agent answers (in the chat and its row) | the first message once, in a thread of its own; the agent's answer there |
 | 65 wide-places | (1280×800) the rail: 文件 (the stations' folders in the sidebar), the chats, settings (外观: 深色, then 跟随系统), back to the chats | the host told dark; the core's store on the device keeps appearance system |
 | 66 wide-resize | 390 wide: Home; the window resized to 1280 (the wide frame; the chat pressed in the sidebar), then to 390 again: the same chat, a phone's page; words sent | the window resized twice (the host's RESIZED); the words at the station, once, in the test chat |
+| 90 drive-download | a file of the lent folder held, ⋯ → 下载: 正在下载「说明.txt」, then 已保存到「下载」 | drive.read through the core; the device keeps the station's file byte for byte (macOS: MBUI_DOWNLOADS_DIR; Android: the emulator's Download/, as MediaStore named it) |
+| 91 drive-download-many | in a folder of its own (drive-big), a 48 MB file and a small one chosen, 下载 2 个文件: the big one's row says how far, then gone; 已保存到「下载」 | the big file read in a dozen parts; both kept byte for byte |
+| 92 drive-zip | a folder held, ⋯ → 下载为 zip: 正在下载「子文件夹.zip」, 已保存到「下载」 | the station zipped it (drive.zip); the kept zip holds the folder's file, its words the same |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once

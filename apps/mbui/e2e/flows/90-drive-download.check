@@ -1,0 +1,2 @@
+check "the file was read through the core" 'grep -q "CALL drive.read .*说明.txt" $OUT/$name.log'
+check "the device keeps the station's file, byte for byte, where downloads go" 'kept_same 说明.txt "$DRIVE/说明.txt"'

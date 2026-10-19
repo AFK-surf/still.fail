@@ -1,0 +1,19 @@
+# A file of the lent folder downloaded to the device (DriveScreen.kt saveToDownloads): held, ⋯ → 下载: 正在下载「…」,
+# read through the core (drive.read), kept where the system keeps downloads (@host.keep_begin: MediaStore's Downloads
+# on Android, MBUI_DOWNLOADS_DIR on macOS): 已保存到「下载」.
+#env MBUI_OPEN_PAGE=files
+timeout 90000
+until =e2e-{T}
+tap =e2e-{T}
+until 说明.txt
+wait 500
+hold 900 说明.txt
+until 已选 1 项
+tap icon:more
+until =下载
+shot 1-sheet
+tap =下载
+until 正在下载「说明.txt」
+shot 2-downloading
+until 已保存到「下载」
+shot 3-saved

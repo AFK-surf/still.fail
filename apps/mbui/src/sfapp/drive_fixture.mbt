@@ -4,7 +4,8 @@
 // (rename, delete, a new folder, a file put up) while the app runs. Every word in it is made up.
 //
 // MBUI_FIXTURE: files (文件), drive (Studio's 文档), drive-sub (a folder in it), drive-chosen (two of it chosen),
-// drive-entry (a file's sheet), drive-upload (files going up, one whose name is taken, one failed), drive-empty, reader
+// drive-entry (a file's sheet), drive-upload (files going up, one whose name is taken, one failed), drive-download (a
+// file and a folder being downloaded: their rows' progress), drive-empty, reader
 // (a novel read), reader-bars (with its bars), reader-contents, reader-layout, reader-md (a Markdown file read);
 // chat-station-files (＋'s Station 文件 in a folder, a file ticked), chat-station-ref (a station's file in the draft).
 
@@ -227,6 +228,11 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
       Some(Ok(Json::object({})))
     }
     "drive.refresh" | "drive.setRoots" => Some(Ok(Json::object({})))
+    // a folder zipped (as a station puts it among its zips): read as any file of the drive
+    "drive.zip" => {
+      let name = dv_name(text(p, "path")) + ".zip"
+      Some(Ok({ "root": "/tmp/stillfail-zips/1", "path": Json::string(name), "name": Json::string(name), "size": 21 }))
+    }
     "drive.folders" => {
       let path = match text(p, "path") {
         "" => fix_home
@@ -329,10 +335,15 @@ pub fn open_drive_fixture(mode : String) -> Unit {
   let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
   match mode {
     "files" => app.nav.push(Files)
-    "drive" | "drive-loading" | "drive-chosen" | "drive-entry" | "drive-upload" => {
+    "drive" | "drive-loading" | "drive-chosen" | "drive-entry" | "drive-upload" | "drive-download" => {
       app.nav.push(Files)
       app.nav.push(Drive(docs))
       let key = folder_key("ws1/st1", fix_docs, "")
+      // a file being downloaded, a folder being zipped for it (keep.mbt): their rows' progress
+      if mode == "drive-download" {
+        dv_fetches[dv_fetch_key("ws1/st1", fix_docs, "首页截图.png")] = 40
+        dv_fetches[dv_fetch_key("ws1/st1", fix_docs, "设计稿")] = 0
+      }
       if mode == "drive-chosen" {
         dv.chosen[key] = ["长篇小说.txt", "首页截图.png"]
       }

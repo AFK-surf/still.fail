@@ -455,23 +455,34 @@ fn share_open(c : @ui.Ctx, src : Source, w : Workspace, station : String, id : S
 }
 
 ///|
-/// A file of a drive handed to another app (DriveScreen.kt openElsewhere, share): read whole through the core, then the
-/// system's share sheet; said when nothing takes it.
+/// A file of a drive handed to another app (DriveScreen.kt openElsewhere, share): read through the core a part at a
+/// time, how far on its row meanwhile (keep.mbt drive_fetch), then the system's share sheet; said when nothing takes it.
 fn share_drive_file(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit {
   let root = at.root.unwrap_or("")
   let path = dv_join(at.path, e.name)
-  drive_read_all(src, at.station, root, path, 256 * 1024 * 1024, fn(r) {
-    match r {
-      Ok(bytes) =>
-        if !@host.share("", e.name, e.mime, bytes) {
-          app.toast = sh("android-misc.drive.noApp")
+  let all = Buffer(size_hint=if e.size > 0.0 { e.size.to_int() } else { 0 })
+  drive_fetch(
+    src,
+    at.station,
+    root,
+    path,
+    fn(b) {
+      all.write_bytes(b)
+      true
+    },
+    fn(err) {
+      match err {
+        None =>
+          if !@host.share("", e.name, e.mime, all.to_bytes()) {
+            app.toast = sh("android-misc.drive.noApp")
+            app.toast_at = -1.0
+          }
+        Some(err) => {
+          app.toast = fill("android-misc.drive.fetchFailed", [("name", e.name), ("error", dv_error(err))])
           app.toast_at = -1.0
         }
-      Err(err) => {
-        app.toast = text(Some(err), "message")
-        app.toast_at = -1.0
       }
-    }
-    c.request_frame()
-  })
+      c.request_frame()
+    },
+  )
 }

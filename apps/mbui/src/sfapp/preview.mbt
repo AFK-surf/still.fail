@@ -1087,11 +1087,8 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx) -> Unit {
 /// 下载: the file into the system's downloads, once it is here (fetched first when it was only told of).
 fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
   match self.bytes {
-    Some(b) => {
-      let ok = @host.save_file(self.file.name, b)
-      app.toast = pv(if ok { "android-chat.file.saved" } else { "android-chat.file.saveFailed" })
-      app.toast_at = -1.0
-    }
+    // kept where the system keeps downloads, said once the host has answered (keep.mbt)
+    Some(b) => keep_bytes(c, self.file.name, self.mime, b)
     None => {
       self.error = None
       self.asked = true

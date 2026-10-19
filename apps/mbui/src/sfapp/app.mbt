@@ -279,6 +279,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       update_first(src)
       // what another app shared in (share.mbt)
       share_in_frame(c)
+      // files being kept on the device, said once kept (keep.mbt)
+      keeps_frame(c)
       if wide_on.val {
         // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them
         wide_frame(c, src, w, all, invited)

@@ -21,6 +21,7 @@
 #   scripts/e2e-local.sh freeze|thaw  the test station stopped where it is (SIGSTOP: as if its network went) or started anew
 #   scripts/e2e-local.sh drive-seed TAG   the drive flows' folder in the test station's home (e2e-TAG)
 #   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
+#   scripts/e2e-local.sh drive-big TAG    the downloads' folder in it (e2e-TAG/大文件: 48 MB and a small file)
 #   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
 #   scripts/e2e-local.sh status
 #
@@ -223,6 +224,16 @@ PY
   say "drive folder $d"
 }
 
+# the downloads' flow's folder (e2e/flows/91-…), 大文件 in the drive flows' e2e-<tag>: a file of 48 MB (read in a dozen
+# parts) and a small one beside it
+drive_big() {
+  local d=$STATION/home/e2e-${1:?a tag}/大文件
+  mkdir -p $d
+  head -c 50331648 /dev/urandom > $d/大文件.bin
+  printf '和大文件一起下载的小文件。\n' > $d/附件.txt
+  say "drive big $d"
+}
+
 # the player's flows' folder (e2e/flows/45-…), 影音 in the drive flows' e2e-<tag>, which flow 15 lends: two episodes
 # (H.264 and AAC, their index first; the first 20 s with a subtitle beside it, the second 4 s) and a song of 5 s
 drive_media() {
@@ -317,6 +328,7 @@ case "${1:-all}" in
   thaw) thaw ;;
   drive-seed) shift; drive_seed "$@" ;;
   drive-media) shift; drive_media "$@" ;;
+  drive-big) shift; drive_big "$@" ;;
   release-seed) release_seed ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
