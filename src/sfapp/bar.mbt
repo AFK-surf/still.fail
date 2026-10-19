@@ -1263,6 +1263,8 @@ fn bar_gesture(
     })
     m.mode = false
     m.o.go(0.0, 200.0, 28.0)
+    // its first frame, drawn as the panel was (the motion log)
+    @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=0")
     set_bars(src, ws.id, sets, i)
     match key {
       Some(k) => go_place(c, k, sets, i)
