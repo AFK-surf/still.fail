@@ -108,6 +108,26 @@ test "a chat's kept draft comes back into the field" {
 }
 
 ///|
+test "a kept quote's comment comes back into its line and goes with the message" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, kept={
+    "text": "",
+    "quotes": [{ "author": "林", "text": "先把列表改好", "comment": "这里要对齐", "role": "person" }],
+    "files": [],
+  })
+  assert_true(t.dump().contains("这里要对齐"))
+  t.tap_text("发消息")
+  t.type_text("带评论的引用")
+  tap_send(t)
+  let sent = named(calls, "chat.send")
+  assert_eq(sent.length(), 1)
+  match field(Some(sent[0].params), "quotes") {
+    Some(Array([q])) => assert_eq(text(Some(q), "comment"), "这里要对齐")
+    _ => fail("the quote did not go with the message")
+  }
+}
+
+///|
 test "a long paste goes as a text file, up to the station, and with the message" {
   let calls : Array[Made] = []
   let t = fake_core(calls)

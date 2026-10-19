@@ -308,6 +308,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
     }
     "job" | "previewLoad" => fixture_service_topic(f, name, params)
     "shareIn" => fixture_share_topic(params)
+    "imageNear" => fixture_image_near(params)
     "chats" => fixture_chats(f, params)
     "workspaceMarks" =>
       Some({

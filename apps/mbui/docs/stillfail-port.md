@@ -635,11 +635,8 @@ FileData; Zoom.kt):
   script, code, Markdown, a table, a file of no kind): `scripts/shots.sh preview web-preview` compares them with
   goldens/mac-preview-*.png and web-preview-*.png.
 
-Not yet, against the current app: the flight from the chat's thumbnail and back (a video closed into its thumbnail at
-the frame it was left at), stepping through the chat's images (`imageNear`) and swiping between them, pinching on iOS (its host
-tells no second finger yet), marking an image (ImageMarks.kt), a video's
-frame-exact steps (the file's frames' times, MediaExtractor; here steps of a 60th of a second), saving a frame,
-landscape, code highlighting and a code file's sideways scroll,
+Not yet, against the current app (the viewer's flight, stepping, pinching on iOS, marking, a video's frames and
+landscape: branch mbui-media-complete, below): code highlighting and a code file's sideways scroll,
 installing an APK, an SVG drawn by a page when it is not a bitmap, the progress of a whole file coming (`progress`), a
 big file read to the disk, a web view's own scrolling under the canvas on macOS while something is painted over it,
 the frosted glass over a picture or a document (where nothing native is under it: `@sf` glass could take it).
@@ -807,6 +804,44 @@ RefCard, openRefSheet, sendUp):
   card's sheet); the recent photos' strip is Android's (its shots from the emulator, flow 95). Flows 94
   station-file-sent, 95 recent-photos (Android).
 
+The image viewer, complete (branch mbui-media-complete; FilePreview.kt ViewerLayer, Viewer, Gallery, Leaving, Beside;
+VideoViewer.kt frameStarts, saveFrame, landscape; ImageMarks.kt):
+
+- Stepping through a chat's images: the core says those beside the one shown (`imageNear` by the chat's thread, else
+  its session: each with the session that keeps it), a drive's folder its pictures in its order. The one shown and those
+  beside it are one strip, the stage's width and 24 apart: fitted (not zoomed), a finger sideways carries it (past the
+  first or the last a third as far), let go past 80 (or a fifth of the width) or flung that way it goes on to that one,
+  else back, on SLIDE (critically damped, stiffness 400) at the finger's speed; the one going is drawn from its
+  picture where it was. Over the image's sides, in the middle, while the bars show, the ways to the one before and
+  after (36 discs of the dark canvas at 80%). Those beside it are read ahead (and the last few read kept), so a step
+  shows the next at once; their thumbnails stand in meanwhile.
+- The flight: an image opened from the chat grows from its thumbnail (its box, its corners, the picture cropped as the
+  chat crops it) to its place on the stage in 320 ms on (.2, .8, .2, 1), the black and the bars coming with it; closed,
+  it shrinks back into its thumbnail in 280 ms (from where a flight in had got to); the thumbnail hidden meanwhile (one
+  picture on the screen, never two). With no thumbnail on the screen (or its size not known yet) it fades as before.
+- Pinching on iOS: the host tells a second finger now (4 down, 5 moved, 6 up, as Android's).
+- Marking an image (标注图片, its whole picture here): 选择, 框, 箭头, 画笔, 文字 at the foot on the dark glass, the
+  colour (seven, each with the halo that edges its words), 删除 the picked mark, 撤销 / 重做; boxes and arrows numbered,
+  a pin on each (tapped: its note), the note written in a box at the foot (完成, 删除), the notes as cards over the tools.
+  The marks are in the picture's own pixels, drawn on the screen at its zoom (boxes bordered, lines and arrows as dots
+  along them, words with their halo round them); a picked mark moves with the finger, an arrow's end stretches it. 取消
+  / 下载标注后的图片 / 添加到对话 in the bar: the host draws the marks on the picture at its own size (mbui's
+  @host.draw_marks: Android's Canvas, Core Graphics), then it is kept with the downloads or put in the chat's draft with
+  a quote per numbered mark (图片 … 标注 n: where it is, on which image, what was said), and the viewer closes to the
+  chat (已添加到对话，返回对话发送). Back steps out of a note, the words, the colours, the pick, then marking.
+- A video's frames: their times read from the file as the system reads it (mbui's NativeView::frames: Android's
+  MediaExtractor over the same reads as the player, Apple's sample cursor), so ‹ › step to the very next frame the file
+  has whatever its rate, and n / N 帧 counts them (正在读取帧 meanwhile; a 60th of a second where none are read). 保存此帧
+  (paused): the frame showing grabbed at its own size (MediaMetadataRetriever, AVAssetImageGenerator) and kept with the
+  downloads as name-n.png. 横屏: the phone turned for it, upright again as the viewer closes.
+- `APP=sffix MBUI_FIXTURE=chat-preview-step | chat-preview-swipe` (a second picture beside the first: the ways to it;
+  halfway to it under a finger): goldens/mac-preview-step.png, mac-preview-swipe.png; mac-preview-image changed on
+  purpose (标注图片 in its bar, as the Android app's).
+
+Not yet: a video flown back into its thumbnail at the frame it was left at (videos fade), marks' text drawn with the
+words' own shaping on the image (the host's face, not mbui's), a marked image bigger than memory (the Android app
+draws it in bands), Windows' marks, frames and grabs.
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
@@ -945,6 +980,8 @@ while the card moved the list):
 | 93 share-files | files shared in (Android: an ACTION_SEND intent of a photo; macOS: a photo and a PDF): the sheet heads with them, the test chat tapped, the files in its composer going up, sent with words | the entry's attachments; the photo at the station byte for byte; on Android the intent's file taken in |
 | 94 station-file-sent | ＋ → Station 文件, the novel ticked, 添加; its card's sheet: 文件; sent with words | drive.stage called; the entry's attachment is the file, no path line; the station keeps it byte for byte |
 | 95 recent-photos | (Android) the photo put in the emulator's gallery; ＋: the strip shows it after the camera; tapped, it goes up; sent | the gallery read and ranked; the entry's attachment, the photo byte for byte at the station |
+| 96 viewer | two pictures from the other device: the first grows from its thumbnail; ›; a swipe back; a box marked, its note said, 下载标注后的图片, 添加到对话, sent | imageNear stepped; the marks drawn by the host; the marked PNG kept on the device; the entry's attachment and the note's quote |
+| 97 video-frames | a video from the other device: 120 帧 read from the file, › › to the third, 保存此帧 | 120 frames read; the kept frame a PNG of 640 × 360 |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once

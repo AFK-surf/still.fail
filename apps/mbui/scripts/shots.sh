@@ -185,7 +185,7 @@ shoot() {
       build_mac sffix
       rm -rf out/shot-preview; mkdir -p out/shot-preview
       names=
-      for m in image pdf video audio html code md csv none; do
+      for m in image pdf video audio html code md csv none step swipe; do
         at=60; [ $m = html ] && at=150
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-preview-$m MBUI_SCRIPT=shot MBUI_SHOT_AT=$at MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-preview ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-preview/$m.png out/shots/mac-preview-$m.png
@@ -194,7 +194,7 @@ shoot() {
     web-preview)
       WAPP=sffix
       names=
-      for m in image pdf video audio html code md csv none; do
+      for m in image pdf video audio html code md csv none step swipe; do
         web_shot "MBUI_FIXTURE=chat-preview-$m" out/shots/web-preview-$m.png
         names="$names web-preview-$m"
       done ;;

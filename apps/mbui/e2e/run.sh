@@ -48,6 +48,8 @@ mkdir -p $FILES
 [ -f $FILES/e2e-doc.pdf ] || python3 $MBUI_DIR/test/apple_views/make_pdf.py $FILES/e2e-doc.pdf
 [ -f $FILES/e2e-clip.mp4 ] || ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=640x360:rate=30 -t 4 \
   -c:v libx264 -profile:v baseline -pix_fmt yuv420p -movflags +faststart $FILES/e2e-clip.mp4
+# a second picture beside the first, upright (96-viewer: stepping, swiping, marking)
+[ -f $FILES/e2e-photo2.png ] || ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=480x640:rate=1 -frames:v 1 $FILES/e2e-photo2.png
 # a song for the chat's player (46-chat-audio): 20 s of AAC, its index first
 [ -f $FILES/e2e-tune.m4a ] || ffmpeg -loglevel error -y -f lavfi -i sine=frequency=440:sample_rate=44100 -t 20 \
   -c:a aac -movflags +faststart $FILES/e2e-tune.m4a
