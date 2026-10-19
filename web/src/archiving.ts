@@ -43,14 +43,13 @@ export const IDLE_DAYS = [1, 3, 7, 30];
 export const SLACK_DAYS = [0, 3, 7, 30];
 export const daysLabel = (n: number) => (n <= 0 ? t("web-pages.archiving.never") : t("web-pages.archiving.days", { n }));
 
-/** What a station's row says of its archive review, and whether it is on. */
-export function reviewOf(s: StationView): { on: boolean; text: string; short: string } {
+/** What a station's page says of its archive review, and whether it is on. */
+export function reviewOf(s: StationView): { on: boolean; short: string } {
   const rule = s.overview?.automaticDecisions?.settings.completion;
   const on = rule?.enabled === true;
   const model = s.overview?.automaticDecisions?.models.find((m) => m.id === rule?.model)?.name ?? rule?.model ?? "";
   return {
     on,
-    text: on ? t("web-pages.archiving.reviewOn", { model }) : t("web-pages.archiving.reviewOff"),
     // Under its own heading (归档建议): the state alone.
     short: on ? t("web-pages.archiving.reviewOnShort", { model }) : t("web-pages.archiving.reviewOffShort"),
   };

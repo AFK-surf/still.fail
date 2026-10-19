@@ -169,8 +169,6 @@
   "web-pages.archiving.mode": "How it archives",
   "web-pages.archiving.reviewOnShort": "On · {model}",
   "web-pages.archiving.reviewOffShort": "Off",
-  "web-pages.archiving.reviewOn": "Archive suggestions: on · {model}",
-  "web-pages.archiving.reviewOff": "Archive suggestions: off",
   "web-pages.archiving.reviewGo": "Settings",
   "web-pages.archiving.adminOnly": "Only workspace managers can change this.",
   "web-pages.archiving.idle": "Idle for",
