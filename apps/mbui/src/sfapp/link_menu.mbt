@@ -44,9 +44,6 @@ fn link_menu_layer(c : @ui.Ctx) -> Unit {
     Some(l) => l
     None => return
   }
-  if link_menu.open {
-    c.on_back(fn() { link_menu.open = false })
-  }
   let shown = @motion.animate(c, "link-menu/scrim", if link_menu.open { 1.0 } else { 0.0 }, spec=@motion.tween(200.0))
   scrim(c, "link-menu-scrim", shown, open=link_menu.open, fn() { link_menu.open = false })
   // two rows of 45 and the menu's 12 off the line; above the line when it would not fit below

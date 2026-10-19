@@ -4,7 +4,9 @@
 ///|
 /// The finger held still on `words` a long press's time (and a little more), then let go there; where it was.
 fn hold_on(t : @ui.Tester, words : String) -> (Double, Double) {
-  let (x, y) = t.find(words).unwrap()
+  // near the start of its first line (the message's words run on past it)
+  let (rx, ry, _, _) = t.rect_of(words).unwrap()
+  let (x, y) = (rx + 24.0, ry + 8.0)
   t.press_at(x, y)
   t.frame(ms=250.0)
   t.frame(ms=250.0)
@@ -41,7 +43,8 @@ test "held still on a message's words: the word under the finger is picked, the 
 test "a finger sliding on widens it by words, from the word first held; the list holds still" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
-  let (x, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
+  let (rx, ry, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  let (x, y) = (rx + 24.0, ry + 8.0)
   let before = t.list_offset()
   t.press_at(x, y)
   t.frame(ms=250.0)

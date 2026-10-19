@@ -69,6 +69,17 @@ fn pick_reset() -> Unit {
 }
 
 ///|
+/// Back lets go of what is picked, and closes a link's menu, before it goes back a page (MessagePick.kt's
+/// BackHandler): after the stack is drawn, as what lies over the pages.
+fn pick_back(c : @ui.Ctx) -> Unit {
+  if link_menu.open {
+    c.take_back(fn() { link_menu.open = false })
+  } else if pk.ts != "" {
+    c.take_back(fn() { pick_clear() })
+  }
+}
+
+///|
 /// How long a finger is held still for a long press (ViewConfiguration's long press timeout, as Compose has it).
 let long_press_ms : Double = @ui.long_press_ms
 
@@ -192,7 +203,6 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   if lines.length() == 0 {
     return
   }
-  c.take_back(fn() { pick_clear() })
   let t = @sf.theme()
   let (px, py, down) = c.pointer()
   let bar = c.id("pick/bar")
