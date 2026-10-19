@@ -305,6 +305,8 @@
   "web-pages.chat.openPanel": "Show panel",
   "web-pages.chat.pickSaved": "Changed. Applies from the next turn",
   "web-pages.chat.profileDetails": "Profile details",
+  "web-pages.chat.transcript": "Session file",
+  "web-pages.chat.copyPath": "Copy path",
   "web-pages.chat.resizePanel": "Resize panel",
   "web-pages.chat.serviceFailed": "“{name}” failed to start",
   "web-pages.chat.serviceStopped": "“{name}” stopped",

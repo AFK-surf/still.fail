@@ -442,6 +442,8 @@ export function stationApi(t: StationCall) {
     linkPreview: <T>(url: string) => ops.linkPreview<T>({ url }),
     /** What an inline visualization (Viz.tsx) kept: by the session that sent its file and the file's path. */
     widgetState: (key: string, path: string) => ops.widgetState<{ state: unknown }>({ key, path }),
+    /** Where its runtime keeps the session's transcript on the station's machine; null before it is written. */
+    transcriptPath: (key: string) => ops.sessionTranscript<{ path: string | null }>({ key }).then((r) => r.path),
     setWidgetState: (key: string, path: string, state: unknown) => ops.widgetSetState<{ ok: true }>({ key, path, state }),
     /** The chat of an agent that has none yet, bound to its session. */
     chatFor: (session: string) => ops.chatForSession<{ id: number }>({ session }),
