@@ -53,6 +53,9 @@ final class MBText {
             Typeface base = (style & 2) != 0 ? Typeface.MONOSPACE : Typeface.DEFAULT;
             p.setTypeface(Typeface.create(base, weight, (style & 1) != 0));
             p.setTextSize(size);
+            // Each grapheme cluster is drawn on its own: a ligature ("fl", "fi") puts its whole advance on its
+            // first letter and none on the next, which then lands on the letter after it ("f ɭex" for "flex").
+            p.setFontFeatureSettings("\"liga\" 0, \"clig\" 0");
             p.setColor(Color.WHITE);
             paints.put(k, p);
         }
