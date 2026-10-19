@@ -1,0 +1,1 @@
+check "the link was handed to the system (open-url on the log)" 'grep -q "open-url: https://example.com/e2e/" $OUT/$name.log'

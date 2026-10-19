@@ -178,11 +178,13 @@ fn reset() -> Unit {
   cui.outside = false
   cui.room = 0.0
   cui.doing.clear()
-  cui.hold = 0
-  cui.picked = ""
+  pick_reset()
   fix_chats.clear()
   fix_timers.clear()
   fix_drafts.clear()
+  fix_decided.clear()
+  emits.clear()
+  fix_kept.val = false
   dv_reset()
   decide_reset()
   close_now()
@@ -283,6 +285,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them
         wide_frame(c, src, w, all, invited)
         wide_overlays(c, src, w)
+        pick_back(c)
         preview(c, src)
       } else {
         c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
@@ -294,6 +297,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         }
         // the player sideways: back turns it upright first
         play_back(c)
+        // words picked in a chat, a link's menu: back lets go of them first (pick.mbt)
+        pick_back(c)
         // the bottom bar: on a place's top page with nothing over it
         bottom_bar(c, src, w, place_of(root), app.nav.depth() == 1 && place_of(root) is Some(_))
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts

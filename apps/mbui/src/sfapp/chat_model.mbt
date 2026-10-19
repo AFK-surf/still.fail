@@ -109,6 +109,8 @@ pub(all) struct Decision {
   resolved : Bool
   dismissed : Bool
   text : String?
+  /// the option picked, once answered
+  chosen : String?
 }
 
 ///|
@@ -285,6 +287,7 @@ fn message_of(m : Json) -> Message {
           resolved: flag(d, "resolved"),
           dismissed: flag(d, "dismissed"),
           text: opt_text(d, "text"),
+          chosen: opt_text(d, "chosen"),
         })
       _ => None
     },

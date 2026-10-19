@@ -1195,9 +1195,49 @@ fn command_of(a : Map[String, Json]) -> String? {
 }
 
 ///|
-/// The quiet tinted box code and output sit in (ToolStep.kt Boxed), cut at `max` high.
+/// The quiet tinted box code and output sit in (ToolStep.kt Boxed), kept to `max` high: what is taller scrolls within
+/// it (mbui's Ctx::capped: a finger up or down on it moves it while it can go that way, else the page).
 fn boxed(c : @ui.Ctx, ground : Int64, max : Double, padx : Double, pady : Double, body : () -> Unit) -> Unit {
-  c.box(w=Fill(1.0), max_h=max, radius=10.0, bg=ground, padx~, pady~, clip=true, body) |> ignore
+  let n = boxed_n.val
+  boxed_n.val += 1
+  c.capped("boxed/\{n}", max, bg=ground, radius=10.0, padx~, pady~, body) |> ignore
+}
+
+///|
+/// The boxes of a step drawn so far, numbered for where each is scrolled to (within the step's scope).
+let boxed_n : Ref[Int] = { val: 0 }
+
+///|
+/// The language a file is in, by its extension (ToolStep.kt languageOf).
+fn language_of(path : String?) -> String {
+  let p = match path {
+    Some(p) => p
+    None => return ""
+  }
+  let mut i = p.length()
+  while i > 0 {
+    let u = p.at(i - 1).to_int()
+    if u == 46 {
+      break
+    }
+    if !((u >= 48 && u <= 57) || (u >= 65 && u <= 90) || (u >= 97 && u <= 122) || u == 95) {
+      return ""
+    }
+    i = i - 1
+  }
+  if i == 0 || i == p.length() {
+    return ""
+  }
+  let ext = p.view(start_offset=i).to_string().to_lower()
+  match ext {
+    "mjs" | "cjs" => "js"
+    "mts" => "ts"
+    "yml" => "yaml"
+    "zsh" | "bash" => "sh"
+    "h" => "c"
+    "hpp" => "cpp"
+    e => e
+  }
 }
 
 ///|
@@ -1206,11 +1246,24 @@ fn code_ground() -> Int64 {
 }
 
 ///|
-/// Code (a command, a file written or read) in the code face, wrapping, cut at 360 (ToolStep.kt Block).
-fn code_lines(c : @ui.Ctx, words : String) -> Unit {
+/// Code (a command, a file written or read) in the code face, highlighted by its language (Highlight.kt), wrapping,
+/// kept to 360 high and scrolled within (ToolStep.kt Block).
+fn code_lines(c : @ui.Ctx, words : String, language? : String = "") -> Unit {
   let t = @sf.theme()
-  c.box(w=Fill(1.0), max_h=360.0, radius=12.0, bg=code_ground(), padx=12.0, pady=8.0, clip=true, fn() {
-    c.rich([@ui.span(words, mono=true)], size=12.0, line=18.6, color=t.p.text, w=Fill(1.0)) |> ignore
+  let n = boxed_n.val
+  boxed_n.val += 1
+  c.capped("code/\{n}", 360.0, bg=code_ground(), radius=12.0, padx=12.0, pady=8.0, fn() {
+    c.rich(
+      match @sf.highlight(words, language, t.dark) {
+        Some(runs) => runs
+        None => [@ui.span(words, mono=true)]
+      },
+      size=12.0,
+      line=18.6,
+      color=t.p.text,
+      w=Fill(1.0),
+    )
+    |> ignore
   })
   |> ignore
 }
@@ -1516,11 +1569,15 @@ fn tool_step_body(
   failed : Bool,
 ) -> Unit {
   c.box(w=Fill(1.0), pl=6.0, pr=6.0, pt=4.0, pb=10.0, gap=8.0, fn() {
-    c.box(w=Fill(1.0), gap=6.0, fn() { tool_call(c, name, call, said) }) |> ignore
-    match result {
-      Some(r) => tool_result(c, name, call, r, failed)
-      None => ()
-    }
+    // its boxes numbered within it (where each is scrolled to)
+    c.scope(c.id("step/" + name + "/" + call), fn() {
+      boxed_n.val = 0
+      c.box(w=Fill(1.0), gap=6.0, fn() { tool_call(c, name, call, said) }) |> ignore
+      match result {
+        Some(r) => tool_result(c, name, call, r, failed)
+        None => ()
+      }
+    })
   })
   |> ignore
 }
@@ -1548,12 +1605,11 @@ fn tool_call(c : @ui.Ctx, name : String, call : String, said : Bool) -> Unit {
       if trimmed.has_prefix("*** Begin Patch") {
         patch(c, trimmed)
       } else if trimmed != "" {
-        code_lines(c, call)
+        code_lines(c, call, language=if name == "exec" { "js" } else { "" })
       }
       return
     }
   }
-  ignore(name)
   let skip = if said { ["description"] } else { [] }
   let file = file_of(a)
   let get = fn(k : String) { jstr(a.get(k)) }
@@ -1577,7 +1633,7 @@ fn tool_call(c : @ui.Ctx, name : String, call : String, said : Bool) -> Unit {
   }).count()
   match command_of(a) {
     Some(cmd) => {
-      code_lines(c, cmd)
+      code_lines(c, cmd, language="sh")
       facts(c, a, skip + ["command", "cmd"])
       return
     }
@@ -1608,7 +1664,7 @@ fn tool_call(c : @ui.Ctx, name : String, call : String, said : Bool) -> Unit {
   match (file, get("content")) {
     (Some(f), Some(body)) => {
       path_line(c, f, "")
-      code_lines(c, body)
+      code_lines(c, body, language=language_of(Some(f)))
       return
     }
     _ => ()
@@ -1846,6 +1902,15 @@ fn output_box(c : @ui.Ctx, words : String, failed : Bool) -> Unit {
 }
 
 ///|
+/// The file a call names (its path), if it is one.
+fn call_file(call : String) -> String? {
+  match parse_call(call) {
+    Some(Object(m)) => file_of(m)
+    _ => None
+  }
+}
+
+///|
 /// What a call gave back (ToolStep.kt ToolResult).
 fn tool_result(c : @ui.Ctx, name : String, call : String, result : String, failed : Bool) -> Unit {
   if result.trim(chars=" \n\t").to_string() == "" {
@@ -1878,8 +1943,8 @@ fn tool_result(c : @ui.Ctx, name : String, call : String, result : String, faile
           none_line(c, tr("android-misc.tool.noOutput"))
         }
       }
-      (_, Some(r), _, _) => code_lines(c, r)
-      (_, _, Some(r), _) => code_lines(c, r)
+      (_, Some(r), _, _) => code_lines(c, r, language=language_of(call_file(call)))
+      (_, _, Some(r), _) => code_lines(c, r, language=language_of(call_file(call)))
       (_, _, _, Some(x)) => output_box(c, x, false)
       _ =>
         match (if failed { None } else { parse_call(result) }) {

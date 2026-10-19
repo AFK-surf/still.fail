@@ -81,11 +81,11 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 | The way to the newest (↓) | away from the end by more than 120 dp, or short of the chat's end | alpha; y +18 → 0 and scale .6 → 1 | in: alpha tween(180, Css), the rest tween(220, Standard); out: 150 and 180; turned back from where it is | chat/Chat.kt:869-878, 921-954 | yes (`presence` in `jump_to_latest`) |
 | The bell over it lifts | both show | y 0 → −44 dp | tween(200, Standard) | chat/Chat.kt:881 | not yet (no bell) |
 | The bell | what waits to be decided is not in view | as the way to the newest | as above | chat/Chat.kt:972-990 | not yet |
-| 归档 in the bar comes and goes | nothing left in the chat | alpha, scale .85 → 1, width from its end | tween(280, ArchiveEase) each | chat/Chat.kt:281-285 | not yet |
-| 忽略 goes | dismissed | alpha, scale → .85 (top left), height → 0 | tween(280, ArchiveEase) | chat/Chat.kt:956-961 | not yet |
-| 保留 / 归档此对话 under the last post | offered, taken | alpha, scale .85 (top centre), height | tween(280, ArchiveEase) | chat/Chat.kt:1164-1170 | not yet |
+| 归档 in the bar comes and goes | nothing left in the chat | alpha, scale .85 → 1, width from its end | tween(280, ArchiveEase) each | chat/Chat.kt:281-285 | yes (`chat_bar`: presence and its width) |
+| 忽略 goes | dismissed | alpha, scale → .85 (top left), height → 0 | tween(280, ArchiveEase) | chat/Chat.kt:956-961 | yes (`ask_dismiss` over decide.mbt `under_post`) |
+| 保留 / 归档此对话 under the last post | offered, taken | alpha, scale .85 (top centre), height | tween(280, ArchiveEase) | chat/Chat.kt:1164-1170 | yes (`archive_under_post`) |
 | A quoted message flashes | a quote tapped (a jump) | the accent's ground: 0 → 1 in 160 ms (Ease.Out), held to 900, → 0 by 1700 (Standard); a passage marked to .24 by 160, held to 1400, gone by 2400 | keyframes | chat/ChatMotion.kt:254-335 | not yet (no quote jumps) |
-| A passage picked (long press) | a hold on a message's words | the picked ground (accent 26%), the handles and the bar (引用 / 复制) | none: there at once, gone at once | chat/MessagePick.kt; ui/Pick.kt:143 | the same (no motion, as the app) |
+| A passage picked (long press) | a hold on a message's words | the picked ground (accent 26%), the handles and the bar (引用 / 复制) | none: there at once, gone at once | chat/MessagePick.kt; ui/Pick.kt:143 | the same (no motion, as the app; src/sfapp/pick.mbt) |
 | Quotes in the composer | a quote taken into the draft, or dropped | the composer's capsule changes shape round it | the morph (below) | chat/Composer.kt | yes (the morph) |
 | A search's words drawn in | opened from a search | strokes under the words | 520 ms each, 180 apart, Standard | chat/ChatMotion.kt:289-295; ui/TextMark.kt:47-48, 108 | not yet |
 
@@ -129,17 +129,17 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 |---|---|---|---|---|---|
 | Ripple | `clickable` with Material 3's ripple (Theme.kt), on buttons and rows | a disc from the touch, the pressed state layer | Android's RippleDrawable (≈ 225 ms grow, 75 in, 150 out; pressed alpha .1) | ui/Theme.kt | the pressed grounds come and go on the ripple's timing (`pressing`: in 75 ms, out 150, a short tap shown whole); no disc spreading from the finger |
 | A row held | a long press on a Home row | ink 5% ground; its time shows | at once | chat/Home.kt:572, 615 | yes (before this work) |
-| An option pressed | a decision's option | scale .97 | tween(80) in, tween(180) out, Ease.Out | chat/Decisions.kt:141-150 | not yet (options are inert in this slice) |
+| An option pressed | a decision's option | scale .97 | tween(80) in, tween(180) out, Ease.Out | chat/Decisions.kt:141-150 | yes (`option_button`) |
 | An activity pressed | its line | ink 10% ground round it | at once | chat/Chat.kt:1538-1554 | — |
 
 ## Agents' messages out of their avatar (chat/ChatMotion.kt)
 
 | Motion | Trigger | Property | Spec | Where | mbui |
 |---|---|---|---|---|---|
-| Fold | an agent posts while its activity shows (watched: in front, at the end) | its line folds to its avatar: width → 0 (200, Ease.Out), alpha (160, Ease.Out) | Fold 170 ms | chat/ChatMotion.kt:58, 131-137; chat/Chat.kt:1524-1528 | not yet |
-| Float | after the fold | the avatar's copy hops: up to 34 dp over the higher end in 42% of the time ((1 − (1 − u)^2.5)), then drops ever faster (u^2.5), across ease-in-out cubic; stretched (7% up, 14% down) | 440 ms; on to the same agent's next: a drop only, 280 ms | chat/ChatMotion.kt:58, 198-236, 354-358 | not yet (`fly` takes such a path from the app) |
-| Spit | landed | the message comes out: scale .35 → 1 from 12 dp, unrolling from its top (Ease.Out), alpha by 35%; the avatar flattened (116% × 80%) springing back (stiffness 520, damping 14) with a 12% swell | 380 ms | chat/ChatMotion.kt:237-246, 360-393 | not yet |
-| Return | after | the copy goes home, cubic out | 320 ms | chat/ChatMotion.kt:247-250 | not yet |
+| Fold | an agent posts while its activity shows (watched: in front, at the end) | its line folds to its avatar: width → 0 (200, Ease.Out), alpha (160, Ease.Out) | Fold 170 ms | chat/ChatMotion.kt:58, 131-137; chat/Chat.kt:1524-1528 | yes (src/sfapp/emit.mbt; the line cut to its share of its width and faded in `activity`) |
+| Float | after the fold | the avatar's copy hops: up to 34 dp over the higher end in 42% of the time ((1 − (1 − u)^2.5)), then drops ever faster (u^2.5), across ease-in-out cubic; stretched (7% up, 14% down) | 440 ms; on to the same agent's next: a drop only, 280 ms | chat/ChatMotion.kt:58, 198-236, 354-358 | yes (`emit_flight`, `emit_flyer`: drawn only, over the list, from where the two ends were last laid out: `@motion.measured_rect`) |
+| Spit | landed | the message comes out: scale .35 → 1 from 12 dp, unrolling from its top (Ease.Out), alpha by 35%; the avatar flattened (116% × 80%) springing back (stiffness 520, damping 14) with a 12% swell | 380 ms | chat/ChatMotion.kt:237-246, 360-393 | yes (`emit_out`: a look and mbui's `Ctx::cut_to_top`; the message's own avatar hidden meanwhile) |
+| Return | after | the copy goes home, cubic out | 320 ms | chat/ChatMotion.kt:247-250 | yes; one turn after another (not in ListTurns' queue with what else changes the list's height) |
 
 ## Waiting and loops (ui/Waiting.kt, ui/Parts.kt, others)
 
@@ -158,7 +158,7 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 | History's line marked | colour, tween(900) | chat/History.kt:278 | — |
 | A note pinned / popping in | scale 1.12, 160 Arrive; pop .97 → 1 and alpha, 140 Arrive | ui/../screens/Notes.kt:73, 137-146 | — |
 | Decisions' deck | a card in 260 Ease.Out; answered: up, 360 (.55, 0, .85, .35); set aside: 1.25 widths, 260 Standard; back MoveSpring | chat/Decisions.kt:380-425, 477 | — |
-| A decision's options go, its outcome comes | out: 200 CSS ease-out, scale .9, height by the delayed MOVE spring (100 ms); outcome: fade after 200, height on the same | chat/Decisions.kt:192-222; chat/ListMotion.kt:39-41 | — |
+| A decision's options go, its outcome comes | out: 200 CSS ease-out, scale .9, height by the delayed MOVE spring (100 ms); outcome: fade after 200, height on the same | chat/Decisions.kt:192-222; chat/ListMotion.kt:39-41 | yes in a chat (`decision_under`; no turns: it starts at once, not after what else changes the list's height) |
 | The viewer from a thumbnail | open 320 Arrive, close 280 Arrive, fade 140 Out | chat/FilePreview.kt:207-210, 359-388 | — |
 | The latest chats' button (wide) | in: fade 180, scale .6 from (8%, 110%) 280; out 160 / 200 | chat/Wide.kt:128-131 | — |
 | The keyboard's room | follows the system's insets | ui/Keyboard.kt:82 | the host's insets (before this work) |

@@ -218,8 +218,10 @@ fn said(
     |> ignore
     return
   }
+  let ek = here.station + "\u{1}" + here.session
+  let em = emits_of(ek)
   c.box(w=Fill(1.0), fn() {
-    c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
+    let col = c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
       c.box(dir=Row, w=Fill(1.0), pl=25.0, min_h=24.0, gap=6.0, align=ACenter, fn() {
         // an agent of the chat's name opens its card (AgentSheet.kt)
         let mine = m.by.agent != "" && here.view.agents.iter().any(fn(a) { a.key == m.by.agent })
@@ -265,14 +267,24 @@ fn said(
           |> ignore
         None => ()
       }
-      if archive_under(here.view) == Some(m.seq) {
-        archive_buttons(c, src, here)
-      }
+      // under its agent's latest 做完了 while nothing is left in the chat: keeping or archiving it, right there
+      archive_under_post(c, src, here, m)
     })
-    |> ignore
-    // the picture over the name's start
+    // coming out of its agent's avatar (emit.mbt): from 35% at its corner, unrolling from its top
+    if emit_goes(em, m.seq) {
+      @motion.measure(c, col, "emit-col/" + seq_s(m.seq))
+      emit_out(c, col, em, m.seq)
+    }
+    // the picture over the name's start (where a message out of an avatar lands: hidden while the flying one is
+    // over it)
     c.layer(fn() {
-      c.box(pt=3.0, fn() { message_avatar(c, src, m) }) |> ignore
+      let av = c.box(pt=3.0, fn() { message_avatar(c, src, m) })
+      if emit_goes(em, m.seq) {
+        @motion.measure(c, av, "emit-landing/" + ek + "/" + seq_s(m.seq))
+        if emit_emitting(em, m.seq) {
+          c.look(av, @ui.look(alpha=0.0))
+        }
+      }
     })
     |> ignore
   })
@@ -543,7 +555,8 @@ fn person_words(c : @ui.Ctx, words : String, ts : String) -> Unit {
     line=23.0,
     link_color=t.p.blue,
     pressed_bg=@sf.alpha(t.p.blue, 0.14),
-    on_link=fn(h) { open_link(h) },
+    on_link=fn(h) { open_link(c, h) },
+    on_link_hold=Some(link_held),
   )
   |> ignore
 }
@@ -571,7 +584,8 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
       line=21.0,
       link_color=t.p.blue,
       pressed_bg=@sf.alpha(t.p.blue, 0.14),
-      on_link=fn(h) { open_link(h) },
+      on_link=fn(h) { open_link(c, h) },
+      on_link_hold=Some(link_held),
     )
     |> ignore
   })
@@ -582,12 +596,12 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
 }
 
 ///|
-/// A link tapped in a message: one to another chat opens it here (AppState.openLink); the rest are not opened from
-/// this slice.
-fn open_link(href : String) -> Unit {
+/// A link tapped in a message (App.kt's UriHandler, AppState.openLink): one to another chat opens it here; any other
+/// is handed to the system (its browser, or the app that takes it: mbui's Ctx::open_url), said when nothing took it.
+fn open_link(c : @ui.Ctx, href : String) -> Unit {
   match chat_of_link(href) {
     Some(r) => app.nav.push(Chat(r))
-    None => ()
+    None => if !c.open_url(href) { say(c, tr("android-misc.link.cantOpen")) }
   }
 }
 
@@ -631,7 +645,8 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
         key="md/" + m.ts,
         size=15.0,
         ink=ink().text,
-        on_link=fn(h) { open_link(h) },
+        on_link=fn(h) { open_link(c, h) },
+        on_link_hold=Some(link_held),
         files=fn(name) {
           match placed.get(name) {
             Some(a) => Some(fn() { files(c, src, here, [a], false) })
@@ -953,7 +968,10 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
 
 ///|
 /// Under a post (Decisions.kt DecisionUnder): a login card as its login stands; an options card's options while it
-/// waits, who is to decide above them; once answered, how it went in a quiet line. (Answering is not done from here.)
+/// waits, who is to decide above them, a tap answering with one; once answered (or let go, or replaced) the options go
+/// (200 ms, CSS's ease-out: fading, to 90%, the one picked as it was while the rest step back, their room closing on
+/// the rows' spring a little late) and how it went comes in a quiet line in their place (fading in once they have
+/// gone, its room opening on the same spring).
 fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
   let k = ink()
   let quiet = fn(words : String) {
@@ -1017,29 +1035,64 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
       return
     }
   }
-  if resolved {
-    match m.decision {
-      Some({ text: Some(words), .. }) => quiet(words)
-      _ => ()
-    }
-    return
-  }
-  match m.card {
-    Some({ assignee_text: Some(a), .. }) => quiet(a)
-    _ => ()
-  }
+  let key = here.station + "/" + m.ts
   let busy = answering(here.station, m, options)
-  match
-    decision_options(
-      c,
-      "options/" + m.ts,
-      options,
-      !here.view.offline && !here.view.archived,
-      busy,
-    ) {
-    Some(o) => answer_option(src, here.station, m.thread, m.seq, o.label)
-    None => ()
+  let chosen = if resolved {
+    match m.decision {
+      Some(d) => d.chosen
+      None => None
+    }
+  } else {
+    None
   }
+  under_post(
+    c,
+    "options/" + key,
+    !resolved,
+    exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)),
+    close=close_gap,
+    fn() {
+      // (who decides over the options as the message's column has them: 4 apart)
+      c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
+        match m.card {
+          Some({ assignee_text: Some(a), .. }) => quiet(a)
+          _ => ()
+        }
+        match
+          decision_options(
+            c,
+            "options/" + m.ts,
+            options,
+            !resolved && !here.view.offline && !here.view.archived,
+            busy,
+            chosen~,
+          ) {
+          Some(o) if !resolved => answer_option(src, here.station, m.thread, m.seq, o.label)
+          _ => ()
+        }
+      })
+      |> ignore
+    },
+  )
+  let outcome = match m.decision {
+    Some({ text: Some(words), .. }) if resolved => Some(words)
+    _ => None
+  }
+  under_post(
+    c,
+    "outcome/" + key,
+    outcome is Some(_),
+    enter=@motion.trans(fade=0.0, spec=@motion.Snap(0.0), fade_spec=@motion.tween(200.0, ease=CssOut, delay=200.0)),
+    open=close_gap,
+    exit=@motion.trans(spec=@motion.Snap(0.0)),
+    close=@motion.Snap(0.0),
+    fn() {
+      match outcome {
+        Some(w) => quiet(w)
+        None => ()
+      }
+    },
+  )
 }
 
 ///|
@@ -1053,6 +1106,7 @@ fn decision_options(
   options : Array[Choice],
   enabled : Bool,
   busy : String?,
+  chosen? : String? = None,
 ) -> Choice? {
   let t = @sf.theme()
   let free = enabled && busy is None
@@ -1080,8 +1134,15 @@ fn decision_options(
           gap=12.0,
           align=AStart,
           radius=18.0,
-          opacity=if enabled { 1.0 } else { 0.5 },
-          bg=if free && c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
+          opacity=if enabled || chosen == Some(o.label) { 1.0 } else { 0.5 },
+          bg={
+            let p = if free { @motion.pressing(c, id) } else { 0.0 }
+            if p > 0.0 {
+              @sf.alpha(t.p.text, 0.08 * p)
+            } else {
+              0L
+            }
+          },
           id~,
           fn() {
             c.box(
@@ -1456,7 +1517,15 @@ fn activity(
   here : Here,
   a : Agent,
   leaving? : Bool = false,
+  first? : Bool = false,
 ) -> Unit {
+  let ek = here.station + "\u{1}" + here.session
+  let em = emits_of(ek)
+  // a message coming out of its avatar: the line folds to its avatar (200 ms Ease.Out; faded by 160), and the avatar
+  // is away while its copy flies (emit.mbt, ChatMotion.kt)
+  let folded = emit_folded(em, a.key)
+  let tail = @motion.animate(c, "tail/" + a.key, if folded { 0.0 } else { 1.0 }, spec=@motion.tween(200.0, ease=Out))
+  let tail_fade = @motion.animate(c, "tail-fade/" + a.key, if folded { 0.0 } else { 1.0 }, spec=@motion.tween(160.0, ease=Out))
   let t = @sf.theme()
   let k = ink()
   let live = (src.topic)("live", { "station": Json::string(here.station), "key": Json::string(a.key) })
@@ -1506,8 +1575,12 @@ fn activity(
     bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.1) } else { 0L },
     id~,
     fn() {
-    c.box(w=Px(24.0), h=Px(24.0), tx=-3.0, align=ACenter, justify=JCenter, fn() {
-      agent_avatar(c, a.maker, a.runtime)
+    let face = c.box(w=Px(24.0), h=Px(24.0), tx=-3.0, align=ACenter, justify=JCenter, fn() {
+      let av = c.box(fn() { agent_avatar(c, a.maker, a.runtime) })
+      @motion.measure(c, av, "emit-avatar/" + ek + "/" + a.key)
+      if em.copied == a.key {
+        c.look(av, @ui.look(alpha=0.0))
+      }
       // its turn over, the ring goes first (Chat.kt WorkRing: 160 ms)
       let ring = @motion.animate(c, "ring/" + here.station + "/" + a.key, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(160.0))
       let rl = c.layer(fn() {
@@ -1520,15 +1593,32 @@ fn activity(
       })
       c.look(rl, @ui.look(alpha=ring))
     })
-    |> ignore
-    c.box(fn() { c.text(now_words, size=15.0, color=k.muted, wrap=false) |> ignore }) |> ignore
-    if clock != "" {
-      c.box(pl=3.0, fn() { c.text(clock, size=15.0, color=k.subtle, wrap=false) |> ignore })
-      |> ignore
+    ignore(face)
+    // what it does now and how long: folded away to its width's share, cut there, faded
+    let natural = match @motion.measured_rect(c, "emit-tail/" + ek + "/" + a.key) {
+      Some(r) => r.2
+      None => 0.0
+    }
+    let cut = tail < 1.0 && natural > 0.0
+    let tb = c.box(dir=Row, max_w=if cut { natural * tail } else { 1.0e9 }, clip=cut, fn() {
+      let inner = c.box(dir=Row, fn() {
+        c.box(fn() { c.text(now_words, size=15.0, color=k.muted, wrap=false) |> ignore }) |> ignore
+        if clock != "" {
+          c.box(pl=3.0, fn() { c.text(clock, size=15.0, color=k.subtle, wrap=false) |> ignore })
+          |> ignore
+        }
+      })
+      if !cut {
+        @motion.measure(c, inner, "emit-tail/" + ek + "/" + a.key)
+      }
+    })
+    if tail_fade < 1.0 {
+      c.look(tb, @ui.look(alpha=tail_fade))
     }
     },
   )
   |> ignore
+  ignore(first)
 }
 
 ///|

@@ -43,6 +43,7 @@ CURVES = {
     "cssout": bezier(0, 0, 0.58, 1),
     "flight": bezier(0.6, 0, 0.2, 1),
     "linear": lambda t: min(max(t, 0.0), 1.0),
+    "soft": bezier(0.16, 1, 0.3, 1),
 }
 
 
@@ -129,7 +130,73 @@ SPECS = [
      [rspring(200.0, 28.0)], 0, "to"),
     (r"^settings-sheet/offset", "value", "a settings sheet (Sheet.kt: SheetSpring)", [spring((2 * math.pi / (1.2 * 0.32)) ** 2, threshold=0.5)], 1, "to"),
     (r"^settings-sheet/scrim", "value", "a settings sheet's scrim (Sheet.kt: 300 ms, CSS's ease)", [tween(300, "css")], 1, "to"),
+    (r"^under/options/", "alpha", "a card's options going (Decisions.kt: fadeOut 200 ms, CSS's ease-out)", [tween(200, "cssout")], 1, None),
+    (r"^under/options/", "open", "a card's options' room closing (ListMotion.kt closeGap: spring(1, 350), 100 ms late)",
+     [spring(350.0, threshold=0.002, delay=100.0)], 1, 0.0),
+    (r"^under/outcome/", "open", "how a card went, its room opening (closeGap)", [spring(350.0, threshold=0.002, delay=100.0)], 1, 1.0),
+    (r"^under/(dismiss|archive)/", "open", "忽略, 保留 / 归档此对话 coming or going (Chat.kt: 280 ms, ArchiveEase)",
+     [tween(280, "soft")], 1, None),
+    (r"^under/(dismiss|archive)/", "alpha", "their opacity (Chat.kt: 280 ms, ArchiveEase)", [tween(280, "soft")], 1, None),
+    (r"^bar-archive/", "alpha", "the bar's 归档 coming or going (Chat.kt ChatBar: 280 ms, ArchiveEase)", [tween(280, "soft")], 1, None),
 ]
+
+
+def emit_poses(runs):
+    """An agent's answer out of its avatar (ChatMotion.kt): each pose's frames against Android's formulas, from where
+    the flying avatar set out and where it landed (its first and last frames): the hop's height, the spit's squash.
+    Returns (what, frames, largest difference as a share of the way)."""
+    out = []
+    for key, series in runs.items():
+        if key.startswith("emit/"):
+            out.extend(by_pose(key, series))
+    return out
+
+
+def by_pose(key, lines):
+    """The frames of one message's flight: each Float frame's y against ChatMotion.kt's hop (or, on from the message
+    before, its drop) between where it set out and where it lands as that frame had them (the log's from= and to=: the
+    list may move under it), at that frame's share of the pose (u=); that share against the clock (440 ms; the drop 280);
+    each Spit frame's squash at its share (380 ms)."""
+    res = []
+    floats = [(t, v) for t, v in lines if v.get("_pose") == "Float" and "u" in v]
+    spits = [(t, v) for t, v in lines if v.get("_pose") == "Spit" and "u" in v]
+    if len(floats) >= 3:
+        lo = min(min(v["from"], v["to"]) for _, v in floats)
+        hop = min(v["y"] for _, v in floats) < lo - 5.0
+        ms = 440.0 if hop else 280.0
+        rise = 0.42 if hop else 0.0
+        worst, way = 0.0, 0.0
+        for t, v in floats:
+            u, sy, ly = v["u"], v["from"], v["to"]
+            top = min(sy, ly) - 34.0 if hop else sy
+            way = max(way, abs(ly - sy), 34.0 if hop else 1.0)
+            if u < rise:
+                want = sy + (top - sy) * (1 - (1 - u / rise) ** 2.5)
+            else:
+                want = top + (ly - top) * ((u - rise) / (1 - rise)) ** 2.5
+            worst = max(worst, abs(v["y"] - want))
+        t0, u0 = floats[0][0], floats[0][1]["u"]
+        late = max(abs(v["u"] - min(u0 + (t - t0) / ms, 1.0)) for t, v in floats)
+        what = "hop (440 ms)" if hop else "drop (280 ms)"
+        res.append((f"the avatar's {what} (ChatMotion.kt Float) — {key}: its height", len(floats), worst / way))
+        res.append((f"the avatar's {what} — {key}: its share of the time against the clock", len(floats), late))
+    if len(spits) >= 3:
+        worst = 0.0
+        for t, v in spits:
+            u = v["u"]
+            w0 = math.sqrt(520.0)
+            z = 14.0 / (2 * w0)
+            wd = w0 * math.sqrt(1 - z * z)
+            s = u * 0.38
+            k = math.exp(-z * w0 * s) * (math.cos(wd * s) + z * w0 / wd * math.sin(wd * s))
+            sm = lambda x: x * x * (3 - 2 * x)
+            swell = 1 + 0.12 * (sm(u / 0.4) if u < 0.4 else (1 - sm((u - 0.4) / 0.35)) if u < 0.75 else 0.0)
+            worst = max(worst, abs(v["sx"] - swell * (1 + 0.16 * k)) / 0.28)
+        t0, u0 = spits[0][0], spits[0][1]["u"]
+        late = max(abs(v["u"] - min(u0 + (t - t0) / 380.0, 1.0)) for t, v in spits)
+        res.append((f"the answer let out, the avatar squashed (ChatMotion.kt Spit: 380 ms) — {key}", len(spits), worst))
+        res.append((f"the answer let out — {key}: its share of the time against the clock", len(spits), late))
+    return res
 
 
 def parse(path):
@@ -144,7 +211,7 @@ def parse(path):
             try:
                 vals[k] = float(v)
             except ValueError:
-                pass
+                vals["_" + k] = v
         runs.setdefault(m.group(2), []).append((float(m.group(1)), vals))
     return runs
 
@@ -245,6 +312,9 @@ def main():
                 print(f"{what}\n  {name}: {len(seg)} frames over {seg[-1][0] - seg[0][0]:.0f} ms, from {d0:.2f}; "
                       f"largest difference {err:.3f} ({100 * share:.2f}% of the way)")
                 plots.append((f"{what} — {name}", got, want))
+    for what, n, share in emit_poses(runs):
+        worst = max(worst, share)
+        print(f"{what}\n  {n} frames; largest difference {100 * share:.2f}% of the way")
     print(f"WORST {100 * worst:.2f}% of the way")
     if len(sys.argv) > 2 and plots:
         svg(plots[:12], sys.argv[2])

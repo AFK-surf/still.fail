@@ -1,0 +1,4 @@
+S72=$(grep '^CALL chat.archive' $OUT/$name.log | tail -1 | sed 's/.*"session":"\([^"]*\)".*/\1/')
+check "the app asked to archive that chat's session" '[ -n "$S72" ]'
+check "the station has it archived, by hand" '[ "$(sql "select archived_by from sessions where key = \"$S72\" and archived_at is not null")" = manual ]'
+check "the test chat is not" '[ -z "$(sql "select t.hidden_at from threads t join entries e on e.thread = t.id where e.n = 1 and e.text like \"端到端测试%\" and t.hidden_at is not null")" ]'

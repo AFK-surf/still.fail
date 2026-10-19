@@ -1,0 +1,17 @@
+# A link in a message tapped (App.kt's UriHandler): handed to the system's browser (macOS: said on the log only, a
+# scripted run opens nothing; Android: ACTION_VIEW); a chat's own link opens the chat in the app instead.
+timeout 60000
+tap 端到端测试
+until =studio
+until 发消息
+wait 1000
+tap 发消息
+type 给个链接 {T} md:链接 {T}
+tap icon:arrow-up
+gone 正在发送
+timeout 120000
+until example.com/e2e
+wait 1500
+shot 1-before
+# (tapped, the run ends: on Android the browser comes in front and the app is no longer drawn; the check reads the log)
+tap example.com/e2e
