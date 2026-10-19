@@ -80,88 +80,69 @@ fn scrim(
 }
 
 ///|
-/// The filter's menu (Home.kt, in Sheet.kt MenuHost's look): 180 wide under the filter's button, its right edge
-/// under the button's: 全部, 我参与的, 监控中 (the one in use checked), 已归档.
+/// The filter's menu (Home.kt, in Sheet.kt MenuHost's look), mbui's dropdown menu (@kit.dropdown_menu): 180 wide under
+/// the filter's button, its right edge under the button's: 全部, 我参与的, 监控中 (the one in use checked), 已归档. In: its
+/// opacity 160 ms (Ease.Out), its scale from 90% on the menu's spring, from its top left; out: 120 ms (CSS's ease-out),
+/// back to 90%; the scrim (black at 28%) 200 ms. Drawn until it has gone; the arrows, letters and Escape as a menu's.
 fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let filter = filter_of(src, w.id)
-  // in: its opacity 160 ms (Ease.Out), its scale from 90% on the menu's spring, from its top left; out: 120 ms (CSS's
-  // ease-out), back to 90%; the scrim 200 ms (Sheet.kt MenuHost). Drawn until it has gone.
-  let look = match
-    @motion.presence(
-      c,
-      "filter-menu",
-      app.menu,
-      enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
-      exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=CssOut)),
-    ) {
-    Some(l) => l
-    None => return
-  }
-  let shown = @motion.animate(c, "filter-menu/scrim", if app.menu { 1.0 } else { 0.0 }, spec=@motion.tween(200.0))
-  scrim(c, "filter-scrim", shown, open=app.menu, fn() { app.menu = false })
-  let x = dmax(12.0, c.width - 16.0 - 180.0)
-  c.layer(fn() {
-    let menu = c.box(
-      w=Px(180.0),
-      tx=x,
-      ty=bar_h + 6.0,
-      radius=14.0,
-      bg=t.p.card,
-      shadow=18.0,
-      shadow_y=6.0,
-      clip=true,
-      fn() {
-        let item = fn(label : String, icon : String, key : String) -> Bool {
-          let id = c.id("filter/" + key)
-          c.box(
-            dir=Row,
-            w=Fill(1.0),
-            padx=16.0,
-            pady=12.0,
-            align=ACenter,
-            justify=JBetween,
-            bg=@sf.alpha(t.p.text, 0.06 * @motion.pressing(c, id)),
-            id~,
-            fn() {
-              c.text(label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
-              if icon != "" {
-                @sf.icon(c, icon, size=16.0, color=t.p.text) |> ignore
-              } else {
-                c.box(w=Px(16.0), h=Px(16.0), fn() {  }) |> ignore
-              }
-            },
-          )
-          |> ignore
-          c.clicked(id)
-        }
-        for f in ["all", "mine", "watching"] {
-          if item(
-              tr("android-chat.home.filter." + f),
-              if filter == f { "check" } else { "" },
-              f,
-            ) {
-            app.menu = false
-            app.filters[w.id] = f
-            let pick : Map[String, Json] = {}
-            pick[w.id] = Json::string(f)
-            (src.call)(
-              "prefs.set",
-              Json::object({ "listFilter": Json::object(pick) }),
-              fn(_) {  },
-            )
-          }
-        }
-        if item(tr("android-chat.home.filter.archived"), "archive", "archived") {
-          app.menu = false
-          app.nav.push(Archived)
-        }
-      },
-    )
-    c.look(menu, look)
-    @motion.leaving(c, menu, app.menu)
+  let entries = ["all", "mine", "watching"].map(fn(f) {
+    @kit.menu_radio(f, filter == f, label=tr("android-chat.home.filter." + f))
   })
-  |> ignore
+  entries.push(@kit.menu_item("archived", label=tr("android-chat.home.filter.archived")))
+  let x = dmax(12.0, c.width - 16.0 - 180.0)
+  let m = @kit.dropdown_menu(
+    c,
+    "filter-menu",
+    app.menu,
+    c.id("home-filter"),
+    entries,
+    at=(x, 0.0, 180.0, bar_h),
+    along=Start,
+    offset=6.0,
+    scrim=0x00000047L,
+    enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
+    exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=CssOut)),
+    look=fn(c, _min_w, body) {
+      c.box(w=Px(180.0), radius=14.0, bg=t.p.card, shadow=18.0, shadow_y=6.0, clip=true, body) |> ignore
+    },
+    item_look=fn(c, s) {
+      let icon = match s.entry.kind {
+        @kit.Choice(true) => "check"
+        _ => if s.entry.value == "archived" { "archive" } else { "" }
+      }
+      c.box(
+        dir=Row,
+        w=Fill(1.0),
+        padx=16.0,
+        pady=12.0,
+        align=ACenter,
+        justify=JBetween,
+        bg=if s.lit { @sf.alpha(t.p.text, 0.06) } else { 0L },
+        fn() {
+          c.text(s.entry.label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+          if icon != "" {
+            @sf.icon(c, icon, size=16.0, color=t.p.text) |> ignore
+          } else {
+            c.box(w=Px(16.0), h=Px(16.0), fn() {  }) |> ignore
+          }
+        },
+      )
+      |> ignore
+    },
+  )
+  app.menu = m.open
+  match m.chosen {
+    Some("archived") => app.nav.push(Archived)
+    Some(f) => {
+      app.filters[w.id] = f
+      let pick : Map[String, Json] = {}
+      pick[w.id] = Json::string(f)
+      (src.call)("prefs.set", Json::object({ "listFilter": Json::object(pick) }), fn(_) {  })
+    }
+    None => ()
+  }
 }
 
 ///|
