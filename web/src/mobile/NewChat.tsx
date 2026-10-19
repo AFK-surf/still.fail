@@ -20,7 +20,7 @@ import { useHost } from "./ChatHost.tsx";
 import { Button, Illustration, MakerIcon, ModelMark, NavBar, PickRow } from "./parts.tsx";
 import { Waiting } from "@stillfail/ui/waiting.tsx";
 import { MachineLoginOffers } from "./Profiles.tsx";
-import { Buddy, FirstStation } from "./Stations.tsx";
+import { FirstStation } from "./Stations.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./NewChat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
@@ -167,7 +167,7 @@ function pickStation(app: MobileApp, stations: StationView[], current: string, o
   app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab /><SheetHead title={t("web-mobile.newChat.pickStation")} />
-      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.emoji ? `${s.emoji} ${s.name}` : s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.id); app.sheet(null); }} />)}</div>
+      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<StationMark emoji={s.emoji} icon={s.icon} size={22} />} onClick={() => { onPick(s.id); app.sheet(null); }} />)}</div>
     </>
   ) });
 }
