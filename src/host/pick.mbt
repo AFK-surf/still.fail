@@ -47,6 +47,15 @@ pub fn pick(kind : PickKind) -> Pick? {
 }
 
 ///|
+/// A photo of the gallery (gallery.mbt's `src`) read whole, as a pick of it: None where the host has no gallery.
+pub fn pick_photo(src : String) -> Pick? {
+  match pk_photo(src) {
+    0 => None
+    id => Some({ id, })
+  }
+}
+
+///|
 /// What was picked, once the system has answered (empty: called off, or nothing could be read); None while it asks.
 /// Taken once: the ask is forgotten as it is answered.
 pub fn Pick::files(self : Pick) -> Array[Picked]? {

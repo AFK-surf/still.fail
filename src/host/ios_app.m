@@ -541,3 +541,13 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
 int32_t mb_host_window_inset(void) { return 0; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
+
+// The gallery (gallery.mbt): none on this host; no photo of it picked.
+int32_t mb_host_gallery_access(void) { return -1; }
+void mb_host_gallery_ask(void) {}
+int32_t mb_host_gallery_answers(void) { return 0; }
+int32_t mb_host_gallery_read(void) { return 0; }
+int32_t mb_host_gallery_read_state(int32_t id) { (void)id; return -1; }
+moonbit_string_t mb_host_gallery_read_rows(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
+void mb_host_gallery_read_end(int32_t id) { (void)id; }
+int32_t mb_host_pick_photo(moonbit_string_t src) { (void)src; return 0; }

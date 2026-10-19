@@ -217,6 +217,10 @@ public class MainActivity extends Activity {
     /** The system's answer to POST_NOTIFICATIONS (Notices: asked as notifications are turned on, or once at first). */
     @Override
     public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        if (request == Gallery.ASK) {
+            Gallery.answered();
+            return;
+        }
         if (request == Notices.ASK) {
             Notices.answered(results.length > 0 && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED);
             return;

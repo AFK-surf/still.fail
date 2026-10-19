@@ -25,7 +25,8 @@ import java.util.concurrent.Executors;
 /**
  * Images: read and decoded on a few background threads straight to the size
  * asked for, EXIF orientation applied, then uploaded on the GL thread as
- * premultiplied RGBA textures the C renderer draws.
+ * premultiplied RGBA textures the C renderer draws. A content:// source (a
+ * photo of the gallery: Gallery.java) is the system's thumbnail of it.
  */
 final class Images {
     // a few at a time, so a grid scrolled fast doesn't keep every core busy
@@ -80,6 +81,18 @@ final class Images {
         Bitmap b = null;
         try {
             byte[] data = r.data;
+            if (data == null && r.src.startsWith("content://")) {
+                // a photo of the gallery (Gallery.java): its thumbnail, as big as asked for
+                Bitmap t = Host.activity.getContentResolver().loadThumbnail(android.net.Uri.parse(r.src),
+                        new android.util.Size(r.maxPx, r.maxPx), null);
+                orig[0] = t.getWidth();
+                orig[1] = t.getHeight();
+                b = t.getConfig() == Bitmap.Config.ARGB_8888 ? t : t.copy(Bitmap.Config.ARGB_8888, false);
+                if (b != t) t.recycle();
+                Bitmap bmp = b;
+                Host.view.toGL(() -> upload(id, bmp, orig[0], orig[1]));
+                return;
+            }
             if (data == null && (r.src.startsWith("http://") || r.src.startsWith("https://"))) {
                 data = fetch(r.src);
             }

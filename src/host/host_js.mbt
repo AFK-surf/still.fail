@@ -470,6 +470,48 @@ fn kp_end(_id : Int) -> Unit {
 
 }
 
+// The gallery (gallery.mbt): a page has none.
+
+///|
+fn ga_access() -> Int {
+  -1
+}
+
+///|
+fn ga_ask() -> Unit {
+
+}
+
+///|
+fn ga_answers() -> Int {
+  0
+}
+
+///|
+fn ga_read() -> Int {
+  0
+}
+
+///|
+fn ga_read_state(_id : Int) -> Int {
+  -1
+}
+
+///|
+fn ga_read_rows(_id : Int) -> String {
+  ""
+}
+
+///|
+fn ga_read_end(_id : Int) -> Unit {
+
+}
+
+///|
+fn pk_photo(_src : String) -> Int {
+  0
+}
+
 // Notifications (notify.mbt): not shown by a page yet; what would be is said on the log.
 
 ///|

@@ -40,6 +40,8 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways;
 static jclass updates_cls, shares_cls, keeps_cls;
+static jclass gallery_cls;
+static jmethodID m_ga_access, m_ga_ask, m_ga_answers, m_ga_read, m_ga_state, m_ga_rows, m_ga_end, m_pk_photo;
 static jmethodID m_kp_begin, m_kp_append, m_kp_finish, m_kp_state, m_kp_where, m_kp_end;
 static jmethodID m_up_version, m_up_install, m_up_state, m_sh_share, m_sh_in, m_sh_file;
 static mb_back_fn back_cb;
@@ -119,6 +121,15 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_kp_state = (*env)->GetStaticMethodID(env, keeps_cls, "state", "(I)I");
   m_kp_where = (*env)->GetStaticMethodID(env, keeps_cls, "where", "(I)Ljava/lang/String;");
   m_kp_end = (*env)->GetStaticMethodID(env, keeps_cls, "end", "(I)V");
+  gallery_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Gallery"));
+  m_ga_access = (*env)->GetStaticMethodID(env, gallery_cls, "access", "()I");
+  m_ga_ask = (*env)->GetStaticMethodID(env, gallery_cls, "ask", "()V");
+  m_ga_answers = (*env)->GetStaticMethodID(env, gallery_cls, "answers", "()I");
+  m_ga_read = (*env)->GetStaticMethodID(env, gallery_cls, "read", "()I");
+  m_ga_state = (*env)->GetStaticMethodID(env, gallery_cls, "readState", "(I)I");
+  m_ga_rows = (*env)->GetStaticMethodID(env, gallery_cls, "readRows", "(I)Ljava/lang/String;");
+  m_ga_end = (*env)->GetStaticMethodID(env, gallery_cls, "readEnd", "(I)V");
+  m_pk_photo = (*env)->GetStaticMethodID(env, picks_cls, "photo", "(Ljava/lang/String;)I");
   views_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/NativeViews"));
   m_v_open = (*env)->GetStaticMethodID(env, views_cls, "open", "(ILjava/lang/String;)I");
   m_v_place = (*env)->GetStaticMethodID(env, views_cls, "place", "(IFFFFFFFFZ)V");
@@ -1322,6 +1333,54 @@ int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) {
   (*env)->DeleteLocalRef(env, n);
   (*env)->DeleteLocalRef(env, b);
   return ok ? 1 : 0;
+}
+
+// The gallery (gallery.mbt): dev.mbui.Gallery; a photo of it picked by its address (Picks.photo).
+
+int32_t mb_host_gallery_access(void) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, gallery_cls, m_ga_access);
+}
+
+void mb_host_gallery_ask(void) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, gallery_cls, m_ga_ask);
+}
+
+int32_t mb_host_gallery_answers(void) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, gallery_cls, m_ga_answers);
+}
+
+int32_t mb_host_gallery_read(void) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, gallery_cls, m_ga_read);
+}
+
+int32_t mb_host_gallery_read_state(int32_t id) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, gallery_cls, m_ga_state, id);
+}
+
+moonbit_string_t mb_host_gallery_read_rows(int32_t id) {
+  JNIEnv *env = env_();
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, gallery_cls, m_ga_rows, id);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  return out;
+}
+
+void mb_host_gallery_read_end(int32_t id) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, gallery_cls, m_ga_end, id);
+}
+
+int32_t mb_host_pick_photo(moonbit_string_t src) {
+  JNIEnv *env = env_();
+  jstring s = jstr(env, src);
+  jint id = (*env)->CallStaticIntMethod(env, picks_cls, m_pk_photo, s);
+  (*env)->DeleteLocalRef(env, s);
+  return id;
 }
 
 // Files kept on the device (keep.mbt): dev.mbui.Keeps, MediaStore's Downloads or the documents UI's CreateDocument.

@@ -555,6 +555,33 @@ extern "C" fn kp_where(id : Int) -> String = "mb_host_keep_where"
 ///|
 extern "C" fn kp_end(id : Int) -> Unit = "mb_host_keep_end"
 
+// The gallery (gallery.mbt): Gallery.java on Android; none elsewhere.
+
+///|
+extern "C" fn ga_access() -> Int = "mb_host_gallery_access"
+
+///|
+extern "C" fn ga_ask() -> Unit = "mb_host_gallery_ask"
+
+///|
+extern "C" fn ga_answers() -> Int = "mb_host_gallery_answers"
+
+///|
+extern "C" fn ga_read() -> Int = "mb_host_gallery_read"
+
+///|
+extern "C" fn ga_read_state(id : Int) -> Int = "mb_host_gallery_read_state"
+
+///|
+extern "C" fn ga_read_rows(id : Int) -> String = "mb_host_gallery_read_rows"
+
+///|
+extern "C" fn ga_read_end(id : Int) -> Unit = "mb_host_gallery_read_end"
+
+///|
+#borrow(src)
+extern "C" fn pk_photo(src : String) -> Int = "mb_host_pick_photo"
+
 // Notifications (notify.mbt): dev.mbui.Notices on Android (android_host.c), kept and said on the log elsewhere.
 
 ///|

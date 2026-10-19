@@ -137,38 +137,59 @@ final class Picks {
                     k.bytes.add(out.toByteArray());
                 }
             }
-            for (Uri u : uris) {
-                String name = "file";
-                long size = -1;
-                try (Cursor c = cr.query(u, new String[] {OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE}, null, null, null)) {
-                    if (c != null && c.moveToFirst()) {
-                        if (!c.isNull(0)) name = c.getString(0);
-                        if (!c.isNull(1)) size = c.getLong(1);
-                    }
-                } catch (Exception e) {
-                    Host.log("pick: " + e);
-                }
-                if (size > MAX) continue;
-                try (InputStream in = cr.openInputStream(u)) {
-                    if (in == null) continue;
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
-                    byte[] buf = new byte[1 << 16];
-                    for (int r; (r = in.read(buf)) > 0; ) {
-                        out.write(buf, 0, r);
-                        if (out.size() > MAX) break;
-                    }
-                    if (out.size() > MAX) continue;
-                    synchronized (k) {
-                        k.names.add(name);
-                        k.bytes.add(out.toByteArray());
-                    }
-                } catch (Exception e) {
-                    Host.log("pick: " + name + ": " + e);
-                }
-            }
+            read(cr, k, uris);
             done(id, k.names.isEmpty() ? -1 : 1);
         }, "mbui-pick").start();
         return true;
+    }
+
+    /** Each of `uris` read whole into the ask (one over 1 GB left out). */
+    private static void read(ContentResolver cr, Ask k, List<Uri> uris) {
+        for (Uri u : uris) {
+            String name = "file";
+            long size = -1;
+            try (Cursor c = cr.query(u, new String[] {OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE}, null, null, null)) {
+                if (c != null && c.moveToFirst()) {
+                    if (!c.isNull(0)) name = c.getString(0);
+                    if (!c.isNull(1)) size = c.getLong(1);
+                }
+            } catch (Exception e) {
+                Host.log("pick: " + e);
+            }
+            if (size > MAX) continue;
+            try (InputStream in = cr.openInputStream(u)) {
+                if (in == null) continue;
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] buf = new byte[1 << 16];
+                for (int r; (r = in.read(buf)) > 0; ) {
+                    out.write(buf, 0, r);
+                    if (out.size() > MAX) break;
+                }
+                if (out.size() > MAX) continue;
+                synchronized (k) {
+                    k.names.add(name);
+                    k.bytes.add(out.toByteArray());
+                }
+            } catch (Exception e) {
+                Host.log("pick: " + name + ": " + e);
+            }
+        }
+    }
+
+    /** A photo of the gallery (Gallery.java's content:// address) read whole, as a pick of it. */
+    static synchronized int photo(String src) {
+        if (Host.activity == null) return 0;
+        int id = next++;
+        Ask k = new Ask();
+        asks.put(id, k);
+        ContentResolver cr = Host.activity.getContentResolver();
+        new Thread(() -> {
+            List<Uri> uris = new ArrayList<>();
+            uris.add(Uri.parse(src));
+            read(cr, k, uris);
+            done(id, k.names.isEmpty() ? -1 : 1);
+        }, "mbui-pick").start();
+        return id;
     }
 
     static int state(int id) {

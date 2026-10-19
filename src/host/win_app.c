@@ -747,6 +747,16 @@ moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) { return moonbit_make
 moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) { return moonbit_make_bytes(0, 0); }
 void mb_host_pick_end(int32_t pid) {}
 
+// The gallery (gallery.mbt): none on this host; no photo of it picked.
+int32_t mb_host_gallery_access(void) { return -1; }
+void mb_host_gallery_ask(void) {}
+int32_t mb_host_gallery_answers(void) { return 0; }
+int32_t mb_host_gallery_read(void) { return 0; }
+int32_t mb_host_gallery_read_state(int32_t id) { (void)id; return -1; }
+moonbit_string_t mb_host_gallery_read_rows(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
+void mb_host_gallery_read_end(int32_t id) { (void)id; }
+int32_t mb_host_pick_photo(moonbit_string_t src) { (void)src; return 0; }
+
 // Native views over the canvas, PDFs (host_native.mbt): not on Windows yet. No view opens (0), no PDF is drawn (pages
 // -1); the app says it cannot show those here. (Saving a file: at the end, with keep.mbt's.)
 int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) { (void)kind; (void)arg; return 0; }
