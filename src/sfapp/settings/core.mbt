@@ -41,6 +41,10 @@ pub(all) struct Core {
   push_sync : (Bool?) -> Unit
   /// what the page under this one is: "chats" (Home), "settings", or "" (another)
   under : () -> String
+  /// the version row's words at its end and whether they are the accent's (an update: 更新到 …, how far, 检查更新)
+  version_words : () -> (String, Bool)
+  /// the version row tapped: a newer build installed, or still.fail cloud asked now
+  version_tap : () -> Unit
 }
 
 ///|

@@ -32,6 +32,8 @@
 //   notice TEXT                 that notification, once there, tapped (as the system's shade sends the tap)
 //   log TEXT                    DRIVE LOG TEXT on the log (a mark for whoever watches it)
 //   exit                        ends the run: DRIVE PASS, exit 0
+//   linger MS                   the run passed (DRIVE PASS said now), the app left running MS more for what the last
+//                               step set off (a share sheet, a download): a check beside the run looks at it
 // A step that fails logs DRIVE FAIL (its line, what was on screen), takes a shot "fail" and exits 1.
 
 ///|
@@ -580,6 +582,23 @@ fn drive_frame(c : Ctx) -> Unit {
       }
       "exit" => {
         drive_end(0)
+        return
+      }
+      "linger" => {
+        h_log("DRIVE PASS")
+        d.steps.clear()
+        d.steps.push("wait " + arg)
+        d.steps.push("quit")
+        d.at = 0
+        d.since = -1.0
+        return
+      }
+      "quit" => {
+        driver.val = None
+        match fake.val {
+          Some(f) => f.logs.push("EXIT 0")
+          None => @host.exit(0)
+        }
         return
       }
       _ => {

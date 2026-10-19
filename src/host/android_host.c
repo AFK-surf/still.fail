@@ -39,6 +39,8 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways;
+static jclass updates_cls;
+static jmethodID m_up_version, m_up_install, m_up_state;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -76,6 +78,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_system_dark = (*env)->GetStaticMethodID(env, host_cls, "systemDark", "()Z");
   m_set_dark = (*env)->GetStaticMethodID(env, host_cls, "setDark", "(Z)V");
   m_set_sideways = (*env)->GetStaticMethodID(env, host_cls, "setSideways", "(Z)V");
+  updates_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Updates"));
+  m_up_version = (*env)->GetStaticMethodID(env, updates_cls, "versionCode", "()I");
+  m_up_install = (*env)->GetStaticMethodID(env, updates_cls, "install", "(Ljava/lang/String;Ljava/lang/String;DLjava/lang/String;)V");
+  m_up_state = (*env)->GetStaticMethodID(env, updates_cls, "state", "()Ljava/lang/String;");
   m_metrics = (*env)->GetStaticMethodID(env, text_cls, "fontMetrics", "(DII[D)V");
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
@@ -813,6 +819,29 @@ void mb_host_set_dark(int32_t dark) {
 void mb_host_set_sideways(int32_t on) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_set_sideways, (jboolean)(on != 0));
+}
+
+// Updates (Updates.java): this build's version code, a newer one installed, how that goes.
+int32_t mb_host_app_version(void) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, updates_cls, m_up_version);
+}
+
+void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
+  JNIEnv *env = env_();
+  jstring u = jstr(env, url), h = jstr(env, sha256), n = jstr(env, name);
+  (*env)->CallStaticVoidMethod(env, updates_cls, m_up_install, u, h, size, n);
+  (*env)->DeleteLocalRef(env, u);
+  (*env)->DeleteLocalRef(env, h);
+  (*env)->DeleteLocalRef(env, n);
+}
+
+moonbit_string_t mb_host_update_state(void) {
+  JNIEnv *env = env_();
+  jstring j = (jstring)(*env)->CallStaticObjectMethod(env, updates_cls, m_up_state);
+  moonbit_string_t out = j ? mstr(env, j) : moonbit_make_string_raw(0);
+  if (j) (*env)->DeleteLocalRef(env, j);
+  return out;
 }
 
 void mb_host_wake_after(double ms) {

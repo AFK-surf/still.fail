@@ -248,6 +248,18 @@ fn main {
   if @host.env("MBUI_OPEN_PAGE") == "decisions" {
     @sfapp.open_decisions()
   }
+  // where newer builds of the app come from (src/sfapp/updates.mbt): still.fail cloud's feed MBUI_UPDATE_FEED (the
+  // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere)
+  match @host.env("MBUI_UPDATE_FEED") {
+    "" => ()
+    feed => {
+      let origin = match @host.env("MBUI_CLOUD") {
+        "" => "https://app.still.fail"
+        o => o
+      }
+      @sfapp.set_update_source(Some(@sfapp.cloud_updates(core_source, feed, origin)))
+    }
+  }
   @ui.run("still.fail", fn(c) {
     @sfcore.frame(@core.subscribe("accounts"))
     @sfapp.view(c, core_source)

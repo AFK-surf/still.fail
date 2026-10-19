@@ -9,6 +9,7 @@
 #     the files to attach are not put in it and the core's store is not read back: flows that need them fail)
 #
 # A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed);
+# `#only PLATFORM…` runs it on those platforms only;
 # its `#env K=V` lines are given to the app (as MBUI_OPEN_PAGE=decisions: a page opened at the start), its `#before
 # WORDS` lines run as `scripts/e2e-local.sh WORDS` before the app starts.
 # The flows run in order on one sign-in (a fresh core data directory per run); later ones lean on earlier ones' chat.
@@ -171,6 +172,8 @@ TABLE=$OUT/../$PLATFORM.txt
 total=0; passed=0
 for f in $flows; do
   name=$(basename $f .drive)
+  # a flow for some platforms only (`#only android`): the others pass it by
+  if grep -q '^#only ' $f && ! grep '^#only ' $f | grep -qw $PLATFORM; then echo "== $name (not on $PLATFORM)"; continue; fi
   total=$((total + 1))
   echo "== $name"
   FAILS=""

@@ -275,6 +275,8 @@ fn top_bar(
         @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
       })
       |> ignore
+      // a newer build that brings something (updates.mbt): its key, or how far it has come
+      update_button(c, src)
       // the filter, and the archive in its menu: nothing to narrow or look back on with no station
       match view {
         Some(v) if v.stations > 0 =>

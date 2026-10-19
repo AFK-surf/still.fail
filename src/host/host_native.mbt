@@ -114,6 +114,16 @@ extern "C" fn ffi_set_sideways(on : Int) -> Unit = "mb_host_set_sideways"
 
 
 ///|
+extern "C" fn ffi_app_version() -> Int = "mb_host_app_version"
+
+///|
+#borrow(url, sha256, name)
+extern "C" fn ffi_update_install(url : String, sha256 : String, size : Double, name : String) -> Unit = "mb_host_update_install"
+
+///|
+extern "C" fn ffi_update_state() -> String = "mb_host_update_state"
+
+///|
 pub fn run(
   title : String,
   frame : FuncRef[(Double, Double, Double, Double) -> Unit],
@@ -338,6 +348,26 @@ pub fn set_sideways(on : Bool) -> Unit {
   ffi_set_sideways(if on { 1 } else { 0 })
 }
 
+
+///|
+/// This build's version code, as the system has it (Android's); 0 where the app does not update itself.
+pub fn app_version() -> Int {
+  ffi_app_version()
+}
+
+///|
+/// A newer build at `url` (its `sha256`, `size` bytes) downloaded as `name`, checked and handed to the system's
+/// installer (Android: still.fail's Updates.kt); nothing elsewhere. How it goes: `update_state`.
+pub fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
+  ffi_update_install(url, sha256, size, name)
+}
+
+///|
+/// How an update goes, as JSON text: `{"phase","percent","error"}` (phase idle, allow: the person's leave to install
+/// apps asked for, downloading, retrying, installing, handed, failed); "" where there is none.
+pub fn update_state() -> String {
+  ffi_update_state()
+}
 
 ///|
 /// A scripted run's input given to the host to send as its own (src/ui/drive.mbt): `drive_insert` words committed and

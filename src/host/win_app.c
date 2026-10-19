@@ -529,6 +529,13 @@ void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
 // Whether the system is set to dark (@host.system_dark): not read here yet (light).
 int32_t mb_host_system_dark(void) { return 0; }
 
+// Updates (@host.app_version, update_install, update_state): this app does not update itself here.
+int32_t mb_host_app_version(void) { return 0; }
+void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
+  (void)url; (void)sha256; (void)size; (void)name;
+}
+moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }
+
 // Turned sideways for a film (@host.set_sideways): a window does not turn.
 void mb_host_set_sideways(int32_t on) { (void)on; }
 

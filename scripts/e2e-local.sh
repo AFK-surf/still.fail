@@ -21,6 +21,7 @@
 #   scripts/e2e-local.sh freeze|thaw  the test station stopped where it is (SIGSTOP: as if its network went) or started anew
 #   scripts/e2e-local.sh drive-seed TAG   the drive flows' folder in the test station's home (e2e-TAG)
 #   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
+#   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
 #   scripts/e2e-local.sh status
 #
 # E2E_WORK (default: e2e-local beside this checkout), E2E_STATION (the station's data and HOME, /tmp/mbui-e2e-<uid>),
@@ -236,6 +237,21 @@ drive_media() {
   say "drive media $d"
 }
 
+# a newer build of the app in the local cloud's releases (the updates' flow, 49): the APK as built, as android/stillfail-2.apk,
+# and the feed's latest.json naming it (version code 2, 0.1.1; its sha256 and size), served by the dev cloud from the
+# clone's dist/releases; on the emulator, the app given leave to install apps (安装未知应用), as the person would
+release_seed() {
+  local apk=$ROOT/android/app/build/outputs/apk/debug/app-debug.apk d=$E/dist/releases/android
+  [ -f "$apk" ] || die "no APK built ($apk)"
+  mkdir -p $d && cp "$apk" $d/stillfail-2.apk
+  local sum=$(shasum -a 256 $d/stillfail-2.apk | cut -d' ' -f1) size=$(wc -c < $d/stillfail-2.apk | tr -d ' ')
+  printf '{"versionCode":2,"versionName":"0.1.1","file":"android/stillfail-2.apk","sha256":"%s","size":%s}\n' $sum $size > $d/latest.json
+  say "release android/stillfail-2.apk ($size bytes, $sum) in $d"
+  local adb=${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb
+  [ -n "${EMU_PORT:-}" ] && $adb -s emulator-$EMU_PORT shell appops set ${E2E_PKG:-dev.mbui.demo} REQUEST_INSTALL_PACKAGES allow && say "the app may install apps"
+  return 0
+}
+
 # waits (a minute at most) until the test station has a chat whose first words begin with WORDS, said in it
 wait_chat() {
   local w="$*" i=0
@@ -301,6 +317,7 @@ case "${1:-all}" in
   thaw) thaw ;;
   drive-seed) shift; drive_seed "$@" ;;
   drive-media) shift; drive_media "$@" ;;
+  release-seed) release_seed ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   all)

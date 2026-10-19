@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- the system's notifications (Notices: a chat's notices, as still.fail's Android app shows them) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Updates: a newer build of the app handed to the system's installer (the person agrees) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- BrowserLogin asks whether there is a browser to open a login page in -->
     <queries>
         <intent>
@@ -33,6 +35,8 @@
                 <data android:scheme="${applicationId}" android:host="back" />
             </intent-filter>
         </activity>
+        <!-- Updates: what the installer says of a newer build handed to it -->
+        <receiver android:name=".Updates$InstallResult" android:exported="false" />
         <service android:name=".LoginService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a local loopback listener alive for a few minutes while the user signs in in their browser, so the browser's OAuth redirect to 127.0.0.1 reaches the app." />
         </service>

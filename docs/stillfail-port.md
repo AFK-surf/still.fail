@@ -411,6 +411,29 @@ lists the sizes), the size and the toolbar's folding kept on the device (kept wh
 page (PreviewFileScreen), a link elsewhere opened in the browser (no URL hand-off on the hosts: it is copied and said
 so), document.cookie (the cookies are the app's, not the web view's), the opening and closing motion of the page's own.
 
+Slice 14's updates (branch player-share, 2026-10-19; ember apps/android app/Updates.kt, shared/Install.kt, Home.kt's
+update button, SettingsHome.kt Version): the app keeping itself current (src/sfapp/updates.mbt, Updates.java).
+
+- Where a build comes from is an `UpdateSource` the app is given (`set_update_source`): `check(version, now)` answers
+  the newest build when newer (an AppRelease: versionCode, versionName, file, sha256, size, news), `url(file)` where its
+  file is. `cloud_updates(feed)` is still.fail cloud's, as the Android app has it (the core's `app.update`, at most
+  hourly unless asked now: /releases/<feed>/latest.json, the file under /releases/ or a whole URL). The mbui build ships
+  apart from still.fail's (its own package and key, a release of its own), so src/stillfail gives no source by default:
+  MBUI_UPDATE_FEED=<feed> gives the cloud's (the local cloud's in e2e). A release published elsewhere meets it with a
+  latest.json of the same AppRelease shape beside its APK (and a source that reads it).
+- Asked once the app is signed in. Home's top bar offers a build that brings something (its `news`): the download key
+  with its accent dot, how far while it downloads (40%); the settings' version row any build (更新到 0.1.1, in the accent;
+  检查更新 asks now: 正在检查, then 已是最新 or why it failed). Tapped: asked again now, then the host downloads it
+  (@host.update_install; Android's Updates.java: into the cache, a cut connection picked up by a range, six tries with
+  growing pauses, 网络中断，正在继续下载 meanwhile; checked against its sha256: 下载的文件不完整 when not), and hands it
+  to the system's installer (PackageInstaller, as this app's own newer build; the confirmation the installer asks for
+  opened by InstallResult); without leave to install apps the system's page for it opens (允许 still.fail 安装应用后，
+  再点一次更新). What failed is said in a toast (无法更新：…). Hosts with no version code (all but Android) never ask.
+
+Not yet, against the current app: checking again as the app comes back to the front (only at its start), an APK of a
+chat installed from the file preview (安装), a source for the mbui build's own release (it is to publish a latest.json
+in the AppRelease shape beside its APK; no host here reads a JSON from a URL of its own yet).
+
 Glass (branch glass, 2026-10-19): frosted glass and liquid glass, a pass of every renderer (Metal on macOS and iOS,
 GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
 

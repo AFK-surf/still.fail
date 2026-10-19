@@ -160,6 +160,10 @@ fn reset() -> Unit {
   play_srcs.clear()
   service_pages.clear()
   svc_viewports.clear()
+  update.available = None
+  update.asked = false
+  update.source = None
+  update_version.val = 0
   svc_folded.val = false
   splash_first.val = -1.0
   drafts.clear()
@@ -265,6 +269,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       attend(src, w.id)
       // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off
       notices_frame(src, w)
+      // a newer build of the app asked for once (updates.mbt)
+      update_first(src)
       c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
       |> ignore
       // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
@@ -471,6 +477,8 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
         _ => ""
       }
     },
+    version_words: fn() { update_row_words() },
+    version_tap: fn() { update_row_tapped(src) },
   }
 }
 

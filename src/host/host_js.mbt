@@ -296,6 +296,25 @@ pub fn set_sideways(on : Bool) -> Unit {
 
 
 ///|
+/// This build's version code (see host_native.mbt): a page does not update itself.
+pub fn app_version() -> Int {
+  0
+}
+
+///|
+pub fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
+  ignore(url)
+  ignore(sha256)
+  ignore(size)
+  ignore(name)
+}
+
+///|
+pub fn update_state() -> String {
+  ""
+}
+
+///|
 /// A scripted run's input given to the host (see host_native.mbt): the browser has none of these paths.
 pub fn drive(kind : Int, text : String) -> Bool {
   ignore(kind)

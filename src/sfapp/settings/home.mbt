@@ -317,14 +317,16 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         }) {
           use_notify(core, !on)
         }
-        // this build (Version): its name and version, and the way to a newer one
-        list_row(c, fn() {
-          c.text("still.fail " + build_version, size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0)
-          |> ignore
-          c.text(tr("android-settings.version.check"), size=15.0, color=t.p.muted, wrap=false, line=21.0)
-          |> ignore
-        })
-        |> ignore
+        // this build (Version): its name and version, and the way to a newer one (tapped: installed, or asked now)
+        let (words, newer) = (core.version_words)()
+        if list_row(c, key="version", fn() {
+            c.text("still.fail " + build_version, size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0)
+            |> ignore
+            c.text(words, size=15.0, color=if newer { t.p.accent } else { t.p.muted }, wrap=false, line=21.0)
+            |> ignore
+          }) {
+          (core.version_tap)()
+        }
         go_row(c, "go-changelog", tr("android-settings.changelog.title")) |> ignore
       })
     },
