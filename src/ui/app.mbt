@@ -61,7 +61,15 @@ pub fn run(title : String, view : (Ctx) -> Unit) -> Unit {
 ///|
 fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let c = g()
+  let fed = inputs_since.val
+  inputs_since.val = false
+  in_frame.val = true
   let t0 = frame_body(c, w, h, scale, t)
+  in_frame.val = false
+  // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`)
+  if fed {
+    c.wants_frame = true
+  }
   let t3 = h_now()
   h_present(c.inst, c.ninst)
   log_drawn(w, h, scale, t)
@@ -312,7 +320,7 @@ let track_y : Tracker = Tracker::new()
 
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
-  rec_input("pointer", h_event_time(), [kind.to_double(), x, y, button.to_double()])
+  took_input("pointer", h_event_time(), [kind.to_double(), x, y, button.to_double()])
   let c = g()
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
   if kind >= 4 && kind <= 6 {
@@ -626,7 +634,7 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 /// from the edge it came from), let go to go back, called off; or a back
 /// with no gesture.
 fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
-  rec_input("back", h_now(), [kind.to_double(), x, _progress, edge.to_double()])
+  took_input("back", h_now(), [kind.to_double(), x, _progress, edge.to_double()])
   let c = g()
   let t = h_now()
   // from the right edge, the finger's way is mirrored
@@ -642,7 +650,7 @@ fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
 
 ///|
 fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
-  rec_input("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
+  took_input("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
   let c = g()
   let mut target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
   // over what scrolls sideways: its sideways part moves it, the rest goes to the list it lies in
@@ -677,7 +685,7 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
 
 ///|
 fn on_key(code : Int, mods : Int) -> Unit {
-  rec_input("key", h_now(), [code.to_double(), mods.to_double()])
+  took_input("key", h_now(), [code.to_double(), mods.to_double()])
   let c = g()
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
   desk_key(code, mods, c.editors.contains(c.focus) && code < key_escape)
@@ -709,7 +717,7 @@ fn on_key(code : Int, mods : Int) -> Unit {
 
 ///|
 fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
-  rec_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
+  took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
   let c = g()
   match c.editors.get(c.focus) {
     Some(st) => {
@@ -736,7 +744,7 @@ let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref::new(None)
 
 ///|
 fn on_app_state(s : Int) -> Unit {
-  rec_input("app", h_now(), [s.to_double()])
+  took_input("app", h_now(), [s.to_double()])
   // a scripted run stands for someone looking at the app: what the host says meanwhile (a locked screen's window
   // is covered, a task's app not active) is let be
   if driver.val is Some(_) {

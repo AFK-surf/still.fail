@@ -611,15 +611,8 @@ pub fn Ctx::text(
 
 ///|
 pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {
-  if self.clicked.contains(id) {
-    // what a click changes is drawn by the next frame, wherever it was seen: a list's row is built after the rest of
-    // the frame has been, so what it changes there would wait for some other frame (a tap in a reader's text that
-    // brings its bars)
-    self.wants_frame = true
-    true
-  } else {
-    false
-  }
+  // (what a click changes is drawn by the next frame wherever it was seen, as every input's: on_frame)
+  self.clicked.contains(id)
 }
 
 ///|
@@ -633,9 +626,18 @@ pub fn Ctx::pressed(self : Ctx, id : Int) -> Bool {
 }
 
 ///|
+/// Whether a frame is being built now (on_frame): a frame asked for outside one is the host's to be told of.
+let in_frame : Ref[Bool] = Ref::new(false)
+
+///|
 #callsite(autofill(loc))
 pub fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
   self.wants_frame = true
+  // asked between frames (a host's callback, a timer's): the frame's own asking (on_frame's end) is past, so the
+  // host is told now, else nothing comes (the next frame's start clears wants_frame)
+  if !in_frame.val {
+    h_request_frame()
+  }
   if self.frame_by is None {
     self.frame_by = Some(loc)
   }

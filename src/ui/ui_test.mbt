@@ -455,3 +455,4 @@ test "a scripted shot is taken once settled; a host that cannot take it is given
   assert_true(log.contains("DRIVE PASS"))
   assert_true(frames.val >= 20 + 2 * (1500 / 16))
 }
+

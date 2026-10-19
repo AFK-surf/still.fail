@@ -32,6 +32,8 @@ fn reset_globals() -> Unit {
   text_cache.glyphs.clear()
   text_cache.generation = -1
   text_table.val = None
+  inputs_since.val = false
+  in_frame.val = false
   image_cache.clear()
   outside_tickets.clear()
   views_told.clear()

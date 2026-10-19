@@ -16,7 +16,15 @@ fn draw_logging() -> Bool {
 }
 
 ///|
-fn rec_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
+/// An input came between two frames (any of the host's: a pointer's, a key's…): the next frame is the framework's to
+/// draw, and the one after it, for what was changed by what read the input late in a frame (a list's rows are built
+/// after the rest). Kept on the log when it is (MBUI_DRAW_LOG).
+let inputs_since : Ref[Bool] = Ref::new(false)
+
+///|
+fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
+  inputs_since.val = true
+  h_request_frame()
   if draw_logging() {
     let m : Map[String, Json] = {
       "k": Json::string(kind),
