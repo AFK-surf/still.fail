@@ -265,3 +265,26 @@ test "image sizes from their bytes" {
   assert_eq(uuid("0123456789abcdef0123456789abcdef"), "01234567-89ab-cdef-0123-456789abcdef")
   assert_eq(utf8_bytes("会").length(), 3)
 }
+
+///|
+test "the app tells the core it is shown and in front, in which workspace, and when it leaves the front" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  let told = named(calls, "client.focus").filter(fn(m) { m.params.stringify().contains("\"visible\"") })
+  assert_eq(told.length(), 1)
+  let first = told[0].params.stringify()
+  assert_true(first.contains("\"visible\":true"))
+  assert_true(first.contains("\"focused\":true"))
+  assert_true(first.contains("\"workspace\":\"ws1\""))
+  // the window covered or the activity paused: said at once (no frame need come after it), and only once
+  t.app_state(false, false)
+  t.settle() |> ignore
+  let after = named(calls, "client.focus").filter(fn(m) { m.params.stringify().contains("\"visible\"") })
+  assert_eq(after.length(), 2)
+  assert_true(after[1].params.stringify().contains("\"visible\":false"))
+  // back in front
+  t.app_state(true, true)
+  let back = named(calls, "client.focus").filter(fn(m) { m.params.stringify().contains("\"visible\"") })
+  assert_eq(back.length(), 3)
+  assert_true(back[2].params.stringify().contains("\"focused\":true"))
+}

@@ -14,6 +14,10 @@
 //   device (the person's phone, this Mac's screen being locked) can't open: the person sends back the address it shows,
 //   and MBUI_AUTH_COMPLETE=<that URL> finishes the sign-in (AUTH_DONE … or AUTH_FAILED …). Both runs on the same
 //   MBUI_CORE_DATA: the core keeps the sign-in it began there.
+// - MBUI_CLOUD=<origin>: still.fail cloud elsewhere than https://app.still.fail (a local one, scripts/e2e-local.sh).
+// - MBUI_CORE_ACCOUNT=<JSON> (or MBUI_CORE_ACCOUNT_B64, base64): signed out, that account taken as signed in (the
+//   core's `migrate`: an account as a page kept it, {sub, email, name, picture, access, refresh, accessExpires}), as a
+//   local cloud's mock login hands it out (/__dev/account?user=alice). Only with MBUI_CLOUD: never on the real cloud.
 // - MBUI_AUTH_LOGIN=1 (`scripts/mac.sh login`) signs in as a login command: the app listens on 127.0.0.1, hands the
 //   login page to $BROWSER (else `open`), and exits 0 once the browser has come back and the sign-in is done (1 when
 //   it failed). A station's remote login runs it as its login command (ember docs/remote-login.md).
@@ -29,6 +33,8 @@ pub(all) struct SignIn {
   mut login : Bool
   /// by hand: "begin", or the URL the browser was sent back to
   mut by_hand : String
+  /// MBUI_CORE_ACCOUNT: the account to take in once the accounts are read and none is signed in
+  mut account : String
 }
 
 ///|
@@ -38,6 +44,7 @@ pub let state : SignIn = {
   auto: false,
   login: false,
   by_hand: "",
+  account: "",
 }
 
 ///|
@@ -45,7 +52,14 @@ pub let state : SignIn = {
 /// when this build has no core linked in (the web's, a fixture's).
 pub fn start() -> Bool {
   @core.on_change(fn() { @host.request_frame() })
-  let started = @core.start()
+  let cloud = @host.env("MBUI_CLOUD")
+  let started = if cloud != "" {
+    @host.log("still.fail cloud at " + cloud)
+    state.account = @host.env_text("MBUI_CORE_ACCOUNT")
+    @core.start(cloud~)
+  } else {
+    @core.start()
+  }
   state.auto = @host.env("MBUI_CORE_SIGNIN") == "1"
   state.login = @host.env("MBUI_AUTH_LOGIN") == "1"
   state.by_hand = if @host.env("MBUI_AUTH_BEGIN") == "1" {
@@ -60,7 +74,14 @@ pub fn start() -> Bool {
 /// Each frame, with the `accounts` topic: what the environment asked once the accounts are read, and a browser login
 /// come back.
 pub fn frame(accounts : @core.Sub) -> Unit {
-  if accounts.value is Some(_) {
+  if accounts.value is Some(list) {
+    if state.account != "" {
+      let account = state.account
+      state.account = ""
+      if list is Array([]) {
+        take_account(account)
+      }
+    }
     if state.auto {
       state.auto = false
       sign_in()
@@ -76,6 +97,25 @@ pub fn frame(accounts : @core.Sub) -> Unit {
     }
   }
   login_back()
+}
+
+///|
+/// MBUI_CORE_ACCOUNT: the account taken in as signed in (`migrate`).
+fn take_account(account : String) -> Unit {
+  let parsed = @json.parse(account) catch {
+    _ => {
+      @host.log("MBUI_CORE_ACCOUNT is not JSON")
+      return
+    }
+  }
+  let params : Map[String, Json] = { "accounts": Json::array([parsed]) }
+  @core.call("migrate", params=Json::object(params), on_done=fn(r) {
+    match r {
+      Ok(_) => @host.log("SIGN_IN taken in: " + str(Some(parsed), "email"))
+      Err(e) => @host.log("SIGN_IN migrate failed: " + e.stringify())
+    }
+    @host.request_frame()
+  })
 }
 
 ///|

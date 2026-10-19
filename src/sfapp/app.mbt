@@ -69,6 +69,8 @@ pub fn open_chat(r : ChatRef) -> Unit {
 ///|
 /// As at the start: Home alone, nothing chosen here yet (tests).
 fn reset() -> Unit {
+  attention.told = false
+  attention.src = None
   app.nav = new_nav()
   app.picked = ""
   app.filters.clear()
@@ -167,6 +169,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
   }
   match current {
     Some(w) => {
+      attend(src, w.id)
       c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
       |> ignore
       if app.menu {
@@ -496,4 +499,61 @@ fn opening(c : @ui.Ctx, at : Double, ms : Double) -> Double {
   c.request_frame()
   let q = 1.0 - (if p < 0.0 { 0.0 } else { p })
   1.0 - q * q * q
+}
+
+///|
+/// What this app last told the core of its attention (`client.focus`): shown, in front, the workspace in view; and
+/// where to tell it again when the system says the app left the front between frames.
+priv struct Attention {
+  mut told : Bool
+  mut visible : Bool
+  mut focused : Bool
+  mut workspace : String
+  mut src : Source?
+}
+
+///|
+let attention : Attention = {
+  told: false,
+  visible: false,
+  focused: false,
+  workspace: "",
+  src: None,
+}
+
+///|
+/// Tells the core where this app's attention is, as the Android app's activity and App.kt do: shown and in front or
+/// not (`client.focus {visible, focused}`, as the system says: @ui.app_visible, app_focused) and the workspace in view
+/// (`workspace`); a chat's own place (`chat`, `left`) is chat.mbt's. Only a change is told. What is read follows from
+/// it: the core marks a chat read only while a page in view (visible) shows its end, and shows no notice of a chat
+/// one in front shows.
+fn attend(src : Source, workspace : String) -> Unit {
+  if attention.src is None {
+    // the system's say between frames (Android's activity pausing: no frame comes after it)
+    @ui.on_app_change(fn(_, _) {
+      match attention.src {
+        Some(s) => attend(s, attention.workspace)
+        None => ()
+      }
+    })
+  }
+  attention.src = Some(src)
+  let visible = @ui.app_visible()
+  let focused = @ui.app_focused()
+  if attention.told &&
+    visible == attention.visible &&
+    focused == attention.focused &&
+    workspace == attention.workspace {
+    return
+  }
+  attention.told = true
+  attention.visible = visible
+  attention.focused = focused
+  attention.workspace = workspace
+  let params : Map[String, Json] = {
+    "visible": Json::boolean(visible),
+    "focused": Json::boolean(focused),
+    "workspace": Json::string(workspace),
+  }
+  (src.call)("client.focus", Json::object(params), fn(_) {  })
 }

@@ -30,6 +30,10 @@ fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
 let dump : Bool = @host.env("MBUI_CORE_DUMP") == "1"
 
 ///|
+/// MBUI_CALL_LOG=1: every call the app makes, and its answer, on the log (CALL …, ANSWER …), for scripted runs.
+let call_log : Bool = @host.env("MBUI_CALL_LOG") == "1"
+
+///|
 /// People's pictures as the core gives them (`picture`): asked once each, kept as images.
 let pictures : Map[String, String] = {}
 
@@ -121,7 +125,16 @@ let core_source : @sfapp.Source = {
       done(Err(refused(name)))
       return
     }
+    if call_log {
+      @host.log("CALL \{name} \{params.stringify()}")
+    }
     @core.call(name, params~, on_done=fn(r) {
+      if call_log {
+        match r {
+          Ok(v) => @host.log("ANSWER \{name} ok \{v.stringify()}")
+          Err(e) => @host.log("ANSWER \{name} error \{e.stringify()}")
+        }
+      }
       done(r)
       @host.request_frame()
     })
@@ -131,7 +144,16 @@ let core_source : @sfapp.Source = {
       done(Err(refused(name)))
       return
     }
+    if call_log {
+      @host.log("CALL \{name} \{params.stringify()} with \{bytes.length()} bytes")
+    }
     @core.call(name, params~, bytes=Some(bytes), on_done=fn(r) {
+      if call_log {
+        match r {
+          Ok(v) => @host.log("ANSWER \{name} ok \{v.stringify()}")
+          Err(e) => @host.log("ANSWER \{name} error \{e.stringify()}")
+        }
+      }
       done(r)
       @host.request_frame()
     })
