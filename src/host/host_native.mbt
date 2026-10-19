@@ -124,6 +124,14 @@ extern "C" fn ffi_shared_in() -> String = "mb_host_shared_in"
 extern "C" fn ffi_shared_in_file(i : Int) -> Bytes = "mb_host_shared_in_file"
 
 ///|
+#borrow(text)
+extern "C" fn ffi_word_at(text : String, off : Int) -> Double = "mb_host_word_at"
+
+///|
+#borrow(url)
+extern "C" fn ffi_open_url(url : String) -> Int = "mb_host_open_url"
+
+///|
 extern "C" fn ffi_app_version() -> Int = "mb_host_app_version"
 
 ///|
@@ -892,4 +900,30 @@ extern "C" fn ffi_save_file(name : String, data : Bytes) -> Int = "mb_host_save_
 /// once it is there.
 pub fn save_file(name : String, data : Bytes) -> Bool {
   ffi_save_file(name, data) != 0
+}
+
+///|
+/// The word of `text` around `off` (UTF-16 offsets, its start and end) as the system finds words (Android's
+/// BreakIterator, Apple's CFStringTokenizer: a dictionary's words in Chinese and Japanese); (-1, -1) where the host has
+/// no such thing (Windows here) or `off` is in no word.
+pub fn word_at(text : String, off : Int) -> (Int, Int) {
+  word_pair(ffi_word_at(text, off))
+}
+
+///|
+/// A word's start and end as a host gives them: start × 2³² + end, or negative for none.
+fn word_pair(v : Double) -> (Int, Int) {
+  if v < 0.0 {
+    return (-1, -1)
+  }
+  let k = 4294967296.0
+  let s = (v / k).floor()
+  ((s).to_int(), (v - s * k).to_int())
+}
+
+///|
+/// `url` handed to the system: the browser, or the app it belongs to (Android's ACTION_VIEW, macOS's NSWorkspace,
+/// iOS's UIApplication, Windows' ShellExecute). False when nothing took it.
+pub fn open_url(url : String) -> Bool {
+  ffi_open_url(url) != 0
 }

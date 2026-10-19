@@ -969,6 +969,21 @@
   const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab'];
   H.setCursor = (k) => { canvas.style.cursor = cursors[k] || 'default'; };
   H.clipboardSet = (s) => { navigator.clipboard?.writeText(s).catch(() => {}); };
+  // the word around a UTF-16 offset as the browser finds words (Intl.Segmenter: a dictionary's in Chinese), start × 2³²
+  // + end; -1 without one
+  const words = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'word' }) : null;
+  H.wordAt = (t, o) => {
+    if (!words) return -1;
+    const seg = words.segment(t).containing(o);
+    return seg ? seg.index * 4294967296 + seg.index + seg.segment.length : -1;
+  };
+  // a URL handed to the browser: a tab of its own (noopener: the page cannot reach this one; window.open then answers
+  // null whether or not it opened, so it is taken as handed over)
+  H.openUrl = (u) => {
+    window.__opened = (window.__opened || []).concat([u]);
+    window.open(u, '_blank', 'noopener');
+    return true;
+  };
   H.log = (s) => { console.log(s); window.__logs.push(s); };
   H.benchMode = () => Number(params.get('bench') || 0);
   H.exit = (code) => { window.__done = code; document.title = 'DONE ' + code; };

@@ -588,3 +588,23 @@ int32_t mb_host_ref_frame(moonbit_string_t name) {
     return mb_render_snapshot(path);
   }
 }
+
+// The word around a UTF-16 offset as the system finds words (@host.word_at): CFStringTokenizer's word boundaries (a
+// dictionary's words in Chinese and Japanese); start × 2^32 + end, or -1 when there is none there.
+double mb_host_word_at(moonbit_string_t text, int32_t off) {
+  NSString *s = mb_ns_from_string(text);
+  if (off < 0 || (NSUInteger)off >= s.length) return -1;
+  CFLocaleRef loc = CFLocaleCopyCurrent();
+  CFStringTokenizerRef tok = CFStringTokenizerCreate(NULL, (__bridge CFStringRef)s, CFRangeMake(0, (CFIndex)s.length),
+                                                     kCFStringTokenizerUnitWordBoundary, loc);
+  CFRelease(loc);
+  if (!tok) return -1;
+  CFStringTokenizerTokenType type = CFStringTokenizerGoToTokenAtIndex(tok, off);
+  double out = -1;
+  if (type != kCFStringTokenizerTokenNone) {
+    CFRange r = CFStringTokenizerGetCurrentTokenRange(tok);
+    if (r.location != kCFNotFound && r.length > 0) out = (double)r.location * 4294967296.0 + (double)(r.location + r.length);
+  }
+  CFRelease(tok);
+  return out;
+}

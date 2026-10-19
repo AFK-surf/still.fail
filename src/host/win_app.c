@@ -8,6 +8,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
+#include <shellapi.h>
 #include <objbase.h>
 #include <imm.h>
 #include <psapi.h>
@@ -22,6 +23,7 @@
 #pragma comment(lib, "imm32.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "shell32.lib")
 
 mb_callbacks mb_cb;
 
@@ -587,6 +589,28 @@ void mb_host_log(moonbit_string_t s) {
   fprintf(stdout, "%s\n", u);
   fflush(stdout);
   free(u);
+}
+
+// A URL handed to the system (@host.open_url): ShellExecute, the default browser or the app that takes it; only
+// http, https and mailto (nothing ShellExecute would run as a program).
+int32_t mb_host_open_url(moonbit_string_t s) {
+  int n = Moonbit_array_length(s);
+  WCHAR *w = (WCHAR *)malloc(((size_t)n + 1) * sizeof(WCHAR));
+  memcpy(w, s, (size_t)n * sizeof(WCHAR));
+  w[n] = 0;
+  int ok = 0;
+  if (_wcsnicmp(w, L"http://", 7) == 0 || _wcsnicmp(w, L"https://", 8) == 0 || _wcsnicmp(w, L"mailto:", 7) == 0) {
+    mb_host_log(s);
+    ok = (INT_PTR)ShellExecuteW(NULL, L"open", w, NULL, NULL, SW_SHOWNORMAL) > 32;
+  }
+  free(w);
+  return ok;
+}
+
+// The word around an offset (@host.word_at): none from the host here yet (the app's own rule, words.mbt).
+double mb_host_word_at(moonbit_string_t text, int32_t off) {
+  (void)text; (void)off;
+  return -1;
 }
 
 int32_t mb_host_reduce_motion(void) {

@@ -799,3 +799,29 @@ pub fn window_drag() -> Unit {
 pub fn set_cursor(kind : Int) -> Unit {
   js_set_cursor(kind)
 }
+
+///|
+extern "js" fn js_word_at(text : String, off : Int) -> Double =
+  #|(t, o) => globalThis.__mbhost && globalThis.__mbhost.wordAt ? globalThis.__mbhost.wordAt(t, o) : -1
+
+///|
+extern "js" fn js_open_url(url : String) -> Bool =
+  #|(u) => !!(globalThis.__mbhost && globalThis.__mbhost.openUrl && globalThis.__mbhost.openUrl(u))
+
+///|
+/// The word around `off` (see host_native.mbt): the browser's Intl.Segmenter.
+pub fn word_at(text : String, off : Int) -> (Int, Int) {
+  let v = js_word_at(text, off)
+  if v < 0.0 {
+    return (-1, -1)
+  }
+  let k = 4294967296.0
+  let s = (v / k).floor()
+  (s.to_int(), (v - s * k).to_int())
+}
+
+///|
+/// `url` handed to the browser (see host_native.mbt): window.open, in a tab of its own.
+pub fn open_url(url : String) -> Bool {
+  js_open_url(url)
+}

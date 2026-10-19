@@ -6,8 +6,8 @@
 // within one. A line is as high as the tallest run on it needs; runs share
 // its baseline.
 //
-// The layout answers what selection will ask (offset_at, caret, rects over
-// a range of the paragraph's text), and links are found the same way: each
+// The layout answers what selection asks (offset_at, caret, rects over a
+// range of the paragraph's text: words.mbt), and links are found the same way: each
 // link's pieces of lines are hit targets with an id of their own, pressed
 // and clicked as any widget.
 
@@ -622,6 +622,7 @@ pub fn Ctx::rich(
   code_bg? : Int64 = 0x7676801FL,
   code_scale? : Double = 0.9,
   on_link? : (String) -> Unit = fn(_) {  },
+  on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
 ) -> Int {
   let sb = StringBuilder()
   for r in runs {
@@ -633,6 +634,33 @@ pub fn Ctx::rich(
     if r.link != "" && self.clicked(link_id(base, k)) {
       on_link(r.link)
     }
+  }
+  // a link held still a long press's time: told where it leads and the piece of line held (in the window), once a
+  // press, and the press is the hold's (no tap of the link as it lifts)
+  match on_link_hold {
+    Some(f) if self.down && self.held_told != self.press_at =>
+      for k, r in runs {
+        let id = link_id(base, k)
+        if r.link == "" || !self.pressed(id) {
+          continue
+        }
+        let moved = (self.px - self.press_x).abs() > touch_slop() ||
+          (self.py - self.press_y).abs() > touch_slop()
+        if moved {
+          break
+        }
+        let held = self.now - self.press_at
+        if held < long_press_ms {
+          self.wake_in(long_press_ms - held)
+          break
+        }
+        self.held_told = self.press_at
+        let piece = link_piece(self, id, self.press_x, self.press_y)
+        self.take_press()
+        f(r.link, piece)
+        break
+      }
+    _ => ()
   }
   let i = self.alloc_part(kind_rich, true, false)
   let n = self.nodes[i]
@@ -682,13 +710,17 @@ fn Node::rich_layout(self : Node, max_w : Double) -> RichLayout? {
 }
 
 ///|
-fn Ctx::paint_rich(self : Ctx, n : Node, alpha : Double) -> Unit {
+fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
   let (r, lay) = match (n.rich, n.rl) {
     (Some(r), Some(l)) => (r, l)
     _ => return
   }
   let ox = n.x + n.pad_l
   let oy = n.y + n.pad_t
+  // a passage selected in the words it is in (words.mbt), behind everything of it
+  if !words_sel.is_empty() {
+    self.paint_selection(i, lay, ox, oy, alpha)
+  }
   let k = clip_stack.length() - 4
   let cx0 = clip_stack[k]
   let cy0 = clip_stack[k + 1]
@@ -820,4 +852,29 @@ fn Ctx::paint_rich(self : Ctx, n : Node, alpha : Double) -> Unit {
       }
     }
   }
+}
+
+///|
+/// How long a finger is held still for a long press (ViewConfiguration's long press timeout, as Compose has it on
+/// Android: 400 ms).
+pub let long_press_ms : Double = 400.0
+
+///|
+/// The piece of a link's line under (x, y), as it was last drawn (x, y, w, h in the window); the point itself when none.
+fn link_piece(c : Ctx, id : Int, x : Double, y : Double) -> (Double, Double, Double, Double) {
+  let mut k = c.hit_ids.length() - 1
+  while k >= 0 {
+    if c.hit_ids[k] == id {
+      let r = k * 4
+      let x0 = c.hit_rects[r]
+      let y0 = c.hit_rects[r + 1]
+      let x1 = c.hit_rects[r + 2]
+      let y1 = c.hit_rects[r + 3]
+      if x >= x0 && x < x1 && y >= y0 && y < y1 {
+        return (x0, y0, x1 - x0, y1 - y0)
+      }
+    }
+    k = k - 1
+  }
+  (x, y, 0.0, 0.0)
 }

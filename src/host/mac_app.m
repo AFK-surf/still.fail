@@ -741,6 +741,18 @@ void mb_host_log(moonbit_string_t s) {
   fflush(stdout);
 }
 
+// A URL handed to the system (@host.open_url): NSWorkspace, the browser or the app that takes it. A scripted run
+// (MBUI_SCRIPT, MBUI_DRIVE) only says it on the log (open-url: …), opening nothing on the machine it runs on.
+int32_t mb_host_open_url(moonbit_string_t s) {
+  NSString *u = mb_ns_from_string(s);
+  NSURL *url = [NSURL URLWithString:u];
+  fprintf(stdout, "open-url: %s\n", u.UTF8String);
+  fflush(stdout);
+  if (!url || !url.scheme) return 0;
+  if (getenv("MBUI_SCRIPT") || getenv("MBUI_DRIVE") || getenv("MBUI_DRIVE_B64")) return 1;
+  return [NSWorkspace.sharedWorkspace openURL:url] ? 1 : 0;
+}
+
 int32_t mb_host_reduce_motion(void) {
   return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion ? 1 : 0;
 }

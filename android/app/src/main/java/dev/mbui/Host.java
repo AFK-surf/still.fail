@@ -143,6 +143,43 @@ final class Host {
         });
     }
 
+    /**
+     * The word of `text` around `off` as the system finds words (ICU's BreakIterator, as Compose's text and the
+     * still.fail app's Pick.kt: a dictionary's words in Chinese and Japanese): start × 2³² + end, or -1 when `off` is in
+     * no word (a space, a mark).
+     */
+    static double wordAt(String text, int off) {
+        if (text == null || text.isEmpty() || off < 0 || off >= text.length()) return -1;
+        android.icu.text.BreakIterator words = android.icu.text.BreakIterator.getWordInstance();
+        words.setText(text);
+        int end = words.following(off);
+        int status = words.getRuleStatus();
+        int start = words.previous();
+        if (end == android.icu.text.BreakIterator.DONE || start == android.icu.text.BreakIterator.DONE) return -1;
+        if (status < android.icu.text.BreakIterator.WORD_NUMBER) return -1;
+        return start * 4294967296.0 + end;
+    }
+
+    /**
+     * A URL handed to the system (ACTION_VIEW: the browser, or the app that takes such links), from a task of its own;
+     * false when no activity takes it.
+     */
+    static boolean openUrl(String url) {
+        if (activity == null || url == null || url.isEmpty()) return false;
+        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
+        i.addCategory(android.content.Intent.CATEGORY_BROWSABLE);
+        i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+        main.post(() -> {
+            try {
+                activity.startActivity(i);
+                log("open-url: " + url);
+            } catch (android.content.ActivityNotFoundException e) {
+                log("open-url: nothing takes " + url);
+            }
+        });
+        return true;
+    }
+
     /** Whether the app takes back (a page to go back to); MainActivity's callback follows it. */
     static void backEnabled(boolean on) {
         main.post(() -> { if (activity != null) activity.setBackEnabled(on); });

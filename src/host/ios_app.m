@@ -469,6 +469,16 @@ void mb_host_clipboard_set(moonbit_string_t s) {
 
 void mb_host_log(moonbit_string_t s) { NSLog(@"%@", mb_ns_from_string(s)); }
 
+// A URL handed to the system (@host.open_url): UIApplication, Safari or the app that takes it.
+int32_t mb_host_open_url(moonbit_string_t s) {
+  NSString *u = mb_ns_from_string(s);
+  NSURL *url = [NSURL URLWithString:u];
+  NSLog(@"open-url: %@", u);
+  if (!url || !url.scheme) return 0;
+  [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];
+  return 1;
+}
+
 int32_t mb_host_reduce_motion(void) { return UIAccessibilityIsReduceMotionEnabled() ? 1 : 0; }
 
 int32_t mb_host_bench_mode(void) {

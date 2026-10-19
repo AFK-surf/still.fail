@@ -36,6 +36,8 @@ struct FakeHost {
   /// the pointer's shape as last told (desktop.mbt), and how often the window was asked to be dragged
   mut cursor : Int
   mut window_drags : Int
+  /// the URLs handed to the system (Ctx::open_url), oldest first
+  opened : Array[String]
 }
 
 ///|
@@ -281,6 +283,28 @@ fn h_clipboard_set(s : String) -> Unit {
   match fake.val {
     Some(f) => f.clipboard = s
     None => @host.clipboard_set(s)
+  }
+}
+
+///|
+/// The word of `text` around `off` as the host's word boundaries have it, (-1, -1) where it has none (the fake host:
+/// words.mbt's own).
+fn h_word_at(text : String, off : Int) -> (Int, Int) {
+  match fake.val {
+    Some(_) => (-1, -1)
+    None => @host.word_at(text, off)
+  }
+}
+
+///|
+/// A URL handed to the system (its browser, or the app it belongs to); the fake host keeps it (Tester::opened).
+fn h_open_url(url : String) -> Bool {
+  match fake.val {
+    Some(f) => {
+      f.opened.push(url)
+      true
+    }
+    None => @host.open_url(url)
   }
 }
 

@@ -270,7 +270,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     return
   }
   if n.kind == kind_rich {
-    self.paint_rich(n, alpha)
+    self.paint_rich(i, n, alpha)
     return
   }
   if n.kind == kind_editor {

@@ -130,6 +130,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.layout(root, 0.0, 0.0, w, h) |> ignore
   // how things are drawn this frame, from where they are laid out (draw.mbt: the motion package's looks)
   c.drawing_after_layout()
+  // what words marked as selectable hold, as laid out (words.mbt)
+  c.words_after_layout()
   c.clicked.clear()
   if scroll_logging() {
     c.log_scroll()
@@ -309,6 +311,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     c.active = target
     c.press_x = x
     c.press_y = y
+    c.press_at = t
     c.last_y = y
     c.last_x = x
     c.vel_x = 0.0

@@ -115,6 +115,7 @@ pub fn Tester::new(
     site: [],
     cursor: 0,
     window_drags: 0,
+    opened: [],
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
@@ -624,6 +625,12 @@ pub fn Tester::back_gesture(
 pub fn Tester::touch(self : Tester, kind : Int, x : Double, y : Double) -> Unit {
   ignore(self)
   on_pointer(kind, x, y, 0)
+}
+
+///|
+/// The URLs the app handed to the system (Ctx::open_url), oldest first.
+pub fn Tester::opened(self : Tester) -> Array[String] {
+  self.fake.opened
 }
 
 ///|

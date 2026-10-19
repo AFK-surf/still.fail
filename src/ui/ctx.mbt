@@ -143,6 +143,9 @@ pub struct Ctx {
   mut drag_scroll : Int
   mut dragging : Bool
   mut press_x : Double
+  /// when the press under way went down (ms), and the press a link's hold was last told of
+  mut press_at : Double
+  mut held_told : Double
   mut press_y : Double
   mut last_y : Double
   mut last_x : Double
@@ -218,6 +221,8 @@ fn Ctx::new() -> Ctx {
     drag_scroll: 0,
     dragging: false,
     press_x: 0.0,
+    press_at: -1.0,
+    held_told: -1.0,
     press_y: 0.0,
     last_y: 0.0,
     last_x: 0.0,
@@ -663,6 +668,20 @@ pub fn Ctx::rect_of(self : Ctx, id : Int) -> (Double, Double, Double, Double)? {
 /// The pointer, and whether it is down.
 pub fn Ctx::pointer(self : Ctx) -> (Double, Double, Bool) {
   (self.px, self.py, self.down)
+}
+
+///|
+/// `url` handed to the system: its browser, or the app it belongs to (Android's ACTION_VIEW, macOS's NSWorkspace,
+/// iOS's UIApplication, Windows' ShellExecute, the browser's window.open). False when nothing took it.
+pub fn Ctx::open_url(self : Ctx, url : String) -> Bool {
+  ignore(self)
+  h_open_url(url)
+}
+
+///|
+/// `url` handed to the system, outside a frame (an answer that came between frames): as Ctx::open_url.
+pub fn open_url(url : String) -> Bool {
+  h_open_url(url)
 }
 
 ///|

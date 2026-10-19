@@ -38,7 +38,8 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
-    m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways;
+    m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
+    m_open_url;
 static jclass updates_cls, shares_cls, keeps_cls;
 static jclass gallery_cls, marks_cls;
 static jmethodID m_mk_start, m_mk_state, m_mk_png;
@@ -84,6 +85,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_system_dark = (*env)->GetStaticMethodID(env, host_cls, "systemDark", "()Z");
   m_set_dark = (*env)->GetStaticMethodID(env, host_cls, "setDark", "(Z)V");
   m_set_sideways = (*env)->GetStaticMethodID(env, host_cls, "setSideways", "(Z)V");
+  m_word_at = (*env)->GetStaticMethodID(env, host_cls, "wordAt", "(Ljava/lang/String;I)D");
+  m_open_url = (*env)->GetStaticMethodID(env, host_cls, "openUrl", "(Ljava/lang/String;)Z");
   updates_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Updates"));
   m_up_version = (*env)->GetStaticMethodID(env, updates_cls, "versionCode", "()I");
   m_up_install = (*env)->GetStaticMethodID(env, updates_cls, "install", "(Ljava/lang/String;Ljava/lang/String;DLjava/lang/String;)V");
@@ -855,6 +858,24 @@ void mb_host_set_dark(int32_t dark) {
 void mb_host_set_sideways(int32_t on) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_set_sideways, (jboolean)(on != 0));
+}
+
+// The word around an offset as ICU finds it (Host.wordAt, @host.word_at): start × 2³² + end, or -1.
+double mb_host_word_at(moonbit_string_t text, int32_t off) {
+  JNIEnv *env = env_();
+  jstring t = jstr(env, text);
+  jdouble v = (*env)->CallStaticDoubleMethod(env, host_cls, m_word_at, t, (jint)off);
+  (*env)->DeleteLocalRef(env, t);
+  return v;
+}
+
+// A URL handed to the system (Host.openUrl, @host.open_url): ACTION_VIEW.
+int32_t mb_host_open_url(moonbit_string_t url) {
+  JNIEnv *env = env_();
+  jstring u = jstr(env, url);
+  jboolean ok = (*env)->CallStaticBooleanMethod(env, host_cls, m_open_url, u);
+  (*env)->DeleteLocalRef(env, u);
+  return ok ? 1 : 0;
 }
 
 // Sharing (Shares.java): words or a file to the system's share sheet; what another app shared in.
