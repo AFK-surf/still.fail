@@ -488,9 +488,11 @@ fn note_marks(c : @ui.Ctx, v : ChatsView) -> Unit {
 }
 
 ///|
+// kept across runs: a table, never written
 let titles : Array[Double] = [150.0, 110.0, 170.0, 130.0, 96.0, 160.0, 120.0]
 
 ///|
+// kept across runs: a table, never written
 let lines : Array[Double] = [230.0, 190.0, 250.0, 170.0, 210.0, 200.0, 180.0]
 
 ///|
@@ -1117,6 +1119,7 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
 
 ///|
 /// The people's colours (Parts.kt AVATAR).
+// kept across runs: a table, never written
 let avatar_colors : Array[Int64] = [
   0x5B7BB2FFL, 0x2F8F5BFFL, 0xB9471FFFL, 0x8A6BB0FFL, 0x3F8C99FFL, 0xB0842FFFL,
 ]

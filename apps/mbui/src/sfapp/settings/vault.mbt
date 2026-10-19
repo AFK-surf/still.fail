@@ -7,6 +7,7 @@
 
 ///|
 /// The kinds of item, in the editor's order (Vault.kt KINDS).
+// kept across runs: a table, never written
 let vault_kinds : Array[String] = ["token", "ssh_key", "login"]
 
 ///|

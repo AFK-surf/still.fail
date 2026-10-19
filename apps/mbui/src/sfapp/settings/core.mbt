@@ -421,7 +421,27 @@ pub fn reset() -> Unit {
   builtin_open.clear()
   doc_picked.clear()
   close_sheet()
+  sheet.last = None
+  sheet.was_up = false
+  sheet.height = 0.5
+  sheet.on_close = fn() {  }
+  sheet.serial = 0
+  menu.items = []
+  menu.selected = -1
+  menu.x = 0.0
+  menu.y = 0.0
+  menu.pick = fn(_) {  }
   menu.up = false
+  frame_ctx.val = None
+  frame_core.val = None
+  at_root.val = false
+  wide.val = false
+  wide_deep.val = false
+  top_trailing.val = None
+  top_label.val = ""
+  fx.names.clear()
+  fx.restored.clear()
+  fx.version = 0
 }
 
 ///|

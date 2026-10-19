@@ -9,6 +9,6 @@ moon test --target js -p stillfail/sf -p stillfail/sfapp -p stillfail/gallery -p
 code=${PIPESTATUS[0]}
 # (the runs seen again: a package each, one app a process, src/sfreplay/flow.mbt)
 moon test --target js -p stillfail/core -p stillfail/sfreplay -p stillfail/sfreplay/send_text \
-  -p stillfail/sfreplay/send_text_frames -p stillfail/sfreplay/agent_reply 2>&1 | grep -v "$F" | tail -8
+  -p stillfail/sfreplay/send_text_frames -p stillfail/sfreplay/send_text_twice -p stillfail/sfreplay/agent_reply 2>&1 | grep -v "$F" | tail -8
 [ ${PIPESTATUS[0]} = 0 ] || code=1
 exit $code

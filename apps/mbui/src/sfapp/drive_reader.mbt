@@ -18,6 +18,7 @@ priv struct PaperInk {
 }
 
 ///|
+// kept across runs: a table, never written
 let paper_keys : Array[String] = ["follow", "white", "green", "grey", "night"]
 
 ///|
@@ -474,11 +475,15 @@ fn reader_book(
   }
   // a jump: its block at the top, then slid to the offset in it once it is laid out
   if r.jump_step == 1 {
-    let (k, _, _) = r.jump
-    c.list_scroll_to(list_key, k + 1)
-    r.chunk = k
-    r.within = 0.0
-    r.jump_step = 2
+    // (only once the list is there, laid out in a frame before this one: built further down this frame the first
+    // time, before which a scroll to it is lost, and the second step would wait for its block for ever)
+    if c.list_place(list_key) is Some(_) {
+      let (k, _, _) = r.jump
+      c.list_scroll_to(list_key, k + 1)
+      r.chunk = k
+      r.within = 0.0
+      r.jump_step = 2
+    }
     c.request_frame()
   } else if r.jump_step == 2 {
     let (k, off, lead) = r.jump
@@ -1369,6 +1374,9 @@ fn reader_toggle(c : @ui.Ctx, r : TextReading) -> Unit {
   }
   r.chrome = !r.chrome
   r.chrome_at = c.now()
+  // the bars' way in or out drawn from the next frame: a block's tap is seen as its row is built, after this frame
+  // has drawn its bars
+  c.request_frame()
 }
 
 ///|

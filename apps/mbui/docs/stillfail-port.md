@@ -945,8 +945,9 @@ out/e2e/mac/NN-name.log NAME` makes it e2e/traces/NAME.trace and src/sfreplay/tr
 the run had it; a sign-in's tokens put as "-"), and a test runs the flow's script in a Tester over the app with that
 conversation as its core (src/core/replay.mbt, src/sfreplay/flow.mbt): what came given as each frame begins, all that
 may or one at a time, the ids of now matched to the run's, and whatever the app asks that the run did not
-(`diverged`), asks with other params (`fuzzy`), or the run asked and the app does not (`unmade`) said. One flow a test
-process (src/sfreplay/send_text, send_text_frames, agent_reply), as the app's pages keep what they were told. Recorded
+(`diverged`), asks with other params (`fuzzy`), or the run asked and the app does not (`unmade`) said. Each Tester
+starts the app's pages anew (sfapp's reset, run by mbui's on_reset; scripts/check.sh checks every global is put back
+or says why it is kept), so a flow seen twice in one process is the same twice (src/sfreplay/send_text_twice). Recorded
 2026-10-20 on Studio (flows 01, 02, 03, 05, all passing): 03 (54 messages) and 05 (62) seen again with nothing
 diverged or fuzzy and every message given; 03 ends on the same screen given all at once or one a frame (正在发送 drawn
 for four frames in the second, none in the first), its one ask not made again a `client.focus` of the run's.

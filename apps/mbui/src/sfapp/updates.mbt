@@ -14,6 +14,7 @@
 // source's releases or a whole https URL, sha256, size, news).
 
 ///|
+// kept across runs: a table, never written
 let up_zh : Map[String, String] = {
   "android-chat.home.update": "更新到 {version}",
   "android-misc.updates.allowInstall": "允许 {app} 安装应用后，再点一次更新",

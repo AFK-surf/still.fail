@@ -12,6 +12,7 @@ let flashing : Ref[(String, Double)] = Ref(("", 0.0))
 let flash_row : Ref[(Int, Int, Double, Double)?] = Ref(None)
 
 ///|
+// kept across runs: mbui keeps the underlay it installed (on_list_underlay) for the process too
 let flash_installed : Ref[Bool] = Ref(false)
 
 ///|

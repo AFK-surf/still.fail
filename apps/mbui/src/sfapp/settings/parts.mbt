@@ -595,6 +595,7 @@ fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Double, p
 
 ///|
 /// The people's colours (Parts.kt AVATAR).
+// kept across runs: a table, never written
 let avatar_colors : Array[Int64] = [
   0x5B7BB2FFL, 0x2F8F5BFFL, 0xB9471FFFL, 0x8A6BB0FFL, 0x3F8C99FFL, 0xB0842FFFL,
 ]
@@ -702,12 +703,15 @@ fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? :
 }
 
 ///|
+// kept across runs: a table, never written
 let wait_cards : Array[Double] = [120.0, 88.0, 152.0, 104.0]
 
 ///|
+// kept across runs: a table, never written
 let wait_titles : Array[Double] = [150.0, 110.0, 170.0, 130.0, 96.0, 160.0, 120.0]
 
 ///|
+// kept across runs: a table, never written
 let wait_lines : Array[Double] = [230.0, 190.0, 250.0, 170.0, 210.0, 200.0, 180.0]
 
 ///|

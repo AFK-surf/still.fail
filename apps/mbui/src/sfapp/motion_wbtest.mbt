@@ -3,10 +3,13 @@
 
 ///|
 test "Home: a chat with news goes to the top on the rows' spring, the rows it passes going down" {
+  // (the clock set after reset, which puts the fixture's own back)
+  reset()
   let clock = Ref::new(0.0)
   fix_clock.val = fn() { clock.val }
   fix_wake.val = fn(_) {  }
-  let t = tester("home-motion")
+  let src = fixture("home-motion")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.settle() |> ignore
   let (_, y_ci) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
   let (_, y_top) = t.drawn_of("整理发布清单").unwrap()

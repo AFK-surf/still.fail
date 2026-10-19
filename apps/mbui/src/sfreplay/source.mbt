@@ -9,6 +9,12 @@
 let images : Map[String, String] = {}
 
 ///|
+/// Asked again in every Tester (mbui's on_reset): the pictures it had are gone from its images.
+fn init {
+  @ui.on_reset(fn() { images.clear() })
+}
+
+///|
 fn image(call : String, params : Json, key : String) -> String {
   match images.get(key) {
     Some(k) => k
