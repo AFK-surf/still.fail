@@ -142,3 +142,14 @@ test "the run's calls a test does not make again, skipped with their answers" {
   assert_eq(r.left(), 0)
   assert_eq(r.diverged().length(), 0)
 }
+
+///|
+test "the run's asks not made again are listed, the skipped ones aside" {
+  let r = @core.Replay::parse(run)
+  assert_eq(r.unmade().length(), 2)
+  r.skip("chat.send")
+  let c = r.client()
+  assert_eq(r.unmade(), ["{\"id\":7,\"subscribe\":{\"topic\":\"accounts\"},\"keyed\":true}"])
+  c.subscribe("accounts") |> ignore
+  assert_eq(r.unmade().length(), 0)
+}

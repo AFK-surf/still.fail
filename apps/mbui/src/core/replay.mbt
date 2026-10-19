@@ -183,6 +183,19 @@ pub fn Replay::diverged(self : Replay) -> Array[String] {
 }
 
 ///|
+/// The run's asks the app has not made again (yet), in their order, the skipped ones aside: at a test's end, what the
+/// run did that this one did not.
+pub fn Replay::unmade(self : Replay) -> Array[String] {
+  let out : Array[String] = []
+  for e in self.evs {
+    if e.out && !e.done {
+      out.push(e.msg.stringify())
+    }
+  }
+  out
+}
+
+///|
 /// Asks made again with other params, matched to the run's next of their kind and name.
 pub fn Replay::fuzzy(self : Replay) -> Array[String] {
   self.fuzzy

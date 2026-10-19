@@ -1,8 +1,8 @@
 // The app over a kept conversation with its core (src/core/replay.mbt), for tests: the app's pages (src/sfapp) as
 // src/stillfail shows them, over @core, with the core a run's trace given again. A scripted run against a live
 // backend keeps the trace (MBUI_CORE_TRACE=1, e2e/run.sh: CORETRACE lines on the flow's log); `scripts/trace.py`
-// makes it a test's (e2e/traces, src/sfreplay/*_wbtest.mbt), and the test sees the run again frame by frame, the
-// same every time, no backend, no wall clock.
+// makes it a test's (e2e/traces, src/sfreplay/trace_*.mbt), and the test sees the run again frame by frame (flow.mbt),
+// the same every time, no backend, no wall clock.
 
 ///|
 /// Pictures and chats' images as the core gives them (`picture`, `station.file`), asked once each.
