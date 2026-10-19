@@ -29,7 +29,15 @@ public class MainActivity extends Activity {
         // The test hooks (env, script, bench) come in an intent any app on the device may send this exported
         // activity: a release build (the beta app) takes them only on an emulator (e2e/run.sh with E2E_APK).
         boolean hooks = testHooks();
-        String env = hooks ? getIntent().getStringExtra("env") : null;
+        // The app's own defaults first (its manifest's <meta-data android:name="dev.mbui.env" android:value="K=V;…">: a
+        // build's settings, as still.fail mbui's release says where its updates come from), the intent's over them.
+        String defaults = null;
+        try {
+            Bundle meta = getPackageManager().getApplicationInfo(getPackageName(), android.content.pm.PackageManager.GET_META_DATA).metaData;
+            if (meta != null) defaults = meta.getString("dev.mbui.env");
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {}
+        String given = hooks ? getIntent().getStringExtra("env") : null;
+        String env = defaults == null ? given : given == null ? defaults : defaults + ";" + given;
         if (env != null) {
             for (String kv : env.split(";")) {
                 int eq = kv.indexOf('=');
