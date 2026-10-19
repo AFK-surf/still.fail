@@ -28,6 +28,15 @@ static void go_back(void) {
 
 static MBView *the_view;
 static int bench_mode;
+// The desktop window as the app asks for it (@host.window_setup): its first size and its least, and whether its
+// title bar is the app's own top row (the system's buttons in it, 16 in and centred on its 44: as still.fail's
+// desktop app's hiddenInset window)
+static double setup_w, setup_h, setup_min_w, setup_min_h;
+static int setup_inset;
+// the pointer's shape (@host.set_cursor), and the press under way (what @host.window_drag drags the window with)
+static int cursor_kind;
+static NSEvent *down_event;
+static int down_secondary;
 static const char *shot_path;
 static void tell_state(void);
 static const char *script;
@@ -83,7 +92,8 @@ static void run_script_step(int step);
   [self addTrackingArea:[[NSTrackingArea alloc]
                             initWithRect:NSZeroRect
                                  options:NSTrackingMouseMoved | NSTrackingActiveAlways |
-                                         NSTrackingInVisibleRect
+                                         NSTrackingInVisibleRect | NSTrackingMouseEnteredAndExited |
+                                         NSTrackingCursorUpdate
                                    owner:self
                                 userInfo:nil]];
   [self requestFrame];
@@ -164,28 +174,72 @@ static void mouse(int kind, NSPoint p, NSEvent *e) {
   mb_cb.pointer(kind, p.x, p.y, 0);
   event_time = -1;
 }
+static void mouse_button(int kind, NSPoint p, NSEvent *e, int button) {
+  event_time = e.timestamp * 1000.0;
+  mb_cb.pointer(kind, p.x, p.y, button);
+  event_time = -1;
+}
 - (void)mouseDown:(NSEvent *)e {
   NSPoint p = [self pt:e];
   [self.window makeFirstResponder:self];
+  // Ctrl-click is the secondary click (a context menu's)
+  down_secondary = (e.modifierFlags & NSEventModifierFlagControl) != 0;
+  if (down_secondary) {
+    mouse_button(0, p, e, 2);
+    return;
+  }
+  down_event = e;
   mouse(0, p, e);
+  down_event = nil;
 }
 - (void)mouseDragged:(NSEvent *)e {
+  if (down_secondary) return;
   mouse(1, [self pt:e], e);
 }
 - (void)mouseMoved:(NSEvent *)e {
   mouse(1, [self pt:e], e);
 }
 - (void)mouseUp:(NSEvent *)e {
+  if (down_secondary) {
+    down_secondary = 0;
+    mouse_button(2, [self pt:e], e, 2);
+    return;
+  }
   mouse(2, [self pt:e], e);
+}
+- (void)rightMouseDown:(NSEvent *)e {
+  mouse_button(0, [self pt:e], e, 2);
+}
+- (void)rightMouseUp:(NSEvent *)e {
+  mouse_button(2, [self pt:e], e, 2);
+}
+// the pointer gone out of the window (nothing hovered), and its shape where it comes in
+- (void)mouseExited:(NSEvent *)e {
+  mb_cb.pointer(7, -1, -1, 0);
+}
+static NSCursor *cursor_of(int kind) {
+  switch (kind) {
+    case 1: return NSCursor.pointingHandCursor;
+    case 2: return NSCursor.IBeamCursor;
+    case 3: return NSCursor.resizeLeftRightCursor;
+    case 4: return NSCursor.resizeUpDownCursor;
+    case 5: return NSCursor.openHandCursor;
+    default: return NSCursor.arrowCursor;
+  }
+}
+- (void)cursorUpdate:(NSEvent *)e {
+  [cursor_of(cursor_kind) set];
 }
 - (void)otherMouseUp:(NSEvent *)e {
   if (e.buttonNumber == 3) go_back();
 }
 - (void)scrollWheel:(NSEvent *)e {
   NSPoint p = [self pt:e];
-  double dy = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 12.0;
-  double dx = e.hasPreciseScrollingDeltas ? e.scrollingDeltaX : e.scrollingDeltaX * 12.0;
-  int phase = e.momentumPhase != NSEventPhaseNone ? 3 : (e.phase != NSEventPhaseNone ? 1 : 0);
+  // a mouse wheel's notch: 40 points, as a browser scrolls by one, eased in by the app (phase 4); a trackpad's
+  // as it comes (1 the fingers on it, 3 its momentum)
+  double dy = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 40.0;
+  double dx = e.hasPreciseScrollingDeltas ? e.scrollingDeltaX : e.scrollingDeltaX * 40.0;
+  int phase = !e.hasPreciseScrollingDeltas ? 4 : e.momentumPhase != NSEventPhaseNone ? 3 : (e.phase != NSEventPhaseNone ? 1 : 0);
   mb_cb.wheel(p.x, p.y, -dx, -dy, phase);
 }
 
@@ -195,9 +249,14 @@ static void mouse(int kind, NSPoint p, NSEvent *e) {
   NSEventModifierFlags m = e.modifierFlags;
   int mods = ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
              ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
+  // the arrows (with ⌘, ⌥ or none): a field's own moves while it has the keyboard; else the app's
+  int arrow = e.keyCode == 123 ? 3 : e.keyCode == 124 ? 4 : e.keyCode == 126 ? 5 : e.keyCode == 125 ? 6 : 0;
   if (m & NSEventModifierFlagCommand) {
     NSString *c = e.charactersIgnoringModifiers.lowercaseString;
-    if ([c isEqualToString:@"q"]) [NSApp terminate:nil];
+    if (arrow) {
+      if (self.imeActive) [self interpretKeyEvents:@[ e ]];
+      else mb_cb.key(arrow, mods);
+    } else if ([c isEqualToString:@"q"]) [NSApp terminate:nil];
     else if ([c isEqualToString:@"["]) go_back();
     else if ([c isEqualToString:@"a"]) mb_cb.key(12, mods);
     else if ([c isEqualToString:@"c"]) mb_cb.key(13, mods);
@@ -205,10 +264,27 @@ static void mouse(int kind, NSPoint p, NSEvent *e) {
     else if ([c isEqualToString:@"v"]) {
       NSString *s = [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
       if (s.length) send_text(0, s, 0, 0);
+    } else if (c.length == 1) {
+      // any other ⌘ key: the app's shortcut (1000 + the character)
+      mb_cb.key(1000 + [c characterAtIndex:0], mods);
     }
     return;
   }
+  // Escape and Tab are the app's (a composition under way keeps its Escape)
+  if (e.keyCode == 53 && self.markedLen == 0) {
+    mb_cb.key(17, mods);
+    return;
+  }
+  if (e.keyCode == 48 && self.markedLen == 0) {
+    mb_cb.key(18, mods);
+    return;
+  }
   if (self.imeActive) {
+    // ⌥ with an arrow and an empty field: the app's (the chat before or after)
+    if (arrow && (m & NSEventModifierFlagOption) && self.mirror.length == 0) {
+      mb_cb.key(arrow, mods);
+      return;
+    }
     [self interpretKeyEvents:@[ e ]];
     return;
   }
@@ -220,6 +296,16 @@ static void mouse(int kind, NSPoint p, NSEvent *e) {
     case 121: mb_cb.key(16, mods); break;  // Page Down
     case 126: mb_cb.key(5, mods); break;   // up
     case 125: mb_cb.key(6, mods); break;   // down
+    case 123: mb_cb.key(3, mods); break;   // left
+    case 124: mb_cb.key(4, mods); break;   // right
+    case 36:
+    case 76: mb_cb.key(7, mods); break;    // Return, Enter
+    default: {
+      // a character with no field to take it (Space, a letter): the app's, as 1000 + it
+      NSString *c = e.charactersIgnoringModifiers.lowercaseString;
+      if (c.length == 1 && [c characterAtIndex:0] >= 32 && [c characterAtIndex:0] < 0xF700)
+        mb_cb.key(1000 + [c characterAtIndex:0], mods);
+    }
   }
 }
 
@@ -473,8 +559,68 @@ static void run_script_step(int step) {
   }
 }
 
+// The window's buttons in the app's top row (an inset window): 16 from its left, centred on its 44, as still.fail's
+// desktop app has them (Electron's trafficLightPosition {16, 15}); placed again as the window resizes.
+static void place_buttons(NSWindow *w) {
+  NSButton *close = [w standardWindowButton:NSWindowCloseButton];
+  NSButton *mini = [w standardWindowButton:NSWindowMiniaturizeButton];
+  NSButton *zoom = [w standardWindowButton:NSWindowZoomButton];
+  NSView *bar = close.superview.superview;
+  if (!close || !bar || (w.styleMask & NSWindowStyleMaskFullScreen)) return;
+  double bh = close.frame.size.height, gap = mini.frame.origin.x - close.frame.origin.x;
+  double h = bh + 2 * 15.0;
+  NSRect f = bar.frame;
+  f.size.height = h;
+  f.origin.y = w.frame.size.height - h;
+  bar.frame = f;
+  NSArray<NSButton *> *bs = @[ close, mini, zoom ];
+  for (NSUInteger i = 0; i < bs.count; i++) {
+    NSRect b = bs[i].frame;
+    b.origin.x = 16.0 + i * gap;
+    b.origin.y = (h - bh) / 2.0;
+    bs[i].frame = b;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The host API MoonBit calls
+
+// The window as the app wants it, asked before `run` (@host.window_setup).
+void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
+  setup_min_w = min_w;
+  setup_min_h = min_h;
+  setup_w = w;
+  setup_h = h;
+  setup_inset = inset;
+}
+
+// Whether the window's buttons are in the app's top row now (an inset window, not full screen).
+int32_t mb_host_window_inset(void) {
+  NSWindow *w = the_view.window;
+  return setup_inset && w && !(w.styleMask & NSWindowStyleMaskFullScreen) ? 1 : 0;
+}
+
+// The press under way drags the window (the app's top row: @host.window_drag); twice, what the system's title bar
+// does on a double click (zoom, minimize or nothing, as set in the system's settings).
+void mb_host_window_drag(void) {
+  NSWindow *w = the_view.window;
+  NSEvent *e = down_event;
+  if (!w || !e) return;
+  if (e.clickCount >= 2) {
+    NSString *act = [[NSUserDefaults standardUserDefaults] stringForKey:@"AppleActionOnDoubleClick"];
+    if ([act isEqualToString:@"Minimize"]) [w performMiniaturize:nil];
+    else if (![act isEqualToString:@"None"]) [w performZoom:nil];
+    return;
+  }
+  [w performWindowDragWithEvent:e];
+}
+
+// The pointer's shape (@host.set_cursor): 0 the arrow, 1 a hand, 2 the I-beam, 3 and 4 resizing sideways and up and
+// down, 5 an open hand.
+void mb_host_set_cursor(int32_t kind) {
+  cursor_kind = kind;
+  [cursor_of(kind) set];
+}
 
 void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointer,
                  mb_wheel_fn wheel, mb_key_fn key, mb_text_fn text) {
@@ -488,17 +634,23 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     // MBUI_WIN=<w>x<h>: the window's size (a phone's, for the narrow layouts)
-    double ww = 900, wh = 720;
+    // (else the app's own, @host.window_setup; else 900×720)
+    double ww = setup_w > 0 ? setup_w : 900, wh = setup_h > 0 ? setup_h : 720;
     const char *win = getenv("MBUI_WIN");
     if (win) sscanf(win, "%lfx%lf", &ww, &wh);
     NSRect r = NSMakeRect(120, 120, ww, wh);
-    NSWindow *w = [[NSWindow alloc]
-        initWithContentRect:r
-                  styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
-                            NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable
-                    backing:NSBackingStoreBuffered
-                      defer:NO];
+    NSWindowStyleMask style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+                              NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable;
+    if (setup_inset) style |= NSWindowStyleMaskFullSizeContentView;
+    NSWindow *w = [[NSWindow alloc] initWithContentRect:r styleMask:style backing:NSBackingStoreBuffered defer:NO];
     w.title = mb_ns_from_string(title);
+    if (setup_min_w > 0 || setup_min_h > 0) w.contentMinSize = NSMakeSize(setup_min_w, setup_min_h);
+    if (!win && setup_w > 0) [w center];
+    if (setup_inset) {
+      // no title bar of the system's: the app's top row is it (the buttons in it, its drag: @host.window_drag)
+      w.titlebarAppearsTransparent = YES;
+      w.titleVisibility = NSWindowTitleHidden;
+    }
     // the content: the native views' view, the canvas's over it, both its size
     NSView *box = [[NSView alloc] initWithFrame:r];
     box.wantsLayer = YES;
@@ -512,6 +664,17 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     w.contentView = box;
     [w makeKeyAndOrderFront:nil];
     [w makeFirstResponder:the_view];
+    if (setup_inset) {
+      place_buttons(w);
+      for (NSNotificationName name in @[ NSWindowDidResizeNotification, NSWindowDidEnterFullScreenNotification,
+                                         NSWindowDidExitFullScreenNotification ]) {
+        [[NSNotificationCenter defaultCenter] addObserverForName:name object:w queue:nil
+                                                      usingBlock:^(NSNotification *n) {
+                                                        place_buttons(w);
+                                                        [the_view requestFrame];
+                                                      }];
+      }
+    }
     [NSApp activateIgnoringOtherApps:YES];
     [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillCloseNotification
                                                       object:w
@@ -746,6 +909,15 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
       break;
     }
     case 5: [v doCommandBySelector:@selector(deleteBackward:)]; break;
+    // the window resized to "<w>x<h>" (its content)
+    case 8: {
+      double w = 0, h = 0;
+      if (sscanf(s.UTF8String, "%lfx%lf", &w, &h) != 2 || w <= 0 || h <= 0) return 0;
+      [v.window setContentSize:NSMakeSize(w, h)];
+      fprintf(stdout, "RESIZED %.0fx%.0f\n", w, h);
+      fflush(stdout);
+      break;
+    }
     // a notification kept here (below), by its words: tapped (6) or looked for (7)
     case 6:
     case 7: return notice_drive(kind == 6, s);

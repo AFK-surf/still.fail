@@ -46,6 +46,10 @@ static int marked_len;
 static WCHAR high_surrogate;
 static const char *script;
 static const wchar_t *shot_dir;
+// The window as the app asks for it (@host.window_setup), the pointer's shape (@host.set_cursor), whether the
+// pointer's leaving is asked to be told (TrackMouseEvent), whether the right button is down
+static double setup_w, setup_h, setup_min_w, setup_min_h;
+static int cursor_kind, tracking_leave, right_down;
 static int frames_drawn;
 static int sizing;  // inside the modal move/size loop, where our loop does not run
 
@@ -181,8 +185,19 @@ static void key_down(WPARAM vk) {
       case 'X': code = 14; break;
       case 'V': paste(); return;
     }
+    // any other Ctrl key with a character: the app's shortcut (1000 + the character, lower case)
+    if (!code) {
+      UINT ch = MapVirtualKeyW((UINT)vk, MAPVK_VK_TO_CHAR) & 0x7FFF;
+      if (ch >= 'A' && ch <= 'Z') ch += 'a' - 'A';
+      if (ch >= 32) {
+        mb_cb.key(1000 + (int)ch, mods);
+        return;
+      }
+    }
   }
   switch (vk) {
+    case VK_ESCAPE: code = 17; break;
+    case VK_TAB: code = 18; break;
     case VK_BACK: code = 1; break;
     case VK_DELETE: code = 2; break;
     case VK_LEFT: code = 3; break;
@@ -196,7 +211,16 @@ static void key_down(WPARAM vk) {
     case VK_PRIOR: code = ime_active ? 0 : 15; break;
     case VK_NEXT: code = ime_active ? 0 : 16; break;
   }
-  if (code) mb_cb.key(code, mods);
+  if (code) {
+    mb_cb.key(code, mods);
+    return;
+  }
+  // a character with no field to take it (Space, a letter): the app's, as 1000 + it
+  if (!ime_active) {
+    UINT ch = MapVirtualKeyW((UINT)vk, MAPVK_VK_TO_CHAR) & 0x7FFF;
+    if (ch >= 'A' && ch <= 'Z') ch += 'a' - 'A';
+    if (ch >= 32) mb_cb.key(1000 + (int)ch, mods);
+  }
 }
 
 static void char_in(WCHAR c) {
@@ -211,8 +235,8 @@ static void char_in(WCHAR c) {
     return;
   }
   high_surrogate = 0;
-  // control characters arrive as keys (Enter, Backspace) or shortcuts
-  if (c < 0x20 || c == 0x7F) return;
+  // control characters arrive as keys (Enter, Backspace) or shortcuts; with no field, characters are keys (key_down)
+  if (c < 0x20 || c == 0x7F || !ime_active) return;
   send_text(0, &c, 1, 0, 0);
 }
 
@@ -222,16 +246,32 @@ static void pointer(int kind, LPARAM lp) {
   mb_cb.pointer(kind, GET_X_LPARAM(lp) / scale, GET_Y_LPARAM(lp) / scale, 0);
 }
 
+static void pointer_button(int kind, LPARAM lp, int button) {
+  mb_cb.pointer(kind, GET_X_LPARAM(lp) / scale, GET_Y_LPARAM(lp) / scale, button);
+}
+
+static LPCWSTR cursor_name(int kind) {
+  switch (kind) {
+    case 1: return IDC_HAND;
+    case 2: return IDC_IBEAM;
+    case 3: return IDC_SIZEWE;
+    case 4: return IDC_SIZENS;
+    case 5: return IDC_SIZEALL;
+    default: return IDC_ARROW;
+  }
+}
+
 static void wheel(WPARAM wp, LPARAM lp, int horizontal) {
   POINT p = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
   ScreenToClient(hwnd, &p);
   UINT lines = 3;
   SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lines, 0);
   if (lines == WHEEL_PAGESCROLL) lines = 20;
-  // a notch is WHEEL_DELTA; a line is about 16 points
-  double d = GET_WHEEL_DELTA_WPARAM(wp) / (double)WHEEL_DELTA * lines * 16.0;
-  if (horizontal) mb_cb.wheel(p.x / scale, p.y / scale, d, 0, 0);
-  else mb_cb.wheel(p.x / scale, p.y / scale, 0, -d, 0);
+  // a notch is WHEEL_DELTA; a line 100/3 points, as a browser scrolls (100 a notch of three lines), eased in by the
+  // app (phase 4)
+  double d = GET_WHEEL_DELTA_WPARAM(wp) / (double)WHEEL_DELTA * lines * (100.0 / 3.0);
+  if (horizontal) mb_cb.wheel(p.x / scale, p.y / scale, d, 0, 4);
+  else mb_cb.wheel(p.x / scale, p.y / scale, 0, -d, 4);
 }
 
 static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
@@ -266,7 +306,42 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       return 0;
     }
     case WM_LBUTTONDOWN: SetCapture(h); SetFocus(h); pointer(0, lp); return 0;
-    case WM_MOUSEMOVE: pointer(1, lp); return 0;
+    case WM_MOUSEMOVE:
+      if (!tracking_leave) {
+        TRACKMOUSEEVENT t = {sizeof t, TME_LEAVE, h, 0};
+        tracking_leave = TrackMouseEvent(&t) ? 1 : 0;
+      }
+      pointer(1, lp);
+      return 0;
+    case WM_MOUSELEAVE:
+      tracking_leave = 0;
+      mb_cb.pointer(7, -1, -1, 0);
+      return 0;
+    case WM_RBUTTONDOWN: SetFocus(h); right_down = 1; pointer_button(0, lp, 2); return 0;
+    case WM_RBUTTONUP:
+      if (right_down) pointer_button(2, lp, 2);
+      right_down = 0;
+      return 0;
+    case WM_CONTEXTMENU: return 0;
+    case WM_SETCURSOR:
+      if (LOWORD(lp) == HTCLIENT) {
+        SetCursor(LoadCursor(NULL, cursor_name(cursor_kind)));
+        return TRUE;
+      }
+      break;
+    case WM_GETMINMAXINFO: {
+      // the least the app asked for (@host.window_setup), as a client area at the window's scale
+      if (setup_min_w > 0 || setup_min_h > 0) {
+        UINT dpi = GetDpiForWindow(h);
+        double k = (dpi ? dpi : 96) / 96.0;
+        RECT r = {0, 0, (LONG)lround(setup_min_w * k), (LONG)lround(setup_min_h * k)};
+        AdjustWindowRectExForDpi(&r, WS_OVERLAPPEDWINDOW, FALSE, 0, dpi ? dpi : 96);
+        MINMAXINFO *mm = (MINMAXINFO *)lp;
+        mm->ptMinTrackSize.x = r.right - r.left;
+        mm->ptMinTrackSize.y = r.bottom - r.top;
+      }
+      return 0;
+    }
     case WM_LBUTTONUP: ReleaseCapture(); pointer(2, lp); return 0;
     case WM_MOUSEWHEEL: wheel(wp, lp, 0); return 0;
     case WM_MOUSEHWHEEL: wheel(wp, lp, 1); return 0;
@@ -392,8 +467,9 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   WCHAR *t = (WCHAR *)calloc((size_t)n + 1, sizeof(WCHAR));
   memcpy(t, title, (size_t)n * sizeof(WCHAR));
   DWORD style = WS_OVERLAPPEDWINDOW;
-  // MBUI_WIN=<w>x<h>: the client area's size in points (a phone's, for the narrow layouts); 900 x 720 by default
-  double ww = 900, wh = 720;
+  // MBUI_WIN=<w>x<h>: the client area's size in points (a phone's, for the narrow layouts); else the app's own
+  // (@host.window_setup); 900 x 720 by default
+  double ww = setup_w > 0 ? setup_w : 900, wh = setup_h > 0 ? setup_h : 720;
   const char *win = getenv("MBUI_WIN");
   if (win) sscanf(win, "%lfx%lf", &ww, &wh);
   hwnd = CreateWindowExW(0, L"mbui", t, style, CW_USEDEFAULT, CW_USEDEFAULT, (int)ww, (int)wh, NULL, NULL,
@@ -569,11 +645,60 @@ moonbit_string_t mb_host_notice_text(int32_t what) {
   return moonbit_make_string_raw(0);
 }
 
-// Scripted runs' input given to the host (src/ui/drive.mbt): none of its paths here yet (the app is sent it itself).
+// Scripted runs' input given to the host (src/ui/drive.mbt): the window's picture saved (4) and the window resized to
+// "<w>x<h>" points (8); the rest is sent to the app itself.
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
-  (void)kind;
-  (void)text;
+  int n = Moonbit_array_length(text);
+  wchar_t w[1024];
+  if (n > 1023) n = 1023;
+  memcpy(w, text, (size_t)n * sizeof(wchar_t));
+  w[n] = 0;
+  if (kind == 4) {
+    int ok = mb_render_snapshot(w);
+    char u[2048];
+    WideCharToMultiByte(CP_UTF8, 0, w, -1, u, sizeof u, NULL, NULL);
+    fprintf(stdout, "SHOT %s %s\n", u, ok ? "ok" : "failed");
+    fflush(stdout);
+    return 1;
+  }
+  if (kind == 8) {
+    double cw = 0, ch = 0;
+    if (swscanf(w, L"%lfx%lf", &cw, &ch) != 2 || cw <= 0 || ch <= 0) return 0;
+    UINT dpi = GetDpiForWindow(hwnd);
+    RECT r = {0, 0, (LONG)lround(cw * scale), (LONG)lround(ch * scale)};
+    AdjustWindowRectExForDpi(&r, WS_OVERLAPPEDWINDOW, FALSE, 0, dpi);
+    SetWindowPos(hwnd, NULL, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER);
+    fprintf(stdout, "RESIZED %.0fx%.0f\n", cw, ch);
+    fflush(stdout);
+    want_frame = 1;
+    return 1;
+  }
   return 0;
+}
+
+// The window as the app wants it, asked before `run` (@host.window_setup). Windows keeps its own title bar here.
+void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
+  (void)inset;
+  setup_min_w = min_w;
+  setup_min_h = min_h;
+  setup_w = w;
+  setup_h = h;
+}
+
+// The system's title bar holds the window's buttons: none in the app's top row.
+int32_t mb_host_window_inset(void) { return 0; }
+
+// The press under way moves the window (the app's top row), as the title bar's would.
+void mb_host_window_drag(void) {
+  ReleaseCapture();
+  SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+}
+
+// The pointer's shape (@host.set_cursor), shown at once where it is over the window.
+void mb_host_set_cursor(int32_t kind) {
+  cursor_kind = kind;
+  POINT p;
+  if (GetCursorPos(&p) && WindowFromPoint(p) == hwnd) SetCursor(LoadCursor(NULL, cursor_name(kind)));
 }
 
 moonbit_string_t mb_host_env(moonbit_string_t name) {

@@ -13,6 +13,8 @@ pub struct Tester {
 ///|
 fn reset_globals() -> Unit {
   let c = g
+  desk_reset()
+  tester_size.val = None
   app_state.val = 3
   driver.val = None
   c.count = 0
@@ -111,6 +113,8 @@ pub fn Tester::new(
     views: [],
     view_ids: 0,
     site: [],
+    cursor: 0,
+    window_drags: 0,
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
@@ -135,6 +139,15 @@ pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
     }
   }
   self.fake.wants = false
+  // a scripted run's `resize`
+  match tester_size.val {
+    Some((w, h)) => {
+      self.w = w
+      self.h = h
+      tester_size.val = None
+    }
+    None => ()
+  }
   on_frame(self.w, self.h, 2.0, self.fake.time)
   self.frames = self.frames + 1
 }
@@ -918,4 +931,47 @@ pub fn Tester::tap_once(self : Tester, x : Double, y : Double) -> Unit {
   on_pointer(0, x, y, 0)
   on_pointer(2, x, y, 0)
   self.frame()
+}
+
+///|
+/// A secondary click (a right click) at (x, y): what a context menu opens on.
+pub fn Tester::right_click(self : Tester, x : Double, y : Double) -> Unit {
+  on_pointer(0, x, y, 2)
+  on_pointer(2, x, y, 2)
+  self.frame()
+  self.settle() |> ignore
+}
+
+///|
+/// The pointer gone out of the window.
+pub fn Tester::leave(self : Tester) -> Unit {
+  on_pointer(7, -1.0, -1.0, 0)
+  self.frame()
+}
+
+///|
+/// A wheel at (x, y) as the host sends it: `phase` 0 a trackpad's (or a host that does not say), 4 a mouse wheel's
+/// notch (eased in over the next frames). One frame drawn, not settled.
+pub fn Tester::wheel_phase(self : Tester, x : Double, y : Double, dy : Double, phase : Int) -> Unit {
+  on_wheel(x, y, 0.0, dy, phase)
+  self.frame()
+}
+
+///|
+/// The pointer's shape the host was last told (desktop.mbt Cursor).
+pub fn Tester::cursor(self : Tester) -> Cursor {
+  match self.fake.cursor {
+    1 => Hand
+    2 => IBeam
+    3 => ResizeX
+    4 => ResizeY
+    5 => Grab
+    _ => Arrow
+  }
+}
+
+///|
+/// How often a press asked the host to drag the window.
+pub fn Tester::window_drags(self : Tester) -> Int {
+  self.fake.window_drags
 }

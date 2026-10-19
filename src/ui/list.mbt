@@ -93,6 +93,7 @@ fn ListState::scroll_to_end(self : ListState) -> Unit {
   self.anchor = 1 << 30
   self.anchor_off = 1.0e9
   self.pending = 0.0
+  self.ease = 0.0
   self.stop()
   self.unstretch()
   self.at_end = true
@@ -108,6 +109,35 @@ fn Ctx::scroll_list(self : Ctx, id : Int, d : Double) -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// A wheel's notch on list `id`: scrolled by `d` over the next frames (eased out, as a browser eases one), not at
+/// once.
+fn Ctx::ease_list(self : Ctx, id : Int, d : Double) -> Unit {
+  match self.lists.get(id) {
+    Some(st) => {
+      st.ease = st.ease + d
+      st.last_scroll = self.now
+      st.glide = false
+    }
+    None => ()
+  }
+}
+
+///|
+/// What of a wheel's notches comes this frame (Ctx::ease_list): most of what is left, a frame's share of an ease out
+/// over about 120 ms.
+fn Ctx::step_ease(self : Ctx, st : ListState) -> Unit {
+  if st.ease == 0.0 {
+    return
+  }
+  let k = 1.0 - @math.exp(-self.dt / 36.0)
+  let take = if (st.ease * (1.0 - k)).abs() < 0.5 { st.ease } else { st.ease * k }
+  st.ease = st.ease - take
+  st.pending = st.pending + take
+  st.last_scroll = self.now
+  self.wants_frame = true
 }
 
 ///|
@@ -193,6 +223,9 @@ pub fn Ctx::list(
         over_state: 0,
         over_v: 0.0,
         over_t: -1.0,
+        ease: 0.0,
+        vw: 0.0,
+        vh: 0.0,
       }
       self.lists[id] = s
       self.own(id)
@@ -209,6 +242,9 @@ pub fn Ctx::list(
   st.row = row
   st.seed = self.id_seed
   st.owner = self.owner
+  st.vw = self.width
+  st.vh = self.height
+  self.step_ease(st)
   self.step_scroll(st)
   // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was
   // (still.fail's Follow), rather than being put at its end at once
@@ -235,9 +271,15 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let saved_cur = self.cur
   let saved_seed = self.id_seed
   let saved_owner = self.owner
+  let (saved_w, saved_h) = (self.width, self.height)
   self.cur = li
   self.id_seed = st.seed
   self.owner = st.owner
+  // built for the size the list was given (Ctx::sized), not the window's
+  if st.vw > 0.0 {
+    self.width = st.vw
+    self.height = st.vh
+  }
   let r = self.alloc(kind_box)
   self.nodes[r].item = k
   let row = st.row
@@ -245,6 +287,8 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   self.id_seed = saved_seed
   self.cur = saved_cur
   self.owner = saved_owner
+  self.width = saved_w
+  self.height = saved_h
   r
 }
 

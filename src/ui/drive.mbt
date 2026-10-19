@@ -22,6 +22,14 @@
 //   paste TEXT                  TEXT on the clipboard, then the system's paste
 //   pasten N TEXT               TEXT repeated to N characters, pasted
 //   wheel DY                    the list under the middle of the window scrolled by DY
+//   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY, a mouse wheel's notches (eased in)
+//   move X Y                    the pointer moved there, no button down (negative: from the right, the bottom)
+//   hover TEXT                  the pointer moved onto the lowest TEXT, once it holds still
+//   rightclick TEXT             a secondary click (a context menu's) on the lowest TEXT, once it holds still
+//   key NAME                    a key, with what is held before it: esc, tab, enter, space, up, down, left, right,
+//                               home, end, pageup, pagedown, backspace, a character; cmd+ (⌘ on macOS, Ctrl
+//                               elsewhere), ctrl+, alt+, shift+ (cmd+k, shift+enter, alt+down)
+//   resize W H                  the window's content resized to W by H (the host's own window, where it can)
 //   drag X Y DX DY [MS]         a finger down at X Y (negative: from the right, the bottom), moved by DX DY over MS
 //                               (300 by default), a move a frame, then lifted there
 //   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, once it holds still
@@ -564,6 +572,85 @@ fn drive_frame(c : Ctx) -> Unit {
         next()
         return
       }
+      "move" => {
+        let xy = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
+        if xy.length() < 2 {
+          drive_fail(c, d, "move X Y")
+          return
+        }
+        let x = if xy[0] < 0.0 { c.width + xy[0] } else { xy[0] }
+        let y = if xy[1] < 0.0 { c.height + xy[1] } else { xy[1] }
+        on_pointer(1, x, y, 0)
+        next()
+        return
+      }
+      "hover" | "rightclick" | "wheelat" => {
+        let (dy, what) = if cmd == "wheelat" {
+          match arg.find(" ") {
+            Some(i) =>
+              (
+                number(arg.unsafe_substring(start=0, end=i)),
+                arg.unsafe_substring(start=i + 1, end=arg.length()),
+              )
+            None => {
+              drive_fail(c, d, "wheelat DY TEXT")
+              return
+            }
+          }
+        } else {
+          (0.0, arg)
+        }
+        let at = on_screen(c, what)
+        if at.length() == 0 {
+          if waited > d.timeout {
+            drive_fail(c, d, "not on screen after \{d.timeout.to_int()} ms")
+          }
+          return
+        }
+        let (x, y) = lowest(at)
+        if !d.still(x, y) {
+          return
+        }
+        h_log("DRIVE \{cmd} \{what} at \{x.to_int()},\{y.to_int()}")
+        match cmd {
+          "hover" => on_pointer(1, x, y, 0)
+          "rightclick" => {
+            on_pointer(0, x, y, 2)
+            on_pointer(2, x, y, 2)
+          }
+          _ => on_wheel(x, y, 0.0, dy, 4)
+        }
+        next()
+        return
+      }
+      "key" =>
+        match key_named(arg) {
+          Some((code, mods)) => {
+            h_log("DRIVE key \{arg} (\{code} \{mods})")
+            on_key(code, mods)
+            next()
+            return
+          }
+          None => {
+            drive_fail(c, d, "no such key")
+            return
+          }
+        }
+      "resize" => {
+        let wh = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
+        if wh.length() < 2 {
+          drive_fail(c, d, "resize W H")
+          return
+        }
+        if !h_drive(8, "\{wh[0].to_int()}x\{wh[1].to_int()}") {
+          match fake.val {
+            Some(_) => tester_size.val = Some((wh[0], wh[1]))
+            None => h_log("DRIVE resize: the host cannot")
+          }
+        }
+        next()
+        return
+      }
       "shot" =>
         if waited == 0.0 {
           if drive_shot(d, arg) {
@@ -622,4 +709,51 @@ pub fn Tester::drive(self : Tester, script : String, max? : Int = 3000) -> Array
     n = n + 1
   }
   self.fake.logs.copy()
+}
+
+///|
+/// A size a scripted run asked of the window, for the tester's next frame (a host's window resizes itself).
+let tester_size : Ref[(Double, Double)?] = Ref::new(None)
+
+///|
+/// A key as a script names it (drive's `key`): its code and modifiers.
+fn key_named(name : String) -> (Int, Int)? {
+  let parts = name.split("+").map(fn(v) { v.to_string() }).to_array()
+  let mut mods = 0
+  for i in 0..<(parts.length() - 1) {
+    match parts[i] {
+      "cmd" => mods = mods | (if h_platform() == 0 { mod_cmd } else { mod_ctrl })
+      "ctrl" => mods = mods | mod_ctrl
+      "alt" | "option" => mods = mods | mod_alt
+      "shift" => mods = mods | mod_shift_key
+      "meta" => mods = mods | mod_cmd
+      _ => return None
+    }
+  }
+  let last = if parts.length() > 0 { parts[parts.length() - 1] } else { "" }
+  let code = match last {
+    "esc" | "escape" => key_escape
+    "tab" => key_tab
+    "enter" | "return" => key_enter
+    "space" => key_of_char(' ')
+    "up" => key_up
+    "down" => key_down
+    "left" => key_left
+    "right" => key_right
+    "home" => key_home
+    "end" => key_end
+    "pageup" => key_page_up
+    "pagedown" => key_page_down
+    "backspace" => key_backspace
+    "delete" => key_delete
+    s if s.length() == 1 => {
+      let mut code = -1
+      for ch in s {
+        code = key_of_char(ch)
+      }
+      code
+    }
+    _ => return None
+  }
+  Some((code, mods))
 }

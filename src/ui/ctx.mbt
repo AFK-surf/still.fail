@@ -55,6 +55,11 @@ struct ListState {
   mut over_state : Int
   mut over_v : Double
   mut over_t : Double
+  // a wheel's notches not yet scrolled by (eased in over the next frames: Ctx::ease_list)
+  mut ease : Double
+  // the size its rows are built for: the Ctx's as the list was (Ctx::sized), its rows built later, as it is laid out
+  mut vw : Double
+  mut vh : Double
 }
 
 ///|

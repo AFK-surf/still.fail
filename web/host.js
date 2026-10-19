@@ -897,27 +897,48 @@
       if (imeActive) ta.focus({ preventScroll: true });
     });
     canvas.addEventListener('pointermove', (e) => ptr(1, e, 0));
-    canvas.addEventListener('pointerup', (e) => ptr(2, e, 0));
+    canvas.addEventListener('pointerup', (e) => ptr(2, e, e.button === 2 ? 2 : 0));
     canvas.addEventListener('pointercancel', (e) => ptr(3, e, 0));
+    // the pointer gone out of the page (nothing hovered); a right click is the app's (its context menus)
+    canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') cb.pointer(7, -1, -1, 0); });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1;
       const [x, y] = pos(e);
-      cb.wheel(x, y, e.deltaX * k, e.deltaY * k, 0);
+      // lines (a mouse wheel's notches, as Firefox says them): eased in by the app (phase 4)
+      cb.wheel(x, y, e.deltaX * k, e.deltaY * k, e.deltaMode === 1 ? 4 : 0);
     }, { passive: false });
-    const keymap = { Backspace: 1, Delete: 2, ArrowLeft: 3, ArrowRight: 4, ArrowUp: 5, ArrowDown: 6, Enter: 7, Home: 8, End: 9 };
+    const keymap = { Backspace: 1, Delete: 2, ArrowLeft: 3, ArrowRight: 4, ArrowUp: 5, ArrowDown: 6, Enter: 7, Home: 8, End: 9, PageUp: 15, PageDown: 16, Escape: 17, Tab: 18 };
+    // the browser's own shortcuts left to it (reload, close, a new tab or window, the address bar, quit)
+    const browsers = new Set(['r', 'w', 't', 'n', 'l', 'q', 'v']);
+    const modsOf = (e) => (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
     ta.addEventListener('keydown', (e) => {
       if (e.isComposing || e.keyCode === 229) return;
-      const mods = (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
-      if (e.metaKey || e.ctrlKey) {
+      const mods = modsOf(e);
+      if ((e.metaKey || e.ctrlKey) && !keymap[e.key]) {
         const c = e.key.toLowerCase();
         if (c === 'a') { cb.key(12, mods); e.preventDefault(); }
         else if (c === 'c') { cb.key(13, mods); e.preventDefault(); }
         else if (c === 'x') { cb.key(14, mods); e.preventDefault(); }
+        else if (c.length === 1 && !browsers.has(c)) { cb.key(1000 + c.charCodeAt(0), mods); e.preventDefault(); }
         return; // paste arrives as a paste event
       }
       const code = keymap[e.key];
       if (code) { cb.key(code, mods); e.preventDefault(); }
+    });
+    // with no field focused, the keys are the app's (its shortcuts, Escape, the arrows; a character as 1000 + it)
+    window.addEventListener('keydown', (e) => {
+      if (e.target === ta || imeActive || e.isComposing) return;
+      if (e.altKey && e.key === 'ArrowLeft') return; // back (below)
+      const mods = modsOf(e);
+      const code = keymap[e.key];
+      if (code) { cb.key(code, mods); e.preventDefault(); return; }
+      const c = e.key.length === 1 ? e.key.toLowerCase() : '';
+      if (!c) return;
+      if ((e.metaKey || e.ctrlKey) && browsers.has(c)) return;
+      cb.key(1000 + c.charCodeAt(0), mods);
+      e.preventDefault();
     });
     ta.addEventListener('input', (e) => {
       if (e.isComposing) return;
@@ -940,6 +961,9 @@
     window.addEventListener('resize', H.requestFrame);
   }
 
+  // the pointer's shape (@host.set_cursor)
+  const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab'];
+  H.setCursor = (k) => { canvas.style.cursor = cursors[k] || 'default'; };
   H.clipboardSet = (s) => { navigator.clipboard?.writeText(s).catch(() => {}); };
   H.log = (s) => { console.log(s); window.__logs.push(s); };
   H.benchMode = () => Number(params.get('bench') || 0);

@@ -1373,3 +1373,12 @@ void mb_host_pdf_close(int32_t doc) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, pdfs_cls, m_pdf_close, doc);
 }
+
+// The desktop's window and pointer (@host.window_setup, window_inset, window_drag, set_cursor): no window to size
+// or move here, no pointer to shape.
+void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
+  (void)min_w; (void)min_h; (void)w; (void)h; (void)inset;
+}
+int32_t mb_host_window_inset(void) { return 0; }
+void mb_host_window_drag(void) {}
+void mb_host_set_cursor(int32_t kind) { (void)kind; }

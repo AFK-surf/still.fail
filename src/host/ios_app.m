@@ -531,3 +531,12 @@ int32_t mb_host_pick_count(int32_t pid) { return 0; }
 moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
 moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) { return moonbit_make_bytes(0, 0); }
 void mb_host_pick_end(int32_t pid) {}
+
+// The desktop's window and pointer (@host.window_setup, window_inset, window_drag, set_cursor): no window to size
+// or move here, no pointer to shape.
+void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
+  (void)min_w; (void)min_h; (void)w; (void)h; (void)inset;
+}
+int32_t mb_host_window_inset(void) { return 0; }
+void mb_host_window_drag(void) {}
+void mb_host_set_cursor(int32_t kind) { (void)kind; }

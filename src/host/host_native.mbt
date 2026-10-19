@@ -131,6 +131,48 @@ extern "C" fn ffi_update_install(url : String, sha256 : String, size : Double, n
 extern "C" fn ffi_update_state() -> String = "mb_host_update_state"
 
 ///|
+extern "C" fn ffi_window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset : Int) -> Unit = "mb_host_window_setup"
+
+///|
+extern "C" fn ffi_window_inset() -> Int = "mb_host_window_inset"
+
+///|
+extern "C" fn ffi_window_drag() -> Unit = "mb_host_window_drag"
+
+///|
+extern "C" fn ffi_set_cursor(kind : Int) -> Unit = "mb_host_set_cursor"
+
+///|
+/// The desktop's window as the app wants it, said before `run`: its first size (`w` by `h`; MBUI_WIN=<w>x<h> still
+/// has the last word) and its least (`min_w` by `min_h`), and with `inset` no title bar of the system's: the app's own
+/// top row is it (macOS: the window's buttons in it, 16 in and centred on its first 44; the app drags the window by
+/// it, Ctx::window_drag). Nothing where there is no window to size (iOS, Android, a browser's page).
+pub fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? : Bool = false) -> Unit {
+  ffi_window_setup(min_w, min_h, w, h, if inset { 1 } else { 0 })
+}
+
+///|
+/// Whether the window's buttons are in the app's top row now (an inset window, not full screen): the room the app
+/// leaves them there.
+pub fn window_inset() -> Bool {
+  ffi_window_inset() != 0
+}
+
+///|
+/// The press under way moves the window (a press on the app's own top row, @ui's Ctx::window_drag): the host's from
+/// here, as its title bar's would be.
+pub fn window_drag() -> Unit {
+  ffi_window_drag()
+}
+
+///|
+/// The pointer's shape from now on: 0 the arrow, 1 a hand, 2 the text's I-beam, 3 resizing sideways, 4 up and down,
+/// 5 an open hand. Nothing where there is no pointer.
+pub fn set_cursor(kind : Int) -> Unit {
+  ffi_set_cursor(kind)
+}
+
+///|
 pub fn run(
   title : String,
   frame : FuncRef[(Double, Double, Double, Double) -> Unit],

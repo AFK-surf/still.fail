@@ -33,6 +33,9 @@ struct FakeHost {
   mut view_ids : Int
   /// what its sites say, oldest first (Tester::site_says), as a site view's host would (view_site_next)
   site : Array[String]
+  /// the pointer's shape as last told (desktop.mbt), and how often the window was asked to be dragged
+  mut cursor : Int
+  mut window_drags : Int
 }
 
 ///|
@@ -553,5 +556,23 @@ fn h_pdf_close(doc : Int) -> Unit {
   match fake.val {
     Some(f) => f.views.push("pdf close \{doc}")
     None => @host.pdf_close(doc)
+  }
+}
+
+///|
+/// The pointer's shape (desktop.mbt Cursor's code).
+fn h_set_cursor(kind : Int) -> Unit {
+  match fake.val {
+    Some(f) => f.cursor = kind
+    None => @host.set_cursor(kind)
+  }
+}
+
+///|
+/// The press under way drags the window (the app's own title row).
+fn h_window_drag() -> Unit {
+  match fake.val {
+    Some(f) => f.window_drags = f.window_drags + 1
+    None => @host.window_drag()
   }
 }

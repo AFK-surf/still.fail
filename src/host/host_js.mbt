@@ -637,3 +637,31 @@ pub fn save_file(name : String, data : Bytes) -> Bool {
   ignore(data)
   false
 }
+
+///|
+extern "js" fn js_set_cursor(kind : Int) -> Unit =
+  #|(k) => globalThis.__mbhost && globalThis.__mbhost.setCursor && globalThis.__mbhost.setCursor(k)
+
+///|
+/// The desktop's window as the app wants it (see host_native.mbt): a browser's page has no window to size.
+pub fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? : Bool = false) -> Unit {
+  ignore((min_w, min_h, w, h, inset))
+}
+
+///|
+/// Whether the window's buttons are in the app's top row (see host_native.mbt): never in a browser.
+pub fn window_inset() -> Bool {
+  false
+}
+
+///|
+/// The window dragged by the app's top row (see host_native.mbt): a browser's page cannot move its window.
+pub fn window_drag() -> Unit {
+  ()
+}
+
+///|
+/// The pointer's shape (see host_native.mbt): the canvas's CSS cursor.
+pub fn set_cursor(kind : Int) -> Unit {
+  js_set_cursor(kind)
+}

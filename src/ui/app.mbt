@@ -116,6 +116,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   }
   let t0 = h_now()
   drawing_begin()
+  desk_frame_start()
   c.count = 0
   c.cur = -1
   c.back_next = None
@@ -167,6 +168,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let sr = c.scroll_rects
   c.scroll_rects = c.next_scroll_rects
   c.next_scroll_rects = sr
+  c.desk_frame_end()
   c.sync_ime()
   match frame_hook.val {
     Some(f) => f()
@@ -267,11 +269,22 @@ let track_x : Tracker = Tracker::new()
 let track_y : Tracker = Tracker::new()
 
 ///|
-fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
+fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
   let c = g
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
   if kind >= 4 && kind <= 6 {
     on_second(kind, x, y)
+    return
+  }
+  // the pointer gone out of the window (7); a secondary button (a right click: its menu's, nothing pressed)
+  if kind == 7 {
+    c.pointer_left()
+    return
+  }
+  if button == 2 {
+    if kind == 0 {
+      c.secondary_press(x, y)
+    }
     return
   }
   c.px = x
@@ -282,8 +295,13 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
     h_log("TOUCH \{kind} \{t} \{x} \{y} \{h_now()}")
   }
   if kind == 0 {
-    c.down = true
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
+    // the app's own top row: the window is the host's to move from here (it takes the rest of the press)
+    if desk_drags(target) {
+      h_window_drag()
+      return
+    }
+    c.down = true
     c.active = target
     c.press_x = x
     c.press_y = y
@@ -303,6 +321,13 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
     // a drag area (a sheet's top, the bottom bar) is the finger's from here: no edge swipe under it
     if drag_down(c.drag_scroll, x, y) {
       c.edge = 0
+    }
+    // a desktop's page: the mouse drags no list and swipes no page back (the wheel scrolls; Ctx::mouse_drags_lists)
+    if !desk.mouse_drags {
+      c.edge = 0
+      if c.lists.contains(c.drag_scroll) {
+        c.drag_scroll = 0
+      }
     }
     match c.lists.get(c.drag_scroll) {
       // a list moving on its own (flung, springing back from an end) is
@@ -545,7 +570,7 @@ fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
 }
 
 ///|
-fn on_wheel(x : Double, y : Double, _dx : Double, dy : Double, _phase : Int) -> Unit {
+fn on_wheel(x : Double, y : Double, _dx : Double, dy : Double, phase : Int) -> Unit {
   let c = g
   let target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
   if captures.contains(target) {
@@ -559,7 +584,13 @@ fn on_wheel(x : Double, y : Double, _dx : Double, dy : Double, _phase : Int) -> 
       Some(st) => st.stop()
       None => ()
     }
-    c.scroll_list(target, dy)
+    // a wheel's notch (phase 4): eased over a few frames, as a browser does; a trackpad's (and its momentum's)
+    // follows the fingers as it comes
+    if phase == 4 {
+      c.ease_list(target, dy)
+    } else {
+      c.scroll_list(target, dy)
+    }
     h_request_frame()
   }
 }
@@ -567,6 +598,12 @@ fn on_wheel(x : Double, y : Double, _dx : Double, dy : Double, _phase : Int) -> 
 ///|
 fn on_key(code : Int, mods : Int) -> Unit {
   let c = g
+  // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
+  desk_key(code, mods, c.editors.contains(c.focus) && code < key_escape)
+  if code >= key_escape {
+    h_request_frame()
+    return
+  }
   match c.editors.get(c.focus) {
     Some(st) => {
       st.key(code, mods, h_now())
