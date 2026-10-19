@@ -6,6 +6,7 @@
 // docs/multi-workspace.md).
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { linkSync } from "../ops/links.ts";
 import { log } from "../ops/log.ts";
 import type { Runtime } from "./config.ts";
 
@@ -110,8 +111,12 @@ function link(target: string, path: string) {
     return;
   }
   if (meta) rmSync(path, { recursive: true, force: true });
-  // A directory's link on Windows is a junction: a symbolic link there needs an administrator.
-  symlinkSync(target, path, process.platform === "win32" && lstatSync(target).isDirectory() ? "junction" : undefined);
+  // Where links are refused (Windows without Developer Mode) a directory's is a junction; a file's is not made, as a
+  // copy would not follow the memory.
+  if (linkSync(target, path, { junction: true }) === "refused" && !leftAlone.has(path)) {
+    log.warn("agent_home", "the agent home not linked: this machine refuses links", { path, target });
+    leftAlone.add(path);
+  }
 }
 
 /// Creates the agent home if missing and links it into every profile home.
