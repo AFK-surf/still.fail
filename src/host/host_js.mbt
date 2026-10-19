@@ -432,6 +432,38 @@ fn pk_end(_id : Int) -> Unit {
 
 }
 
+// Files kept on the device (keep.mbt): a page keeps none.
+
+///|
+fn kp_begin(_name : String, _mime : String, _way : Int) -> Int {
+  0
+}
+
+///|
+fn kp_append(_id : Int, _data : Bytes) -> Int {
+  0
+}
+
+///|
+fn kp_finish(_id : Int) -> Unit {
+
+}
+
+///|
+fn kp_state(_id : Int) -> Int {
+  -1
+}
+
+///|
+fn kp_where(_id : Int) -> String {
+  ""
+}
+
+///|
+fn kp_end(_id : Int) -> Unit {
+
+}
+
 // Notifications (notify.mbt): not shown by a page yet; what would be is said on the log.
 
 ///|

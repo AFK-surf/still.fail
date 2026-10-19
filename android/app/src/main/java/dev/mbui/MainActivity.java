@@ -211,7 +211,7 @@ public class MainActivity extends Activity {
     @Override
     @SuppressWarnings("deprecation")
     protected void onActivityResult(int request, int result, Intent data) {
-        if (!Picks.answered(request, result, data)) super.onActivityResult(request, result, data);
+        if (!Picks.answered(request, result, data) && !Keeps.answered(request, result, data)) super.onActivityResult(request, result, data);
     }
 
     /** The system's answer to POST_NOTIFICATIONS (Notices: asked as notifications are turned on, or once at first). */

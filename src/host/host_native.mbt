@@ -523,6 +523,28 @@ extern "C" fn pk_bytes(id : Int, i : Int) -> Bytes = "mb_host_pick_bytes"
 ///|
 extern "C" fn pk_end(id : Int) -> Unit = "mb_host_pick_end"
 
+// Files kept on the device (keep.mbt): Keeps.java on Android, apple_views.m on macOS and iOS, win_app.c on Windows.
+
+///|
+#borrow(name, mime)
+extern "C" fn kp_begin(name : String, mime : String, way : Int) -> Int = "mb_host_keep_begin"
+
+///|
+#borrow(data)
+extern "C" fn kp_append(id : Int, data : Bytes) -> Int = "mb_host_keep_append"
+
+///|
+extern "C" fn kp_finish(id : Int) -> Unit = "mb_host_keep_finish"
+
+///|
+extern "C" fn kp_state(id : Int) -> Int = "mb_host_keep_state"
+
+///|
+extern "C" fn kp_where(id : Int) -> String = "mb_host_keep_where"
+
+///|
+extern "C" fn kp_end(id : Int) -> Unit = "mb_host_keep_end"
+
 // Notifications (notify.mbt): dev.mbui.Notices on Android (android_host.c), kept and said on the log elsewhere.
 
 ///|

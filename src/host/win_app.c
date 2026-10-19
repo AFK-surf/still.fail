@@ -746,8 +746,8 @@ moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) { return moonbit_make
 moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) { return moonbit_make_bytes(0, 0); }
 void mb_host_pick_end(int32_t pid) {}
 
-// Native views over the canvas, PDFs, saving a file (host_native.mbt): not on Windows yet. No view opens (0), no PDF
-// is drawn (pages -1), nothing is saved; the app says it cannot show those here.
+// Native views over the canvas, PDFs (host_native.mbt): not on Windows yet. No view opens (0), no PDF is drawn (pages
+// -1); the app says it cannot show those here. (Saving a file: at the end, with keep.mbt's.)
 int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) { (void)kind; (void)arg; return 0; }
 void mb_host_view_place(int32_t id, double x, double y, double w, double h, double cx0, double cy0, double cx1,
                         double cy1, int32_t shown) {
@@ -778,4 +778,172 @@ int32_t mb_host_pdf_pages(int32_t doc) { (void)doc; return -1; }
 void mb_host_pdf_page_size(int32_t doc, int32_t page, double *out) { (void)doc; (void)page; out[0] = out[1] = 0; }
 int32_t mb_host_pdf_page_load(int32_t doc, int32_t page, int32_t max_px) { (void)doc; (void)page; (void)max_px; return 0; }
 void mb_host_pdf_close(int32_t doc) { (void)doc; }
-int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) { (void)name; (void)data; return 0; }
+int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data);  // below, with keep.mbt's
+
+// ---------------------------------------------------------------------------
+// Files kept (keep.mbt) and saved (save_file): into the Downloads known folder (MBUI_DOWNLOADS_DIR instead, for
+// scripted runs), either way (no save dialog yet); a name taken gets " (2)", " (3)"… before its extension. Written at
+// once, so each keep is answered as it starts.
+#include <shlobj.h>
+#include <knownfolders.h>
+#pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "uuid.lib")
+
+// where downloads go: MBUI_DOWNLOADS_DIR, else the Downloads known folder; made if it is not there
+static int keep_dir(wchar_t *dir) {
+  const wchar_t *over = _wgetenv(L"MBUI_DOWNLOADS_DIR");
+  if (over && *over) {
+    lstrcpynW(dir, over, MAX_PATH);
+  } else {
+    PWSTR p = NULL;
+    if (FAILED(SHGetKnownFolderPath(&FOLDERID_Downloads, 0, NULL, &p))) return 0;
+    lstrcpynW(dir, p, MAX_PATH);
+    CoTaskMemFree(p);
+  }
+  CreateDirectoryW(dir, NULL);
+  return 1;
+}
+
+// the app's name for a file made safe for a folder (no separators or reserved characters, never empty)
+static void keep_safe(moonbit_string_t name, wchar_t *n) {
+  int len = Moonbit_array_length(name), k = 0;
+  for (int i = 0; i < len && k < 200; i++) {
+    wchar_t ch = (wchar_t)name[i];
+    n[k++] = (ch < 32 || wcschr(L"\\/:*?\"<>|", ch)) ? L'_' : ch;
+  }
+  n[k] = 0;
+  if (k == 0 || !wcscmp(n, L".") || !wcscmp(n, L"..")) lstrcpynW(n, L"file", MAX_PATH);
+}
+
+// the i-th name tried in `dir` for `n`: n, then "base (2).ext"…
+static void keep_name(const wchar_t *dir, const wchar_t *n, int i, wchar_t *out) {
+  wchar_t base[MAX_PATH], ext[MAX_PATH] = {0};
+  lstrcpynW(base, n, MAX_PATH);
+  wchar_t *dot = wcsrchr(base, L'.');
+  if (dot && dot != base) {
+    lstrcpynW(ext, dot, MAX_PATH);
+    *dot = 0;
+  }
+  if (i == 1) _snwprintf(out, MAX_PATH, L"%ls\\%ls", dir, n);
+  else _snwprintf(out, MAX_PATH, L"%ls\\%ls (%d)%ls", dir, base, i, ext);
+  out[MAX_PATH - 1] = 0;
+}
+
+static int keep_put(HANDLE f, const char *b, DWORD left) {
+  DWORD put = 0;
+  while (left > 0) {
+    if (!WriteFile(f, b, left, &put, NULL)) return 0;
+    b += put;
+    left -= put;
+  }
+  return 1;
+}
+
+int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) {
+  wchar_t dir[MAX_PATH], n[MAX_PATH], path[MAX_PATH];
+  if (!keep_dir(dir)) return 0;
+  keep_safe(name, n);
+  for (int i = 1; i < 10000; i++) {
+    keep_name(dir, n, i, path);
+    HANDLE f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) {
+      if (GetLastError() == ERROR_FILE_EXISTS) continue;
+      return 0;
+    }
+    int ok = keep_put(f, (const char *)data, (DWORD)Moonbit_array_length(data));
+    CloseHandle(f);
+    if (!ok) DeleteFileW(path);
+    return ok;
+  }
+  return 0;
+}
+
+// each keep: its state (0 keeping, 1 kept, -1 failed), its name, its part file in the temporary directory while its
+// bytes come, where it went
+typedef struct {
+  int state;
+  HANDLE part;
+  wchar_t name[MAX_PATH], tmp[MAX_PATH], where[MAX_PATH];
+} win_keep;
+static win_keep *keeps;
+static int nkeeps = 1;  // ids from 1
+
+static win_keep *keep_of(int32_t id) { return id > 0 && id < nkeeps ? &keeps[id] : NULL; }
+
+static void keep_fail(win_keep *k) {
+  if (k->part != INVALID_HANDLE_VALUE) CloseHandle(k->part);
+  k->part = INVALID_HANDLE_VALUE;
+  DeleteFileW(k->tmp);
+  k->state = -1;
+}
+
+int32_t mb_host_keep_begin(moonbit_string_t name, moonbit_string_t mime, int32_t way) {
+  (void)mime;
+  (void)way;
+  win_keep *grown = realloc(keeps, sizeof(win_keep) * (nkeeps + 1));
+  if (!grown) return 0;
+  keeps = grown;
+  int id = nkeeps++;
+  win_keep *k = &keeps[id];
+  memset(k, 0, sizeof *k);
+  keep_safe(name, k->name);
+  wchar_t t[MAX_PATH];
+  GetTempPathW(MAX_PATH, t);
+  _snwprintf(k->tmp, MAX_PATH, L"%lsmbui-keep-%lu-%d.part", t, (unsigned long)GetCurrentProcessId(), id);
+  k->tmp[MAX_PATH - 1] = 0;
+  k->part = CreateFileW(k->tmp, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, NULL);
+  k->state = k->part == INVALID_HANDLE_VALUE ? -1 : 0;
+  return id;
+}
+
+int32_t mb_host_keep_append(int32_t id, moonbit_bytes_t data) {
+  win_keep *k = keep_of(id);
+  if (!k || k->state != 0 || k->part == INVALID_HANDLE_VALUE) return 0;
+  if (keep_put(k->part, (const char *)data, (DWORD)Moonbit_array_length(data))) return 1;
+  keep_fail(k);
+  return 0;
+}
+
+// finished: the part file moved into Downloads under a name not taken (a copy across volumes)
+void mb_host_keep_finish(int32_t id) {
+  win_keep *k = keep_of(id);
+  if (!k || k->state != 0 || k->part == INVALID_HANDLE_VALUE) return;
+  CloseHandle(k->part);
+  k->part = INVALID_HANDLE_VALUE;
+  wchar_t dir[MAX_PATH];
+  if (keep_dir(dir)) {
+    for (int i = 1; i < 10000; i++) {
+      keep_name(dir, k->name, i, k->where);
+      if (GetFileAttributesW(k->where) != INVALID_FILE_ATTRIBUTES) continue;
+      if (MoveFileExW(k->tmp, k->where, MOVEFILE_COPY_ALLOWED)) {
+        k->state = 1;
+        want_frame = 1;
+        return;
+      }
+      if (GetLastError() != ERROR_ALREADY_EXISTS && GetLastError() != ERROR_FILE_EXISTS) break;
+    }
+  }
+  k->where[0] = 0;
+  keep_fail(k);
+  want_frame = 1;
+}
+
+int32_t mb_host_keep_state(int32_t id) {
+  win_keep *k = keep_of(id);
+  return k ? k->state : -1;
+}
+
+moonbit_string_t mb_host_keep_where(int32_t id) {
+  win_keep *k = keep_of(id);
+  if (!k || k->state != 1) return moonbit_make_string_raw(0);
+  int n = (int)wcslen(k->where);
+  moonbit_string_t s = moonbit_make_string_raw(n);
+  memcpy(s, k->where, n * sizeof(uint16_t));
+  return s;
+}
+
+void mb_host_keep_end(int32_t id) {
+  win_keep *k = keep_of(id);
+  if (k && k->state == 0) keep_fail(k);
+  if (k) k->state = -1;
+}

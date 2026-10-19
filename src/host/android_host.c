@@ -39,7 +39,8 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways;
-static jclass updates_cls, shares_cls;
+static jclass updates_cls, shares_cls, keeps_cls;
+static jmethodID m_kp_begin, m_kp_append, m_kp_finish, m_kp_state, m_kp_where, m_kp_end;
 static jmethodID m_up_version, m_up_install, m_up_state, m_sh_share, m_sh_in;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
@@ -110,6 +111,13 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_pk_name = (*env)->GetStaticMethodID(env, picks_cls, "name", "(II)Ljava/lang/String;");
   m_pk_bytes = (*env)->GetStaticMethodID(env, picks_cls, "bytes", "(II)[B");
   m_pk_end = (*env)->GetStaticMethodID(env, picks_cls, "end", "(I)V");
+  keeps_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Keeps"));
+  m_kp_begin = (*env)->GetStaticMethodID(env, keeps_cls, "begin", "(Ljava/lang/String;Ljava/lang/String;I)I");
+  m_kp_append = (*env)->GetStaticMethodID(env, keeps_cls, "append", "(I[B)I");
+  m_kp_finish = (*env)->GetStaticMethodID(env, keeps_cls, "finish", "(I)V");
+  m_kp_state = (*env)->GetStaticMethodID(env, keeps_cls, "state", "(I)I");
+  m_kp_where = (*env)->GetStaticMethodID(env, keeps_cls, "where", "(I)Ljava/lang/String;");
+  m_kp_end = (*env)->GetStaticMethodID(env, keeps_cls, "end", "(I)V");
   views_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/NativeViews"));
   m_v_open = (*env)->GetStaticMethodID(env, views_cls, "open", "(ILjava/lang/String;)I");
   m_v_place = (*env)->GetStaticMethodID(env, views_cls, "place", "(IFFFFFFFFZ)V");
@@ -1303,6 +1311,48 @@ int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) {
   (*env)->DeleteLocalRef(env, n);
   (*env)->DeleteLocalRef(env, b);
   return ok ? 1 : 0;
+}
+
+// Files kept on the device (keep.mbt): dev.mbui.Keeps, MediaStore's Downloads or the documents UI's CreateDocument.
+
+int32_t mb_host_keep_begin(moonbit_string_t name, moonbit_string_t mime, int32_t way) {
+  JNIEnv *env = env_();
+  jstring n = jstr(env, name), m = jstr(env, mime);
+  jint id = (*env)->CallStaticIntMethod(env, keeps_cls, m_kp_begin, n, m, way);
+  (*env)->DeleteLocalRef(env, n);
+  (*env)->DeleteLocalRef(env, m);
+  return id;
+}
+
+int32_t mb_host_keep_append(int32_t id, moonbit_bytes_t data) {
+  JNIEnv *env = env_();
+  jbyteArray b = jbytes(env, data);
+  jint ok = (*env)->CallStaticIntMethod(env, keeps_cls, m_kp_append, id, b);
+  (*env)->DeleteLocalRef(env, b);
+  return ok;
+}
+
+void mb_host_keep_finish(int32_t id) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, keeps_cls, m_kp_finish, id);
+}
+
+int32_t mb_host_keep_state(int32_t id) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, keeps_cls, m_kp_state, id);
+}
+
+moonbit_string_t mb_host_keep_where(int32_t id) {
+  JNIEnv *env = env_();
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, keeps_cls, m_kp_where, id);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  return out;
+}
+
+void mb_host_keep_end(int32_t id) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, keeps_cls, m_kp_end, id);
 }
 
 // Notifications (notify.mbt): dev.mbui.Notices over the system's NotificationManager; the tap comes back to

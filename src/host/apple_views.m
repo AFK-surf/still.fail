@@ -1036,22 +1036,19 @@ void mb_views_draw_under(CGContextRef ctx, double scale) {
 // the app's Documents (MBUI_DOWNLOADS_DIR instead, for tests); a name taken
 // gets " (2)", " (3)"… before its extension.
 
-int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) {
-  NSString *n = mb_ns_from_string(name).lastPathComponent;
-  n = [[n stringByReplacingOccurrencesOfString:@"/" withString:@"_"] stringByReplacingOccurrencesOfString:@":"
-                                                                                               withString:@"_"];
+// a file name of the app's made safe for a folder: its last part, no separators, never empty
+static NSString *keep_safe(NSString *n) {
+  n = [[n.lastPathComponent stringByReplacingOccurrencesOfString:@"/" withString:@"_"]
+      stringByReplacingOccurrencesOfString:@":"
+                                withString:@"_"];
   if (n.length == 0 || [n isEqualToString:@"."] || [n isEqualToString:@".."]) n = @"file";
+  return n;
+}
+
+// `d` written into `dir` as `n`, or `n (2)`… when taken: its path, nil when it could not be written
+static NSString *keep_into(NSString *dir, NSString *n, NSData *d) {
   NSFileManager *fm = NSFileManager.defaultManager;
-  const char *over = getenv("MBUI_DOWNLOADS_DIR");
-#if TARGET_OS_OSX
-  NSSearchPathDirectory where = NSDownloadsDirectory;
-#else
-  NSSearchPathDirectory where = NSDocumentDirectory;
-#endif
-  NSString *dir = over && *over ? @(over) : [fm URLsForDirectory:where inDomains:NSUserDomainMask].firstObject.path;
-  if (!dir) return 0;
   [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
-  NSData *d = [NSData dataWithBytes:data length:Moonbit_array_length(data)];
   NSString *base = n.stringByDeletingPathExtension, *ext = n.pathExtension;
   for (int i = 1; i < 10000; i++) {
     NSString *fn = i == 1         ? n
@@ -1062,12 +1059,236 @@ int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) {
     NSError *e = nil;
     if ([d writeToFile:p options:NSDataWritingWithoutOverwriting error:&e]) {
       vlog(@"saved %@ (%lu bytes)", p, (unsigned long)d.length);
-      return 1;
+      return p;
     }
     if (![fm fileExistsAtPath:p]) {
       vlog(@"save %@ failed: %@", p, e.localizedDescription);
-      return 0;
+      return nil;
     }
   }
-  return 0;
+  return nil;
+}
+
+// where downloads go: MBUI_DOWNLOADS_DIR, else ~/Downloads (macOS) or the app's Documents (iOS)
+static NSString *keep_downloads(void) {
+  const char *over = getenv("MBUI_DOWNLOADS_DIR");
+  if (over && *over) return @(over);
+#if TARGET_OS_OSX
+  NSSearchPathDirectory where = NSDownloadsDirectory;
+#else
+  NSSearchPathDirectory where = NSDocumentDirectory;
+#endif
+  return [NSFileManager.defaultManager URLsForDirectory:where inDomains:NSUserDomainMask].firstObject.path;
+}
+
+int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) {
+  NSString *dir = keep_downloads();
+  if (!dir) return 0;
+  NSData *d = [NSData dataWithBytes:data length:Moonbit_array_length(data)];
+  return keep_into(dir, keep_safe(mb_ns_from_string(name)), d) ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// Files kept (keep.mbt): the bytes put into a part file of the temporary
+// directory as they come, then, finished, moved to their place. macOS:
+// Downloads, nothing asked, or a save panel over the window; iOS: the Files
+// sheet either way (UIDocumentPickerViewController exporting a copy).
+// MBUI_DOWNLOADS_DIR set (a scripted run), either way the file goes there and
+// nothing is asked. All on the main thread but the moves, which go to a queue
+// and come back.
+
+@interface MBKeep : NSObject
+@property(nonatomic) int32_t kid, way, state;  // state: 0 keeping, 1 kept, 2 called off, -1 failed
+@property(nonatomic, copy) NSString *name, *where, *part;
+@property(nonatomic, strong) NSFileHandle *out;
+@end
+@implementation MBKeep
+@end
+
+static NSMutableDictionary<NSNumber *, MBKeep *> *keeps;
+static int32_t next_keep = 1;
+
+static void keep_drop(MBKeep *k) {
+  [k.out closeAndReturnError:nil];
+  k.out = nil;
+  if (k.part) [NSFileManager.defaultManager removeItemAtPath:k.part.stringByDeletingLastPathComponent error:nil];
+}
+
+static void keep_answer(MBKeep *k, int32_t state, NSString *where) {
+  keep_drop(k);
+  k.where = where ?: @"";
+  k.state = state;
+  mb_host_request_frame();
+}
+
+// the part file moved into `dir` as its name, or `name (2)`… when taken: the path, nil when it could not be
+static NSString *keep_move_into(NSString *dir, MBKeep *k) {
+  NSFileManager *fm = NSFileManager.defaultManager;
+  [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+  NSString *n = k.name, *base = n.stringByDeletingPathExtension, *ext = n.pathExtension;
+  for (int i = 1; i < 10000; i++) {
+    NSString *fn = i == 1         ? n
+                   : ext.length ? [NSString stringWithFormat:@"%@ (%d).%@", base, i, ext]
+                                : [NSString stringWithFormat:@"%@ (%d)", base, i];
+    NSString *p = [dir stringByAppendingPathComponent:fn];
+    if ([fm fileExistsAtPath:p]) continue;
+    NSError *e = nil;
+    // (a move across volumes is a copy: moveItemAtPath does it, never over a file there)
+    if ([fm moveItemAtPath:k.part toPath:p error:&e]) {
+      vlog(@"saved %@", p);
+      return p;
+    }
+    if (![fm fileExistsAtPath:p]) {
+      vlog(@"save %@ failed: %@", p, e.localizedDescription);
+      return nil;
+    }
+  }
+  return nil;
+}
+
+#if !TARGET_OS_OSX
+@interface MBKeepSheet : NSObject <UIDocumentPickerDelegate>
+@property(nonatomic, strong) MBKeep *keep;
+@end
+static NSMutableSet *keep_sheets;
+@implementation MBKeepSheet
+- (void)documentPicker:(UIDocumentPickerViewController *)c didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+  vlog(@"keep: exported to %@", urls.firstObject.path);
+  keep_answer(self.keep, 1, urls.firstObject.lastPathComponent ?: self.keep.name);
+  [keep_sheets removeObject:self];
+}
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)c {
+  keep_answer(self.keep, 2, nil);
+  [keep_sheets removeObject:self];
+}
+@end
+
+static UIViewController *keep_top(void) {
+  UIWindow *w = nil;
+  for (UIScene *sc in UIApplication.sharedApplication.connectedScenes)
+    if ([sc isKindOfClass:UIWindowScene.class])
+      for (UIWindow *x in ((UIWindowScene *)sc).windows)
+        if (x.isKeyWindow || !w) w = x;
+  UIViewController *vc = w.rootViewController;
+  while (vc.presentedViewController) vc = vc.presentedViewController;
+  return vc;
+}
+#endif
+
+int32_t mb_host_keep_begin(moonbit_string_t name, moonbit_string_t mime, int32_t way) {
+  (void)mime;
+  if (!keeps) keeps = [NSMutableDictionary new];
+  MBKeep *k = [MBKeep new];
+  k.kid = next_keep++;
+  k.way = way;
+  k.name = keep_safe(mb_ns_from_string(name));
+  NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                                              [NSString stringWithFormat:@"mbui-keeping/%@", NSUUID.UUID.UUIDString]];
+  NSFileManager *fm = NSFileManager.defaultManager;
+  [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+  k.part = [dir stringByAppendingPathComponent:k.name];
+  if ([fm createFileAtPath:k.part contents:nil attributes:nil]) k.out = [NSFileHandle fileHandleForWritingAtPath:k.part];
+  if (!k.out) {
+    vlog(@"keep %@: no part file", k.name);
+    k.state = -1;
+  }
+  keeps[@(k.kid)] = k;
+  return k.kid;
+}
+
+int32_t mb_host_keep_append(int32_t kid, moonbit_bytes_t data) {
+  MBKeep *k = keeps[@(kid)];
+  if (!k || !k.out || k.state != 0) return 0;
+  NSError *e = nil;
+  NSData *d = [NSData dataWithBytesNoCopy:data length:Moonbit_array_length(data) freeWhenDone:NO];
+  if (![k.out writeData:d error:&e]) {
+    vlog(@"keep %@: %@", k.name, e.localizedDescription);
+    keep_answer(k, -1, nil);
+    return 0;
+  }
+  return 1;
+}
+
+void mb_host_keep_finish(int32_t kid) {
+  MBKeep *k = keeps[@(kid)];
+  if (!k || !k.out || k.state != 0) return;
+  [k.out closeAndReturnError:nil];
+  k.out = nil;
+  const char *over = getenv("MBUI_DOWNLOADS_DIR");
+  BOOL scripted = over && *over;
+#if TARGET_OS_OSX
+  if (k.way != 2 || scripted) {
+    NSString *dir = keep_downloads();
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+      NSString *p = dir ? keep_move_into(dir, k) : nil;
+      dispatch_async(dispatch_get_main_queue(), ^{ keep_answer(k, p ? 1 : -1, p); });
+    });
+    return;
+  }
+  NSSavePanel *panel = [NSSavePanel savePanel];
+  panel.nameFieldStringValue = k.name;
+  panel.canCreateDirectories = YES;
+  NSString *dl = keep_downloads();
+  if (dl) panel.directoryURL = [NSURL fileURLWithPath:dl isDirectory:YES];
+  void (^done)(NSModalResponse) = ^(NSModalResponse r) {
+    if (r != NSModalResponseOK || !panel.URL) {
+      keep_answer(k, 2, nil);
+      return;
+    }
+    NSURL *u = panel.URL;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+      NSError *e = nil;
+      // the panel asked before a file of that name is replaced
+      NSURL *got = nil;
+      BOOL ok = [NSFileManager.defaultManager fileExistsAtPath:u.path]
+                    ? [NSFileManager.defaultManager replaceItemAtURL:u
+                                                       withItemAtURL:[NSURL fileURLWithPath:k.part]
+                                                      backupItemName:nil
+                                                             options:0
+                                                    resultingItemURL:&got
+                                                               error:&e]
+                    : [NSFileManager.defaultManager moveItemAtURL:[NSURL fileURLWithPath:k.part] toURL:u error:&e];
+      if (ok) vlog(@"saved %@", u.path);
+      else vlog(@"save %@ failed: %@", u.path, e.localizedDescription);
+      dispatch_async(dispatch_get_main_queue(), ^{ keep_answer(k, ok ? 1 : -1, u.path); });
+    });
+  };
+  NSWindow *w = NSApp.keyWindow ?: NSApp.mainWindow ?: NSApp.windows.firstObject;
+  if (w) [panel beginSheetModalForWindow:w completionHandler:done];
+  else [panel beginWithCompletionHandler:done];
+#else
+  if (scripted) {
+    NSString *p = keep_move_into(@(over), k);
+    keep_answer(k, p ? 1 : -1, p);
+    return;
+  }
+  UIViewController *top = keep_top();
+  if (!top) {
+    keep_answer(k, -1, nil);
+    return;
+  }
+  MBKeepSheet *s = [MBKeepSheet new];
+  s.keep = k;
+  if (!keep_sheets) keep_sheets = [NSMutableSet new];
+  [keep_sheets addObject:s];
+  UIDocumentPickerViewController *c =
+      [[UIDocumentPickerViewController alloc] initForExportingURLs:@[ [NSURL fileURLWithPath:k.part] ] asCopy:YES];
+  c.delegate = s;
+  [top presentViewController:c animated:YES completion:nil];
+#endif
+}
+
+int32_t mb_host_keep_state(int32_t kid) {
+  MBKeep *k = keeps[@(kid)];
+  return k ? k.state : -1;
+}
+
+moonbit_string_t mb_host_keep_where(int32_t kid) { return mb_string_from_ns(keeps[@(kid)].where ?: @""); }
+
+void mb_host_keep_end(int32_t kid) {
+  MBKeep *k = keeps[@(kid)];
+  if (!k) return;
+  // one whose bytes are still coming is called off; one being moved or asked about finishes on its own
+  if (k.out) keep_drop(k);
+  [keeps removeObjectForKey:@(kid)];
 }
