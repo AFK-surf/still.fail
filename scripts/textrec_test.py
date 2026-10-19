@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A real host's run (MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1: TEXTREC and DRAWHASH lines on its log) made a test of
+"""A real host's run (MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1: TEXTREC, DRAWHASH and INPUT lines on its log) made a test of
 whether a Tester over the host's kept text draws, frame for frame, what the host drew: src/kitdemo/textrec_NAME_wbtest.mbt.
 
   scripts/textrec_test.py LOG NAME PAGE W H
@@ -13,7 +13,11 @@ if "." not in scale:
     scale += ".0"
 if "." not in t0:
     t0 += ".0"
-keep = [l[l.index("TEXTREC"):] for l in lines if "TEXTREC " in l] + [l[l.index("DRAWHASH"):] for l in lines if "DRAWHASH " in l]
+def tail(l, w):
+    return l[l.index(w):]
+# the host's text, then its frames and the inputs between them in the order they came
+keep = [tail(l, "TEXTREC") for l in lines if "TEXTREC " in l] + [
+    tail(l, "DRAWHASH") if "DRAWHASH " in l else tail(l, "INPUT ") for l in lines if "DRAWHASH " in l or "INPUT " in l]
 out = [f"// Kept from a real host's run ({name}: MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_SCREEN={page} MBUI_WIN={w}x{h}),",
        "// made by scripts/textrec_test.py: not edited by hand.", "", "///|", f"let run_{name} : String ="]
 out += ["  #|" + l for l in keep]

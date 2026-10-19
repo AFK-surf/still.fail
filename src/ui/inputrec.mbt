@@ -1,0 +1,73 @@
+// What a real host gave the app between its frames, kept with them (MBUI_DRAW_LOG=1, frames.mbt): each input as
+// the host handed it (a pointer's, a wheel's, a key's, the input method's, the system's back, the app shown or
+// hidden), with the host's own time for it, as an INPUT line between the DRAWHASH lines of the frames around it. A
+// Tester's `replay_frames` hands each on again at its place, at its time: the run's whole input, seen again frame by
+// frame.
+//
+//   INPUT {"k":"pointer","t":T,"a":[kind,x,y,button]}   "wheel" [x,y,dx,dy,phase]   "key" [code,mods]
+//   INPUT {"k":"text","t":T,"a":[kind,a,b],"s":TEXT}    "back" [kind,x,progress,edge]   "app" [state]
+
+///|
+fn draw_logging() -> Bool {
+  if draw_log.val < 0 {
+    draw_log.val = if @host.env("MBUI_DRAW_LOG") == "1" { 1 } else { 0 }
+  }
+  draw_log.val == 1 && fake.val is None
+}
+
+///|
+fn rec_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
+  if draw_logging() {
+    let m : Map[String, Json] = {
+      "k": Json::string(kind),
+      "t": Json::number(t),
+      "a": Json::array(args.map(Json::number(_))),
+    }
+    match text {
+      Some(s) => m["s"] = Json::string(s)
+      None => ()
+    }
+    @host.log("INPUT " + Json::object(m).stringify())
+  }
+}
+
+///|
+/// One INPUT line handed on again (Tester::replay_frames), the fake host's clock at its time while it is.
+fn replay_input(f : FakeHost, line : String) -> Unit {
+  guard line.find("INPUT ") is Some(i) else { return }
+  let j = @json.parse(line.view(start_offset=i + 6).to_owned()) catch { _ => return }
+  guard j is Object(m) else { return }
+  let a : Array[Double] = match m.get("a") {
+    Some(Array(xs)) =>
+      xs.map(fn(x) {
+        match x {
+          Number(d, ..) => d
+          _ => 0.0
+        }
+      })
+    _ => []
+  }
+  let n = fn(k : Int) -> Double { if k < a.length() { a[k] } else { 0.0 } }
+  let t = match m.get("t") {
+    Some(Number(d, ..)) => d
+    _ => f.time
+  }
+  let frame_time = f.time
+  f.time = t
+  match m.get("k") {
+    Some(String("pointer")) => on_pointer(n(0).to_int(), n(1), n(2), n(3).to_int())
+    Some(String("wheel")) => on_wheel(n(0), n(1), n(2), n(3), n(4).to_int())
+    Some(String("key")) => on_key(n(0).to_int(), n(1).to_int())
+    Some(String("text")) => {
+      let s = match m.get("s") {
+        Some(String(s)) => s
+        _ => ""
+      }
+      on_text(n(0).to_int(), s, n(1).to_int(), n(2).to_int())
+    }
+    Some(String("back")) => on_back(n(0).to_int(), n(1), n(2), n(3).to_int())
+    Some(String("app")) => on_app_state(n(0).to_int())
+    _ => ()
+  }
+  f.time = frame_time
+}

@@ -56,7 +56,8 @@ fn drawn_hash() -> Int64 {
 }
 
 ///|
-/// MBUI_DRAW_LOG=1 on a real host: each frame's `frame_hash` on the log (DRAWHASH frame time width height scale hash
+/// MBUI_DRAW_LOG=1 on a real host: each frame's `frame_hash` on the log, the inputs between them with it (INPUT,
+/// inputrec.mbt) (DRAWHASH frame time width height scale hash
 /// stable: 1 when the host asked for output the same on every run, MBUI_BENCH=-1),
 /// for a Tester over the host's kept text (textrec.mbt) given the same frames (`replay_frames`) to be checked against:
 /// -1 not asked yet, 0 no, 1 yes.
@@ -67,10 +68,7 @@ let draw_frames : Ref[Int] = Ref::new(0)
 
 ///|
 fn log_drawn(w : Double, h : Double, scale : Double, t : Double) -> Unit {
-  if draw_log.val < 0 {
-    draw_log.val = if @host.env("MBUI_DRAW_LOG") == "1" { 1 } else { 0 }
-  }
-  if draw_log.val == 1 {
+  if draw_logging() {
     draw_frames.val += 1
     let stable = if bench.mode < 0 { 1 } else { 0 }
     @host.log("DRAWHASH \{draw_frames.val} \{t} \{w} \{h} \{scale} \{drawn_hash()} \{stable}")
@@ -109,6 +107,11 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
   }
   for v in log.split("\n") {
     let line = v.to_owned()
+    // what the host gave between two frames, handed on at its place (inputrec.mbt)
+    if line.find("INPUT ") is Some(_) {
+      replay_input(self.fake, line)
+      continue
+    }
     guard line.find("DRAWHASH ") is Some(i) else { continue }
     let parts = line.view(start_offset=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
     guard parts.length() >= 6 else { continue }
