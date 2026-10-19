@@ -115,6 +115,7 @@ import fail.still.android.ui.Seg
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Follow
 import fail.still.android.ui.rememberFollow
+import fail.still.android.ui.keepsBottom
 import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import androidx.compose.ui.platform.LocalDensity
@@ -270,7 +271,7 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: Histor
     // A step or thought in brief is read whole as it is opened (`history.detail`).
     val detail: suspend (List<Long>) -> Unit = { entries -> api.historyDetail(agent.session.key, entries) }
     CompositionLocalProvider(LocalFollow provides follow, LocalDetail provides detail) {
-        LazyColumn(Modifier.fillMaxWidth(), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.fillMaxWidth().keepsBottom(follow), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item(key = "edge") { if (older) Box(Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) { WaitLine() } else Edge(history.edge) }
             itemsIndexed(lines, key = { _, l -> when (l) { is Line.Live -> "live/${l.step.id}"; is Line.Phase -> "phase"; is Line.Item -> l.item.key } }) { _, line ->
                 when (line) {

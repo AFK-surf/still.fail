@@ -52,6 +52,8 @@ val WindowInsets.Companion.keyboard: WindowInsets
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KeyboardInsets(content: @Composable () -> Unit) {
+    // Given from outside (KeyboardAt): that is where it is.
+    if (LocalKeyboard.current != null) return content()
     val activity = LocalActivity.current as? ComponentActivity
     var multiWindow by remember(activity) { mutableStateOf(activity?.isInMultiWindowMode == true) }
     DisposableEffect(activity) {
@@ -62,6 +64,10 @@ fun KeyboardInsets(content: @Composable () -> Unit) {
     val insets = rememberKeyboardInsets(WindowInsets.ime, WindowInsets.imeAnimationSource, WindowInsets.imeAnimationTarget, multiWindow)
     CompositionLocalProvider(LocalKeyboard provides insets, content = content)
 }
+
+/** The keyboard where `insets` say, for all within, whatever the system's is doing (the motion tests move it a frame at a time). */
+@Composable
+fun KeyboardAt(insets: WindowInsets, content: @Composable () -> Unit) = CompositionLocalProvider(LocalKeyboard provides insets, content = content)
 
 @Composable
 fun rememberKeyboardInsets(raw: WindowInsets, source: WindowInsets, target: WindowInsets, multiWindow: Boolean): WindowInsets {

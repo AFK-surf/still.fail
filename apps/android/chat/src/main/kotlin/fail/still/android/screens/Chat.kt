@@ -169,6 +169,7 @@ import fail.still.android.ui.endInView
 import fail.still.android.ui.floating
 import fail.still.android.ui.glass
 import fail.still.android.ui.rememberFollow
+import fail.still.android.ui.keepsBottom
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.drawSmooth
 import fail.still.core.CoreException
@@ -392,8 +393,76 @@ class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: 
     fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key ?: orOwner
 }
 
-/** How an activity glides to a new place (web useActivityGlide: a spring, 0.3s, no bounce). */
-private val ACTIVITY_GLIDE = androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 300f, visibilityThreshold = IntOffset(1, 1))
+/**
+ * An activity pushed by what comes in above it glides to its new place (web useActivityGlide: a spring, 0.3s, no
+ * bounce), going on from where it is and its speed when pushed again. A move is judged as the web's is, by where it
+ * stands in the list's content: how far under the nearest row above it that was there the frame before, as laid out.
+ * The list scrolling, or laid out anew from elsewhere (the keyboard coming or going, the list keeping its bottom), moves
+ * that row with it: not a move of its own. (The list's own placement animation takes any move it did not scroll by as
+ * one: the keyboard going had it glide after the chat.)
+ */
+private class Glide(private val list: androidx.compose.foundation.lazy.LazyListState, private val key: Any) {
+    /** How far it is drawn from where it is laid out, gliding to nothing, and how fast (`v`, per second). */
+    var y by androidx.compose.runtime.mutableFloatStateOf(0f)
+    private var v = 0f
+    var moving by mutableStateOf(false)
+    /** How far under each row in view above it it was laid out, the last time. */
+    private var under = HashMap<Any, Int>()
+
+    /** Where it is drawn, from where the list lays it out now; `on`: a move glides (else it is where it is laid out). */
+    fun place(on: Boolean): Int {
+        val rows = list.layoutInfo.visibleItemsInfo
+        val me = rows.firstOrNull { it.key == key } ?: return y.roundToInt()
+        val now = HashMap<Any, Int>(rows.size)
+        var moved = 0
+        var found = false
+        for (row in rows) {
+            if (row.index >= me.index) break
+            val gap = me.offset - row.offset
+            now[row.key] = gap
+            under[row.key]?.let { moved = gap - it; found = true }
+        }
+        under = now
+        if (!on) { y = 0f; v = 0f; moving = false }
+        else if (found && moved != 0) { y -= moved; moving = true }
+        return y.roundToInt()
+    }
+
+    /** `dt` seconds on (critically damped, as spring(dampingRatio = 1f, stiffness = 300f)). */
+    fun step(dt: Float) {
+        val w = 17.32f
+        val e = kotlin.math.exp(-w * dt)
+        val c = v + w * y
+        val nextY = (y + c * dt) * e
+        v = (v - w * c * dt) * e
+        y = nextY
+        if (kotlin.math.abs(y) < 0.5f && kotlin.math.abs(v) < 5f) { y = 0f; v = 0f; moving = false }
+    }
+}
+
+/** Glides as [Glide] says, while `on`. */
+@Composable
+private fun Modifier.glides(list: androidx.compose.foundation.lazy.LazyListState, key: Any, on: Boolean): Modifier {
+    val glide = remember(list, key) { Glide(list, key) }
+    LaunchedEffect(glide) {
+        snapshotFlow { glide.moving }.collect { moving ->
+            if (!moving) return@collect
+            val scale = kotlinx.coroutines.currentCoroutineContext()[androidx.compose.ui.MotionDurationScale]?.scaleFactor ?: 1f
+            var last = -1L
+            while (glide.moving) withFrameNanos { now ->
+                // Reduced motion: where it is laid out, at once.
+                val dt = if (scale <= 0f) 1f else if (last < 0) 0.016f else minOf(0.064f, (now - last) / 1e9f) / scale
+                last = now
+                glide.step(dt)
+            }
+        }
+    }
+    val glides = rememberUpdatedState(on)
+    return layout { measurable, constraints ->
+        val p = measurable.measure(constraints)
+        layout(p.width, p.height) { p.place(0, glide.place(glides.value)) }
+    }
+}
 
 /** How long an activity stays once its agent stops, then how long it takes to fade (web Chat.tsx HOLD_MS, FADE_MS). */
 private const val HOLD_MS = 600L
@@ -835,6 +904,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         // The list is what the bars and capsules over it frost (the button over it too, so it is not in it).
         LazyColumn(
             Modifier.fillMaxSize()
+                // The keyboard coming or going: what is at its bottom stays there, in the same frame.
+                .keepsBottom(follow)
                 .let { m ->
                     if (flight?.carried != true) m else m.drawWithContent {
                         val cut = host.overlayY(box)?.let { flight.top - it } ?: size.height
@@ -863,7 +934,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 // place, going on from where it is and its speed when pushed again (web useActivityGlide); folded to an
                 // avatar that is out flying it shows nothing, and is put there at once for the avatar to fly to.
                 val glides = row is Entry.Working && !motion.away(row.agent.key)
-                Box(Modifier.sendReflow(host, row.id).animateItem(fadeInSpec = null, placementSpec = if (glides && flight == null) ACTIVITY_GLIDE else null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
+                Box(Modifier.sendReflow(host, row.id).animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = if (fades) tween(200) else null).let { m -> if (row is Entry.Working) m.glides(list, row.id, glides && flight == null) else m }.rise(eases).flying(host, f).onSizeChanged { size ->
                     if (row is Entry.Floor) return@onSizeChanged
                     val before = heights.put(row.id, size.height)
                     // Something new took its place at the bottom: the floor gives that much back.
