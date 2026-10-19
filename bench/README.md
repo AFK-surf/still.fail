@@ -178,15 +178,69 @@ Paint, encoding and GPU time are already at or below nanoui's (mbui's
 shadow is a cheaper approximation than nanoui's Gaussian, which is most of
 the GPU difference in boxes and dashboard).
 
+### Layout kept from frame to frame (branch layout-skip)
+
+Steps 1, 2, 4 and 5 below, one commit each. The views are still built
+anew every frame; what changed is found by comparing each node with what
+its flex node was given last frame (exact, field by field, no hash):
+
+- **Layout kept** (`Ctx::flex_tree`, `@flex.compute(reuse=true)`,
+  `Ctx::commit`): only what differs is set on the flex node, which is then
+  marked dirty with everything above it; the engine keeps the sizes a node
+  was measured at and its last layout, with all under it, while it is
+  asked for the same again; commit puts a subtree that did not change
+  where it now goes (the same sums as a full commit: the same to the bit)
+  or leaves it where it was. Lists, editors and pager pages are placed
+  every frame; texts keep their layout in their slot.
+- **Flat flex**: items and lines from a pool per depth, sizes returned as
+  a width and an out field instead of tuples (MoonBit's native backend
+  allocates every tuple).
+- **Partial resets**: a reused node is reset in three parts, and a box
+  resets only the one it does not set itself (instead of a side record:
+  the reset is not where build's time goes).
+- **List sums**: the rows' heights kept in a Fenwick tree, so the scroll
+  bar reads what is above the anchor and the whole in a few steps.
+
+Studio was busy throughout (an Android emulator and others' builds, load
+11-20), so the five builds ran interleaved, each round all five in a
+rotated order, 8 rounds, one run each, and these are medians (frame CPU,
+in brackets layout). They are about 1.3-1.5× the quiet-machine numbers
+above; compare the ratios.
+
+| scene | main | layout kept | + flat flex | + partial resets | + list sums | final / main |
+|---|---:|---:|---:|---:|---:|---:|
+| boxes | 0.322 (0.216) | 0.247 (0.077) | 0.105 (0.031) | 0.138 (0.033) | 0.128 (0.031) | 0.40 (0.15) |
+| text | 0.672 (0.484) | 0.544 (0.422) | 0.454 (0.340) | 0.493 (0.357) | 0.445 (0.338) | 0.66 (0.70) |
+| scroll | 1.718 (1.386) | 0.503 (0.205) | 0.485 (0.201) | 0.505 (0.205) | 0.523 (0.204) | 0.30 (0.15) |
+| list | 0.098 (0.078) | 0.108 (0.082) | 0.079 (0.061) | 0.077 (0.057) | 0.083 (0.057) | 0.85 (0.74) |
+| dashboard | 0.124 (0.088) | 0.099 (0.069) | 0.109 (0.070) | 0.087 (0.054) | 0.106 (0.068) | 0.86 (0.78) |
+
+Scroll's layout is now flex_tree's comparisons and moving 4000 nodes
+(0.20 ms here, ~0.15 quiet); its frame is mostly build (the view's 2000
+formatted strings). Dashboard and text change their labels every frame,
+so their cards and cells are laid out again (text's gain is the flat flex).
+Build barely moved with the partial resets (minimums: boxes 0.053 to
+0.049, scroll 0.217 to 0.217): the views' own work (formatting, closures,
+colours) is what build costs. The list sums are not exercised here (the
+bench scrolls with `list_scroll_to`, so no scroll bar shows): 100 000
+additions a frame become about 2 × 17 steps. Paint is a few µs slower
+(scroll 0.027 to 0.030): the nodes are no longer warm from layout.
+
+Correctness: every frame of the ui tests' scenes is compared, to the bit,
+with the same frames laid out afresh (`layout_wbtest.mbt`); the engine's
+reuse against fresh trees on 400 random trees changed step by step
+(`src/flex/reuse_test.mbt`); and each check was taken out in turn
+(mutation runs) to see a test fail.
+
 ### Next steps, with what they should give
 
-1. **Skip the flex engine for subtrees that did not change**: hash a
+1. (Done, above: layout kept.) **Skip the flex engine for subtrees that did not change**: hash a
    node's style inputs while building, and when a subtree's hash, the
    space offered and the texts' layouts match last frame's, reuse its
    sizes and only move it. Scroll's layout would fall from ~1 ms to the
    cost of the hashes (~0.1-0.2 ms); boxes and dashboard (which change
    offsets and colours, not sizes) would halve.
-2. **Flat flex**: keep items and lines in arrays reused across calls (an
+2. (Done, above; styles set only where they differ came with layout kept.) **Flat flex**: keep items and lines in arrays reused across calls (an
    arena per layout), return sizes through fields instead of tuples, and
    copy styles into the flex node only when they differ. Expected
    -30-40% of layout everywhere.
@@ -194,10 +248,10 @@ the GPU difference in boxes and dashboard).
    strings of digits and Latin letters (break opportunities only at
    spaces, without UAX #14's tables), and layouts written into reused
    arrays. Text scene -20-30%.
-4. **A smaller node**: move what few nodes use (pages, pager, rich text,
+4. (Done another way, above: partial resets; little gained.) **A smaller node**: move what few nodes use (pages, pager, rich text,
    image fit, reader fields) into an optional side record so
    `Node::reset` touches a dozen fields. Build -30-50%.
-5. **The list's scroll bar** sums every row's height each frame while it
+5. (Done, above: list sums.) **The list's scroll bar** sums every row's height each frame while it
    shows (`paint_scrollbar`): 100 000 additions per frame for this list
    once a user scrolls it (not exercised by the bench, which scrolls with
    `list_scroll_to`). Keep a running total.
