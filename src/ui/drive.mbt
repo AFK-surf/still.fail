@@ -21,6 +21,9 @@
 //   paste TEXT                  TEXT on the clipboard, then the system's paste
 //   pasten N TEXT               TEXT repeated to N characters, pasted
 //   wheel DY                    the list under the middle of the window scrolled by DY
+//   drag X Y DX DY [MS]         a finger down at X Y (negative: from the right, the bottom), moved by DX DY over MS
+//                               (300 by default), a move a frame, then lifted there
+//   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, once it holds still
 //   shot NAME                   the window's picture as $MBUI_SHOT_DIR/NAME.png (where the host cannot, "SHOT NAME"
 //                               is logged and the run waits 1.5 s for whoever takes it: adb's screencap)
 //   log TEXT                    DRIVE LOG TEXT on the log (a mark for whoever watches it)
@@ -39,6 +42,13 @@ priv struct Driver {
   // where a tap's target was last frame: it is tapped once it holds still (not while a list or a page still moves it)
   mut seen_x : Double
   mut seen_y : Double
+  // a drag under way (drag, dragon): where it went down, how far it goes, since when, over how long (0: none)
+  mut gx : Double
+  mut gy : Double
+  mut gdx : Double
+  mut gdy : Double
+  mut gt0 : Double
+  mut gms : Double
   dir : String
 }
 
@@ -67,6 +77,12 @@ fn drive_start(script : String, dir : String) -> Unit {
     ry: 0.0,
     seen_x: -1.0,
     seen_y: -1.0,
+    gx: 0.0,
+    gy: 0.0,
+    gdx: 0.0,
+    gdy: 0.0,
+    gt0: 0.0,
+    gms: 0.0,
     dir,
   })
   h_log("DRIVE start: \{steps.length()} lines")
@@ -281,6 +297,22 @@ fn drive_frame(c : Ctx) -> Unit {
     d.seen_y = -1.0
     return
   }
+  if d.gms > 0.0 {
+    // a drag on its way: a move this frame, lifted once all the way
+    let f = dmin((now - d.gt0) / d.gms, 1.0)
+    let x = d.gx + d.gdx * f
+    let y = d.gy + d.gdy * f
+    on_pointer(1, x, y, 0)
+    if f >= 1.0 {
+      on_pointer(2, x, y, 0)
+      d.gms = 0.0
+      d.at = d.at + 1
+      d.since = -1.0
+      d.seen_x = -1.0
+      d.seen_y = -1.0
+    }
+    return
+  }
   while d.at < d.steps.length() {
     let line = d.steps[d.at]
     if d.since < 0.0 {
@@ -387,6 +419,49 @@ fn drive_frame(c : Ctx) -> Unit {
         d.rx = x
         d.ry = y
         d.release_at = now + ms
+        return
+      }
+      "drag" | "dragon" => {
+        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let (x, y, rest) = if cmd == "drag" {
+          if words.length() < 4 {
+            drive_fail(c, d, "drag X Y DX DY [MS]")
+            return
+          }
+          let x = number(words[0])
+          let y = number(words[1])
+          (
+            if x < 0.0 { c.width + x } else { x },
+            if y < 0.0 { c.height + y } else { y },
+            words[2:].to_owned(),
+          )
+        } else {
+          if words.length() < 4 {
+            drive_fail(c, d, "dragon DX DY MS TEXT")
+            return
+          }
+          let what = words[3:].to_owned().join(" ")
+          let at = on_screen(c, what)
+          if at.length() == 0 {
+            if waited > d.timeout {
+              drive_fail(c, d, "not on screen after \{d.timeout.to_int()} ms")
+            }
+            return
+          }
+          let (x, y) = lowest(at)
+          if !d.still(x, y) {
+            return
+          }
+          (x, y, words[0:3].to_owned())
+        }
+        d.gx = x
+        d.gy = y
+        d.gdx = number(rest[0])
+        d.gdy = if rest.length() > 1 { number(rest[1]) } else { 0.0 }
+        d.gms = if rest.length() > 2 { dmax(number(rest[2]), 16.0) } else { 300.0 }
+        d.gt0 = now
+        h_log("DRIVE \{cmd} \{arg} from \{x.to_int()},\{y.to_int()}")
+        on_pointer(0, x, y, 0)
         return
       }
       "type" => {

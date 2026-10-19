@@ -86,9 +86,15 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     _ => None
   }
   let shown = shown_decisions(items(view, "items"))
+  // the bar's 奏 at the stack's root: a place's top bar, room at its foot for the bar (slice 7's); else pushed
+  let place = app.nav.depth() == 1
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-    nav_bar(c, tr("android-misc.bar.place.decisions"))
-    c.box(w=Fill(1.0), h=Fill(1.0), pt=4.0, fn() {
+    if place {
+      place_top_bar(c, "decisions")
+    } else {
+      nav_bar(c, tr("android-misc.bar.place.decisions"))
+    }
+    c.box(w=Fill(1.0), h=Fill(1.0), pt=4.0, pb=if place { bar_room } else { 0.0 }, fn() {
       if shown.length() == 0 {
         // none yet while stations are still read is not none: their cards to come
         if view is Some(_) && !flag(field(view, "wait"), "reading") {

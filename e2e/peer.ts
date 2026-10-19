@@ -8,6 +8,9 @@
 //   node e2e/peer.ts create TITLE-WORDS    another chat, its first message TITLE-WORDS (Home's new row)
 //   node e2e/peer.ts send TEXT             TEXT said in the chat by this device
 //   node e2e/peer.ts read                  the chat as this device's core shows it (JSON lines: who, text, files)
+//   node e2e/peer.ts chats [WORDS]         the workspace's chats as Home lists them (JSON: title, session, last), once a
+//                                          row has WORDS
+//   node e2e/peer.ts newchat               the workspace's new-chat page as the core has it (the `newChat` topic)
 //
 // E2E_EMBER (the ember checkout), E2E_ORIGIN (the dev cloud), E2E_PEER_DATA (this core's own data directory).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -133,6 +136,18 @@ try {
   } else if (cmd === "read") {
     const chat = JSON.parse(readFileSync(chatFile, "utf8"));
     const v = await until({ topic: "chat", station: chat.station, thread: chat.thread }, (v) => v);
+    console.log(JSON.stringify(v, null, 1));
+  } else if (cmd === "chats") {
+    // with words: once a row has them (its title or its last words)
+    const words = rest.join(" ");
+    const rowsOf = (v: J) => (v?.days ?? []).flatMap((d: J) => d.items ?? []).map((it: J) => ({ title: it.title, session: it.session, station: it.station, last: it.last?.preview }));
+    const rows = await until({ topic: "chats", scope: workspace, mine: false }, (v) => {
+      const r = rowsOf(v);
+      return v?.days && (!words || r.some((x: J) => `${x.title} ${x.last}`.includes(words))) && r;
+    });
+    console.log(JSON.stringify(rows, null, 1));
+  } else if (cmd === "newchat") {
+    const v = await until({ topic: "newChat", scope: workspace }, (v) => v?.stations && v);
     console.log(JSON.stringify(v, null, 1));
   } else {
     throw new Error(`unknown command ${cmd}`);

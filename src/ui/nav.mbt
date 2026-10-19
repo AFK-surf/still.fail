@@ -18,7 +18,9 @@
 ///|
 struct NavPage[P] {
   serial : Int
-  page : P
+  mut page : P
+  // it rose from the bottom (Nav::rise): it goes back down the same way
+  mut rise : Bool
 }
 
 ///|
@@ -29,7 +31,7 @@ let nav_serial : Ref[Int] = { val: 0 }
 ///|
 fn[P] nav_page(page : P) -> NavPage[P] {
   nav_serial.val = nav_serial.val + 1
-  { serial: nav_serial.val, page }
+  { serial: nav_serial.val, page, rise: false }
 }
 
 ///|
@@ -148,6 +150,34 @@ pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
 }
 
 ///|
+/// Pushes `page` rising from the bottom over the one on top, which stays where it is (App.kt: a new chat, 380 ms on
+/// (.2, .8, .2, 1)); back, it sinks down the same way (swiped back, it goes down with the finger).
+pub fn[P] Nav::rise(self : Nav[P], page : P) -> Unit {
+  self.settle()
+  let e = nav_page(page)
+  e.rise = true
+  self.pages.push(e)
+  self.p = 1.0
+  self.go(1, 0.0, 380.0, Arrive)
+}
+
+///|
+/// The top page becomes `page` in place, keeping what its widgets hold (a new chat becoming the chat it made, its
+/// composer's words and focus kept); back from it, it goes sideways as a pushed page does.
+pub fn[P] Nav::become(self : Nav[P], page : P) -> Unit {
+  let e = self.pages[self.pages.length() - 1]
+  e.page = page
+  e.rise = false
+  wake()
+}
+
+///|
+/// Whether the top page rose from the bottom (Nav::rise) and has not become another.
+pub fn[P] Nav::risen(self : Nav[P]) -> Bool {
+  self.pages[self.pages.length() - 1].rise
+}
+
+///|
 /// Back a page: the top slides away; false when there is none under it.
 pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
   if self.pages.length() < 2 {
@@ -160,7 +190,10 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
     }
   }
   self.leaving = self.pages.pop()
-  self.go(2, 1.0, 300.0, Standard)
+  match self.leaving {
+    Some(e) if e.rise => self.go(2, 1.0, 380.0, Arrive)
+    _ => self.go(2, 1.0, 300.0, Standard)
+  }
   true
 }
 
@@ -269,12 +302,14 @@ pub fn[P] Ctx::nav(
     None => if nav.mode != 0 && n > 1 { Some(nav.pages[n - 2]) } else { None }
   }
   let p = nav.p
+  // a page that rose goes up and down over the one under it, which stays
+  let rising = top.rise
   let i = self.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
     match under {
-      Some(e) => self.nav_layer(e, p - 1.0, bg, page)
+      Some(e) => self.nav_layer(e, if rising { 0.0 } else { p - 1.0 }, 0.0, bg, page)
       None => ()
     }
-    self.nav_layer(top, p, bg, page)
+    self.nav_layer(top, if rising { 0.0 } else { p }, if rising { p * self.height } else { 0.0 }, bg, page)
   })
   if n > 1 || nav.mode != 0 {
     self.back_next = Some(fn(kind, x, w, t) { nav.gesture(kind, x, w, t) })
@@ -289,10 +324,11 @@ fn[P] Ctx::nav_layer(
   self : Ctx,
   e : NavPage[P],
   slide : Double,
+  drop : Double,
   bg : Int64,
   page : (P) -> Unit,
 ) -> Unit {
-  let i = self.box(w=Fill(1.0), h=Fill(1.0), bg~, fn() {
+  let i = self.box(w=Fill(1.0), h=Fill(1.0), bg~, ty=drop, fn() {
     let saved = self.owner
     self.owner = e.serial
     self.scope(e.serial, fn() { page(e.page) })
@@ -323,6 +359,7 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
         self.editors.remove(id)
         self.springs.remove(id)
         pagers.remove(id)
+        drags.remove(id)
         if self.focus == id {
           self.focus = 0
         }

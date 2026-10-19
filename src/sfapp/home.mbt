@@ -204,7 +204,8 @@ fn home_page(
         OpenJobs => open_jobs(c, src, w)
         Header(label) => section_header(c, label)
         Row(item) => chat_row(c, src, item, lead)
-        Foot => c.box(h=Px(8.0), fn() {  }) |> ignore
+        // room for the bottom bar (Home.kt: LocalBarRoom)
+        Foot => c.box(h=Px(bar_room), fn() {  }) |> ignore
       }
     })
     |> ignore
@@ -236,8 +237,7 @@ fn top_bar(
       }
       let wid = c.id("home-workspace")
       if c.clicked(wid) {
-        app.sheet = true
-        app.sheet_at = c.now()
+        raise_sheet(Workspaces)
       }
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
         // the name as long as there is room for it

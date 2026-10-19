@@ -21,11 +21,14 @@
 # frosted and liquid glass over bands of colour), light and dark (mac-glass, mac-glass-dark); `home` and `chat` also
 # give their dark looks (mac-home-dark, mac-chat-dark), `chat` a picture under the bar's glass (mac-chat-glass) and
 # its glass drawn solid (mac-chat-solid, as where the system asks for less transparency).
+# `newchat` and `web-newchat` are a new chat, its sheets, the bottom bar's panel and a place
+# (MBUI_FIXTURE=newchat|newchat-station|newchat-model|home-bars|place, src/sfapp/newchat_fixture.mbt):
+# mac-newchat-<state>, web-newchat-<state>.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home chat composer drive decide glass web web-kit web-home web-chat web-composer web-drive web-decide web-glass ios android}
+PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat ios android}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
 if [ ! -d out/node/node_modules/pixelmatch ]; then
@@ -130,6 +133,23 @@ for p in $PLATFORMS; do
       for m in $DECIDE; do
         QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-decide-$m.png
         names="$names web-decide-$m"
+      done ;;
+    newchat)
+      # a new chat, its station's sheet, its run picker; the bar's panel of the other bar; a place's page
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-newchat; mkdir -p out/shot-newchat
+      names=
+      for m in newchat newchat-station newchat-model home-bars place; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_AT=40 MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-newchat ./_build/native/release/build/sffix/sffix.exe >/dev/null
+        cp out/shot-newchat/$m.png out/shots/mac-newchat-$m.png
+        names="$names mac-newchat-$m"
+      done ;;
+    web-newchat)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in newchat newchat-station newchat-model home-bars place; do
+        QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-newchat-$m.png
+        names="$names web-newchat-$m"
       done ;;
     web-composer)
       APP=sffix bash scripts/web.sh build >/dev/null

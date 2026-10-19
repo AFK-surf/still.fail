@@ -1,0 +1,23 @@
+# The bottom bar's places: 文件 tapped (its page in place of the chats', the ball going to it); the bar drawn up into
+# the panel of the other bar and let go on 奏 there (that bar in view, 奏's page); 用量 tapped; the panel again, the
+# chats picked in it (the first bar back in view).
+timeout 60000
+until 端到端测试
+tap icon:folder
+until =文件
+gone 端到端测试
+shot 1-files
+tap icon:chats
+until 端到端测试
+wait 500
+dragon 0 -64 1000 icon:chats
+until =奏
+shot 2-decisions
+tap icon:chart
+until =用量
+shot 3-usage
+dragon 0 -64 1000 icon:zou
+until 端到端测试
+shot 4-chats
+# (the prefs written behind)
+wait 2000

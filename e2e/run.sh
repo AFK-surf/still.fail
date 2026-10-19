@@ -68,6 +68,8 @@ core_has() {
   done
   return 1
 }
+# whether the device's own values the core keeps with the host (its prefs: `storage.set` of device/prefs) hold $1
+core_device_has() { grep -rqaF "$1" $CORE 2>/dev/null; }
 peer() { "$ROOT/scripts/e2e-local.sh" peer "$@"; }
 # the folders the test station lends (its config's drive.roots)
 drive_roots() { python3 -c "import json; print('\n'.join(json.load(open('$STATION/data/config.json')).get('drive', {}).get('roots', [])))"; }

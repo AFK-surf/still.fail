@@ -263,12 +263,13 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
     "workspaceMarks" =>
       Some({
         "workspaces": {
-          "ws1": { "alert": 1, "unread": 2, "wait": 1, "tone": "alert" },
+          "ws1": { "alert": 1, "unread": 2, "wait": 1, "decisions": 2, "tone": "alert" },
           "ws2": { "alert": 0, "unread": 2, "tone": "done" },
         },
         "others": if f.workspace == "ws1" { "done" } else { "alert" },
       })
     "status" => Some({ "items": [] })
+    "newChat" | "pick" => fixture_new_topic(f, name)
     _ =>
       match decide_fixture_topic(f, name, params) {
         Some(v) => v
@@ -323,12 +324,16 @@ pub fn fixture(mode : String) -> Source {
           done(Ok(Json::object({})))
         }
         _ =>
-          match fixture_chat_call(f, name, params) {
+          match fixture_new_call(f, name, params) {
             Some(r) => done(r)
             None =>
-              match decide_fixture_call(name) {
+              match fixture_chat_call(f, name, params) {
                 Some(r) => done(r)
-                None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
+                None =>
+                  match decide_fixture_call(name) {
+                    Some(r) => done(r)
+                    None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
+                  }
               }
           }
       }

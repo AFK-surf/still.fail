@@ -232,6 +232,22 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
 }
 
 ///|
+/// The centre of the last text node containing `s` (drawn last: what lies over the others, a sheet's).
+pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
+  ignore(self)
+  let c = g
+  let mut found = None
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if (n.kind == kind_text || n.kind == kind_editor || n.kind == kind_rich) &&
+      n.text.contains(s) {
+      found = Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
+    }
+  }
+  found
+}
+
+///|
 pub fn Tester::tap_text(self : Tester, s : String) -> Unit {
   match self.find(s) {
     Some((x, y)) => self.tap(x, y)

@@ -31,6 +31,8 @@ D="$(cd "$(dirname "$0")" && pwd)"
 cd "$D/.."
 ROOT=$PWD
 WORK=${E2E_WORK:-$(cd .. && pwd)/e2e-local}
+# (absolute: some steps run from elsewhere)
+mkdir -p "$WORK" && WORK=$(cd "$WORK" && pwd)
 PORT=${E2E_PORT:-18787}
 RELAY_PORT=${E2E_RELAY:-18740}
 ORIGIN=http://127.0.0.1:$PORT
@@ -102,7 +104,8 @@ EOF
   rm -rf $STATION $WORK/peer $WORK/peer-home && mkdir -p $STATION/data/homes/cc $STATION/home $STATION/app/node/bin
   ln -s $E/station/dist $STATION/app/station
   ln -s "$(command -v node)" $STATION/app/node/bin/node
-  echo '{"profiles":[{"id":"cc","runtime":"claude","home":"homes/cc"}],"autoUpdate":false}' > $STATION/data/config.json
+  # its one profile with a model enabled, so a new chat can be made there (newChat.create refuses a station with none)
+  echo '{"profiles":[{"id":"cc","runtime":"claude","home":"homes/cc","models":["claude-sonnet-5-5"]}],"autoUpdate":false}' > $STATION/data/config.json
   echo '{}' > $STATION/data/homes/cc/.credentials.json
   # (what this shell has of the machine's own station, a job's notify address and token, is not the test station's)
   cat > $RUN/station-env.sh <<EOF

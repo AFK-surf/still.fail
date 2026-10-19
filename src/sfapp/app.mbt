@@ -1,6 +1,7 @@
 // still.fail, as its Android app is (ember apps/android app/App.kt): signed out it is the sign-in page; signed in,
 // the chats of one workspace are home (Home.kt), and everything else a page pushed over it (@ui.Nav: sliding in,
-// swiped back from the left edge), or a sheet from the bottom (the workspaces').
+// swiped back from the left edge; a new chat rising from the bottom), or a sheet from the bottom (sheet.mbt). The
+// places of the bottom bar (bar.mbt) are the pages at the stack's root, switched in place.
 
 ///|
 /// A page of the stack.
@@ -18,13 +19,18 @@ pub(all) enum Page {
   Drive(DriveAt)
   /// a text of a drive, read (drive_reader.mbt)
   DriveRead(DriveAt)
-  /// the decisions waiting for the viewer, one at a time (奏: decisions.mbt)
+  /// the decisions waiting for the viewer, one at a time (奏: decisions.mbt); the bar's 奏 place
   Decisions
   /// an agent's execution history (history.mbt): its chat, its session
   History(ChatRef, String)
   /// an entry of a history opened in full: the line it was under, its words
   Words(String, String)
-}
+  /// a new chat (newchat.mbt), rising from the bottom; it becomes the chat it makes, in place
+  NewChat
+  /// a place of the bottom bar's other than the chats, 奏 and 文件 (stations, profiles, connects, usage, archive):
+  /// its page at the stack's root
+  Place(String)
+} derive(Eq)
 
 ///|
 priv struct App {
@@ -33,13 +39,12 @@ priv struct App {
   mut picked : String
   /// the list's filter chosen here, by workspace, before the prefs say it
   filters : Map[String, String]
-  /// the workspaces' sheet: open, and how far up (0 gone … 1 up)
-  mut sheet : Bool
-  /// the filter's menu
+  /// the filter's menu, and when it was opened
   mut menu : Bool
-  /// when the sheet, the menu were opened
-  mut sheet_at : Double
   mut menu_at : Double
+  /// a place switched to on the bar: when, from which side (1 from the right, -1 the left, 0 from no side)
+  mut switch_at : Double
+  mut switch_way : Int
   /// a row held: its id, since when (the time shows while it is)
   mut held : Int
   mut held_at : Double
@@ -53,10 +58,10 @@ let app : App = {
   nav: new_nav(),
   picked: "",
   filters: {},
-  sheet: false,
   menu: false,
-  sheet_at: 0.0,
   menu_at: 0.0,
+  switch_at: -1.0e9,
+  switch_way: 0,
   held: 0,
   held_at: 0.0,
   toast: "",
@@ -92,7 +97,24 @@ fn reset() -> Unit {
   app.nav = new_nav()
   app.picked = ""
   app.filters.clear()
-  app.sheet = false
+  sheet_host.kind = NoSheet
+  sheet_host.shown = NoSheet
+  sheet_host.scrim = 0.0
+  bar_reset()
+  fresh.became = None
+  fresh.made = ""
+  fresh.sent = false
+  fresh.starting = false
+  new_fix.station = "st1"
+  new_fix.model = "claude-opus-5-5"
+  new_fix.runtime = "claude"
+  new_fix.effort = "high"
+  new_fix.d_model = "claude-opus-5-5"
+  new_fix.d_runtime = "claude"
+  new_fix.d_effort = "high"
+  new_fix.d_profile = ""
+  new_fix.made = 0
+  app.switch_at = -1.0e9
   app.menu = false
   app.held = 0
   app.toast = ""
@@ -123,7 +145,7 @@ fn reset() -> Unit {
 ///|
 /// Back to Home (the stack's root), the sheets and the menu closed.
 fn home() -> Unit {
-  app.sheet = false
+  lower_sheet()
   app.menu = false
   dui.sheet = None
   dui.leaving = None
@@ -196,12 +218,25 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       attend(src, w.id)
       c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
       |> ignore
+      // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
+      let root = app.nav.top()
+      if app.nav.depth() == 1 && root != Home && !app.menu {
+        c.on_back(fn() { go_place(c, "chats", [], -1) })
+      }
+      // the bottom bar: on a place's top page with nothing over it
+      bottom_bar(c, src, w, place_of(root), app.nav.depth() == 1 && place_of(root) is Some(_))
       if app.menu {
         filter_menu(c, src, w)
       }
-      if app.sheet {
-        workspaces_sheet(c, src, w, all, ws.value)
-      }
+      sheet_layer(c, fn(kind) {
+        match kind {
+          Workspaces => workspaces_sheet(c, src, w, all)
+          PickStation(scope) => pick_station_sheet(c, src, scope)
+          RunPicker(station) => run_picker_sheet(c, src, station)
+          NoSheet => ()
+        }
+      })
+      // a chat's sheets (slice 8's: sheets.mbt, framed in decide.mbt)
       sheets(c, src, w)
       toast(c)
     }
@@ -241,18 +276,83 @@ fn page_view(
   invited : Bool,
   page : Page,
 ) -> Unit {
-  match page {
-    Home => home_page(c, src, w, all, invited)
-    Chat(r) => chat_page(c, src, w, r)
-    Archived => placeholder_page(c, tr("android-chat.home.filter.archived"))
-    Settings => placeholder_page(c, tr("android-chat.home.settings"))
-    Files => files_page(c, src, w)
-    Drive(at) => drive_page(c, src, w, at)
-    DriveRead(at) => reader_page(c, src, at)
-    Decisions => decisions_page(c, src, w)
-    History(r, key) => history_page(c, src, r, key)
-    Words(head, words) => words_page(c, src, head, words)
+  // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side)
+  let root = app.nav.depth() == 1
+  let since = c.now() - app.switch_at
+  let span = if app.switch_way == 0 { 180.0 } else { 220.0 }
+  let e = if root && since < span && !c.stable() {
+    c.request_frame()
+    @ui.bezier(0.2, 0.8, 0.2, 1.0, dclamp(since / span, 0.0, 1.0))
+  } else {
+    1.0
   }
+  c.box(
+    w=Fill(1.0),
+    h=Fill(1.0),
+    tx=app.switch_way.to_double() * 30.0 * (1.0 - e),
+    opacity=e,
+    fn() {
+      match page {
+        Home => home_page(c, src, w, all, invited)
+        Chat(r) => {
+          chat_page(c, src, w, r)
+          new_chat_leaving(c, src, w, r)
+        }
+        NewChat => new_chat_page(c, src, w)
+        Place(p) => place_page(c, p)
+        // 文件: a place of the bar at the stack's root, else a page pushed
+        Files => files_page(c, src, w, place=app.nav.depth() == 1)
+        Drive(at) => drive_page(c, src, w, at)
+        DriveRead(at) => reader_page(c, src, at)
+        Archived => placeholder_page(c, tr("android-chat.home.filter.archived"))
+        Settings => placeholder_page(c, tr("android-chat.home.settings"))
+        // 奏: a place of the bar at the stack's root, else a page pushed
+        Decisions => decisions_page(c, src, w)
+        History(r, key) => history_page(c, src, r, key)
+        Words(head, words) => words_page(c, src, head, words)
+      }
+    },
+  )
+  |> ignore
+}
+
+///|
+/// A place from the bottom bar (AppState.place): its page takes the stack's root, in place (nothing to go back to),
+/// coming in from the side the ball goes to (App.kt placeSwitch); the same place again changes nothing. `sets`, `cur`:
+/// the bar it is chosen in (none: from no side).
+fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int) -> Unit {
+  let page = match place {
+    "chats" => Home
+    "files" => Files
+    "decisions" => Decisions
+    p => Place(p)
+  }
+  if app.nav.depth() == 1 && app.nav.top() == page {
+    return
+  }
+  lower_sheet()
+  app.menu = false
+  let from = match place_of(app.nav.top()) {
+    Some(p) => p
+    None => ""
+  }
+  let bar_now = if cur >= 0 && cur < sets.length() { sets[cur] } else { [] }
+  let a = bar_now.search(from).unwrap_or(-1)
+  let b = bar_now.search(place).unwrap_or(-1)
+  app.switch_way = if a < 0 || b < 0 || a == b {
+    0
+  } else if b > a {
+    1
+  } else {
+    -1
+  }
+  app.switch_at = c.now()
+  while app.nav.depth() > 1 {
+    if !app.nav.pop() {
+      break
+    }
+  }
+  app.nav.replace(page)
 }
 
 ///|

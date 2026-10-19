@@ -378,14 +378,79 @@ GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
 - Shots: mac-glass, mac-glass-dark, web-glass (the demo's screen), mac-home-dark, mac-chat-dark, mac-chat-glass (a
   picture under the chat's bar), mac-chat-solid; MBUI_DARK=1 for sffix and the demo.
 
+Slices 6 and 7, a new chat becoming its chat and the bottom bar with sheets in use (branch newchat-bar, 2026-10-19;
+src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, Sheet.kt, NewChat.kt, ChatHost.kt):
+
+- The bottom bar on a place's top page with nothing over it (Places.kt PlaceBar, Bar.kt BottomBar): the places of the
+  bar in view (the core's prefs `barsBy[workspace]`, else `bars`, else [对话, 文件, Profile, Station] and [奏, 用量, 连接,
+  已归档]), 22 from the screen's sides and foot (the system's bars are the hosts': the view is laid out inside them on
+  Android and iOS); the ball over the place shown, on its spring (tension as stiff as the way is short, ZETA 0.635),
+  stretched by its speed, held (6% bigger) and led by a finger sliding on the bar; 令 (a new chat) in the notch cut
+  into the bar's top on the chats' family's pages (对话, 奏, 已归档), the notch and the places' spacing on their spring;
+  the 奏 place's accent dot while decisions wait (`workspaceMarks`; the Android app shows a dot, no number), the
+  stations' red one while one is in trouble. Drawn up past 24 (closed under 16, leaning a quarter toward the finger),
+  the glass grows into the panel of the other bars; let go on a place in it, or a row tapped, that bar is the one in
+  view (`prefs.set {barsBy}`) and its place opens. A place tapped is its page at the stack's root, in place, coming in
+  30 from the side the ball goes to and fading in (220 ms; 180 from no side); back on another place's page goes to the
+  chats. It goes down out of the way (300 ms) under a page pushed and comes back (380 ms). Home keeps its room at the
+  list's foot (BAR_ROOM, 126). 文件 is the drive's page (slice 12's, its ＋ in the notch) and 奏 the decisions page
+  (slice 8's, a place's top bar over it and the bar's room at its foot); the other places are their top bar over
+  nothing yet (PlacePage.kt; their pages are later slices'). The sheets of a chat (slice 8's, decide.mbt's frame) are
+  not yet on this sheet host: they neither drag nor snap.
+- The bar and its sheets with nothing blurred yet: `bar_ground` (bar.mbt) is the bar's colour where the Android app
+  has no blur (Glass.kt floating: --raised at 72% over the paper; the ball that and white at 42%; 令 the accent at
+  86%), the one place it is chosen, and `sheet_ground` (sheet.mbt) the sheet's (the paper, the scrim's black, the
+  surface at 80%). The glass (above) has `glass_bottom_bar`, `glass_bar_ball`, `glass_action` and `glass_sheet` for
+  them, but the notch is cut out of the bar as Bar.kt's outline has it (the circle and its two fillets), drawn from
+  rounded rectangles and a ring in clips so the page shows through it, and a ring is not a shape the glass pass
+  takes: the bar goes on glass with that. A new chat's choices over the composer are on the composer's glass
+  (`glass_floating`). The rim is a hairline here; the shadow is cast below and to the sides only.
+- Sheets (Sheet.kt SheetHost): one at a time over a scrim (black at 28%, 300 ms), rising on SheetSpring (critically
+  damped, stiffness (2π / 1.2·0.32)²); its top 64 drags it: a draggable one between 55% and 94% (or closed under 30%),
+  any other only down (closed past 80, else back), let go at the finger's speed; a tap on a draggable one's grabber
+  switches half and full; a tap on the scrim, back, or dragged down closes it. `Ctx::drag_area` (src/ui/drag.mbt) is
+  what takes those drags: a box that takes the presses landing on it as a list does, so nothing behind a sheet (or the
+  bar) scrolls, and says where the finger has it, past the slop on its axis, let go and how fast. In use: the
+  workspaces' sheet (70%, draggable, as Workspaces.kt has it; it was a fixed one before), a new chat's station (50%)
+  and what it runs on (66%). (＋'s sheet in the composer is still its own, as slice 5 made it.)
+- A new chat (NewChat.kt): 令 raises it from the bottom (380 ms, (.2, .8, .2, 1): `Nav::rise`; back or the edge swipe
+  sinks it), its bar 取消 · 新对话, the `newChat` topic's page: while its stations are read their first read, with no
+  station the first one to add, with none up said so; on a station the illustration, 想让 agent 做什么？, where it runs,
+  the combinations used often (one tap: `newChat.pick`), what keeps it from starting (`problem`, 添加 Profile when it has
+  none); at its foot the choices over the composer: the station (its sheet of the stations up: `newChat.pick
+  {station}`) and what it runs on, as one control (the model · the runtime where there is a choice · how hard it
+  thinks · how fast · who runs it; its sheet of the models by series beside the runtime, the depth and the speed, the
+  accounts in its foot, `pick.set` until 确定 `pick.save`; with no model enabled, 没有可用模型 · 前往勾选). The composer
+  is the chat's (composer.mbt, its draft `new:<station>`: words, files, quotes as in a chat). Sent: the composer empties,
+  the chat is made (`newChat.create`, once for what is picked: picked anew before a message went, made anew) and the
+  message goes to it by its key (`chat.send {session}`); then the page becomes that chat in place (`Nav::become`: the
+  same page, its composer's field and focus kept; back from it goes sideways), the new chat's scene going up out of
+  view as it fades (140 ms) and its choices fading (80 ms), the chat's list coming up out of the composer (480 ms after
+  90); Home lists it at once (the core's row). Refused, the words come back and why is said.
+- `APP=sffix MBUI_FIXTURE=newchat|newchat-station|newchat-model|home-bars|place` (src/sfapp/newchat_fixture.mbt):
+  `scripts/shots.sh newchat web-newchat` compares them with goldens/mac-newchat-*.png and web-newchat-*.png. Home's
+  goldens (mac-home, mac-home-sheet, mac-home-swipe, web-home) changed on purpose: the bar on Home, the workspaces'
+  sheet in the new sheet.
+- MBUI_DRIVE has `drag X Y DX DY [MS]` and `dragon DX DY MS TEXT` (a finger moved a frame at a time, then lifted).
+
+Not yet, against the current app: the bar's and the sheets' frosted glass (see above), the bar chosen in the panel sliding
+down into the bar's place (here the panel closes and the bar is the chosen one at once), the notch's icon swapping
+between 令 and a page's "+" (no place page here has an action yet), the stations' place's glyph of their states (the
+server's mark here), the bar going away while the keyboard is up (no page with the bar has a field yet), the words
+flying from the composer into their bubble (the list comes up with them; the words leave the field at once), the
+machine's own sessions to go on with (MachineSessions), borrowing another station's model (the note only), a wide
+screen's column, the offline station's illustration (not among the drawables yet), the profile and models pages the
+new chat leads to (place pages over nothing).
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
 only on this machine, never the real account: ember's local cloud (cloud/test/dev.ts: its Workers in Miniflare,
 Google mocked, the test identities, alice in the workspace "Dev"), an iroh-relay of its own (dev mode, loopback), and
 a test station enrolled there from a clone of ember (built in it, never in ember-src), its agent ember's fake claude
-(station/test/fake: it answers `post:<words>` with those words through the agents' door, as an agent's chat_post).
-Every part has its own ports (E2E_PORT, the cloud from 18787 to 18792; E2E_RELAY, 18740) and directories (E2E_WORK,
+(station/test/fake: it answers `post:<words>` with those words through the agents' door, as an agent's chat_post),
+its one profile with a model enabled (`models: [claude-sonnet-5-5]` in its config: a new chat is refused on a station
+with none). Every part has its own ports (E2E_PORT, the cloud from 18787 to 18792; E2E_RELAY, 18740) and directories (E2E_WORK,
 e2e-local beside the checkout; the station's data and HOME under /tmp/mbui-e2e-<uid>, short, as its runners' sockets
 need); the station starts with what the shell has of the machine's own station (EMBER_*, STILLFAIL_* …) taken out.
 
@@ -477,6 +542,9 @@ while the card moved the list):
 | 27 pin | "…" → 固定到列表顶部, then 取消固定 | the station's `pins` has alice's for the chat, then none |
 | 28 decisions-page | the 奏 page (MBUI_OPEN_PAGE=decisions, a flow's `#env`); the other device asks with a card; the option tapped there; 奏折已全部批完 | alice's answer quoting the post |
 | 29 glass | four long messages sent from the composer's glass; the newest run under the top bar's glass, then, scrolled up, under the composer's | the four entries, as alice's; on macOS the bar's and the capsule's rows in the shots are not flat (what is under them shows through, blurred) |
+| 30 new-chat | 令 in the bar's notch: the new chat rises; the first message typed and sent; the page becomes its chat; the agent's answer comes there; back on Home | the station's entry: the words, once, alice's, in a thread of their own; the agent's answer in that thread; alice's other device lists the chat |
+| 31 places | 文件 tapped on the bar (its page in place); the bar drawn up into the other bar's panel and let go on 奏 (that bar, 奏's page); 用量; the panel again, back on the chats | the bar chosen kept as the workspace's in the core's store on the device (`prefs.set {barsBy}`) |
+| 32 sheet-drag | the workspaces' sheet drawn up to 94% and dragged closed; a new chat's station sheet dragged a little (back) and past 80 (closed), opened again and its station tapped | the sheet's settling as the app logs it; the core took the pick (`newChat.pick` answered) |
 
 Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
 never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however

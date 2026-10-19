@@ -118,7 +118,20 @@ fn draft_key(r : ChatRef) -> String {
 ///|
 /// The chat's draft, its kept words asked of the core the first time (`draft.get`).
 fn draft_of(src : Source, r : ChatRef) -> Draft {
-  let key = draft_key(r)
+  draft_by(src, draft_key(r))
+}
+
+///|
+/// What a composer writes to that is not a chat yet (NewChat.kt NewChatOn): its draft's key (`new:<station>`, as a
+/// new chat's on the device) and what sending does.
+priv struct Fresh {
+  key : String
+  send : (Draft) -> Unit
+}
+
+///|
+/// The draft kept as `key`, its words asked of the core the first time (`draft.get`).
+fn draft_by(src : Source, key : String) -> Draft {
   match drafts.get(key) {
     Some(d) => d
     None => {
@@ -682,9 +695,12 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
 ///|
 /// The composer at the chat page's foot (ChatHost.kt HostComposer): its notices, what waits to go, the bar, what went
 /// wrong; ＋'s sheet over the page when open. `v` None while the chat is read the first time (it takes nothing yet).
-fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
+fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fresh? = None) -> Unit {
   let t = @sf.theme()
-  let d = draft_of(src, r)
+  let d = match fresh {
+    Some(f) => draft_by(src, f.key)
+    None => draft_of(src, r)
+  }
   let offline = match v {
     Some(v) => v.offline
     None => false
@@ -737,7 +753,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
           None => ()
         }
         draft_extras(c, src, r, d, locked)
-        composer_bar(c, src, r, v, d, expanded, locked)
+        composer_bar(c, src, r, v, d, expanded, locked, fresh)
         match d.error {
           Some(e) =>
             c.box(padx=6.0, fn() { c.text(e, size=12.0, color=t.p.red, line=16.0) |> ignore })
@@ -867,19 +883,21 @@ fn composer_bar(
   d : Draft,
   expanded : Bool,
   locked : Bool,
+  fresh : Fresh?,
 ) -> Unit {
   let t = @sf.theme()
   let ready = draft_ready(d, locked)
   let plus = c.id("composer/plus")
   let send = c.id("composer/send")
-  if c.clicked(plus) && !locked && v is Some(_) {
+  if c.clicked(plus) && !locked && (v is Some(_) || fresh is Some(_)) {
     cui.attach = true
     cui.attach_at = c.now()
     c.blur()
   }
   let do_send = fn() {
-    match v {
-      Some(view) if ready => send_draft(c, src, r, view, d)
+    match (fresh, v) {
+      (Some(f), _) if ready => (f.send)(d)
+      (None, Some(view)) if ready => send_draft(c, src, r, view, d)
       _ => ()
     }
   }
@@ -918,8 +936,9 @@ fn composer_bar(
     )
     |> ignore
   }
-  let placeholder = match v {
-    Some(view) if view.archived => tr("android-chat.composer.archived.placeholder")
+  let placeholder = match (fresh, v) {
+    (Some(_), _) => tr("android-chat.new.placeholder")
+    (_, Some(view)) if view.archived => tr("android-chat.composer.archived.placeholder")
     _ => tr("android-chat.chat.placeholder")
   }
   let field = fn() {

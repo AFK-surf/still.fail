@@ -290,6 +290,10 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
     c.drag_scroll = hit_in(c.scroll_ids, c.scroll_rects, x, y)
     c.editor_drag = false
     c.edge = if c.on_edge(x, y) { 1 } else { 0 }
+    // a drag area (a sheet's top, the bottom bar) is the finger's from here: no edge swipe under it
+    if drag_down(c.drag_scroll, x, y) {
+      c.edge = 0
+    }
     match c.lists.get(c.drag_scroll) {
       // a list moving on its own (flung, springing back from an end) is
       // caught: the finger drags it from there, and presses nothing in it
@@ -341,6 +345,11 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
             }
           None => ()
         }
+      } else if drags.contains(c.drag_scroll) {
+        if drag_move(c.drag_scroll, x, y) && !c.dragging {
+          c.dragging = true
+          c.active = 0
+        }
       } else if c.drag_scroll != 0 {
         // a pager follows the finger sideways, a list up and down
         let pager = pagers.contains(c.drag_scroll)
@@ -382,6 +391,16 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
     if c.active != 0 && target == c.active && !c.dragging {
       c.clicked.push(c.active)
     }
+    if drags.contains(c.drag_scroll) {
+      drag_up(
+        c.drag_scroll,
+        x,
+        y,
+        dclamp(track_x.velocity(), -max_fling, max_fling),
+        dclamp(track_y.velocity(), -max_fling, max_fling),
+        false,
+      )
+    }
     if c.dragging {
       match c.lists.get(c.drag_scroll) {
         Some(st) =>
@@ -404,6 +423,9 @@ fn on_pointer(kind : Int, x : Double, y : Double, _button : Int) -> Unit {
       c.back_gesture(3, x, t)
     }
     c.edge = 0
+    if drags.contains(c.drag_scroll) {
+      drag_up(c.drag_scroll, x, y, 0.0, 0.0, true)
+    }
     if c.dragging {
       match c.lists.get(c.drag_scroll) {
         Some(st) => c.release(st, 0.0)

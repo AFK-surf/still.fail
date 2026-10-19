@@ -281,7 +281,8 @@ fn messages(
   rd.head = head
   rd.head_at = head_at
   let n = list.length()
-  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+  // a new chat's list comes up out of the composer as it becomes this chat (newchat.mbt)
+  c.box(w=Fill(1.0), h=Fill(1.0), ty=new_chat_rise(c, r), fn() {
     c.list(
       key,
       n,

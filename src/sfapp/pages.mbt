@@ -138,108 +138,68 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// The workspaces' sheet (Workspaces.kt WorkspacesSheet), 70% of the screen from its foot: the workspace in use
-/// (checked), the others to switch to (what each has waiting at its end), signing in another account. A
-/// workspace tapped is the one in view from then on (the prefs' `workspace`), Home at its top.
-fn workspaces_sheet(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  all : Array[Workspace],
-  raw : Json?,
-) -> Unit {
-  ignore(raw)
-  let t = @sf.theme()
-  let shown = opening(c, app.sheet_at, 300.0)
-  scrim(c, "ws-scrim", dmin(shown, 1.0), fn() { app.sheet = false })
-  let h = c.height * 0.7
+/// The workspaces' sheet (Workspaces.kt WorkspacesSheet, in a draggable sheet of 70%: sheet.mbt): the workspace in use
+/// (checked), the others to switch to (what each has waiting at its end), signing in another account. A workspace
+/// tapped is the one in view from then on (the prefs' `workspace`), Home at its top.
+fn workspaces_sheet(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
   let by_ws = field(marks.value, "workspaces")
   let any_marked = all.iter().any(fn(x) { @sf.has_station_mark(x.emoji, x.icon) })
-  c.layer(fn() {
-    c.spacer()
-    c.box(
-      w=Fill(1.0),
-      h=Px(h + 26.0),
-      ty=26.0 + (1.0 - shown) * (h + 26.0),
-      radius=26.0,
-      bg=t.p.card,
-      shadow=24.0,
-      clip=true,
-      fn() {
-        // the grabber
-        c.box(w=Fill(1.0), pt=12.0, pb=8.0, align=ACenter, fn() {
-          c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
-        })
-        |> ignore
-        c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, fn() {
-          c.text(
-            tr("android-misc.workspace.sheet.title"),
-            size=17.0,
-            weight=700,
-            color=t.p.text,
-            wrap=false,
-          )
-          |> ignore
-        })
-        |> ignore
-        c.box(w=Fill(1.0), h=Fill(1.0), pb=24.0, clip=true, fn() {
-          sheet_label(c, tr("android-misc.workspace.current"))
-          c.box(w=Fill(1.0), pl=12.0, pr=12.0, pt=4.0, pb=16.0, fn() {
-            c.box(w=Fill(1.0), radius=16.0, bg=t.p.bg, clip=true, fn() {
-              if pick_row(c, "ws/" + w.id, w.name, w.email, true, if any_marked {
-                  Some(w)
-                } else {
-                  None
-                }, "", Json::null()) {
-                app.sheet = false
-              }
-            })
-            |> ignore
-          })
-          |> ignore
-          let others = all.filter(fn(x) { x.id != w.id })
-          if others.length() > 0 {
-            sheet_label(c, tr("android-misc.workspace.others"))
-          }
-          for o in others {
-            let mark = field(by_ws, o.id).unwrap_or(Json::null())
-            if pick_row(c, "ws/" + o.id, o.name, o.email, false, if any_marked {
-                Some(o)
-              } else {
-                None
-              }, "", mark) {
-              app.picked = o.id
-              (src.call)(
-                "prefs.set",
-                Json::object({ "workspace": Json::string(o.id) }),
-                fn(_) {  },
-              )
-              home()
-            }
-          }
-        })
-        |> ignore
-        c.box(w=Fill(1.0), pt=8.0, pb=16.0 + 26.0, fn() {
-          if pick_row(
-              c,
-              "ws-sign-in",
-              tr("android-misc.workspace.addAccount"),
-              tr("android-misc.workspace.addAccount.sub"),
-              false,
-              None,
-              "log-in",
-              Json::null(),
-            ) {
-            app.sheet = false
-            (src.sign_in)()
-          }
-          pick_row(c, "ws-new", tr("android-misc.workspace.new"), "", false, None, "plus", Json::null())
-          |> ignore
-        })
-        |> ignore
-      },
-    )
+  sheet_grab(c)
+  sheet_head(c, tr("android-misc.workspace.sheet.title"))
+  c.box(w=Fill(1.0), h=Fill(1.0), pb=24.0, clip=true, fn() {
+    sheet_label(c, tr("android-misc.workspace.current"))
+    c.box(w=Fill(1.0), pl=12.0, pr=12.0, pt=4.0, pb=16.0, fn() {
+      let t = @sf.theme()
+      c.box(w=Fill(1.0), radius=16.0, bg=t.p.bg, clip=true, fn() {
+        if pick_row(c, "ws/" + w.id, w.name, w.email, true, if any_marked {
+            Some(w)
+          } else {
+            None
+          }, "", Json::null()) {
+          lower_sheet()
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+    let others = all.filter(fn(x) { x.id != w.id })
+    if others.length() > 0 {
+      sheet_label(c, tr("android-misc.workspace.others"))
+    }
+    for o in others {
+      let mark = field(by_ws, o.id).unwrap_or(Json::null())
+      if pick_row(c, "ws/" + o.id, o.name, o.email, false, if any_marked {
+          Some(o)
+        } else {
+          None
+        }, "", mark) {
+        app.picked = o.id
+        (src.call)(
+          "prefs.set",
+          Json::object({ "workspace": Json::string(o.id) }),
+          fn(_) {  },
+        )
+        home()
+      }
+    }
+  })
+  |> ignore
+  c.box(w=Fill(1.0), pt=8.0, pb=16.0, fn() {
+    if pick_row(
+        c,
+        "ws-sign-in",
+        tr("android-misc.workspace.addAccount"),
+        tr("android-misc.workspace.addAccount.sub"),
+        false,
+        None,
+        "log-in",
+        Json::null(),
+      ) {
+      lower_sheet()
+      (src.sign_in)()
+    }
+    pick_row(c, "ws-new", tr("android-misc.workspace.new"), "", false, None, "plus", Json::null())
     |> ignore
   })
   |> ignore
