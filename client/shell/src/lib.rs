@@ -59,6 +59,8 @@ fn err(e: impl std::fmt::Display) -> String {
 
 /// The two halves of an iroh stream, and the reads waiting on it: a reset wakes them first (as the addon's).
 struct Halves {
+    /// The connection it is on: it goes when that one closes.
+    conn: u64,
     send: tokio::sync::Mutex<Option<SendStream>>,
     recv: tokio::sync::Mutex<Option<RecvStream>>,
     reset: tokio::sync::watch::Sender<bool>,
@@ -78,6 +80,8 @@ enum Handle {
     Tcp { read: Arc<tokio::sync::Mutex<tokio::net::tcp::OwnedReadHalf>>, write: Arc<tokio::sync::Mutex<tokio::net::tcp::OwnedWriteHalf>> },
     Endpoint(Endpoint, Accepted),
     Conn(Connection),
+    /// A connection that closed, let go (its state, its streams), with what the core may still ask of it.
+    Gone { remote: String, reason: Value, stats: Value },
     IStream(Arc<Halves>),
 }
 
@@ -246,6 +250,7 @@ impl Handle {
             Handle::Tcp { .. } => "tcp",
             Handle::Endpoint(..) => "endpoint",
             Handle::Conn(_) => "conn",
+            Handle::Gone { .. } => "gone",
             Handle::IStream(_) => "stream",
         }
     }
@@ -301,6 +306,39 @@ impl Inner {
 
     fn drop_handle(&self, id: u64) -> Option<Handle> {
         self.handles.lock().unwrap().remove(&id)
+    }
+
+    /// A connection kept for the core, and let go once it closes, however it does (closed here, by the other end, timed
+    /// out): kept, a closed connection and the streams opened on it stayed in memory, iroh's tasks still going over
+    /// them, and a phone whose links were replaced often held hundreds and grew gigabytes a minute (2026-10-19).
+    fn keep_conn(self: &Arc<Self>, conn: Connection) -> u64 {
+        let id = self.keep(Handle::Conn(conn.clone()));
+        let inner = self.clone();
+        tokio::spawn(async move {
+            let reason = conn.closed().await;
+            inner.release_conn(id, &reason);
+        });
+        id
+    }
+
+    /// A closed connection let go: what the core may still ask (`remoteId`, `closeReason`, `stats`) is kept, and its
+    /// streams go, a read still waiting on one woken.
+    fn release_conn(&self, id: u64, reason: &iroh::endpoint::ConnectionError) {
+        let mut handles = self.handles.lock().unwrap();
+        let gone = match handles.get(&id) {
+            Some(Handle::Conn(conn)) => {
+                let s = conn.stats();
+                Handle::Gone { remote: hex::encode(conn.remote_id().as_bytes()), reason: close_info(reason), stats: json!({ "rxBytes": s.udp_rx.bytes, "txBytes": s.udp_tx.bytes }) }
+            }
+            _ => return,
+        };
+        handles.insert(id, gone);
+        let streams: Vec<u64> = handles.iter().filter_map(|(k, h)| matches!(h, Handle::IStream(halves) if halves.conn == id).then_some(*k)).collect();
+        for k in streams {
+            if let Some(Handle::IStream(halves)) = handles.remove(&k) {
+                let _ = halves.reset.send(true);
+            }
+        }
     }
 
     /// A job for the disk thread, answered when done.
@@ -463,7 +501,7 @@ impl Inner {
                 let addr = endpoint_addr(a.get("addr").ok_or("missing addr")?)?;
                 let connecting = endpoint.connect_with_opts(addr, &bytes.unwrap_or_default(), options).await.map_err(err)?;
                 let conn = connecting.await.map_err(err)?;
-                Ok(Answer::json(json!({ "id": self.keep(Handle::Conn(conn)) })))
+                Ok(Answer::json(json!({ "id": self.keep_conn(conn) })))
             }
             // As the station's addon takes them: handshakes side by side, each on its own, so one never finished (a
             // device gone half way) holds up no other; one that fails is skipped.
@@ -487,7 +525,7 @@ impl Inner {
                 match done.recv().await {
                     Some(conn) => {
                         let alpn = hex::encode(conn.alpn());
-                        Ok(Answer::json(json!({ "id": self.keep(Handle::Conn(conn)), "alpn": alpn })))
+                        Ok(Answer::json(json!({ "id": self.keep_conn(conn), "alpn": alpn })))
                     }
                     None => Ok(Answer::json(json!({ "end": true }))),
                 }
@@ -504,7 +542,13 @@ impl Inner {
                 Ok(Answer::json(json!({})))
             }
             "conn.openBi" | "conn.openUni" | "conn.acceptBi" => {
-                let Handle::Conn(conn) = self.handle(id_of(&a)?)? else { return Err("not a connection".into()) };
+                let on = id_of(&a)?;
+                let conn = match self.handle(on)? {
+                    Handle::Conn(conn) => conn,
+                    Handle::Gone { .. } if op == "conn.acceptBi" => return Ok(Answer::json(json!({ "end": true }))),
+                    Handle::Gone { reason, .. } => return Err(format!("connection closed: {}", reason["reason"].as_str().unwrap_or(""))),
+                    _ => return Err("not a connection".into()),
+                };
                 let (send, recv) = match op {
                     "conn.openBi" => {
                         let (s, r) = conn.open_bi().await.map_err(err)?;
@@ -517,6 +561,7 @@ impl Inner {
                     },
                 };
                 let halves = Halves {
+                    conn: on,
                     ended: (recv.is_none()).into(),
                     finished: false.into(),
                     send: tokio::sync::Mutex::new(send),
@@ -525,12 +570,17 @@ impl Inner {
                 };
                 Ok(Answer::json(json!({ "id": self.keep(Handle::IStream(Arc::new(halves))) })))
             }
-            "conn.closed" => {
-                let Handle::Conn(conn) = self.handle(id_of(&a)?)? else { return Err("not a connection".into()) };
-                Ok(Answer::json(close_info(&conn.closed().await)))
-            }
+            "conn.closed" => match self.handle(id_of(&a)?)? {
+                Handle::Conn(conn) => Ok(Answer::json(close_info(&conn.closed().await))),
+                Handle::Gone { reason, .. } => Ok(Answer::json(reason)),
+                _ => Err("not a connection".into()),
+            },
             "conn.close" => {
-                let Handle::Conn(conn) = self.handle(id_of(&a)?)? else { return Err("not a connection".into()) };
+                let conn = match self.handle(id_of(&a)?)? {
+                    Handle::Conn(conn) => conn,
+                    Handle::Gone { .. } => return Ok(Answer::json(json!({}))),
+                    _ => return Err("not a connection".into()),
+                };
                 let code = a.get("code").and_then(Value::as_u64).unwrap_or(0) as u32;
                 conn.close(code.into(), a.get("reason").and_then(Value::as_str).unwrap_or("").as_bytes());
                 Ok(Answer::json(json!({})))
@@ -788,6 +838,10 @@ impl Inner {
                 let s = c.stats();
                 Ok(json!({ "rxBytes": s.udp_rx.bytes, "txBytes": s.udp_tx.bytes }))
             }
+            ("conn.remoteId", Handle::Gone { remote, .. }) => Ok(json!(remote)),
+            ("conn.closeReason", Handle::Gone { reason, .. }) => Ok(reason),
+            ("conn.paths", Handle::Gone { .. }) => Ok(json!([])),
+            ("conn.stats", Handle::Gone { stats, .. }) => Ok(stats),
             (op, _) => Err(format!("no operation {op} on that handle")),
         }
     }
@@ -1020,5 +1074,44 @@ mod tests {
         counted("test.op", false);
         let stats = stats_json();
         assert_eq!(stats["calls"]["test.op"], json!([2, 1]));
+    }
+
+    #[test]
+    fn lets_a_closed_connection_and_its_streams_go() {
+        let dir = tempfile::tempdir().unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let inner = shell.inner.clone();
+        shell.runtime.block_on(async move {
+            let alpn = b"stillfail/test".to_vec();
+            let bind = |alpns: Vec<Vec<u8>>| Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).alpns(alpns).bind();
+            let (a, b) = (bind(vec![]).await.unwrap(), bind(vec![alpn.clone()]).await.unwrap());
+            let port = b.bound_sockets().iter().find(|s| s.is_ipv4()).unwrap().port();
+            let addr = endpoint_addr(&json!({ "id": hex::encode(b.id().as_bytes()), "ips": [format!("127.0.0.1:{port}")] })).unwrap();
+            // The other end kept, so its close is sent rather than its endpoint gone.
+            let taking = b.clone();
+            let taken = tokio::spawn(async move { taking.accept().await.unwrap().await.unwrap() });
+            let id = inner.keep_conn(a.connect(addr, &alpn).await.unwrap());
+            let theirs = taken.await.unwrap();
+            let opened = inner.run("conn.openBi", json!({ "id": id }), None).await.unwrap();
+            let stream = opened.json["id"].as_u64().unwrap();
+            assert!(matches!(inner.handle(stream), Ok(Handle::IStream(_))));
+            let remote = inner.run_sync("conn.remoteId", &json!({ "id": id })).unwrap();
+            theirs.close(7u32.into(), b"bye");
+            for _ in 0..200 {
+                if matches!(inner.handle(id), Ok(Handle::Gone { .. })) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            // Let go, its stream with it; what the core asks after still answers.
+            assert!(matches!(inner.handle(id), Ok(Handle::Gone { .. })));
+            assert!(inner.handle(stream).is_err());
+            assert_eq!(inner.run_sync("conn.closeReason", &json!({ "id": id })).unwrap(), json!({ "kind": "application", "reason": "bye" }));
+            assert_eq!(inner.run_sync("conn.remoteId", &json!({ "id": id })).unwrap(), remote);
+            assert_eq!(inner.run_sync("conn.paths", &json!({ "id": id })).unwrap(), json!([]));
+            assert_eq!(inner.run("conn.closed", json!({ "id": id }), None).await.unwrap().json, json!({ "kind": "application", "reason": "bye" }));
+            assert!(inner.run("conn.openBi", json!({ "id": id }), None).await.is_err());
+            assert_eq!(inner.run("conn.acceptBi", json!({ "id": id }), None).await.unwrap().json, json!({ "end": true }));
+        });
     }
 }
