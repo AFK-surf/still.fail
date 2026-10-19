@@ -241,13 +241,15 @@ function grokBilling(env: Env): Promise<Json> {
     const child = spawn(r.file, r.args, { env: env as NodeJS.ProcessEnv, stdio: ["pipe", "pipe", "pipe"], windowsVerbatimArguments: r.windowsVerbatimArguments, windowsHide: true });
     let buffer = "";
     let stderr = "";
+    let over = false;
     const done = (error: Error | null, value?: Json) => {
-      clearTimeout(timer);
+      if (over) return;
+      over = true;
       child.kill("SIGKILL");
       if (error) reject(error);
       else resolve(value);
     };
-    const timer = setTimeout(() => done(new Error("grok did not say its billing in time")), 30_000);
+    AbortSignal.timeout(30_000).addEventListener("abort", () => done(new Error("grok did not say its billing in time")));
     child.once("error", (e) => done(e));
     child.once("close", (code) => done(new Error(`grok exited (${code})${stderr.trim() === "" ? "" : `: ${stderr.trim().slice(-300)}`}`)));
     child.stderr?.on("data", (d: Buffer) => (stderr = (stderr + d.toString("utf8")).slice(-2000)));
