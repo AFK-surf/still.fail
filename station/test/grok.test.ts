@@ -17,6 +17,7 @@ import { checkProfile, grokModels, loginCommand } from "../src/accounts/profiles
 import { LoginManager, type LoginState } from "../src/accounts/login.ts";
 import { grokQuotaOf } from "../src/accounts/quota.ts";
 import { callsOf } from "../src/usage/counter.ts";
+import { TranscriptTail } from "../src/sessions/live.ts";
 import { readTimeline, transcriptPath } from "../src/read/transcript.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -128,7 +129,15 @@ describe("the Grok Build driver", { concurrency: true }, () => {
     // Each turn's usage kept beside it, its input less what the cache read and wrote.
     const usage = readFileSync(join(sessionDir(o.profile.home, session.id())!, USAGE), "utf8").trim().split("\n").map((l) => JSON.parse(l));
     assert.equal(usage.length, 2);
-    assert.deepEqual(usage[0].usage, { input: 30, cacheRead: 60, cacheWrite: 10, output: 7 });
+    assert.deepEqual([usage[0].usage, usage[0].context, usage[0].window], [{ input: 30, cacheRead: 60, cacheWrite: 10, output: 7, calls: 2 }, 1234, 256000]);
+    // The history's usage: the turns' counts, and the context the last one ended with, of the model's window.
+    const tail = new TranscriptTail("grok", path);
+    tail.read();
+    assert.deepEqual([tail.usage.modelCalls, tail.usage.inputTokens, tail.usage.cachedTokens, tail.usage.outputTokens, tail.usage.contextTokens, tail.usage.contextWindow, tail.usage.model], [4, 200, 120, 14, 1234, 256000, "grok-4.7"]);
+    // Between turns, another model and effort are set in the process, not by starting another.
+    assert.equal(session.retune?.({ ...o, model: "grok-4.6", effort: "low" }), true);
+    await eventually(() => stdin(o.dump).filter((m) => m.method === "session/set_config_option").length === 2);
+    assert.deepEqual(stdin(o.dump).filter((m) => m.method === "session/set_config_option").map((m) => [m.params.configId, m.params.value]), [["model", "grok-4.6"], ["reasoning_effort", "low"]]);
     const calls = callsOf("grok", readFileSync(join(sessionDir(o.profile.home, session.id())!, USAGE), "utf8"), false, { model: null, codexId: null });
     assert.deepEqual(calls.map((c) => [c.model, c.input, c.cacheRead, c.cacheWrite, c.output]), [["grok-4.7", 30, 60, 10, 7], ["grok-4.7", 30, 60, 10, 7]]);
     await session.dispose();
@@ -185,6 +194,22 @@ describe("the Grok Build driver", { concurrency: true }, () => {
     assert.deepEqual(tool && "tool" in tool ? [tool.tool, tool.input] : null, ["mcp__stillfail__chat_post", '{\n  "text": "posted words"\n}']);
     const call = readTimeline("grok", transcriptPath("grok", o.profile.home, session.id())!).find((e) => e.kind === "tool_call");
     assert.deepEqual([call?.tool, call?.text], ["mcp__stillfail__chat_post", '{\n  "text": "posted words"\n}']);
+    await session.dispose();
+  });
+
+  test("a subagent's steps are shown under the call that spawned it, marked a subagent's, and end with it", async () => {
+    const d = driver();
+    const o = options();
+    const { events, push, until } = listen();
+    const session = await d.open(o, push);
+    await session.prompt("sub");
+    await until(ended(1));
+    const starts = live(events).filter((e) => e.kind === "start");
+    const spawn = starts.find((e) => e.kind === "start" && e.tool === "spawn_subagent");
+    const inner = starts.filter((e) => e.kind === "start" && e.subagent === true);
+    assert.ok(spawn);
+    assert.deepEqual(inner.map((e) => (e.kind === "start" ? [e.step, e.tool ?? null, e.parent] : null)), [["tool", "read_file", spawn.id], ["text", null, spawn.id]]);
+    assert.equal(live(events).filter((e) => e.kind === "end").length, starts.length, "every step started ends");
     await session.dispose();
   });
 
@@ -332,8 +357,8 @@ describe("what a profile runs Grok Build on", () => {
   });
 
   test("a turn's usage line from the prompt's answer; none without its usage", () => {
-    const line = usageLine({ result: { stopReason: "end_turn", _meta: { promptId: "p1", modelId: "grok-4.7", usage: { inputTokens: 22533, outputTokens: 211, cachedReadTokens: 22400, cacheCreationTokens: 0 } } } }, 5);
-    assert.deepEqual(JSON.parse(line!), { type: "stillfail/usage", time: 5, id: "p1", model: "grok-4.7", usage: { input: 133, cacheRead: 22400, cacheWrite: 0, output: 211 } });
+    const line = usageLine({ result: { stopReason: "end_turn", _meta: { promptId: "p1", modelId: "grok-4.7", totalTokens: 22751, usage: { inputTokens: 22533, outputTokens: 211, cachedReadTokens: 22400, cacheCreationTokens: 0, modelCalls: 1 } } } }, 5, 256000);
+    assert.deepEqual(JSON.parse(line!), { type: "stillfail/usage", time: 5, id: "p1", model: "grok-4.7", usage: { input: 133, cacheRead: 22400, cacheWrite: 0, output: 211, calls: 1 }, context: 22751, window: 256000 });
     assert.equal(usageLine({ result: { stopReason: "cancelled" } }, 5), null);
   });
 

@@ -7,6 +7,7 @@
 // system's change events (fs.watch), not looked at every 250 ms.
 import type { Clock } from "effect";
 import { closeSync, existsSync, type FSWatcher, openSync, readFileSync, readSync, statSync, watch } from "node:fs";
+import { dirname, join } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 import type { LiveEvent } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
@@ -101,6 +102,8 @@ export class TranscriptTail {
   /// Codex's running totals counted: token counts are told again with rate limits.
   private totals = new Set<number>();
   private state: ReadState = { inner: new Map() };
+  /// Grok Build's usage file as last read (its size): what the driver keeps of each turn beside the transcript.
+  private grokRead = -1;
 
   constructor(runtime: RuntimeKind, path: string) {
     this.runtime = runtime;
@@ -109,6 +112,7 @@ export class TranscriptTail {
 
   /// New entries since the last read, with the index of the first.
   read(): [number, TimelineEntry[]] {
+    if (this.runtime === "grok") this.grokUsage();
     let start = this.entries.length;
     const compressed = !existsSync(this.path);
     const disk = compressed ? `${this.path}.zst` : this.path;
@@ -178,6 +182,40 @@ export class TranscriptTail {
     return [start, entries];
   }
 
+  /// Grok Build's transcript says no counts: the usage is what the driver kept of each turn beside it (agents/grok.ts
+  /// usageLine), read whole again when it grew; the context is the last turn's.
+  private grokUsage() {
+    const file = join(dirname(this.path), "stillfail-usage.jsonl");
+    let text: string;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      return;
+    }
+    if (text.length === this.grokRead) return;
+    this.grokRead = text.length;
+    const n = (v: Json) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+    const usage = noUsage();
+    for (const line of text.split("\n")) {
+      let r: Json;
+      try {
+        r = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const u = r?.usage;
+      if (r?.type !== "stillfail/usage" || !u) continue;
+      usage.modelCalls += Math.max(1, n(u.calls));
+      usage.inputTokens += n(u.input) + n(u.cacheRead) + n(u.cacheWrite);
+      usage.cachedTokens += n(u.cacheRead);
+      usage.outputTokens += n(u.output);
+      if (typeof r.model === "string") usage.model = r.model;
+      if (n(r.context) > 0) usage.contextTokens = n(r.context);
+      if (n(r.window) > 0) usage.contextWindow = n(r.window);
+    }
+    this.usage = usage;
+  }
+
   private addUsage(records: Json[]) {
     const n = (v: Json) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : 0);
     const usage = this.usage;
@@ -222,7 +260,7 @@ export class TranscriptTail {
         if (typeof model === "string") usage.model = model;
       } else if (this.runtime === "grok") {
         // Grok Build's transcript says no counts (the station keeps them apart: agents/grok.ts), only the model.
-        if (r?.type === "assistant" && typeof r.model_id === "string") usage.model = r.model_id;
+        if (r?.type === "assistant" && typeof r.model_id === "string" && usage.model === null) usage.model = r.model_id;
       } else {
         const p = r?.payload ?? null;
         if (r?.type === "turn_context" && typeof p?.model === "string") usage.model = p.model;

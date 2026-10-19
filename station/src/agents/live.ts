@@ -392,6 +392,11 @@ export class LiveFromAcp {
     return out;
   }
 
+  /// The call that started last of those still running (what a subagent spawned now was spawned by).
+  openCall(): string | undefined {
+    return [...this.open].filter((id) => id.startsWith("call:")).at(-1);
+  }
+
   feed(update: Json): LiveEvent[] {
     const out: LiveEvent[] = [];
     const kind = str(update?.sessionUpdate) ?? "";

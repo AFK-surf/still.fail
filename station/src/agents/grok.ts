@@ -20,7 +20,7 @@ import { peerHttpBase } from "../tools/http.ts";
 import { LiveFromAcp, chars, type AcpLiveState } from "./live.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
-import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type LiveEvent, type OpenOptions, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 
 type Json = any;
 type Env = Record<string, string | undefined>;
@@ -92,17 +92,19 @@ export function outcomeOf(message: Json): TurnOutcome {
 
 /// A turn's usage as the station keeps it beside the transcript (counted by usage/counter.ts): its input less what was
 /// read from the cache or written to it, as the others count.
-export function usageLine(answer: Json, time: number): string | null {
+export function usageLine(answer: Json, time: number, window: number | null = null): string | null {
   const meta = answer?.result?._meta;
   const u = meta?.usage;
   if (u === null || typeof u !== "object") return null;
   const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
   const read = n(u.cachedReadTokens);
   const written = n(u.cacheCreationTokens);
-  const usage = { input: Math.max(0, n(u.inputTokens) - read - written), cacheRead: read, cacheWrite: written, output: n(u.outputTokens) };
+  const usage = { input: Math.max(0, n(u.inputTokens) - read - written), cacheRead: read, cacheWrite: written, output: n(u.outputTokens), calls: n(u.modelCalls) };
   const id = typeof meta.promptId === "string" ? meta.promptId : typeof meta.requestId === "string" ? meta.requestId : null;
   if (id === null) return null;
-  return JSON.stringify({ type: "stillfail/usage", time, id, model: typeof meta.modelId === "string" ? meta.modelId : null, usage });
+  // What the context holds at the turn's end (its last call's), and how much it can.
+  const context = n(meta.totalTokens);
+  return JSON.stringify({ type: "stillfail/usage", time, id, model: typeof meta.modelId === "string" ? meta.modelId : null, usage, context, window });
 }
 
 /// The turn as its handled lines leave it.
@@ -136,6 +138,14 @@ const mcpServers = (url: string, token: string) => [{ type: "http", name: "still
 /// are behind Grok Build's search_tool and use_tool), so that no turn spends a step looking for them.
 export const grokRules = (instructions: string) =>
   `${instructions}${instructions === "" ? "" : "\n\n"}The station's tools (chat_post, chat_state and the others named in these instructions) are the stillfail MCP server's: call one with use_tool and its full name, stillfail__<tool> (for example stillfail__chat_post), without searching for it first.`;
+
+/// A subagent's step as the parent session shows it: its own id, marked a subagent's, under the call that spawned it.
+function underParent(event: LiveEvent, child: string, parent: string | undefined): LiveEvent {
+  if (event.kind === "phase") return event;
+  const id = `sub:${child}:${event.id}`;
+  if (event.kind !== "start") return { ...event, id };
+  return { ...event, id, subagent: true, ...(parent !== undefined ? { parent } : {}) };
+}
 
 /// The process's arguments: no approvals, its own process (not a shared leader), the model and effort chosen.
 export function grokArgs(model: string | undefined, effort: string | undefined): string[] {
@@ -194,13 +204,15 @@ export class GrokDriver implements AgentDriver {
       await session.request(INIT, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "still.fail", version: "1" }, _meta: meta });
       const servers = mcpServers(options.mcpUrl, options.mcpToken);
       if (options.resume !== undefined) {
-        await session.request(OPEN, "session/load", { sessionId: options.resume, cwd: options.cwd, mcpServers: servers, _meta: meta });
+        const loaded = await session.request(OPEN, "session/load", { sessionId: options.resume, cwd: options.cwd, mcpServers: servers, _meta: meta });
         session.named(options.resume);
+        session.models(loaded?.result?.models);
       } else {
         const opened = await session.request(OPEN, "session/new", { cwd: options.cwd, mcpServers: servers, _meta: meta });
         const id = opened?.result?.sessionId;
         if (typeof id !== "string" || id === "") throw new Error("Grok Build named no session");
         session.named(id);
+        session.models(opened?.result?.models);
       }
     } catch (error) {
       await session.dispose();
@@ -279,6 +291,11 @@ export class GrokSession implements AgentSession {
   toolsUrl: string | null = null;
   /// The profile's home (its sessions are in grokHome of it).
   private home: string;
+  /// What its model's context can hold (as session/new or session/load said), by model.
+  private windows = new Map<string, number>();
+  private model: string | null = null;
+  /// Its subagents' sessions (Grok Build says them as it spawns them): their steps, under the call that spawned them.
+  private children = new Map<string, { live: LiveFromAcp; parent: string | undefined }>();
 
   constructor(driver: GrokDriver, sessionId: string, turn: Turn, live: LiveFromAcp, events: (event: RuntimeEvent) => void, home: string) {
     this.home = home;
@@ -291,6 +308,15 @@ export class GrokSession implements AgentSession {
 
   named(id: string) {
     this.sessionId = id;
+  }
+
+  /// The models Grok Build said it has: which is current, and what each one's context holds.
+  models(models: Json) {
+    if (typeof models?.currentModelId === "string") this.model = models.currentModelId;
+    for (const m of Array.isArray(models?.availableModels) ? models.availableModels : []) {
+      const size = m?._meta?.totalContextTokens;
+      if (typeof m?.modelId === "string" && typeof size === "number") this.windows.set(m.modelId, size);
+    }
   }
 
   attach(proc: AgentProcess) {
@@ -336,12 +362,24 @@ export class GrokSession implements AgentSession {
   private onMessage(message: Json) {
     const id = message.id;
     if (message.method === "session/update") {
-      // A subagent's session says its own steps; the station follows the session it opened.
-      if (this.sessionId !== "" && typeof message.params?.sessionId === "string" && message.params.sessionId !== this.sessionId) return;
+      const from = message.params?.sessionId;
+      // A subagent's session says its own steps: under the call that spawned it; any other session is not this one's.
+      if (this.sessionId !== "" && typeof from === "string" && from !== this.sessionId) {
+        const child = this.children.get(from);
+        if (child) for (const event of child.live.feed(message.params?.update)) this.events({ type: "live", event: underParent(event, from, child.parent) });
+        return;
+      }
       const update = message.params?.update;
       for (const event of this.live.feed(update)) this.events({ type: "live", event });
       const lost = this.toolsLost(update);
       if (lost !== null) this.events({ type: "toolsLost", why: lost });
+      return;
+    }
+    if (message.method === "_x.ai/session_notification" && message.params?.sessionId === this.sessionId) {
+      const update = message.params?.update;
+      const child = typeof update?.child_session_id === "string" ? update.child_session_id : null;
+      if (update?.sessionUpdate === "subagent_spawned" && child !== null) this.children.set(child, { live: new LiveFromAcp(), parent: this.live.openCall() });
+      if (update?.sessionUpdate === "subagent_finished" && child !== null) this.endChild(child);
       return;
     }
     if (message.method === "session/request_permission" && id !== undefined) {
@@ -365,6 +403,7 @@ export class GrokSession implements AgentSession {
       this.turn.busy = false;
       this.turn.aborting = false;
       this.keepUsage(message);
+      for (const child of [...this.children.keys()]) this.endChild(child);
       for (const event of this.live.ended()) this.events({ type: "live", event });
       this.events({ type: "turnEnded", outcome });
       return;
@@ -376,9 +415,18 @@ export class GrokSession implements AgentSession {
     }
   }
 
+  /// A subagent done: what it still had open ends.
+  private endChild(id: string) {
+    const child = this.children.get(id);
+    if (!child) return;
+    this.children.delete(id);
+    for (const event of child.live.ended()) this.events({ type: "live", event: underParent(event, id, child.parent) });
+  }
+
   /// The turn's usage, beside its transcript (none for a turn that made no call).
   private keepUsage(answer: Json) {
-    const line = usageLine(answer, wall.now());
+    const model = typeof answer?.result?._meta?.modelId === "string" ? answer.result._meta.modelId : this.model;
+    const line = usageLine(answer, wall.now(), model !== null ? (this.windows.get(model) ?? null) : null);
     const dir = sessionDir(this.home, this.sessionId);
     if (line === null || dir === null) return;
     try {
@@ -438,6 +486,22 @@ export class GrokSession implements AgentSession {
   }
 
   async backgroundTools() {}
+
+  /// Between turns, another model or effort is set in the running process (session/set_config_option), read from its
+  /// next turn on.
+  retune(options: OpenOptions) {
+    if (this.turn.closed || this.turn.busy || this.sessionId === "") return false;
+    const model = options.model ?? profileModel(options.profile);
+    const effort = grokEffort(options.effort);
+    if (model === undefined && effort === undefined) return false;
+    const set = (configId: string, value: string) => this.proc.write(rpc(`config:${uuid()}`, "session/set_config_option", { sessionId: this.sessionId, configId, value }));
+    if (model !== undefined) {
+      set("model", model);
+      this.model = model;
+    }
+    if (effort !== undefined) set("reasoning_effort", effort);
+    return true;
+  }
 
   async abort() {
     if (this.turn.closed || !this.turn.busy || this.turn.aborting) return;

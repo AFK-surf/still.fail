@@ -8,6 +8,7 @@
 //   cmd           a terminal call with its output, then a reply                    ask   asks the client's permission first
 //   tools         a call to the station's tools that fails as unreachable
 //   post          a post through the station's tools, reached with use_tool as Grok Build reaches an MCP server's
+//   sub           a subagent spawned by a call: its own session's steps, then its end
 //   hold          waits until cancelled, or until a message is interjected (then says it heard it)
 //   exit          exits 4 in the middle of the turn
 // FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin. The version
@@ -68,7 +69,9 @@ function agent() {
     return s;
   }
   const record = (s, line) => fs.appendFileSync(s.file, JSON.stringify(line) + "\n");
-  const usage = (promptId) => ({ sessionId: "", promptId, requestId: promptId, modelId: "grok-4.7", usage: { inputTokens: 100, outputTokens: 7, cachedReadTokens: 60, cacheCreationTokens: 10, totalTokens: 107 } });
+  const usage = (promptId) => ({ sessionId: "", promptId, requestId: promptId, modelId: "grok-4.7", totalTokens: 1234, usage: { inputTokens: 100, outputTokens: 7, cachedReadTokens: 60, cacheCreationTokens: 10, totalTokens: 107, modelCalls: 2 } });
+  const models = { currentModelId: "grok-4.7", availableModels: [{ modelId: "grok-4.7", _meta: { totalContextTokens: 256000 } }, { modelId: "grok-4.6", _meta: { totalContextTokens: 500000 } }] };
+  const notify = (sessionId, u) => say({ method: "_x.ai/session_notification", params: { sessionId, update: u } });
 
   async function turn(s, text) {
     record(s, { type: "user", content: [{ type: "text", text: "<system-reminder>skills</system-reminder>" }], synthetic_reason: "system_reminder" });
@@ -115,6 +118,17 @@ function agent() {
       update(s.id, { sessionUpdate: "tool_call_update", toolCallId: callId, status: "completed", content: [{ type: "content", content: { type: "text", text: "Posted." } }] });
       record(s, { type: "tool_result", tool_call_id: callId, content: "Posted." });
     }
+    if (text === "sub") {
+      const callId = `call-${++n}`;
+      const child = `child-${++n}`;
+      update(s.id, { sessionUpdate: "tool_call", toolCallId: callId, title: "spawn_subagent", rawInput: { description: "look around" }, _meta: { "x.ai/tool": { name: "spawn_subagent" } } });
+      notify(s.id, { sessionUpdate: "subagent_spawned", subagent_id: child, parent_session_id: s.id, child_session_id: child, subagent_type: "explore", description: "look around" });
+      update(child, { sessionUpdate: "tool_call", toolCallId: "c1", title: "read_file", rawInput: { path: "a" }, _meta: { "x.ai/tool": { name: "read_file" } } });
+      update(child, { sessionUpdate: "tool_call_update", toolCallId: "c1", status: "completed", content: [{ type: "content", content: { type: "text", text: "A" } }] });
+      update(child, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "found A" } });
+      notify(s.id, { sessionUpdate: "subagent_finished", subagent_id: child, child_session_id: child, status: "completed", tool_calls: 1, turns: 1 });
+      update(s.id, { sessionUpdate: "tool_call_update", toolCallId: callId, status: "completed", content: [{ type: "content", content: { type: "text", text: "found A" } }] });
+    }
     if (text === "hold") {
       reply("holding");
       const why = await new Promise((r) => {
@@ -144,14 +158,14 @@ function agent() {
     if (method === "initialize") return reply({ protocolVersion: 1, agentCapabilities: { loadSession: true, mcpCapabilities: { http: true, sse: true } }, _meta: { agentVersion: version } });
     if (method === "session/new") {
       const s = open(`01a151b0-0000-7000-8000-${String(process.pid % 1e6).padStart(6, "0")}${String(++n).padStart(6, "0")}`, params.cwd);
-      return reply({ sessionId: s.id });
+      return reply({ sessionId: s.id, models });
     }
     if (method === "session/load") {
       const root = path.join(home, "sessions");
       const dir = (fs.existsSync(root) ? fs.readdirSync(root) : []).map((d) => path.join(root, d, params.sessionId)).find((d) => fs.existsSync(d));
       if (!dir) return fail(`Session ${params.sessionId} not found`);
       open(params.sessionId, params.cwd);
-      return reply({});
+      return reply({ models });
     }
     if (method === "session/prompt") {
       const s = sessions.get(params.sessionId);
@@ -163,6 +177,7 @@ function agent() {
         return fail(e.message);
       }
     }
+    if (method === "session/set_config_option") return reply({ configOptions: [] });
     if (method === "session/cancel") {
       sessions.get(params.sessionId)?.cancel?.();
       return;
