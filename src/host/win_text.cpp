@@ -33,7 +33,6 @@ typedef struct {
 
 static IDWriteFactory2 *dw;
 static IDWriteFontFallback *fallback;
-static IDWriteTypography *typo;
 static IDWriteRenderingParams *params;
 static ID2D1Factory *d2d;
 static IWICImagingFactory *wic;
@@ -69,11 +68,8 @@ static void init(void) {
   b->CreateFontFallback(&fallback);
   sys->Release();
   b->Release();
-  // clusters stay single graphemes, as on the other hosts
-  dw->CreateTypography(&typo);
-  DWRITE_FONT_FEATURE off[] = {{DWRITE_FONT_FEATURE_TAG_STANDARD_LIGATURES, 0},
-                               {DWRITE_FONT_FEATURE_TAG_CONTEXTUAL_LIGATURES, 0}};
-  for (int i = 0; i < 2; i++) typo->AddFontFeature(off[i]);
+  // the font's own features, ligatures with them, as DirectWrite draws any app's text: a ligature is one
+  // cluster of its letters (GetClusterMetrics), drawn whole
   // plain coverage without hinting or contrast boost, like Core Text with
   // smoothing off
   IDWriteRenderingParams2 *p2 = NULL;
@@ -115,8 +111,6 @@ static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int 
     l2->SetFontFallback(fallback);
     l2->Release();
   }
-  DWRITE_TEXT_RANGE all = {0, (UINT32)len};
-  l->SetTypography(typo, all);
   return l;
 }
 
@@ -231,6 +225,12 @@ extern "C" int32_t mb_host_shape(moonbit_string_t text, double size, int32_t wei
   }
   l->Release();
   return k;
+}
+
+// The key of a piece of text drawn whole (a word of a joining script): host_native.mbt's text_key.
+extern "C" int32_t mb_host_text_key(moonbit_string_t text, double size, int32_t weight, int32_t style) {
+  init();
+  return intern((const WCHAR *)text, Moonbit_array_length(text), size, weight, style);
 }
 
 extern "C" int32_t mb_host_atlas_generation(void) { return generation; }
@@ -381,9 +381,13 @@ static void rasterize(int key) {
         d[1] = s[1];
         d[2] = s[0];
         d[3] = s[3];
+        // premultiplied: drawn in white, a mask's pixel has its colour equal to its alpha; an emoji's does not
+        if (color == 1 && d[3] > 64 && (d[0] + 32 < d[3] || d[1] + 32 < d[3] || d[2] + 32 < d[3])) color = 2;
       }
     }
     lock->Release();
+    // a color font's glyph drawn in the text's colour (Segoe UI Emoji's flags are letters): a mask after all
+    color = color == 2;
     mb_atlas_upload(pack_x, pack_y, pw, ph, px);
     free(px);
   }

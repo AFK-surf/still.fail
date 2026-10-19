@@ -41,6 +41,9 @@ extern "js" fn js_shape(
 ) -> Int =
   #|(t, s, w, st, o) => globalThis.__mbhost.shape(t, s, w, st, o)
 
+extern "js" fn js_text_key(text : String, size : Double, weight : Int, style : Int) -> Int =
+  #|(t, s, w, st) => globalThis.__mbhost.textKey(t, s, w, st)
+
 extern "js" fn js_glyph(key : Int, out : FixedArray[Double]) -> Unit =
   #|(k, o) => globalThis.__mbhost.glyph(k, o)
 
@@ -159,6 +162,11 @@ pub fn shape(
   out : FixedArray[Double],
 ) -> Int {
   js_shape(text, size, weight, style, out)
+}
+
+///|
+pub fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
+  js_text_key(text, size, weight, style)
 }
 
 ///|

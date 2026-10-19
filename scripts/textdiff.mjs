@@ -160,6 +160,8 @@ for (const r of rows) {
   const pix = Math.max(ua, ub) / inkN;
   const dAdv = r.mbui - r.native;
   const edges = ba && bb ? [ba.l - bb.l, ba.t - bb.t, ba.r - bb.r, ba.b - bb.b] : null;
+  // a string longer than the window: where its ink is cut off says nothing
+  if (edges && (ba.r >= w - 1 || bb.r >= w - 1)) edges[2] = 0;
   const bad = [];
   if (Math.abs(dAdv) > ADV_TOL(Math.abs(r.native))) bad.push('advance');
   if ((ba === null) !== (bb === null)) bad.push('ink');

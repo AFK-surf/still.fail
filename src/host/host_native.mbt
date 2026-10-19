@@ -38,6 +38,14 @@ extern "C" fn ffi_shape(
   out : FixedArray[Double],
 ) -> Int = "mb_host_shape"
 
+#borrow(text)
+extern "C" fn ffi_text_key(
+  text : String,
+  size : Double,
+  weight : Int,
+  style : Int,
+) -> Int = "mb_host_text_key"
+
 #borrow(out)
 extern "C" fn ffi_glyph(key : Int, out : FixedArray[Double]) -> Unit = "mb_host_glyph"
 
@@ -159,6 +167,13 @@ pub fn shape(
   out : FixedArray[Double],
 ) -> Int {
   ffi_shape(text, size, weight, style, out)
+}
+
+///|
+/// The glyph key of `text` drawn whole as one piece (the way the platform draws it in a line: a word whose letters
+/// join), for `glyph`.
+pub fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
+  ffi_text_key(text, size, weight, style)
 }
 
 ///|

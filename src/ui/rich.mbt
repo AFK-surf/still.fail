@@ -155,6 +155,8 @@ pub struct RichLayout {
   line_h : Array[Double]
   /// the baseline, down from the line's top
   line_base : Array[Double]
+  /// each cluster's bidi level on its line (empty: all left to right)
+  lv : Array[Int]
   len : Int
   w : Double
   h : Double
@@ -302,6 +304,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
     line_y: [],
     line_h: [],
     line_base: [],
+    lv: [],
     len: off,
     w: 0.0,
     h: 0.0,
@@ -358,6 +361,21 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
   }
   if ls < n || line_start.length() == 0 || (n > 0 && lay.hard_end(n - 1)) {
     finish(ls, n)
+  }
+  // right to left: each line's clusters in their visual order
+  let bd = @text.Bidi::new(text)
+  if bd.is_mixed() {
+    for _ in 0..<n {
+      lay.lv.push(0)
+    }
+    for l in 0..<line_start.length() {
+      let a = line_start[l]
+      let mut e = line_end[l]
+      while e > a && (cu[e - 1] == 32 || is_nl(cu[e - 1])) {
+        e = e - 1
+      }
+      bidi_line(bd, starts, lens, adv, xs, lay.lv, a, e, 0.0)
+    }
   }
   // each line as high as its tallest run needs, its baseline shared
   let mut y = 0.0
@@ -424,6 +442,9 @@ pub fn RichLayout::offset_at(self : RichLayout, x : Double, y : Double) -> Int {
   let line = self.line_at(y)
   let a = self.line_start[line]
   let b = self.line_end[line]
+  if self.lv.length() > 0 {
+    return bidi_offset_at(self.starts, self.lens, self.adv, self.xs, self.lv, self.cu, a, b, x)
+  }
   for c in a..<b {
     if is_nl(self.cu[c]) {
       return self.starts[c]
@@ -458,10 +479,10 @@ pub fn RichLayout::caret(self : RichLayout, off : Int) -> (Double, Double, Doubl
       return (0.0, self.line_y[l], self.line_h[l])
     }
     let ll = self.line_of[last]
-    (self.xs[last] + self.adv[last], self.line_y[ll], self.line_h[ll])
+    (caret_after(self.xs, self.adv, self.lv, last), self.line_y[ll], self.line_h[ll])
   } else {
     let l = self.line_of[c]
-    (self.xs[c], self.line_y[l], self.line_h[l])
+    (caret_before(self.xs, self.adv, self.lv, c), self.line_y[l], self.line_h[l])
   }
 }
 
@@ -490,8 +511,15 @@ pub fn RichLayout::rects(
       }
       l = cl
       x0 = self.xs[c]
+      x1 = x0
     }
-    x1 = self.xs[c] + self.adv[c]
+    // a line's clusters may be out of order (right to left): the box around them
+    if self.xs[c] < x0 {
+      x0 = self.xs[c]
+    }
+    if self.xs[c] + self.adv[c] > x1 {
+      x1 = self.xs[c] + self.adv[c]
+    }
   }
   if l >= 0 {
     out.push((x0, self.line_y[l], x1 - x0, self.line_h[l]))
@@ -513,6 +541,25 @@ pub fn RichLayout::run_at(self : RichLayout, off : Int) -> Int {
   } else {
     k
   }
+}
+
+///|
+/// Where clusters [c0, c1) of one line lie: from the left of the leftmost to the right of the rightmost (in order
+/// unless the line holds right-to-left text).
+fn RichLayout::span_x(self : RichLayout, c0 : Int, c1 : Int) -> (Double, Double) {
+  let mut x0 = self.xs[c0]
+  let mut x1 = self.xs[c1 - 1] + self.adv[c1 - 1]
+  if self.lv.length() > 0 {
+    for c in c0..<c1 {
+      if self.xs[c] < x0 {
+        x0 = self.xs[c]
+      }
+      if self.xs[c] + self.adv[c] > x1 {
+        x1 = self.xs[c] + self.adv[c]
+      }
+    }
+  }
+  (x0, x1)
 }
 
 ///|
@@ -664,8 +711,9 @@ fn Ctx::paint_rich(self : Ctx, n : Node, alpha : Double) -> Unit {
     for p in lay.pieces(k) {
       let (l, c0, c1) = p
       let top = oy + lay.line_y[l]
-      let x0 = ox + lay.xs[c0]
-      let x1 = ox + lay.xs[c1 - 1] + lay.adv[c1 - 1]
+      let (sx0, sx1) = lay.span_x(c0, c1)
+      let x0 = ox + sx0
+      let x1 = ox + sx1
       if bg != 0L {
         let base = top + lay.line_base[l]
         let a = lay.run_a[k]
@@ -744,9 +792,9 @@ fn Ctx::paint_rich(self : Ctx, n : Node, alpha : Double) -> Unit {
     for p in lay.pieces(k) {
       let (l, c0, c1) = p
       let base = oy + lay.line_y[l] + lay.line_base[l]
-      let x0 = ox + lay.xs[c0] + (if c0 == lay.run_c0[k] { room } else { 0.0 })
-      let x1 = ox + lay.xs[c1 - 1] + lay.adv[c1 - 1] -
-        (if c1 == lay.run_c1[k] { room } else { 0.0 })
+      let (sx0, sx1) = lay.span_x(c0, c1)
+      let x0 = ox + sx0 + (if c0 == lay.run_c0[k] { room } else { 0.0 })
+      let x1 = ox + sx1 - (if c1 == lay.run_c1[k] { room } else { 0.0 })
       if run.strike {
         let y = ((base - size * 0.27 - t / 2.0) * sc).round() / sc
         self.emit_rect(x0, y, x1 - x0, t, 0.0, colors[k], 0.0, 0L, alpha)

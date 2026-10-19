@@ -83,19 +83,19 @@ fn unescape(s : String) -> String {
 fn corpus_rows(only : String) -> Array[Row] {
   let rows = []
   for line in corpus.split("\n") {
-    let l = line.to_string()
+    let l = line.to_owned()
     if l.trim(chars=" ").length() == 0 || l.has_prefix("#") {
       continue
     }
-    let parts = l.split(" | ").map(fn(p) { p.to_string() }).to_array()
+    let parts = l.split(" | ").map(fn(p) { p.to_owned() }).to_array()
     if parts.length() < 3 {
       continue
     }
-    let id = parts[0].trim(chars=" ").to_string()
+    let id = parts[0].trim(chars=" ").to_owned()
     if only != "" && !id.has_prefix(only) {
       continue
     }
-    let variants = parts[1].trim(chars=" ").to_string()
+    let variants = parts[1].trim(chars=" ").to_owned()
     // the text is all after the second separator, as written (it may hold " | " itself)
     let rest = []
     for k in 2..<parts.length() {

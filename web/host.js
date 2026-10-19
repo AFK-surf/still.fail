@@ -532,7 +532,6 @@
   let packX = 0, packY = 0, packH = 0, generation = 0;
   const rc = document.createElement('canvas');
   const rctx = rc.getContext('2d', { willReadFrequently: true });
-  const emojiRe = /\p{Extended_Pictographic}/u;
   // style: 1 slanted, 2 the code face
   const font = (size, weight, style) => `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${style & 2 ? MONO : FAMILY}`;
 
@@ -544,31 +543,52 @@
     out[2] = Math.round(size * 1.42);
   };
 
+  const textKey = (c, size, weight, style) => {
+    const kk = c + '\x01' + size + '\x01' + weight + '\x01' + style;
+    let key = keys.get(kk);
+    if (key === undefined) {
+      key = entries.length;
+      entries.push({ c, size, weight, style, done: false });
+      keys.set(kk, key);
+    }
+    return key;
+  };
+  H.textKey = textKey;
+  // a width the canvas measures, kept
+  const width = (f, s) => {
+    const ak = f + '\x01' + s;
+    let w = advCache.get(ak);
+    if (w === undefined) {
+      w = mctx.measureText(s).width;
+      advCache.set(ak, w);
+    }
+    return w;
+  };
+
   H.shape = (text, size, weight, style, out) => {
     const f = font(size, weight, style);
     mctx.font = f;
     const cap = out.length / 4;
+    const segs = [...seg.segment(text)];
     let k = 0;
-    for (const s of seg.segment(text)) {
-      if (k >= cap) break;
+    let word = 0;
+    for (let i = 0; i < segs.length && k < cap; i++) {
+      const s = segs[i];
       const c = s.segment;
-      const ak = f + '\x01' + c;
-      let adv = advCache.get(ak);
-      if (adv === undefined) {
-        adv = mctx.measureText(c).width;
-        advCache.set(ak, adv);
+      // the canvas says no more of a cluster than its width alone: within a word, what it adds to the word so far
+      // is its advance as the browser lays the word out (kerning, letters that join, the spacing it trims between
+      // CJK punctuation)
+      const blank = /^\s+$/.test(c);
+      let adv;
+      if (blank) {
+        adv = width(f, c);
+        word = s.index + c.length;
+      } else {
+        adv = width(f, text.slice(word, s.index + c.length)) - (s.index > word ? width(f, text.slice(word, s.index)) : 0);
       }
       let key = -1;
       if (c === '\n') adv = 0;
-      else if (c !== ' ' && c !== '\t') {
-        const kk = c + '\x01' + size + '\x01' + weight + '\x01' + style;
-        key = keys.get(kk);
-        if (key === undefined) {
-          key = entries.length;
-          entries.push({ c, size, weight, style, done: false });
-          keys.set(kk, key);
-        }
-      }
+      else if (c !== ' ' && c !== '\t') key = textKey(c, size, weight, style);
       out[k * 4] = s.index;
       out[k * 4 + 1] = c.length;
       out[k * 4 + 2] = adv;
@@ -610,6 +630,12 @@
     rctx.textBaseline = 'alphabetic';
     rctx.fillText(e.c, pad + l, pad + a);
     const img = rctx.getImageData(0, 0, pw, ph);
+    // drawn in white: a cluster with colours of its own (grey ones too: any pixel of some opacity not white) is an
+    // emoji's
+    let color = 0;
+    for (let i = 0; i < img.data.length && !color; i += 4) {
+      if (img.data[i + 3] > 64 && Math.min(img.data[i], img.data[i + 1], img.data[i + 2]) < 224) color = 1;
+    }
     gl.bindTexture(gl.TEXTURE_2D, atlasTex);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, packX, packY, pw, ph, gl.RGBA, gl.UNSIGNED_BYTE, img);
@@ -619,7 +645,7 @@
     e.h = ph / sc;
     e.ox = -(l + pad) / sc;
     e.oy = -(a + pad) / sc;
-    e.color = emojiRe.test(e.c) ? 1 : 0;
+    e.color = color;
     packX += pw + 1;
     packH = Math.max(packH, ph);
   }

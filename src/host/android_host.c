@@ -34,7 +34,7 @@ static jclass host_cls, text_cls, images_cls, login_cls, picks_cls;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
-    m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame;
+    m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -72,6 +72,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
   m_generation = (*env)->GetStaticMethodID(env, text_cls, "atlasGeneration", "()I");
+  m_text_key = (*env)->GetStaticMethodID(env, text_cls, "textKey", "(Ljava/lang/String;DII)I");
   m_ref_begin = (*env)->GetStaticMethodID(env, text_cls, "refBegin", "(DDDI)V");
   m_ref_text = (*env)->GetStaticMethodID(env, text_cls, "refText", "(Ljava/lang/String;DIIDDI[D)V");
   m_ref_end = (*env)->GetStaticMethodID(env, text_cls, "refEnd", "(Ljava/lang/String;)Z");
@@ -753,6 +754,14 @@ int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, int32_
   if (n > cap) n = cap;
   (*env)->GetDoubleArrayRegion(env, shape_buf, 0, n * 4, out);
   return n;
+}
+
+int32_t mb_host_text_key(moonbit_string_t text, double size, int32_t weight, int32_t style) {
+  JNIEnv *env = env_();
+  jstring s = jstr(env, text);
+  jint k = (*env)->CallStaticIntMethod(env, text_cls, m_text_key, s, size, weight, style);
+  (*env)->DeleteLocalRef(env, s);
+  return k;
 }
 
 void mb_host_glyph(int32_t key, double *out) {

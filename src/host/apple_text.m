@@ -14,6 +14,9 @@ typedef struct {
   int done;
   double u, v, w, h, ox, oy;
   int color;
+  // where the shaper put the cluster's glyph in its line, past where it starts on its own (a CJK bracket after
+  // another, set half a width closer)
+  double dx;
 } glyph_entry;
 
 static NSMutableDictionary<NSString *, NSNumber *> *keys;
@@ -85,12 +88,13 @@ static CTLineRef make_line(NSString *s, CTFontRef f) {
   return CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)as);
 }
 
-static int intern(NSString *cluster, double size, int weight, int style) {
+static int intern_at(NSString *cluster, double size, int weight, int style, double dx) {
   if (!keys) {
     keys = [NSMutableDictionary new];
     texts = [NSMutableArray new];
   }
-  NSString *k = [NSString stringWithFormat:@"%@\x01%g\x01%d\x01%d", cluster, size, weight, style];
+  NSString *k = dx == 0 ? [NSString stringWithFormat:@"%@\x01%g\x01%d\x01%d", cluster, size, weight, style]
+                        : [NSString stringWithFormat:@"%@\x01%g\x01%d\x01%d\x01%.3f", cluster, size, weight, style, dx];
   NSNumber *n = keys[k];
   if (n) return n.intValue;
   if (n_entries == cap_entries) {
@@ -98,10 +102,14 @@ static int intern(NSString *cluster, double size, int weight, int style) {
     entries = realloc(entries, sizeof(glyph_entry) * cap_entries);
   }
   int id_ = n_entries++;
-  entries[id_] = (glyph_entry){size, weight, style, 0, 0, 0, 0, 0, 0, 0, 0};
+  entries[id_] = (glyph_entry){size, weight, style, 0, 0, 0, 0, 0, 0, 0, 0, dx};
   [texts addObject:cluster];
   keys[k] = @(id_);
   return id_;
+}
+
+static int intern(NSString *cluster, double size, int weight, int style) {
+  return intern_at(cluster, size, weight, style, 0);
 }
 
 // The keys of ASCII clusters, per font, found without building a string
@@ -239,6 +247,37 @@ static int32_t shape_slow(moonbit_string_t text, int32_t len, double size, int32
   NSString *s = [[NSString alloc] initWithCharacters:(const unichar *)text length:len];
   CTFontRef f = font_for(size, weight, style);
   CTLineRef line = make_line(s, f);
+  // where Core Text's glyphs come from in the text: a cluster none comes from is part of the glyph before it (a
+  // ligature), drawn by that cluster (-2 tells MoonBit, which gives the ligature to the first of them)
+  uint8_t *from = calloc((size_t)len + 1, 1);
+  // In a line with right-to-left text, a caret offset is where a character is from the line's start in a reading
+  // order of its own, not what it advances: there each cluster advances as far as its glyphs do, each glyph to
+  // where the next one in the run starts (the run's glyphs are in visual order), counted to where it comes from
+  int any_rtl = 0;
+  double *glyph_adv = calloc((size_t)len + 1, sizeof(double));
+  // where the first glyph from each character is in the line (NAN: none), left to right
+  double *glyph_x = malloc(sizeof(double) * ((size_t)len + 1));
+  for (int32_t j = 0; j <= len; j++) glyph_x[j] = NAN;
+  CFArrayRef runs = CTLineGetGlyphRuns(line);
+  for (CFIndex r = 0; r < CFArrayGetCount(runs); r++) {
+    CTRunRef run = CFArrayGetValueAtIndex(runs, r);
+    CFIndex gc = CTRunGetGlyphCount(run);
+    CFIndex *idx = malloc(sizeof(CFIndex) * (gc > 0 ? gc : 1));
+    CGPoint *pos = malloc(sizeof(CGPoint) * (gc > 0 ? gc : 1));
+    CTRunGetStringIndices(run, CFRangeMake(0, 0), idx);
+    CTRunGetPositions(run, CFRangeMake(0, 0), pos);
+    double w = CTRunGetTypographicBounds(run, CFRangeMake(0, 0), NULL, NULL, NULL);
+    if (CTRunGetStatus(run) & kCTRunStatusRightToLeft) any_rtl = 1;
+    for (CFIndex g = 0; g < gc; g++) {
+      if (idx[g] < 0 || idx[g] >= len) continue;
+      from[idx[g]] = 1;
+      if (isnan(glyph_x[idx[g]]) || pos[g].x < glyph_x[idx[g]]) glyph_x[idx[g]] = pos[g].x;
+      double next = g + 1 < gc ? pos[g + 1].x : pos[0].x + w;
+      glyph_adv[idx[g]] += next - pos[g].x;
+    }
+    free(idx);
+    free(pos);
+  }
   int32_t k = 0;
   NSUInteger i = 0;
   // a cluster starts where the one before it ended
@@ -247,19 +286,38 @@ static int32_t shape_slow(moonbit_string_t text, int32_t len, double size, int32
     NSRange r = [s rangeOfComposedCharacterSequenceAtIndex:i];
     unichar c = [s characterAtIndex:r.location];
     if (r.location != i) x0 = CTLineGetOffsetForStringIndex(line, r.location, NULL);
+    double start_x = x0;
     double x1 = CTLineGetOffsetForStringIndex(line, r.location + r.length, NULL);
     double adv = x1 - x0;
     x0 = x1;
+    if (any_rtl) {
+      adv = 0;
+      for (NSUInteger j = r.location; j < r.location + r.length; j++) adv += glyph_adv[j];
+    }
     int key;
     if (c == '\n') {
       adv = 0;
       key = -1;
     } else if (c == ' ' || c == '\t') {
       key = -1;
-    } else if (r.length == 1 && c < 128) {
-      key = ascii_key(c, size, weight, style);
     } else {
-      key = intern([s substringWithRange:r], size, weight, style);
+      int drawn = 0;
+      for (NSUInteger j = r.location; j < r.location + r.length; j++) drawn |= from[j];
+      if (!drawn && k > 0)
+        key = -2;
+      else if (r.length == 1 && c < 128)
+        key = ascii_key(c, size, weight, style);
+      else {
+        // a glyph the shaper moved within its cluster's advance (contextual spacing of CJK punctuation): drawn
+        // there, not where it sits on its own
+        // (the leftmost of its glyphs: a vowel sign the shaper put before its consonant is where it starts)
+        double gx = NAN;
+        for (NSUInteger j = r.location; j < r.location + r.length; j++)
+          if (!isnan(glyph_x[j]) && (isnan(gx) || glyph_x[j] < gx)) gx = glyph_x[j];
+        double dx = any_rtl || isnan(gx) ? 0 : gx - start_x;
+        if (fabs(dx) < 0.01) dx = 0;
+        key = intern_at([s substringWithRange:r], size, weight, style, dx);
+      }
     }
     out[k * 4] = r.location;
     out[k * 4 + 1] = r.length;
@@ -268,8 +326,18 @@ static int32_t shape_slow(moonbit_string_t text, int32_t len, double size, int32
     k++;
     i = r.location + r.length;
   }
+  free(from);
+  free(glyph_adv);
+  free(glyph_x);
   CFRelease(line);
   return k;
+}
+
+// The key of a piece of text drawn whole (a word of a joining script, a ligature): host_native.mbt's text_key.
+int32_t mb_host_text_key(moonbit_string_t text, double size, int32_t weight, int32_t style) {
+  @autoreleasepool {
+    return intern(mb_ns_from_string(text), size, weight, style);
+  }
 }
 
 static int shape_check = -1;
@@ -379,6 +447,20 @@ static void rasterize(int key) {
   e->w = pw / sc;
   e->h = ph / sc;
   e->ox = b.origin.x;
+  if (e->dx != 0) {
+    // moved by as much as its glyphs sit further right in the line than they do on their own
+    double iso = NAN;
+    for (CFIndex r = 0; r < CFArrayGetCount(runs); r++) {
+      CTRunRef run = CFArrayGetValueAtIndex(runs, r);
+      CFIndex gc = CTRunGetGlyphCount(run);
+      CGPoint *pos = malloc(sizeof(CGPoint) * (gc > 0 ? gc : 1));
+      CTRunGetPositions(run, CFRangeMake(0, 0), pos);
+      for (CFIndex g = 0; g < gc; g++)
+        if (isnan(iso) || pos[g].x < iso) iso = pos[g].x;
+      free(pos);
+    }
+    e->ox += e->dx - (isnan(iso) ? 0 : iso);
+  }
   e->oy = -(b.origin.y + b.size.height);
   e->color = color;
   pack_x += pw + 1;

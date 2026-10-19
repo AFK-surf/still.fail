@@ -42,13 +42,15 @@ for h in $HOSTS; do
       ADB="$SDK/platform-tools/adb -s emulator-${EMU_PORT:-5580}"
       APP=textdiff bash scripts/android.sh build >/dev/null || { echo "textdiff: android build failed"; fail=1; continue; }
       $ADB logcat -c
-      $ADB shell run-as dev.mbui.demo rm -rf files/textdiff
+      # the last run's pictures gone (the app not yet installed on a new emulator has none)
+      $ADB shell run-as dev.mbui.demo rm -rf files/textdiff 2>/dev/null || true
       APP=textdiff ENV="MBUI_BENCH=-1;MBUI_TEXTDIFF_ONLY=${ONLY:-}" bash scripts/android.sh run
       for i in $(seq 1 300); do
         $ADB logcat -d -s mbui:I | grep -q "TXD done" && break
         sleep 2
       done
       $ADB logcat -d -v raw -s mbui:I > $O/log.txt
+      grep -q "TXD done" $O/log.txt || { echo "textdiff android: the app did not finish"; fail=1; }
       $ADB exec-out run-as dev.mbui.demo tar cf - -C files/textdiff . | tar xf - -C $O ;;
     windows)
       APP=textdiff bash scripts/win.sh build >/dev/null || { echo "textdiff: windows build failed"; fail=1; continue; }

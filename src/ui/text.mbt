@@ -3,6 +3,15 @@
 // rasterizes each cluster into its atlas on demand. Line breaking (UAX #14,
 // from mbui/text), caret geometry and hit testing are done here, the same on
 // every platform.
+//
+// What the host draws as one piece: a cluster, or a ligature the shaper made of
+// several (the host gives it to the first, with the advance shared out). A word
+// in a script whose letters take their shapes from their neighbours (Arabic,
+// the Indic scripts…) is made one cluster here (@host.text_key), so the host
+// rasterizes it whole, joined as it is when the system draws it; a caret in it
+// goes before or after the whole word. Right-to-left text is put in its visual
+// order line by line (UAX #9, @text.Bidi): each line's clusters reordered, the
+// caret and hit testing following them.
 
 ///|
 struct Shaped {
@@ -15,6 +24,8 @@ struct Shaped {
   // line break (UAX #14)
   brk : Array[Int]
   len : Int
+  // the text's bidirectional levels, when any is not 0 (None: all left to right)
+  bidi : @text.Bidi?
   // the last layout made of it (with no indent), for the next one asked
   // for with the same line height and wrapping, in a width it fits
   mut lay : TextLayout?
@@ -36,6 +47,8 @@ pub struct TextLayout {
   h : Double
   ascent : Double
   line_h : Double
+  // each cluster's bidi level on its line (empty: all left to right)
+  lv : Array[Int]
 }
 
 ///|
@@ -147,30 +160,153 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0) -> Shaped
         clear_shapes()
       }
       let out = text_cache.buf
-      let n = if text.length() == 0 {
+      let m = if text.length() == 0 {
         0
       } else {
         h_shape(text, size, weight, style, out)
       }
-      let starts = Array::new(capacity=n)
-      let lens = Array::new(capacity=n)
-      let adv = Array::new(capacity=n)
-      let keys = Array::new(capacity=n)
-      let cu = Array::new(capacity=n)
-      for i in 0..<n {
-        let st = out[i * 4].to_int()
-        starts.push(st)
-        lens.push(out[i * 4 + 1].to_int())
-        adv.push(out[i * 4 + 2])
-        keys.push(out[i * 4 + 3].to_int())
-        cu.push(if st < text.length() { text.at(st).to_int() } else { 0 })
+      let lb = if m > 1 { Some(@text.line_breaks(text)) } else { None }
+      // UAX #29's clusters: a host that cut one in two (a Thai vowel sign some segmenters leave on its own) is
+      // made whole again
+      // (ASCII, the most of what is shaped: every host's clusters are UAX #29's, nothing joins, nothing reads right
+      // to left)
+      let mut ascii = true
+      for k in 0..<text.length() {
+        if text.at(k).to_int() >= 0x80 {
+          ascii = false
+          break
+        }
       }
+      let gb = if m > 1 && !ascii { Some(@text.graphemes(text)) } else { None }
+      let boundary = FixedArray::make(text.length() + 1, m <= 1 || ascii)
+      match gb {
+        Some(g) =>
+          for b in g {
+            boundary[b] = true
+          }
+        None => ()
+      }
+      let starts = Array::new(capacity=m)
+      let lens = Array::new(capacity=m)
+      let adv = Array::new(capacity=m)
+      let keys = Array::new(capacity=m)
+      let cu = Array::new(capacity=m)
+      let mut i = 0
+      while i < m {
+        let st = out[i * 4].to_int()
+        // what joins it: the rest of its grapheme cluster, and the rest of a word in a joining script (which ends
+        // where a line may break)
+        let word = !ascii && joining(text, st) && out[i * 4 + 3] != -1.0
+        let mut j = i + 1
+        while j < m {
+          let sj = out[j * 4].to_int()
+          if !boundary[sj] {
+            j = j + 1
+            continue
+          }
+          let opp = match lb {
+            Some(b) => b[sj]
+            None => 0
+          }
+          if !word || opp != 0 || out[j * 4 + 3] == -1.0 || !joining(text, sj) {
+            break
+          }
+          j = j + 1
+        }
+        let k0 = out[i * 4 + 3].to_int()
+        if j - i >= 2 {
+          let end = out[(j - 1) * 4].to_int() + out[(j - 1) * 4 + 1].to_int()
+          let mut a = 0.0
+          let mut drawn = false
+          for k in i..<j {
+            a = a + out[k * 4 + 2]
+            drawn = drawn || out[k * 4 + 3] != -1.0
+          }
+          starts.push(st)
+          lens.push(end - st)
+          adv.push(a)
+          keys.push(
+            if k0 == -2 {
+              -2
+            } else if drawn && !is_nl(text.at(st).to_int()) {
+              h_text_key(text.unsafe_substring(start=st, end~), size, weight, style)
+            } else {
+              k0
+            },
+          )
+        } else {
+          starts.push(st)
+          lens.push(out[i * 4 + 1].to_int())
+          adv.push(out[i * 4 + 2])
+          keys.push(k0)
+        }
+        cu.push(if st < text.length() { text.at(st).to_int() } else { 0 })
+        i = j
+      }
+      // ligatures: a cluster the shaper drew as part of the one before it (-2 from the host) has that one's piece
+      // drawn over it; the piece, the whole ligature, is the first's, the advance shared out evenly
+      let mut c = 0
+      while c < keys.length() {
+        if keys[c] != -2 {
+          c = c + 1
+          continue
+        }
+        let u = c - 1
+        let mut e = c
+        while e < keys.length() && keys[e] == -2 {
+          e = e + 1
+        }
+        if u < 0 || keys[u] < 0 {
+          for k in c..<e {
+            keys[k] = h_text_key(text.unsafe_substring(start=starts[k], end=starts[k] + lens[k]), size, weight, style)
+          }
+        } else {
+          let end = starts[e - 1] + lens[e - 1]
+          keys[u] = h_text_key(text.unsafe_substring(start=starts[u], end~), size, weight, style)
+          let mut a = 0.0
+          for k in u..<e {
+            a = a + adv[k]
+          }
+          for k in u..<e {
+            adv[k] = a / (e - u).to_double()
+            if k > u {
+              keys[k] = -1
+            }
+          }
+        }
+        c = e
+      }
+      let n = starts.length()
       let brk = Array::make(n, 0)
       if n > 1 {
-        let b = @text.line_breaks(text)
-        for i in 1..<n {
-          brk[i] = b[starts[i]]
+        match lb {
+          Some(b) =>
+            for k in 1..<n {
+              brk[k] = b[starts[k]]
+            }
+          None => ()
         }
+      }
+      let bd = if ascii { None } else { Some(@text.Bidi::new(text)) }
+      let bd = match bd {
+        Some(b) if b.is_mixed() => Some(b)
+        _ => None
+      }
+      // L4: a bracket (or another mirrored character) reading right to left is drawn as its mirror image, ")" for
+      // "(" (each cluster is drawn on its own, out of the line the shaper would have mirrored it in)
+      match bd {
+        Some(bd) => {
+          for k in 0..<n {
+            if lens[k] == 1 && bd.levels[starts[k]] % 2 == 1 && keys[k] >= 0 {
+              let c = text.at(starts[k]).to_int()
+              let m = @text.mirror(c)
+              if m != c {
+                keys[k] = h_text_key(Int::unsafe_to_char(m).to_string(), size, weight, style)
+              }
+            }
+          }
+        }
+        None => ()
       }
       let s = {
         starts,
@@ -180,6 +316,7 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0) -> Shaped
         cu,
         brk,
         len: text.length(),
+        bidi: bd,
         lay: None,
         lay_max: 0.0,
         lay_line: 0.0,
@@ -189,6 +326,156 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0) -> Shaped
       text_cache.shaped = text_cache.shaped + 1
       s
     }
+  }
+}
+
+///|
+/// The code point at UTF-16 offset i.
+fn cp_at(text : String, i : Int) -> Int {
+  let c = text.at(i).to_int()
+  if c >= 0xD800 && c < 0xDC00 && i + 1 < text.length() {
+    let d = text.at(i + 1).to_int()
+    if d >= 0xDC00 && d < 0xE000 {
+      return 0x10000 + ((c - 0xD800) << 10) + (d - 0xDC00)
+    }
+  }
+  c
+}
+
+///|
+/// Whether the cluster at offset i is of a script whose letters take their shapes from the letters beside them
+/// (cursive joining: Arabic, Syriac, N'Ko, Mongolian…; conjuncts and reordered vowel signs: the Indic scripts,
+/// Myanmar, Khmer, Tibetan) or joins them (ZWJ, ZWNJ): a word of them is drawn whole. Arabic's digits and number
+/// signs are not (they read left to right in a right-to-left line).
+fn joining(text : String, i : Int) -> Bool {
+  if i >= text.length() {
+    return false
+  }
+  let c = cp_at(text, i)
+  if c < 0x600 {
+    return false
+  }
+  if c <= 0x8FF {
+    // Arabic, Syriac, Thaana, N'Ko, Samaritan, Mandaic and the Arabic supplements, less their numbers
+    !((c >= 0x600 && c <= 0x605) ||
+    (c >= 0x660 && c <= 0x66C) ||
+    (c >= 0x6F0 && c <= 0x6F9) ||
+    c == 0x6DD ||
+    (c >= 0x7C0 && c <= 0x7C9) ||
+    c == 0x890 ||
+    c == 0x891 ||
+    c == 0x8E2)
+  } else {
+    (c >= 0x900 && c <= 0xDFF) ||
+    (c >= 0xF00 && c <= 0x109F) ||
+    (c >= 0x1780 && c <= 0x18AF) ||
+    c == 0x200C ||
+    c == 0x200D ||
+    (c >= 0xA8E0 && c <= 0xA8FF) ||
+    (c >= 0xA9E0 && c <= 0xA9FF) ||
+    (c >= 0xAA60 && c <= 0xAA7F) ||
+    (c >= 0xFB50 && c <= 0xFDFF) ||
+    (c >= 0xFE70 && c <= 0xFEFE) ||
+    (c >= 0x10D00 && c <= 0x10D3F) ||
+    (c >= 0x11000 && c <= 0x111FF)
+  }
+}
+
+///|
+/// A line's clusters [a, e) (without the spaces it ends in) put in their visual order from x: their xs, and their
+/// levels (UAX #9 with L1) into lv.
+fn bidi_line(
+  b : @text.Bidi,
+  starts : Array[Int],
+  lens : Array[Int],
+  adv : Array[Double],
+  xs : Array[Double],
+  lv : Array[Int],
+  a : Int,
+  e : Int,
+  x0 : Double,
+) -> Unit {
+  if e <= a {
+    return
+  }
+  let base = starts[a]
+  let ll = b.line_levels(base, starts[e - 1] + lens[e - 1])
+  let levels = Array::makei(e - a, fn(k) { ll[starts[a + k] - base] })
+  for k, l in levels {
+    lv[a + k] = l
+  }
+  let order = @text.visual_order(levels[:])
+  let mut x = x0
+  for k in order {
+    xs[a + k] = x
+    x = x + adv[a + k]
+  }
+}
+
+///|
+/// The x of a caret before cluster c (its left edge, or right edge read right to left).
+fn caret_before(xs : Array[Double], adv : Array[Double], lv : Array[Int], c : Int) -> Double {
+  if c < lv.length() && lv[c] % 2 == 1 {
+    xs[c] + adv[c]
+  } else {
+    xs[c]
+  }
+}
+
+///|
+/// The x of a caret after cluster c.
+fn caret_after(xs : Array[Double], adv : Array[Double], lv : Array[Int], c : Int) -> Double {
+  if c < lv.length() && lv[c] % 2 == 1 {
+    xs[c]
+  } else {
+    xs[c] + adv[c]
+  }
+}
+
+///|
+/// The offset nearest x on a line of clusters [a, b) in visual order (some right to left).
+fn bidi_offset_at(
+  starts : Array[Int],
+  lens : Array[Int],
+  adv : Array[Double],
+  xs : Array[Double],
+  lv : Array[Int],
+  cu : Array[Int],
+  a : Int,
+  b : Int,
+  x : Double,
+) -> Int {
+  let mut left = -1
+  let mut right = -1
+  for c in a..<b {
+    if is_nl(cu[c]) {
+      continue
+    }
+    let rtl = lv[c] % 2 == 1
+    if x >= xs[c] && x < xs[c] + adv[c] {
+      let first_half = x < xs[c] + adv[c] / 2.0
+      return if first_half != rtl { starts[c] } else { starts[c] + lens[c] }
+    }
+    if left < 0 || xs[c] < xs[left] {
+      left = c
+    }
+    if right < 0 || xs[c] > xs[right] {
+      right = c
+    }
+  }
+  if left < 0 {
+    return if a < starts.length() { starts[a] } else { 0 }
+  }
+  if x < xs[left] {
+    if lv[left] % 2 == 1 {
+      starts[left] + lens[left]
+    } else {
+      starts[left]
+    }
+  } else if lv[right] % 2 == 1 {
+    starts[right]
+  } else {
+    starts[right] + lens[right]
   }
 }
 
@@ -313,6 +600,26 @@ fn layout_text(
     finish(ls, n)
   }
   let lines = line_start.length()
+  // right to left: each line's clusters in their visual order
+  let lv = match s.bidi {
+    Some(b) => {
+      let lv = Array::make(n, 0)
+      for l in 0..<lines {
+        let a = line_start[l]
+        let mut e = line_end[l]
+        while e > a && (s.cu[e - 1] == 32 || is_nl(s.cu[e - 1])) {
+          e = e - 1
+        }
+        bidi_line(b, s.starts, s.lens, s.adv, xs, lv, a, e, if l == 0 { indent } else { 0.0 })
+        // the spaces it ends in stay after it, read left to right
+        for c in e..<line_end[l] {
+          lv[c] = 0
+        }
+      }
+      lv
+    }
+    None => []
+  }
   let tl = {
     text,
     shaped: s,
@@ -325,6 +632,7 @@ fn layout_text(
     h: lines.to_double() * line_h,
     ascent,
     line_h,
+    lv,
   }
   if indent == 0.0 {
     s.lay = Some(tl)
@@ -352,9 +660,9 @@ fn TextLayout::caret(self : TextLayout, off : Int) -> (Double, Int) {
     if s.hard_end(last) {
       return (0.0, self.line_start.length() - 1)
     }
-    (self.xs[last] + s.adv[last], self.line_of[last])
+    (caret_after(self.xs, s.adv, self.lv, last), self.line_of[last])
   } else {
-    (self.xs[c], self.line_of[c])
+    (caret_before(self.xs, s.adv, self.lv, c), self.line_of[c])
   }
 }
 
@@ -369,6 +677,9 @@ fn TextLayout::offset_at(self : TextLayout, x : Double, y : Double) -> Int {
   let line = imin(imax((y / self.line_h).to_int(), 0), lines - 1)
   let a = self.line_start[line]
   let b = self.line_end[line]
+  if self.lv.length() > 0 {
+    return bidi_offset_at(s.starts, s.lens, s.adv, self.xs, self.lv, s.cu, a, b, x)
+  }
   for c in a..<b {
     if is_nl(s.cu[c]) {
       return s.starts[c]

@@ -171,13 +171,29 @@ fn h_shape(
         out[k * 4] = i.to_double()
         out[k * 4 + 1] = len.to_double()
         out[k * 4 + 2] = adv
-        out[k * 4 + 3] = if c == 32 || c == 10 { -1.0 } else { c.to_double() }
+        // U+E000 plays a ligature's second letter: drawn as part of the cluster before it
+        out[k * 4 + 3] = if c == 32 || c == 10 {
+          -1.0
+        } else if c == 0xE000 && k > 0 {
+          -2.0
+        } else {
+          c.to_double()
+        }
         i = i + len
         k = k + 1
       }
       k
     }
     None => @host.shape(text, size, weight, style, out)
+  }
+}
+
+///|
+/// The key of `text` drawn as one piece (a word of a joining script).
+fn h_text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
+  match fake.val {
+    Some(_) => text.at(0).to_int()
+    None => @host.text_key(text, size, weight, style)
   }
 }
 
