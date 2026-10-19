@@ -1,5 +1,6 @@
 import {
   "mbui/ui",
+  "mbui/effect",
   "moonbitlang/core/math",
   "moonbitlang/core/double",
 }

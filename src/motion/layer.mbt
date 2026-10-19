@@ -216,6 +216,8 @@ fn install() -> Unit {
   }
   installed.val = true
   @ui.on_after_layout(after_layout)
+  // fx.mbt's layout animations (after the layer's looks)
+  @ui.on_after_layout(layouts_after)
   @ui.on_list_underlay(draw_ghosts)
   @ui.on_reset(reset)
 }
@@ -230,6 +232,7 @@ fn reset() -> Unit {
   mo.lists.clear()
   mo.ghosts.clear()
   anims.clear()
+  reset_fx()
 }
 
 ///|
