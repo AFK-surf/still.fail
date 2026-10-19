@@ -111,7 +111,9 @@ fn decide_reset() -> Unit {
   dui.gone.clear()
   dui.failed.clear()
   dui.sheet = None
+  dui.sheet_at = 0.0
   dui.leaving = None
+  dui.leave_at = 0.0
   dui.jobs_all = false
   dui.job_tab = 0
   dui.history_tab = 0
@@ -124,7 +126,16 @@ fn decide_reset() -> Unit {
   dui.drag = 0.0
   dui.held = false
   dui.swiping = false
+  dui.from_x = 0.0
+  dui.from_y = 0.0
+  dui.base = 0.0
+  dui.last_x = 0.0
+  dui.last_t = 0.0
+  dui.speed = 0.0
   dui.going = 0
+  dui.going_at = 0.0
+  dui.going_from = 0.0
+  dui.after_go = fn() {  }
   dui.arrive_at = -1.0
 }
 
@@ -242,10 +253,12 @@ fn seq_key(station : String, thread : Double, seq : Double) -> String {
 
 ///|
 /// ListMotion.kt closeGap: the room left closed by the rows' spring (critically damped, 350), a little late (100 ms).
+// kept across runs: a curve, never written
 let close_gap : @motion.Spec = @motion.spring(stiffness=350.0, threshold=0.002, delay=100.0)
 
 ///|
 /// The archive buttons' curve and time (Chat.kt ArchiveEase, 280 ms): a quick start, a soft landing.
+// kept across runs: a curve, never written
 let archive_tween : @motion.Spec = @motion.tween(280.0, ease=Soft)
 
 ///|

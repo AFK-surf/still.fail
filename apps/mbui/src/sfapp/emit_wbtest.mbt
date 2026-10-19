@@ -23,8 +23,8 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
 
 ///|
 fn emit_restore() -> Unit {
-  fix_clock.val = fn() { @host.now() }
-  fix_wake.val = fn(ms) { @host.wake_after(ms) }
+  fix_clock.val = fix_frame_clock
+  fix_wake.val = fix_frame_wake
 }
 
 ///|

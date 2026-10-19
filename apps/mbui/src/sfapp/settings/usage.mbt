@@ -17,9 +17,11 @@ let usage_state : UsageState = { days: 7, day: "", list: 0, all: false }
 
 ///|
 /// The people a day's bar is split by (Usage.kt LIGHT, DARK); the rest in the subtle grey.
+// kept across runs: a table, never written
 let usage_light : Array[Int64] = [0xEF6A3CFFL, 0x2A78D6FFL, 0x1BAF7AFFL, 0x4A3AA7FFL]
 
 ///|
+// kept across runs: a table, never written
 let usage_dark : Array[Int64] = [0xE0602FFFL, 0x3987E5FFL, 0x199E70FFL, 0x9085E9FFL]
 
 ///|

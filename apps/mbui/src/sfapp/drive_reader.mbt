@@ -18,6 +18,7 @@ priv struct PaperInk {
 }
 
 ///|
+// kept across runs: a table, never written
 let paper_keys : Array[String] = ["follow", "white", "green", "grey", "night"]
 
 ///|

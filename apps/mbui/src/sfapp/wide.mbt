@@ -84,6 +84,8 @@ fn wide_reset() -> Unit {
   wide.side_w = 240.0
   wide.folded = false
   wide.edge_x = -1.0
+  wide.edge_w = 0.0
+  wide.edge_moved = false
   wide.menu = None
   wide.renaming = ""
   wide.filter_open = false
@@ -211,6 +213,7 @@ fn main_page(
 
 ///|
 /// The rail's places when none were chosen (Rail.tsx RAIL_DEFAULT).
+// kept across runs: a table, never written
 let rail_default : Array[String] = [
   "attention", "chats", "files", "stations", "profiles", "connects", "usage",
 ]

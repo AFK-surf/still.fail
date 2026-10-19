@@ -74,11 +74,13 @@ let bar_room : Double = 56.0 + 22.0 + 16.0 + 32.0
 
 ///|
 /// Every place a bar can hold (the core's BAR_PLACES); the chats' family, whose pages have 令 in the notch.
+// kept across runs: a table, never written
 let places : Array[String] = [
   "chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive",
 ]
 
 ///|
+// kept across runs: a table, never written
 let chat_family : Array[String] = ["chats", "decisions", "archive"]
 
 ///|
@@ -388,23 +390,52 @@ let bar : BarModel = {
 ///|
 /// As at the start (tests).
 fn bar_reset() -> Unit {
+  let back_spr = fn(s : Spr, to : Spr) {
+    s.x = to.x
+    s.v = to.v
+    s.to = to.to
+    s.tension = to.tension
+    s.friction = to.friction
+  }
+  let back_glide = fn(g : Glide, to : Glide) {
+    g.value = to.value
+    g.target = to.target
+    g.from = to.from
+    g.t = to.t
+    g.span = to.span
+    g.curve = to.curve
+  }
   bar.mode = false
-  bar.o.x = 0.0
-  bar.o.to = 0.0
-  bar.o.v = 0.0
-  bar.vis.value = 0.0
-  bar.vis.target = 0.0
+  back_spr(bar.o, spr(0.0, 260.0, 17.0))
+  back_spr(bar.k, spr(1.0, 300.0, 30.0))
+  back_spr(bar.held, spr(0.0, 420.0, 16.0))
+  back_glide(bar.vis, glide(0.0))
+  back_glide(bar.ball_alpha, glide(1.0))
+  back_glide(bar.ball_scale, glide(1.0))
   bar.tints.clear()
+  bar.bx = 0.0
+  bar.by = 0.0
+  bar.bvx = 0.0
+  bar.bvy = 0.0
+  bar.gx = 0.0
+  bar.gy = 0.0
+  bar.tension = 300.0
+  bar.trip = slot_px
+  bar.active_was = ""
   bar.drag = -1.0
   bar.drag_y = -1.0
   bar.holds = false
+  bar.from_open = false
+  bar.open = false
+  bar.y0 = 0.0
+  bar.o0 = 0.0
   bar.placed = false
   bar.was_down = false
+  bar.width = 0.0
   bar.swap = None
   bar.waits = false
   bar.icon_was = ""
-  bar.icon_swap.value = 1.0
-  bar.icon_swap.target = 1.0
+  back_glide(bar.icon_swap, glide(1.0))
   m_face.val = ""
   bars_picked.val = None
 }

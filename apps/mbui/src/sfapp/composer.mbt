@@ -99,7 +99,7 @@ priv struct Draft {
   mut changed_at : Double
   /// when typing last woke the agent's runtime (`session.warm`, once a minute)
   mut warmed : Double
-  /// the quote whose comment line takes the focus next frame (0 none); 1: the words' field
+  /// the quote whose comment line takes the focus next frame (0 none); -1: the words' field (ids count from 1)
   mut focus : Int
 }
 
@@ -745,7 +745,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     }
     None => ()
   }
-  if d.focus == 1 {
+  if d.focus == -1 {
     c.focus_editor(field_key)
     d.focus = 0
   }
@@ -1213,7 +1213,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
             if res.submitted is Some(_) {
               c.set_editor_text(key, res.submitted.unwrap())
               d.comments[q.id] = res.submitted.unwrap()
-              d.focus = 1
+              d.focus = -1
             }
           })
           |> ignore
@@ -1353,7 +1353,7 @@ fn pasted_card(
       let now = if d.text == "" { words } else { d.text + "\n" + words }
       d.text = now
       d.put_text = Some(now)
-      d.focus = 1
+      d.focus = -1
     }
   }
   c.box(

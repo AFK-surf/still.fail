@@ -21,6 +21,7 @@
 // hosts yet: it is copied and said so), document.cookie (the cookies are the app's, not the web view's).
 
 ///|
+// kept across runs: a table, never written
 let svc_zh : Map[String, String] = {
   "android-chat.link.failed": "无法打开此链接",
   "android-chat.load.failed": "失败",
@@ -73,6 +74,7 @@ priv struct Viewport {
 
 ///|
 /// The sizes offered (Preview.kt PRESETS).
+// kept across runs: a table, never written
 let svc_presets : Array[(String, Int, Int)] = [
   ("phone", 390, 844),
   ("tablet", 820, 1180),

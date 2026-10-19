@@ -21,6 +21,7 @@ priv enum MarkTool {
 
 ///|
 /// still.fail's accent, what is drawn by default; the colours to draw in, each with the halo that edges its words.
+// kept across runs: a table, never written
 let mark_colors : Array[(Int64, Int64)] = [
   (0xE5704AFFL, 0xFFFFFFFFL),
   (0xE5484DFFL, 0xFFFFFFFFL),

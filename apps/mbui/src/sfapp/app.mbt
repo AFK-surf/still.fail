@@ -124,20 +124,46 @@ pub fn open_page(p : Page) -> Unit {
 }
 
 ///|
-/// As at the start: Home alone, nothing chosen here yet (tests).
+/// reset() called by hand since the last Tester started: what the test set after it (its clock, its system) is the
+/// next Tester's to start from, not forgotten again as it starts.
+let reset_by_hand : Ref[Bool] = Ref(false)
+
+///|
+/// Every Tester starts from the app as at the start (mbui's on_reset), whatever ran before it in the process: what is
+/// kept here from one Tester to the next would be an input the test does not give.
+fn init {
+  @ui.on_reset(fn() {
+    if !reset_by_hand.val {
+      reset()
+    }
+    reset_by_hand.val = false
+  })
+}
+
+///|
+/// As at the start: Home alone, nothing chosen here yet (tests; every Tester as it starts: init above). Each global
+/// of this package is put back here (or in what this calls) as its `let` has it, or says why it is kept across runs
+/// (scripts/check.sh checks).
 fn reset() -> Unit {
   attention.told = false
+  attention.visible = false
+  attention.focused = false
+  attention.workspace = ""
   attention.src = None
   app.nav = new_nav()
   app.picked = ""
   app.filters.clear()
   sheet_host.kind = NoSheet
   sheet_host.shown = NoSheet
+  sheet_host.accounts = false
   bar_reset()
   fresh.became = None
+  fresh.became_at = -1.0
   fresh.made = ""
+  fresh.made_sig = ""
   fresh.sent = false
   fresh.starting = false
+  fresh.scene = None
   new_fix.station = "st1"
   new_fix.model = "claude-opus-5-5"
   new_fix.runtime = "claude"
@@ -148,9 +174,13 @@ fn reset() -> Unit {
   new_fix.d_profile = ""
   new_fix.made = 0
   app.switch_at = -1.0e9
+  app.switch_way = 0
   app.menu = false
+  app.menu_at = 0.0
   app.held = 0
+  app.held_at = 0.0
   app.toast = ""
+  app.toast_at = 0.0
   read_views.clear()
   read_chats.clear()
   readings.clear()
@@ -160,20 +190,35 @@ fn reset() -> Unit {
   service_pages.clear()
   svc_viewports.clear()
   share_in.shared = None
+  share_in.files = []
   share_in.raised = false
+  // (taken: a Tester never reads the machine's MBUI_SHARE_TEXT)
   share_in.env_taken = true
+  share_in.searching = false
+  share_in.choosing = false
+  share_in.opening = None
+  share_in.error = ""
+  share_in.query = ""
   update.available = None
   update.asked = false
+  update.checking = false
+  update.installing = false
+  update.phase = "idle"
   update.source = None
   update_version.val = 0
   svc_folded.val = false
   splash_first.val = -1.0
   drafts.clear()
   cui.attach = false
+  cui.attach_at = 0.0
   cui.picking = None
+  cui.picking_for = ""
   cui.was_down = false
   cui.press_new = false
   cui.released = false
+  cui.down_x = 0.0
+  cui.down_y = 0.0
+  cui.down_at = 0.0
   cui.moved = false
   cui.outside = false
   cui.room = 0.0
@@ -193,6 +238,70 @@ fn reset() -> Unit {
   flash_held.val = false
   notices_reset()
   wide_reset()
+  // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
+  kept_chats.clear()
+  fixture_pictures.clear()
+  fix_threads.clear()
+  fix_ctx.val = None
+  fix_clock.val = fix_frame_clock
+  fix_wake.val = fix_frame_wake
+  fix_serial.val = 0
+  fix_stream_ids.val = 0
+  // Home (home.mbt), the host told (above), a chat's page and what is in it
+  open_titled.val = ""
+  shown_days.clear()
+  marks_seen.clear()
+  told_bars.val = None
+  told_dark.val = None
+  send_flight.val = None
+  flying.val = None
+  absolute_times.val = false
+  opened_notices.clear()
+  flashing.val = ("", 0.0)
+  flash_row.val = None
+  at_end_env.val = -1
+  bench_on.val = -1
+  boxed_n.val = 0
+  run_picker_opened.val = false
+  run_picker_saving.val = false
+  svc_hold.val = -1.0
+  // the composer: its ids counted from the start, what waits for it
+  next_pending.val = 1
+  quote_seeded.clear()
+  upload_serial.val = 0
+  marked_into.clear()
+  shared_into.clear()
+  share_files_made.val = 0
+  recent.open = false
+  recent.answers = -1
+  recent.access = NoGallery
+  recent.reading = None
+  recent.photos = []
+  // the viewer (preview.mbt, preview_marks.mbt: marks_leave above)
+  marking.color = 0xE5704AFFL
+  marking.next_id = 1
+  marking.to_draft = false
+  marking.job_name = ""
+  marking.write_text = ""
+  marking.note_text = ""
+  pv_thumbs.clear()
+  pv_hidden.val = ""
+  pv_read.clear()
+  pv_strip.leaving = None
+  pv_strip.pinned = None
+  pv_strip.near.clear()
+  viewer_awake_env.val = -1
+  src_now.val = fn() { 0.0 }
+  // a drive's files, a text read (keep.mbt, drive_reader.mbt)
+  dv_fetches.clear()
+  keepings.clear()
+  reader_mds.clear()
+  // the wide frame's keys (wide_keys.mbt)
+  focus_composer.val = false
+  switcher_query.val = ""
+  rename_for.val = ""
+  rename_seen.val = false
+  reset_by_hand.val = true
 }
 
 ///|
