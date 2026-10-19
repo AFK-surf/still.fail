@@ -94,6 +94,9 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.LIST_PAD
+import fail.still.android.ui.CARD_PAD
+import fail.still.android.ui.LocalOnCard
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import fail.still.android.data.errorText
@@ -230,9 +233,12 @@ fun SecretField(value: String, onChange: (String) -> Unit, placeholder: String) 
     }
 }
 
+/** Words on a card: on a list card (its padding in already) its words CARD_PAD from the card's edge, as its rows'. */
 @Composable
-fun Body(content: @Composable () -> Unit) =
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
+fun Body(content: @Composable () -> Unit) {
+    val onCard = LocalOnCard.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = if (onCard) CARD_PAD - LIST_PAD else 16.dp, vertical = if (onCard) 12.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
+}
 
 /** A check's tone as a colour (the core's: accent | green | blue | red | neutral). */
 @Composable

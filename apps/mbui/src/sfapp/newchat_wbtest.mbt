@@ -65,16 +65,16 @@ test "the workspaces' sheet: drawn up to 94%, dragged down past 30% it closes" {
   t.settle() |> ignore
   t.tap_text("星火工作室")
   t.settle() |> ignore
-  assert_true((sheet_host.h.x - 844.0 * 0.7).abs() < 1.0)
+  assert_true((t.get(@ui.Dialog).rect.3 - 844.0 * 0.7).abs() < 1.0)
   let (x, y) = t.find("切换 workspace").unwrap()
   t.drag(x, y, x, y - 200.0)
   t.settle() |> ignore
-  assert_true((sheet_host.h.x - 844.0 * 0.94).abs() < 1.0)
+  assert_true((t.get(@ui.Dialog).rect.3 - 844.0 * 0.94).abs() < 1.0)
   // a tap on the grabber: half
   let (x, y) = t.find("切换 workspace").unwrap()
   t.tap(x, y - 30.0)
   t.settle() |> ignore
-  assert_true((sheet_host.h.x - 844.0 * 0.55).abs() < 1.0)
+  assert_true((t.get(@ui.Dialog).rect.3 - 844.0 * 0.55).abs() < 1.0)
   let (x, y) = t.find("切换 workspace").unwrap()
   t.drag(x, y, x, y + 300.0)
   t.settle() |> ignore
@@ -151,6 +151,10 @@ test "a new chat: its station picked in the sheet, its model in the run picker" 
   t.tap(ox, oy)
   t.settle() |> ignore
   assert_true(!sheet_open())
+  for l in t.dump().split("\n") {
+    if l.contains("GPT") || l.contains("Opus") || l.contains("high") || l.contains("高") {
+        }
+  }
   assert_true(t.find("GPT-6 · high") is Some(_))
   // cancelled, it sinks back down
   t.tap_text("取消")

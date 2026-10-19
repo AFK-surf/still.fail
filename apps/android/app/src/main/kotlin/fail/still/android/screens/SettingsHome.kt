@@ -218,7 +218,7 @@ private fun Version() {
     ListRow(onClick = if (busy) null else ({ scope.launch { (if (newer == null) updates.checkNow() else updates.install())?.let { app.toast = it } } })) {
         // The beta app goes by its own name (app/build.gradle.kts).
         Text("${BuildConfig.APP_NAME} ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-        Text(updates.progress ?: (if (updates.checking) t("android-settings.version.checking") else null) ?: newer?.let { t("android-settings.version.update", "version" to it.versionName) } ?: t("android-settings.version.check"), fontSize = 15.sp, color = if (newer != null && !busy) C.accent else C.muted)
+        Text(updates.progress ?: (if (updates.checking) t("android-settings.version.checking") else null) ?: newer?.let { t("android-settings.version.update", "version" to it.versionName) } ?: t("android-settings.version.check"), fontSize = 15.sp, color = if (newer != null && !busy) C.link else C.muted)
     }
 }
 

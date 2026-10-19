@@ -487,7 +487,7 @@ fun NavBack(label: String, onClick: () -> Unit) {
     Layout(
         content = {
             IconIn(Icons.ChevronLeft, 22.dp, C.accent)
-            Text(label, fontSize = 17.sp, color = C.accent, maxLines = 1, softWrap = false)
+            Text(label, fontSize = 17.sp, color = C.link, maxLines = 1, softWrap = false)
         },
         modifier = Modifier.clip(Smooth(8.dp)).clickable(onClick = onClick).padding(end = 6.dp, top = 4.dp, bottom = 4.dp),
     ) { (chevron, word), constraints ->
@@ -566,11 +566,13 @@ fun LargeTitle(small: String, big: String, lead: (@Composable () -> Unit)? = nul
 // ── lists and cards ────────────────────────────────────────────────────
 
 @Composable
-fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp) {
+fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp, action: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(start = start, end = 20.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom) {
         Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         Spacer(Modifier.weight(1f))
         if (trailing != null) Text(trailing, fontSize = 13.sp, color = C.muted)
+        // What can be done to the whole section (取消登录), at its end.
+        action?.invoke()
     }
 }
 
@@ -578,12 +580,13 @@ fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp) {
  * A card of words (web pages.css.ts card, docs/ui-panels.md 页面卡片): CARD_PAD on every side, its words and a solid
  * button's ground on one line. `foot`: a button with a ground of its own (a capsule) sits in a corner, and the card's
  * corner is taken from it, CARD_PAD and its half height, so they are concentric; else CARD_CORNER. `corner`: taken
- * from something else with a ground in its corner (a Seg at its top).
+ * from something else with a ground in its corner (a Seg at its top). `margin`: its room from the page's sides, none in a
+ * page padded already.
  */
 @Composable
-fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, foot: Boolean = false, corner: Dp? = null, content: @Composable ColumnScope.() -> Unit) {
+fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, foot: Boolean = false, corner: Dp? = null, margin: Dp = 12.dp, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(corner ?: if (foot) CARD_PAD + BUTTON_HEIGHT / 2 else CARD_CORNER)).background(C.surface)
+        modifier.padding(horizontal = margin).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(corner ?: if (foot) CARD_PAD + BUTTON_HEIGHT / 2 else CARD_CORNER)).background(C.surface)
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(CARD_PAD),
         content = content,
     )
@@ -619,9 +622,9 @@ val LIST_ROW_CORNER = 18.dp
 val LIST_CARD_CORNER = concentricOut(LIST_ROW_CORNER, LIST_PAD)
 
 @Composable
-fun ListRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
+fun ListRow(onClick: (() -> Unit)? = null, ground: Color = Color.Transparent, content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).let { if (onClick != null) it.clickable(onClick = onClick) else it }
+        Modifier.fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).background(ground).let { if (onClick != null) it.clickable(onClick = onClick) else it }
             .padding(horizontal = CARD_PAD - LIST_PAD, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = content,
     )

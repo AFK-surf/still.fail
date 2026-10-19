@@ -75,6 +75,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.LIST_ROW_CORNER
 import fail.still.android.ui.BUTTON_HEIGHT
 import fail.still.android.ui.RowsCard
 import fail.still.android.ui.StationMark
@@ -140,7 +141,8 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                             Text(invite.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                             Text(t("android-misc.invite.invitedAs", "inviter" to invite.inviter.ifEmpty { t("android-misc.invite.someone") }, "email" to account.email, "role" to (ROLE_LABEL[invite.role] ?: invite.role)), fontSize = 13.sp, color = C.muted)
                         }
-                        Button(t("android-misc.invite.join"), primary = true, busy = accept.busy && accept.arg == invite.id) { app.run(accept, invite.id) { app.join(account, invite) } }
+                        // In the bottom corner however many lines its words take.
+                        Button(t("android-misc.invite.join"), primary = true, busy = accept.busy && accept.arg == invite.id, modifier = Modifier.align(Alignment.Bottom)) { app.run(accept, invite.id) { app.join(account, invite) } }
                     }
                 }
                 accept.error?.let { Error(it.message) }
@@ -241,7 +243,7 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         if (current != null) {
             Label(t("android-misc.workspace.current"))
-            RowsCard(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp), ground = C.bg) {
+            RowsCard(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp), ground = C.chip) {
                 PickRow(current.name, sub = currentOf.account.email, checked = true, leading = if (anyMarked) ({ WorkspaceIcon(current) }) else null) { app.sheet = null }
             }
         }
@@ -277,7 +279,7 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
 /** Workspace identity (its icon, when it has one, and name) and its waiting work; membership counts belong in settings. */
 @Composable
 private fun WorkspaceRow(w: WorkspaceSummary, email: String, mark: WorkspaceMark?, lead: Boolean, onClick: () -> Unit) {
-    Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
+    Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (lead) WorkspaceIcon(w)
         Column(Modifier.weight(1f)) {

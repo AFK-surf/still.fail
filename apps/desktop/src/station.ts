@@ -9,7 +9,7 @@ import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
-import { installedService } from "./installed";
+import { installedService } from "./installed.ts";
 
 /** stillfail-station's exit when another station runs the data directory (station/native/launcher: HELD). */
 const HELD = 3;
@@ -33,29 +33,40 @@ function withPath(env: NodeJS.ProcessEnv, first: string[], last: string[]): Node
 const PROXY = ["http_proxy", "https_proxy", "all_proxy", "no_proxy"].flatMap((name) => [name, name.toUpperCase()]);
 const MARK = "__stillfail_env__";
 
+/** What the user's login shell sets that an app opened from Finder or the Dock has not: its proxy and its PATH. */
+interface ShellEnv {
+  /** The proxy variables, for those the app was not started with. */
+  proxy: Record<string, string>;
+  /** Its PATH (empty when not read): where nvm, fnm, Volta, asdf and the like put the agents a terminal finds. */
+  path: string;
+}
+
 /**
- * The proxy variables the user's login shell sets (an `export https_proxy=…` in ~/.zshrc, as proxy apps tell one to
- * write), for those the app was not started with: opened from Finder or the Dock it has launchd's environment, and the
- * station's agents would reach the API without the proxy the terminal's go through. Read once, by an interactive login
- * shell as a terminal's (what it prints of its own is cut off by the marks); none when it fails or takes over 5 s.
+ * What the user's login shell sets (an `export https_proxy=…` in ~/.zshrc, as proxy apps tell one to write; the PATH
+ * nvm puts its Node's bin on): opened from Finder or the Dock the app has launchd's environment, and the station would
+ * neither find the agents a terminal finds nor have them reach the API through the proxy the terminal's go through.
+ * Read once, by an interactive login shell as a terminal's (what it prints of its own is cut off by the marks); nothing
+ * when it fails or takes over 5 s.
  */
-let shellProxy: Promise<Record<string, string>> | null = null;
-function proxyOfShell(): Promise<Record<string, string>> {
-  shellProxy ??= new Promise((resolve) => {
+let shellEnv: Promise<ShellEnv> | null = null;
+function ofShell(): Promise<ShellEnv> {
+  shellEnv ??= new Promise((resolve) => {
     const shell = process.env.SHELL;
-    if (process.platform === "win32" || !shell) return resolve({});
+    if (process.platform === "win32" || !shell) return resolve({ proxy: {}, path: "" });
     execFile(shell, ["-ilc", `printf '${MARK}'; env; printf '${MARK}'`], { timeout: 5000, maxBuffer: 1 << 20 }, (error, stdout) => {
       const env = error ? undefined : stdout.split(MARK)[1];
-      const found: Record<string, string> = {};
+      const proxy: Record<string, string> = {};
+      let path = "";
       for (const line of env?.split("\n") ?? []) {
         const at = line.indexOf("=");
         const name = line.slice(0, at);
-        if (at > 0 && PROXY.includes(name) && process.env[name] === undefined) found[name] = line.slice(at + 1);
+        if (at > 0 && PROXY.includes(name) && process.env[name] === undefined) proxy[name] = line.slice(at + 1);
+        if (name === "PATH") path = line.slice(at + 1);
       }
-      resolve(found);
+      resolve({ proxy, path });
     });
   });
-  return shellProxy;
+  return shellEnv;
 }
 
 /** A directory with something in it (a link counts: ~/.ember once moved is one). */
@@ -89,15 +100,20 @@ export class LocalStation {
   }
   readonly #bin: string;
   #child: ChildProcess | null = null;
-  /** Reading the shell's proxy before the first start. */
+  /** Reading the shell's proxy and PATH before the first start. */
   #starting = false;
+  /** The login shell's PATH, once read (ofShell). */
+  #shellPath = "";
   #stopping = false;
   #backoff = 1000;
   /** Another station runs this machine's data: this one is not started again until the app is. */
   held = false;
 
-  /** `dir`: the release, stillfail/ of scripts/station-bundle.sh. */
-  constructor(readonly dir: string) {
+  /** The release, stillfail/ of scripts/station-bundle.sh. */
+  readonly dir: string;
+
+  constructor(dir: string) {
+    this.dir = dir;
     this.#bin = join(dir, "mesh", "target", "release", WINDOWS ? "stillfail-station.exe" : "stillfail-station");
   }
 
@@ -142,9 +158,15 @@ export class LocalStation {
     return this.place.state === "running";
   }
 
-  /** The PATH the station is given (and an installed one updated from here, when its service says none). */
+  /**
+   * The PATH the station is given (and an installed one updated from here, when its service says none): as an installed
+   * station's, the usual places of the agents, then the login shell's PATH (a terminal's: nvm's Node among them), then
+   * the app's own; each directory once.
+   */
   get path(): string {
-    return WINDOWS ? withPath(process.env, [join(homedir(), ".local", "bin")], []).PATH! : `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin`;
+    if (WINDOWS) return withPath(process.env, [join(homedir(), ".local", "bin")], []).PATH!;
+    const dirs = [`${homedir()}/.local/bin`, "/opt/homebrew/bin", "/usr/local/bin", ...this.#shellPath.split(delimiter), ...(process.env.PATH ?? "").split(delimiter), "/usr/bin", "/bin"];
+    return [...new Set(dirs.filter((d) => d !== ""))].join(delimiter);
   }
 
   /** The release the app carries: 0.1.<commits> (scripts/station-bundle.sh BUILD); none in a build without one. */
@@ -173,8 +195,9 @@ export class LocalStation {
     // An installed station's service runs this machine's: the app does not run one beside it, even while it is stopped.
     if (installedService()) return;
     this.#starting = true;
-    void proxyOfShell().then((proxy) => {
+    void ofShell().then(({ proxy, path }) => {
       this.#starting = false;
+      this.#shellPath = path;
       if (!this.#child && !this.#stopping && !this.held) this.#spawn(proxy);
     });
   }

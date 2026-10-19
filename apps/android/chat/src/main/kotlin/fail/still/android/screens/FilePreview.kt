@@ -1059,7 +1059,7 @@ private fun TextViewer(bytes: ByteArray, kind: PreviewKind, language: String?, n
 
 @Composable
 private fun Cut(words: String, top: Dp) {
-    Text(words, fontSize = 13.sp, color = C.warn, modifier = Modifier.fillMaxWidth().background(C.warn.copy(alpha = 0.14f)).padding(start = 20.dp, end = 20.dp, top = 8.dp + top, bottom = 8.dp))
+    Text(words, fontSize = 13.sp, color = C.warnInk, modifier = Modifier.fillMaxWidth().background(C.warn.copy(alpha = 0.14f)).padding(start = 20.dp, end = 20.dp, top = 8.dp + top, bottom = 8.dp))
 }
 
 /** A page of its own in a WebView: scripts on, nothing of the phone's files or the app's reachable; links stay out. */

@@ -6,6 +6,8 @@
 // says none (not a Mac, or older) shows nothing.
 package fail.still.android.screens
 
+import androidx.compose.ui.draw.clip
+import fail.still.android.ui.Smooth
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -94,8 +96,7 @@ internal fun StationPermissionsSection(address: String, name: String, p: Station
             }
         }
     }
-    // What is unavailable now for want of a grant.
-    p.note?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 10.dp)) }
+    // What is unavailable for want of a grant (p.note) is not said again under it: each such row says it, 申请 at its end.
 }
 
 /** A row's state at its end, in words. */
@@ -111,12 +112,12 @@ private fun EndWords(text: String, color: Color, weight: FontWeight = FontWeight
 @Composable
 private fun RowAction(label: String, description: String? = null, busy: Boolean = false, failed: String? = null, onClick: () -> Unit) {
     Row(
-        Modifier.clickable(enabled = !busy, role = Role.Button, onClick = onClick)
+        Modifier.clip(Smooth(8.dp)).clickable(enabled = !busy, role = Role.Button, onClick = onClick)
             .let { m -> if (description != null) m.semantics { contentDescription = description } else m }
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (busy || failed != null) DoingMark(busy, failed, inline = true)
-        Text(label, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = if (busy) C.muted else C.accent, maxLines = 1)
+        Text(label, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = if (busy) C.muted else C.link, maxLines = 1)
     }
 }

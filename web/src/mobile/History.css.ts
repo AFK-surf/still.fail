@@ -216,7 +216,7 @@ globalStyle(`${m} :is(${mNavButton}, ${mPlus}, ${mSend}, ${mChatBack}, ${mHAct},
     },
   },
 });
-globalStyle(`${m} :is(${mNavButton}, ${mPlus}:not(:disabled), ${mChatBack}, ${mHAct}, ${mPickRow}, ${mListRow}, ${mInfoRow}, ${mSettingRow}, ${mPickLine}):hover`, {
+globalStyle(`${m} :is(${mNavButton}, ${mPlus}:not(:disabled), ${mChatBack}, ${mHAct}, ${mPickRow}, button${mListRow}, ${mInfoRow}, ${mSettingRow}, ${mPickLine}):hover`, {
   "@media": {
     "(hover: hover) and (pointer: fine)": {
       backgroundColor: "color-mix(in srgb, var(--m-ink) 5%, transparent)",

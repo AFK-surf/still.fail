@@ -60,6 +60,10 @@ import fail.still.android.ui.Markdown
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.Seg
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.LIST_ROW_CORNER
+import fail.still.android.ui.LIST_PAD
+import fail.still.android.ui.bleed
+import fail.still.android.ui.pressText
 import fail.still.android.ui.CARD_PAD
 import fail.still.android.ui.concentricOut
 import fail.still.android.ui.WaitShape
@@ -104,7 +108,8 @@ fun UsageScreen(current: WorkspaceEntry) {
                 }
             }
             Column(Modifier.padding(horizontal = 24.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                (view.notes + view.basis).forEach { Text(it, fontSize = 12.sp, color = C.subtle) }
+                // How it is counted, under what was counted (nothing counted: the empty place says it already).
+                (if (view.empty) view.notes else view.notes + view.basis).forEach { Text(it, fontSize = 12.sp, color = C.subtle) }
             }
         }
         Spacer(Modifier.height(30.dp))
@@ -202,14 +207,15 @@ private fun Lists(view: UsageView, open: (UsageItem) -> Unit) {
         val items = if (all) list.items else list.items.take(8)
         items.forEachIndexed { i, item -> ItemRow(item, i + 1, list.key, open) }
         if (list.items.size > 8) Text(if (all) t("android-misc.usage.collapse") else t("android-misc.usage.showAll", "n" to list.items.size), fontSize = 14.sp, color = C.muted,
-            modifier = Modifier.clip(Smooth(10.dp)).clickable { all = !all }.padding(horizontal = 4.dp, vertical = 10.dp))
+            modifier = Modifier.padding(vertical = 8.dp).pressText { all = !all })
     }
 }
 
 @Composable
 private fun ItemRow(item: UsageItem, rank: Int, kind: String, open: (UsageItem) -> Unit) {
     val opens = kind == "chats" && item.chat != null
-    Column(Modifier.fillMaxWidth().clip(Smooth(12.dp)).let { if (opens) it.clickable { open(item) } else it }.padding(vertical = 10.dp)) {
+    // Its ground under the finger out to LIST_PAD from the card's edge, its words where the card's are, as a list card's rows.
+    Column(Modifier.fillMaxWidth().bleed(CARD_PAD - LIST_PAD).clip(Smooth(LIST_ROW_CORNER)).let { if (opens) it.clickable { open(item) } else it }.padding(horizontal = CARD_PAD - LIST_PAD, vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             val person = item.person
             if (kind == "people" && person != null) Avatar(person.email ?: person.id, person.shown?.name ?: item.title, 22.dp, picture = person.shown?.picture)

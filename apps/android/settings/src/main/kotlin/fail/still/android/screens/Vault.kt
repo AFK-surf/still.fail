@@ -8,6 +8,7 @@
 // host, never from here. What an item holds is shown only on its page, while it is up, never kept.
 package fail.still.android.screens
 
+import fail.still.android.ui.pressText
 import fail.still.android.ui.Spinner
 import fail.still.android.ui.WaitLine
 import fail.still.android.ui.WaitShape
@@ -102,6 +103,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SHEET_ACTION
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.Card
 import fail.still.android.ui.concentricOut
 import fail.still.core.CoreException
 import kotlinx.coroutines.delay
@@ -328,10 +330,11 @@ private fun Library(ws: String, view: VaultsView) {
     val left = view.plainLeft?.toInt() ?: 0
     if (!plain && left > 0) PlainLeft(ws, left)
     ProfileAccounts(ws)
-    if (!plain && view.vaults.isEmpty()) ListCard {
-        Body {
+    // Words and its button under them, in the corner.
+    if (!plain && view.vaults.isEmpty()) Card(foot = true) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Para(t("android-settings.vault.none"))
-            WideButton(t("android-settings.vault.create"), primary = true, modifier = Modifier.fillMaxWidth(), busy = app.isDoing("vault.create", "workspace" to ws)) { createFirst(app, ws) }
+            Button(t("android-settings.vault.create"), primary = true, modifier = Modifier.fillMaxWidth(), busy = app.isDoing("vault.create", "workspace" to ws)) { createFirst(app, ws) }
         }
     }
     // A vault this device has no key to: what is known of it, and how to get the key.
@@ -349,17 +352,17 @@ private fun RequestCard(ws: String, view: VaultsView, r: VaultRequest) {
     val app = LocalApp.current
     // The request's keeper is the station its vault is on (docs/vault.md: the agent asks there); its chat is the session's.
     val station = view.vaults.firstOrNull { it.id == r.vault }?.station?.ifEmpty { null }
-    ListCard {
-        Body {
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(t("android-settings.vault.request.title", "name" to (r.itemName ?: t("android-settings.vault.request.someItem"))), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
             Text(r.reason, fontSize = 14.sp, lineHeight = 20.sp, color = C.ink)
             r.command?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = CodeFont, color = C.ink) }
             Text(howLine(r.mode, r.hosts), fontSize = 13.sp, color = C.muted)
             if (station != null) Row(
-                Modifier.clickable { app.push(Screen.Chat("$ws/$station", ChatOf.Session(r.session))) },
+                Modifier.pressText { app.push(Screen.Chat("$ws/$station", ChatOf.Session(r.session))) },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(t("android-settings.vault.request.openChat"), fontSize = 14.sp, color = C.accent)
+                Text(t("android-settings.vault.request.openChat"), fontSize = 14.sp, color = C.link)
                 IconIn(Icons.ChevronRight, 13.dp, C.accent)
             }
         }
@@ -469,10 +472,10 @@ private fun LibraryState(plain: Boolean) {
         ListRow(onClick = { app.push(Screen.Security) }) {
             RowMark { IconIn(Icons.ShieldCheck, 18.dp, if (plain) C.warn else C.subtle) }
             Column(Modifier.weight(1f)) {
-                Text(t(if (plain) "web-pages.vault.lib.plain" else "web-pages.vault.lib.sealed"), fontSize = 15.sp, color = if (plain) C.warn else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(t(if (plain) "web-pages.vault.lib.plain" else "web-pages.vault.lib.sealed"), fontSize = 15.sp, color = if (plain) C.warnInk else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(t(if (plain) "web-pages.vault.lib.plainWhy" else "web-pages.vault.lib.sealedWhy"), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (plain) Text(t("web-pages.vault.lib.turnOn"), fontSize = 15.sp, color = C.accent, maxLines = 1)
+            if (plain) Text(t("web-pages.vault.lib.turnOn"), fontSize = 15.sp, color = C.link, maxLines = 1)
             else IconIn(Icons.ChevronRight, 14.dp, C.subtle)
         }
     }
@@ -482,9 +485,10 @@ private fun LibraryState(plain: Boolean) {
 @Composable
 private fun PlainLeft(ws: String, n: Int) {
     val app = LocalApp.current
-    ListCard {
-        ListRow {
-            Column(Modifier.weight(1f)) {
+    // Its words, its button under them in the corner.
+    Card(foot = true) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column {
                 Text(t("android-settings.vault.migrate.title", "n" to n), fontSize = 15.sp, color = C.ink)
                 Text(t("android-settings.vault.migrate.body"), fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
             }
@@ -564,7 +568,7 @@ private fun LibraryVault(ws: String, v: VaultRow, plain: Boolean) {
         }
         if (v.open) ListRow(onClick = { app.scope.launch { runCatching { app.vaultCall(ws, "lock") } } }) {
             RowMark {}
-            Text(t("android-settings.vault.lock"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+            Text(t("android-settings.vault.lock"), fontSize = 15.sp, color = C.link, modifier = Modifier.weight(1f))
         }
     }
 }
@@ -586,7 +590,7 @@ private fun addSheet(app: AppState, ws: String) {
                 AddRow(Icons.Quota, "profile") { app.sheet = null; app.push(Screen.Profiles()) }
                 if (mine != null) ITEM_SECTIONS.forEach { k -> AddRow(kindIcon(k), k) { editorSheet(app, ws, mine.id, null, kind = k, plain = plain) } }
             }
-            if (plain && mine != null) Text(t("web-pages.vault.risk.editor"), fontSize = 13.sp, lineHeight = 19.sp, color = C.warn, modifier = Modifier.padding(horizontal = 24.dp))
+            if (plain && mine != null) Text(t("web-pages.vault.risk.editor"), fontSize = 13.sp, lineHeight = 19.sp, color = C.warnInk, modifier = Modifier.padding(horizontal = 24.dp))
         }
     }
 }
@@ -630,11 +634,11 @@ private fun Devices(ws: String, view: VaultsView) {
             ListRow(onClick = if (give && !giving) ({ app.vaultAct(t("android-settings.vault.giveKey"), t("android-settings.vault.gaveKey")) { app.vaultCall(ws, "addDevice") { put("vault", v.id) } } }) else null) {
                 Column(Modifier.weight(1f)) {
                     Text(if (view.vaults.size > 1) "${v.name} · $hold" else hold, fontSize = 15.sp, color = C.ink)
-                    if (v.missing > 0u) Text(t("android-settings.vault.missing", "n" to v.missing.toInt()), fontSize = 13.sp, color = C.warn)
+                    if (v.missing > 0u) Text(t("android-settings.vault.missing", "n" to v.missing.toInt()), fontSize = 13.sp, color = C.warnInk)
                 }
                 when {
                     giving -> Spinner()
-                    give -> Text(t("android-settings.vault.giveKey"), fontSize = 14.sp, color = C.accent)
+                    give -> Text(t("android-settings.vault.giveKey"), fontSize = 14.sp, color = C.link)
                 }
             }
         }
@@ -766,7 +770,7 @@ private fun UseRow(ws: String, u: VaultUse) {
 
 /** A link in words in a card's body: no ground, flush with the text around it. */
 @Composable
-private fun Link(label: String, onClick: () -> Unit) = Text(label, fontSize = 15.sp, color = C.accent, modifier = Modifier.clickable(onClick = onClick))
+private fun Link(label: String, onClick: () -> Unit) = Text(label, fontSize = 15.sp, color = C.link, modifier = Modifier.pressText(onClick = onClick))
 
 /** A field of an opened item: its name over its value (dots until shown, when secret), shown and copied from beside it. */
 @Composable
@@ -887,7 +891,7 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
         action = { Button(t("common.save"), primary = true, busy = saving, enabled = ready, height = SHEET_ACTION) { save() } },
     )
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (plainLibrary) Text(t("web-pages.vault.risk.editor"), fontSize = 13.sp, lineHeight = 19.sp, color = C.warn)
+        if (plainLibrary) Text(t("web-pages.vault.risk.editor"), fontSize = 13.sp, lineHeight = 19.sp, color = C.warnInk)
         if (was == null && fixed == null) Seg(KINDS.map(::kindName), kind, { kind = it }, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
         Labeled(t("android-settings.vault.name")) { VaultField(name, { name = it }, t("android-settings.vault.namePlaceholder")) }
         val optional = { f: String -> t("android-settings.vault.optional", "name" to fieldName(f)) }
@@ -905,7 +909,7 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
         }
         // Its fields (rounded 12) in its corners 16 from both edges: its corner taken from theirs, concentric.
         Column(Modifier.fillMaxWidth().clip(Smooth(concentricOut(12.dp, 16.dp))).background(C.surface).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth().clickable { agent = !agent }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().clip(Smooth(12.dp)).clickable { agent = !agent }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text(t("android-settings.vault.agent"), fontSize = 15.sp, color = C.ink)
                     Text(t("android-settings.vault.agentNote"), fontSize = 13.sp, color = C.muted)
@@ -987,7 +991,7 @@ private fun recoverSheet(app: AppState, ws: String) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(t("android-settings.vault.recoverLead"), fontSize = 14.sp, color = C.muted)
             VaultField(text, { text = it; error = null }, "orbit canvas lemon …", mono = true, lines = 5)
-            Text(t("android-settings.vault.recoverCount", "n" to n), fontSize = 12.sp, color = if (n == 24) C.green else C.subtle)
+            Text(t("android-settings.vault.recoverCount", "n" to n), fontSize = 12.sp, color = if (n == 24) C.greenInk else C.subtle)
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button(t("common.cancel"), primary = false) { app.sheet = null }

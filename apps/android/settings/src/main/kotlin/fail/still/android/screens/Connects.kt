@@ -73,6 +73,7 @@ import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.WorkspaceView
 import fail.still.android.data.rememberTopic
+import fail.still.android.ui.pressText
 import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
 import fail.still.android.ui.CodeFont
@@ -236,7 +237,7 @@ fun ConnectScreen(station: String, id: String) {
             if (c.state == "no_tokens" || c.state == "error" || (c.state == "reconnecting" && c.lastError != null)) Callout {
                 if (c.state == "no_tokens") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(t("android-settings.connect.noTokens"), fontSize = 13.sp, color = C.ink)
-                    Text(t("android-settings.connect.fillTokens"), fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { openTokens(app, station, connect) })
+                    Text(t("android-settings.connect.fillTokens"), fontSize = 13.sp, color = C.link, modifier = Modifier.pressText { openTokens(app, station, connect) })
                 } else Text(if (c.state == "error") c.error ?: "" else t("android-settings.connect.reconnecting", "error" to c.lastError), fontSize = 13.sp, color = C.ink)
             }
             SectionHeader(t("android-settings.connect.run"), start = 24.dp)
@@ -535,7 +536,7 @@ private fun TokenFields(tokens: Tokens, masked: Pair<String, String>? = null, in
             Text("Bot Token", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
             SecretField(tokens.bot, { tokens.bot = it }, masked?.second?.ifEmpty { null }?.let { t("android-settings.tokens.kept", "token" to it) } ?: "xoxb-…")
         }
-        tokens.verified?.let { Text(t("android-settings.tokens.verified", "team" to it.team, "bot" to it.botName), fontSize = 12.sp, color = C.green) }
+        tokens.verified?.let { Text(t("android-settings.tokens.verified", "team" to it.team, "bot" to it.botName), fontSize = 12.sp, color = C.greenInk) }
         tokens.errors.forEach { Text(it, fontSize = 13.sp, color = C.red) }
     }
 }
@@ -572,7 +573,7 @@ fun ConnectRunScreen(station: String, id: String) {
         if (list == "model") return ModelList(models, runtime, model) { m -> pick { put("model", m) }; list = null }
         if (list == "account") return AccountList(accounts, runtime, profile) { p -> pick { put("profile", p) }; list = null }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-            if (models.isEmpty()) Text(t("android-settings.run.noModels", "runtime" to connect.runtimeText), fontSize = 13.sp, color = C.warn, modifier = Modifier.padding(top = 8.dp))
+            if (models.isEmpty()) Text(t("android-settings.run.noModels", "runtime" to connect.runtimeText), fontSize = 13.sp, color = C.warnInk, modifier = Modifier.padding(top = 8.dp))
             GroupLabel(t("android-settings.connect.model"))
             SettingRow(onClick = { list = "model" }, leading = { MakerIcon(v.maker, runtime, 18.dp) }) {
                 // Another station's: where it comes from, on the same line.
@@ -687,22 +688,22 @@ fun NewConnectScreen(station: String) {
                 "team" -> if (teams.isEmpty()) {
                     Text(t("android-settings.flow.tokenNote", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("android-settings.slack.addToken"), primary = true) { flow.go("token") } }
-                    Text(t("android-settings.flow.manualInSlack"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("manual") })
+                    Text(t("android-settings.flow.manualInSlack"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { flow.go("manual") })
                 } else {
                     Text(t("android-settings.flow.whichTeam"), fontSize = 14.sp, color = C.muted)
                     RowsCard {
                         teams.forEach { t -> PickRow(t.name, t.owner?.let { o -> o.user + (o.teamDomain?.let { " · $it.slack.com" } ?: "") }, checked = chosen?.teamId == t.teamId) { flow.edit { put("team", t.teamId) } } }
                     }
-                    Text(t("android-settings.flow.addTeamToken"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("token") })
+                    Text(t("android-settings.flow.addTeamToken"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { flow.go("token") })
                     chosen?.let { team ->
-                        Text(t("android-settings.flow.removeToken", "name" to team.name), fontSize = 14.sp, color = C.muted, modifier = Modifier.clickable {
+                        Text(t("android-settings.flow.removeToken", "name" to team.name), fontSize = 14.sp, color = C.muted, modifier = Modifier.pressText {
                             confirm(app, t("android-settings.flow.removeTokenTitle", "name" to team.name), t("android-settings.flow.removeTokenText", "app" to BuildConfig.APP_NAME), t("android-settings.members.remove"), danger = true,
                                 what = t("android-settings.flow.removeTokenWhat"), then = { flow.edit { put("team", null as String?) } }) {
                                 api.removeConfigToken(team.teamId); app.toast = t("android-settings.flow.tokenRemoved")
                             }
                         })
                     }
-                    Text(t("android-settings.flow.manual"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("manual") })
+                    Text(t("android-settings.flow.manual"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { flow.go("manual") })
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("android-settings.flow.next"), primary = true, enabled = chosen != null) { flow.go("app") } }
                 }
                 "token" -> ConfigTokenSteps(station, flow) {}
@@ -730,7 +731,7 @@ fun NewConnectScreen(station: String) {
                         t("android-settings.flow.appToken") to { open(m.links.appToken) },
                         (if (install != null) t("android-settings.flow.pasteAppToken") else t("android-settings.flow.pasteTokens")) to null,
                     ))
-                    if (install == null) Text(t("android-settings.flow.oauthPage"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(m.links.oauth) })
+                    if (install == null) Text(t("android-settings.flow.oauthPage"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { open(m.links.oauth) })
                     TokenFields(tokens, install = m.state)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         Button(t("android-settings.flow.next"), primary = true, busy = busy, enabled = tokens.ready) { flow.act("verify") }
@@ -750,7 +751,7 @@ fun NewConnectScreen(station: String) {
                 }
                 else -> {
                     GroupLabel(t("android-settings.connect.model"))
-                    if (models.isEmpty()) Text(t("android-settings.flow.noModels"), fontSize = 13.sp, color = C.warn)
+                    if (models.isEmpty()) Text(t("android-settings.flow.noModels"), fontSize = 13.sp, color = C.warnInk)
                     else RowsCard {
                         models.forEach { m -> PickRow(m.name, m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, checked = entry?.model == m.model, leading = { MakerIcon(m.maker, m.runtimes.first(), 18.dp) }) { flow.choose { put("model", m.model) } } }
                     }
@@ -796,7 +797,7 @@ internal fun WaitingApp(app: AppState, station: String, a: MadeSlackApp, online:
         }
         // Being dropped (the sheet that asked gone): a spinner until the station has it, a red mark a moment if it failed.
         DoingMark(app.isDoing("slack.dropApp", "station" to station, "appId" to a.appId), app.failedOf("slack.dropApp", "station" to station, "appId" to a.appId))
-        if (online) Text(t("android-settings.waiting.continue"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openNewConnect(app, station, a.appId) })
+        if (online) Text(t("android-settings.waiting.continue"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { openNewConnect(app, station, a.appId) })
         else Text(t("android-settings.waiting.offline"), fontSize = 12.sp, color = C.muted)
     }
 }
@@ -827,7 +828,7 @@ internal fun Steps(steps: List<Pair<String, (() -> Unit)?>>) {
                 Text("${i + 1}.", fontSize = 14.sp, color = C.muted)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(text, fontSize = 14.sp, color = C.ink)
-                    if (open != null) Text(t("android-settings.open"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open() })
+                    if (open != null) Text(t("android-settings.open"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { open() })
                 }
             }
         }

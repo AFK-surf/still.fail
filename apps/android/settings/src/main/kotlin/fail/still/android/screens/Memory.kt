@@ -5,6 +5,11 @@
 // each opens on a page of its own to be read: a skill with its other files, the global memory a part at a time.
 package fail.still.android.screens
 
+import fail.still.android.ui.LIST_ROW_CORNER
+import fail.still.android.ui.LIST_PAD
+import fail.still.android.ui.CARD_PAD
+import fail.still.android.ui.bleed
+import fail.still.android.ui.Smooth
 import fail.still.android.data.t
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -216,9 +221,10 @@ private fun ShareRow(skill: SkillFile, station: String, changed: () -> Unit) {
     val busy = app.isDoing("skill.share", "station" to station, "name" to skill.name)
     val on = skill.share?.role == "host"
     Row(
-        Modifier.fillMaxWidth().padding(top = 12.dp).clickable(enabled = !busy) {
+        // The card's last row, in its bottom corners: its ground under the finger rounded as the card's, less its room.
+        Modifier.fillMaxWidth().padding(top = 12.dp).bleed(CARD_PAD - LIST_PAD).clip(Smooth(LIST_ROW_CORNER)).clickable(enabled = !busy) {
             app.act(t("web-main.memory.share.switch")) { app.api(station).shareSkill(skill.name, !on); changed() }
-        },
+        }.padding(horizontal = CARD_PAD - LIST_PAD, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(t("web-main.memory.share.switch"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
@@ -226,7 +232,7 @@ private fun ShareRow(skill: SkillFile, station: String, changed: () -> Unit) {
         Switch(on)
     }
     val conflicts = skill.share?.conflicts.orEmpty()
-    if (conflicts.isNotEmpty()) Text(t("web-main.memory.share.conflicts", "names" to conflicts.joinToString(t("web-main.list.separator"))), fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(top = 6.dp))
+    if (conflicts.isNotEmpty()) Text(t("web-main.memory.share.conflicts", "names" to conflicts.joinToString(t("web-main.list.separator"))), fontSize = 12.sp, color = C.warnInk, modifier = Modifier.padding(top = 6.dp))
 }
 
 /** Pages to pick between, as a row of pills scrolled across when they do not fit (none for a single page): a skill's

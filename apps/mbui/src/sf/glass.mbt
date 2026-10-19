@@ -89,3 +89,33 @@ pub fn glass_sheet() -> @ui.Glass {
   let t = theme()
   @ui.Glass::frosted(blur=28.0, tint=alpha(t.p.canvas, 0.8), solid=t.p.bg)
 }
+
+///|
+/// still.fail's sheet (Sheet.kt) as mbui's sheet draws it (@kit.sheet's look): the sheet's glass over the page, the
+/// scrim's black as far as it shows (`s.t`) under it, its top corners 26 round (26 more of it under the window's
+/// foot), a shadow; `ground` (not 0) a solid ground in the glass's place. What it holds starts with its grabber.
+pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit) -> Unit {
+  fn(c, s, body) {
+    let t = theme()
+    c.box(
+      w=Fill(1.0),
+      h=Px(s.h + 26.0),
+      radius=26.0,
+      bg=ground,
+      glass?=if ground != 0L {
+        None
+      } else {
+        Some({ ..glass_sheet(), solid: over(over(t.p.bg, alpha(0x000000FFL, 0.28 * s.t)), alpha(t.p.card, 0.8)) })
+      },
+      shadow=24.0,
+      clip=true,
+      pb=26.0,
+      body,
+    )
+    |> ignore
+  }
+}
+
+///|
+/// The scrim under a sheet at its fullest: black at 28% (Sheet.kt).
+pub let sheet_scrim : Int64 = 0x00000047L

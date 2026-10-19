@@ -207,7 +207,7 @@ private fun Summary(agent: ChatAgent) {
             val quota = a.quota
             when {
                 quota != null -> QuotaChip(quota.mark, quota.left, quota.level)
-                a.kind == "disk" -> Text(a.text, fontSize = 12.sp, color = C.warn)
+                a.kind == "disk" -> Text(a.text, fontSize = 12.sp, color = C.warnInk)
                 else -> Text(a.text, fontSize = 12.sp, color = C.red)
             }
         }
@@ -531,7 +531,7 @@ private fun Folding(name: String, hint: String?, meta: String?, failed: Boolean,
     var open by remember { mutableStateOf(false) }
     val follow = LocalFollow.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.fillMaxWidth().clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clip(Smooth(6.dp)).clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(name, fontSize = 13.sp, color = if (failed) C.red else C.ink, fontWeight = if (hint != null) FontWeight.Medium else null, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (hint == null) Modifier.weight(1f) else Modifier.widthIn(max = 160.dp))
             // The hint takes all the width the name and meta leave: two weights would cut it at half the row.
             if (hint != null) Text(hint, fontSize = 12.sp, style = Mono, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -650,11 +650,11 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                         Text(was, fontSize = 14.sp, color = if (moved) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = !moved))
                         if (moved) {
                             IconIn(Icons.ArrowRight, 14.dp, C.accent)
-                            Text(becomes, fontSize = 14.sp, color = C.accent, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text(becomes, fontSize = 14.sp, color = C.link, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         }
                     }
                 }
-                v.force?.let { Text(it, fontSize = 12.sp, color = C.warn) }
+                v.force?.let { Text(it, fontSize = 12.sp, color = C.warnInk) }
                 Text(t("android-chat.run.next"), fontSize = 12.sp, color = C.subtle)
             }
             GroupLabel(t("android-chat.run.label.model"))
@@ -682,7 +682,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> v.accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp, it.mark) } }) {
                 Text(v.accountText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(v.accountNote, fontSize = 12.sp, color = C.muted)
-                if (v.accountWarn) Text(t("android-chat.run.account.warn"), fontSize = 12.sp, color = C.warn)
+                if (v.accountWarn) Text(t("android-chat.run.account.warn"), fontSize = 12.sp, color = C.warnInk)
             }
             Box(Modifier.height(16.dp))
         }

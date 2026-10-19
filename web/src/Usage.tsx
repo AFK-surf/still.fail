@@ -149,11 +149,12 @@ export function Rankings({ view }: { view: UsageView }) {
   );
 }
 
-export function Notes({ view }: { view: UsageView }) {
+/** `basis`: how it is counted, said last (not where an empty place has said it already). */
+export function Notes({ view, basis = true }: { view: UsageView; basis?: boolean }) {
   return (
     <ul className={css.notes}>
       {view.notes.map((n) => <li key={n}>{n}</li>)}
-      <li>{view.basis}</li>
+      {basis && <li>{view.basis}</li>}
     </ul>
   );
 }

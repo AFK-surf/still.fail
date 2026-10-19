@@ -134,8 +134,10 @@ test "＋'s sheet going down takes no tap: the field tapped meanwhile is the fie
   t.tap(10.0 + 8.0 + 18.0, 844.0 - 10.0 - 8.0 - 18.0)
   t.settle() |> ignore
   assert_true(cui.attach)
-  // the scrim, tapped: let go of
-  t.tap(195.0, 200.0)
+  // the scrim, tapped: let go of (a frame, not settled: it is still going down)
+  t.touch(0, 195.0, 200.0)
+  t.touch(2, 195.0, 200.0)
+  t.frame()
   assert_true(!cui.attach)
   t.frame()
   // still going down, drawn over the field

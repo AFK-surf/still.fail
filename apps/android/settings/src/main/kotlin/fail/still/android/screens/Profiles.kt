@@ -4,6 +4,9 @@
 // variables; renaming, checking and deleting under "…"), and a new one.
 package fail.still.android.screens
 
+import fail.still.android.ui.BUTTON_HEIGHT
+import fail.still.android.ui.concentric
+import fail.still.android.ui.pressText
 import fail.still.android.ui.Spinner
 import fail.still.android.shared.BuildConfig
 import android.content.ClipData
@@ -97,6 +100,9 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.CARD_PAD
+import fail.still.android.ui.LIST_PAD
+import fail.still.android.ui.concentricOut
 import fail.still.android.ui.RowsCard
 import fail.still.android.data.t
 import fail.still.core.CoreException
@@ -399,7 +405,7 @@ private fun openPickShare(app: AppState, s: StationView, p: Profile, stations: L
             stations.forEach { x ->
                 PickRow(x.name, checked = x.id == s.id || x.id in ticked, enabled = x.id != s.id) { ticked = if (x.id in ticked) ticked - x.id else ticked + x.id }
             }
-            PickRow(t("web-pages.profiles.share.done"), color = C.accent) {
+            PickRow(t("web-pages.profiles.share.done"), color = C.link) {
                 app.sheet = null
                 val allow = if (all) null else (ticked + s.id).toList()
                 app.act(t("web-pages.profiles.share.stations")) { app.api(s.station).shareProfile(p.id, true, allow) }
@@ -439,7 +445,7 @@ internal fun ProfileRow(station: String, p: Profile) {
             val problem = p.trouble
             if (problem != null) {
                 Text("${problem.title} · ${problem.detail}", fontSize = 13.sp, color = C.muted)
-                Text(t("android-settings.profile.seeFix"), fontSize = 13.sp, color = C.accent)
+                Text(t("android-settings.profile.seeFix"), fontSize = 13.sp, color = C.link)
             } else trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
         }
         val calls = setOf("profile.check", "profile.quota")
@@ -475,7 +481,9 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
         NavBar(s.name, app::pop, p.name, sub = { Text(if (p.machine == true) t("android-settings.profile.machine") else p.providerName ?: ACCESS_LABEL[kind] ?: kind, fontSize = 11.sp, color = C.muted) },
             trailing = if (copy) null else ({ NavButton(Icons.More, { openProfileMenu(app, address, p) }) }))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
-            Card {
+            // Where it stands: its mark, its pill, what the check said. A subscription's is the head of its sign-in's
+            // card (one card for the account, not a card of a pill over another).
+            val status = @Composable {
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ProviderMark(p.runtime, kind, 26.dp, p.providerMark)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -485,16 +493,59 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             if (app.isDoing("profile.check", "station" to address, "id" to p.id)) WaitLine(t("android-settings.version.checking"))
                             else DoingMark(false, app.failedOf(setOf("profile.check", "profile.quota"), "station" to address, "id" to p.id), inline = true)
                         }
-                        Text(
-                            (p.check?.detail?.replace(Regex("^(可用[，,]|Works,)\\s*"), "") ?: t("android-settings.profile.notChecked")) + (p.check?.time?.get("checkedAt")?.let { t("android-settings.profile.checkedAt", "ago" to it.ago) } ?: ""),
-                            fontSize = 13.sp, color = C.muted,
-                        )
+                        // What the check said beyond its pill (需要登录 under 需要登录 said nothing more), and when.
+                        val detail = (p.check?.detail?.replace(Regex("^(可用[，,]|Works,)\\s*"), "") ?: t("android-settings.profile.notChecked")).takeIf { it != p.checkText }
+                        val checked = p.check?.time?.get("checkedAt")?.let { t("android-settings.profile.checkedAt", "ago" to it.ago) }
+                        val line = if (detail != null) detail + (checked ?: "") else checked?.removePrefix(" · ").orEmpty()
+                        if (line.isNotEmpty()) Text(line, fontSize = 13.sp, color = C.muted)
                     }
                 }
             }
+            val signs = !copy && (kind == "subscription" || (kind == "opencode-go" && p.access.login == true)) && p.machine != true
+            if (signs) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN, head = status)
+            else if (!copy && p.machine == true) {
+                // On the machine's own login: whose it is is changed on that machine, not here.
+                val runtime = MACHINE_RUNTIME[p.runtime] ?: p.runtime
+                Card {
+                    status()
+                    Text(t("android-settings.profile.machineLogin", "station" to s.name, "runtime" to runtime), fontSize = 15.sp, color = C.ink, modifier = Modifier.padding(top = 14.dp))
+                    Text(t("android-settings.profile.machineNote", "runtime" to runtime), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
+                }
+            } else if (!copy && kind in KEYED && p.access.login != true) {
+                // Its key (and its address) under where it stands, on the one card of the account.
+                val name = if (kind == "opencode-go") "OpenCode Go key" else p.providerName?.let { "$it key" } ?: "API key"
+                ListCard {
+                    Box(Modifier.padding(horizontal = CARD_PAD - LIST_PAD, vertical = 12.dp)) { status() }
+                    ListRow(onClick = {
+                        ask(app, if (kind == "opencode-go") t("android-settings.profile.newGoKey") else t("android-settings.profile.newApiKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHint"), what = t("android-settings.profile.keyWhat")) { key ->
+                            api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("key", key) } }); app.toast = t("android-settings.profile.savedChecking")
+                        }
+                    }) {
+                        Column(Modifier.weight(1f)) {
+                            Text(name, fontSize = 15.sp, color = C.ink)
+                            Text(p.access.key.ifEmpty { t("android-settings.profile.notSaved") }, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
+                        }
+                        // A key saved (the sheet that asked gone): a spinner until the station has it.
+                        DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
+                        Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.link)
+                    }
+                    // Where a provider is at an address of the person's own, that can be changed too.
+                    p.access.endpoint?.let { endpoint ->
+                        ListRow(onClick = {
+                            ask(app, t("common.provider.endpoint"), endpoint, "https://", t("common.save")) { value ->
+                                api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("endpoint", value.trim()) } }); app.toast = t("android-settings.profile.savedChecking")
+                            }
+                        }) {
+                            Column(Modifier.weight(1f)) {
+                                Text(t("common.provider.endpoint"), fontSize = 15.sp, color = C.ink)
+                                Text(endpoint, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
+                            }
+                            Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.link)
+                        }
+                    }
+                }
+            } else Card { status() }
             if (p.trouble != null) ProfileRecovery(s, p)
-            // A subscription, or an OpenCode Go profile on an OpenCode account: signed in (again) here.
-            if (!copy && (kind == "subscription" || (kind == "opencode-go" && p.access.login == true)) && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             if (p.trouble?.action != "quota") QuotaSection(address, p)
             if (s.overview?.sharing == true) ShareSection(current, s, p)
             if (!copy) WorkspacesSection(address, p)
@@ -547,48 +598,6 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     }
                 }
             }
-            if (copy) Unit
-            else if (p.machine == true) {
-                // On the machine's own login: whose it is is changed on that machine, not here.
-                val runtime = MACHINE_RUNTIME[p.runtime] ?: p.runtime
-                SectionHeader(t("android-settings.run.account"), start = 24.dp)
-                Card {
-                    Text(t("android-settings.profile.machineLogin", "station" to s.name, "runtime" to runtime), fontSize = 15.sp, color = C.ink)
-                    Text(t("android-settings.profile.machineNote", "runtime" to runtime), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
-                }
-            } else if (kind in KEYED && p.access.login != true) {
-                val name = if (kind == "opencode-go") "OpenCode Go key" else p.providerName?.let { "$it key" } ?: "API key"
-                SectionHeader(t("android-settings.run.account"), start = 24.dp)
-                ListCard {
-                    ListRow(onClick = {
-                        ask(app, if (kind == "opencode-go") t("android-settings.profile.newGoKey") else t("android-settings.profile.newApiKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHint"), what = t("android-settings.profile.keyWhat")) { key ->
-                            api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("key", key) } }); app.toast = t("android-settings.profile.savedChecking")
-                        }
-                    }) {
-                        Column(Modifier.weight(1f)) {
-                            Text(name, fontSize = 15.sp, color = C.ink)
-                            Text(p.access.key.ifEmpty { t("android-settings.profile.notSaved") }, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
-                        }
-                        // A key saved (the sheet that asked gone): a spinner until the station has it.
-                        DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
-                        Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.accent)
-                    }
-                    // Where a provider is at an address of the person's own, that can be changed too.
-                    p.access.endpoint?.let { endpoint ->
-                        ListRow(onClick = {
-                            ask(app, t("common.provider.endpoint"), endpoint, "https://", t("common.save")) { value ->
-                                api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("endpoint", value.trim()) } }); app.toast = t("android-settings.profile.savedChecking")
-                            }
-                        }) {
-                            Column(Modifier.weight(1f)) {
-                                Text(t("common.provider.endpoint"), fontSize = 15.sp, color = C.ink)
-                                Text(endpoint, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
-                            }
-                            Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.accent)
-                        }
-                    }
-                }
-            }
             if (kind == "env" && !copy) {
                 SectionHeader(t("android-settings.env.title"), start = 24.dp)
                 ListCard {
@@ -601,7 +610,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                         }
                     }
                     ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) } }) {
-                        Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+                        Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.link, modifier = Modifier.weight(1f))
                         // Saved (the sheet gone): a spinner until the station has them.
                         DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
                     }
@@ -687,11 +696,11 @@ private fun QuotaSection(station: String, p: Profile) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(t("android-settings.quota.title"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         Spacer(Modifier.weight(1f))
-        Row(Modifier.clickable(enabled = !refreshing) {
+        Row(Modifier.pressText(enabled = !refreshing) {
             app.act(t("android-settings.quota.checkWhat"), t("android-settings.quota.updated")) { app.api(station).refreshQuota(p.id) }
         }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             DoingMark(refreshing, failed, inline = true)
-            Text(if (refreshing) t("android-settings.quota.checking") else t("android-settings.quota.check"), fontSize = 14.sp, color = if (refreshing) C.muted else C.accent)
+            Text(if (refreshing) t("android-settings.quota.checking") else t("android-settings.quota.check"), fontSize = 14.sp, color = if (refreshing) C.muted else C.link)
         }
     }
     if (checked != null && !refreshing) Text(checked, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, bottom = 8.dp))
@@ -731,7 +740,7 @@ private fun QuotaSection(station: String, p: Profile) {
                 Text(quota.resetText ?: "", fontSize = 13.sp, color = C.muted)
             }
             DoingMark(resetting, app.failedOf("profile.resetQuota", "station" to station, "id" to p.id))
-            Text(t("android-settings.quota.reset"), fontSize = 14.sp, color = if (count > 0) C.accent else C.muted)
+            Text(t("android-settings.quota.reset"), fontSize = 14.sp, color = if (count > 0) C.link else C.muted)
         } } }
     }
 }
@@ -739,7 +748,7 @@ private fun QuotaSection(station: String, p: Profile) {
 /** A check's state in its words on a soft pill of its tone (the core's: accent | green | blue | red | amber | neutral). */
 @Composable
 internal fun TonePill(text: String, tone: String, size: androidx.compose.ui.unit.TextUnit = 12.sp) {
-    val color = when (tone) { "green" -> C.green; "red" -> C.red; "blue" -> C.blue; "accent" -> C.accentInk; "amber" -> C.warn; else -> C.muted }
+    val color = when (tone) { "green" -> C.greenInk; "red" -> C.red; "blue" -> C.blue; "accent" -> C.accentInk; "amber" -> C.warnInk; else -> C.muted }
     val bg = if (tone == "neutral") C.chip else color.copy(alpha = if (tone == "amber") 0.14f else 0.12f)
     Text(text, fontSize = size, color = color, maxLines = 1, modifier = Modifier.clip(Smooth(6.dp)).background(bg).padding(horizontal = 6.dp, vertical = 1.dp))
 }
@@ -768,15 +777,15 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
         fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp),
     )
     Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.clickable(enabled = !checking) { app.act(t("android-settings.models.refreshWhat"), t("android-settings.models.refreshed")) { app.api(station).checkProfile(p.id) } },
+        Row(Modifier.pressText(enabled = !checking) { app.act(t("android-settings.models.refreshWhat"), t("android-settings.models.refreshed")) { app.api(station).checkProfile(p.id) } },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             DoingMark(checking, checkFailed, inline = true)
-            Text(if (checking) t("android-settings.refreshing") else t("android-settings.models.refresh"), fontSize = 14.sp, color = if (checking) C.muted else C.accent)
+            Text(if (checking) t("android-settings.refreshing") else t("android-settings.models.refresh"), fontSize = 14.sp, color = if (checking) C.muted else C.link)
         }
         Spacer(Modifier.weight(1f))
         if (all.isNotEmpty()) {
-            Text(if (filtered) t("android-settings.models.allFiltered") else t("android-settings.all"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(enabled = !saving) { save(models + shown) })
-            Text(if (filtered) t("android-settings.models.noneFiltered") else t("android-settings.none"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(enabled = !saving) { save(models - shown.toSet()) })
+            Text(if (filtered) t("android-settings.models.allFiltered") else t("android-settings.all"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText(enabled = !saving) { save(models + shown) })
+            Text(if (filtered) t("android-settings.models.noneFiltered") else t("android-settings.none"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText(enabled = !saving) { save(models - shown.toSet()) })
         }
     }
     // A provider that does not list its models: one is named by hand.
@@ -786,7 +795,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
         Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Field(typed, { typed = it }, t("web-mobile.profiles.addModelPlaceholder"), mono = true, modifier = Modifier.weight(1f))
             if (adding) Spinner()
-            else Text(t("web-mobile.profiles.addModel"), fontSize = 14.sp, color = if (typed.isBlank()) C.muted else C.accent, modifier = Modifier.clickable(enabled = typed.isNotBlank()) {
+            else Text(t("web-mobile.profiles.addModel"), fontSize = 14.sp, color = if (typed.isBlank()) C.muted else C.link, modifier = Modifier.pressText(enabled = typed.isNotBlank()) {
                 val model = typed.trim(); typed = ""
                 app.act(t("android-settings.models.refreshWhat")) { app.api(station).addModel(p.id, model) }
             })
@@ -814,9 +823,12 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
     }
 }
 
-/** A subscription's sign-in: run on the station's machine, the browser steps relayed here. */
+/**
+ * A subscription's sign-in (or an OpenCode Go profile's on an OpenCode account), run on the station's machine, the
+ * browser steps relayed here; `head`, where the account stands, on top of its card.
+ */
 @Composable
-private fun SignIn(station: String, p: Profile, needed: Boolean) {
+private fun SignIn(station: String, p: Profile, needed: Boolean, head: @Composable () -> Unit) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val api = app.api(station)
@@ -830,35 +842,37 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
         if (job?.state == "done" && previous != null && previous != "done") app.toast = t("android-settings.login.done")
         previous = job?.state
     }
-    SectionHeader(if (active) t("android-settings.login.active", "provider" to provider) else if (needed) t("android-settings.login.needed", "provider" to provider) else t("android-settings.login.subscription", "provider" to provider), start = 24.dp)
-    // Its sign-in button last, in the corner, where there is no command to run by hand under it.
-    Card(foot = !active && p.loginCommand.isEmpty()) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (active) {
-                LoginSteps(job, provider) { code -> api.loginCode(p.id, code) }
-                // Not a step of its own: a quiet text button under them, in the middle.
-                val cancelling = app.isDoing("profile.cancelLogin", "station" to station, "id" to p.id)
-                Row(
-                    Modifier.align(Alignment.CenterHorizontally).height(38.dp).clip(Smooth(19.dp))
-                        .clickable(enabled = !cancelling) { app.act(t("android-settings.login.cancelWhat")) { api.cancelLogin(p.id) } }.padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
+    val cancelling = app.isDoing("profile.cancelLogin", "station" to station, "id" to p.id)
+    // Its buttons at its foot, in its corners (a field beside one: rounded as they are); a command box last instead: the
+    // card's corner taken from it.
+    val commandLast = !active && p.loginCommand.isNotEmpty() && manual
+    val waits = active && (job?.state == "starting" || job?.state == "verifying" || job?.state == "done")
+    Card(foot = !commandLast && !waits, corner = if (commandLast) concentricOut(COMMAND_BOX_CORNER, CARD_PAD) else null) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Where it stands (its pill says it once, no title over the card saying it again), and while signing in, a way
+            // out of it at its end.
+            Row(verticalAlignment = Alignment.Top) {
+                Box(Modifier.weight(1f)) { head() }
+                if (active) Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     DoingMark(cancelling, app.failedOf("profile.cancelLogin", "station" to station, "id" to p.id), inline = true)
-                    Text(t("android-settings.login.cancel"), fontSize = 14.sp, color = C.muted)
+                    Text(t("android-settings.login.cancel"), fontSize = 14.sp, color = C.muted, modifier = Modifier.pressText(enabled = !cancelling) { app.act(t("android-settings.login.cancelWhat")) { api.cancelLogin(p.id) } })
                 }
-            } else {
-                Text(
-                    when (job?.state) { "failed" -> t("android-settings.login.failed", "error" to job.error); "done" -> t("android-settings.login.signedIn"); else -> t("android-settings.login.note", "app" to BuildConfig.APP_NAME) },
-                    fontSize = 13.sp, color = C.muted,
-                )
-                Button(if (job?.state == "done" || !needed) t("android-settings.login.again") else t("android-settings.login.signIn"), primary = true, busy = busy, modifier = Modifier.fillMaxWidth()) {
-                    scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = t("android-settings.signIn.beginFailed", "error" to errorText(e)) } }
+            }
+            if (active) LoginSteps(job, provider) { code -> api.loginCode(p.id, code) }
+            else {
+                // Signed in: the pill above says so; only what was off, or how it is done, in words.
+                when {
+                    job?.state == "failed" -> Text(t("android-settings.login.failed", "error" to job.error), fontSize = 13.sp, color = C.red)
+                    needed -> Text(t("android-settings.login.note", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
                 }
-                // OpenCode's has no command to run by hand.
-                if (p.loginCommand.isNotEmpty()) {
-                    Text(t("android-settings.login.manual"), fontSize = 13.sp, color = C.muted, modifier = Modifier.clickable { manual = !manual }.padding(vertical = 4.dp))
-                    if (manual) CommandBox(p.loginCommand)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Button(if (needed && job?.state != "done") t("android-settings.login.signIn") else t("android-settings.login.again"), primary = needed, busy = busy) {
+                        scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = t("android-settings.signIn.beginFailed", "error" to errorText(e)) } }
+                    }
+                    // OpenCode's has no command to run by hand.
+                    if (p.loginCommand.isNotEmpty()) Text(t("android-settings.login.manualShort"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { manual = !manual })
                 }
+                if (manual && p.loginCommand.isNotEmpty()) CommandBox(p.loginCommand)
             }
         }
     }
@@ -874,13 +888,31 @@ private fun InstallStep(install: RuntimeInstall, station: String) {
     val app = LocalApp.current
     val action = install.action
     val busy = app.isDoing("software.update", "station" to station, "id" to install.runtime)
-    Card {
+    // In the add-profile page, padded already; its button last, in the corner.
+    Card(margin = 0.dp, foot = action != null) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(install.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
             Text(install.detail ?: install.note ?: t("web-pages.profiles.installThenSignIn"), fontSize = 13.sp, color = if (install.detail != null) C.red else C.muted)
             if (install.state == "installing") Progress(install.percent?.let { it / 100f }, Modifier.fillMaxWidth())
             if (action != null) Button(action, primary = true, busy = busy, modifier = Modifier.fillMaxWidth()) { app.act(action) { app.api(station).updateSoftware(install.runtime) } }
         }
+    }
+}
+
+/**
+ * The device code's box and the code's field (LoginSteps): in the sign-in card, whose corner is its foot button's (CARD_PAD
+ * and the button's half), they reach its corners too: rounded concentric with it.
+ */
+private val CODE_BOX_CORNER = concentric(CARD_PAD + BUTTON_HEIGHT / 2, CARD_PAD)
+
+/** A step of a sign-in: its number in a small round, its words beside it. */
+@Composable
+private fun Step(n: Int, words: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.padding(top = 1.dp).size(20.dp).clip(CircleShape).background(C.chip), contentAlignment = Alignment.Center) {
+            Text("$n", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        }
+        Text(words, fontSize = 14.sp, lineHeight = 20.sp, color = C.ink, modifier = Modifier.weight(1f))
     }
 }
 
@@ -906,30 +938,33 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
         job == null || job.state == "starting" -> waiting(t("android-settings.login.making", "provider" to provider))
         job.state == "verifying" -> waiting(t("android-settings.login.finishing"))
         job.state == "done" -> waiting(t("android-settings.login.adding"))
-        job.state == "needs_approval" && url != null && userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.chip).padding(horizontal = 14.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+        job.state == "needs_approval" && url != null && userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.fillMaxWidth().clip(Smooth(CODE_BOX_CORNER)).background(C.chip).padding(horizontal = 14.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
                 Text(userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = CodeFont, color = C.ink)
             }
+            Text(when (provider) { "OpenCode" -> t("android-settings.login.opencodeNote"); "Grok" -> t("android-settings.login.grokNote"); else -> t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME) }, fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
             // OpenCode's page has the code in its address: only compared there, not copied.
             val filled = provider == "OpenCode"
-            Button(if (filled) t("android-settings.login.openPage") else if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true, modifier = Modifier.fillMaxWidth()) {
+            Button(if (filled) t("android-settings.login.openPage") else if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true) {
                 if (!filled) {
                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", userCode))
                     copied = true
                 }
                 open(url)
             }
-            Text(when (provider) { "OpenCode" -> t("android-settings.login.opencodeNote"); "Grok" -> t("android-settings.login.grokNote"); else -> t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME) }, fontSize = 13.sp, color = C.muted)
         }
-        job.state == "needs_code" && url != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // Each step's words, then what it is done with: its page's button, the field and its button.
-            Text("1. " + t("web-pages.profiles.step1", "name" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.ink)
-            Button(t("android-settings.login.openPage"), primary = true, modifier = Modifier.fillMaxWidth()) { open(url) }
-            Text(t("android-settings.login.step2"), fontSize = 13.sp, color = C.ink, modifier = Modifier.padding(top = 4.dp))
-            Field(code, { code = it }, t("android-settings.login.pasteCode"), mono = true)
+        // Two steps, each said once: what to do on the page (its button under it), then the code it gives, pasted beside
+        // what sends it.
+        job.state == "needs_code" && url != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Step(1, t("android-settings.login.step1Short", "app" to BuildConfig.APP_NAME))
+            Button(t("android-settings.login.openPage"), primary = code.isBlank(), modifier = Modifier.padding(start = 30.dp)) { open(url) }
+            Step(2, t("android-settings.login.step2Short"))
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
-            Button(t("android-settings.login.finish"), primary = true, busy = busy, enabled = code.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-                operation.run { send(code.trim()); code = "" }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Field(code, { code = it }, t("android-settings.login.pasteCode"), mono = true, modifier = Modifier.weight(1f), corner = CODE_BOX_CORNER)
+                Button(t("android-settings.login.finishShort"), primary = true, busy = busy, enabled = code.isNotBlank()) {
+                    operation.run { send(code.trim()); code = "" }
+                }
             }
         }
     }
@@ -971,14 +1006,14 @@ private fun ColumnScope.EnvSheet(station: String, p: Profile) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Field(r.key, { r.key = it }, "NAME", mono = true, modifier = Modifier.weight(1f))
-                    Text(t("common.delete"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { rows = rows.filter { it.row != r.row } })
+                    Text(t("common.delete"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { rows = rows.filter { it.row != r.row } })
                 }
                 val placeholder = if (r.masked != null) t("android-settings.tokens.kept", "token" to r.masked) else t("android-settings.env.value")
                 if (r.masked != null || Regex("KEY|TOKEN|SECRET|PASSWORD|AUTH", RegexOption.IGNORE_CASE).containsMatchIn(r.key)) SecretField(r.value, { r.value = it }, placeholder)
                 else Field(r.value, { r.value = it }, placeholder, mono = true)
             }
         }
-        Text(t("android-settings.env.add"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { rows = rows + EnvRow(next++, "", "", null, null) })
+        Text(t("android-settings.env.add"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { rows = rows + EnvRow(next++, "", "", null, null) })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button(t("common.cancel"), primary = false) { app.sheet = null }
             Button(t("common.save"), primary = true, enabled = !busy) {
@@ -1176,7 +1211,7 @@ private fun MachineLoginRow(l: MachineLogin, busy: Boolean, onUse: () -> Unit) {
         // A refused account is said so, with nothing to do with it here.
         if (!blocked) {
             if (busy) Spinner()
-            else Text(if (l.usable == true) t("android-settings.machine.use") else t("android-settings.login.signIn"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(onClick = onUse))
+            else Text(if (l.usable == true) t("android-settings.machine.use") else t("android-settings.login.signIn"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText(onClick = onUse))
         }
     }
 }
