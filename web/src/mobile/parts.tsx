@@ -6,6 +6,7 @@ import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
 import { Check, ChevronLeft, Filter, Plug, Plus, Settings, type IconProps } from "@stillfail/ui/icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
 import { SlackLogo } from "../ui.tsx";
+import { MARKS, MONO } from "../modelMarks.ts";
 import { QuotaBars } from "../components.tsx";
 import { doingMatches, failed as itFailed, useDoing, useDoingFailed } from "../doing.ts";
 import type { DoingItem } from "../core/shapes.ts";
@@ -33,13 +34,10 @@ export type Icon = (props: IconProps) => ReactNode;
 
 // ── model marks ────────────────────────────────────────────────────────
 
-const MAKERS = new Set(["anthropic", "openai", "deepseek", "qwen", "zhipu", "gemini", "kimi", "minimax", "xai", "dsh"]);
-/** Marks of one colour, drawn in the page's ink. */
-const MONO = new Set(["anthropic", "openai", "kimi", "xai", "dsh"]);
 
 /** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own; xAI's for Grok Build). */
 export function MakerIcon({ maker, runtime, size }: { maker?: Maker | undefined; runtime?: RuntimeKind | string | undefined; size: number }) {
-  const id = maker && MAKERS.has(maker.id) ? maker.id : runtime === "codex" ? "openai" : runtime === "dsh" ? "dsh" : runtime === "grok" ? "xai" : "anthropic";
+  const id = maker && MARKS.has(maker.id) ? maker.id : runtime === "codex" ? "openai" : runtime === "dsh" ? "dsh" : runtime === "grok" ? "xai" : "anthropic";
   return <img className={css.mMaker} src={`${BASE}models/${id}.svg`} alt={maker?.name ?? ""} width={size} height={size} data-mono={MONO.has(id) || undefined} />;
 }
 
@@ -127,7 +125,7 @@ export function ProviderMark({ runtime, kind, mark, size = 16 }: { runtime: stri
     );
   }
   // A key on a listed provider: its maker's mark, or the generic plug where there is none.
-  if (kind === "api-provider") return mark ? <MakerIcon maker={{ id: mark, name: mark }} runtime={runtime} size={size} /> : <Plug size={size} strokeWidth={1.7} aria-hidden="true" />;
+  if (kind === "api-provider") return mark && MARKS.has(mark) ? <MakerIcon maker={{ id: mark, name: mark }} runtime={runtime} size={size} /> : <Plug size={size} strokeWidth={1.7} aria-hidden="true" />;
   const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : runtime === "grok" ? { id: "xai", name: "xAI" } : { id: "openai", name: "OpenAI" };
   return <MakerIcon maker={maker} runtime={runtime} size={size} />;
 }
