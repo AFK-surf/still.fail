@@ -24,11 +24,13 @@
 # `newchat` and `web-newchat` are a new chat, its sheets, the bottom bar's panel and a place
 # (MBUI_FIXTURE=newchat|newchat-station|newchat-model|home-bars|place, src/sfapp/newchat_fixture.mbt):
 # mac-newchat-<state>, web-newchat-<state>.
+# `preview` and `web-preview` are a file of it open in the preview
+# (MBUI_FIXTURE=chat-preview-image|pdf|video|html|code|md|csv|none): mac-preview-<what>, web-preview-<what>.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat ios android}
+PLATFORMS=${*:-mac kit home chat composer drive decide glass newchat preview web web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview ios android}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
 if [ ! -d out/node/node_modules/pixelmatch ]; then
@@ -150,6 +152,26 @@ for p in $PLATFORMS; do
       for m in newchat newchat-station newchat-model home-bars place; do
         QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-newchat-$m.png
         names="$names web-newchat-$m"
+      done ;;
+    preview)
+      # the file preview over made-up files (src/sfapp/preview_fixture.mbt): a picture, a PDF (drawn by the system),
+      # a video (its player waiting on reads never answered), a page of HTML (a web view, a while to load), code,
+      # Markdown, a table, a file that cannot be shown: mac-preview-<what>
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-preview; mkdir -p out/shot-preview
+      names=
+      for m in image pdf video html code md csv none; do
+        at=60; [ $m = html ] && at=150
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-preview-$m MBUI_SCRIPT=shot MBUI_SHOT_AT=$at MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-preview ./_build/native/release/build/sffix/sffix.exe >/dev/null
+        cp out/shot-preview/$m.png out/shots/mac-preview-$m.png
+        names="$names mac-preview-$m"
+      done ;;
+    web-preview)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in image pdf video html code md csv none; do
+        QUERY=MBUI_FIXTURE=chat-preview-$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-preview-$m.png
+        names="$names web-preview-$m"
       done ;;
     web-composer)
       APP=sffix bash scripts/web.sh build >/dev/null

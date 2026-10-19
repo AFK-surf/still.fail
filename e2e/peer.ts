@@ -7,6 +7,7 @@
 //                                          prints CHAT <station> <session> <thread> (kept in $E2E_PEER_DATA/chat.json)
 //   node e2e/peer.ts create TITLE-WORDS    another chat, its first message TITLE-WORDS (Home's new row)
 //   node e2e/peer.ts send TEXT             TEXT said in the chat by this device
+//   node e2e/peer.ts sendfiles TEXT -- F…  TEXT said with files (from $E2E_FILES), each put up first in 4 MB parts
 //   node e2e/peer.ts read                  the chat as this device's core shows it (JSON lines: who, text, files)
 //   node e2e/peer.ts chats [WORDS]         the workspace's chats as Home lists them (JSON: title, session, last), once a
 //                                          row has WORDS
@@ -15,6 +16,7 @@
 // E2E_EMBER (the ember checkout), E2E_ORIGIN (the dev cloud), E2E_PEER_DATA (this core's own data directory).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 const ember = process.env.E2E_EMBER!;
 const origin = process.env.E2E_ORIGIN!;
@@ -52,6 +54,32 @@ function call(name: string, params?: J): Promise<J> {
     pending.set(id, (m) => ("error" in m ? reject(new Error(`${name}: ${JSON.stringify(m.error)}`)) : resolve(m.ok)));
     core.receive(client, JSON.stringify(params === undefined ? { id, call: name } : { id, call: name, params }));
   });
+}
+
+/// A call with bytes beside it (a file's part going up).
+function callBytes(name: string, params: J, bytes: Uint8Array): Promise<J> {
+  const id = next++;
+  return new Promise((resolve, reject) => {
+    pending.set(id, (m) => ("error" in m ? reject(new Error(`${name}: ${JSON.stringify(m.error)}`)) : resolve(m.ok)));
+    core.receiveRaw(client, { id, call: name, params, bytes });
+  });
+}
+
+/// A file put up to the station (`station.upload.part`, 4 MB a part, as the app's composer does): the file as the
+/// station keeps it, for a message's attachments.
+async function upload(station: string, path: string): Promise<J> {
+  const bytes = new Uint8Array(readFileSync(path));
+  const name = path.split("/").pop()!;
+  const id = randomUUID().replace(/-/g, "");
+  let at = 0;
+  for (;;) {
+    const part = bytes.subarray(at, Math.min(bytes.length, at + 4 * 1024 * 1024));
+    const got = await callBytes("station.upload.part", { station, id, name, size: bytes.length, offset: at }, part);
+    if (got?.file) return got.file;
+    const have = typeof got?.have === "number" ? got.have : at + part.length;
+    if (have <= at) throw new Error(`upload of ${name} stood still at ${at}`);
+    at = have;
+  }
 }
 
 /// The topic's value once `ok` says it is what is waited for (or the time is up: what it was, in the error).
@@ -133,6 +161,17 @@ try {
   } else if (cmd === "send") {
     const chat = JSON.parse(readFileSync(chatFile, "utf8"));
     console.log(JSON.stringify(await call("chat.send", { station: chat.station, thread: chat.thread, text: rest.join(" ") })));
+  } else if (cmd === "sendfiles") {
+    const chat = JSON.parse(readFileSync(chatFile, "utf8"));
+    const cut = rest.indexOf("--");
+    const text = rest.slice(0, cut).join(" ");
+    const attachments = [];
+    for (const f of rest.slice(cut + 1)) {
+      const file = await upload(chat.station, join(process.env.E2E_FILES!, f));
+      console.error(`peer: put up ${f}: ${JSON.stringify(file)}`);
+      attachments.push(file);
+    }
+    console.log(JSON.stringify(await call("chat.send", { station: chat.station, thread: chat.thread, text, attachments })));
   } else if (cmd === "read") {
     const chat = JSON.parse(readFileSync(chatFile, "utf8"));
     const v = await until({ topic: "chat", station: chat.station, thread: chat.thread }, (v) => v);

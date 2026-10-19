@@ -282,6 +282,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
 ///|
 /// A source of made-up chats (see the top of this file for `mode`).
 pub fn fixture(mode : String) -> Source {
+  fixture_preview(mode)
   let f : Fixture = {
     mode: if mode == "" { "home" } else { mode },
     workspace: "ws1",
@@ -339,6 +340,11 @@ pub fn fixture(mode : String) -> Source {
       }
     },
     read_bytes: fn(name, params, done) {
+      // a chat's made-up files (the preview's), else the made-up drive's
+      if name.has_prefix("station.file") {
+        fixture_fetch(name, params, done)
+        return
+      }
       match fixture_drive_read(name, params) {
         Some(r) => done(r)
         None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))

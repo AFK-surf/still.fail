@@ -141,3 +141,20 @@ test "images take their own proportions before they load" {
   assert_eq(file_size(4.5 * 1048576.0), "4.5 MB")
   assert_eq(elapsed(200000.0), "3m 20s")
 }
+
+///|
+/// (Here, after the chat's own: a chat scrolled leaves the made-up chat as it is for the tests after it.)
+test "a file card in the chat opens its preview" {
+  reset()
+  let src = fixture("chat")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.settle() |> ignore
+  t.move(195.0, 400.0)
+  t.wheel(195.0, 400.0, -600.0)
+  t.settle() |> ignore
+  t.tap_text("build.log")
+  t.settle() |> ignore
+  assert_true(viewer.val is Some(_))
+  assert_eq(viewer.val.unwrap().file.name, "build.log")
+}

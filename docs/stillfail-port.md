@@ -443,6 +443,67 @@ machine's own sessions to go on with (MachineSessions), borrowing another statio
 screen's column, the offline station's illustration (not among the drawables yet), the profile and models pages the
 new chat leads to (place pages over nothing).
 
+Slice 11, the file preview (branch preview, 2026-10-19): a file of a chat tapped (its image, its video's box, its
+card) opens over everything (src/sfapp/preview.mbt; FilePreview.kt, VideoViewer.kt, FileKinds.kt kindOf, ChatFiles.kt
+FileData; Zoom.kt):
+
+- The bar floating at the top (44 high, its corner 14, 12 in): the file's name (15 semibold), its tools, 下载 and ×;
+  over a picture or a video the dark tint, over a document the page's white with its shadow; it fades after 2 s left
+  alone (4 s after a tap brought it back), a tap on the stage brings it back. It fades in and out (140 ms), as the
+  Android app does when the thumbnail is not on the screen. Back (the system's, ×) closes it.
+- What it shows, by the file's name (kindOf's tables), or for a name of no kind by its first 8 KB (`station.file.part`:
+  UTF-8 with no NULs is text): an image read whole through the core (`station.file`), the chat's thumbnail standing in
+  meanwhile, fitted with a margin (12, or 32 on a wide screen), a double tap to 2.5× the fitted size (at least 100%)
+  around it and back, the bar's − / % / + (×1.25, the % back to fitted), two fingers pinching it round the point
+  between them (Android tells mbui of a second finger now: pointer kinds 4, 5, 6, `Ctx::second_pointer`), a finger
+  panning it when larger, the wheel zooming round the pointer; a video played by the system's player in a native view (below), its bytes read through
+  the core a part at a time (`station.file.part`, as the drive's DriveSource reads `drive.read`: never the whole file
+  first, where the Android app's chat viewer fetches it to the disk before playing), its controls over its foot (where
+  it is, to tap or drag along; a frame back, play, a frame on; which frame of how many; 1× 0.5× 0.25× 0.1×); a PDF's
+  pages drawn by the system as they scroll near (12 round them, their shape on the waiting grey before), HTML in a
+  page of its own (a native web view under the bar: its scripts run, nothing of the device's files reachable, no link
+  followed) or its source; Markdown rendered (`@sf.markdown`) or its source; CSV as a table (a row number, its columns
+  as wide as what they hold, the head with a hairline, 2000 rows at most); code and text in the code face (12.5 on 20,
+  a file over 2 MB cut with the warning's line). Anything else (or bigger than 16 MB) is told of: its kind's mark, its
+  name, its size and extension, why it is not shown, 下载 (fetched, then put in the system's downloads: MediaStore's
+  Downloads on Android, ~/Downloads on macOS, MBUI_DOWNLOADS_DIR there for runs).
+- Native views over the canvas (src/ui/native.mbt, host_native.mbt `view_*`): a system view the host keeps under the
+  app's surface, shown through a hole the app paints where it is (instances of kind 9: transparent, written without
+  blending); what is painted after the hole draws over the view (the bar, the video's controls), what is painted
+  round it (or a clip) hides the rest of it, so it scrolls and clips with the canvas. `Ctx::native(view, content=)`
+  places it each frame it is painted and hides it on the frames it is not. Android (NativeViews.java): the GL surface
+  is on top of the window and translucent (setZOrderOnTop), the views in a layer over it in the view tree (a page
+  takes its touches) under it on the screen; the video is Media3's ExoPlayer (1.8.0, as the Android app's) on a
+  TextureView whose transform puts the picture in its rect, reading through ViewSource (DriveSource.kt's window: 256 KB
+  first, doubling to 4 MB while reads run on, served from the window around the extractor's reopenings), each read
+  asked of the app (`view_read_next`) and answered from the core (`view_read_answer`); the page is a WebView with the
+  Android app's HtmlPage settings (JavaScript on, no file or content access, no DOM storage, shouldOverrideUrlLoading
+  true). macOS and iOS (apple_views.m): the Metal layer non-opaque over a views root, AVPlayerLayer with an
+  AVAssetResourceLoaderDelegate on a scheme of its own reading through the same calls, WKWebView with a
+  non-persistent store and no navigation but the first; the window's snapshots composite the views' content under the
+  canvas. The browser (web/host.js): a <video> from the bytes read whole, a sandboxed <iframe> (scripts only), in a
+  layer under the canvas. Windows: none yet (no view opens: the app says it cannot show it).
+- PDFs (`@ui.Pdf`, host_native.mbt `pdf_*`): opened from their bytes, each page an image the host draws at the size it
+  is shown (Android's PdfRenderer from a file of the app's cache, one page at a time; Core Graphics' CGPDF); the
+  browser and Windows draw none (said so on the page).
+- Images on Android are ImageDecoder's already (Images.java): the chat's pictures and the viewer's show there too.
+- The glass: the Android app blurs under the bar and the video's controls (Haze, darkGlass: 0x121214 at 62% over a
+  24 dp blur); a native view under them cannot be blurred, so here they are a deeper solid tint (0x121214 at 85%)
+  whatever is under them (the page's white at 92% over a document).
+- `APP=sffix MBUI_FIXTURE=chat-preview-image|pdf|video|html|code|md|csv|none` opens a made-up file
+  (src/sfapp/preview_fixture.mbt: a picture, a PDF of two pages, a video whose reads are never answered, a page with a
+  script, code, Markdown, a table, a file of no kind): `scripts/shots.sh preview web-preview` compares them with
+  goldens/mac-preview-*.png and web-preview-*.png.
+
+Not yet, against the current app: the flight from the chat's thumbnail and back (a video closed into its thumbnail at
+the frame it was left at), stepping through the chat's images (`imageNear`) and swiping between them, pinching on iOS (its host
+tells no second finger yet), marking an image (ImageMarks.kt), a video's
+frame-exact steps (the file's frames' times, MediaExtractor; here steps of a 60th of a second), saving a frame,
+landscape, audio's own small player (audio plays in the video's), code highlighting and a code file's sideways scroll,
+installing an APK, an SVG drawn by a page when it is not a bitmap, the progress of a whole file coming (`progress`), a
+big file read to the disk, a web view's own scrolling under the canvas on macOS while something is painted over it,
+the frosted glass.
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
@@ -546,6 +607,8 @@ while the card moved the list):
 | 30 new-chat | 令 in the bar's notch: the new chat rises; the first message typed and sent; the page becomes its chat; the agent's answer comes there; back on Home | the station's entry: the words, once, alice's, in a thread of their own; the agent's answer in that thread; alice's other device lists the chat |
 | 31 places | 文件 tapped on the bar (the drive's page in place); the bar drawn up into the other bar's panel and let go on 奏 (that bar, 奏's page); 用量; the panel again, back on the chats | the bar chosen kept as the workspace's in the core's store on the device (`prefs.set {barsBy}`) |
 | 32 sheet-drag | the workspaces' sheet drawn up to 94% and dragged closed; a new chat's station sheet dragged a little (back) and past 80 (closed), opened again and its station tapped | the sheet's settling as the app logs it; the core took the pick (`newChat.pick` answered) |
+
+| 15 preview | the other device sends a picture, a PDF, a video and a page (`peer sendfiles`: put up in parts, then the message); each opened in the preview, shot, closed | the station's entry has the four files; the app's log: the picture and the page read through the core, the PDF's 2 pages drawn, the player's reads through the core (`station.file.part`) and its first frame, the page loaded in the web view; each shot shows something in its place (e2e/pngstat.py) |
 
 Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
 never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however

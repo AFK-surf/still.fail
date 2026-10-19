@@ -40,6 +40,18 @@ export E2E_ACCOUNT_B64=$(curl -sf "$MBUI_CLOUD/__dev/account?user=alice" | base6
 mkdir -p $FILES
 [ -f $FILES/e2e-photo.jpg ] || cp test/images/$(ls test/images | grep -i '\.jpg$' | head -1) $FILES/e2e-photo.jpg
 [ -f $FILES/e2e-data.bin ] || head -c 9437184 /dev/urandom > $FILES/e2e-data.bin
+# what alice's other device sends for the preview (15-preview): a PDF of two pages, a short video (H.264, its index
+# first), a page with a script
+[ -f $FILES/e2e-doc.pdf ] || python3 test/apple_views/make_pdf.py $FILES/e2e-doc.pdf
+[ -f $FILES/e2e-clip.mp4 ] || ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=640x360:rate=30 -t 4 \
+  -c:v libx264 -profile:v baseline -pix_fmt yuv420p -movflags +faststart $FILES/e2e-clip.mp4
+[ -f $FILES/e2e-page.html ] || cat > $FILES/e2e-page.html <<'HTML'
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0;padding:20px;font-family:system-ui,sans-serif;background:#fff;color:#24272b}
+.card{background:#fbe6dc;border-radius:12px;padding:16px;margin:12px 0}.bar{height:12px;border-radius:6px;background:#e5704a;margin:8px 0}</style>
+</head><body><h1>端到端测试的网页</h1><div class="card"><div class="bar" style="width:80%"></div><div class="bar" style="width:50%"></div></div>
+<p id="n">脚本还没有运行</p><script>document.getElementById('n').textContent='脚本已运行：'+(6*7)</script></body></html>
+HTML
 
 # the drive's flows' folder in the test station's home, this run's own (e2e-$TAG; the flows' e2e-{T}): a text, a novel
 # of made-up chapters, a folder with a file in it (scripts/e2e-local.sh drive-seed)

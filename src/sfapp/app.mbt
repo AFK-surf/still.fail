@@ -140,6 +140,7 @@ fn reset() -> Unit {
   fix_drafts.clear()
   dv_reset()
   decide_reset()
+  close_now()
 }
 
 ///|
@@ -225,6 +226,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       }
       // the bottom bar: on a place's top page with nothing over it
       bottom_bar(c, src, w, place_of(root), app.nav.depth() == 1 && place_of(root) is Some(_))
+      // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
+      preview(c, src)
       if app.menu {
         filter_menu(c, src, w)
       }

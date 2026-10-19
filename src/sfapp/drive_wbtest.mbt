@@ -196,11 +196,15 @@ test "deleted to the station's trash, said so; a new folder made" {
 }
 
 ///|
-test "a picture goes to the preview (not in this build yet: said so)" {
+test "a picture goes to the preview, read by drive.read" {
   let t = drive_tester("drive")
   t.settle() |> ignore
-  let log = t.drive("tap 首页截图.png\nuntil 暂时无法预览\n")
+  let log = t.drive("tap 首页截图.png\nuntil %\n")
   assert_true(log.contains("EXIT 0"))
+  let v = viewer.val.unwrap()
+  assert_eq(v.file.name, "首页截图.png")
+  assert_true(v.drive is Some(_))
+  assert_true(v.bytes is Some(_))
 }
 
 ///|

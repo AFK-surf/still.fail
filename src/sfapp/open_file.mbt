@@ -1,14 +1,27 @@
 // Where the drive hands a file to be looked at (ember apps/android drive/DriveScreen.kt open: pictures, PDFs, code,
-// tables, pages, subtitles in the chat's viewer, FilePreview.kt; video and audio in the player, Player.kt; anything
-// else to another app). The file preview (slice 11, branch `preview`) fills this in; until it does, it says there is
-// no preview yet.
+// tables, pages in the chat's viewer, FilePreview.kt): the file preview (preview.mbt), its bytes read by `drive.read`.
+// Video and audio go to the player in the Android app (Player.kt, the rest of slice 12): here the preview's player
+// plays them meanwhile, reading the same way.
 
 ///|
 /// `file` of a drive opened to be looked at; `near`: the others of its folder to step to (pictures: the folder's
-/// pictures, `file` among them; otherwise none).
+/// pictures, `file` among them; otherwise none: stepping is not done here yet).
 pub fn open_file(c : @ui.Ctx, src : Source, file : DriveFile, near : Array[DriveFile]) -> Unit {
   ignore(src)
   ignore(near)
-  ignore(file)
-  say(c, tr("android-chat.file.noPreview"))
+  open_preview(
+    file.station,
+    "",
+    {
+      name: file.name,
+      path: file.path,
+      size: file.size,
+      width: 0.0,
+      height: 0.0,
+      thumbhash: "",
+      owner: "",
+    },
+    drive=Some(file),
+  )
+  c.request_frame()
 }

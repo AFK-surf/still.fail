@@ -837,12 +837,17 @@ fn base_name(path : String) -> String {
 /// on black with the play mark and its name, anything else a card.
 fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double) -> Unit {
   let t = @sf.theme()
+  // tapped, it opens in the preview (preview.mbt)
+  let open = c.id("file-open/" + a.path)
+  if c.clicked(open) {
+    open_preview(here.station, owner_of(here, a), a)
+  }
   match kind_of(a.name) {
     "image" => {
       let (bw, bh, letterbox) = image_box(a, 16.0)
       let h = bh * w / bw
       let key = (src.file)(here.station, owner_of(here, a), base_name(a.path))
-      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=t.p.chip, fn() {
+      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=t.p.chip, id=open, fn() {
         if key != "" && key != "!" {
           c.image(
             key,
@@ -874,7 +879,7 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
     "video" => {
       let (bw, bh, _) = image_box(a, 96.0)
       let h = bh * w / bw
-      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=0x000000FFL, fn() {
+      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=0x000000FFL, id=open, fn() {
         c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
           c.box(w=Px(40.0), h=Px(40.0), radius=20.0, bg=0x000000A6L, align=ACenter, justify=JCenter, fn() {
             @sf.icon(c, "play", size=16.0, color=0xFFFFFFFFL) |> ignore
@@ -893,19 +898,20 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
       })
       |> ignore
     }
-    _ => file_card(c, a, w)
+    _ => file_card(c, a, w, id=open)
   }
 }
 
 ///|
 /// A file as a card (ChatFiles.kt FileCard): its kind's mark, its name, its size, on the neutral ground.
-fn file_card(c : @ui.Ctx, a : Attachment, w : Double) -> Unit {
+fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
   let t = @sf.theme()
   c.box(
     dir=Row,
     w=Px(w),
     radius=8.0,
     bg=ink().neutral,
+    id~,
     padx=10.0,
     pady=8.0,
     gap=10.0,

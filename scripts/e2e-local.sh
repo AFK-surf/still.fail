@@ -164,7 +164,7 @@ down() {
 
 peer() {
   (. $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/peer-home; mkdir -p $HOME
-   E2E_EMBER=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/peer node $ROOT/e2e/peer.ts "$@")
+   E2E_EMBER=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/peer E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
 }
 
 sql() { sqlite3 -readonly $STATION/data/stillfail.db "$@"; }

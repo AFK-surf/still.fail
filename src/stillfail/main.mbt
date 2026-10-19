@@ -81,7 +81,8 @@ fn chat_file(station : String, key : String, name : String) -> String {
       @core.call_bytes("station.file", params=Json::object(params), on_done=fn(r) {
         match r {
           Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            let k = "mem:chat-file/\{id.hash()}/\{id.length()}"
+            // its name at the end: a scripted run finds it by it (`tap img:NAME`)
+            let k = "mem:chat-file/\{id.hash()}/\{id.length()}/\{name}"
             @ui.add_image(k, bytes)
             chat_files[id] = k
           }
@@ -104,8 +105,8 @@ let read_only : Bool = @host.env("MBUI_READONLY") == "1"
 /// list's filter). Anything else (sending, drafts kept, files put up, read marks, places, archiving…) is refused here,
 /// whatever page asks it.
 let read_only_calls : Array[String] = [
-  "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "picture",
-  "prefs.set", "drive.read", "drive.folders", "drive.refresh",
+  "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "station.file.part",
+  "picture", "prefs.set", "drive.read", "drive.folders", "drive.refresh",
 ]
 
 ///|
