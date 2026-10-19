@@ -570,22 +570,34 @@
     mctx.font = f;
     const cap = out.length / 4;
     const segs = [...seg.segment(text)];
-    let k = 0;
+    // the canvas says no more of a cluster than its width alone; within a word, a cluster starts where the word up
+    // to and with it ends, less its own width: kerning moves it as the browser does, the spacing the browser trims
+    // between CJK punctuation is trimmed, and the word ends where the canvas ends it (letters that join)
+    const blank = (c) => /^\s+$/.test(c);
+    const xs = new Array(segs.length);
     let word = 0;
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i], c = s.segment;
+      if (blank(c)) {
+        word = s.index + c.length;
+        continue;
+      }
+      xs[i] = width(f, text.slice(word, s.index + c.length)) - width(f, c);
+    }
+    let k = 0;
+    word = 0;
     for (let i = 0; i < segs.length && k < cap; i++) {
       const s = segs[i];
       const c = s.segment;
-      // the canvas says no more of a cluster than its width alone: within a word, what it adds to the word so far
-      // is its advance as the browser lays the word out (kerning, letters that join, the spacing it trims between
-      // CJK punctuation)
-      const blank = /^\s+$/.test(c);
       let adv;
-      if (blank) {
+      if (blank(c)) {
         adv = width(f, c);
-        word = s.index + c.length;
       } else {
-        adv = width(f, text.slice(word, s.index + c.length)) - (s.index > word ? width(f, text.slice(word, s.index)) : 0);
+        const last = i + 1 >= segs.length || blank(segs[i + 1].segment);
+        const end = last ? width(f, text.slice(word, s.index + c.length)) : xs[i + 1];
+        adv = Math.max(0, end - xs[i]);
       }
+      if (blank(c)) word = s.index + c.length;
       let key = -1;
       if (c === '\n') adv = 0;
       else if (c !== ' ' && c !== '\t') key = textKey(c, size, weight, style);
