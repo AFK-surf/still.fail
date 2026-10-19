@@ -68,6 +68,7 @@ test("parses_each_call", () => {
   assert.deepEqual(parseCall("auth.begin", { redirect_uri: "r", return_to: "/", device_name: "Mac" }), { kind: "authBegin", redirectUri: "r", returnTo: "/", deviceName: "Mac" });
   assert.deepEqual(parseCall("auth.complete", { query: "?code=c&state=s" }), { kind: "authComplete", query: "?code=c&state=s" });
   assert.deepEqual(parseCall("auth.signOut", { account: "sub1" }), { kind: "signOut", account: "sub1" });
+  assert.deepEqual(parseCall("auth.deleteAccount", { account: "sub1" }), { kind: "deleteAccount", account: "sub1" });
   assert.deepEqual(parseCall("client.error", { source: "android.decode", message: "chat: 读不懂" }), { kind: "clientError", source: "android.decode", message: "chat: 读不懂" });
   assert.deepEqual(parseCall("workspace.rename", { account: "a", workspace: "w", name: "n" }), {
     kind: "op",
@@ -125,6 +126,7 @@ test("checks_params", () => {
     assert.ok((e as CoreError).message.includes("return_to"), (e as CoreError).message);
   }
   assert.equal(code(() => parseCall("auth.signOut", null)), "invalid_params");
+  assert.equal(code(() => parseCall("auth.deleteAccount", {})), "invalid_params");
   assert.equal(code(() => parseCall("workspace.rename", { account: "a", name: "n" })), "invalid_params");
   // A file going up carries its bytes beside the call; base64 in it is not taken.
   assert.equal(code(() => parseCall("station.upload", { station: "w/s", name: "n", bytes: "aGVsbG8=" })), "invalid_params");

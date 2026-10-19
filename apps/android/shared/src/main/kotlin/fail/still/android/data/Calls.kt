@@ -695,6 +695,12 @@ object Auth {
     suspend fun signOut(core: StillFailCore, account: String) {
         core.call("auth.signOut", buildJsonObject { put("account", account) })
     }
+
+    /** Deletes the account in still.fail cloud, then forgets it here as signing out does; refused (`sole_owner`, said) while
+     *  it is a workspace's only owner beside other members. */
+    suspend fun deleteAccount(core: StillFailCore, account: String) {
+        core.call("auth.deleteAccount", buildJsonObject { put("account", account) })
+    }
 }
 
 /** still.fail cloud's account API: what the app has done there, by name, done by the core as one of the signed-in accounts (web/src/cloud/api.ts). */

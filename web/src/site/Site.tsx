@@ -158,6 +158,10 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
           <a className={css.navLink} href={WINDOWS}>Windows</a>
           <a className={css.navLink} href={ANDROID}>Android</a>
           <a className={css.navLink} href="https://github.com/AFK-surf/still.fail">GitHub</a>
+          {/* The legal pages: static files in web/public (terms.html, privacy.html, trademark.html; en/ their English). */}
+          <a className={css.navLink} href="/terms">服务条款</a>
+          <a className={css.navLink} href="/privacy">隐私政策</a>
+          <a className={css.navLink} href="/trademark">商标</a>
         </div>
       </footer>
     </div>

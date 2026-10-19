@@ -1,5 +1,5 @@
 // The account, as the narrow web has it (web/src/mobile/Me.tsx), from the card atop settings (SettingsHome.kt): who is
-// signed in, the accounts on this device, and where it is signed in.
+// signed in, the accounts on this device, where it is signed in, and deleting it.
 package fail.still.android.screens
 
 import fail.still.android.ui.Spinner
@@ -84,6 +84,16 @@ fun MeScreen(current: WorkspaceEntry) {
         }
         SectionHeader(t("android-settings.me.devices"), start = 24.dp)
         Devices(current)
+        // Deleting the account in view, at the foot as deleting a workspace is: asked first, and the sheet stays until it
+        // is done, with why still.fail cloud refused it (the only owner of a workspace others are in) in it.
+        Spacer(Modifier.height(18.dp))
+        ListCard {
+            ListRow(onClick = {
+                confirm(app, t("android-settings.me.deleteTitle"), t("android-settings.me.deleteText", "email" to me.email), t("android-settings.me.deleteAction"), danger = true) {
+                    Auth.deleteAccount(app.core, me.sub); app.home(); app.toast = t("android-settings.me.deleted", "email" to me.email)
+                }
+            }) { Text(t("android-settings.me.delete"), fontSize = 15.sp, color = C.red) }
+        }
         Spacer(Modifier.height(30.dp))
     }
 }

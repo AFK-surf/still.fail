@@ -8,7 +8,8 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 `web/src/telemetry.ts`，在 `web/src/main.tsx` 里启动。构建时没有 key 的话，这些函数什么都不做，bundle 里也没有 posthog-js。管理后台（`admin.still.fail`）什么都不发。
 
-- **身份**：看着哪个 workspace，就以那个 workspace 所用的已登录账号标识（still.fail 账号 id，即 Google `sub`），邮箱作为人的属性；退出这个账号时 reset。station 自己的管理页不标识人。
+- **身份**：看着哪个 workspace，就以那个 workspace 所用的已登录账号标识，只用 still.fail 账号 id（即 Google `sub`），不发邮箱；退出或注销这个账号时 reset。station 自己的管理页不标识人。
+- **开关**：设置里的「发送使用统计和错误报告」（宽屏在 设置 → 关于，窄屏在设置的「此设备」里），默认开。关掉用的是 PostHog 自己的 `opt_out_capturing()`，选择由 PostHog 存在这个浏览器里；关掉后事件、错误、会话回放都不再发（回放的录制也停掉）。reset 会清掉这个选择，所以 reset 后重新 opt out。构建时没有 key 的话不显示这个开关。
 - **错误**：页面上未捕获的异常和 promise 拒绝；核心 worker（SharedWorker / Worker）里捕获到的错误由 worker 转给一个页面上报；worker 崩溃（`{fatal}`）或起不来也上报。每个事件都带 `release`（构建时的 git 提交）和 `app`（`cloud` / `station`）。
 - **会话回放**：所有文字、所有输入框都打码；图片、视频、canvas 整块挡掉；`title`、`alt`、`aria-label`、`placeholder`、`href`、`src` 等可能带人名、文件名、对话名的属性打码。回放里只有布局和操作。控制台日志不录。登录回调页（URL 里有 Google 的 code）不录。是否录制还取决于 PostHog 项目设置里的 Session replay 开关。
 - **事件**（不按键入发）：
@@ -60,6 +61,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 - release 包关了 R8 的混淆（`proguard-rules.pro` 的 `-dontobfuscate`，保留行号），堆栈里是原名，不用上传 mapping。
 - 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`app/build.gradle.kts` → `BuildConfig.POSTHOG_KEY`）；CI 的安卓发布从 `POSTHOG_JSON` 写这个文件（`.github/release.sh`）。没有 key 的构建（本地、开发）什么都不发。
+- 设置 → 此设备里的「发送使用统计和错误报告」（默认开，只存在这台设备上，app prefs 的 `telemetry`；没有 key 的构建不显示）关掉后，以上都不发：都经 `Crashes.send` 发出，它先看这个开关；关着时的闪退也不留到以后再报。
 
 ## key 从哪来
 

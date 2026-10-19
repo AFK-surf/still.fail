@@ -76,6 +76,7 @@
   "core-misc.cloud.invitation_for_other_email": "This invite is for another email. Accept it with that account",
   "core-misc.cloud.invitation_not_found": "Invite link invalid or expired",
   "core-misc.cloud.last_owner": "A workspace needs at least one owner",
+  "core-misc.cloud.sole_owner": "You're the only owner of a workspace that has other members. Make someone else an owner or delete the workspace first, then delete your account",
   "core-misc.cloud.member_not_found": "Member not found",
   "core-misc.cloud.not_beta": "This account isn't in the beta yet",
   "core-misc.cloud.station_not_found": "Station not found",

@@ -1,12 +1,13 @@
 // The account on a narrow screen, as the Android app has it (apps/android/…/screens/Me.kt), from the card atop settings
-// (./Settings.tsx): who is signed in, the accounts on this device, and where it is signed in.
+// (./Settings.tsx): who is signed in, the accounts on this device, where it is signed in, and deleting it at the bottom.
 import { useState } from "react";
-import { signIn, signOut, useAccounts, type Account } from "../cloud/accounts.ts";
+import { deleteAccount, signIn, signOut, useAccounts, type Account } from "../cloud/accounts.ts";
 import { useDoing } from "../doing.ts";
 import { useApp } from "./app.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, TopBack } from "./parts.tsx";
 import { Spinner } from "@stillfail/ui/waiting.tsx";
 import { Devices } from "./WorkspacePage.tsx";
+import { confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Me.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -23,6 +24,14 @@ export function MeScreen() {
     setSigningIn(true);
     signIn().catch((e: unknown) => { setSigningIn(false); app.toast(t("web-mobile.me.signInFailed", { error: e instanceof Error ? e.message : String(e) })); });
   };
+  // Asked again; the sheet goes as it is answered and the row turns until still.fail cloud has it (it may refuse: the
+  // only owner of a workspace others are in, said by toast). Then away as after signing out, the account gone from here.
+  const deleting = useDoing("auth.deleteAccount", { account: me.sub });
+  const remove = () => confirm(app, {
+    title: t("web-pages.settings.account.delete"), text: t("web-pages.settings.account.deleteConfirmBody", { email: me.email }),
+    action: t("web-pages.settings.account.deleteAction"), danger: true, atOnce: "web-pages.accounts.deleteFailed",
+    run: () => deleteAccount(me.sub).then(() => { app.replace("/", { signingOut: me.sub }); app.toast(t("web-pages.settings.account.deleted", { email: me.email })); }),
+  });
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
@@ -43,6 +52,12 @@ export function MeScreen() {
       </ListCard>
       <SectionHeader title={t("web-mobile.me.devices")} start={24} />
       <Devices />
+      <div className={css.mGap} />
+      <ListCard>
+        <ListRow onClick={deleting ? undefined : remove}>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mRed}`}>{t("web-pages.settings.account.delete")}</span>{deleting && <Spinner inline />}
+        </ListRow>
+      </ListCard>
       <div style={{ height: 30 }} />
     </div>
   );

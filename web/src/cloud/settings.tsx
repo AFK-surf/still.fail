@@ -36,7 +36,7 @@ import { profilePath, useProfilesSidebar } from "../ProfilesNav.tsx";
 import { useCall, useTopic } from "../core/react.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { About, BackLink, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time, Spinner, Waiting, WaitLine, WaitMore } from "../ui.tsx";
-import { useSignOut, type Account } from "./accounts.ts";
+import { useDeleteAccount, useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
 import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
@@ -89,6 +89,7 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("client", "version", t("web-pages.settings.nav.version"), Info, "version update", HAS_VERSION),
     ...page("client", "local-station", t("web-pages.localStation.title"), Monitor, "local station this mac", HAS_LOCAL_STATION),
     ...page("client", "changelog", t("web-pages.settings.nav.changelog"), Sparks, "changelog"),
+    ...page("client", "about", t("web-pages.settings.nav.about"), Info, "about privacy telemetry statistics terms"),
     ...page("station", "stations", "Station", Server, "station"),
     ...page("station", "connects", t("web-pages.settings.nav.connects"), Im, "connects slack", some),
     ...page("station", "profiles", "Profile", Quota, "profile", some),
@@ -99,7 +100,7 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("cloud", "workspace", `Workspace · ${entry.name}`, Users, "workspace members"),
     ...page("cloud", "security", t("web-pages.security.title"), ShieldCheck, "security lock devices"),
     ...page("cloud", "vault", t("web-pages.vault.title"), Key, "vault secrets keys tokens"),
-    ...page("cloud", "account", entry.account.email, User, "account sign out"),
+    ...page("cloud", "account", entry.account.email, User, "account sign out delete"),
   ];
 }
 
@@ -172,6 +173,8 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
   const signOut = useSignOut();
+  const [deleting, setDeleting] = useState(false);
+  const remove = useDeleteAccount();
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={`/w/${entry.id}/settings`} label={t("web-pages.settings.title")} />
@@ -208,6 +211,23 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
       <Confirm open={signingOut} onClose={() => setSigningOut(false)}
         onConfirm={() => { setSigningOut(false); navigate("/", { state: { signingOut: account.sub } }); void signOut.signOut(account.sub).then((out) => { if (out) toast(t("web-pages.settings.account.signedOut", { email: account.email })); }); }}
         title={t("web-pages.settings.account.signOutConfirm", { email: account.email })} action={t("web-pages.settings.account.signOutAction")} description={t("web-pages.settings.account.signOutConfirmBody")} />
+      <Section title={t("web-pages.settings.account.delete")}>
+        <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
+          <div className={pagesCss.cardRowText}><strong>{t("web-pages.settings.account.deleteHere", { email: account.email })}</strong><span className={shellCss.muted}>{t("web-pages.settings.account.deleteHereBody", { name: NAME })}</span></div>
+          <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>{t("web-pages.settings.account.deleteAction")}</Button>
+        </div>
+      </Section>
+      {/* Asked again, the dialog turning until still.fail cloud has it (it may refuse: the only owner of a workspace others
+          are in, said by toast); then away as after signing out, the account gone from here. */}
+      <Confirm open={deleting} busy={remove.busy(account.sub)} onClose={() => setDeleting(false)}
+        onConfirm={() => void remove.deleteAccount(account.sub).then((gone) => {
+          setDeleting(false);
+          if (!gone) return;
+          navigate("/", { state: { signingOut: account.sub } });
+          toast(t("web-pages.settings.account.deleted", { email: account.email }));
+        })}
+        title={t("web-pages.settings.account.delete")} action={t("web-pages.settings.account.deleteAction")}
+        description={t("web-pages.settings.account.deleteConfirmBody", { email: account.email })} />
     </div>
   );
 }

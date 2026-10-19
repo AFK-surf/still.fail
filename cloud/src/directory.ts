@@ -802,6 +802,39 @@ export class Directory extends DurableObject<Env> {
     this.#changed(workspace, true, [target]);
   }
 
+  /**
+   * The account deletes itself (DELETE /v1/me; its sessions end in its own object): the workspaces only it is in go as
+   * deleteWorkspace takes them, it leaves the others, and what is kept of it goes: its row, push registrations, devices,
+   * lock requests, bug reports, and what waits for its email (pending, added, invitations). Refused (409 sole_owner)
+   * while it is the only owner of a workspace others are in: they would be left with no one to manage it.
+   */
+  deleteAccount(sub: string): void {
+    const email = this.#one("SELECT email FROM users WHERE sub = ?", sub)?.email as string | undefined;
+    const memberships = this.#rows("SELECT workspace, role FROM members WHERE sub = ?", sub).map((r) => ({ workspace: r.workspace as string, role: r.role as Role }));
+    const alone = memberships.filter((m) => this.#members(m.workspace).length === 1).map((m) => m.workspace);
+    for (const m of memberships) {
+      if (m.role !== "owner" || alone.includes(m.workspace)) continue;
+      if ((this.#one("SELECT COUNT(*) AS n FROM members WHERE workspace = ? AND role = 'owner'", m.workspace)!.n as number) <= 1) fail(409, "sole_owner");
+    }
+    for (const workspace of alone) this.deleteWorkspace(sub, workspace);
+    for (const { workspace } of memberships.filter((m) => !alone.includes(m.workspace))) {
+      this.#run("DELETE FROM members WHERE workspace = ? AND sub = ?", workspace, sub);
+      this.#revoke(workspace, "sub", sub);
+      this.#changed(workspace, true);
+    }
+    this.ctx.storage.transactionSync(() => {
+      for (const table of ["push", "devices", "lock_requests"]) this.#run(`DELETE FROM ${table} WHERE sub = ?`, sub);
+      this.#run("DELETE FROM feedback WHERE account = ?", sub);
+      if (email) {
+        this.#run("DELETE FROM pending WHERE lower(email) = lower(?)", email);
+        this.#run("DELETE FROM added WHERE lower(email) = lower(?)", email);
+        this.#run("DELETE FROM invitations WHERE lower(email) = lower(?)", email);
+      }
+      this.#run("DELETE FROM users WHERE sub = ?", sub);
+    });
+    this.#tell([sub], LIST);
+  }
+
   #keepAnOwner(workspace: string): void {
     const owners = this.#one("SELECT COUNT(*) AS n FROM members WHERE workspace = ? AND role = 'owner'", workspace)!.n as number;
     if (owners <= 1) fail(409, "last_owner");
