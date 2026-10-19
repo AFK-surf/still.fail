@@ -417,21 +417,22 @@ fn go_row(
 }
 
 ///|
-/// A switch (PageParts.kt Switch): 44 by 26, green when on, its knob white.
+/// A switch (PageParts.kt Switch): 44 by 26, green when on, its knob white: mbui's switch's look (@kit.switch_look_of)
+/// in still.fail's colours; the row it is in takes the tap.
 fn switch(c : @ui.Ctx, on : Bool) -> Unit {
   let t = @sf.theme()
-  c.box(w=Px(44.0), h=Px(26.0), radius=13.0, bg=if on { t.p.green } else { t.p.line }, justify=JCenter, fn() {
-    c.box(
-      w=Px(20.0),
-      h=Px(20.0),
-      radius=10.0,
-      bg=0xFFFFFFFFL,
-      tx=if on { 21.0 } else { 3.0 },
-      fn() {  },
-    )
-    |> ignore
-  })
-  |> ignore
+  @kit.switch_look_of(w=44.0, h=26.0, inset=3.0, on_color=t.p.green, off_color=t.p.line, knob=0xFFFFFFFFL, shadow=false)(
+    c,
+    {
+      on,
+      t: if on { 1.0 } else { 0.0 },
+      hovered: false,
+      pressed: false,
+      focus_shown: false,
+      disabled: false,
+      rect: (0.0, 0.0, 44.0, 26.0),
+    },
+  )
 }
 
 ///|
