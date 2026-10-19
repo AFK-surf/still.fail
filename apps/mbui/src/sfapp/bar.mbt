@@ -669,8 +669,9 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
       )
       |> ignore
       // the notch's outline alone: the glass's outline grown by half the line, its line inside that, seen between
-      // the lips and under the glass's top
-      at(c, l, top + 0.5, rr - l, h, clip=true, body=fn() {
+      // the lips and under the glass's top, down to the notch's foot only (the outline's bottom edge is not the notch's
+      // and would lay a light seam over the shadow under the bar)
+      at(c, l, top + 0.5, rr - l, dmin(h - 1.0, cy + r + 1.0), clip=true, body=fn() {
         at(
           c,
           -l - 0.5,
