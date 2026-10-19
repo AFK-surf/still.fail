@@ -598,14 +598,6 @@ priv struct ComposerUi {
   mut room : Double
   /// the outbox's entries being sent again or dropped (their buttons spin meanwhile)
   doing : Map[String, Bool]
-  /// a message held: its words picked, the bar over them (MessagePick.kt)
-  mut hold : Int
-  mut hold_at : Double
-  mut picked : String
-  mut picked_id : Int
-  mut picked_author : String
-  mut picked_role : String
-  mut picked_text : String
 }
 
 ///|
@@ -624,13 +616,6 @@ let cui : ComposerUi = {
   outside: false,
   room: 0.0,
   doing: {},
-  hold: 0,
-  hold_at: 0.0,
-  picked: "",
-  picked_id: 0,
-  picked_author: "",
-  picked_role: "",
-  picked_text: "",
 }
 
 ///|
@@ -1648,156 +1633,6 @@ fn attach_sheet(
   }
 }
 
-// ── picking a message's words (MessagePick.kt) ───────────────────────────
-
-///|
-/// A message's words that a finger held still on picks (all of them: MessagePick.kt picks a word and widens it by
-/// words), to quote into the draft or copy; the bar over them (pick_bar) does that.
-fn pickable(
-  c : @ui.Ctx,
-  ts : String,
-  author : String,
-  role : String,
-  words : String,
-  fill_w : Bool,
-  body : () -> Unit,
-) -> Unit {
-  let id = c.id("pick/" + ts)
-  // a tap on it: the keyboard goes, and what was picked is let go of
-  if c.clicked(id) {
-    c.blur()
-    if cui.picked != "" && cui.picked != ts {
-      cui.picked = ""
-    }
-  }
-  // held still on it half a second: picked (by where the finger is, whatever in it took the press: a link, a code
-  // block)
-  let (px, py, down) = c.pointer()
-  if down && !cui.moved && cui.picked != ts && words.trim(chars=" \n\t") != "" {
-    match c.rect_of(id) {
-      Some((x, y, w, h)) if px >= x && px < x + w && py >= y && py < y + h => {
-        let held = c.now() - cui.down_at
-        if held >= 500.0 {
-          cui.picked = ts
-          cui.picked_id = id
-          cui.picked_author = author
-          cui.picked_role = role
-          cui.picked_text = words
-          cui.hold = id
-          c.request_frame()
-        } else {
-          c.wake_in(500.0 - held)
-        }
-      }
-      _ => ()
-    }
-  }
-  let lit = cui.picked == ts
-  c.box(
-    w=if fill_w { Fill(1.0) } else { Auto },
-    radius=if lit { 6.0 } else { 0.0 },
-    bg=if lit { @sf.alpha(ink().accent, 0.2) } else { 0L },
-    id~,
-    body,
-  )
-  |> ignore
-}
-
-///|
-/// Over the list: what to do with the picked words (MessagePick.kt PickBar), over them (under them when the bar is
-/// too near); a tap anywhere else lets go of them.
-fn pick_bar(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
-  if cui.picked == "" {
-    return
-  }
-  let t = @sf.theme()
-  let quote = c.id("pick/quote")
-  let copy = c.id("pick/copy")
-  let bar = c.id("pick/bar")
-  let (px, py, _) = c.pointer()
-  if c.clicked(quote) {
-    let d = draft_of(src, r)
-    draft_quote(d, cui.picked_author, cui.picked_text.trim(chars=" \n\t").to_string(), cui.picked, cui.picked_role)
-    cui.picked = ""
-    c.request_frame()
-    return
-  }
-  if c.clicked(copy) {
-    c.copy_text(cui.picked_text)
-    say(c, tr("android-chat.annotate.copied"))
-    cui.picked = ""
-    c.request_frame()
-    return
-  }
-  // the press that picked it, lifted, is not a tap elsewhere
-  if cui.released {
-    cui.hold = 0
-  }
-  // a new press elsewhere than the bar lets go
-  if cui.press_new {
-    let on_bar = match c.rect_of(bar) {
-      Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
-      None => false
-    }
-    if !on_bar {
-      cui.picked = ""
-      return
-    }
-  }
-  let (x, y, w, h) = match c.rect_of(cui.picked_id) {
-    Some(rect) => rect
-    None => return
-  }
-  let over = y - 52.0
-  let top = chat_bar_h + 8.0
-  let at_y = if over < top { y + h + 12.0 } else { over }
-  let at_y = dmax(top, dmin(at_y, c.height - composer_room_of(c) - 48.0))
-  let mid = dmax(130.0, dmin(x + w / 2.0, c.width - 130.0))
-  let button = fn(id : Int, label : String, icon : String) {
-    c.box(
-      dir=Row,
-      h=Px(32.0),
-      padx=12.0,
-      gap=5.0,
-      radius=16.0,
-      align=ACenter,
-      bg=@sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)),
-      id~,
-      fn() {
-        @sf.icon(c, icon, size=15.0, color=t.p.text) |> ignore
-        c.text(label, size=14.0, color=t.p.text, wrap=false) |> ignore
-      },
-    )
-    |> ignore
-  }
-  c.layer(fn() {
-    c.box(dir=Row, w=Fill(1.0), pt=at_y, justify=JCenter, fn() {
-      c.box(tx=mid - c.width / 2.0, fn() {
-        c.box(
-          dir=Row,
-          h=Px(40.0),
-          padx=4.0,
-          radius=20.0,
-          bg=t.p.raised,
-          border=1.0,
-          border_color=t.p.line,
-          shadow=8.0,
-          align=ACenter,
-          id=bar,
-          fn() {
-            button(quote, tr("android-chat.pick.quote"), "quote")
-            button(copy, tr("common.copy"), "copy")
-          },
-        )
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
 ///|
 /// The chat left: its draft kept as it is now, ＋'s sheet and what was picked let go.
 fn composer_left(src : Source, r : ChatRef) -> Unit {
@@ -1809,8 +1644,7 @@ fn composer_left(src : Source, r : ChatRef) -> Unit {
     None => ()
   }
   cui.attach = false
-  cui.picked = ""
-  cui.hold = 0
+  pick_clear()
 }
 
 ///|

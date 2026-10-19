@@ -50,8 +50,8 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if wide.renaming != "" {
       wide.renaming = ""
       c.blur()
-    } else if cui.picked != "" {
-      cui.picked = ""
+    } else if pk.ts != "" {
+      pick_clear()
     }
   }
   // Space with no field focused: back to the composer (回到输入框)

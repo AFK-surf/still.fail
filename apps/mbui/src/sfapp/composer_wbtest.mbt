@@ -235,6 +235,8 @@ test "a message held: its words quoted into the draft, with a line for a comment
   t.release(x, y)
   t.settle() |> ignore
   assert_true(t.find("引用") is Some(_))
+  // a word was picked; all of the message, then quoted
+  t.tap_text("全选")
   t.tap_text("引用")
   assert_true(t.find("添加说明（可选）") is Some(_))
   // the comment's field has the focus

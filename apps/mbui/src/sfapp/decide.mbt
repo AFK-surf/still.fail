@@ -26,6 +26,8 @@ priv struct Decide {
   doing : Map[String, Bool]
   /// asks let go here, before the core says so (Chat.kt AskDismiss `gone`), by station, thread and post
   gone : Map[String, Bool]
+  /// what failed a moment ago (the core's doing, `stage: failed`, kept 6 s: DoingMark's red mark), by its key, when
+  failed : Map[String, Double]
   /// the sheet open, since when; the one going, since when
   mut sheet : Sheet?
   mut sheet_at : Double
@@ -72,6 +74,7 @@ priv struct Decide {
 let dui : Decide = {
   doing: {},
   gone: {},
+  failed: {},
   sheet: None,
   sheet_at: 0.0,
   leaving: None,
@@ -106,6 +109,7 @@ let dui : Decide = {
 fn decide_reset() -> Unit {
   dui.doing.clear()
   dui.gone.clear()
+  dui.failed.clear()
   dui.sheet = None
   dui.leaving = None
   dui.jobs_all = false
@@ -151,10 +155,15 @@ fn act(
   }
   if key != "" {
     dui.doing[key] = true
+    dui.failed.remove(key)
   }
   (src.call)(call, params, fn(res) {
     if key != "" {
       dui.doing.remove(key)
+    }
+    if key != "" && res is Err(_) {
+      // stamped by the frame that first shows it (failed_lately)
+      dui.failed[key] = -1.0
     }
     match res {
       Ok(v) => {
@@ -197,8 +206,90 @@ fn doing(key : String) -> Bool {
 }
 
 ///|
+/// How long what failed keeps its red mark (the core's doing keeps a failure 6 s).
+let failed_ms : Double = 6000.0
+
+///|
+/// Whether `key` failed within the last 6 s (AppState.failedOf); a frame asked for when its mark is to go.
+fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
+  match dui.failed.get(key) {
+    Some(was) => {
+      let at = if was < 0.0 {
+        dui.failed[key] = c.now()
+        c.now()
+      } else {
+        was
+      }
+      let left = at + failed_ms - c.now()
+      if left <= 0.0 {
+        dui.failed.remove(key)
+        false
+      } else {
+        c.wake_in(left)
+        true
+      }
+    }
+    None => false
+  }
+}
+
+///|
 fn seq_key(station : String, thread : Double, seq : Double) -> String {
   station + "\t" + thread.to_int64().to_string() + "\t" + seq.to_int64().to_string()
+}
+
+// ── what comes and goes under a post ────────────────────────────────────
+
+///|
+/// ListMotion.kt closeGap: the room left closed by the rows' spring (critically damped, 350), a little late (100 ms).
+let close_gap : @motion.Spec = @motion.spring(stiffness=350.0, threshold=0.002, delay=100.0)
+
+///|
+/// The archive buttons' curve and time (Chat.kt ArchiveEase, 280 ms): a quick start, a soft landing.
+let archive_tween : @motion.Spec = @motion.tween(280.0, ease=Soft)
+
+///|
+/// What `body` builds under a post, shown or not as `shown` says (Compose's AnimatedVisibility with expandVertically /
+/// shrinkVertically from its top): coming by `enter` (None: there at once, EnterTransition.None) as its room opens by
+/// `open`, going by `exit` as its room closes by `close`; turned back mid-way from where it is; the first time as it
+/// is. Its room is laid out (`@motion.reveal`, as the Android app's shrinkVertically lays it out, so what is under it
+/// in the chat closes up); what is in it is only drawn while it goes (a tap is what is under it's).
+fn under_post(
+  c : @ui.Ctx,
+  key : String,
+  shown : Bool,
+  enter? : @motion.Trans,
+  open? : @motion.Spec = archive_tween,
+  exit~ : @motion.Trans,
+  close? : @motion.Spec = archive_tween,
+  body : () -> Unit,
+) -> Unit {
+  let to = if shown { 1.0 } else { 0.0 }
+  let h = @motion.anim(c, "under/" + key, to, global=true)
+  let look = match enter {
+    Some(e) => @motion.presence(c, "under-look/" + key, shown, enter=e, exit=exit)
+    None => {
+      // there at once as it comes; going, by `exit`
+      if shown {
+        h.snap(1.0)
+      }
+      @motion.presence(c, "under-look/" + key, shown, enter=@motion.trans(spec=@motion.Snap(0.0)), exit=exit)
+    }
+  }
+  h.follow(to, if shown { open } else { close })
+  let share = h.get()
+  let look = match look {
+    Some(l) => l
+    None => if share <= 0.0 { return } else { @ui.look(alpha=0.0) }
+  }
+  if h.moving() {
+    @motion.log_frame(c, "under/" + key, "open=\{share} alpha=\{look.alpha} scale=\{look.sx}")
+  }
+  @motion.reveal(c, "under/" + key, share, fn() {
+    let i = c.box(w=Fill(1.0), body)
+    c.look(i, look)
+    @motion.leaving(c, i, shown)
+  })
 }
 
 // ── the cards in a chat ─────────────────────────────────────────────────
@@ -234,15 +325,21 @@ fn answering(station : String, m : Message, options : Array[Choice]) -> String? 
 
 ///|
 /// 忽略 under a post that asks what no one has decided (Chat.kt AskDismiss): gone at once, back if letting it go
-/// failed (`decision.dismiss`).
+/// failed (`decision.dismiss`). It goes as the archive buttons go (280 ms, ArchiveEase: fading, to 85% from its top
+/// left, its room closing), and with the options once the card is answered.
 fn ask_dismiss(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
-  let k = seq_key(here.station, m.thread, m.seq)
-  if !m.asked || dui.gone.contains(k) {
+  let answered = match m.decision {
+    Some(d) => d.resolved || d.dismissed
+    None => false
+  }
+  if !m.asked && !answered {
     return
   }
+  let k = seq_key(here.station, m.thread, m.seq)
+  let shown = m.asked && !answered && !dui.gone.contains(k)
   let t = @sf.theme()
   let id = c.id("ask-dismiss/" + m.ts)
-  if c.clicked(id) {
+  if shown && c.clicked(id) {
     dui.gone[k] = true
     c.request_frame()
     act(
@@ -258,13 +355,21 @@ fn ask_dismiss(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
       failed=fn() { dui.gone.remove(k) },
     )
   }
-  c.box(pt=6.0, fn() {
-    c.box(id~, fn() {
-      c.text(tr("android-chat.asks.dismiss"), size=12.0, color=t.p.muted, line=18.0) |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
+  under_post(
+    c,
+    "dismiss/" + k,
+    shown,
+    exit=@motion.trans(fade=0.0, scale=0.85, ox=0.0, oy=0.0, spec=archive_tween),
+    fn() {
+      c.box(pt=6.0, fn() {
+        c.box(id=if shown { id } else { 0 }, fn() {
+          c.text(tr("android-chat.asks.dismiss"), size=12.0, color=t.p.muted, line=18.0) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+  )
 }
 
 ///|
@@ -294,8 +399,24 @@ fn archive_chat(src : Source, r : ChatRef, v : ChatView) -> Unit {
 ///|
 /// 保留 and 归档此对话 under the agents' latest all-done post while nothing is left in the chat (Chat.kt ArchiveUnder),
 /// as buttons (Decisions.kt OptionButton), the second in the accent; each a spinner while it is done, neither while the
-/// station is offline or the other is under way.
-fn archive_buttons(c : @ui.Ctx, src : Source, here : Here) -> Unit {
+/// station is offline or the other is under way; 保留 that failed a moment ago marked so. Offered or taken, they come
+/// and go (280 ms, ArchiveEase: fading, from or to 85% about their top's middle, their room opening or closing).
+fn archive_under_post(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
+  if m.author_kind != "agent" || m.ending != "all_done" {
+    return
+  }
+  let under = archive_under(here.view) == Some(m.seq)
+  let shown = under && here.view.thread is Some(_)
+  let enter = @motion.trans(fade=0.0, scale=0.85, ox=0.5, oy=0.0, spec=archive_tween)
+  under_post(c, "archive/" + here.station + "/" + m.ts, shown, enter~, exit=enter, fn() {
+    archive_buttons(c, src, here, shown)
+  })
+}
+
+///|
+/// The two buttons of archive_under_post; `enabled` while they are offered (going, they are drawn as they were, not
+/// pressed).
+fn archive_buttons(c : @ui.Ctx, src : Source, here : Here, enabled : Bool) -> Unit {
   let r : ChatRef = { station: here.station, session: here.session, title: "", station_name: "" }
   let thread = match here.view.thread {
     Some(th) => th
@@ -310,8 +431,9 @@ fn archive_buttons(c : @ui.Ctx, src : Source, here : Here) -> Unit {
         "archive-under/keep",
         tr("android-chat.chat.keep"),
         false,
-        !here.view.offline && !archiving,
+        enabled && !here.view.offline && !archiving,
         keeping,
+        failed=failed_lately(c, kkey),
       ) {
       act(
         src,
@@ -327,7 +449,7 @@ fn archive_buttons(c : @ui.Ctx, src : Source, here : Here) -> Unit {
         "archive-under/archive",
         tr("android-chat.chat.archiveThis"),
         true,
-        !here.view.offline && !keeping,
+        enabled && !here.view.offline && !keeping,
         archiving,
       ) {
       archive_chat(src, r, here.view)
@@ -338,8 +460,9 @@ fn archive_buttons(c : @ui.Ctx, src : Source, here : Here) -> Unit {
 
 ///|
 /// A button as wide as it is given (Decisions.kt OptionButton): the label in medium, white on the accent when
-/// `strong`, ink on the chip otherwise; half there when not `enabled`; a spinner while `busy`. True on the frame after
-/// it was tapped (never while busy or not enabled).
+/// `strong`, ink on the chip otherwise; half there when not `enabled`; a spinner while `busy`, the red mark when it
+/// `failed` a moment ago; pressed, its ground the ripple's (in 75 ms, out 150) and the whole drawn at 97% (80 ms in,
+/// 180 out, Ease.Out). True on the frame after it was tapped (never while busy or not enabled).
 fn option_button(
   c : @ui.Ctx,
   key : String,
@@ -347,12 +470,22 @@ fn option_button(
   strong : Bool,
   enabled : Bool,
   busy : Bool,
+  failed? : Bool = false,
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   let ink = if strong { 0xFFFFFFFFL } else { t.p.text }
   let ground = if strong { t.p.accent } else { t.p.chip }
-  c.box(
+  let free = enabled && !busy
+  let down = free && c.pressed(id)
+  let scale = @motion.animate(
+    c,
+    key + "/press",
+    if down { 0.97 } else { 1.0 },
+    spec=@motion.tween(if down { 80.0 } else { 180.0 }, ease=Out),
+  )
+  let pressed = if free { @motion.pressing(c, id) } else { 0.0 }
+  let b = c.box(
     dir=Row,
     w=Fill(1.0),
     padx=14.0,
@@ -361,7 +494,7 @@ fn option_button(
     radius=12.0,
     align=ACenter,
     opacity=if enabled { 1.0 } else { 0.5 },
-    bg=if c.pressed(id) && enabled && !busy { @sf.over(ground, @sf.alpha(ink, 0.12)) } else { ground },
+    bg=if pressed > 0.0 { @sf.over(ground, @sf.alpha(ink, 0.12 * pressed)) } else { ground },
     id~,
     fn() {
       c.box(w=Fill(1.0), fn() {
@@ -374,19 +507,24 @@ fn option_button(
         } else {
           @sf.spinner(c, size=12.0) |> ignore
         }
+      } else if failed {
+        @sf.icon(c, "info", size=14.0, color=t.p.red) |> ignore
       }
     },
   )
-  |> ignore
-  c.clicked(id) && enabled && !busy
+  if scale != 1.0 {
+    c.look(b, @ui.look(scale~))
+  }
+  c.clicked(id) && free
 }
 
 // ── a login card's buttons (LoginCards.kt ActiveCard) ───────────────────
 
 ///|
 /// A login under way, for one who may finish it (the station's `machineLogins` says `canLogin`): what to do now by its
-/// step, then the step's own pill (filled) and 取消. The page itself is not opened here: there is no browser hand-off
-/// in the app yet, so its link (or the code) goes on the clipboard, said in a toast.
+/// step, then the step's own pill (filled) and 取消 (LoginCards.kt ActiveCard). The pill opens the login's page in the
+/// system's browser (Ctx::open_url; LoginPages.open): a device code first copied (复制并打开), a loopback login's page
+/// once the core listens for its callback (`machineLogin.open`, the browser's answer coming back to this device).
 fn login_active(c : @ui.Ctx, src : Source, station : String, l : Json?, relay : Bool) -> Unit {
   let t = @sf.theme()
   let id = text(l, "id")
@@ -411,15 +549,23 @@ fn login_active(c : @ui.Ctx, src : Source, station : String, l : Json?, relay : 
   }
   let mut main = ""
   let mut copy = ""
+  let mut page = ""
   match step {
     "device" if code != "" => {
       said(fill("web-main.logins.device", [("domain", text(l, "domain"))]), false, false)
-      c.box(padx=10.0, pady=4.0, fn() {
+      // the code, large enough to read and copy by eye; pressed, it is copied (nothing opened), said so
+      let code_id = c.id("login-code/" + id)
+      if c.clicked(code_id) {
+        c.copy_text(code)
+        say(c, tr("web-main.logins.codeCopied"))
+      }
+      c.box(padx=10.0, pady=4.0, id=code_id, fn() {
         c.text(code, size=22.0, weight=600, color=t.p.text, wrap=false, line=29.0) |> ignore
       })
       |> ignore
       main = tr("web-main.logins.copyOpen")
       copy = code
+      page = url
     }
     "loopback" if !relay => {
       said(tr("web-main.logins.needsDesktop"), false, false)
@@ -437,23 +583,44 @@ fn login_active(c : @ui.Ctx, src : Source, station : String, l : Json?, relay : 
         said(domain, false, false)
       }
       main = tr(if flag(l, "listening") { "web-main.logins.openAgain" } else { "web-main.logins.signIn" })
-      copy = url
+      page = "\u{1}relay"
     }
     "open" if url != "" => {
       if domain != "" {
         said(domain, false, false)
       }
       main = tr("web-main.logins.signIn")
-      copy = url
+      page = url
     }
     _ => said(text(l, "statusText"), false, true)
   }
   let cancel_key = "login-cancel/" + station + "/" + id
   c.box(dir=Row, pt=6.0, gap=4.0, align=ACenter, fn() {
     if main != "" {
-      if login_pill(c, "login-main/" + id, main, true, false) {
-        c.copy_text(copy)
-        say(c, tr("web-main.logins.codeCopied"))
+      let open_key = "login-open/" + station + "/" + id
+      if login_pill(c, "login-main/" + id, main, true, doing(open_key)) {
+        if copy != "" {
+          c.copy_text(copy)
+        }
+        if page == "\u{1}relay" {
+          // the core listens for the browser's callback first, then the page opens (LoginCards.kt relay); this
+          // device's port taken is said on the card (relayText), nothing opened
+          act(
+            src,
+            tr("web-main.logins.openWhat"),
+            open_key,
+            "machineLogin.open",
+            { "station": Json::string(station), "id": Json::string(id), "here": Json::boolean(false) },
+            ok=fn(v) {
+              let u = text(Some(v), "url")
+              if u != "" && !@ui.open_url(u) {
+                toast_later(tr("android-misc.link.cantOpen"))
+              }
+            },
+          )
+        } else if page != "" && !c.open_url(page) {
+          say(c, tr("android-misc.link.cantOpen"))
+        }
       }
     }
     if login_pill(c, "login-cancel/" + id, tr("common.cancel"), false, doing(cancel_key)) {

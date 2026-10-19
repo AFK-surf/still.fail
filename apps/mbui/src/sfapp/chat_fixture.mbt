@@ -373,7 +373,7 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         Some(kept_chat("long", fn() { long_chat(3000) }))
       } else if session == "s-c1" {
         let base = kept_chat("rich/\{f.older}/\{f.mode}", fn() {
-          let v = rich_chat(f.older)
+          let v = if f.mode == "chat-md" { with_md_message(rich_chat(f.older)) } else { rich_chat(f.older) }
           match (v, seeded_outbox(f.mode)) {
             (Object(m), out) if out.length() > 0 => {
               let o = m.copy()
@@ -383,7 +383,7 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             _ => v
           }
         })
-        Some(with_sent(base, session))
+        Some(with_cards(f, with_sent(base, session), session))
       } else {
         // its row's title
         let mut title = ""
@@ -442,6 +442,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
 priv struct FixChat {
   sent : Array[Json]
   outbox : Array[Json]
+  /// its agent at work on what was sent (its activity shows), since when (ms)
+  mut working : Double
 }
 
 ///|
@@ -456,7 +458,7 @@ fn fix_chat(session : String) -> FixChat {
   match fix_chats.get(session) {
     Some(f) => f
     None => {
-      let f = { sent: [], outbox: [] }
+      let f = { sent: [], outbox: [], working: -1.0 }
       fix_chats[session] = f
       f
     }
@@ -520,7 +522,7 @@ fn with_sent(base : Json, session : String) -> Json {
     _ => ()
   }
   match (fix_chats.get(session), base) {
-    (Some(fc), Object(m)) if fc.sent.length() > 0 || fc.outbox.length() > 0 => {
+    (Some(fc), Object(m)) if fc.sent.length() > 0 || fc.outbox.length() > 0 || fc.working >= 0.0 => {
       let o = m.copy()
       let all = match m.get("messages") {
         Some(Array(a)) => a.copy()
@@ -531,6 +533,22 @@ fn with_sent(base : Json, session : String) -> Json {
       }
       o["messages"] = Json::array(all)
       o["outbox"] = Json::array(fc.outbox.copy())
+      if fc.working >= 0.0 {
+        o["agents"] = Json::array(
+          items(Some(base), "agents").map(fn(a) {
+            match a {
+              Object(am) => {
+                let w = am.copy()
+                w["status"] = Json::string("running")
+                w["started"] = Json::boolean(true)
+                w["since"] = Json::number(fc.working)
+                Json::object(w)
+              }
+              _ => a
+            }
+          }),
+        )
+      }
       Json::object(o)
     }
     _ => base
@@ -584,8 +602,12 @@ fn fix_deliver(session : String, id : String) -> Unit {
       "quotes": Json::array(items(Some(params), "quotes")),
     }),
   )
+  // its agent sets to work at once (its activity comes in), answers a moment later (its answer said while the chat
+  // shows: out of the activity's avatar), and its turn ends a moment after that
+  fc.working = (fix_clock.val)()
   fix_later(1400.0, fn() {
     fix_serial.val += 1
+    fix_later(700.0, fn() { fix_chat(session).working = -1.0 })
     let first = paste_preview(words)
     let said = if first == "" {
       "收到文件了，我看一下。"
@@ -600,6 +622,7 @@ fn fix_deliver(session : String, id : String) -> Unit {
     fix_chat(session).sent.push(
       msg(100 + fix_serial.val, "agent", by_agent("anthropic", "claude", session), said, "刚刚", {
         "ts": Json::string("reply\{fix_serial.val}"),
+        "said": true,
       }),
     )
   })
@@ -728,5 +751,176 @@ fn seeded_outbox(mode : String) -> Array[Json] {
     "chat-sending" => [outgoing_json("o-seed", words, "sending", "")]
     "chat-failed" => [outgoing_json("o-seed", words, "failed", "Studio 没有回应")]
     _ => []
+  }
+}
+
+// ── the made-up chat's cards, answered here ─────────────────────────────
+//
+// The fixture takes a card's answer as the core does (Decisions.kt): answered at once (the option picked, 你 选择了
+// 「…」 as how it went), let go at once (no longer asked), the chat kept (no longer offered to archive). An option with
+// 失败 in it fails, as 保留 does in the mode chat-cards. The modes chat-cards (the card answered, 保留 failed a moment
+// ago) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards).
+
+///|
+/// How the first row's chat's cards stand as answered here: by seq, the card's decision; whether it was kept.
+let fix_decided : Map[Int, Json] = {}
+
+///|
+let fix_kept : Ref[Bool] = { val: false }
+
+///|
+/// The chat `v` with what was answered here in it.
+fn with_cards(f : Fixture, v : Json, session : String) -> Json {
+  let seeded = f.mode == "chat-cards"
+  if session != "s-c1" || (fix_decided.is_empty() && !fix_kept.val && !seeded) {
+    return v
+  }
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      for i, x in all {
+        let seq = number(Some(x), "seq").to_int()
+        let decided = match fix_decided.get(seq) {
+          Some(d) => Some(d)
+          None if seeded && seq == 8 => Some(decided_json("一起换"))
+          None => None
+        }
+        match (decided, x) {
+          (Some(d), Object(xm)) => {
+            let y = xm.copy()
+            y["decision"] = d
+            y["asked"] = Json::boolean(false)
+            all[i] = Json::object(y)
+          }
+          _ => ()
+        }
+      }
+      o["messages"] = Json::array(all)
+      if fix_kept.val {
+        o["archiveOffered"] = Json::boolean(false)
+      }
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// A card answered with `label`, as the core says it.
+fn decided_json(label : String) -> Json {
+  {
+    "resolved": true,
+    "chosen": Json::string(label),
+    "text": Json::string("你 选择了「" + label + "」"),
+  }
+}
+
+///|
+/// The cards' calls in the made-up chat (`decision.answer`, `decision.dismiss`, `chat.keep`): None for any other.
+fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+  let p = Some(params)
+  let seq = number(p, "seq").to_int()
+  match name {
+    "decision.answer" => {
+      let label = text(p, "option")
+      if label.contains("失败") {
+        return Some(Err({ "code": "unavailable", "message": "Studio 没有回应" }))
+      }
+      fix_decided[seq] = decided_json(label)
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    "decision.dismiss" => {
+      fix_decided[seq] = { "resolved": false, "dismissed": true }
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    "chat.keep" => {
+      if f.mode == "chat-cards" {
+        return Some(Err({ "code": "unavailable", "message": "Studio 没有回应" }))
+      }
+      fix_kept.val = true
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    _ => None
+  }
+}
+
+///|
+/// What the modes of the cards and words set going as the chat opens: chat-answering's option under way, chat-cards' 保留
+/// failed, chat-pick's word picked, chat-link-menu's link held.
+pub fn open_cards_fixture(mode : String) -> Unit {
+  match mode {
+    "chat-answering" => dui.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
+    "chat-cards" => dui.failed["keep/ws1/st1/7"] = -1.0
+    // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
+    "chat-pick" => {
+      pk.ts = "ts11"
+      pk.key = "pick/ts11"
+      pk.author = "Claude"
+      pk.role = "agent"
+      pk.a = 4
+      pk.b = 6
+    }
+    // the bare address in the long answer held: its menu (link_menu.mbt)
+    "chat-link-menu" => {
+      link_menu.href = "https://example.com/bench/list"
+      link_menu.x = 220.0
+      link_menu.top = 360.0
+      link_menu.bottom = 383.0
+      link_menu.open = true
+    }
+    _ => ()
+  }
+}
+
+// ── Markdown's tables and code (MBUI_FIXTURE=chat-md) ───────────────────
+
+///|
+/// An agent's answer with a table, highlighted code (one line too long for the message: it scrolls sideways) and a
+/// command, at the end of the first row's chat.
+let md_answer : String =
+  #|对比了三种做法，结果如下：
+  #|
+  #|| 做法 | 首帧耗时 | 内存 | 结论 |
+  #||:--|--:|--:|:-:|
+  #|| 全量重排 | 4.2 ms | 18 MB | 太慢 |
+  #|| 按行缓存 | 1.1 ms | 22 MB | 可以 |
+  #|| 只排可见的行，其余按估计高度占位 | 0.6 ms | 12 MB | 采用 |
+  #|
+  #|```ts
+  #|export function placeRows(rows: Row[], from: number): number {
+  #|  const visible = rows.filter((r) => r.top >= from && r.top < from + window.innerHeight * 2) // 只排屏幕附近的行
+  #|  return visible.length
+  #|}
+  #|```
+  #|
+  #|```sh
+  #|pnpm test --filter list -- --reporter dot
+  #|```
+
+///|
+fn with_md_message(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), md_answer, "1 分钟前", {
+          "ending": "all_done",
+        }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
   }
 }

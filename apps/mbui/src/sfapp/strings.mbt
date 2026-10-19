@@ -3,6 +3,10 @@
 
 ///|
 let zh : Map[String, String] = {
+  "common.link.open": "打开链接",
+  "common.link.copy": "复制链接",
+  "common.link.copied": "已复制链接",
+  "android-misc.link.cantOpen": "无法打开此链接",
   "android-chat.annotate.copied": "已复制",
   "android-chat.annotate.selectAll": "全选",
   "android-chat.archive": "归档",

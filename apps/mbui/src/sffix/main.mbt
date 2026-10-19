@@ -5,7 +5,8 @@
 // newchat-station, newchat-model (a new chat, its sheets), home-bars (the bottom bar's panel of the other bars),
 // home-sheet (the workspaces' sheet), place (the 文件 place); settings, settings-<page> (a page of the settings over
 // it: src/sfapp/settings/fixture.mbt), -dark after either for the dark theme; chat-flash, chat-flash-mine (the chat
-// opened at a message from a notification, flashing), settings-notify-off (settings, notifications off).
+// opened at a message from a notification, flashing), settings-notify-off (settings, notifications off); chat-cards,
+// chat-answering (the chat's card answered and 保留 failed a moment ago; an option under way).
 
 ///|
 fn main {
@@ -26,6 +27,8 @@ fn main {
     @sfapp.open_chat_at(rich, if mode == "chat-flash" { 4.0 } else { 6.0 }, held=true)
   } else if mode.has_prefix("chat") {
     @sfapp.open_chat(rich)
+    // the cards' states (chat_fixture.mbt): chat-cards, chat-answering
+    @sfapp.open_cards_fixture(mode)
   }
   // the drive's pages (src/sfapp/drive_fixture.mbt): files, drive…, reader…
   @sfapp.open_drive_fixture(mode)

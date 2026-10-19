@@ -289,10 +289,13 @@ fn service_body(
         "/",
         fn(req, reply) { service_serve(src, p, req, reply) },
         leave=fn(url) {
-          // a link elsewhere: not followed here (no URL hand-off on the hosts yet), copied
-          c.copy_text(url)
-          app.toast = svc("android-chat.link.failed") + " · " + svc("common.copied")
-          app.toast_at = -1.0
+          // a link elsewhere: not followed in the page, handed to the system's browser (PreviewWeb.kt); copied and
+          // said so when nothing takes it
+          if !@ui.open_url(url) {
+            c.copy_text(url)
+            app.toast = svc("android-chat.link.failed") + " · " + svc("common.copied")
+            app.toast_at = -1.0
+          }
         },
       )
       @ui.log("service: \{name} on \{station} (port \{port}) opened in a site view")
