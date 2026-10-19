@@ -18,7 +18,7 @@
 #   scripts/e2e-local.sh reads      how far alice has read the test chat, as the station has it
 #   scripts/e2e-local.sh pins       whether alice keeps the test chat pinned (PINS 1 or 0)
 #   scripts/e2e-local.sh wait-chat WORDS   until the test station has a chat whose first words begin with WORDS
-#   scripts/e2e-local.sh freeze|thaw  the test station stopped where it is (SIGSTOP: as if its network went) or let go on
+#   scripts/e2e-local.sh freeze|thaw  the test station stopped where it is (SIGSTOP: as if its network went) or started anew
 #   scripts/e2e-local.sh drive-seed TAG   the drive flows' folder in the test station's home (e2e-TAG)
 #   scripts/e2e-local.sh status
 #
@@ -236,7 +236,19 @@ pins() {
   echo "PINS $(sql "select count(*) from pins where viewer = 'alice@example.test' and session = '$s'")"
 }
 freeze() { local p=$(station_node); [ -n "$p" ] || die "no station to freeze"; kill -STOP $p; say "station frozen ($p)"; }
-thaw() { local p=$(station_node); [ -n "$p" ] || die "no station to thaw"; kill -CONT $p; say "station thawed ($p)"; }
+# thawed, the frozen Node is ended and the launcher starts it anew: what the system's sockets kept for it while it was
+# stopped (a message sent "offline") goes with it, as it would have with the network gone; let go on (CONT), it would
+# still read it and take the message after all. A station not frozen is left as it is.
+thaw() {
+  local p=$(station_node); [ -n "$p" ] || die "no station to thaw"
+  case "$(ps -o state= -p $p 2>/dev/null)" in
+    T*) ;;
+    *) return 0 ;;
+  esac
+  kill -KILL $p
+  wait_for "[ -n \"\$(station_node)\" ] && [ \"\$(station_node)\" != $p ]" 60 || die "the station did not start again ($RUN/station.log)"
+  say "station thawed: started anew ($(station_node))"
+}
 
 case "${1:-all}" in
   up) up ;;
