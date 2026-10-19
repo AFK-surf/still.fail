@@ -183,6 +183,8 @@ fn reset() -> Unit {
   fix_chats.clear()
   fix_timers.clear()
   fix_drafts.clear()
+  fix_decided.clear()
+  fix_kept.val = false
   dv_reset()
   decide_reset()
   close_now()

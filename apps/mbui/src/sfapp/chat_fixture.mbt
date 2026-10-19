@@ -383,7 +383,7 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             _ => v
           }
         })
-        Some(with_sent(base, session))
+        Some(with_cards(f, with_sent(base, session), session))
       } else {
         // its row's title
         let mut title = ""
@@ -728,5 +728,112 @@ fn seeded_outbox(mode : String) -> Array[Json] {
     "chat-sending" => [outgoing_json("o-seed", words, "sending", "")]
     "chat-failed" => [outgoing_json("o-seed", words, "failed", "Studio 没有回应")]
     _ => []
+  }
+}
+
+// ── the made-up chat's cards, answered here ─────────────────────────────
+//
+// The fixture takes a card's answer as the core does (Decisions.kt): answered at once (the option picked, 你 选择了
+// 「…」 as how it went), let go at once (no longer asked), the chat kept (no longer offered to archive). An option with
+// 失败 in it fails, as 保留 does in the mode chat-cards. The modes chat-cards (the card answered, 保留 failed a moment
+// ago) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards).
+
+///|
+/// How the first row's chat's cards stand as answered here: by seq, the card's decision; whether it was kept.
+let fix_decided : Map[Int, Json] = {}
+
+///|
+let fix_kept : Ref[Bool] = { val: false }
+
+///|
+/// The chat `v` with what was answered here in it.
+fn with_cards(f : Fixture, v : Json, session : String) -> Json {
+  let seeded = f.mode == "chat-cards"
+  if session != "s-c1" || (fix_decided.is_empty() && !fix_kept.val && !seeded) {
+    return v
+  }
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      for i, x in all {
+        let seq = number(Some(x), "seq").to_int()
+        let decided = match fix_decided.get(seq) {
+          Some(d) => Some(d)
+          None if seeded && seq == 8 => Some(decided_json("一起换"))
+          None => None
+        }
+        match (decided, x) {
+          (Some(d), Object(xm)) => {
+            let y = xm.copy()
+            y["decision"] = d
+            y["asked"] = Json::boolean(false)
+            all[i] = Json::object(y)
+          }
+          _ => ()
+        }
+      }
+      o["messages"] = Json::array(all)
+      if fix_kept.val {
+        o["archiveOffered"] = Json::boolean(false)
+      }
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// A card answered with `label`, as the core says it.
+fn decided_json(label : String) -> Json {
+  {
+    "resolved": true,
+    "chosen": Json::string(label),
+    "text": Json::string("你 选择了「" + label + "」"),
+  }
+}
+
+///|
+/// The cards' calls in the made-up chat (`decision.answer`, `decision.dismiss`, `chat.keep`): None for any other.
+fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+  let p = Some(params)
+  let seq = number(p, "seq").to_int()
+  match name {
+    "decision.answer" => {
+      let label = text(p, "option")
+      if label.contains("失败") {
+        return Some(Err({ "code": "unavailable", "message": "Studio 没有回应" }))
+      }
+      fix_decided[seq] = decided_json(label)
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    "decision.dismiss" => {
+      fix_decided[seq] = { "resolved": false, "dismissed": true }
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    "chat.keep" => {
+      if f.mode == "chat-cards" {
+        return Some(Err({ "code": "unavailable", "message": "Studio 没有回应" }))
+      }
+      fix_kept.val = true
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    _ => None
+  }
+}
+
+///|
+/// What the modes of the cards set going as the chat opens: chat-answering's option under way, chat-cards' 保留 failed.
+pub fn open_cards_fixture(mode : String) -> Unit {
+  match mode {
+    "chat-answering" => dui.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
+    "chat-cards" => dui.failed["keep/ws1/st1/7"] = -1.0
+    _ => ()
   }
 }

@@ -157,8 +157,7 @@ ChatFiles.kt, Decisions.kt, LoginCards.kt, Follow.kt):
   3000 messages): `scripts/shots.sh chat web-chat` compares it with
   goldens/mac-chat*.png and web-chat.png.
 
-Not yet, against the current app: answering cards, letting go, archiving and keeping from the chat (the
-buttons are drawn, inert); the long-press menu and picking words;
+Not yet, against the current app: the long-press menu and picking words;
 the file preview (slice 11) and opening links outside the app; tables and
 code highlighting in Markdown, a code block's sideways scroll; the messages'
 motion (rising in, coming out of an agent's avatar, the activity's glide and
@@ -336,6 +335,18 @@ OpenJobs.kt, History.kt, ui/ToolStep.kt, ui/Sheet.kt):
   all-done post, as the bar's 归档 (`chat.archive`: Home at once, 已归档 said); a login card for one who may finish it
   (the station's `machineLogins.canLogin`) says what to do now by its step, with its pill and 取消
   (`machineLogin.cancel`). Anything that fails is said in a toast (无法…：…), as AppState.act says it.
+- Their states and motion (branch mbui-chat-complete, src/sfapp/decide.mbt `under_post`): an option pressed is drawn at
+  97% (80 ms in, 180 out, Ease.Out) on the ripple's ground; answered, the options stay as they were (the one picked
+  whole, the rest at half) while they go (200 ms, CSS's ease-out: fading, to 90%), their room closing on the rows'
+  spring 100 ms late (ListMotion.kt closeGap), 忽略 going with them, and how it went (你 选择了「…」) fades in once they
+  have gone (200 after 200), its room opening on the same spring; 忽略 tapped goes on ArchiveEase (280 ms, fading, to 85%
+  from its top left, its room closing); 保留 / 归档此对话 come and go on ArchiveEase (to 85% about their top's middle,
+  their room opening or closing), 保留 that failed keeps the red mark for 6 s (the core's doing, DoingMark); the bar's
+  归档 comes and goes as nothing is left in the chat or something is again (280 ms, ArchiveEase, fading, from 85%, its
+  width from its end). Only drawn, but for the rooms (as the Android app lays them out): going, they take no tap. Each
+  is in the motion log (`under/options/…`, `under/outcome/…`, `under/dismiss/…`, `under/archive/…`, `bar-archive/…`).
+  `APP=sffix MBUI_FIXTURE=chat-cards|chat-answering` (the fixture answers, lets go and keeps as the core does; 保留
+  fails in chat-cards): `scripts/shots.sh cards web-cards`.
 - Sheets over the chat, one at a time, coming up over the scrim (Sheet.kt's 26 corners, the grabber, as tall as what
   they show): "…" opens the chat's own (its name with renaming it, `chat.rename`; who started it, how many take part,
   its latest; its agents with where each stands and its account's allowance; 固定到列表顶部 / 取消固定 `chat.pin`, 复制会话
@@ -885,6 +896,9 @@ while the card moved the list):
 | 64 wide-new-chat | (1280×800) ⌘N: a new chat beside the list; its first words sent with Enter make the chat, the page becomes it, the agent answers (in the chat and its row) | the first message once, in a thread of its own; the agent's answer there |
 | 65 wide-places | (1280×800) the rail: 文件 (the stations' folders in the sidebar), the chats, settings (外观: 深色, then 跟随系统), back to the chats | the host told dark; the core's store on the device keeps appearance system |
 | 66 wide-resize | 390 wide: Home; the window resized to 1280 (the wide frame; the chat pressed in the sidebar), then to 390 again: the same chat, a phone's page; words sent | the window resized twice (the host's RESIZED); the words at the station, once, in the test chat |
+| 70 card-motion | an options card answered in the chat (the options go, 你 选择了「…」 comes in their place), another let go with 忽略 | alice's answer quoting the post; `dismissed` has alice's row for the second, nothing answered; the motion log has the options going (to 90%, their room closing), the line coming, 忽略 going (to 85%) |
+| 71 card-keep | a chat ended all done (made by the other device before the app starts): 保留 under its last post; 已保留…; the buttons and the bar's 归档 go | the station's `kept_chats` has alice's row for that chat's thread; the motion log has the buttons and the bar's 归档 going |
+| 72 bar-archive | the same kind of chat archived from its bar's 归档: Home at once, 已归档 | the session archived by hand at the station; the test chat not |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once

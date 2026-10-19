@@ -12,7 +12,7 @@
 # gives mac-chat (at its end), mac-chat-up (scrolled up: the way to the newest over it) and mac-chat-loading (being
 # read), its dark look (mac-chat-dark), a picture under the bar's glass (mac-chat-glass) and its glass drawn solid
 # (mac-chat-solid). `composer` and `web-composer` are its composer's states (MBUI_FIXTURE=chat-compose|attach|quote|
-# sending|failed). `drive` and `web-drive` the drive's pages over a made-up drive (src/sfapp/drive_fixture.mbt);
+# sending|failed); `cards` and `web-cards` its cards answered from it (MBUI_FIXTURE=chat-cards|answering). `drive` and `web-drive` the drive's pages over a made-up drive (src/sfapp/drive_fixture.mbt);
 # `decide` and `web-decide` src/sfapp/decide_fixture.mbt's modes; `settings` and `web-settings` the settings' pages
 # (src/sfapp/settings/fixture.mbt); `glass` and `web-glass` frosted and liquid glass over bands of colour (APP=sfkit
 # MBUI_SCREEN=glass), light and dark; `newchat` and `web-newchat` a new chat, its sheets, the bottom bar's panel and a
@@ -22,7 +22,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
 mkdir -p out/shots goldens
-PLATFORMS=${*:-kit home chat composer drive decide glass newchat preview settings wide web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-settings}
+PLATFORMS=${*:-kit home chat cards composer drive decide glass newchat preview settings wide web-kit web-home web-chat web-cards web-composer web-drive web-decide web-glass web-newchat web-preview web-settings}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
 PLAYER_MODES="video audio ended opening"
@@ -125,6 +125,17 @@ shoot() {
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-composer ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-composer/$m.png out/shots/mac-composer-$m.png
         names="$names mac-composer-$m"
+      done ;;
+    cards)
+      # the chat's cards as answered from it (src/sfapp/chat_fixture.mbt's modes): the card answered (你 选择了「…」) and
+      # 保留 failed a moment ago (its red mark); an option under way (its spinner)
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-cards; mkdir -p out/shot-cards
+      names=
+      for m in cards answering; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-cards ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        cp out/shot-cards/$m.png out/shots/mac-chat-$m.png
+        names="$names mac-chat-$m"
       done ;;
     drive)
       # the drive's pages over the fixture's made-up drive (src/sfapp/drive_fixture.mbt's modes): 文件, a folder, a folder
@@ -286,6 +297,13 @@ shoot() {
       for m in compose attach quote sending failed; do
         web_shot "MBUI_FIXTURE=chat-$m" out/shots/web-composer-$m.png
         names="$names web-composer-$m"
+      done ;;
+    web-cards)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in cards answering; do
+        QUERY=MBUI_FIXTURE=chat-$m NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/web-shot.mjs" out/shots/web-chat-$m.png
+        names="$names web-chat-$m"
       done ;;
     notify)
       build_mac sffix

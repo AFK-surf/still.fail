@@ -961,6 +961,18 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   let jobs = (src.topic)("chatJobs", chat_params(r))
   let has_jobs = items(jobs.value, "jobs").length() > 0
   let archive = v.archivable && !v.archived
+  // 归档 comes and goes as nothing is left in the chat or something is again (Chat.kt ChatBar: 280 ms, ArchiveEase;
+  // fading, from or to 85%, its width from its end)
+  let archive_key = "bar-archive/" + r.station + "/" + r.session
+  let archive_look = @motion.presence(
+    c,
+    archive_key,
+    archive,
+    enter=@motion.trans(fade=0.0, scale=0.85, spec=archive_tween),
+  )
+  let archive_w = @motion.anim(c, archive_key + "/w", if archive { 1.0 } else { 0.0 }, global=true)
+  archive_w.follow(if archive { 1.0 } else { 0.0 }, archive_tween)
+  let archive_share = if archive_look is None { 0.0 } else { archive_w.get() }
   let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
   // what follows the title, as wide as it is drawn
   let mut room = 0.0
@@ -979,7 +991,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   }
   room = room + (if v.thread is Some(_) { 34.0 } else { 0.0 }) +
     (if has_jobs { 34.0 } else { 0.0 }) +
-    (if archive { 34.0 } else { 0.0 })
+    34.0 * archive_share
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     bar_frame(
       c,
@@ -1011,15 +1023,24 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
         }
       },
       fn() {
-        if archive {
-          if doing("archive/" + r.station + "/" + r.session) {
-            c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() {
-              @sf.spinner(c) |> ignore
+        match archive_look {
+          Some(look) =>
+            c.box(dir=Row, w=Px(34.0 * archive_share), justify=JEnd, fn() {
+              let b = c.box(w=Px(34.0), min_w=34.0, h=Px(34.0), fn() {
+                if doing("archive/" + r.station + "/" + r.session) {
+                  c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() {
+                    @sf.spinner(c) |> ignore
+                  })
+                  |> ignore
+                } else if nav_button(c, "archive", 20.0, key="chat-archive") && archive {
+                  archive_chat(src, r, v)
+                }
+              })
+              c.look(b, look)
+              @motion.leaving(c, b, archive)
             })
             |> ignore
-          } else if nav_button(c, "archive", 20.0, key="chat-archive") {
-            archive_chat(src, r, v)
-          }
+          None => ()
         }
         if has_jobs {
           // a dot when one died lately (red) or a service is started again (amber)

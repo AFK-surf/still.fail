@@ -265,9 +265,8 @@ fn said(
           |> ignore
         None => ()
       }
-      if archive_under(here.view) == Some(m.seq) {
-        archive_buttons(c, src, here)
-      }
+      // under its agent's latest 做完了 while nothing is left in the chat: keeping or archiving it, right there
+      archive_under_post(c, src, here, m)
     })
     |> ignore
     // the picture over the name's start
@@ -953,7 +952,10 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
 
 ///|
 /// Under a post (Decisions.kt DecisionUnder): a login card as its login stands; an options card's options while it
-/// waits, who is to decide above them; once answered, how it went in a quiet line. (Answering is not done from here.)
+/// waits, who is to decide above them, a tap answering with one; once answered (or let go, or replaced) the options go
+/// (200 ms, CSS's ease-out: fading, to 90%, the one picked as it was while the rest step back, their room closing on
+/// the rows' spring a little late) and how it went comes in a quiet line in their place (fading in once they have
+/// gone, its room opening on the same spring).
 fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
   let k = ink()
   let quiet = fn(words : String) {
@@ -1017,29 +1019,60 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
       return
     }
   }
-  if resolved {
-    match m.decision {
-      Some({ text: Some(words), .. }) => quiet(words)
-      _ => ()
-    }
-    return
-  }
-  match m.card {
-    Some({ assignee_text: Some(a), .. }) => quiet(a)
-    _ => ()
-  }
+  let key = here.station + "/" + m.ts
   let busy = answering(here.station, m, options)
-  match
-    decision_options(
-      c,
-      "options/" + m.ts,
-      options,
-      !here.view.offline && !here.view.archived,
-      busy,
-    ) {
-    Some(o) => answer_option(src, here.station, m.thread, m.seq, o.label)
-    None => ()
+  let chosen = if resolved {
+    match m.decision {
+      Some(d) => d.chosen
+      None => None
+    }
+  } else {
+    None
   }
+  under_post(
+    c,
+    "options/" + key,
+    !resolved,
+    exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)),
+    close=close_gap,
+    fn() {
+      match m.card {
+        Some({ assignee_text: Some(a), .. }) => quiet(a)
+        _ => ()
+      }
+      match
+        decision_options(
+          c,
+          "options/" + m.ts,
+          options,
+          !resolved && !here.view.offline && !here.view.archived,
+          busy,
+          chosen~,
+        ) {
+        Some(o) if !resolved => answer_option(src, here.station, m.thread, m.seq, o.label)
+        _ => ()
+      }
+    },
+  )
+  let outcome = match m.decision {
+    Some({ text: Some(words), .. }) if resolved => Some(words)
+    _ => None
+  }
+  under_post(
+    c,
+    "outcome/" + key,
+    outcome is Some(_),
+    enter=@motion.trans(fade=0.0, spec=@motion.Snap(0.0), fade_spec=@motion.tween(200.0, ease=CssOut, delay=200.0)),
+    open=close_gap,
+    exit=@motion.trans(spec=@motion.Snap(0.0)),
+    close=@motion.Snap(0.0),
+    fn() {
+      match outcome {
+        Some(w) => quiet(w)
+        None => ()
+      }
+    },
+  )
 }
 
 ///|
@@ -1053,6 +1086,7 @@ fn decision_options(
   options : Array[Choice],
   enabled : Bool,
   busy : String?,
+  chosen? : String? = None,
 ) -> Choice? {
   let t = @sf.theme()
   let free = enabled && busy is None
@@ -1080,8 +1114,15 @@ fn decision_options(
           gap=12.0,
           align=AStart,
           radius=18.0,
-          opacity=if enabled { 1.0 } else { 0.5 },
-          bg=if free && c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
+          opacity=if enabled || chosen == Some(o.label) { 1.0 } else { 0.5 },
+          bg={
+            let p = if free { @motion.pressing(c, id) } else { 0.0 }
+            if p > 0.0 {
+              @sf.alpha(t.p.text, 0.08 * p)
+            } else {
+              0L
+            }
+          },
           id~,
           fn() {
             c.box(
