@@ -11,7 +11,15 @@ pub(all) enum DragAxis {
   Vertical
   Horizontal
   Free
-} derive(Eq)
+}
+
+///|
+fn DragAxis::same(self : DragAxis, other : DragAxis) -> Bool {
+  match (self, other) {
+    (Hold, Hold) | (Vertical, Vertical) | (Horizontal, Horizontal) | (Free, Free) => true
+    _ => false
+  }
+}
 
 ///|
 /// Where a finger has a drag area: `down` while pressed on it; `moving` once it went past the slop along the axis (from
@@ -36,7 +44,7 @@ pub(all) struct Drag {
 
 ///|
 /// The drag areas drawn, by id.
-let drags : Map[Int, Drag] = {}
+let drags : Map[Int, Drag] = Map::new()
 
 ///|
 /// A box that takes the drags landing on it (see the file's head), as `Ctx::box` otherwise lays out what it holds;
@@ -51,7 +59,7 @@ pub fn Ctx::drag_area(
   body : () -> Unit,
 ) -> Int {
   match drags.get(id) {
-    Some(d) if d.axis == axis => ()
+    Some(d) if d.axis.same(axis) => ()
     _ => {
       drags[id] = {
         axis,
@@ -141,7 +149,7 @@ fn drag_move(id : Int, x : Double, y : Double) -> Bool {
           Horizontal => (x - d.x0).abs()
           Free => ((x - d.x0) * (x - d.x0) + (y - d.y0) * (y - d.y0)).sqrt()
         }
-        if d.axis != Hold && along > touch_slop() {
+        if !d.axis.same(Hold) && along > touch_slop() {
           d.moving = true
         }
       }

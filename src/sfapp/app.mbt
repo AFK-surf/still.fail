@@ -220,7 +220,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       |> ignore
       // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
       let root = app.nav.top()
-      if app.nav.depth() == 1 && root != Home && !app.menu {
+      if app.nav.depth() == 1 && root != Home && !app.menu && !sheet_open() {
         c.on_back(fn() { go_place(c, "chats", [], -1) })
       }
       // the bottom bar: on a place's top page with nothing over it

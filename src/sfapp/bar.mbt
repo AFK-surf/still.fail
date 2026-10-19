@@ -276,11 +276,9 @@ priv struct BarModel {
   /// a finger: where it has the ball (-1 none), its height once the panel is its own
   mut drag : Double
   mut drag_y : Double
-  mut dragging : Bool
   mut holds : Bool
   mut from_open : Bool
   mut open : Bool
-  mut x0 : Double
   mut y0 : Double
   mut o0 : Double
   mut was_down : Bool
@@ -310,11 +308,9 @@ let bar : BarModel = {
   active_was: "",
   drag: -1.0,
   drag_y: -1.0,
-  dragging: false,
   holds: false,
   from_open: false,
   open: false,
-  x0: 0.0,
   y0: 0.0,
   o0: 0.0,
   was_down: false,
@@ -334,7 +330,6 @@ fn bar_reset() -> Unit {
   bar.tints.clear()
   bar.drag = -1.0
   bar.drag_y = -1.0
-  bar.dragging = false
   bar.holds = false
   bar.placed = false
   bar.was_down = false
@@ -467,7 +462,7 @@ fn set_bars(src : Source, ws : String, sets : Array[Array[String]], cur : Int) -
     "sets": Json::array(sets.map(fn(s) { Json::array(s.map(fn(p) { Json::string(p) })) })),
     "current": Json::number(cur.to_double()),
   })
-  let by : Map[String, Json] = {}
+  let by : Map[String, Json] = Map::new()
   by[ws] = whole
   (src.call)("prefs.set", Json::object({ "barsBy": Json::object(by) }), fn(_) {  })
 }
@@ -702,13 +697,11 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
       others.push(i)
     }
   }
-  let multi = sets.length() > 1
   let rows = if others.length() > 1 { others.length() } else { 1 }
   let panel = bar_track + rows.to_double() * bar_row + over
   let row_top = panel - bar_track
   let reach = row_top - over
   let bar_mid = row_top + bar_track / 2.0
-  let top_y = over + bar_row / 2.0
   let w = c.width - 44.0
   let slot = (w - 2.0 * c0) / 3.0
   // the page's primary action in the notch (Places.kt PlaceBar): 令 on the chats' pages, 文件's ＋ while it can lend
@@ -726,7 +719,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(ws.id) })
   let decisions = count(field(field(marks.value, "workspaces"), ws.id), "decisions")
   let chats = (src.topic)("chats", { "scope": Json::string(ws.id), "mine": Json::boolean(false) })
-  let dots : Map[String, Int64] = {}
+  let dots : Map[String, Int64] = Map::new()
   if decisions > 0 {
     dots["decisions"] = t.p.accent
   }
@@ -743,7 +736,6 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     }
     m.drag = -1.0
     m.drag_y = -1.0
-    m.dragging = false
     m.holds = false
   }
   m.k.to = if notched { 1.0 } else { 0.0 }
@@ -1023,8 +1015,6 @@ fn bar_gesture(
   if d.down && !m.was_down {
     // pressed: the panel open, opening or closing, the finger has it from here
     m.was_down = true
-    m.dragging = false
-    m.x0 = px
     m.y0 = py
     m.o0 = m.o.x
     m.holds = multi && (m.o0 > 0.02 || (m.o.moving() && m.o.to > 0.0))
@@ -1035,7 +1025,6 @@ fn bar_gesture(
     }
   }
   if d.down && d.moving {
-    m.dragging = true
     if multi {
       let raw = m.o0 + (m.y0 - py - (if m.from_open { 0.0 } else { 8.0 })) / reach
       if !m.holds && raw > 0.0 {
@@ -1070,7 +1059,6 @@ fn bar_gesture(
     m.was_down = false
     let had = m.holds
     m.holds = false
-    m.dragging = false
     m.drag = -1.0
     m.drag_y = -1.0
     if had {
