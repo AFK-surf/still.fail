@@ -6,9 +6,9 @@
 // Android: NotificationManager (dev.mbui.Notices: the channel made as a notification is shown, POST_NOTIFICATIONS
 // asked for from the activity, a tap a PendingIntent back to MainActivity). No push service is linked yet (Firebase
 // Cloud Messaging needs the app in a Firebase project of its own and still.fail cloud sending to it): `push_token` and
-// `push_next` say none. macOS, iOS, Windows and the web keep what would be shown, said on the log (`NOTICE …`), not
-// shown by the system yet: a bare executable on macOS has no bundle for UNUserNotificationCenter; iOS, Windows and the
-// page have no way in here yet. A scripted run taps one by its words there too (@host.drive 6, src/ui/drive.mbt
+// `push_next` say none. macOS: UNUserNotificationCenter (mac_app.m) when the app is a bundle (its .app); a bare
+// executable has no bundle for it, and keeps what would be shown, said on the log (`NOTICE …`), as iOS, Windows and the
+// page do (no way in there yet). A scripted run taps one by its words everywhere (@host.drive 6, src/ui/drive.mbt
 // `notice`), as on Android.
 
 ///|

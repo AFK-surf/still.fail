@@ -3,6 +3,7 @@
 // through NSTextInputClient. The window's content is a plain view holding
 // the native views' (apple_views.m) and, over them, the canvas's.
 #import <Cocoa/Cocoa.h>
+#import <UserNotifications/UserNotifications.h>
 #import <mach/mach.h>
 #import "apple.h"
 
@@ -27,6 +28,7 @@ static void go_back(void) {
 @end
 
 static MBView *the_view;
+static void notice_start(void);  // the system's notifications (below), before the app runs
 static int bench_mode;
 // The desktop window as the app asks for it (@host.window_setup): its first size and its least, and whether its
 // title bar is the app's own top row (the system's buttons in it, 16 in and centred on its 44: as still.fail's
@@ -633,6 +635,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    notice_start();
     // MBUI_WIN=<w>x<h>: the window's size (a phone's, for the narrow layouts)
     // (else the app's own, @host.window_setup; else 900×720)
     double ww = setup_w > 0 ? setup_w : 900, wh = setup_h > 0 ? setup_h : 720;
@@ -821,11 +824,75 @@ void mb_host_set_dark(int32_t dark) {
 }
 
 // ---- notifications (notify.mbt) ----
-// Not the system's yet: this is a bare executable, and UNUserNotificationCenter wants an app bundle. What would be shown
-// is kept (one per tag, as the system's would be) and said on the log (NOTICE <tag>\t<title>\t<body>); a scripted run
-// taps one by its words (drive 6), which gives the app what it opens as a tap would.
+// The system's (UNUserNotificationCenter) when the app is a bundle (an app's .app: still.fail mbui's): one request per
+// tag (a newer one with the same tag replaces it), what it opens in its userInfo, a tap bringing the app to the front
+// with that (the center's delegate, set before the app runs: a tap that launched it comes too); shown while the app is
+// in front as well (the app decides what to show). A bare executable has no bundle for the center (it throws): what
+// would be shown is only kept there. Either way it is kept (one per tag) and said on the log (NOTICE <tag>\t<title>\t
+// <body>), and a scripted run taps one by its words (drive 6), which gives the app what it opens as a tap would.
+// The framework is asked for by this object itself (its load command), so no app's link flags have to name it.
+__asm__(".linker_option \"-framework\", \"UserNotifications\"");
+
 static NSMutableArray<NSArray<NSString *> *> *notices;
 static NSString *notice_opened = @"";
+// what the system allows: 0 not known yet, 1 granted, 2 denied, 3 not asked; the answer to an ask: -1 none, 0, 1
+static _Atomic int32_t notice_allowed = 0;
+static _Atomic int32_t notice_answered = -1;
+
+static BOOL notice_system(void) { return NSBundle.mainBundle.bundleIdentifier != nil; }
+
+@interface MBNoticeDelegate : NSObject <UNUserNotificationCenterDelegate>
+@end
+@implementation MBNoticeDelegate
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+       willPresentNotification:(UNNotification *)notification
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))done {
+  done(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList | UNNotificationPresentationOptionSound);
+}
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+    didReceiveNotificationResponse:(UNNotificationResponse *)response
+             withCompletionHandler:(void (^)(void))done {
+  NSString *opens = response.notification.request.content.userInfo[@"opens"];
+  NSString *tag = response.notification.request.identifier;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if ([opens isKindOfClass:NSString.class]) notice_opened = opens;
+    [notices filterUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSArray<NSString *> *n, NSDictionary *b) {
+      return ![n[0] isEqualToString:tag];
+    }]];
+    fprintf(stdout, "NOTICE TAP %s\n", tag.UTF8String);
+    fflush(stdout);
+    [NSApp activateIgnoringOtherApps:YES];
+    [the_view.window makeKeyAndOrderFront:nil];
+    [the_view requestFrame];
+  });
+  done();
+}
+@end
+
+// What the system allows, asked again (as the app comes to the front: it may have changed in the system's settings).
+static void notice_refresh(void) {
+  if (!notice_system()) return;
+  [[UNUserNotificationCenter currentNotificationCenter] getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *s) {
+    int32_t was = notice_allowed;
+    switch (s.authorizationStatus) {
+      case UNAuthorizationStatusNotDetermined: notice_allowed = 3; break;
+      case UNAuthorizationStatusDenied: notice_allowed = 2; break;
+      default: notice_allowed = 1; break;
+    }
+    if (was != notice_allowed) dispatch_async(dispatch_get_main_queue(), ^{ [the_view requestFrame]; });
+  }];
+}
+
+// Before the app runs (mb_host_run): the center's delegate, and what it allows.
+static void notice_start(void) {
+  if (!notice_system()) return;
+  static MBNoticeDelegate *delegate;
+  delegate = [MBNoticeDelegate new];
+  [UNUserNotificationCenter currentNotificationCenter].delegate = delegate;
+  notice_refresh();
+  [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationDidBecomeActiveNotification object:nil queue:nil
+                                                usingBlock:^(NSNotification *n) { notice_refresh(); }];
+}
 
 static void notice_drop(NSString *tag) {
   NSIndexSet *at = [notices indexesOfObjectsPassingTest:^BOOL(NSArray<NSString *> *n, NSUInteger i, BOOL *stop) {
@@ -836,7 +903,7 @@ static void notice_drop(NSString *tag) {
 
 void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit_string_t title, moonbit_string_t body,
                          moonbit_string_t opens) {
-  (void)channel;
+  (void)channel;  // one kind of notification here: the system's settings list the app's, not channels
   if (!notices) notices = [NSMutableArray array];
   NSString *t = mb_ns_from_string(tag);
   notice_drop(t);
@@ -844,6 +911,20 @@ void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit
   [notices addObject:n];
   fprintf(stdout, "NOTICE %s\t%s\t%s\n", n[0].UTF8String, n[1].UTF8String, n[2].UTF8String);
   fflush(stdout);
+  if (!notice_system()) return;
+  UNMutableNotificationContent *c = [UNMutableNotificationContent new];
+  c.title = n[1];
+  c.body = n[2];
+  c.sound = UNNotificationSound.defaultSound;
+  c.userInfo = @{@"opens" : n[3]};
+  // the same identifier: the system replaces the one shown
+  UNNotificationRequest *r = [UNNotificationRequest requestWithIdentifier:t content:c trigger:nil];
+  [[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:r withCompletionHandler:^(NSError *e) {
+    if (e) {
+      fprintf(stdout, "NOTICE NOT SHOWN %s: %s\n", t.UTF8String, e.localizedDescription.UTF8String);
+      fflush(stdout);
+    }
+  }];
 }
 
 void mb_host_notice_cancel(moonbit_string_t tag) {
@@ -854,10 +935,31 @@ void mb_host_notice_cancel(moonbit_string_t tag) {
     fprintf(stdout, "NOTICE CANCEL %s\n", t.UTF8String);
     fflush(stdout);
   }
+  if (!notice_system()) return;
+  UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+  [center removeDeliveredNotificationsWithIdentifiers:@[ t ]];
+  [center removePendingNotificationRequestsWithIdentifiers:@[ t ]];
 }
 
-// What the system allows (unknown here), asking it (no way here), its answer (none).
-int32_t mb_host_notice_state(int32_t what) { return what == 2 ? -1 : 0; }
+// 0: what the system allows (1 granted, 2 denied, 3 not asked, 0 not known: always so for a bare executable);
+// 1: ask it (1 when asked: not asked before); 2: its answer to the ask, once (1, 0; -1 none yet).
+int32_t mb_host_notice_state(int32_t what) {
+  if (what == 0) return notice_allowed;
+  if (what == 2) {
+    int32_t a = notice_answered;
+    if (a >= 0) notice_answered = -1;
+    return a;
+  }
+  if (!notice_system() || notice_allowed != 3) return 0;
+  UNAuthorizationOptions o = UNAuthorizationOptionAlert | UNAuthorizationOptionSound | UNAuthorizationOptionBadge;
+  [[UNUserNotificationCenter currentNotificationCenter] requestAuthorizationWithOptions:o
+                                                                      completionHandler:^(BOOL granted, NSError *e) {
+    notice_answered = granted ? 1 : 0;
+    notice_allowed = granted ? 1 : 2;
+    dispatch_async(dispatch_get_main_queue(), ^{ [the_view requestFrame]; });
+  }];
+  return 1;
+}
 
 // A notification tapped, once; no push token or push here.
 moonbit_string_t mb_host_notice_text(int32_t what) {
@@ -881,6 +983,7 @@ static int32_t notice_drive(int tap, NSString *words) {
   fprintf(stdout, "NOTICE TAP %s\n", found[0].UTF8String);
   fflush(stdout);
   [notices removeObject:found];
+  if (notice_system()) [[UNUserNotificationCenter currentNotificationCenter] removeDeliveredNotificationsWithIdentifiers:@[ found[0] ]];
   [the_view requestFrame];
   return 1;
 }
