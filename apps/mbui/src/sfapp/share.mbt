@@ -1,13 +1,17 @@
 // Sharing (ember apps/android app/share/ShareActivity.kt, ShareSheet.kt; drive/DriveScreen.kt hand; docs/share-in.md).
 //
-// In: what another app shares into still.fail (Android's share sheet: ACTION_SEND of a link or some text, @host.shared_in;
-// MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs) opens one sheet: what is shared at its top (its title, the
+// In: what another app shares into still.fail (Android's share sheet: ACTION_SEND of a link, some text or files,
+// ACTION_SEND_MULTIPLE of files, @host.shared_in; MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs, the host's
+// MBUI_SHARE_FILES on macOS) opens one sheet: what is shared at its top (its title, the
 // app's subject or its first line; a link's mark or text's), 发到 the chats it can go to (the core's `shareIn` view: the
 // one a thing from the same site went to last first, saying so; 搜索 from six chats), 新 chat last (then which station,
 // when there are more). A tap puts what is shared in that chat's composer (`shareIn.open`: a link as a card among its
 // files, the words after what is written) and opens the chat there (or a new chat on that station), where it is added
-// to and sent. The Android app shows the sheet over the app it came from (an activity of its own); here the app comes to
-// the front and shows it over itself.
+// to and sent. Files (which the Android app does not take in) head the sheet as the composer shows them (pictures as
+// tiles, a file's mark, name and size; n 个文件) and go into the chat's composer as attachments, up to the station at once
+// as ＋'s files do (composer.mbt add_file); words shared with them go in through `shareIn.open` as before. The Android
+// app shows the sheet over the app it came from (an activity of its own); here the app comes to the front and shows it
+// over itself.
 //
 // Out: a file of a drive handed to another app (DriveScreen.kt openElsewhere with share): read whole through the core
 // (`drive.read`), then the system's share sheet (@host.share: Android's chooser, a file of the app's own provider;
@@ -25,6 +29,7 @@ let share_zh : Map[String, String] = {
   "android-misc.drive.noApp": "本机没有可打开此文件的应用",
   "android-chat.ref.none.match": "没有标题匹配的对话",
   "common.cancel": "取消",
+  "android-settings.files.count": "{n} 个文件",
   "common.reading": "正在读取",
 }
 
@@ -38,10 +43,20 @@ fn sh(key : String, args? : Array[(String, String)] = []) -> String {
 }
 
 ///|
+/// A file shared in: its name and bytes; a picture's key once added (`mem:share-in/…`), else "".
+priv struct SharedFile {
+  name : String
+  bytes : Bytes
+  image : String
+}
+
+///|
 /// What is being shared in, and how its sheet stands.
 priv struct ShareIn {
   /// its words and the subject the app gave with them
   mut shared : (String, String?)?
+  /// its files
+  mut files : Array[SharedFile]
   /// its sheet raised (it closes by itself: then what is shared is let go)
   mut raised : Bool
   mut env_taken : Bool
@@ -57,6 +72,7 @@ priv struct ShareIn {
 ///|
 let share_in : ShareIn = {
   shared: None,
+  files: [],
   raised: false,
   env_taken: false,
   searching: false,
@@ -76,10 +92,30 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
   if share_in.shared is None {
     let said = @host.shared_in()
     let mut got : (String, String?)? = None
+    let files : Array[SharedFile] = []
     if said != "" {
       let v = try Some(@json.parse(said)) catch { _ => None }
       let title = text(v, "title")
       got = Some((text(v, "text"), if title == "" { None } else { Some(title) }))
+      for i, f in items(v, "files") {
+        let bytes = @host.shared_in_file(i)
+        if bytes.length() == 0 {
+          continue
+        }
+        let name = text(Some(f), "name")
+        let image = match image_size(bytes) {
+          Some(_) => {
+            share_files_made.val += 1
+            let key = "mem:share-in/\{share_files_made.val}"
+            @ui.add_image(key, bytes)
+            key
+          }
+          None => ""
+        }
+        files.push({ name, bytes, image })
+      }
+      // (the host's words are these: the scripted run's are not taken again)
+      share_in.env_taken = true
     } else if !share_in.env_taken {
       share_in.env_taken = true
       let words = @host.env("MBUI_SHARE_TEXT")
@@ -89,9 +125,10 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       }
     }
     match got {
-      Some((words, title)) if words.trim() != "" => {
-        @host.log("share in: \{words.length()} characters")
+      Some((words, title)) if words.trim() != "" || files.length() > 0 => {
+        @host.log("share in: \{words.length()} characters, \{files.length()} files")
         share_in.shared = Some((words, title))
+        share_in.files = files
         share_in.raised = false
         share_in.searching = false
         share_in.choosing = false
@@ -107,6 +144,7 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
   } else if share_in.raised && sheet_host.kind != ShareSheet {
     // closed (the scrim, back, dragged down): let go
     share_in.shared = None
+    share_in.files = []
     share_in.raised = false
   }
 }
@@ -120,7 +158,11 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     None => return
   }
   sheet_grab(c)
-  shared_head(c, source, title)
+  if share_in.files.length() > 0 {
+    shared_files_head(c, share_in.files, source, title)
+  } else {
+    shared_head(c, source, title)
+  }
   let query = share_in.query
   let topic = (src.topic)("shareIn", {
     "scope": Json::string(w.id),
@@ -194,7 +236,10 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           let it = Some(item)
           let station = text(it, "station")
           let id = text(it, "id")
-          let kept_here = text(kept, "station") == station && text(kept, "id") == id
+          // (where things of a site went last: files have no site)
+          let kept_here = text(kept, "station") == station &&
+            text(kept, "id") == id &&
+            source.trim() != ""
           let sub = if kept_here {
             text(kept, "text")
           } else {
@@ -219,7 +264,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                 }
               },
             ) {
-            share_open(c, src, w, station, Some(id))
+            share_open(c, src, w, station, Some(id), session=text(it, "session"))
           }
         }
         if rows.length() == 0 && share_in.searching && query.trim() != "" {
@@ -401,12 +446,38 @@ fn share_row(
 ///|
 /// What is shared put in the chat's composer (`shareIn.open`; a new chat's on `station` with no `id`), then that chat
 /// opened (or a new chat rising), its draft read anew.
-fn share_open(c : @ui.Ctx, src : Source, w : Workspace, station : String, id : String?) -> Unit {
+fn share_open(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  station : String,
+  id : String?,
+  session? : String = "",
+) -> Unit {
   let (source, title) = match share_in.shared {
     Some(s) => s
     None => return
   }
   if share_in.opening is Some(_) {
+    return
+  }
+  let files = share_in.files
+  // files alone: nothing for the core to put in the composer; the chat (or a new chat on that station) opened with
+  // them going up from its composer
+  if source.trim() == "" {
+    share_opened(c, station, match id {
+      Some(x) => if session != "" { session } else { x }
+      None => ""
+    }, "", files, fn() {
+      match id {
+        // (the station by its own id, the address's last part, as the core's shareIn.open picks it)
+        None => {
+          let parts = station.split("/").to_array()
+          pick_new(c, src, w.id, { "station": Json::string(parts[parts.length() - 1].to_owned()) })
+        }
+        Some(_) => ()
+      }
+    })
     return
   }
   share_in.opening = Some((station, id.unwrap_or("")))
@@ -431,27 +502,122 @@ fn share_open(c : @ui.Ctx, src : Source, w : Workspace, station : String, id : S
         let key = text(Some(a), "key")
         // the composer reads what the core keeps anew (Drafts.refresh)
         drafts.remove(key)
-        share_in.shared = None
-        share_in.raised = false
-        lower_sheet()
-        @host.log("share in: into \{key}")
-        match text(Some(a), "session") {
-          "" => {
-            while app.nav.depth() > 1 {
-              if !app.nav.pop() {
-                break
-              }
-            }
-            app.nav.rise(NewChat)
-          }
-          session =>
-            app.nav.push(Chat({ station, session, title: text(Some(a), "title"), station_name: "" }))
-        }
+        share_opened(c, station, text(Some(a), "session"), text(Some(a), "title"), files, fn() {  }, key~)
       }
       Err(e) => share_in.error = sh("android-misc.shareIn.failed", args=[("error", text(Some(e), "message"))])
     }
     c.request_frame()
   })
+}
+
+///|
+/// What is shared gone into a chat's composer (`session`; "" a new chat on `station`, made the one new chats start on by
+/// `pick`): the sheet let go, the chat opened (a new chat rising), the files handed to its composer, which puts them up.
+fn share_opened(
+  c : @ui.Ctx,
+  station : String,
+  session : String,
+  title : String,
+  files : Array[SharedFile],
+  pick : () -> Unit,
+  key? : String,
+) -> Unit {
+  let key = match key {
+    Some(k) => k
+    None => if session == "" { "new:" + station } else { station + ":" + session }
+  }
+  if files.length() > 0 {
+    let list = shared_into.get(key).unwrap_or([])
+    for f in files {
+      list.push({ name: f.name, bytes: f.bytes })
+    }
+    shared_into[key] = list
+  }
+  share_in.shared = None
+  share_in.files = []
+  share_in.raised = false
+  lower_sheet()
+  @host.log("share in: into \{key}, \{files.length()} files")
+  if session == "" {
+    pick()
+    while app.nav.depth() > 1 {
+      if !app.nav.pop() {
+        break
+      }
+    }
+    app.nav.rise(NewChat)
+  } else {
+    app.nav.push(Chat({ station, session, title, station_name: "" }))
+  }
+  c.request_frame()
+}
+
+///|
+/// Files shared in waiting for their chat's composer to take them, by its draft's key (composer.mbt).
+let shared_into : Map[String, Array[@host.Picked]] = Map([])
+
+///|
+/// How many pictures shared in have been added as images (their keys' numbers).
+let share_files_made : Ref[Int] = { val: 0 }
+
+///|
+/// What is shared when it is files (the composer's own look: shared_head's place): their pictures as 56 tiles, then
+/// a file's mark with its name bold (n 个文件 for several) and under it its size (their names), the words shared with
+/// them, when any, under that.
+fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, title : String?) -> Unit {
+  let t = @sf.theme()
+  let pictures = files.filter(fn(f) { f.image != "" })
+  if pictures.length() > 0 {
+    c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=4.0, pb=8.0, gap=8.0, clip=true, fn() {
+      for f in pictures {
+        c.box(w=Px(56.0), h=Px(56.0), radius=16.0, bg=t.p.chip, clip=true, fn() {
+          c.image(f.image, w=Px(56.0), h=Px(56.0), radius=16.0, fit=FitCover, bg=0L) |> ignore
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+  }
+  let one = files.length() == 1
+  let mut size = 0
+  for f in files {
+    size += f.bytes.length()
+  }
+  let head = if one { files[0].name } else { sh("android-settings.files.count", args=[("n", "\{files.length()}")]) }
+  let under = if one {
+    file_size(size.to_double())
+  } else {
+    files.map(fn(f) { f.name }).join("、")
+  }
+  let said = match title {
+    Some(x) => x
+    None => words.trim().to_owned()
+  }
+  c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=4.0, pb=2.0, gap=12.0, fn() {
+    c.box(w=Px(16.0), pt=3.0, align=ACenter, fn() {
+      @sf.icon(c, if pictures.length() == files.length() { "photo" } else { "file" }, size=16.0, color=t.p.muted)
+      |> ignore
+    })
+    |> ignore
+    c.box(w=Fill(1.0), fn() {
+      c.box(w=Fill(1.0), clip=true, fn() {
+        c.text(head, size=17.0, weight=700, color=t.p.text, line=24.0, wrap=false) |> ignore
+      })
+      |> ignore
+      c.box(w=Fill(1.0), clip=true, fn() {
+        c.text(under, size=13.0, color=t.p.muted, wrap=false) |> ignore
+      })
+      |> ignore
+      if said != "" {
+        c.box(w=Fill(1.0), clip=true, fn() {
+          c.text(said, size=13.0, color=t.p.muted, wrap=false) |> ignore
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|

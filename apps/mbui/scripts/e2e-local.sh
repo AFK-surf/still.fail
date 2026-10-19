@@ -22,6 +22,7 @@
 #   scripts/e2e-local.sh drive-seed TAG   the drive flows' folder in the test station's home (e2e-TAG)
 #   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
 #   scripts/e2e-local.sh drive-big TAG    the downloads' folder in it (e2e-TAG/大文件: 48 MB and a small file)
+#   scripts/e2e-local.sh android-stage FILE…  files to attach put where the app's provider serves them (a share's intent)
 #   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
 #   scripts/e2e-local.sh status
 #
@@ -224,6 +225,16 @@ PY
   say "drive folder $d"
 }
 
+# files of e2e/run.sh's (FILES) put where the app's own provider serves them (its cache's shared/, Shares.Files), for
+# an intent that shares them in as another app would (a flow's #android-intent): EMU_PORT, E2E_PKG
+android_stage() {
+  local adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb -s emulator-${EMU_PORT:-5586}" f
+  $adb get-state >/dev/null 2>&1 || return 0
+  $adb shell run-as ${E2E_PKG:?} mkdir -p cache/shared < /dev/null
+  for f in "$@"; do $adb exec-in run-as $E2E_PKG sh -c "cat > cache/shared/$f" < $WORK/files/$f; done
+  say "staged $* for $E2E_PKG"
+}
+
 # the downloads' flow's folder (e2e/flows/91-…), 大文件 in the drive flows' e2e-<tag>: a file of 48 MB (read in a dozen
 # parts) and a small one beside it
 drive_big() {
@@ -329,6 +340,7 @@ case "${1:-all}" in
   drive-seed) shift; drive_seed "$@" ;;
   drive-media) shift; drive_media "$@" ;;
   drive-big) shift; drive_big "$@" ;;
+  android-stage) shift; android_stage "$@" ;;
   release-seed) release_seed ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;

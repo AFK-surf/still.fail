@@ -163,7 +163,9 @@ fi
 # environment for that run (MBUI_OPEN_PAGE=files: the drive's 文件 pushed over Home)
 run_flow() {
   local name=$1 log=$OUT/$name.log script=$OUT/$name.drive
-  sed "s/{T}/$TAG/g" $2 > $script
+  # {T} this run's tag; {FILES} where the files to attach are (on Android the app's own copy of them); {PKG} the app
+  local files=$FILES; [ $PLATFORM = android ] && files=/data/data/$E2E_PKG/files/e2e
+  sed "s/{T}/$TAG/g; s|{FILES}|$files|g; s/{PKG}/${E2E_PKG:-}/g" $2 > $script
   mkdir -p $OUT/$name
   local extra=$(grep '^#env ' $script | sed 's/^#env //' | tr '\n' ' ')
   # what the runner does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, as a chat made elsewhere)

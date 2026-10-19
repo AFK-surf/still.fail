@@ -27,7 +27,7 @@ DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-d
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
 PLAYER_MODES="video audio ended opening"
 SERVICE_MODES="service service-sized service-restart service-stopped"
-SHARE_MODES="share-in share-in-stations"
+SHARE_MODES="share-in share-in-stations share-in-files"
 WIDE_MODES=${WIDE_MODES:-home chat settings-appearance files decisions}
 SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security vault stations station profiles profile connects memory memory-doc usage archive}
 if [ ! -d out/node/node_modules/pixelmatch ]; then

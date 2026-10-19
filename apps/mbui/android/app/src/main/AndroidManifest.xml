@@ -27,11 +27,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- What another app shares (a link, some text: the system's share sheet), into a chat (mbui's Shares.java) -->
+            <!-- What another app shares (a link, some text, files: the system's share sheet), into a chat (mbui's Shares.java) -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
             </intent-filter>
             <!-- A browser login's page, once the browser has come back, links here: <package>://back (the build's own package) -->
             <intent-filter>

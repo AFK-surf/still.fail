@@ -455,9 +455,8 @@ drive/DriveScreen.kt hand; docs/share-in.md): src/sfapp/share.mbt, Shares.java.
 
 Not yet, against the current app: the sheet over the app it came from (Android's ShareActivity is an activity of its own,
 translucent over that app; here still.fail comes to the front and shows it over itself), signing in first from the sheet
-(signed out, the app's sign-in page shows and the share waits), a file shared in (only text and links, as the Android
-app takes), how far a drive's file has come while it is read for sharing (its row's progress), downloading a drive's
-file to the device, sharing on iOS, Windows and the web (no share sheet there yet).
+(signed out, the app's sign-in page shows and the share waits), sharing on iOS, Windows and the web (no share sheet
+there yet).
 
 Glass (branch glass, 2026-10-19): frosted glass and liquid glass, a pass of every renderer (Metal on macOS and iOS,
 GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
@@ -774,6 +773,18 @@ FileKinds.kt download, drive/DriveScreen.kt saveToDownloads, saveZip, DriveFetch
 Not yet: the bytes downloaded kept for the drive's next open (DriveCache: each download reads through the core again),
 a big file's download going on while the app is away (it is the app's: Android stops it with the process).
 
+Files shared in (branch mbui-media-complete): another app's share sheet hands still.fail files, not only words and
+links (the Android app takes text only; its sheet and composer are the reference): ACTION_SEND with a stream and
+ACTION_SEND_MULTIPLE of any type, read whole by mbui's host (Shares.java; 1 GB each at most, as the composer takes)
+and taken by the app (@host.shared_in's `files`, shared_in_file). The sheet heads with them as the composer shows files
+(pictures as 56 tiles, a file's mark, its name and size, n 个文件 and their names for several), 发到 the chats as for a
+link (the site's last chat not said: files have none); a tap opens that chat (or a new chat on that station, made the
+one new chats start on: `newChat.pick`) with the files in its composer, going up at once as ＋'s do; words shared with
+them still go in through `shareIn.open`. MBUI_SHARE_FILES (paths split by |) stands for another app on macOS.
+`APP=sffix MBUI_FIXTURE=share-in-files`: goldens/mac-share-in-files.png, web-share-in-files.png. Flow 93 share-files
+(Android: an ACTION_SEND intent with the photo through the app's own provider, `#android-intent`; macOS: a photo and a
+PDF).
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
@@ -909,6 +920,7 @@ while the card moved the list):
 | 90 drive-download | a file of the lent folder held, ⋯ → 下载: 正在下载「说明.txt」, then 已保存到「下载」 | drive.read through the core; the device keeps the station's file byte for byte (macOS: MBUI_DOWNLOADS_DIR; Android: the emulator's Download/, as MediaStore named it) |
 | 91 drive-download-many | in a folder of its own (drive-big), a 48 MB file and a small one chosen, 下载 2 个文件: the big one's row says how far, then gone; 已保存到「下载」 | the big file read in a dozen parts; both kept byte for byte |
 | 92 drive-zip | a folder held, ⋯ → 下载为 zip: 正在下载「子文件夹.zip」, 已保存到「下载」 | the station zipped it (drive.zip); the kept zip holds the folder's file, its words the same |
+| 93 share-files | files shared in (Android: an ACTION_SEND intent of a photo; macOS: a photo and a PDF): the sheet heads with them, the test chat tapped, the files in its composer going up, sent with words | the entry's attachments; the photo at the station byte for byte; on Android the intent's file taken in |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once

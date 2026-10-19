@@ -879,6 +879,17 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
       }
     None => ()
   }
+  // files another app shared into this chat (share.mbt), up as ＋'s are
+  match shared_into.get(d.key) {
+    Some(list) => {
+      shared_into.remove(d.key)
+      for f in list {
+        add_file(src, d, r.station, f.name, f.bytes, None)
+      }
+      c.request_frame()
+    }
+    None => ()
+  }
   // ＋'s sheet: up from below and back down on the sheet's spring, the scrim in and out (Sheet.kt SheetHost, mbui's
   // @kit.sheet); drawn until it has gone
   attach_sheet(c, src, r, d)
