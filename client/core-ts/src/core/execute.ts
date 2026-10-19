@@ -70,6 +70,9 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       }
       case "signOut":
         return Effect.as(inner.accounts.signOut(call.account), null);
+      // The account deleted in the cloud (DELETE /v1/me), then forgotten here as signing out does.
+      case "deleteAccount":
+        return Effect.as(Effect.andThen(inner.provider.request(call.account, "DELETE", "/v1/me", null), inner.accounts.signOut(call.account)), null);
       case "pushKey":
         return inner.provider.pushKey();
       case "op":

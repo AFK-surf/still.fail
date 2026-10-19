@@ -1,7 +1,8 @@
 // Settings on a narrow screen, one page from the gear on Home (as the Android app has it, apps/android/…/screens/
 // SettingsHome.kt): who is signed in, then the workspace's (its people, stations, connects, profiles, memory), then this
-// device's (how it looks, whether it notifies). Each row says how things stand at its end, what is wrong in red, so the
-// page is worth a look before anything is opened.
+// device's (how it looks, whether it notifies, whether it sends usage statistics), then still.fail's terms and privacy
+// policy. Each row says how things stand at its end, what is wrong in red, so the page is worth a look before anything
+// is opened.
 import { useState, type ReactNode } from "react";
 import { useDoing } from "../doing.ts";
 import { useStations, useConnects } from "../api.ts";
@@ -9,9 +10,12 @@ import { useWorkspace } from "../cloud/api.ts";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
 import { useLock } from "../cloud/Security.tsx";
 import { useVaults, vaultStatus } from "../vault.ts";
-import { ChevronRight } from "@stillfail/ui/icons.tsx";
+import { ArrowUpRight, ChevronRight } from "@stillfail/ui/icons.tsx";
 import { useAppearance, useMotionSetting, type Appearance } from "../theme.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
+import { HAS_TELEMETRY, setTelemetry, useTelemetryOn } from "../telemetry.ts";
+import { legalPages, legalUrl } from "../pages/About.tsx";
+import { NAME } from "../channel.ts";
 import { useApp } from "./app.tsx";
 import { t } from "../i18n.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
@@ -102,11 +106,22 @@ export function SettingsScreen() {
         <GoRow title={t("web-mobile.bar.title")} value={bars.sets.length > 1 ? t("web-mobile.bar.count", { n: bars.sets.length }) : bars.sets[0]!.map((k) => railLabel(k as BarPlace)).join("、")} onClick={at("/settings/bar")} />
         <GoRow title={t("common.language")} value={languages().find(([v]) => v === language)?.[1]} onClick={at("/settings/language")} />
         <Notify />
+        <Telemetry />
         <GoRow title={t("web-mobile.settings.changelog")} value={build != null ? `0.1.${build}` : undefined} onClick={at("/settings/changelog")} />
         {/* On an Android phone's browser, this channel's app. */}
         {downloadsOffered() && onAndroid() && <GoRow title={t("web-mobile.settings.downloadAndroid")} onClick={() => { location.href = download("android"); }} />}
         {/* An app on the home screen has no browser round it to reload the page: here it can. */}
         {standalone() && <ListRow onClick={() => location.reload()}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("common.reload")}</span></ListRow>}
+      </ListCard>
+      {/* On still.fail's site, in a tab of their own. */}
+      <SectionHeader title={t("web-pages.settings.nav.about")} start={24} />
+      <ListCard>
+        {legalPages().map(([page, label]) => (
+          <ListRow key={page} onClick={() => { window.open(legalUrl(page), "_blank", "noopener"); }}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{label}</span>
+            <ArrowUpRight size={14} className={partsCss.mSubtle} />
+          </ListRow>
+        ))}
       </ListCard>
       <div style={{ height: 30 }} />
     </div>
@@ -141,6 +156,21 @@ function Notify() {
       </span>
       {busy && <Spinner inline />}
       <span className={connectsCss.mSwitch} data-on={on || undefined} />
+    </ListRow>
+  );
+}
+
+/** Whether this browser sends usage statistics and error reports (telemetry.ts); none to send in a build without PostHog. */
+function Telemetry() {
+  const sending = useTelemetryOn();
+  if (!HAS_TELEMETRY) return null;
+  return (
+    <ListRow onClick={() => setTelemetry(!sending)}>
+      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+        <span className={listsCss.mRowTitle}>{t("common.telemetry.title")}</span>
+        <span className={listsCss.mRowNote}>{t("common.telemetry.note", { name: NAME })}</span>
+      </span>
+      <span className={connectsCss.mSwitch} data-on={sending || undefined} />
     </ListRow>
   );
 }

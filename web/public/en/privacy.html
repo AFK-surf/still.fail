@@ -47,7 +47,7 @@
 <li><strong>Push tokens</strong>: the tokens or push endpoints your devices or browsers register to receive notifications;</li>
 <li><strong>Issue reports</strong>: see section 3;</li>
 <li><strong>Network and log information</strong>: the IP address, request path, time and browser information (User-Agent) when you access the Service, recorded in Cloudflare's request logs; relay servers can see connections' IP addresses, node public keys and traffic volume. To prevent abuse, we rate-limit sign-ins using salted hashes of IP addresses and email addresses;</li>
-<li><strong>Usage statistics and error information</strong>: the web app and the Android app send PostHog action events, counts, durations, program errors and stack traces, and the web app also records session replays (all text, input and images on the page are masked at recording time). This data is tied to your account ID and includes your email address. Clients, stations and servers also send request traces to Axiom, including account ID, session ID, request path and duration. <strong>These statistics and traces don't include chat text, file names, prompts, agent output or conversation titles.</strong> Station error logs are sent only if the station's user turns them on; they're off by default.</li>
+<li><strong>Usage statistics and error information</strong>: the web app and the Android app send PostHog action events, counts, durations, program errors and stack traces, and the web app also records session replays (all text, input and images on the page are masked at recording time). This data is tied to your account ID only, without your email address or name. <strong>You can turn off “Send usage statistics and error reports” in the app's settings</strong>; once it's off, that device sends nothing to PostHog. Clients, stations and servers also send request traces to Axiom, including account ID, session ID, request path and duration. <strong>These statistics and traces don't include chat text, file names, prompts, agent output or conversation titles.</strong> Traces are used to diagnose failures and performance problems and aren't affected by that switch. Station error logs are sent only if the station's user turns them on; they're off by default.</li>
 </ul>
 <p>The still.fail website (still.fail) itself doesn't use analytics.</p>
 
@@ -65,7 +65,7 @@
 <ul>
 <li>Signing in uses a cookie valid for 10 minutes, to complete sign-in securely;</li>
 <li>The web app stores sign-in credentials and app data in your browser's IndexedDB, and interface preferences (theme, sidebar width and so on) in localStorage;</li>
-<li>PostHog analytics in the web app stores its own identifier in your browser.</li>
+<li>PostHog analytics in the web app stores its own identifier in your browser, and whether you turned statistics off.</li>
 </ul>
 <p>We don't use third-party advertising cookies.</p>
 
@@ -76,7 +76,7 @@
 <tr><td>Cloudflare, Inc.</td><td>United States; global network</td><td>Hosting the website, servers and data storage; request logs; sending verification code emails; relay servers</td><td>All information stored on our servers listed in section 4, request logs, connection metadata</td></tr>
 <tr><td>Google LLC</td><td>United States</td><td>Google sign-in; Android push (Firebase Cloud Messaging)</td><td>Google account information, push tokens and notification text</td></tr>
 <tr><td>Your browser's push service (e.g. Google, Mozilla, Apple)</td><td>Varies by browser</td><td>Web push notifications</td><td>Push endpoints and encrypted notification content</td></tr>
-<tr><td>PostHog, Inc.</td><td>United States</td><td>Usage statistics, error tracking, session replay</td><td>Account ID, email address, usage events, error information, masked session replays</td></tr>
+<tr><td>PostHog, Inc.</td><td>United States</td><td>Usage statistics, error tracking, session replay</td><td>Account ID, usage events, error information, masked session replays</td></tr>
 <tr><td>Axiom, Inc.</td><td>United States</td><td>Request tracing</td><td>Account ID, session ID, request paths and durations</td></tr>
 <tr><td>Alibaba Cloud</td><td>Beijing, China; Hong Kong, China</td><td>Relay servers, to improve connections in mainland China</td><td>Connection metadata (IP addresses, node public keys, traffic volume), no content</td></tr>
 </table>
@@ -91,8 +91,8 @@
 <li>Sign-in sessions: up to 30 days; they expire after 7 days without use;</li>
 <li>Invitations: 7 days;</li>
 <li>Push tokens: deleted when you sign out or the device stops receiving notifications;</li>
-<li>Account, workspace and station information: kept while you use the Service, and deleted when you delete your account or the workspace;</li>
-<li>Issue reports: kept as needed after the issue is resolved; you can ask us to delete them;</li>
+<li>Account, workspace and station information: kept while you use the Service, and deleted as soon as you delete your account or the workspace;</li>
+<li>Issue reports: kept as needed after the issue is resolved, deleted along with your account, and you can ask us to delete them at any time;</li>
 <li>Request logs, usage statistics and traces: kept for the retention periods of Cloudflare, PostHog and Axiom respectively, then deleted automatically.</li>
 </ul>
 <p>Where laws or regulations require a longer retention period, that period applies.</p>
@@ -101,7 +101,8 @@
 <p>You have the right to access, copy, correct, supplement and delete your personal information, to ask us to explain our rules for processing personal information, and to withdraw consent and delete your account.</p>
 <ul>
 <li>Workspace owners can delete a workspace in the app;</li>
-<li><strong>There's no way to delete your account in the app yet</strong>. To delete it, email <a href="mailto:hi@still.fail">hi@still.fail</a> from your account's email address; once we've verified your identity, we'll delete your account information;</li>
+<li><strong>Deleting your account</strong>: choose “Delete account” in the app's account settings. Your account information, sign-in sessions, push tokens and issue reports are deleted at once; workspaces with only you in them are deleted too; you're removed from the other workspaces you're in. If you're the only owner of a workspace that has other members, first make someone else an owner or delete that workspace. Deletion can't be undone;</li>
+<li>Turning off usage statistics: turn off “Send usage statistics and error reports” in the app's settings;</li>
 <li>For other requests, also email hi@still.fail. We'll reply within 15 working days.</li>
 </ul>
 <p>Your chat history and files are on your stations, where you can view, export and delete them directly.</p>

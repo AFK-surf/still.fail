@@ -76,6 +76,7 @@
   "core-misc.cloud.invitation_for_other_email": "此邀请发送至其他邮箱，请使用对应的账号接受",
   "core-misc.cloud.invitation_not_found": "邀请链接无效或已过期",
   "core-misc.cloud.last_owner": "workspace 至少要保留一个 owner",
+  "core-misc.cloud.sole_owner": "你是一个还有其他成员的 workspace 的唯一 owner。先把 owner 转给别人，或者删掉这个 workspace，再注销账号",
   "core-misc.cloud.member_not_found": "找不到此成员",
   "core-misc.cloud.not_beta": "此账号尚未开通测试版",
   "core-misc.cloud.station_not_found": "找不到此 station",

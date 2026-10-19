@@ -22,7 +22,7 @@ const STATUS: Record<string, number> = {
   workspace_not_found: 404, member_not_found: 404, user_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
   forbidden: 403, invitation_for_other_email: 403,
   already_member: 409, invalid_name: 400, invalid_emoji: 400, invalid_icon: 400, invalid_role: 400, invalid_email: 400, invalid_relay: 400, invalid_relays: 400,
-  last_owner: 409, locked_workspace: 409,
+  last_owner: 409, sole_owner: 409, locked_workspace: 409,
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
   invalid_note: 400, invalid_expiry: 400,
@@ -181,6 +181,14 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
 
   if (path === "/v1/me" && method === "GET") {
     return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), ...relays(env, true) }));
+  }
+  // Deleting the account: the Directory first (it may refuse: 409 sole_owner), then its sessions and all of it.
+  if (path === "/v1/me" && method === "DELETE") {
+    return directory(async () => {
+      await dir.deleteAccount(sub);
+      await env.ACCOUNTS.getByName(sub).erase();
+      return { deleted: true };
+    });
   }
   const byId = /^\/v1\/invitations\/([0-9A-HJKMNP-TV-Z]{26})\/(accept|decline)$/.exec(path);
   if (byId && method === "POST") {

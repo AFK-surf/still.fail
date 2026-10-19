@@ -4,9 +4,10 @@
 // the page is actions, counts, timings and errors, never what anyone wrote:
 // no autocapture (it records element text), replays mask all text, inputs,
 // images and the attributes that carry names, and URLs lose their ids,
-// queries and hashes.
+// queries and hashes. A person may turn all of it off in settings; PostHog
+// keeps that choice in the browser.
 import type { CaptureResult, PostHog, Properties } from "posthog-js";
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useLocation } from "react-router";
 
 /** Set by web/vite.config.ts from the project key file; null in a build without one. */
@@ -16,6 +17,19 @@ let posthog: PostHog | null = null;
 /** Calls made while posthog-js loads; null when it is not coming. */
 let early: ((ph: PostHog) => void)[] | null = null;
 let loaded: Promise<void> = Promise.resolve();
+
+/** Whether this build has PostHog: only then is there anything to turn off (the switch in settings). */
+export const HAS_TELEMETRY = __POSTHOG__ !== null;
+
+/** Whether this browser sends anything: as PostHog keeps it once it has loaded, as last set here (else on) till then. */
+let sending = true;
+const watchers = new Set<() => void>();
+
+function sendingNow(on: boolean): void {
+  if (on === sending) return;
+  sending = on;
+  for (const watcher of watchers) watcher();
+}
 
 function use(run: (ph: PostHog) => void): void {
   if (posthog) run(posthog);
@@ -57,9 +71,37 @@ export function startTelemetry(app: "cloud"): void {
     posthog = ph;
     for (const run of early ?? []) run(ph);
     early = null;
+    sendingNow(!ph.has_opted_out_capturing());
   }, (error: unknown) => {
     early = null;
     console.warn("telemetry: posthog-js did not load", error);
+  });
+}
+
+/** Whether this browser sends usage statistics and error reports (the switch in settings). */
+export function telemetryOn(): boolean {
+  return sending;
+}
+
+/** Whether this browser sends them, redrawn when that changes. */
+export function useTelemetryOn(): boolean {
+  return useSyncExternalStore((watcher) => { watchers.add(watcher); return () => watchers.delete(watcher); }, telemetryOn);
+}
+
+/**
+ * Turns sending on or off in this browser, kept by PostHog there (its opt-out). Off, nothing is captured: no events, no
+ * exceptions, and the replay recording stops.
+ */
+export function setTelemetry(on: boolean): void {
+  sendingNow(on);
+  use((ph) => {
+    if (on) {
+      ph.opt_in_capturing();
+    } else {
+      ph.opt_out_capturing();
+      // Opting out drops what the recording sends; it is stopped too, rather than left running for nothing.
+      ph.stopSessionRecording();
+    }
   });
 }
 
@@ -136,17 +178,21 @@ export function captureException(error: unknown, properties: Record<string, stri
   use((ph) => ph.captureException(error, properties));
 }
 
-/** Who is using the page: the signed-in account in view, by its ember account id. */
-export function identify(account: { sub: string; email: string }): void {
+/** Who is using the page: the signed-in account in view, by its ember account id alone (not its email). */
+export function identify(account: { sub: string }): void {
   use((ph) => {
-    if (ph.get_distinct_id() !== account.sub) ph.identify(account.sub, { email: account.email });
+    if (ph.get_distinct_id() !== account.sub) ph.identify(account.sub);
   });
 }
 
-/** An account signed out: if it was the one identified, later events are anonymous. */
+/** An account signed out (or deleted): if it was the one identified, later events are anonymous. */
 export function signedOut(sub: string): void {
   use((ph) => {
-    if (ph.get_distinct_id() === sub) ph.reset();
+    if (ph.get_distinct_id() !== sub) return;
+    // reset() forgets the opt-out with the rest: a browser turned off stays off.
+    const off = ph.has_opted_out_capturing();
+    ph.reset();
+    if (off) ph.opt_out_capturing();
   });
 }
 

@@ -41,5 +41,9 @@
   "common.link.copied": "已复制链接",
   "common.link.copyFailed": "无法复制链接：{error}",
   "common.reload": "重新加载",
-  "common.folderOn": "{station} 上的文件夹：{path}"
+  "common.folderOn": "{station} 上的文件夹：{path}",
+  "common.telemetry.title": "发送使用统计和错误报告",
+  "common.telemetry.note": "帮助改进 {name}。不包含聊天内容。",
+  "common.legal.terms": "服务条款",
+  "common.legal.privacy": "隐私政策"
 }

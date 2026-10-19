@@ -31,6 +31,7 @@ export type Call =
   | { kind: "authComplete"; query: string }
   | { kind: "authPassword"; email: string; password: string; deviceName: string | null }
   | { kind: "signOut"; account: string }
+  | { kind: "deleteAccount"; account: string }
   | { kind: "op"; op: ops.Request }
   | { kind: "profileModels"; op: ops.Request; id: string; models: unknown }
   | { kind: "chatArchive"; op: ops.Request; thread: number | null; session: string; archived: boolean }
@@ -183,6 +184,7 @@ export function counts(call: Call, name: string): boolean {
     case "machineLoginOpen":
     case "chatLatest":
     case "signOut":
+    case "deleteAccount":
     case "authBegin":
     case "authPassword":
     case "stationMeasure":
@@ -321,6 +323,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     }
     case "auth.signOut":
       return { kind: "signOut", account: read(params, [["account", S, "req"]]).account as string };
+    case "auth.deleteAccount":
+      return { kind: "deleteAccount", account: read(params, [["account", S, "req"]]).account as string };
     case "client.error": {
       const p = read(params, [
         ["source", S, "req"],

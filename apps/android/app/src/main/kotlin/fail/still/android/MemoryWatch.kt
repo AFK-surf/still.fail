@@ -37,7 +37,8 @@ object MemoryWatch {
         Thread({
             try {
                 while (Debug.getNativeHeapAllocatedSize() < LIMIT) Thread.sleep(EVERY_MS)
-                Crashes.memoryRunaway(app, look(app))
+                // Not looked at (the JS sampled for nothing) when reports are turned off (Crashes.reporting).
+                if (Crashes.reporting(app)) Crashes.memoryRunaway(app, look(app))
             } catch (_: Throwable) {
             }
         }, "stillfail-memory").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()

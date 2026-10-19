@@ -462,6 +462,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `auth.password` | `email`, `password`, `device_name` | `{ account }`: signed in with an account still.fail cloud set up for a password (REVIEW_ACCOUNTS: App Store review's); a wrong one fails `login_wrong_password` |
 | `auth.complete` | `query` (the callback's query string) | `{ account, return_to }` |
 | `auth.signOut` | `account` | — |
+| `auth.deleteAccount` | `account` | — : the account deleted in still.fail cloud (`DELETE /v1/me`), then forgotten here as signing out does. Refused `sole_owner` while it is the only owner of a workspace with other members |
 | `slack.tokens.edit` | `station`, `form` (the generated `SlackTokenForm`), `input` (changed `appToken`, `botToken`, `connect`, `install`; `clear` invalidates verification) | the transient draft; also published as `{ topic: "slackTokens", station, form }` (`SlackTokensView`) |
 | `slack.tokens.verify` | `station`, `form` | `true` only for the current verified draft; errors and identity in the topic. Late results for edited or closed forms cannot advance it |
 | `slack.tokens.drop` | `station`, `form` | clears the in-memory draft; disconnecting its owning UI also clears it. Nothing is saved to device storage |
