@@ -1,0 +1,17 @@
+# The folder lent, listed: what it holds in a line, folders first; into its folder and back by the crumbs.
+#env MBUI_OPEN_PAGE=files
+timeout 90000
+until =e2e-{T}
+tap =e2e-{T}
+until 1 个文件夹 · 2 个文件
+until 小说-e2e.txt
+until 说明.txt
+shot 1-folder
+tap 子文件夹
+until 里面.txt
+until 1 个文件
+shot 2-subfolder
+tap1 =e2e-{T}
+until 小说-e2e.txt
+gone 里面.txt
+shot 3-back

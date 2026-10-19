@@ -17,6 +17,7 @@
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
 #   scripts/e2e-local.sh reads      how far alice has read the test chat, as the station has it
 #   scripts/e2e-local.sh freeze|thaw  the test station stopped where it is (SIGSTOP: as if its network went) or let go on
+#   scripts/e2e-local.sh drive-seed TAG   the drive flows' folder in the test station's home (e2e-TAG)
 #   scripts/e2e-local.sh status
 #
 # E2E_WORK (default: e2e-local beside this checkout), E2E_STATION (the station's data and HOME, /tmp/mbui-e2e-<uid>),
@@ -187,6 +188,32 @@ reads() {
   local r=$(sql "select n from reads where viewer = 'alice@example.test' and thread = $t")
   echo "READS thread=$t last=$last alice=${r:-0} $([ "${r:-0}" -ge "$last" ] && echo read || echo unread)"
 }
+# the drive flows' folder (e2e/flows/15-…) in the test station's home, e2e-<run's tag>: a run's own (it lends it
+# itself, through the app), so no run finds it lent already; every word in it made up
+drive_seed() {
+  local d=$STATION/home/e2e-${1:?a tag}
+  rm -rf $d && mkdir -p $d/子文件夹
+  printf '这是端到端测试用的说明文件。\n' > $d/说明.txt
+  printf '子文件夹里的一行字。\n' > $d/子文件夹/里面.txt
+  python3 - "$d/小说-e2e.txt" <<'PY'
+import sys
+titles = ["第一章 雨后的车站", "第二章 旧仓库", "第三章 灯塔的钥匙", "第四章 回程"]
+lines = ["雨停的时候，站台上只剩下一盏灯还亮着，他把伞收好，靠在柱子旁边数着远处驶来的车厢。",
+         "仓库的门比想象中轻，推开时没有声音，只有一股潮湿的木头味道慢慢涌出来。",
+         "风从海面吹过来，把灯塔下的旗子拉得笔直，守塔的老人说今晚不会再有船经过了。",
+         "回程的路上谁都没有说话，车窗外的田野一片一片地向后退去，像翻过的书页。"]
+out = []
+for i, t in enumerate(titles):
+    out.append(t)
+    for k in range(40):
+        out.append("\u3000\u3000" + lines[(i + k) % 4] + lines[(i * 3 + k + 1) % 4])
+    if i == 2:
+        out.append("\u3000\u3000灯塔的钥匙藏在账簿封皮里。")
+    out.append("")
+open(sys.argv[1], "w").write("\n".join(out) + "\n")
+PY
+  say "drive folder $d"
+}
 freeze() { local p=$(station_node); [ -n "$p" ] || die "no station to freeze"; kill -STOP $p; say "station frozen ($p)"; }
 thaw() { local p=$(station_node); [ -n "$p" ] || die "no station to thaw"; kill -CONT $p; say "station thawed ($p)"; }
 
@@ -201,6 +228,7 @@ case "${1:-all}" in
   android-ime) shift; android_ime "$@" ;;
   freeze) freeze ;;
   thaw) thaw ;;
+  drive-seed) shift; drive_seed "$@" ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   all)

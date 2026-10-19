@@ -17,6 +17,8 @@ pub(all) struct Source {
   call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit
   /// a call with bytes beside it (a file's part going up: `station.upload.part`)
   call_bytes : (String, Json, Bytes, (Result[Json, Json]) -> Unit) -> Unit
+  /// a call whose answer has bytes beside it (a part of a drive's file: `drive.read`)
+  read_bytes : (String, Json, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
   /// 登录 pressed
   sign_in : () -> Unit
   /// whether a sign-in is under way

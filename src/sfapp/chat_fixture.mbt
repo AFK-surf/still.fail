@@ -405,8 +405,16 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
           "icon": "glyph:desktop",
           "online": true,
           "net": { "via": "direct" },
+          "overview": fixture_station_drive(true),
         },
-        { "station": "ws1/st2", "id": "st2", "name": "MBA", "icon": "glyph:laptop:teal", "online": false },
+        {
+          "station": "ws1/st2",
+          "id": "st2",
+          "name": "MBA",
+          "icon": "glyph:laptop:teal",
+          "online": false,
+          "overview": fixture_station_drive(false),
+        },
       ])
     "chatJobs" => Some({ "jobs": [] })
     "machineLogin" =>
@@ -417,7 +425,7 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         "active": true,
         "statusText": "等你在浏览器里登录",
       })
-    _ => None
+    _ => fixture_drive_topic(f, name, params)
   }
 }
 
@@ -671,7 +679,7 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       )
     }
     "session.warm" | "client.focus" | "chat.place" => Some(Ok(Json::object({})))
-    _ => None
+    _ => fixture_drive_call(f, name, params)
   }
 }
 

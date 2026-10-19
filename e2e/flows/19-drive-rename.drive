@@ -1,0 +1,23 @@
+# A row held: chosen; ⋯ → 重命名, the name changed in its field and saved.
+#env MBUI_OPEN_PAGE=files
+timeout 90000
+until =e2e-{T}
+tap =e2e-{T}
+until e2e-photo.jpg
+wait 500
+hold 900 e2e-photo.jpg
+until 已选 1 项
+shot 1-chosen
+tap icon:more
+until 重命名
+shot 2-sheet
+tap 重命名
+until =保存
+tap e2e-photo.jpg
+clear
+type 照片-{T}.jpg
+shot 3-asked
+tap =保存
+until 照片-{T}.jpg
+gone e2e-photo.jpg
+shot 4-renamed

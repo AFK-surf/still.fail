@@ -231,11 +231,62 @@ PastedText.kt; SendText.kt; MessagePick.kt):
 Not yet, against the current app: the words flying from the field into their
 bubble (and the capsule's morph as it changes height), `@` references to
 other chats and pasted chat links as marks (chat.ref, chatSearch), sharing
-what they refer to before sending, the recent photos' strip, Station 文件, a
+what they refer to before sending, the recent photos' strip, Station 文件 (slice 12's drive, below), a
 picture's preview from its tile, files pasted or sent by the keyboard (only
 words are), the composer's frosted glass, the text toolbar of the field
 (select, cut, copy by touch; the keyboard's own paste works), a new chat
 (slice 6).
+
+Slice 12 without the player, the drive and the reader (branch drive, 2026-10-19; ember apps/android drive/Files.kt,
+DriveScreen.kt, Reader.kt, TextModel.kt, Novel.kt, ReaderMarkdown.kt; chat/screens/StationFiles.kt):
+
+- 文件 (src/sfapp/drive.mbt `files_page`, Page `Files`): every station's folders lent under its name (`stations`
+  topic, Overview.drive), its home first (主目录) for a member who browses every folder, a station away faint and
+  said so (· 离线); its ＋ (owners and admins) lends another through the folder picker (`drive.folders`: the way as
+  crumbs, a filter, the usual places at the home, a folder the station may not read said so; `drive.setRoots`).
+  Pushed it has a bar with back and ＋; `files_page(…, place=true)` draws it as a place of the bottom bar (Home's top
+  bar), `files_can_lend` / `files_lend` give the bar's notch its ＋ (branch newchat-bar links it).
+- A drive's page (Page `Drive(DriveAt)`, `drive_page`): the drive itself with several roots as rows (one that
+  cannot be browsed in red with what to do; held, stop lending it), or a folder (`drive` topic): back to where it was
+  opened from, its name, 刷新 (`drive.refresh`), ＋ (上传文件, 新建文件夹, the folders lent), ⋯ (its order and
+  hidden files, prefs `driveViews`); the crumbs; what it holds in a line; the files going up; its entries as one
+  card (kind's mark, name, size · time; how far a text was read; a folder's chevron), folders first. A folder goes
+  in (a page pushed: the stack's slide and edge swipe), text and Markdown are read, anything else goes to
+  `open_file` (src/sfapp/open_file.mbt, the file preview's: branch preview fills it in; until then it says
+  暂时无法预览). Held, a row is chosen (others by a tap; 已选 n 项, 全选, ⋯): one renamed (the ask sheet,
+  `drive.rename`), downloaded, shared, its path copied, deleted (to the machine's trash where the station has one,
+  said so; else asked, then for good: `drive.remove`); several downloaded, their paths copied, deleted. Uploads go
+  one at a time whatever page shows, each a row of its folder (`drive.upload.part`: a quarter of a megabyte first,
+  doubling to 4 MB while parts go through; a name taken asked in the row: 替换 or 保留两者; failed: 重试).
+- The reader (Page `DriveRead(DriveAt)`, src/sfapp/drive_reader.mbt over drive_text.mbt): the file read through
+  the core a part at a time (`drive.read`, bytes beside the answer: Source.read_bytes), 16 MB at most, how much has
+  come shown; decoded (a byte order mark, UTF-8, a character cut at the end dropped), a hard-wrapped novel reflowed
+  into paragraphs, chapters found (第…章, front matter, Chapter N, title-like lines; Markdown's headings), cut into
+  blocks of about 1000 characters that a list lays out one at a time, paragraphs indented by two ideographic spaces.
+  One column that scrolls; a tap brings the bars (the paper's bar colour at 72%, 180 ms): the top one back, the
+  name and the chapter; the bottom one 上一章 / 下一章, the hairline with its knob (the text goes there when let
+  go), how far, 目录 / 搜索 / 排版. The contents (the chapter read checked), search (as it is typed: each hit a line;
+  the pill steps through them, hits marked on the text), the layout (字号, 行距, 边距, 字体, 缩进, the five papers;
+  the core's prefs `reader`). Where it was left is told to the core as the reader stops and as the page goes
+  (`drive.place`; the drivePlace topic) and opened at next time; the folder's row says how far (n%, 读完).
+  src/shelf's reader (the media app's books) is paged; Reader.kt scrolls, so this one is its own; it shares @sf's
+  slider, segmented control, wait pill and progress bar.
+- Station 文件 (src/sfapp/station_files.mbt, ＋'s sheet in the composer): the places, a folder entered by a tap, the
+  way back as crumbs; files ticked (or the folder shown as a whole), 添加 n 个: each a card in the draft (outlined:
+  it stays where it is), and the message says where in a line each (`common.pathOn`: Studio 上的文件：/…).
+- `APP=sffix MBUI_FIXTURE=files|drive|drive-sub|drive-chosen|drive-entry|drive-upload|drive-empty|reader|reader-bars|
+  reader-contents|reader-layout|reader-md|chat-station-files|chat-station-ref` (src/sfapp/drive_fixture.mbt, a
+  made-up drive that takes renames, deletes, new folders and uploads while it runs): `scripts/shots.sh drive
+  web-drive` compares them with goldens/mac-<mode>.png and web-<mode>.png.
+
+Not yet, against the current app: the player (the rest of slice 12), downloading a file to the device, sharing it
+to another app, a folder as a zip (each says so in a toast: no host API to keep a file yet), GB18030 text (no
+table here: such a file opens as UTF-8 with replacement characters), the serif face (the reader draws its sans
+face either way), 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light one),
+the system bars' icons following the paper, the frosted glass of the bars and sheets (their tint only), the
+system's back closing a sheet or ending a choice (it goes back a page), dragging sheets by the grabber, the
+long-press ripple, a station file sent as a file (`drive.stage`, the card's sheet, 此对话默认发送文件) and station
+files kept with the draft on the device, the station page's way into a drive (slice 13).
 
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
@@ -277,6 +328,10 @@ need); the station starts with what the shell has of the machine's own station (
 
 To check a later slice the same way: add its flows and checks to e2e/flows, and what the runner must do beside the
 app to `scripts/e2e-local.sh` (as `peer`, `freeze`, `reads`).
+A flow's `#env K=V` lines are put in the app's environment for that flow (the drive's flows start on 文件 with
+MBUI_OPEN_PAGE=files until the bottom bar reaches it). Before the flows, `scripts/e2e-local.sh drive-seed <tag>` makes
+the drive flows' folder in the test station's home (e2e-<tag>: a text, a novel of made-up chapters, a folder with a
+file), a run's own, which flow 15 lends through the app.
 
 The flows (macOS, 390×844, and Android on the emulator, Pixel 7 size). On 2026-10-19 all 14 passed on macOS; on
 Android 13 of 14 in the full run and 11 (the quote) alone, twice, once it waited for the all-done card (it had held
@@ -298,6 +353,13 @@ while the card moved the list):
 | 12 offline-retry | the station frozen (SIGSTOP) as a message goes: 未发送 after some 30 s; thawed, 重试 | the station has the message, once |
 | 13 delete-failed | the same, 删除 | the station never gets it, even once thawed |
 | 14 mark-read | on Home, the other device asks; the answer comes unread; the chat opened at its end | the station's reads: alice unread before, read to the end after |
+| 15 drive-lend | 文件 (MBUI_OPEN_PAGE=files): the station's home; ＋, the folder picker into the station's home, this run's e2e-<tag>, 选择此文件夹 | the station's config lends the folder (drive.roots) |
+| 16 drive-list | the folder: 1 个文件夹 · 2 个文件, its entries; into its folder and back by the crumbs | the station's folder holds what was listed; nothing written |
+| 17 drive-read | a novel of made-up chapters read: the bars, 目录 → 第三章; left, its row says how far | drive.read through the core; drive.place past the second chapter; the core keeps the place on the device |
+| 18 drive-upload | ＋ → 上传文件: a photo and a 9 MB file, each a row going up in parts, then entries | both files in the station's folder, byte for byte; several drive.upload.part |
+| 19 drive-rename | the photo held: 已选 1 项, ⋯ → 重命名, a new name typed, 保存 | the station has it under the new name, the same bytes; the old name gone |
+| 20 drive-delete | the renamed file held, ⋯ → 删除, asked (the test station has no trash), 删除 | gone from the station's folder, the others there |
+| 21 station-files | in the chat, ＋ → Station 文件: the lent folder, a file ticked, 添加 1 个: its card; sent with words | the station's entry: the words and studio 上的文件：<path> under them; no attachment |
 
 Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
 never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however

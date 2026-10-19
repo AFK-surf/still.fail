@@ -325,6 +325,12 @@ pub fn fixture(mode : String) -> Source {
           }
       }
     },
+    read_bytes: fn(name, params, done) {
+      match fixture_drive_read(name, params) {
+        Some(r) => done(r)
+        None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
+      }
+    },
     call_bytes: fn(name, params, _bytes, done) {
       match fixture_chat_call(f, name, params) {
         Some(r) => done(r)

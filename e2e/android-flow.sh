@@ -15,6 +15,9 @@ mkdir -p $OUT
 . ${E2E_WORK:-$(cd $ROOT/.. && pwd)/e2e-local}/run/e2e-env.sh
 DIR=/data/data/$PKG/files/e2e
 ENVS="MBUI_CLOUD=$MBUI_CLOUD;MBUI_CORE_ACCOUNT_B64=${E2E_ACCOUNT_B64:-$MBUI_CORE_ACCOUNT_B64};MBUI_DRIVE_B64=$(base64 < $SCRIPT | tr -d '\n');MBUI_PICK_FILES=$DIR/e2e-photo.jpg|$DIR/e2e-data.bin;MBUI_IME_LOG=1;MBUI_CALL_LOG=1"
+# a flow's `#env K=V` lines, for this run
+EXTRA=$(grep '^#env ' $SCRIPT | sed 's/^#env //' | tr '\n' ';')
+[ -n "$EXTRA" ] && ENVS="$ENVS;${EXTRA%;}"
 $ADB shell am force-stop $PKG
 $ADB logcat -c
 $ADB shell "screenrecord --time-limit 180 /sdcard/e2e-$NAME.mp4" >/dev/null 2>&1 &

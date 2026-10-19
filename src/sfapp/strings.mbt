@@ -105,7 +105,10 @@ let zh : Map[String, String] = {
 ///|
 /// The words for `key`.
 pub fn tr(key : String) -> String {
-  zh.get(key).unwrap_or(key)
+  match zh.get(key) {
+    Some(s) => s
+    None => drive_zh.get(key).unwrap_or(key)
+  }
 }
 
 ///|

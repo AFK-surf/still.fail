@@ -152,7 +152,7 @@ fn draft_of(src : Source, r : ChatRef) -> Draft {
 
 ///|
 fn draft_empty(d : Draft) -> Bool {
-  d.text == "" && d.quotes.length() == 0 && d.files.length() == 0
+  d.text == "" && d.quotes.length() == 0 && d.files.length() == 0 && refs_of(d.key).length() == 0
 }
 
 ///|
@@ -279,7 +279,8 @@ fn draft_ready(d : Draft, locked : Bool) -> Bool {
   (
     d.text.trim(chars=" \n\t") != "" ||
     d.files.iter().any(fn(f) { f.done is Some(_) }) ||
-    d.quotes.length() > 0
+    d.quotes.length() > 0 ||
+    refs_of(d.key).length() > 0
   ) &&
   !uploading(d) &&
   !locked
@@ -618,7 +619,10 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     say(c, read_only_words)
     return
   }
-  let words = d.text.trim(chars=" \n\t").to_string()
+  // the station files named by their paths, a line each under the words
+  let words = with_ref_words(d.text.trim(chars=" \n\t").to_string(), d.key)
+  let taken_refs = refs_of(d.key)
+  draft_refs.remove(d.key)
   let files = d.files.filter_map(fn(f) { f.done })
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   // what was taken, to put back
@@ -655,6 +659,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
           for q in taken_quotes {
             d.quotes.push(q)
           }
+          draft_refs[d.key] = taken_refs
           for k, w in taken_comments {
             d.comments[k] = w
           }
@@ -709,7 +714,8 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
   let expanded = focused ||
     d.text != "" ||
     d.files.length() > 0 ||
-    d.quotes.length() > 0
+    d.quotes.length() > 0 ||
+    refs_of(d.key).length() > 0
   let cap = capsule_id(c)
   if c.clicked(cap) && !locked {
     c.focus_editor(field_key)
@@ -787,6 +793,17 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
   }
   if cui.attach {
     attach_sheet(c, src, r, d)
+  }
+  // ＋'s Station 文件 (station_files.mbt)
+  station_files_sheet(c, src, workspace_of(r.station), d.key)
+}
+
+///|
+/// The workspace a station (`<workspace>/<station>`) is in.
+fn workspace_of(station : String) -> String {
+  match station.find("/") {
+    Some(i) => station.view(end_offset=i).to_owned()
+    None => station
   }
 }
 
@@ -1059,6 +1076,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
     })
     |> ignore
   }
+  ref_cards(c, d.key)
   if d.files.length() > 0 {
     // as far from the capsule's edge as from its top (ComposerFilesIn 10), past its own room
     c.box(dir=Row, w=Fill(1.0), pl=2.0, pr=2.0, pt=2.0, gap=11.0, align=AEnd, clip=true, fn() {
@@ -1301,7 +1319,7 @@ fn file_icon(name : String) -> String {
 
 ///|
 /// ＋'s sheet: the recent photos across the top (the camera first; reading the gallery is not in this build, so its
-/// tile only says so), then 照片, 文件 and Station 文件 (not in this build either). As tall as those two rows.
+/// tile only says so), then 照片, 文件 and Station 文件 (station_files.mbt). As tall as those two rows.
 fn attach_sheet(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Unit {
   let t = @sf.theme()
   let shown = opening(c, cui.attach_at, 300.0)
@@ -1347,7 +1365,7 @@ fn attach_sheet(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Unit {
   }
   if c.clicked(station) {
     cui.attach = false
-    say(c, "Station 文件还不在这个版本里")
+    station_files_open(c, d.key)
   }
   c.layer(fn() {
     c.spacer()

@@ -1,7 +1,7 @@
 // still.fail's Home over made-up chats, with no core (src/sfapp/fixture.mbt, chat_fixture.mbt): what the screenshots
 // compare (scripts/shots.sh home, web-home, chat, web-chat) on every run the same. MBUI_FIXTURE (?MBUI_FIXTURE= on
 // the web) picks what it shows: home (the default), signin, loading, empty; chat, chat-loading, chat-long (the first
-// row's chat open over Home).
+// row's chat open over Home); files, drive…, reader… (the drive's pages, src/sfapp/drive_fixture.mbt).
 
 ///|
 fn main {
@@ -15,5 +15,7 @@ fn main {
       station_name: "Studio",
     })
   }
+  // the drive's pages (src/sfapp/drive_fixture.mbt): files, drive…, reader…
+  @sfapp.open_drive_fixture(mode)
   @ui.run("still.fail", fn(c) { @sfapp.view(c, src) })
 }

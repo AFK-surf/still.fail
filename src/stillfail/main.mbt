@@ -105,7 +105,7 @@ let read_only : Bool = @host.env("MBUI_READONLY") == "1"
 /// whatever page asks it.
 let read_only_calls : Array[String] = [
   "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "picture",
-  "prefs.set",
+  "prefs.set", "drive.read", "drive.folders", "drive.refresh",
 ]
 
 ///|
@@ -158,6 +158,32 @@ let core_source : @sfapp.Source = {
       @host.request_frame()
     })
   },
+  read_bytes: fn(name, params, done) {
+    if read_only && !read_only_calls.contains(name) {
+      done(Err(refused(name)))
+      return
+    }
+    if call_log {
+      @host.log("CALL \{name} \{params.stringify()}")
+    }
+    @core.call_bytes(name, params~, on_done=fn(r) {
+      match r {
+        Ok((v, bytes)) => {
+          if call_log {
+            @host.log("ANSWER \{name} ok \{v.stringify()} with \{bytes.map(fn(b) { b.length() }).unwrap_or(0)} bytes")
+          }
+          done(Ok((v, bytes.unwrap_or(Bytes::new(0)))))
+        }
+        Err(e) => {
+          if call_log {
+            @host.log("ANSWER \{name} error \{e.stringify()}")
+          }
+          done(Err(e))
+        }
+      }
+      @host.request_frame()
+    })
+  },
   sign_in: fn() { @sfcore.sign_in() },
   signing_in: fn() { @sfcore.state.busy },
   picture,
@@ -188,6 +214,10 @@ fn main {
     [station, session] =>
       @sfapp.open_chat({ station, session, title: "", station_name: "" })
     _ => ()
+  }
+  // MBUI_OPEN_PAGE=files: 文件 pushed over Home (scripted runs; the bottom bar's place until there is one)
+  if @host.env("MBUI_OPEN_PAGE") == "files" {
+    @sfapp.open_page(Files)
   }
   @ui.run("still.fail", fn(c) {
     @sfcore.frame(@core.subscribe("accounts"))

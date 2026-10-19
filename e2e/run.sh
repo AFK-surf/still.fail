@@ -39,6 +39,11 @@ mkdir -p $FILES
 [ -f $FILES/e2e-photo.jpg ] || cp test/images/$(ls test/images | grep -i '\.jpg$' | head -1) $FILES/e2e-photo.jpg
 [ -f $FILES/e2e-data.bin ] || head -c 9437184 /dev/urandom > $FILES/e2e-data.bin
 
+# the drive's flows' folder in the test station's home, this run's own (e2e-$TAG; the flows' e2e-{T}): a text, a novel
+# of made-up chapters, a folder with a file in it (scripts/e2e-local.sh drive-seed)
+"$ROOT/scripts/e2e-local.sh" drive-seed $TAG >/dev/null || { echo "e2e: no drive folder"; exit 1; }
+DRIVE=$STATION/home/e2e-$TAG
+
 # helpers for the checks: the station's database (read only), what it keeps on disk, the core's own store
 sql() { sqlite3 -readonly $STATION/data/stillfail.db "$@"; }
 # the attachments (JSON) of the message whose words are $1
@@ -62,6 +67,8 @@ core_has() {
   return 1
 }
 peer() { "$ROOT/scripts/e2e-local.sh" peer "$@"; }
+# the folders the test station lends (its config's drive.roots)
+drive_roots() { python3 -c "import json; print('\n'.join(json.load(open('$STATION/data/config.json')).get('drive', {}).get('roots', [])))"; }
 FAILS=""
 check() {  # check WHAT COMMAND…: a line of the flow's verdict
   if eval "$2" >/dev/null 2>&1; then echo "  ok   $1"; else echo "  FAIL $1"; FAILS="$FAILS|$1"; fi
@@ -100,13 +107,15 @@ if [ $PLATFORM = mac ]; then
   export MB_CORE_BUNDLE=$ROOT/out/core/core.js
 fi
 
-# runs a flow in the app; its log as it goes, `log do:` acted on
+# runs a flow in the app; its log as it goes, `log do:` acted on. A flow's `#env K=V` lines are put in the app's
+# environment for that run (MBUI_OPEN_PAGE=files: the drive's 文件 pushed over Home)
 run_flow() {
   local name=$1 log=$OUT/$name.log script=$OUT/$name.drive
   sed "s/{T}/$TAG/g" $2 > $script
   mkdir -p $OUT/$name
+  local extra=$(grep '^#env ' $script | sed 's/^#env //' | tr '\n' ' ')
   if [ $PLATFORM = mac ]; then
-    MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
+    env $extra MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
       MBUI_WIN=390x844 MBUI_SHOT_DIR=$OUT/$name MBUI_DRIVE_B64=$(base64 < $script | tr -d '\n') \
       MBUI_PICK_FILES="$FILES/e2e-photo.jpg|$FILES/e2e-data.bin" MBUI_CALL_LOG=1 \
       timeout ${E2E_FLOW_TIMEOUT:-300} $EXE 2>&1 | while IFS= read -r line; do

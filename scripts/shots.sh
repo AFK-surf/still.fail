@@ -11,12 +11,14 @@
 # `web-chat` are a made-up chat open over it (MBUI_FIXTURE=chat, src/sfapp/chat_fixture.mbt): chat gives mac-chat (at
 # its end), mac-chat-up (scrolled up: the way to the newest over it) and mac-chat-loading (being read). `composer`
 # and `web-composer` are its composer's states (MBUI_FIXTURE=chat-compose|attach|quote|sending|failed):
-# mac-composer-<state>, web-composer-<state>.
+# mac-composer-<state>, web-composer-<state>. `drive` and `web-drive` are the drive's pages over a made-up drive
+# (MBUI_FIXTURE=files|drive|…|reader|…, src/sfapp/drive_fixture.mbt): mac-<mode>, web-<mode>.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home chat composer web web-kit web-home web-chat web-composer ios android}
+PLATFORMS=${*:-mac kit home chat composer drive web web-kit web-home web-chat web-composer web-drive ios android}
+DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
 fi
@@ -63,6 +65,25 @@ for p in $PLATFORMS; do
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-composer ./_build/native/release/build/sffix/sffix.exe >/dev/null
         cp out/shot-composer/$m.png out/shots/mac-composer-$m.png
         names="$names mac-composer-$m"
+      done ;;
+    drive)
+      # the drive's pages over the fixture's made-up drive (src/sfapp/drive_fixture.mbt's modes): 文件, a folder, a folder
+      # in it, two rows chosen, a file's sheet, files going up, an empty folder; a text read, with its bars, its
+      # contents, its layout; a Markdown file read
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-drive; mkdir -p out/shot-drive
+      names=
+      for m in $DRIVE_MODES; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_AT=60 MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-drive ./_build/native/release/build/sffix/sffix.exe >/dev/null
+        cp out/shot-drive/$m.png out/shots/mac-$m.png
+        names="$names mac-$m"
+      done ;;
+    web-drive)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in $DRIVE_MODES; do
+        QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-$m.png
+        names="$names web-$m"
       done ;;
     web-composer)
       APP=sffix bash scripts/web.sh build >/dev/null

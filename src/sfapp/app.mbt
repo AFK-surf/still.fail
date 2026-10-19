@@ -12,6 +12,12 @@ pub(all) enum Page {
   Archived
   /// settings (the gear)
   Settings
+  /// 文件: every station's folders lent (drive.mbt)
+  Files
+  /// a page of a station's drive: its roots, or a folder (drive.mbt)
+  Drive(DriveAt)
+  /// a text of a drive, read (drive_reader.mbt)
+  DriveRead(DriveAt)
 }
 
 ///|
@@ -67,6 +73,12 @@ pub fn open_chat(r : ChatRef) -> Unit {
 }
 
 ///|
+/// A page pushed over Home from the start (a scripted run; the bottom bar's places until there is one).
+pub fn open_page(p : Page) -> Unit {
+  app.nav.push(p)
+}
+
+///|
 /// As at the start: Home alone, nothing chosen here yet (tests).
 fn reset() -> Unit {
   attention.told = false
@@ -98,6 +110,7 @@ fn reset() -> Unit {
   fix_chats.clear()
   fix_timers.clear()
   fix_drafts.clear()
+  dv_reset()
 }
 
 ///|
@@ -120,6 +133,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   for p in left_pages {
     match p {
       Chat(r) => chat_left(src, r)
+      DriveRead(at) => reader_left(at)
       _ => ()
     }
   }
@@ -221,6 +235,9 @@ fn page_view(
     Chat(r) => chat_page(c, src, w, r)
     Archived => placeholder_page(c, tr("android-chat.home.filter.archived"))
     Settings => placeholder_page(c, tr("android-chat.home.settings"))
+    Files => files_page(c, src, w)
+    Drive(at) => drive_page(c, src, w, at)
+    DriveRead(at) => reader_page(c, src, at)
   }
 }
 

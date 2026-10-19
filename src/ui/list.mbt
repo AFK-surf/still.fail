@@ -577,6 +577,27 @@ pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
 }
 
 ///|
+/// Where list `key` is, after its last layout: the first row in view, how far its top is above the view's, and that
+/// row's height (a reader's place inside a block taller than the window). None before its first layout.
+pub fn Ctx::list_place(self : Ctx, key : String) -> (Int, Double, Double)? {
+  match self.lists.get(self.id(key)) {
+    Some(st) if st.vis_first >= 0 && st.vis_first < st.heights.length() =>
+      Some((st.vis_first, st.anchor_off, st.heights[st.vis_first]))
+    _ => None
+  }
+}
+
+///|
+/// Row `item` of list `key`'s height as last laid out; None while it has not been.
+pub fn Ctx::list_row_height(self : Ctx, key : String, item : Int) -> Double? {
+  match self.lists.get(self.id(key)) {
+    Some(st) if item >= 0 && item < st.heights.length() && st.heights[item] >= 0.0 =>
+      Some(st.heights[item])
+    _ => None
+  }
+}
+
+///|
 /// Rows came (`n` > 0) or went (`n` < 0) before row `at` of list `key`
 /// since it was last laid out: what is in view stays where it is. Where
 /// the first row in view is above `at` (a spinner over the rows, say), the

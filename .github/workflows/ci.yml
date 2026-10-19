@@ -45,7 +45,7 @@ jobs:
           done
       - name: Screenshot against the golden
         continue-on-error: true
-        run: scripts/shots.sh mac kit home chat composer
+        run: scripts/shots.sh mac kit home chat composer drive
       - name: iOS simulator app
         run: scripts/ios.sh build
       - uses: actions/upload-artifact@v4
