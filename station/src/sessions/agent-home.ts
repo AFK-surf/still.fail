@@ -82,17 +82,36 @@ const isLink = (path: string) => {
   }
 };
 
+/// Whether `path` is a directory with no file anywhere in it: what a runtime makes in its home before the link is
+/// there (Claude Code's skills/synced/), so nothing is lost putting the link in its place.
+function hollow(path: string): boolean {
+  try {
+    return lstatSync(path).isDirectory() && readdirSync(path).every((e) => hollow(join(path, e)));
+  } catch {
+    return false;
+  }
+}
+
+/// The paths already said to be left alone: said once, not at each look.
+const leftAlone = new Set<string>();
+
 function link(target: string, path: string) {
   let meta;
   try {
     meta = lstatSync(path);
   } catch {
-    symlinkSync(target, path);
+    meta = null;
+  }
+  if (meta?.isSymbolicLink() && readlinkSync(path) === target) return;
+  if (meta && !hollow(path)) {
+    // A real file or a different link: someone configured it by hand. Leave it and say so.
+    if (!leftAlone.has(path)) log.warn("agent_home", "not linking the agent home over an existing path", { path, target });
+    leftAlone.add(path);
     return;
   }
-  if (meta.isSymbolicLink() && readlinkSync(path) === target) return;
-  // A real file or a different link: someone configured it by hand. Leave it and say so.
-  log.warn("agent_home", "not linking the agent home over an existing path", { path, target });
+  if (meta) rmSync(path, { recursive: true, force: true });
+  // A directory's link on Windows is a junction: a symbolic link there needs an administrator.
+  symlinkSync(target, path, process.platform === "win32" && lstatSync(target).isDirectory() ? "junction" : undefined);
 }
 
 /// Creates the agent home if missing and links it into every profile home.

@@ -406,6 +406,14 @@ test("profile homes link to the shared memory and skills under their runtimes' n
   writeFileSync(join(own, "CLAUDE.md"), "mine");
   linkAgentHome(join(root, "agent2"), [{ id: "own", runtimes: ["claude"], home: own }]);
   assert.equal(readFileSync(join(own, "CLAUDE.md"), "utf8"), "mine");
+  // What a runtime made before the link (Claude Code's empty skills/synced/) gives way to it; a skill of its own does not.
+  const [made, kept] = [join(root, "made"), join(root, "kept")];
+  mkdirSync(join(made, "skills", "synced"), { recursive: true });
+  mkdirSync(join(kept, "skills", "mine"), { recursive: true });
+  writeFileSync(join(kept, "skills", "mine", "SKILL.md"), "mine");
+  linkAgentHome(agent, [{ id: "made", runtimes: ["claude"], home: made }, { id: "kept", runtimes: ["claude"], home: kept }]);
+  assert.equal(readlinkSync(join(made, "skills")), join(agent, "skills"));
+  assert.equal(readFileSync(join(kept, "skills", "mine", "SKILL.md"), "utf8"), "mine");
   rmSync(root, { recursive: true, force: true });
 });
 
