@@ -13,7 +13,7 @@ import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, Button, Dialog, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
@@ -1040,14 +1040,15 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
   const chat = useContext(DraftKey);
   const agent = s.by.here ? s.by.agent : undefined;
   const received = s.received === true;
+  const kind = s.place?.surface;
   const place = s.place
-    ? <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
+    ? <><ElsewhereLogo kind={kind} size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
     : <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>Slack</span></>;
   return (
     <OthersMessage data-vk={`e:${s.key}`} data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
       avatar={received
-        ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><SlackLogo size={9} /></span></span>
-        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack agent={agent} />}
+        ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><ElsewhereLogo kind={kind} size={9} /></span></span>
+        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack={kind === "feishu" ? "feishu" : true} agent={agent} />}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{s.by.name}</button>
         : <span className={css.msgName}>{s.by.name}</span>}
@@ -1256,13 +1257,13 @@ export function OthersMessage({ avatar, name, route, time, children, ...data }: 
 
 /** An agent's picture in a chat: its model's maker, in the agents' ground. One of the chat's (`agent`, its session's key)
  * has its card while it is pointed at (AgentCard.tsx). */
-export function AgentAvatar({ maker, runtime, slack, agent }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean; agent?: string | undefined }) {
+export function AgentAvatar({ maker, runtime, slack, agent }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean | "feishu"; agent?: string | undefined }) {
   return (
     <AgentHover agent={agent}>
       <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`} data-slack={slack || undefined}>
         {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
         {/* What it said went to Slack, not here: Slack's mark on its corner. */}
-        {slack && <span className={css.msgAvatarSlack}><SlackLogo size={9} /></span>}
+        {slack && <span className={css.msgAvatarSlack}><ElsewhereLogo kind={slack === "feishu" ? "feishu" : "slack"} size={9} /></span>}
       </span>
     </AgentHover>
   );

@@ -444,7 +444,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
           : failed !== undefined ? <span className={css.mChatMark}><FailedMark error={failed} size={12} /></span>
           // Its station offline, or its link coming back: unplugged (a spinner is only something its person did).
           : item.offline || item.reconnecting ? <Tip label={item.offline ?? item.reconnecting}><span className={css.mChatMark} aria-label={item.offline ?? item.reconnecting}><Unplug size={14} /></span></Tip>
-          : <span className={css.mChatMark}>{item.connect && <Tip label={item.originText ?? "Slack"}><span><SlackMark size={14} /></span></Tip>}</span>}
+          : <span className={css.mChatMark}>{item.connect && <Tip label={item.originText ?? "Slack"}><span><SlackMark kind={item.originKind} size={14} /></span></Tip>}</span>}
       </span>
       <span className={css.mChatLine2}>
         {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}

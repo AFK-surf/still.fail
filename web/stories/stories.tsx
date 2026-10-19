@@ -39,6 +39,7 @@ import { installDemo, installFlowDemo } from "./install.ts";
 import { permissionsDemo } from "./permissions.ts";
 import { agentEnvDemo } from "./agent-env.ts";
 import { lockDemo } from "./lock.ts";
+import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
 import { ModelTriple } from "../src/ModelTriple.tsx";
 import { ModelList } from "../src/mobile/History.tsx";
 import type { Picking } from "../src/pick.ts";
@@ -594,6 +595,26 @@ export const stories: Story[] = [
   { id: "pick-borrow-confirm", group: "选模型", title: "模型 · 借用前再次确认", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }, { click: "text=借用账号" }] },
   { id: "app-new-chat-not-shared", group: "应用", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, demo: notShared, steps: [{ text: "新建对话" }] },
   { id: "app-connects", group: "应用", title: "连接", app: true, steps: [{ click: '[aria-label="连接"]' }] },
+  { id: "app-connect-platform", group: "连接", title: "添加连接 · 选平台", app: true, demo: feishuFlowDemo("platform"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-platform-old", group: "连接", title: "添加连接 · 选平台 · station 尚无飞书", app: true, demo: feishuFlowDemo("old"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-bind", group: "连接", title: "添加连接 · 飞书 · 绑定模型", app: true, demo: feishuFlowDemo("bind"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-way", group: "连接", title: "添加连接 · 飞书 · 创建方式", app: true, demo: feishuFlowDemo("way"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-scan", group: "连接", title: "添加连接 · 飞书 · 扫码等待", app: true, demo: feishuFlowDemo("scan"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-expired", group: "连接", title: "添加连接 · 飞书 · 二维码过期", app: true, demo: feishuFlowDemo("expired"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-made", group: "连接", title: "添加连接 · 飞书 · 已创建，正在添加", app: true, demo: feishuFlowDemo("made"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-made-failed", group: "连接", title: "添加连接 · 飞书 · 已创建，添加失败", app: true, demo: feishuFlowDemo("made-failed"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-app", group: "连接", title: "添加连接 · 飞书 · 已有应用", app: true, demo: feishuFlowDemo("app"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-app-wrong", group: "连接", title: "添加连接 · 飞书 · 已有应用 · 验证失败", app: true, demo: feishuFlowDemo("app-wrong"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-app-verified", group: "连接", title: "添加连接 · 飞书 · 已有应用 · 已验证", app: true, demo: feishuFlowDemo("app-verified"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "phone-connect-platform", group: "连接", title: "手机 · 添加连接 · 选平台", app: true, phone: true, demo: feishuFlowDemo("platform", true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: '[aria-label="添加连接"]' }] },
+  { id: "phone-connect-way", group: "连接", title: "手机 · 添加连接 · 飞书 · 创建方式", app: true, phone: true, demo: feishuFlowDemo("way", true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: '[aria-label="添加连接"]' }] },
+  { id: "phone-connect-scan", group: "连接", title: "手机 · 添加连接 · 飞书 · 扫码等待", app: true, phone: true, demo: feishuFlowDemo("scan", true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: '[aria-label="添加连接"]' }] },
+  { id: "phone-connect-expired", group: "连接", title: "手机 · 添加连接 · 飞书 · 二维码过期", app: true, phone: true, demo: feishuFlowDemo("expired", true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: '[aria-label="添加连接"]' }] },
+  { id: "phone-connect-app-verified", group: "连接", title: "手机 · 添加连接 · 飞书 · 已有应用 · 已验证", app: true, phone: true, demo: feishuFlowDemo("app-verified", true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: '[aria-label="添加连接"]' }] },
+  { id: "app-connects-feishu", group: "连接", title: "连接列表 · 含飞书", app: true, demo: feishuConnectDemo(), steps: [{ click: '[aria-label="连接"]' }] },
+  { id: "app-connect-feishu", group: "连接", title: "飞书连接 · 已连接", app: true, demo: feishuConnectDemo(), steps: [{ click: '[aria-label="连接"]' }, { click: "text=Codex 机器人" }] },
+  { id: "app-connect-feishu-error", group: "连接", title: "飞书连接 · 出错", app: true, demo: feishuConnectDemo(true), steps: [{ click: '[aria-label="连接"]' }, { click: "text=Codex 机器人" }] },
+  { id: "phone-connect-feishu", group: "连接", title: "手机 · 飞书连接 · 已连接", app: true, phone: true, demo: feishuConnectDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: "text=Codex 机器人" }] },
   { id: "app-usage", group: "应用", title: "用量", app: true, steps: [{ click: '[aria-label="用量"]' }] },
 
   // ── waiting (docs/ui-panels.md「等待」): a list or page read the first time, a row or button at work ──

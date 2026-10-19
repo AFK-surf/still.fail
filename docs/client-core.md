@@ -703,9 +703,15 @@ shapes every topic's value passes through on its way out): `node
 client/core-ts/scripts/shapes.ts` writes `web/src/core/shapes.ts` and Android's
 `data/Shapes.kt`, and `--check` keeps them from drifting.
 
-`connectFlow {station, form}` owns the complete Slack connection wizard: team,
+`connectFlow {station, form}` owns the complete connection wizard. It starts at the
+platform where the station has the Feishu connect (its overview lists
+`feishuRegistrations`; a station without it starts at Slack's steps). Slack: team,
 configuration token, app settings, installation, token verification, model binding
-and submission. Calls are `connect.flow.open/edit/go/config/make/verify/create/drop`.
+and submission. Feishu (docs/feishu.md): model binding, then the bot made by scanning
+(`register`; the registration followed through the overview, its link as a QR code
+from `qr.ts`, the connect added by the core itself once the bot is made, the
+registration cancelled when the form closes) or an app of one's own verified. Calls
+are `connect.flow.open/edit/go/config/make/verify/register/create/drop`.
 The core chooses desktop inline versus mobile separate token steps. Each form has
 its own `connect-new:<form>` pick and token state, belongs to its client, and is
 removed on close/disconnect. Secrets are transient; no draft is written to Data.

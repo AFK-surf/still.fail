@@ -60,7 +60,7 @@ export function BackLink({ to, label }: { to: string; label: string }) {
   );
 }
 
-const KIND_ICON = { slack: SlackLogo, wechat: Chat } as const;
+const KIND_ICON = { slack: SlackLogo, feishu: FeishuLogo, wechat: Chat } as const;
 
 /** What a connect connects to, as an icon: its kind, not its identity. */
 export function ConnectKindIcon({ kind, size = 16, tile }: { kind: string; size?: number; tile?: boolean }) {
@@ -83,6 +83,22 @@ export function SlackLogo({ size = 16 }: { size?: number; strokeWidth?: number }
       <path fill="#2EB67D" d="M53.76 19.884a5.381 5.381 0 0 0-5.376-5.386 5.381 5.381 0 0 0-5.376 5.386v5.387h5.376a5.381 5.381 0 0 0 5.376-5.387m-14.336 0V5.52A5.381 5.381 0 0 0 34.048.133a5.381 5.381 0 0 0-5.376 5.387v14.364a5.381 5.381 0 0 0 5.376 5.387 5.381 5.381 0 0 0 5.376-5.387" />
       <path fill="#ECB22E" d="M34.048 54a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386h-5.376v5.386A5.381 5.381 0 0 0 34.048 54m0-14.365h14.336a5.381 5.381 0 0 0 5.376-5.386 5.381 5.381 0 0 0-5.376-5.387H34.048a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386" />
       <path fill="#E01E5A" d="M0 34.249a5.381 5.381 0 0 0 5.376 5.386 5.381 5.381 0 0 0 5.376-5.386v-5.387H5.376A5.381 5.381 0 0 0 0 34.249m14.336 0v14.364A5.381 5.381 0 0 0 19.712 54a5.381 5.381 0 0 0 5.376-5.387V34.249a5.381 5.381 0 0 0-5.376-5.387 5.381 5.381 0 0 0-5.376 5.387" />
+    </svg>
+  );
+}
+
+/** Where a thread elsewhere is (a place's `surface`, a connect's kind): Feishu's mark for Feishu, else Slack's. */
+export function ElsewhereLogo({ kind, size = 16 }: { kind: string | null | undefined; size?: number }) {
+  return kind === "feishu" || kind?.startsWith("feishu:") ? <FeishuLogo size={size} /> : <SlackLogo size={size} />;
+}
+
+/** Feishu's (Lark's) mark in its own colours: the teal wing, the blue body, the navy tail. */
+export function FeishuLogo({ size = 16 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" className="feishu-logo">
+      <path fill="#00D6B9" d="M12.3 8.6h14.5c1.6 0 3.1.8 4 2.2l7.2 10.8-11.3 6.1L12.3 8.6Z" />
+      <path fill="#3370FF" d="M4.2 18.9c7 6.5 15.2 11.5 24.3 14.2 4.4 1.3 9.2-.2 12-3.8l3.4-4.5c1.1-1.4 2.6-2.4 4.1-2.8-2.9-1.5-6.4-1.5-9.4.1L26.3 27.6c-8.1-1.7-15.6-4.8-22.1-8.7Z" />
+      <path fill="#133C9A" d="M4.2 18.9v15.7c0 1.4.8 2.7 2 3.4 6.4 3.7 14 5 21.4 3.5 4.6-.9 8.6-3.5 11.3-7.2l1.6-2.2c-2.8 3.4-7.5 4.8-11.9 3.5C19.4 32.9 11.2 26.9 4.2 18.9Z" />
     </svg>
   );
 }

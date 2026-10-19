@@ -39,7 +39,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
-import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
+import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, ElsewhereLogo, Empty, FeishuLogo, ICON, IconButton, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
 import { useRenaming } from "../Rename.tsx";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
@@ -82,7 +82,7 @@ function useChatOpened(chat: ChatView | undefined): void {
   useEffect(() => {
     if (!chat || reported.current) return;
     reported.current = true;
-    const surface = !chat.thread || (chat.thread.surface === "ember" || chat.thread.surface === "stillfail") ? "ember" : "slack";
+    const surface = !chat.thread || (chat.thread.surface === "ember" || chat.thread.surface === "stillfail") ? "ember" : chat.thread.surface.startsWith("feishu:") ? "feishu" : "slack";
     // The frame after the commit: when the messages are on screen.
     requestAnimationFrame(() => track("chat_opened", { surface, open: opening.cold ? "cold" : "warm", ms: Math.round(performance.now() - opening.at) }));
   }, [chat, opening]);
@@ -336,6 +336,11 @@ function ChatScreen({ session: chatSession }: { session: string }) {
               <a className={pageCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
             </Tip>
           )}
+          {chat.feishuUrl && (
+            <Tip label={t("web-pages.chat.openInFeishu")}>
+              <a className={pageCss.iconBtn} href={chat.feishuUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInFeishu")}><FeishuLogo /></a>
+            </Tip>
+          )}
           {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onMouseDown={keepFocus} onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
@@ -567,9 +572,11 @@ function JobsPanel({ station, session, chat }: { station: string; session: strin
   );
 }
 
-/** The connect a Slack chat's agents reach Slack through: links into Slack start at its workspace. */
+/** The connect a Slack chat's agents reach Slack through (links into Slack start at its workspace); a Feishu chat's, by
+ * its surface. */
 function slackConnect(chat: ChatView) {
-  return chat.agents.find((a) => a.connect?.kind === "slack")?.connect ?? null;
+  const feishu = chat.thread?.surface.startsWith("feishu:") ? chat.thread.surface.slice("feishu:".length) : null;
+  return chat.agents.find((a) => (feishu !== null ? a.connect?.id === feishu : a.connect?.kind === "slack"))?.connect ?? null;
 }
 
 /** The chat itself: where it came from, who started it and takes part, its agents. Opens from the title bar. */
@@ -613,6 +620,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { stat
   const link = useLink();
   if (!chat?.thread) return null;
   const thread = chat.thread;
+  const feishu = thread.surface.startsWith("feishu:");
   const connect = slackConnect(chat);
   const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
   const where = chat.place;
@@ -623,7 +631,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { stat
     <>
       <dl className={css.details}>
         {row(t("web-pages.chat.info.from"), where
-          ? <span className={css.detailInline}><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : "Slack"} · {where}</span>
+          ? <span className={css.detailInline}><ElsewhereLogo kind={feishu ? "feishu" : "slack"} size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : feishu ? t("web-pages.connect.feishu.name") : "Slack"} · {where}</span>
           : t("web-pages.chat.info.native", { name: NAME }))}
         {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
         {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}

@@ -21,6 +21,7 @@ import { Button, Field, FilterMenu, GroupLabel, LinkButton, Gone, ListCard, List
 import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { PickStation } from "./Profiles.tsx";
+import { FEISHU_STEPS, FeishuSteps } from "./FeishuConnect.tsx";
 import * as settingsCss from "./styles/settings.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -41,10 +42,13 @@ export function Presence({ state }: { state: string }) {
   return <span className={settingsCss.mPresence} data-state={state} />;
 }
 
-/** A connect as its people see it in Slack: its bot's picture; Slack's mark until Slack has said what that is. */
+/** A connect as its people see it in Slack (or Feishu): its bot's picture; its kind's mark until that is known. */
 function ConnectAvatar({ connect, size }: { connect: Connect; size: number }) {
-  return connect.botImage ? <img className={chatCss.botAvatar} src={connect.botImage} width={size} height={size} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <SlackMark size={Math.round(size * 0.55)} />;
+  return connect.botImage ? <img className={chatCss.botAvatar} src={connect.botImage} width={size} height={size} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <SlackMark kind={connect.kind} size={Math.round(size * 0.55)} />;
 }
+
+/** Where a connect is, by name: its workspace or tenant, else its platform. */
+const placeOf = (connect: Connect) => connect.team ?? (connect.kind === "feishu" ? (connect.feishu?.domain === "lark" ? "Lark" : t("web-mobile.connects.feishu.name")) : "Slack");
 
 /** A connect in its station's list: its mark and name, how it runs, and its presence. */
 export function ConnectRow({ connect: c, onClick }: { connect: Connect; onClick: () => void }) {
@@ -213,7 +217,7 @@ function ConnectPage({ item }: { item: ConnectItem }) {
         <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
           <ConnectAvatar connect={connect} size={44} />
           <span className={partsCss.mGrow}>
-            <span className={listsCss.mRowTitle}>{connect.team ?? "Slack"}</span>
+            <span className={listsCss.mRowTitle}>{placeOf(connect)}</span>
             <span className={listsCss.mRowNote}>{station.name}{connect.createdBy ? t("web-mobile.connects.owner", { owner: connect.createdBy.shown?.display ?? connect.createdBy.name }) : ""}</span>
           </span>
         </div>
@@ -247,6 +251,22 @@ function ConnectPage({ item }: { item: ConnectItem }) {
           )}
         </ListCard>
         <p className={settingsCss.mPageNote}>{t("web-mobile.connects.runtimeNote", { runtime: connect.runtimeText })}</p>
+        {connect.feishu && (
+          <>
+            <SectionHeader title={t("web-mobile.connects.feishu.section")} start={24} />
+            <ListCard>
+              <ListRow>
+                <span className={historyCss.mRunLabel}>App ID</span>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${settingsCss.mWrap}`}>{connect.feishu.appId}</span>
+              </ListRow>
+              <ListRow onClick={() => openSecret(app, connect)}>
+                <span className={historyCss.mRunLabel}>Secret</span>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{connect.feishu.appSecret || "••••••••"}</span>
+                <span className={partsCss.mLink}>{t("web-mobile.connects.feishu.replaceShort")}</span>
+              </ListRow>
+            </ListCard>
+          </>
+        )}
         <SectionHeader title={t("web-mobile.app.recent")} start={24} />
         <ListCard>
           {sessions.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.connects.noSessions", { name: connect.name })}</span></ListRow>}
@@ -288,8 +308,11 @@ function ConnectMenu({ connect }: { connect: Connect }) {
       <SheetHead title={connect.name} />
       <div className={sheetsCss.mSheetScroll}>
         <PickRow label={t("web-mobile.connects.reconnect")} busy={reconnecting} failed={reconnectFailed} enabled={!busy} onClick={() => go(api.reconnect(connect.id), t("web-mobile.connects.reconnected"), "web-mobile.connects.reconnectFailed")} />
-        <PickRow label={t("web-mobile.connects.changeToken")} onClick={() => openTokens(app, connect)} />
-        {workspace?.url && <PickRow label={t("web-mobile.connects.openSlack")} onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
+        {connect.kind === "feishu"
+          ? <PickRow label={t("web-mobile.connects.feishu.replace")} onClick={() => openSecret(app, connect)} />
+          : <PickRow label={t("web-mobile.connects.changeToken")} onClick={() => openTokens(app, connect)} />}
+        {connect.kind !== "feishu" && workspace?.url && <PickRow label={t("web-mobile.connects.openSlack")} onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
+        {connect.feishu?.console && <PickRow label={t("web-mobile.connects.feishu.openConsole")} onClick={() => window.open(connect.feishu!.console!, "_blank", "noopener")} />}
         {connect.enabled
           ? <PickRow label={t("web-mobile.connects.disable")} sub={t("web-mobile.connects.disableNote")} busy={putting} failed={putFailed} enabled={!busy} onClick={() => go(api.putConnect(connect.id, { enabled: false }), t("web-mobile.connects.disabled"), "web-mobile.connects.disableFailed")} />
           : <PickRow label={t("web-mobile.connects.enable")} busy={putting} failed={putFailed} enabled={!busy} onClick={() => go(api.putConnect(connect.id, { enabled: true }), t("web-mobile.connects.enabled"), "web-mobile.connects.enableFailed")} />}
@@ -403,6 +426,40 @@ function SessionSheet({ item }: { item: ConnectItem }) {
           <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
           <Button label={choice === "new" ? t("web-mobile.connects.createUse") : t("web-mobile.connects.useThis")} primary busy={busy} enabled={choice !== connect.session}
             onClick={() => { app.sheet(null); api.bindSession(connect.id, choice === "new" ? null : choice, title).then(() => app.toast(choice === "new" ? t("web-mobile.connects.sessionCreated") : t("web-mobile.connects.sessionSwitched")), (e: Error) => app.toast(t("web-main.history.bindFailed", { error: e.message }))); }} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── a Feishu connect's secret ──────────────────────────────────────────
+
+function openSecret(app: MobileApp, connect: Connect) {
+  app.sheet({ height: 0.5, draggable: true, content: () => <SecretSheet connect={connect} /> });
+}
+
+/** Replaces a Feishu connect's App Secret: verified by its station before it is kept (so the sheet waits), then it reconnects. */
+function SecretSheet({ connect }: { connect: Connect }) {
+  const app = useApp();
+  const api = useApi();
+  const [secret, setSecret] = useState("");
+  const busy = useDoing("feishu.putSecret", { station: useStation().address, id: connect.id });
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-mobile.connects.feishu.replace")} />
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.connects.feishu.replaceNote")}</p>
+        <b className={sheetsCss.mFormLabel}>App Secret</b>
+        <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={secret} placeholder={connect.feishu?.appSecret ?? ""} onChange={(e) => { setSecret(e.target.value); setError(null); }} />
+        {error && <p className={partsCss.mError}>{error}</p>}
+        <div className={sheetsCss.mFormActions}>
+          <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+          <Button label={t("web-mobile.connects.saveConnect")} primary busy={busy} enabled={secret.trim() !== ""}
+            onClick={() => {
+              api.putFeishuSecret(connect.id, secret.trim()).then(() => { app.toast(t("web-mobile.connects.feishu.secretSaved")); app.sheet(null); }, (e: Error) => setError(e.message));
+            }} />
         </div>
       </div>
     </>
@@ -570,7 +627,10 @@ export function NewConnectScreen() {
     <div className={pagesCss.mScreen}>
       <NavBar back={view.back === "close" ? t("common.cancel") : t("web-mobile.connects.previous")} onBack={back} title={t("web-mobile.connects.add")} sub={<span className={barsCss.mNavbarNote}>{view.title} · {view.number} / {view.total}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
-        {step === "team" && noProfile ? (
+        {FEISHU_STEPS.includes(step) && !(step === "platform" && noProfile) && view.feishu && (step !== "done" || view.platform === "feishu") && (
+          <FeishuSteps view={view} flow={flow} mode={<ModeChoices value={mode} onChange={setMode} />} />
+        )}
+        {(step === "team" || step === "platform") && noProfile ? (
           <div className={newChatCss.mNewNone}>
             <img className={partsCss.mIllus} src={illustrationUrl("no-profile")} alt="" width={240} />
             <b>{t("web-mobile.connects.profileFirst")}</b>
@@ -672,7 +732,7 @@ export function NewConnectScreen() {
               onClick={() => flow.act("create", ({ id }) => { app.toast(t("web-mobile.connects.added")); app.replace(`${stationBase(station.address)}/connects/${encodeURIComponent(String(id))}`); })} />
           </>
         )}
-        {error && <p className={partsCss.mError}>{error}</p>}
+        {error && !FEISHU_STEPS.includes(step) && <p className={partsCss.mError}>{error}</p>}
         <div style={{ height: 30 }} />
       </div>
     </div>

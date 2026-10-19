@@ -690,7 +690,7 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
  */
 function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
   const publish = shownPublish(here.view);
-  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + 2) * 41
+  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.feishuUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + 2) * 41
     + (publish ? ((publish.may ? 1 : 0) + publish.links.length) * 41 + 10 : 0);
   // As tall as what it shows: its name and line, its agents, its rows.
   app.sheet({ height: Math.min(0.9, (25 + 84 + rows + 10 + 34) / window.innerHeight), content: () => <ChatInfo here={here} thread={thread} /> });
@@ -761,6 +761,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             </InfoRow>
             {view.xshare && <ShareRow here={here} thread={thread} share={view.xshare} />}
             {view.slackUrl && <a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openSlack")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a>}
+            {view.feishuUrl && <a className={listsCss.mInfoRow} href={view.feishuUrl} target="_blank" rel="noopener"><SlackMark kind="feishu" size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openFeishu")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a>}
             {open && <ArchiveRow here={here} view={view} thread={thread} />}
           </InfoList>
         )}

@@ -20,7 +20,7 @@ export { CoreError };
 
 // ── what is sent to a station (its admin API's inputs) ──
 
-export type ConnectKind = "slack";
+export type ConnectKind = "slack" | "feishu";
 
 /** POST /connects, PUT /connects/:id. Blank or missing tokens keep the stored ones. */
 export interface ConnectInput {
@@ -31,6 +31,8 @@ export interface ConnectInput {
   bind?: { runtime?: RuntimeKind; model?: string; effort?: string; profile?: string | null };
   /** `install`: an app installed through Slack's OAuth (its state), whose bot token the station has. */
   slack?: { appToken?: string; botToken?: string; appId?: string; install?: string };
+  /** A Feishu connect's App Secret replaced (blank: kept). */
+  feishu?: { appSecret?: string };
   /** Hands the connect to someone else (an email). Owners, admins, the station itself, or the current owner. */
   owner?: { id: string; name?: string };
 }
@@ -416,6 +418,8 @@ export function stationApi(t: StationCall) {
     evict: (key: string) => ops.sessionEvict<{ ok: true }>({ key }),
     putConnect: (id: string, input: ConnectInput) => ops.connectPut<Overview>({ id, input }),
     deleteConnect: (id: string) => ops.connectDelete<Overview>({ id }),
+    /** A Feishu connect's App Secret replaced: verified by its station first, then it reconnects. */
+    putFeishuSecret: (id: string, appSecret: string) => ops.feishuPutSecret<unknown>({ id, appSecret }),
     reconnect: (id: string) => ops.connectReconnect<{ ok: true }>({ id }),
     putProfile: (id: string, input: ProfileInput) => ops.profilePut<Overview>({ id, input }),
     /** One model named by hand, added to those enabled (a provider that does not list its models). */

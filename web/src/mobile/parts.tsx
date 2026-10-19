@@ -5,7 +5,7 @@ import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type R
 import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
 import { Check, ChevronLeft, Filter, Plug, Plus, Settings, type IconProps } from "@stillfail/ui/icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
-import { SlackLogo } from "../ui.tsx";
+import { ElsewhereLogo, SlackLogo } from "../ui.tsx";
 import { MARKS, MONO } from "../modelMarks.ts";
 import { QuotaBars } from "../components.tsx";
 import { doingMatches, failed as itFailed, useDoing, useDoingFailed } from "../doing.ts";
@@ -377,8 +377,9 @@ export function Mark({ size = 14 }: { size?: number }) {
   return <BrandMark size={size} />;
 }
 
-export function SlackMark({ size = 13 }: { size?: number }) {
-  return <SlackLogo size={size} />;
+/** `kind`: where it is (a connect's kind, a place's surface): Feishu's mark for Feishu, else Slack's. */
+export function SlackMark({ size = 13, kind }: { size?: number; kind?: string | null | undefined }) {
+  return kind ? <ElsewhereLogo kind={kind} size={size} /> : <SlackLogo size={size} />;
 }
 
 /** A scene beside text that says the same (Android's illustrations, as the web has them). */

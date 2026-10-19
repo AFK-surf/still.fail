@@ -31,6 +31,8 @@ export const mSwitch = style({
   },
 });
 export const mGreen = style({ color: "var(--m-green)" });
+/** A Feishu bot's QR code, centred in the step. */
+export const mQr = style({ display: "flex", justifyContent: "center", padding: "4px 0" });
 export const mStepsList = style({
   margin: "0", paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "8px", fontSize: vars.textUi,
   lineHeight: "1.55",
