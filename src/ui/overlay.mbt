@@ -71,7 +71,7 @@ pub fn Ctx::overlay(
   if dismissed is Some(_) {
     self.dismissals.remove(id)
     // the view closes it as it reads this: a frame again to draw it closed
-    self.wants_frame = true
+    self.request_frame()
   }
   let initial = if initial_focus == -2 {
     if trap {
@@ -114,7 +114,7 @@ pub fn Ctx::overlay(
   if escape && !inert {
     self.take_back(fn() {
       self.dismissals[id] = Back
-      self.wants_frame = true
+      self.request_frame()
     })
   }
   self.with_parent(i, fn() {
@@ -143,7 +143,7 @@ pub fn Ctx::overlay(
 /// closes the same way.
 pub fn Ctx::dismiss(self : Ctx, id : Int, why? : Dismiss = Escape) -> Unit {
   self.dismissals[id] = why
-  self.wants_frame = true
+  self.request_frame()
 }
 
 ///|
@@ -374,7 +374,7 @@ fn Ctx::layers_frame_end(self : Ctx) -> Unit {
       }
     }
     self.focus = target
-    self.wants_frame = true
+    self.request_frame()
   }
   // gone, or leaving: the focus back, when it was in it or is nowhere
   for l in self.last_layers {
@@ -393,7 +393,7 @@ fn Ctx::layers_frame_end(self : Ctx) -> Unit {
       })
     if back != 0 && inside {
       self.focus = back
-      self.wants_frame = true
+      self.request_frame()
     }
     if !self.layers.iter().any(fn(x) { x.id == l.id }) {
       self.layer_return.remove(l.id)

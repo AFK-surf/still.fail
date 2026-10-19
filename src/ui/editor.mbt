@@ -430,7 +430,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   if focused {
     let since = self.now - st.blink0
     let phase = (since / 530.0).to_int()
-    self.wake_at_time(st.blink0 + (phase + 1).to_double() * 530.0)
+    self.wake_at_time(st.blink0 + (phase + 1).to_double() * 530.0, later=true)
     let coff = if ml > 0 { st.caret + st.msel_a } else { st.caret }
     if phase % 2 == 0 {
       let (cx, cl) = tl.caret(coff)

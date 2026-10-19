@@ -123,6 +123,12 @@ pub struct Ctx {
   mut epoch : Int
   mut wants_frame : Bool
   mut wake_at : Double
+  /// the earliest wake asked for this frame that what is shown waits for (not `later`): -1 none
+  mut wake_waited : Double
+  /// who asked for the next frame first this frame (Ctx::request_frame's caller), and for the wake it waits for
+  /// (Ctx::wake_in's): what an unsettled run says (Ctx::unsettled)
+  mut frame_by : SourceLoc?
+  mut wake_by : SourceLoc?
   // hit targets of the last frame, in paint order, and those being collected
   mut hit_ids : Array[Int]
   mut hit_rects : Array[Double]
@@ -235,6 +241,9 @@ fn Ctx::new() -> Ctx {
     epoch: 0,
     wants_frame: false,
     wake_at: -1.0,
+    wake_waited: -1.0,
+    frame_by: None,
+    wake_by: None,
     hit_ids: [],
     hit_rects: [],
     next_hit_ids: [],
@@ -624,8 +633,12 @@ pub fn Ctx::pressed(self : Ctx, id : Int) -> Bool {
 }
 
 ///|
-pub fn Ctx::request_frame(self : Ctx) -> Unit {
+#callsite(autofill(loc))
+pub fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
   self.wants_frame = true
+  if self.frame_by is None {
+    self.frame_by = Some(loc)
+  }
 }
 
 ///|
@@ -702,16 +715,19 @@ pub fn Ctx::spring(
       s.x = s.target
       s.v = 0.0
     } else {
-      self.wants_frame = true
+      self.request_frame()
     }
   }
   s.x
 }
 
 ///|
-fn Ctx::wake_at_time(self : Ctx, t : Double) -> Unit {
+fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false) -> Unit {
   if self.wake_at < 0.0 || t < self.wake_at {
     self.wake_at = t
+  }
+  if !later && (self.wake_waited < 0.0 || t < self.wake_waited) {
+    self.wake_waited = t
   }
 }
 
@@ -774,7 +790,14 @@ pub fn Ctx::copy_text(self : Ctx, s : String) -> Unit {
 
 ///|
 /// A frame again `ms` from now (for what changes then: words that say
-/// "copied" for a while), without frames in between.
-pub fn Ctx::wake_in(self : Ctx, ms : Double) -> Unit {
-  self.wake_at_time(self.now + dmax(ms, 1.0))
+/// "copied" for a while), without frames in between. `later`: what is shown
+/// does not wait for it to be settled (Ctx::settled: words going back after a
+/// while, a refresh); by default it does (a press held long enough, a menu
+/// opening once the pointer rests).
+#callsite(autofill(loc))
+pub fn Ctx::wake_in(self : Ctx, ms : Double, later? : Bool = false, loc~ : SourceLoc) -> Unit {
+  if !later && self.wake_by is None {
+    self.wake_by = Some(loc)
+  }
+  self.wake_at_time(self.now + dmax(ms, 1.0), later~)
 }

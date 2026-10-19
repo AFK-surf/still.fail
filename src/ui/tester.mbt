@@ -8,6 +8,8 @@ pub struct Tester {
   mut w : Double
   mut h : Double
   mut frames : Int
+  /// the seed it was made with (Tester::finish_all's order)
+  seed : Int?
 }
 
 ///|
@@ -31,6 +33,8 @@ fn reset_globals() -> Unit {
   text_cache.generation = -1
   text_table.val = None
   image_cache.clear()
+  outside_tickets.clear()
+  views_told.clear()
   pagers.clear()
   code_fields.clear()
   code_clears.clear()
@@ -96,6 +100,10 @@ fn leaked_state() -> Array[String] {
 /// `text`: a real host's text as it kept it (MBUI_TEXT_RECORD's lines, textrec.mbt): its metrics, shaping and glyphs
 /// in place of the fake host's. `scale`: device pixels a point. `time`: the clock before the first frame (drawn 16 ms
 /// later). `stable`: output the same on every run, as a host asked by MBUI_BENCH=-1 makes it (Ctx::stable).
+/// `finish`: what the host does for the app (an image decoding, a native view
+/// loading) is done by itself at the next frame, in the order asked; false: it
+/// stays undone until the test says (Tester::finish, finish_all), so the test
+/// decides when and in what order it comes in.
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
@@ -111,6 +119,7 @@ pub fn Tester::new(
   scale? : Double = 2.0,
   time? : Double = 1000.0,
   stable? : Bool = false,
+  finish? : Bool = true,
 ) -> Tester {
   let f = {
     time,
@@ -133,6 +142,9 @@ pub fn Tester::new(
     bold: 0.0,
     views: [],
     view_ids: 0,
+    view_ready: {},
+    auto_finish: finish,
+    finished: [],
     site: [],
     cursor: 0,
     window_drags: 0,
@@ -156,20 +168,109 @@ pub fn Tester::new(
   }
   fx_reset(seed)
   g_view.val = view
-  let t = { fake: f, w, h, frames: 0 }
+  let t = { fake: f, w, h, frames: 0, seed }
   t.frame()
   t
+}
+
+///|
+/// What the app awaits from the fake host, oldest first: (1, an image's id) decoding, (2, a native view's id) not
+/// ready yet.
+pub fn Tester::pending(self : Tester) -> Array[(Int, Int)] {
+  let out : Array[(Int, Int)] = []
+  let ids = self.fake.images.keys().collect()
+  ids.sort()
+  for id in ids {
+    if self.fake.images.get(id) is Some(im) && im.state == 0 {
+      out.push((1, id))
+    }
+  }
+  for id in 1..=self.fake.view_ids {
+    if !self.fake.view_ready.contains(id) {
+      out.push((2, id))
+    }
+  }
+  out
+}
+
+///|
+/// What the app asked the host for is done, now (the host's event): `kind` 1 an image decoded (`ok` false: it could
+/// not be), 2 a native view ready (or failed). Seen from the next frame on. Nothing if it is not pending.
+pub fn Tester::finish(self : Tester, kind : Int, id : Int, ok? : Bool = true) -> Unit {
+  let state = if ok { 1 } else { -1 }
+  match kind {
+    1 =>
+      match self.fake.images.get(id) {
+        Some(im) if im.state == 0 => im.state = state
+        _ => return
+      }
+    2 => {
+      if id < 1 || id > self.fake.view_ids || self.fake.view_ready.contains(id) {
+        return
+      }
+      self.fake.view_ready[id] = state
+    }
+    _ => return
+  }
+  self.fake.wants = true
+  self.fake.finished.push((kind, id))
+  on_outside(kind, id, state)
+}
+
+///|
+/// What the fake host finished, in the order it did ((kind, id): Tester::finish).
+pub fn Tester::finished_order(self : Tester) -> Array[(Int, Int)] {
+  self.fake.finished.copy()
+}
+
+///|
+/// Whether what is shown is settled, as the last frame left it (Ctx::settled).
+pub fn Tester::settled(self : Tester) -> Bool {
+  ignore(self)
+  g().settled()
+}
+
+///|
+/// What the app awaits from the host, as effect.mb's outside says it (what it is), oldest first.
+pub fn Tester::awaited(self : Tester) -> Array[String] {
+  ignore(self)
+  runtime().awaited().map(a => a.0)
+}
+
+///|
+/// Everything pending is done (Tester::finish each): in the order asked, or, made with a seed, in an order drawn
+/// from it (another seed, another order; the same seed, the same).
+pub fn Tester::finish_all(self : Tester) -> Unit {
+  let ps = self.pending()
+  match self.seed {
+    Some(s) => {
+      // Fisher-Yates over a small LCG from the seed
+      let mut x = s.to_int64() * 6364136223846793005L + 1442695040888963407L
+      for i = ps.length() - 1; i > 0; i = i - 1 {
+        x = x * 6364136223846793005L + 1442695040888963407L
+        let j = ((x >> 33) % (i + 1).to_int64()).to_int()
+        let j = if j < 0 { -j } else { j }
+        let t = ps[i]
+        ps[i] = ps[j]
+        ps[j] = t
+      }
+    }
+    None => ()
+  }
+  for p in ps {
+    self.finish(p.0, p.1)
+  }
 }
 
 ///|
 /// Draws one frame, `ms` after the previous one.
 pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
   self.fake.time = self.fake.time + ms
-  // decodes started last frame are done
-  for _, im in self.fake.images {
-    if im.state == 0 {
-      im.state = 1
-      self.fake.wants = true
+  // decodes started last frame are done, the views opened are ready: the host's events for them (unless the test
+  // says when: Tester::finish)
+  if self.fake.auto_finish {
+    for p in self.pending() {
+      self.finish(p.0, p.1)
     }
   }
   self.fake.wants = false
@@ -188,14 +289,28 @@ pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
 
 ///|
 /// Draws frames until nothing asks for another (animations, scrolling and
-/// re-layouts have finished); returns how many it took.
-pub fn Tester::settle(self : Tester, max? : Int = 600) -> Int {
+/// re-layouts have finished); returns how many it took. Still asked for after
+/// `max`, the test fails, saying why and who asked (Ctx::unsettled);
+/// `unsettled_ok`: it goes on instead (a test of what runs on).
+pub fn Tester::settle(self : Tester, max? : Int = 600, unsettled_ok? : Bool = false) -> Int {
   let mut n = 0
   while n < max && (g().wants_frame || self.fake.wants) {
     self.frame()
     n = n + 1
   }
+  if !unsettled_ok && n >= max && (g().wants_frame || self.fake.wants) {
+    let why = "Tester::settle: not settled after \{max} frames: " + g().unsettled()
+    println(why)
+    abort(why)
+  }
   n
+}
+
+///|
+/// Why what is shown is not settled (Ctx::unsettled): "" when it is.
+pub fn Tester::unsettled(self : Tester) -> String {
+  ignore(self)
+  g().unsettled()
 }
 
 ///|

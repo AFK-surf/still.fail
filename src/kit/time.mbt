@@ -96,8 +96,16 @@ fn install() -> Unit {
 ///|
 /// Whether `on` has held for `ms` (by the Ctx's clock), asked each frame: a frame is asked for when it will have.
 /// Not on, it starts again from nothing, unless `keep`: then it waits where it was (a toast's time, paused while the
-/// pointer is over it). `key` in the scope it is asked in.
-pub fn after(c : @ui.Ctx, key : String, on : Bool, ms : Double, keep? : Bool = false) -> Bool {
+/// pointer is over it). `key` in the scope it is asked in. `later`: what is shown does not wait for it (Ctx::settled:
+/// a toast going away after its time); by default it does (a menu opening once the pointer rests).
+pub fn after(
+  c : @ui.Ctx,
+  key : String,
+  on : Bool,
+  ms : Double,
+  keep? : Bool = false,
+  later? : Bool = false,
+) -> Bool {
   install()
   let id = c.id("\u{2}after/" + key)
   let w = match kit.val.waits.get(id) {
@@ -127,7 +135,7 @@ pub fn after(c : @ui.Ctx, key : String, on : Bool, ms : Double, keep? : Bool = f
   if w.held >= ms {
     true
   } else {
-    c.wake_in(ms - w.held)
+    c.wake_in(ms - w.held, later~)
     false
   }
 }

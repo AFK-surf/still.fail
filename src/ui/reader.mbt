@@ -457,7 +457,7 @@ pub fn Ctx::pager(
       st.offset = 0.0
       st.vel = 0.0
     } else {
-      self.wants_frame = true
+      self.request_frame()
     }
   }
   let i = self.alloc(kind_box)
@@ -503,13 +503,13 @@ fn Ctx::turn(self : Ctx, st : PagerState, dir : Int) -> Unit {
   let next = st.index + dir
   if next < 0 || next >= st.count {
     st.edge = dir
-    self.wants_frame = true
+    self.request_frame()
     return
   }
   st.index = next
   // the page that showed is now one width away, and slides in from there
   st.offset = st.offset + dir.to_double() * st.width
-  self.wants_frame = true
+  self.request_frame()
 }
 
 ///|
@@ -560,7 +560,7 @@ fn Ctx::pager_release(self : Ctx, id : Int, vel : Double) -> Unit {
         self.turn(st, -1)
       }
       st.vel = vel
-      self.wants_frame = true
+      self.request_frame()
     }
     None => ()
   }

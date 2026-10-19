@@ -132,7 +132,7 @@ pub fn Ctx::focus_on(self : Ctx, id : Int, visible? : Bool = false) -> Unit {
   if visible {
     self.focus_visible = true
   }
-  self.wants_frame = true
+  self.request_frame()
 }
 
 ///|
@@ -299,7 +299,7 @@ fn Ctx::move_focus(self : Ctx, id : Int, roved? : Bool = false) -> Unit {
       }
     }
   }
-  self.wants_frame = true
+  self.request_frame()
 }
 
 ///|

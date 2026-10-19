@@ -33,6 +33,13 @@ struct FakeHost {
   // native views: what was asked of them, a line each ("open 1 video/mp4", "place 1 0 0 390 220 shown"…)
   views : Array[String]
   mut view_ids : Int
+  /// the views' readiness as the host's event told it (1 ready, -1 failed); not here: not yet
+  view_ready : Map[Int, Int]
+  /// what the host does for the app is done by itself at the next frame (Tester::new's `finish`); else the test says
+  /// when (Tester::finish, finish_all)
+  auto_finish : Bool
+  /// what it finished, in that order ((kind, id))
+  finished : Array[(Int, Int)]
   /// what its sites say, oldest first (Tester::site_says), as a site view's host would (view_site_next)
   site : Array[String]
   /// the pointer's shape as last told (desktop.mbt), and how often the window was asked to be dragged
@@ -342,6 +349,64 @@ fn h_back_enabled(on : Bool) -> Unit {
   }
 }
 
+// What the app waits on from the host (effect.mb's outside, src/effect/outside.mbt): an image or a PDF's page
+// decoding (kind 1), a native view until it is ready (kind 2: a page loaded, a video's first frame). Each is a ticket
+// of the window's runtime, ended by the host's event for it (@host.set_outside: kind, id, state) or when the app lets
+// it go; what is shown is settled (Ctx::settled) once none is left. A host that sends no such events (set_outside
+// answers false) gets no tickets: there, settled says nothing of its work.
+
+///|
+let outside_tickets : Map[Int64, Int] = Map::new()
+
+///|
+let outside_told : Ref[Bool] = { val: false }
+
+///|
+fn outside_key(kind : Int, id : Int) -> Int64 {
+  (kind.to_int64() << 32) | id.to_int64()
+}
+
+///|
+fn outside_start(kind : Int, id : Int, what : String) -> Unit {
+  if id > 0 && (outside_told.val || fake.val is Some(_)) {
+    outside_tickets[outside_key(kind, id)] = runtime().outside_start(what)
+  }
+}
+
+///|
+fn outside_end(kind : Int, id : Int) -> Unit {
+  let k = outside_key(kind, id)
+  match outside_tickets.get(k) {
+    Some(t) => {
+      outside_tickets.remove(k)
+      runtime().outside_end(t)
+    }
+    None => ()
+  }
+}
+
+///|
+/// The native views the host said were ready (or failed): their work is the host's no more, whatever is asked after.
+let views_told : Map[Int, Bool] = Map::new()
+
+///|
+/// The host's event: what it did for the app is done (`state`: 1 done, -1 failed), or (a view, 0) it waits on the
+/// app now: the bytes a player reads, a site's answer. Until the app answers, the host does nothing for it.
+fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
+  if kind == 2 && state != 0 {
+    views_told[id] = true
+  }
+  outside_end(kind, id)
+}
+
+///|
+/// The app answered what a view waits on (a read, a site's request): the host's again, until ready or it asks more.
+fn outside_answered(id : Int) -> Unit {
+  if !views_told.contains(id) && !outside_tickets.contains(outside_key(2, id)) {
+    outside_start(2, id, "view \{id} (after the app's answer)")
+  }
+}
+
 ///|
 fn h_log(s : String) -> Unit {
   match fake.val {
@@ -352,7 +417,7 @@ fn h_log(s : String) -> Unit {
 
 ///|
 fn h_image_load(src : String, max_px : Int) -> Int {
-  match fake.val {
+  let id = match fake.val {
     Some(f) => {
       f.image_loads.push((src, max_px))
       let (w, h) = f.image_sizes.get(src).unwrap_or((0, 0))
@@ -360,17 +425,21 @@ fn h_image_load(src : String, max_px : Int) -> Int {
     }
     None => @host.image_load(src, max_px)
   }
+  outside_start(1, id, "image \{id} \{src}")
+  id
 }
 
 ///|
 fn h_image_load_bytes(data : Bytes, max_px : Int) -> Int {
-  match fake.val {
+  let id = match fake.val {
     Some(f) => {
       f.image_loads.push(("bytes:\{data.length()}", max_px))
       fake_image(f, 400, 300, max_px)
     }
     None => @host.image_load_bytes(data, max_px)
   }
+  outside_start(1, id, "image \{id} (\{data.length()} bytes)")
+  id
 }
 
 ///|
@@ -395,6 +464,7 @@ fn h_image_info(id : Int, out : FixedArray[Double]) -> Int {
 
 ///|
 fn h_image_free(id : Int) -> Unit {
+  outside_end(1, id)
   match fake.val {
     Some(f) => f.images.remove(id)
     None => @host.image_free(id)
@@ -406,7 +476,7 @@ fn h_image_free(id : Int) -> Unit {
 
 ///|
 fn h_view_open(kind : Int, arg : String) -> Int {
-  match fake.val {
+  let id = match fake.val {
     Some(f) => {
       f.view_ids += 1
       f.views.push("open \{f.view_ids} \{kind} \{arg.length()}")
@@ -414,6 +484,8 @@ fn h_view_open(kind : Int, arg : String) -> Int {
     }
     None => @host.view_open(kind, arg)
   }
+  outside_start(2, id, "view \{id} (kind \{kind})")
+  id
 }
 
 ///|
@@ -441,6 +513,8 @@ fn h_view_place(
 
 ///|
 fn h_view_close(id : Int) -> Unit {
+  outside_end(2, id)
+  views_told.remove(id)
   match fake.val {
     Some(f) => f.views.push("close \{id}")
     None => @host.view_close(id)
@@ -458,6 +532,13 @@ fn h_view_control(id : Int, op : Int, value : Double) -> Unit {
 ///|
 fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
   match fake.val {
+    // a test that says when views are ready: not yet, until it does
+    Some(f) if !f.auto_finish && f.view_ready.get(id).unwrap_or(0) != 1 => {
+      for i in 0..<10 {
+        out[i] = 0.0
+      }
+      f.view_ready.get(id).unwrap_or(0)
+    }
     Some(_) => {
       out[0] = 10000.0
       out[1] = 0.0
@@ -517,6 +598,7 @@ fn h_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
 
 ///|
 fn h_view_site_end(id : Int, req : Int, error : String) -> Unit {
+  outside_answered(id)
   match fake.val {
     Some(f) => f.views.push("site end \{id} \{req} \{error}")
     None => @host.view_site_end(id, req, error)
@@ -566,6 +648,7 @@ fn h_view_read_next(id : Int, out : FixedArray[Double]) -> Int {
 
 ///|
 fn h_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
+  outside_answered(id)
   match fake.val {
     Some(_) => ()
     None => @host.view_read_answer(id, req, data, total)
@@ -609,13 +692,15 @@ fn h_pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
 
 ///|
 fn h_pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
-  match fake.val {
+  let id = match fake.val {
     Some(f) => {
       f.image_loads.push(("pdf:\{doc}/\{page}", max_px))
       fake_image(f, 1224, 1584, max_px)
     }
     None => @host.pdf_page_load(doc, page, max_px)
   }
+  outside_start(1, id, "image \{id} (PDF \{doc}, page \{page})")
+  id
 }
 
 ///|

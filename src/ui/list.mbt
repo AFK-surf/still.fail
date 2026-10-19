@@ -137,7 +137,7 @@ fn Ctx::step_ease(self : Ctx, st : ListState) -> Unit {
   st.ease = st.ease - take
   st.pending = st.pending + take
   st.last_scroll = self.now
-  self.wants_frame = true
+  self.request_frame()
 }
 
 ///|
@@ -481,7 +481,7 @@ fn Ctx::place_list(
   // frame more where this layout changed that (a scroll that took one frame, a wheel's or a key's, would otherwise
   // leave it drawn as before the scroll until something else asked for a frame)
   if was != (st.vis_first, st.vis_last, st.at_end, st.below) {
-    self.wants_frame = true
+    self.request_frame()
   }
   if st.glide {
     // each frame the same share of what is left (1 - e^(-dt/100ms)), at
@@ -494,14 +494,14 @@ fn Ctx::place_list(
       } else {
         let step = left * (1.0 - 2.718281828459045.pow(-self.dt / 100.0))
         st.pending = if step < 1.0 { dmin(left, 1.0) } else { step }
-        self.wants_frame = true
+        self.request_frame()
       }
     } else if st.count - 1 - last > 12 {
       st.scroll_to_end()
-      self.wants_frame = true
+      self.request_frame()
     } else {
       st.pending = ih
-      self.wants_frame = true
+      self.request_frame()
     }
   }
   // a finger pulls past the end it reached; a fling stops there
@@ -576,7 +576,7 @@ pub fn Ctx::list_scroll_to(
     Some(st) => {
       st.scroll_to(item)
       st.anchor_off = offset
-      self.wants_frame = true
+      self.request_frame()
     }
     None => ()
   }
@@ -594,7 +594,7 @@ pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit 
       } else {
         st.scroll_to_end()
       }
-      self.wants_frame = true
+      self.request_frame()
     }
     None => ()
   }
@@ -604,7 +604,7 @@ pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit 
 /// Scrolls list `key` by `dy` (down when positive), as a wheel does.
 pub fn Ctx::list_scroll_by(self : Ctx, key : String, dy : Double) -> Unit {
   self.scroll_list(self.id(key), dy)
-  self.wants_frame = true
+  self.request_frame()
 }
 
 ///|

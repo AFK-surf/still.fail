@@ -198,6 +198,7 @@ typedef struct {
   int state;  // 0 decoding, 1 ready, -1 failed or freed
   GLuint tex;
   int w, h, ow, oh;
+  int told;  // its decode told to the app (outside_cb), once: not again when decoded anew for a new context
 } mb_image;
 
 static mb_image *imgs;  // by id; ids are not reused
@@ -1033,6 +1034,30 @@ int32_t mb_host_reduce_motion(void) {
   return (*env)->CallStaticIntMethod(env, host_cls, m_reduce_motion);
 }
 
+// What the host did for the app is done (host_native.mbt's set_outside): kind 1 an image or a PDF's page decoded and
+// uploaded (Native.imageDone, below), 2 a native view ready (NativeViews.NView.tell: a page loaded and drawn, a
+// video's first frame shown, a sound that can play) or failed (state -1), or (a view, state 0: NView.askApp) waiting on
+// the app now, a player's read or a site's request: the host's work for it stops until the app answers. Told on the
+// GL thread, MoonBit's, between frames (each comes as a queued event, which GLSurfaceView runs before the next
+// onDrawFrame); ready or failed once per item.
+static void (*outside_cb)(int32_t, int32_t, int32_t);
+int32_t mb_host_set_outside(void (*f)(int32_t, int32_t, int32_t)) {
+  outside_cb = f;
+  return 1;
+}
+
+JNIEXPORT void JNICALL Java_dev_mbui_Native_outside(JNIEnv *env, jclass c, jint kind, jint id, jint state) {
+  if (outside_cb) outside_cb(kind, id, state);
+}
+
+// How the frame just built stands (host_native.mbt's frame_settled): settled, how many of the app's asks are not
+// answered yet, and what they are. Nothing here waits on it (screenshots come from adb).
+void mb_host_frame_settled(int32_t settled, int32_t awaiting, moonbit_string_t what) {
+  (void)settled;
+  (void)awaiting;
+  (void)what;
+}
+
 int32_t mb_host_bench_mode(void) {
   JNIEnv *env = env_();
   return (*env)->CallStaticIntMethod(env, host_cls, m_bench);
@@ -1161,9 +1186,12 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_imageDone(JNIEnv *env, jclass c, jin
     if (t) glDeleteTextures(1, &t);
     return;
   }
+  int told = imgs[id].told;
   mb_image *im = &imgs[id];
   if (im->tex && im->tex != t) glDeleteTextures(1, &im->tex);
-  *im = (mb_image){t ? 1 : -1, t, w, h, ow, oh};
+  *im = (mb_image){t ? 1 : -1, t, w, h, ow, oh, 1};
+  if (told) return;
+  if (outside_cb) outside_cb(1, id, t ? 1 : -1);
 }
 
 // A sign-in in the browser that comes back here (host_native.mbt `browser_login`): dev.mbui.BrowserLogin, a loopback

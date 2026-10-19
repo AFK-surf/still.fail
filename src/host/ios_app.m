@@ -481,6 +481,21 @@ int32_t mb_host_open_url(moonbit_string_t s) {
 
 int32_t mb_host_reduce_motion(void) { return UIAccessibilityIsReduceMotionEnabled() ? 1 : 0; }
 
+// What the host did for the app, told as it is done (apple.h's mb_host_outside: images, native views).
+static mb_outside_fn outside_cb;
+int32_t mb_host_set_outside(mb_outside_fn f) {
+  outside_cb = f;
+  return 1;
+}
+void mb_host_frame_settled(int32_t settled, int32_t awaiting, moonbit_string_t what) {
+  (void)settled;
+  (void)awaiting;
+  (void)what;
+}
+void mb_host_outside(int32_t kind, int32_t id, int32_t state) {
+  if (outside_cb) outside_cb(kind, id, state);
+}
+
 int32_t mb_host_bench_mode(void) {
   const char *b = getenv("MBUI_BENCH");
   return b ? atoi(b) : 0;

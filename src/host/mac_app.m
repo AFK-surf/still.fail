@@ -43,6 +43,25 @@ static const char *shot_path;
 static void tell_state(void);
 static const char *script;
 
+// A scripted run in stable mode (MBUI_SCRIPT with MBUI_BENCH=-1: screenshots) is settled, not paced: its frames are
+// not the display's but drawn one after another as fast as they are made, on a clock of their own (1/60 s a frame,
+// from 0), and none moves the clock on while the app awaits the host (what the frame just built said: an image
+// decoding, a view loading — effect.mb's outside, told here by mb_host_awaiting; the host's events for them,
+// mb_host_outside, end it): the app's time stands still until what it waits on is in, so what a frame shows does not
+// hang on how fast the machine is. The app's timers (wake_after) are on that clock too. The script's
+// steps count those frames; `shot` takes its picture once the app is settled (below).
+static int settle;
+static double settle_clock;        // ms, the frames' clock
+static double settle_wake = -1;    // when the app asked to be woken, on that clock (-1: not)
+static BOOL app_wants;             // the app (or the host for it) asked for a frame since the last one began
+static BOOL script_wants;          // the script goes on (its next step)
+static int awaiting;               // what the app awaits from the host, as its last frame said
+static BOOL app_settled;           // whether what it shows is settled, as its last frame said (ui's Ctx::settled)
+static char awaited_what[2048];    // what it awaits, as its last frame said
+static mb_outside_fn outside_cb;   // who is told as that is done (host_native.mbt's set_outside)
+static void pump_soon(void);
+static void script_next(void);
+
 double mb_now_ms(void) { return CACurrentMediaTime() * 1000.0; }
 
 CTFontRef mb_platform_font(double size, int weight, int mono) {
@@ -89,8 +108,10 @@ static void run_script_step(int step);
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   if (!self.window) return;
-  self.link = [self displayLinkWithTarget:self selector:@selector(tick:)];
-  [self.link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+  if (!settle) {
+    self.link = [self displayLinkWithTarget:self selector:@selector(tick:)];
+    [self.link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+  }
   [self addTrackingArea:[[NSTrackingArea alloc]
                             initWithRect:NSZeroRect
                                  options:NSTrackingMouseMoved | NSTrackingActiveAlways |
@@ -103,6 +124,11 @@ static void run_script_step(int step);
 
 - (void)requestFrame {
   self.wantFrame = YES;
+  if (settle) {
+    app_wants = YES;
+    pump_soon();
+    return;
+  }
   self.link.paused = NO;
 }
 
@@ -148,10 +174,69 @@ static double record_t0 = -1;
     self.wantFrame = YES;
     return;
   }
-  mb_cb.frame(s.width, s.height, scale, mb_now_ms());
+  if (settle) app_wants = NO;
+  mb_cb.frame(s.width, s.height, scale, settle ? settle_clock : mb_now_ms());
 }
 
 static int frames_drawn;
+
+// ---- a settled run's frames (settle, above) ----
+
+static BOOL pump_queued;
+static double awaiting_since = -1;
+static void pump(void);
+
+static void pump_soon(void) {
+  if (pump_queued) return;
+  pump_queued = YES;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    pump_queued = NO;
+    pump();
+  });
+}
+
+static void script_next(void) {
+  if (!settle) {
+    [the_view requestFrame];
+    return;
+  }
+  script_wants = YES;
+  pump_soon();
+}
+
+// Whether the app has nothing to do now, as its last frame said (ui's Ctx::settled: no frame asked for, no fiber
+// waiting for one or for the host, no timer set that what is shown waits for), and nothing asked for since.
+static BOOL settled(void) { return app_settled && !app_wants; }
+
+static void pump(void) {
+  MBView *v = the_view;
+  if (!v || !(app_wants || script_wants || settle_wake >= 0)) return;
+  if (awaiting > 0) {
+    // the clock stands still; what the app asks for meanwhile (a read it answers, a list measured) is drawn at the
+    // same time, not a step. Half a minute of it is said, and the run goes on.
+    if (app_wants) [v drawFrame];
+    if (awaiting_since < 0) awaiting_since = CACurrentMediaTime();
+    if (CACurrentMediaTime() - awaiting_since < 30) {
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 4 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{ pump(); });
+      return;
+    }
+    // what never came is a failure, said: not a picture taken as if it had
+    fprintf(stdout, "SETTLE FAIL: still awaiting after 30 s: %s\n", awaited_what);
+    fprintf(stderr, "SETTLE FAIL: still awaiting after 30 s: %s\n", awaited_what);
+    exit(3);
+  }
+  awaiting_since = -1;
+  settle_clock = frames_drawn * (1000.0 / 60.0);
+  if (settle_wake >= 0 && settle_wake <= settle_clock) {
+    settle_wake = -1;
+    app_wants = YES;
+  }
+  script_wants = NO;
+  [v drawFrame];
+  frames_drawn++;
+  run_script_step(frames_drawn);
+  if (app_wants || script_wants || settle_wake >= 0) pump_soon();
+}
 
 - (void)tick:(CADisplayLink *)l {
   if (!self.wantFrame) {
@@ -381,6 +466,15 @@ static int shift_down(void) {
 
 static void shot(const char *name) {
   if (!shot_path) return;
+  // the pages' pictures taken as they are now: the snapshot has them once they are in (ten seconds, else said)
+  mb_views_snap_all();
+  int i = 0;
+  for (; i < 2000 && mb_views_snapping(); i++)
+    [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];
+  if (mb_views_snapping()) {
+    fprintf(stderr, "SETTLE FAIL: a page's picture not taken in 10 s\n");
+    exit(3);
+  }
   char p[1024];
   snprintf(p, sizeof p, "%s/%s.png", shot_path, name);
   int ok = mb_render_snapshot(p);
@@ -418,7 +512,7 @@ static void run_script_step(int step) {
       case 140: shot("06-scrolled"); break;
       case 141: exit(0);
     }
-    [v requestFrame];
+    script_next();
   } else if (strcmp(script, "books") == 0) {
     // the shelf, a book opened, the next page, then the reader's panels:
     // with a mouse the contents and the layout docked at the right; in a
@@ -446,7 +540,7 @@ static void run_script_step(int step) {
       case 160: shot(narrow ? "books-5-contents" : "books-5-layout"); break;
       case 161: exit(0);
     }
-    [v requestFrame];
+    script_next();
   } else if (strcmp(script, "photos") == 0) {
     // decodes take a while: shots once they have had time; far down; back
     // up and a picture opened
@@ -461,7 +555,7 @@ static void run_script_step(int step) {
     }
     if (step == 340) shot("photos-3-viewer");
     if (step == 341) exit(0);
-    [v requestFrame];
+    script_next();
   } else if (strcmp(script, "kit") == 0) {
     // the demo's kit screen (MBUI_SCREEN=kit): the first page; scrolled, the next one pushed (the bar's button at its
     // right); swiped back from the left edge, held halfway; let go: the first page as it was left
@@ -478,7 +572,7 @@ static void run_script_step(int step) {
       case 171: exit(0);
     }
     if (step > 81 && step <= 91) mb_cb.pointer(1, 5 + (step - 81) * 20, 400, 0);
-    [v requestFrame];
+    script_next();
   } else if (strcmp(script, "home") == 0) {
     // still.fail's Home (APP=sffix, made-up chats; or APP=stillfail): the list (at MBUI_SHOT_AT, 30 by default: later
     // for the core's first answers); the workspaces' sheet from the name; closed, the first row tapped: its chat
@@ -504,7 +598,7 @@ static void run_script_step(int step) {
       case 171: exit(0);
     }
     if (k > 81 && k <= 91) mb_cb.pointer(1, 5 + (k - 81) * 20, 400, 0);
-    [v requestFrame];
+    script_next();
   } else if (strcmp(script, "chat") == 0) {
     // a chat (APP=sffix MBUI_FIXTURE=chat, or APP=stillfail with MBUI_OPEN_CHAT): as it opens (at MBUI_SHOT_AT, 30 by
     // default: later for the core's first answers), then scrolled up MBUI_CHAT_UP points (900 by default), then
@@ -521,7 +615,7 @@ static void run_script_step(int step) {
       case 160: shot("chat-3-up"); break;
       case 161: exit(0);
     }
-    [v requestFrame];
+    script_next();
   } else if (strcmp(script, "compose") == 0) {
     // still.fail's composer (APP=sffix MBUI_FIXTURE=chat, a phone's window): the field tapped, Chinese composed through
     // the input method's calls and committed, a new line (Enter), more words; ＋'s sheet; 文件 picked (MBUI_PICK_FILES
@@ -550,14 +644,28 @@ static void run_script_step(int step) {
       case 320: shot("compose-6-answered"); break;
       case 321: exit(0);
     }
-    [v requestFrame];
+    script_next();
   } else if (strcmp(script, "shot") == 0) {
-    // MBUI_SHOT_AT: the frame to take it at (later for what waits on something, as the core's first answers)
+    // settled (a stable run): once the app is (settled, above), from frame MBUI_SHOT_AT on (1); else at frame
+    // MBUI_SHOT_AT (30): later for what waits on something, as the core's first answers
     static int at;
-    if (!at) at = getenv("MBUI_SHOT_AT") ? atoi(getenv("MBUI_SHOT_AT")) : 30;
-    if (step == at) shot(getenv("MBUI_SHOT_NAME") ?: "main");
-    if (step == at + 1) exit(0);
-    [v requestFrame];
+    if (!at) at = getenv("MBUI_SHOT_AT") ? atoi(getenv("MBUI_SHOT_AT")) : settle ? 1 : 30;
+    if (settle) {
+      if (step >= at && settled()) {
+        shot(getenv("MBUI_SHOT_NAME") ?: "main");
+        exit(0);
+      }
+      // ten seconds of the app's own time and still not settled (an animation that never ends, a timer set again and
+      // again that is not `later`): a failure, said, not a picture
+      if (step >= at + 600) {
+        fprintf(stderr, "SETTLE FAIL: not settled after %d frames: %s\n", step, awaited_what);
+        exit(3);
+      }
+    } else {
+      if (step == at) shot(getenv("MBUI_SHOT_NAME") ?: "main");
+      if (step == at + 1) exit(0);
+    }
+    script_next();
   }
 }
 
@@ -629,6 +737,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   mb_cb = (mb_callbacks){frame, pointer, wheel, key, text};
   shot_path = getenv("MBUI_SHOT_DIR");
   script = getenv("MBUI_SCRIPT");
+  settle = script && !getenv("MBUI_RECORD") && getenv("MBUI_BENCH") && atoi(getenv("MBUI_BENCH")) < 0;
   record_dir = getenv("MBUI_RECORD");
   if (getenv("MBUI_RECORD_FROM")) record_from = atoi(getenv("MBUI_RECORD_FROM"));
   if (getenv("MBUI_RECORD_FRAMES")) record_frames = atoi(getenv("MBUI_RECORD_FRAMES"));
@@ -702,7 +811,22 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   }
 }
 
-double mb_host_now(void) { return mb_now_ms(); }
+double mb_host_now(void) { return settle ? settle_clock : mb_now_ms(); }
+
+int32_t mb_host_set_outside(mb_outside_fn f) {
+  outside_cb = f;
+  return 1;
+}
+
+void mb_host_frame_settled(int32_t settled_now, int32_t n, moonbit_string_t what) {
+  app_settled = settled_now != 0;
+  awaiting = n;
+  snprintf(awaited_what, sizeof awaited_what, "%s", mb_ns_from_string(what).UTF8String ?: "");
+}
+
+void mb_host_outside(int32_t kind, int32_t id, int32_t state) {
+  if (outside_cb) outside_cb(kind, id, state);
+}
 
 double mb_host_event_time(void) { return event_time; }
 
@@ -711,6 +835,12 @@ int32_t mb_host_platform(void) { return 0; }
 void mb_host_request_frame(void) { [the_view requestFrame]; }
 
 void mb_host_wake_after(double ms) {
+  if (settle) {
+    double at = settle_clock + ms;
+    if (settle_wake < 0 || at < settle_wake) settle_wake = at;
+    pump_soon();
+    return;
+  }
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(ms * 1e6)), dispatch_get_main_queue(),
                  ^{ [the_view requestFrame]; });
 }

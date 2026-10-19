@@ -81,6 +81,13 @@ extern "C" fn ffi_log(s : String) -> Unit = "mb_host_log"
 extern "C" fn ffi_bench_mode() -> Int = "mb_host_bench_mode"
 
 ///|
+extern "C" fn ffi_set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Int = "mb_host_set_outside"
+
+///|
+#borrow(what)
+extern "C" fn ffi_frame_settled(settled : Bool, awaiting : Int, what : String) -> Unit = "mb_host_frame_settled"
+
+///|
 extern "C" fn ffi_reduce_motion() -> Int = "mb_host_reduce_motion"
 
 extern "C" fn ffi_exit(code : Int) -> Unit = "mb_host_exit"
@@ -305,6 +312,21 @@ pub fn log(s : String) -> Unit {
 ///|
 pub fn bench_mode() -> Int {
   ffi_bench_mode()
+}
+
+///|
+/// Who is told as what the host does for the app is done (`f(kind, id, state)`: kind 1 an image or a PDF's page
+/// decoded, 2 a native view ready — a page loaded and its picture taken, a video's first frame —; state 1 done, -1
+/// failed), on the main thread, between frames. False where the host sends no such events.
+pub fn set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool {
+  ffi_set_outside(f) != 0
+}
+
+///|
+/// As the frame just built left it: whether what is shown is settled (ui's Ctx::settled), how many of the app's asks
+/// the host has not answered yet (effect.mb's outside) and what they are ("" when none).
+pub fn frame_settled(settled : Bool, awaiting : Int, what : String) -> Unit {
+  ffi_frame_settled(settled, awaiting, what)
 }
 
 ///|

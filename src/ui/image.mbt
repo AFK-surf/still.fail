@@ -345,7 +345,7 @@ fn Ctx::draw_image(
     1.0
   }
   if fade < 1.0 {
-    self.wants_frame = true
+    self.request_frame()
   }
   let (x, y, w, h, u0, v0, du, dv) = match fit {
     FitFill => (bx, by, bw, bh, 0.0, 0.0, 1.0, 1.0)

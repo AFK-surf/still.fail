@@ -98,10 +98,59 @@ final class NativeViews {
         // placed: x y w h cx0 cy0 cx1 cy1, in pixels; shown
         final float[] at = new float[8];
         boolean shown;
+        private boolean told;
 
         NView(int id, int kind) {
             this.id = id;
             this.kind = kind;
+        }
+
+        /**
+         * Its readiness told to the app, once (android_host.c's mb_host_set_outside: kind 2, state 1 ready, -1
+         * failed): on the GL thread, between frames, from any thread here.
+         */
+        void tell(int st) {
+            synchronized (this) {
+                if (told || closed) return;
+                told = true;
+            }
+            Host.view.toGL(() -> Native.outside(2, id, st));
+        }
+
+        /**
+         * What it asks of the app (a player's read, a site's request) put where the app finds it (`ask`), on the GL
+         * thread between frames, the app told first that until it answers the view waits on it, not on the host
+         * (state 0; not once it is ready): so no frame sees the ask before that is told.
+         */
+        void askApp(Runnable ask) {
+            Host.view.toGL(() -> {
+                boolean say;
+                synchronized (this) {
+                    say = !told && !closed;
+                }
+                if (say) Native.outside(2, id, 0);
+                ask.run();
+            });
+        }
+
+        /**
+         * A page's readiness once it is loaded: once what it shows is drawn when it shows (WebView's visual state
+         * callback), at once when it does not show (nothing of it is on the screen to wait for). The callback comes
+         * only for a view that is drawn; one that does not come within a second is not waited on.
+         */
+        void pageReady(WebView w) {
+            if (w == null) return;
+            if (!w.isShown() || w.getWidth() == 0 || w.getHeight() == 0) {
+                tell(1);
+                return;
+            }
+            w.postVisualStateCallback(id, new WebView.VisualStateCallback() {
+                @Override
+                public void onComplete(long requestId) {
+                    tell(1);
+                }
+            });
+            Host.main.postDelayed(() -> tell(1), 1000);
         }
 
         void make(Context c) {}
@@ -122,7 +171,11 @@ final class NativeViews {
         views.put(id, v);
         Host.log("view " + id + ": open " + (kind == 1 ? "video " + arg : kind == 2 ? "page of " + arg.length() + " characters" : "site at " + arg));
         Host.main.post(() -> {
-            if (v.closed || layer == null) return;
+            if (v.closed) return;
+            if (layer == null) {
+                v.tell(-1);
+                return;
+            }
             v.clip = new FrameLayout(layer.getContext());
             v.clip.setClipChildren(true);
             v.clip.setBackgroundColor(kind == 1 ? Color.BLACK : kind == 2 ? Color.WHITE : Color.TRANSPARENT);
@@ -484,8 +537,7 @@ final class NativeViews {
         Read ask(long offset, int length) throws IOException {
             Read r = new Read(nextRead.incrementAndGet(), offset, length);
             waiting.put(r.id, r);
-            asked.add(r);
-            Host.requestFrame();
+            askApp(() -> asked.add(r));
             long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(120);
             synchronized (r) {
                 while (!r.done) {
@@ -527,6 +579,9 @@ final class NativeViews {
                         if (dur != C.TIME_UNSET) duration = dur;
                         Host.log("view " + id + ": ready, " + (long) duration + " ms");
                     }
+                    // a player with no picture (a sound) is ready for the app once it can play; one with a picture once
+                    // its first frame shows (onRenderedFirstFrame)
+                    if (s == Player.STATE_READY && !player.getCurrentTracks().containsType(C.TRACK_TYPE_VIDEO)) tell(1);
                     buffering = s == Player.STATE_BUFFERING ? 1 : 0;
                     ended = s == Player.STATE_ENDED ? 1 : 0;
                     if (s == Player.STATE_ENDED) playing = 0;
@@ -556,6 +611,7 @@ final class NativeViews {
                 public void onRenderedFirstFrame() {
                     if (framed == 0) Host.log("view " + id + ": first frame shown");
                     framed = 1;
+                    tell(1);  // ready for the app: its first frame shows
                     Host.requestFrame();
                 }
 
@@ -564,6 +620,7 @@ final class NativeViews {
                     state = -1;
                     playing = 0;
                     Host.log("view " + id + ": cannot play: " + e.getErrorCodeName() + " " + e.getMessage());
+                    tell(-1);
                     Host.requestFrame();
                 }
             });
@@ -735,6 +792,7 @@ final class NativeViews {
                         framed = 1;
                         Host.log("view " + id + ": page loaded (" + bytes + " bytes of HTML)");
                     }
+                    pageReady(view);
                     Host.requestFrame();
                 }
 
@@ -743,6 +801,7 @@ final class NativeViews {
                     if (request.isForMainFrame()) {
                         state = -1;
                         Host.log("view " + id + ": the page failed: " + error.getDescription());
+                        tell(-1);
                         Host.requestFrame();
                     }
                 }
@@ -841,8 +900,9 @@ final class NativeViews {
                 hs.put(new org.json.JSONArray().put(h.getKey()).put(h.getValue()));
             }
             try {
-                say(new org.json.JSONObject().put("req", q.id).put("method", r.getMethod()).put("path", pathOf(r.getUrl()))
-                        .put("headers", hs).put("page", page).toString());
+                String asked = new org.json.JSONObject().put("req", q.id).put("method", r.getMethod())
+                        .put("path", pathOf(r.getUrl())).put("headers", hs).put("page", page).toString();
+                askApp(() -> said.add(asked));
             } catch (org.json.JSONException e) {
                 reqs.remove(q.id);
                 return text(500, e.toString());
@@ -991,7 +1051,16 @@ final class NativeViews {
                         framed = 1;
                         Host.log("view " + id + ": site page loaded (" + path + ")");
                     }
+                    pageReady(view);
                     moved(view, false);
+                }
+
+                @Override
+                public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                    if (request.isForMainFrame() && state == 0) {
+                        Host.log("view " + id + ": the site's page failed: " + error.getDescription());
+                        tell(-1);
+                    }
                 }
 
                 @Override

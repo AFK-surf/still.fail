@@ -110,7 +110,7 @@ pub fn toaster(
         let mut live = !kept.gone.contains(to.id)
         let mut dx = 0.0
         if live {
-          let mut away = after(c, k, !paused, duration, keep=true)
+          let mut away = after(c, k, !paused, duration, keep=true, later=true)
           // the swipe: followed while held, put away past a third or quick, else back
           match c.drag_of(tid) {
             Some(d) => {

@@ -13,6 +13,7 @@ typedef void (*mb_pointer_fn)(int32_t, double, double, int32_t);
 typedef void (*mb_wheel_fn)(double, double, double, double, int32_t);
 typedef void (*mb_key_fn)(int32_t, int32_t);
 typedef void (*mb_text_fn)(int32_t, moonbit_string_t, int32_t, int32_t);
+typedef void (*mb_outside_fn)(int32_t, int32_t, int32_t);
 
 typedef struct {
   mb_frame_fn frame;
@@ -45,6 +46,16 @@ NSString *mb_ns_from_string(moonbit_string_t s);
 
 // shared helpers (per platform)
 double mb_now_ms(void);
+
+// What the host did for the app is done (host_native.mbt's set_outside): kind 1 an image or a PDF's page decoded
+// (id: the image), 2 a native view ready (a page loaded and its picture taken, a video's first frame); state 1 done,
+// -1 failed, 0 (a view) waiting on the app now (bytes a player reads, a site's answer): the host's work for it stops
+// until the app answers. On the main thread, between frames (per platform).
+void mb_host_outside(int32_t kind, int32_t id, int32_t state);
+// whether a native view's picture for snapshots is being taken (apple_views.m): a snapshot waits for it
+int mb_views_snapping(void);
+// every loaded page's picture taken anew, before a snapshot (apple_views.m)
+void mb_views_snap_all(void);
 
 // native views (apple_views.m), kept under the canvas's view and seen through
 // its holes (kind 9 instances)

@@ -23,6 +23,7 @@ struct Image {
   int state;  // 0 decoding, 1 ready, -1 failed or freed
   int w, h, ow, oh;
   ID3D11ShaderResourceView *srv;
+  int untold;  // decoded (or failed), not yet told to the app (mb_images_tell)
 };
 
 struct Job {
@@ -35,6 +36,9 @@ struct Job {
 // by id (ids are not reused); the UI thread grows it, workers fill entries in
 static Image *imgs;
 static int nimgs, img_cap;
+// the ids of those finished and not told yet (mb_images_tell), under lock
+static int *done_ids;
+static int ndone, done_cap;
 static CRITICAL_SECTION lock;
 static PTP_POOL pool;
 static TP_CALLBACK_ENVIRON pool_env;
@@ -58,8 +62,13 @@ static void finish(int id, int state, int w, int h, int ow, int oh, ID3D11Shader
   EnterCriticalSection(&lock);
   Image *im = &imgs[id];
   if (im->state == 0) {
-    *im = {state, w, h, ow, oh, srv};
+    *im = {state, w, h, ow, oh, srv, 1};
     srv = NULL;
+    if (ndone >= done_cap) {
+      done_cap = done_cap ? done_cap * 2 : 64;
+      done_ids = (int *)realloc(done_ids, (size_t)done_cap * sizeof *done_ids);
+    }
+    done_ids[ndone++] = id;
   }
   LeaveCriticalSection(&lock);
   if (srv) srv->Release();  // freed meanwhile
@@ -273,6 +282,25 @@ void mb_host_image_free(int32_t id) {
   imgs[id] = {-1};
   LeaveCriticalSection(&lock);
   if (srv) srv->Release();
+}
+
+void mb_images_tell(mb_outside_fn f) {
+  if (!pool) return;  // no image asked for yet
+  for (;;) {
+    int id = 0, state = 0;
+    EnterCriticalSection(&lock);
+    while (ndone > 0 && !id) {
+      int i = done_ids[--ndone];
+      if (imgs[i].untold) {  // not freed meanwhile
+        imgs[i].untold = 0;
+        id = i;
+        state = imgs[i].state;
+      }
+    }
+    LeaveCriticalSection(&lock);
+    if (!id) return;
+    if (f) f(1, id, state);
+  }
 }
 
 void *mb_image_srv(int id) {

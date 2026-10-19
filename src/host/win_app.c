@@ -79,11 +79,14 @@ void mbc_frame(void);
 void mb_win_no_core_frame(void) {}
 #pragma comment(linker, "/alternatename:mbc_frame=mb_win_no_core_frame")
 
+static mb_outside_fn outside_cb;  // who is told as what the host does for the app is done (mb_host_set_outside)
+
 static void draw_frame(void) {
   RECT rc;
   GetClientRect(hwnd, &rc);
   want_frame = 0;
   mbc_frame();
+  mb_images_tell(outside_cb);
   if (rc.right <= 0 || rc.bottom <= 0) return;  // minimized; WM_SIZE asks again
   double was = scale;
   scale = GetDpiForWindow(hwnd) / 96.0;
@@ -618,6 +621,21 @@ int32_t mb_host_reduce_motion(void) {
   BOOL on = TRUE;
   SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &on, 0);
   return on ? 0 : 1;
+}
+
+// What the host did for the app is done (host_native.mbt's set_outside): kind 1 an image decoded (win_image.cpp,
+// told as each frame begins: on this thread, between frames, once per image). This host has no native views or PDFs
+// yet (view_open and pdf_page_load answer 0: nothing the app awaits).
+int32_t mb_host_set_outside(mb_outside_fn f) {
+  outside_cb = f;
+  return 1;
+}
+// How the frame just built stands (host_native.mbt's frame_settled): settled, how many of the app's asks are not
+// answered yet, and what they are. Nothing here waits on it yet.
+void mb_host_frame_settled(int32_t settled, int32_t awaiting, moonbit_string_t what) {
+  (void)settled;
+  (void)awaiting;
+  (void)what;
 }
 
 int32_t mb_host_bench_mode(void) {

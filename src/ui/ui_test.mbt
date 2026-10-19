@@ -329,3 +329,129 @@ test "a scripted run (MBUI_DRIVE) taps words on screen, types through the input 
   assert_true(failed.iter().any(fn(l) { l.contains("按了 1 次") }))
   assert_true(failed.contains("EXIT 1"))
 }
+
+///|
+test "a scripted step waits for the app to settle: a tap once what moves has stopped and the host's page is in" {
+  let frames = Ref::new(0)
+  let moving_until = Ref::new(0)
+  let ticket = Ref::new(0)
+  let opened_at = Ref::new(0)
+  let ended_at = Ref::new(0)
+  let tapped_at = Ref::new(0)
+  let t = @ui.Tester::new(fn(c) {
+    frames.val = frames.val + 1
+    // something moving (a sheet opening) for 40 frames after 动起来
+    if frames.val < moving_until.val {
+      c.request_frame()
+    }
+    // a page the host loads for 30 frames after 打开 (what hostcall.mbt asks of a host: a ticket until its event)
+    if ticket.val > 0 && frames.val >= opened_at.val + 30 {
+      @ui.runtime().outside_end(ticket.val)
+      ticket.val = 0
+      ended_at.val = frames.val
+    }
+    c.column(fn() {
+      if c.button("动起来") {
+        moving_until.val = frames.val + 40
+      }
+      if c.button("打开") {
+        ticket.val = @ui.runtime().outside_start("page 1 (a slow host)")
+        opened_at.val = frames.val
+      }
+      if c.button("按一下") {
+        tapped_at.val = frames.val
+      }
+    })
+    |> ignore
+  })
+  let log = t.drive("tap 动起来\ntap 按一下\nexit")
+  assert_true(log.contains("DRIVE PASS"))
+  assert_true(tapped_at.val >= moving_until.val)
+  let log = t.drive("tap 打开\ntap 按一下\nexit")
+  assert_true(log.contains("DRIVE PASS"))
+  assert_true(ended_at.val > opened_at.val)
+  assert_true(tapped_at.val > ended_at.val)
+  // `now`: at once, the app moving or not
+  let log = t.drive("tap 动起来\nnow tap 按一下\nexit")
+  assert_true(log.contains("DRIVE PASS"))
+  assert_true(tapped_at.val < moving_until.val)
+  t.settle() |> ignore
+}
+
+///|
+test "a scripted step the app never settles for fails, naming what is still awaited or that a frame is still asked for" {
+  let spinning = Ref::new(false)
+  let t = @ui.Tester::new(fn(c) {
+    if spinning.val {
+      c.request_frame()
+    }
+    c.column(fn() {
+      if c.button("打开") {
+        // a ticket never ended: the host never answers
+        @ui.runtime().outside_start("view 7 (a page that never loads)") |> ignore
+      }
+      if c.button("转起来") {
+        spinning.val = true
+      }
+      c.text("在这里") |> ignore
+    })
+    |> ignore
+  })
+  let failed = t.drive("timeout 300\ntap 打开\nuntil 在这里")
+  assert_true(
+    failed
+    .iter()
+    .any(fn(l) {
+      l.has_prefix(
+        "DRIVE FAIL line 3: until 在这里: the app did not settle in 300 ms (在这里 is on screen): awaiting view 7 (a page that never loads) since ",
+      )
+    }),
+  )
+  assert_true(failed.contains("EXIT 1"))
+  // what does not wait for it still goes (`now`, `wait`)
+  let log = t.drive("timeout 300\nnow until 在这里\nwait 50\nnow exit")
+  assert_true(log.contains("DRIVE PASS"))
+  // a frame asked for every frame (a spinner that never stops)
+  let t = @ui.Tester::new(fn(c) {
+    if spinning.val {
+      c.request_frame()
+    }
+    c.column(fn() {
+      if c.button("转起来") {
+        spinning.val = true
+      }
+    })
+    |> ignore
+  })
+  spinning.val = false
+  let failed = t.drive("timeout 300\ntap 转起来\nshot spun")
+  // (who asked for it: the view, here)
+  assert_true(
+    failed
+    .iter()
+    .any(fn(l) {
+      l.has_prefix("DRIVE FAIL line 3: shot spun: the app did not settle in 300 ms: a frame asked for (by ") &&
+      l.contains("ui_test.mbt")
+    }),
+  )
+  assert_false(failed.contains("SHOT spun"))
+  spinning.val = false
+}
+
+///|
+test "a scripted shot is taken once settled; a host that cannot take it is given 1.5 s" {
+  let frames = Ref::new(0)
+  let t = @ui.Tester::new(fn(c) {
+    frames.val = frames.val + 1
+    if frames.val < 20 {
+      c.request_frame()
+    }
+    c.text("一张图") |> ignore
+  })
+  frames.val = 0
+  let log = t.drive("shot one\nshot two\nexit")
+  assert_true(log.contains("SHOT one"))
+  assert_true(log.contains("SHOT two"))
+  assert_true(log.contains("DRIVE PASS"))
+  assert_true(frames.val >= 20 + 2 * (1500 / 16))
+}

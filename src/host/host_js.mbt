@@ -80,6 +80,12 @@ extern "js" fn js_log(s : String) -> Unit =
 extern "js" fn js_bench_mode() -> Int =
   #|() => globalThis.__mbhost.benchMode()
 
+extern "js" fn js_set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool =
+  #|(f) => globalThis.__mbhost.setOutside ? (globalThis.__mbhost.setOutside(f), true) : false
+
+extern "js" fn js_frame_settled(settled : Bool, awaiting : Int, what : String) -> Unit =
+  #|(s, n, w) => globalThis.__mbhost.frameSettled && globalThis.__mbhost.frameSettled(s, n, w)
+
 extern "js" fn js_exit(code : Int) -> Unit =
   #|(c) => globalThis.__mbhost.exit(c)
 
@@ -220,6 +226,20 @@ pub fn log(s : String) -> Unit {
 ///|
 pub fn bench_mode() -> Int {
   js_bench_mode()
+}
+
+///|
+/// Who is told as what the host does for the app is done (`f(kind, id, state)`, as host_native.mbt's). False where
+/// the host sends no such events.
+pub fn set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool {
+  js_set_outside(f)
+}
+
+///|
+/// As the frame just built left it: whether what is shown is settled, how many of the app's asks the host has not
+/// answered yet and what they are ("" when none).
+pub fn frame_settled(settled : Bool, awaiting : Int, what : String) -> Unit {
+  js_frame_settled(settled, awaiting, what)
 }
 
 ///|

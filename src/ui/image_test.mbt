@@ -87,3 +87,55 @@ test "contain letterboxes; a missing image draws only its background" {
   assert_eq(ims.length(), 1)
   assert_eq((ims[0][0], ims[0][1], ims[0][2], ims[0][3]), (0.0, 25.0, 100.0, 50.0))
 }
+
+///|
+test "what is shown is settled once the images it waits on are in, as the test says when" {
+  let view = fn(c : @ui.Ctx) {
+    c.column(fn() {
+      c.image("a.jpg", w=Px(100.0), h=Px(100.0)) |> ignore
+      c.image("b.jpg", w=Px(100.0), h=Px(100.0)) |> ignore
+    })
+    |> ignore
+  }
+  let t = @ui.Tester::new(view, images=[("a.jpg", 400, 400), ("b.jpg", 400, 400)], finish=false)
+  for _ in 0..<5 {
+    t.frame()
+  }
+  assert_eq(t.pending(), [(1, 1), (1, 2)])
+  assert_false(t.settled())
+  assert_eq(t.awaited(), ["image 1 a.jpg", "image 2 b.jpg"])
+  t.finish(1, 2)
+  t.settle() |> ignore
+  assert_eq(t.awaited(), ["image 1 a.jpg"])
+  assert_false(t.settled())
+  t.finish(1, 1, ok=false)
+  t.settle() |> ignore
+  assert_eq(t.pending(), [])
+  assert_true(t.settled())
+}
+
+///|
+test "finish_all brings what is pending in an order drawn from the seed" {
+  let names = ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]
+  let view = fn(c : @ui.Ctx) {
+    c.column(fn() {
+      for n in names {
+        c.image(n, w=Px(50.0), h=Px(50.0)) |> ignore
+      }
+    })
+    |> ignore
+  }
+  let run = fn(seed : Int) -> @ui.Tester {
+    let t = @ui.Tester::new(view, images=names.map(n => (n, 100, 100)), seed~, finish=false)
+    t.frame()
+    t.finish_all()
+    t.settle() |> ignore
+    t
+  }
+  let t7 = run(7)
+  assert_eq(t7.pending(), [])
+  assert_true(t7.settled())
+  assert_eq(t7.finished_order(), run(7).finished_order())
+  let orders = [1, 2, 3, 4, 5, 6, 7, 8].map(s => run(s).finished_order())
+  assert_true(orders.iter().any(o => o != orders[0]))
+}

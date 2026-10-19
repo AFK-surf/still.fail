@@ -62,6 +62,11 @@ priv struct Timer {
   seq : Int
   mut fire : () -> Unit
   mut live : Bool
+  /// set for a change some time later (a refresh, a caret's blink, words that go back after a while): what is
+  /// shown is not waiting for it to be settled (outside.mbt's `settled`)
+  later : Bool
+  /// who set it (the sleeping fiber's name; "" not said), for `unsettled`
+  who : String
 }
 
 ///|
@@ -169,6 +174,9 @@ pub struct Runtime {
   log : Array[String]
   /// Task resumptions so far.
   mut steps : Int
+  /// What it waits on from outside (outside.mbt): by ticket, what it is and since when.
+  priv awaited : Map[Int, (String, Int64)]
+  priv mut tickets : Int
 }
 
 ///|
@@ -199,6 +207,8 @@ fn Runtime::make(seed : Int, shuffle : Bool, start : Int64, clock : (() -> Int64
     defects,
     log: [],
     steps: 0,
+    awaited: Map::new(),
+    tickets: 0,
   }
 }
 
@@ -416,27 +426,35 @@ pub async fn pause() -> Unit noraise {
 }
 
 ///|
-fn Runtime::add_timer(self : Runtime, at : Int64, fire : () -> Unit) -> Timer {
+fn Runtime::add_timer(
+  self : Runtime,
+  at : Int64,
+  fire : () -> Unit,
+  later? : Bool = false,
+  who? : String = "",
+) -> Timer {
   self.seq += 1
-  let t = { at, seq: self.seq, fire, live: true }
+  let t = { at, seq: self.seq, fire, live: true, later, who }
   self.timers.push(t)
   t
 }
 
 ///|
 /// Calls `f` (sync code: a simulated host, a delivery) `ms` from now on the
-/// runtime's clock.
-pub fn Runtime::after(self : Runtime, ms : Int, f : () -> Unit) -> Unit {
-  ignore(self.add_timer(self.now() + ms.to_int64(), f))
+/// runtime's clock. `later`: a change some time later that what is shown does not wait for to be settled (a
+/// refresh); by default it does.
+pub fn Runtime::after(self : Runtime, ms : Int, f : () -> Unit, later? : Bool = false) -> Unit {
+  ignore(self.add_timer(self.now() + ms.to_int64(), f, later~))
 }
 
 ///|
-/// Waits `ms` on the runtime's clock.
-pub async fn sleep(ms : Int) -> Unit noraise {
+/// Waits `ms` on the runtime's clock. `later`: what is shown is not waiting for it (a refresh loop's pause, words
+/// that go back after a while); by default it is, and the runtime is not settled until it is over.
+pub async fn sleep(ms : Int, later? : Bool = false) -> Unit noraise {
   let t = current_task()
   let rt = t.rt
   let at = rt.now() + ms.to_int64()
-  let timer = rt.add_timer(at, () => t.wake())
+  let timer = rt.add_timer(at, () => t.wake(), later~, who=t.name)
   defer {
     if timer.live {
       timer.live = false

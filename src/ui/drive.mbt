@@ -33,8 +33,8 @@
 //   drag X Y DX DY [MS]         a finger down at X Y (negative: from the right, the bottom), moved by DX DY over MS
 //                               (300 by default), a move a frame, then lifted there
 //   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, once it holds still
-//   shot NAME                   the window's picture as $MBUI_SHOT_DIR/NAME.png (where the host cannot, "SHOT NAME"
-//                               is logged and the run waits 1.5 s for whoever takes it: adb's screencap)
+//   shot NAME                   the window's picture, once settled, as $MBUI_SHOT_DIR/NAME.png (where the host cannot,
+//                               "SHOT NAME" is logged and the run waits 1.5 s for whoever takes it: adb's screencap)
 //   noticed TEXT                one of the app's notifications (the system's, @host.notice_show) holds TEXT in its
 //                               title or words, within the timeout       nonotice TEXT   none does
 //   notice TEXT                 that notification, once there, tapped (as the system's shade sends the tap)
@@ -42,6 +42,19 @@
 //   exit                        ends the run: DRIVE PASS, exit 0
 //   linger MS                   the run passed (DRIVE PASS said now), the app left running MS more for what the last
 //                               step set off (a share sheet, a download): a check beside the run looks at it
+//   now STEP                    STEP as soon as it is due, the app settled or not (below): what is looked at or done
+//                               while something still moves (a tap on what a sheet going down only draws, a shot of
+//                               it on its way; after a `wait` into the motion)
+// A step that looks at the screen or acts on it (until, untiln, gone, field, empty, clear, tap, tap1, tapxy, hold,
+// type, mark, enter, backspace, back, paste, pasten, wheel, wheelat, move, hover, rightclick, key, resize, drag,
+// dragon, shot; exit and the script's end too) first waits, within its timeout, for the app to be settled
+// (Ctx::settled: the frame just drawn asks for no other, nothing is awaited from the host — an image decoding, a page
+// loading — or, where the app says so, from its core, and no timer or wake is set that is not `later`), so that a
+// page sliding in, a sheet opening, a list scrolling or a picture coming needs no `wait`; a check holds once it is so
+// at a settled frame. One the app never settles for fails, saying why (Ctx::unsettled: what is awaited since when,
+// who asked for a frame or a wake); one waiting more than a second says so on the log (DRIVE waiting …). `wait`
+// stays a pause in real time, for what is outside the app (a command beside the run, the other device, the station)
+// that no `until` can see, or for a point inside a motion (then `now` steps).
 // A step that fails logs DRIVE FAIL (its line, what was on screen), takes a shot "fail" and exits 1.
 
 ///|
@@ -63,6 +76,13 @@ priv struct Driver {
   mut gdy : Double
   mut gt0 : Double
   mut gms : Double
+  // when a shot the host cannot take was asked for (logged "SHOT NAME": whoever takes it has 1.5 s), -1 before
+  mut shot_at : Double
+  // frames in a row the app was settled at; whether this step's waiting for it was told (on the log, after a second)
+  mut calm : Int
+  /// whether steps first wait for the app to be settled (a host's run: MBUI_DRIVE_SETTLED=1; under the Tester, yes)
+  settles : Bool
+  mut told : Bool
   dir : String
 }
 
@@ -74,12 +94,14 @@ let driver : Ref[Driver?] = { val: None }
 fn drive_init() -> Unit {
   let script = @host.env_text("MBUI_DRIVE")
   if script != "" {
-    drive_start(script, @host.env("MBUI_SHOT_DIR"))
+    // (on a host only when asked for, for now: an app with what moves for ever where a flow looks, a placeholder's
+    // breath, never settles there; the frames' reasons the framework is to know first)
+    drive_start(script, @host.env("MBUI_SHOT_DIR"), settles=@host.env("MBUI_DRIVE_SETTLED") == "1")
   }
 }
 
 ///|
-fn drive_start(script : String, dir : String) -> Unit {
+fn drive_start(script : String, dir : String, settles? : Bool = true) -> Unit {
   let steps = script.split("\n").map(fn(l) { l.trim(chars=" \t\r").to_string() }).to_array()
   driver.val = Some({
     steps,
@@ -97,6 +119,10 @@ fn drive_start(script : String, dir : String) -> Unit {
     gdy: 0.0,
     gt0: 0.0,
     gms: 0.0,
+    shot_at: -1.0,
+    calm: 0,
+    settles,
+    told: false,
     dir,
   })
   h_log("DRIVE start: \{steps.length()} lines")
@@ -228,7 +254,8 @@ fn drive_shot(d : Driver, name : String) -> Bool {
 
 ///|
 fn drive_fail(c : Ctx, d : Driver, why : String) -> Unit {
-  h_log("DRIVE FAIL line \{d.at + 1}: \{d.steps[d.at]}: \{why}")
+  let line = if d.at < d.steps.length() { d.steps[d.at] } else { "(the script's end)" }
+  h_log("DRIVE FAIL line \{d.at + 1}: \{line}: \{why}")
   h_log("DRIVE FAIL on screen: " + screen_words(c))
   let f = field_words(c)
   if f != "" {
@@ -308,17 +335,65 @@ fn press(x : Double, y : Double, up : Bool) -> Unit {
 }
 
 ///|
+/// The steps that look at the screen or act on it: each first waits for the app to be settled (unless `now`).
+fn settles_first(cmd : String) -> Bool {
+  match cmd {
+    "until" | "untiln" | "gone" | "field" | "empty" | "clear" | "tap" | "tap1" | "tapxy" | "hold" | "type"
+    | "mark" | "enter" | "backspace" | "back" | "paste" | "pasten" | "wheel" | "wheelat" | "move" | "hover"
+    | "rightclick" | "key" | "resize" | "drag" | "dragon" | "shot" | "exit" => true
+    _ => false
+  }
+}
+
+///|
+/// The words a step looks for on screen, if it looks for some (for a failure's report).
+fn target_of(cmd : String, arg : String) -> String? {
+  let after_first = fn() {
+    match arg.find(" ") {
+      Some(i) => arg.unsafe_substring(start=i + 1, end=arg.length())
+      None => arg
+    }
+  }
+  match cmd {
+    "until" | "gone" | "tap" | "tap1" | "hover" | "rightclick" => Some(arg)
+    "untiln" | "wheelat" => Some(after_first())
+    "hold" =>
+      match arg.find(" ") {
+        Some(i) if number(arg.unsafe_substring(start=0, end=i)) > 0.0 => Some(after_first())
+        _ => Some(arg)
+      }
+    "dragon" => {
+      let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+      if words.length() >= 4 {
+        Some(words[3:].to_owned().join(" "))
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
 /// Runs the script's steps due this frame (after it was drawn): steps that only look run on at once; one that acts
 /// ends the frame's turn, so the app sees it before the next.
 fn drive_frame(c : Ctx) -> Unit {
   guard driver.val is Some(d) else { return }
-  c.wants_frame = true
+  // settled as the app left this frame, before the run asks for the next (it does, every frame, while it goes on);
+  // two frames running: the one that took the last step's input, then one built after it
+  let settled_now = c.settled()
+  d.calm = if settled_now { d.calm + 1 } else { 0 }
+  let calm = !d.settles || d.calm >= 2
+  // why not, as the app left it (before the run's own ask for a frame)
+  let why_not = if settled_now { "" } else { c.unsettled() }
+  c.request_frame()
   let now = h_now()
   if d.release_at >= 0.0 {
     if now < d.release_at {
       return
     }
     on_pointer(2, d.rx, d.ry, 0)
+    d.calm = 0
     d.release_at = -1.0
     d.at = d.at + 1
     d.since = -1.0
@@ -334,6 +409,7 @@ fn drive_frame(c : Ctx) -> Unit {
     on_pointer(1, x, y, 0)
     if f >= 1.0 {
       on_pointer(2, x, y, 0)
+      d.calm = 0
       d.gms = 0.0
       d.at = d.at + 1
       d.since = -1.0
@@ -348,6 +424,12 @@ fn drive_frame(c : Ctx) -> Unit {
       d.since = now
     }
     let waited = now - d.since
+    // `now STEP`: the step as it is due, settled or not
+    let (at_once, line) = if line.has_prefix("now ") {
+      (true, line.unsafe_substring(start=4, end=line.length()).trim(chars=" ").to_string())
+    } else {
+      (false, line)
+    }
     let (cmd, arg) = match line.find(" ") {
       Some(i) =>
         (
@@ -361,6 +443,34 @@ fn drive_frame(c : Ctx) -> Unit {
       d.since = -1.0
       d.seen_x = -1.0
       d.seen_y = -1.0
+      d.shot_at = -1.0
+      d.told = false
+    }
+    // a step that acted: what it set off is seen settled only from the frame after the one that took it (a press
+    // changes what that frame built after the part pressed; its picture may not show it yet)
+    let acted = fn() {
+      next()
+      d.calm = 0
+    }
+    if !at_once && !calm && settles_first(cmd) && d.shot_at < 0.0 {
+      if waited > d.timeout {
+        let seen = match target_of(cmd, arg) {
+          Some(w) =>
+            if on_screen(c, w).length() > 0 {
+              " (\{w} is on screen)"
+            } else {
+              " (\{w} is not on screen)"
+            }
+          None => ""
+        }
+        let why = if why_not == "" { "settled only now" } else { why_not }
+        drive_fail(c, d, "the app did not settle in \{d.timeout.to_int()} ms\{seen}: " + why)
+      } else if waited > 1000.0 && !d.told && why_not != "" {
+        // (said once a step, for whoever reads the log: what a slow step waits on)
+        d.told = true
+        h_log("DRIVE waiting for the app to settle (line \{d.at + 1}): " + why_not)
+      }
+      return
     }
     match cmd {
       "" => next()
@@ -408,7 +518,7 @@ fn drive_frame(c : Ctx) -> Unit {
         }
         if ok {
           h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
-          next()
+          if cmd == "notice" { acted() } else { next() }
           return
         } else if waited > d.timeout {
           drive_fail(c, d, "no such notification after \{d.timeout.to_int()} ms")
@@ -431,7 +541,7 @@ fn drive_frame(c : Ctx) -> Unit {
         }
         h_log("DRIVE \{cmd} \{arg} at \{x.to_int()},\{y.to_int()}")
         press(x, y, true)
-        next()
+        acted()
         return
       }
       "tapxy" => {
@@ -439,7 +549,7 @@ fn drive_frame(c : Ctx) -> Unit {
         let x = if xy[0] < 0.0 { c.width + xy[0] } else { xy[0] }
         let y = if xy[1] < 0.0 { c.height + xy[1] } else { xy[1] }
         press(x, y, true)
-        next()
+        acted()
         return
       }
       "hold" => {
@@ -515,21 +625,21 @@ fn drive_frame(c : Ctx) -> Unit {
         if !h_drive(0, arg) {
           on_text(0, arg, 0, 0)
         }
-        next()
+        acted()
         return
       }
       "mark" => {
         if !h_drive(1, arg) {
           on_text(1, arg, arg.length(), 0)
         }
-        next()
+        acted()
         return
       }
       "enter" => {
         if !h_drive(2, "") {
           on_key(key_enter, 0)
         }
-        next()
+        acted()
         return
       }
       "clear" => {
@@ -537,19 +647,19 @@ fn drive_frame(c : Ctx) -> Unit {
         if !h_drive(5, "") {
           on_key(key_backspace, 0)
         }
-        next()
+        acted()
         return
       }
       "backspace" => {
         if !h_drive(5, "") {
           on_key(key_backspace, 0)
         }
-        next()
+        acted()
         return
       }
       "back" => {
         on_back(2, 0.0, 0.0, 0)
-        next()
+        acted()
         return
       }
       "paste" | "pasten" => {
@@ -575,12 +685,12 @@ fn drive_frame(c : Ctx) -> Unit {
         if !h_drive(3, "") {
           on_text(0, words, 0, 0)
         }
-        next()
+        acted()
         return
       }
       "wheel" => {
         on_wheel(c.width / 2.0, c.height / 2.0, 0.0, number(arg), 0)
-        next()
+        acted()
         return
       }
       "move" => {
@@ -592,7 +702,7 @@ fn drive_frame(c : Ctx) -> Unit {
         let x = if xy[0] < 0.0 { c.width + xy[0] } else { xy[0] }
         let y = if xy[1] < 0.0 { c.height + xy[1] } else { xy[1] }
         on_pointer(1, x, y, 0)
-        next()
+        acted()
         return
       }
       "hover" | "rightclick" | "wheelat" => {
@@ -631,7 +741,7 @@ fn drive_frame(c : Ctx) -> Unit {
           }
           _ => on_wheel(x, y, 0.0, dy, 4)
         }
-        next()
+        acted()
         return
       }
       "key" =>
@@ -639,7 +749,7 @@ fn drive_frame(c : Ctx) -> Unit {
           Some((code, mods)) => {
             h_log("DRIVE key \{arg} (\{code} \{mods})")
             on_key(code, mods)
-            next()
+            acted()
             return
           }
           None => {
@@ -659,17 +769,18 @@ fn drive_frame(c : Ctx) -> Unit {
             None => h_log("DRIVE resize: the host cannot")
           }
         }
-        next()
+        acted()
         return
       }
       "shot" =>
-        if waited == 0.0 {
+        if d.shot_at < 0.0 {
           if drive_shot(d, arg) {
             next()
           } else {
+            d.shot_at = now
             return
           }
-        } else if waited >= 1500.0 {
+        } else if now - d.shot_at >= 1500.0 {
           next()
         } else {
           return
@@ -704,6 +815,18 @@ fn drive_frame(c : Ctx) -> Unit {
         return
       }
     }
+  }
+  // the script's end, as `exit`: once settled (what the last steps set off is done, a call to the core answered), so
+  // the app does not end under it
+  if d.since < 0.0 {
+    d.since = now
+  }
+  if !calm {
+    if now - d.since > d.timeout {
+      let why = if why_not == "" { "settled only now" } else { why_not }
+      drive_fail(c, d, "the app did not settle in \{d.timeout.to_int()} ms: " + why)
+    }
+    return
   }
   drive_end(0)
 }

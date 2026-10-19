@@ -76,7 +76,7 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
     if st.vel.abs() < 0.02 || st.x <= 0.0 || st.x >= st.max {
       st.vel = 0.0
     }
-    self.wants_frame = true
+    self.request_frame()
   }
   st.x = dclamp(st.x, 0.0, dmax(st.max, 0.0))
   st

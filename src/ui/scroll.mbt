@@ -447,7 +447,7 @@ fn Ctx::absorb(self : Ctx, st : ListState, edge : Int, vel : Double) -> Unit {
   } else {
     speed
   }
-  self.wants_frame = true
+  self.request_frame()
 }
 
 ///|
@@ -503,7 +503,7 @@ fn Ctx::release(self : Ctx, st : ListState, v : Double) -> Unit {
     st.fling = 0
     st.vel = v
   }
-  self.wants_frame = true
+  self.request_frame()
 }
 
 ///|
@@ -529,7 +529,7 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
       } else {
         let v = sign * vc * st.fling_dist / dmax(st.fling_dur, 1.0)
         st.vel = if v == 0.0 { sign * 1.0e-9 } else { v }
-        self.wants_frame = true
+        self.request_frame()
       }
     } else if st.fling == 2 {
       // UIScrollView's normal deceleration
@@ -546,7 +546,7 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
       if st.vel.abs() < 0.02 {
         st.stop()
       } else {
-        self.wants_frame = true
+        self.request_frame()
       }
     } else {
       st.pending = st.pending + st.vel * self.dt
@@ -554,7 +554,7 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
       if st.vel.abs() < 0.02 {
         st.vel = 0.0
       } else {
-        self.wants_frame = true
+        self.request_frame()
       }
     }
   }
@@ -578,7 +578,7 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
       self.rubber_spring(st)
     }
     if st.over_state == 2 {
-      self.wants_frame = true
+      self.request_frame()
     }
   }
 }

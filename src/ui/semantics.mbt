@@ -177,7 +177,7 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 /// `action` asked of the widget `id` (by a test, by the host's accessibility): its widget sees it the next frame.
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
   self.asked_actions.push((id, action))
-  self.wants_frame = true
+  self.request_frame()
   h_request_frame()
 }
 

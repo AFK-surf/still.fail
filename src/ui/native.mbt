@@ -518,9 +518,10 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
     }
     let before = v.state
     v.state = h_view_info(v.id, v.info)
-    if v.state != before || v.playing() {
-      // a player playing moves on its own: its time is shown
-      self.wants_frame = true
+    if v.state != before || (v.playing() && !v.buffering()) {
+      // a player playing moves on its own: its time is shown (not while it waits for what it needs: the host asks
+      // for a frame as it goes on)
+      self.request_frame()
     }
     match v.serve {
       Some(serve) => v.take_site(serve)
@@ -655,7 +656,7 @@ fn NativeView::take_site(self : NativeView, serve : (SiteRequest, SiteReply) -> 
           _ => ()
         }
         if was != (v.path, v.can_back, v.can_forward, v.loading, v.title) {
-          g().wants_frame = true
+          g().request_frame()
         }
       }
       _ => ()

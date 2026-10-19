@@ -188,6 +188,8 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) BOOL loaded;
 @property(nonatomic) int htmlLen;
 @property(nonatomic, strong) PImage *snap;
+@property(nonatomic) BOOL snapping;  // a picture of it being taken (refreshSnap)
+@property(nonatomic) BOOL told;      // its readiness told to the app (mb_host_outside)
 // a site's
 @property(nonatomic, strong) MBSiteHandler *handler;
 @property(nonatomic, strong) NSMutableArray<NSString *> *said;
@@ -383,6 +385,8 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   r.len = len;
   r.load = l;
   [self.pending addObject:r];
+  // the player waits on the app's bytes now: not the host's work until they come (apple.h's mb_host_outside, 0)
+  mb_host_outside(2, self.vid, 0);
   mb_host_request_frame();
 }
 
@@ -423,6 +427,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   if (total == -2) {
     vlog(@"view %d: read at %lld failed", self.vid, r.off);
     self.failed = YES;
+    [self tell:-1];
     for (MBLoad *x in [self.loads copy]) [self end:x error:YES];
     [self.pending removeAllObjects];
     return;
@@ -494,6 +499,12 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   dispatch_async(dispatch_get_main_queue(), ^{
     if (self.closed) return;
     [self logState];
+    // a player is ready for the app once its first frame can be shown (a video), or once it can play at all with
+    // no picture to show (a sound: its presentation size 0 × 0); or it failed
+    BOOL can = self.item.status == AVPlayerItemStatusReadyToPlay;
+    CGSize ps = self.item.presentationSize;
+    if (self.playerLayer.readyForDisplay || (can && ps.width == 0 && ps.height == 0)) [self tell:1];
+    else if (self.failed) [self tell:-1];
     mb_host_request_frame();
   });
 }
@@ -525,6 +536,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   self.observing = NO;
   [self.item removeObserver:self forKeyPath:@"status" context:kStatus];
   [self.playerLayer removeObserver:self forKeyPath:@"readyForDisplay" context:kReady];
+  [self.player removeObserver:self forKeyPath:@"timeControlStatus" context:kStatus];
 }
 
 // The frame showing now, for snapshots (the last one copied when no new one came); retained, or NULL.
@@ -588,16 +600,28 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     mb_host_request_frame();
     if (!self.loaded) vlog(@"view %d: site page loaded (%@)", self.vid, wv.URL.path);
   }
+  if (self.kind == 3) [self tell:1];
   if (self.closed || self.loaded) return;
   self.loaded = YES;
   vlog(@"view %d: page loaded", self.vid);
+  // ready for the app (its picture for snapshots is the host's own business: mb_views_snap_all, at a snapshot)
+  [self tell:1];
   [self refreshSnap];
   mb_host_request_frame();
+}
+
+// Its readiness told to the app (apple.h's mb_host_outside: kind 2), as it comes: ready (a page loaded and its picture
+// taken, a player's first frame), or failed.
+- (void)tell:(int)state {
+  if (self.told && state > 0) return;
+  self.told = state > 0;
+  mb_host_outside(2, self.vid, state);
 }
 
 - (void)pageFailed:(NSError *)e {
   if (self.loaded || self.closed) return;
   self.failed = YES;
+  [self tell:-1];
   vlog(@"view %d: page failed: %@", self.vid, e.localizedDescription);
   mb_host_request_frame();
 }
@@ -612,9 +636,12 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
 - (void)refreshSnap {
   if (!self.loaded || self.w <= 0 || self.h <= 0) return;
   __weak MBNative *me = self;
+  self.snapping = YES;
   [self.web takeSnapshotWithConfiguration:nil
                         completionHandler:^(PImage *img, NSError *e) {
                           if (img) me.snap = img;
+                          me.snapping = NO;
+                          mb_host_request_frame();
                         }];
 }
 
@@ -693,6 +720,9 @@ static MBNative *open_video(int32_t vid, NSString *mime) {
   v.content = pv;
   [v.item addObserver:v forKeyPath:@"status" options:0 context:kStatus];
   [v.playerLayer addObserver:v forKeyPath:@"readyForDisplay" options:0 context:kReady];
+  // playing, waiting for what it needs, paused: a frame as that changes (the app draws a playing one's time; one that
+  // waits moves on its own no more until this says so)
+  [v.player addObserver:v forKeyPath:@"timeControlStatus" options:0 context:kStatus];
   v.observing = YES;
   vlog(@"view %d: open video (%@, %@)", vid, mime, v.uti);
   return v;
@@ -765,6 +795,8 @@ static MBNative *open_web(int32_t vid, NSString *html) {
   NSString *accept = [r valueForHTTPHeaderField:@"Accept"];
   if ([accept hasPrefix:@"text/html"]) page = YES;
   [v say:@{@"req" : @(q.rid), @"method" : r.HTTPMethod ?: @"GET", @"path" : path, @"headers" : hs, @"page" : @(page)}];
+  // the site waits on the app's answer now (apple.h's mb_host_outside, 0)
+  mb_host_outside(2, v.vid, 0);
 }
 
 - (void)webView:(WKWebView *)wv stopURLSchemeTask:(id<WKURLSchemeTask>)task {
@@ -1115,6 +1147,19 @@ int mb_views_pass_through(double x, double y) {
 }
 
 int mb_views_count(void) { return (int)views.count; }
+
+// Whether a page's picture for snapshots is being taken (apple.h).
+int mb_views_snapping(void) {
+  for (MBNative *v in views.allValues)
+    if (v.snapping && !v.closed) return 1;
+  return 0;
+}
+
+// A snapshot is about to be taken: every page loaded and placed has its picture taken anew (apple.h).
+void mb_views_snap_all(void) {
+  for (MBNative *v in views.allValues)
+    if (v.kind >= 2 && !v.closed && v.loaded) [v refreshSnap];
+}
 
 void mb_views_draw_under(CGContextRef ctx, double scale) {
   size_t H = CGBitmapContextGetHeight(ctx);

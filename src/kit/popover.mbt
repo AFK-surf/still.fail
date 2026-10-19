@@ -108,7 +108,9 @@ pub fn tooltip(
   install()
   let id = c.id(key)
   let was = kit.val.opens.get(id).unwrap_or(false)
-  let hovered = c.hovered(trigger)
+  // over its trigger: by where the pointer is, not by what is on top there (the tip itself, the frame it first comes
+  // before it is placed, lies over the trigger: hovered alone, it shut and opened again every frame)
+  let hovered = c.hovered(trigger) || pointer_in(c, trigger)
   let focused = c.focus_shown(trigger)
   // pressed, or Escape: shut until the pointer and the focus have left it
   if c.pressed(trigger) || c.clicked(trigger) {

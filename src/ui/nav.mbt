@@ -212,7 +212,7 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
 ///|
 /// A frame, for what changed outside of one (or within one, after it).
 fn wake() -> Unit {
-  g().wants_frame = true
+  g().request_frame()
   h_request_frame()
 }
 
@@ -289,7 +289,7 @@ pub fn[P] Ctx::nav(
     if t >= 1.0 {
       nav.settle()
     } else {
-      self.wants_frame = true
+      self.request_frame()
     }
   }
   let n = nav.pages.length()
@@ -378,7 +378,7 @@ pub fn Ctx::back(self : Ctx) -> Bool {
   match self.back {
     Some(f) => {
       f(4, 0.0, 1.0, self.now)
-      self.wants_frame = true
+      self.request_frame()
       h_request_frame()
       true
     }

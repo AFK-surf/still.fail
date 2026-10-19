@@ -22,11 +22,13 @@ pub fn progress(
     Some(v) => Some(if max <= 0.0 { 0.0 } else if v <= 0.0 { 0.0 } else if v >= max { 1.0 } else { v / max })
     None => None
   }
-  if t is None {
-    // a band runs while it is not known: the next frame is wanted
+  // a band runs while it is not known: the next frame is wanted (not where nothing moves: a screenshot, motion
+  // reduced — the band stands at its start)
+  let still = c.still()
+  if t is None && !still {
     c.request_frame()
   }
-  let i = c.box(w~, fn() { look(c, { t, now: c.now() }) })
+  let i = c.box(w~, fn() { look(c, { t, now: if still { 0.0 } else { c.now() } }) })
   match (value, t) {
     (Some(v), Some(k)) =>
       c.semantics(i, ProgressBar, label~, value="\{(k * 100.0).round().to_int()}%", range=(0.0, max, v))

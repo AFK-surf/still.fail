@@ -184,7 +184,7 @@ test "progress: its value as a percentage and its range; not known, neither, and
   v.val = None
   t.frame()
   assert_eq(t.get(@ui.ProgressBar, label="Upload").range, None)
-  assert_eq(t.settle(max=5), 5)
+  assert_eq(t.settle(max=5, unsettled_ok=true), 5)
 }
 
 ///|

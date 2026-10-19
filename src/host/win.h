@@ -14,6 +14,7 @@ typedef void (*mb_pointer_fn)(int32_t, double, double, int32_t);
 typedef void (*mb_wheel_fn)(double, double, double, double, int32_t);
 typedef void (*mb_key_fn)(int32_t, int32_t);
 typedef void (*mb_text_fn)(int32_t, moonbit_string_t, int32_t, int32_t);
+typedef void (*mb_outside_fn)(int32_t, int32_t, int32_t);
 
 typedef struct {
   mb_frame_fn frame;
@@ -38,6 +39,9 @@ void *mb_render_device(void);  // ID3D11Device *
 
 // images (win_image.cpp): the ID3D11ShaderResourceView * of a ready one
 void *mb_image_srv(int id);
+// the images decoded (or failed) since the last call, each told once to f(1, id, state) on the calling thread (the
+// UI thread, between frames: host_native.mbt's set_outside); freed ones are not told
+void mb_images_tell(mb_outside_fn f);
 
 // app (win_app.c): asks for a frame from any thread
 void mb_app_wake(void);
