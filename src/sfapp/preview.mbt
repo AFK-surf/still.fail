@@ -1414,8 +1414,14 @@ fn timeline(c : @ui.Ctx, v : Viewer, n : @ui.NativeView, dur : Double, pos : Dou
     _ => ()
   }
   c.box(w=Fill(1.0), h=Px(22.0), padx=6.0, justify=JCenter, id~, fn() {
-    c.box(w=Fill(1.0), h=Px(4.0), radius=2.0, bg=0xFFFFFF33L, fn() {
-      c.box(w=Fill(dmax(part, 0.0001)), h=Px(4.0), radius=2.0, bg=dark_text, fn() {  }) |> ignore
+    // what has played, then the rest (Fill shares the row: one alone would fill it)
+    c.box(dir=Row, w=Fill(1.0), h=Px(4.0), radius=2.0, bg=0xFFFFFF33L, fn() {
+      if part > 0.0 {
+        c.box(w=Fill(part), h=Px(4.0), radius=2.0, bg=dark_text, fn() {  }) |> ignore
+      }
+      if part < 1.0 {
+        c.box(w=Fill(1.0 - part), h=Px(4.0), fn() {  }) |> ignore
+      }
     })
     |> ignore
     c.layer(fn() {
