@@ -196,7 +196,7 @@ private fun Note(text: String) = Text(text, fontSize = 15.sp, color = C.muted, m
 private fun SignInFirst(onOpenApp: () -> Unit) {
     Note(t("android-misc.shareIn.signIn"))
     Text(
-        t("android-misc.shareIn.openApp"), fontSize = 15.sp, color = C.accent, fontWeight = FontWeight.SemiBold,
+        t("android-misc.shareIn.openApp"), fontSize = 15.sp, color = C.link, fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(horizontal = 20.dp).padding(vertical = 8.dp).pressText { onOpenApp() },
     )
     Spacer(Modifier.heightIn(min = 24.dp))

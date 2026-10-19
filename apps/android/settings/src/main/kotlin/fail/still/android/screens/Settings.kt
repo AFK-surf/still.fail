@@ -253,7 +253,7 @@ private fun Relays(view: WorkspaceView, cloud: Cloud) {
             ask(app, t("android-settings.relays.add"), "", "https://relay.example.com", t("android-settings.relays.addAction"), hint = t("android-settings.relays.hint")) {
                 cloud.setRelays(view.id, view.relays + it); app.toast = t("android-settings.relays.added")
             }
-        })) { Text(t(if (busy) "common.saving" else "android-settings.relays.add"), fontSize = 15.sp, color = C.accent) }
+        })) { Text(t(if (busy) "common.saving" else "android-settings.relays.add"), fontSize = 15.sp, color = C.link) }
     }
     Text(t("android-settings.relays.lead", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp))
 }
@@ -381,8 +381,8 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
             else {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(t("android-settings.add.picked", "n" to list.size, "picked" to picked.count { it !in inside }), fontSize = 13.sp, color = C.muted, modifier = Modifier.weight(1f))
-                    Text(t("android-settings.all"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText { picked = list.map { it.email }.filter { it !in inside }.toSet() })
-                    Text(t("android-settings.none"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText { picked = emptySet() })
+                    Text(t("android-settings.all"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { picked = list.map { it.email }.filter { it !in inside }.toSet() })
+                    Text(t("android-settings.none"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { picked = emptySet() })
                 }
                 // The rows out to the sheet's sides, their words in line with the fields'.
                 Column(Modifier.bleed(20.dp)) {
@@ -510,7 +510,7 @@ private fun Joined(text: String, onDone: () -> Unit) {
     Row(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.green.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         IconIn(Icons.Check, 16.dp, C.green)
-        Text(text, fontSize = 14.sp, color = C.green)
+        Text(text, fontSize = 14.sp, color = C.greenInk)
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("common.done"), primary = true) { onDone() } }
 }
@@ -635,7 +635,7 @@ fun FirstStation(current: WorkspaceEntry) {
                     // A station the viewer manages in another workspace, added here as it is instead (docs/multi-workspace.md).
                     val joinable by rememberTopic<JoinableView>(app.core, Topics.joinable(current.workspace.id))
                     if (joinable.value?.let { it.offered && it.items.isNotEmpty() } == true) {
-                        Text(t("web-pages.settings.stations.firstExisting"), fontSize = 14.sp, color = C.accent,
+                        Text(t("web-pages.settings.stations.firstExisting"), fontSize = 14.sp, color = C.link,
                             modifier = Modifier.clickable { openAddStation(app, current, emptyList(), existingFirst = true) })
                     }
                 }

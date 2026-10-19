@@ -243,7 +243,7 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         if (current != null) {
             Label(t("android-misc.workspace.current"))
-            RowsCard(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp), ground = C.bg) {
+            RowsCard(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp), ground = C.chip) {
                 PickRow(current.name, sub = currentOf.account.email, checked = true, leading = if (anyMarked) ({ WorkspaceIcon(current) }) else null) { app.sheet = null }
             }
         }

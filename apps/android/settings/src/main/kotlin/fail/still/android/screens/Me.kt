@@ -79,7 +79,7 @@ fun MeScreen(current: WorkspaceEntry) {
             }
             val opening = app.isDoing("auth.begin")
             ListRow(onClick = if (opening) null else ({ scope.launch { signIn(app, context) } })) {
-                Text(t("android-settings.me.addAccount"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+                Text(t("android-settings.me.addAccount"), fontSize = 15.sp, color = C.link, modifier = Modifier.weight(1f))
                 if (opening) Spinner(inline = true)
             }
         }

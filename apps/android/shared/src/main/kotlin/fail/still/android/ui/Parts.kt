@@ -487,7 +487,7 @@ fun NavBack(label: String, onClick: () -> Unit) {
     Layout(
         content = {
             IconIn(Icons.ChevronLeft, 22.dp, C.accent)
-            Text(label, fontSize = 17.sp, color = C.accent, maxLines = 1, softWrap = false)
+            Text(label, fontSize = 17.sp, color = C.link, maxLines = 1, softWrap = false)
         },
         modifier = Modifier.clip(Smooth(8.dp)).clickable(onClick = onClick).padding(end = 6.dp, top = 4.dp, bottom = 4.dp),
     ) { (chevron, word), constraints ->

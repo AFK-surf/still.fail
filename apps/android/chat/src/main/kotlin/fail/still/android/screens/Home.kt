@@ -371,7 +371,7 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, filter: String) {
         else if (filter == "watching") Text(t("android-chat.home.empty.watching"), fontSize = 14.sp, color = C.muted)
         else {
             Text(if (view.stations.size > 1) t("android-chat.home.empty.many") else t("android-chat.home.empty.one"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
-            Text(t("android-chat.newChat"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText { app.push(Screen.NewChat) })
+            Text(t("android-chat.newChat"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { app.push(Screen.NewChat) })
         }
     }
 }

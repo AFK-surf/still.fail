@@ -232,7 +232,7 @@ private fun ShareRow(skill: SkillFile, station: String, changed: () -> Unit) {
         Switch(on)
     }
     val conflicts = skill.share?.conflicts.orEmpty()
-    if (conflicts.isNotEmpty()) Text(t("web-main.memory.share.conflicts", "names" to conflicts.joinToString(t("web-main.list.separator"))), fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(top = 6.dp))
+    if (conflicts.isNotEmpty()) Text(t("web-main.memory.share.conflicts", "names" to conflicts.joinToString(t("web-main.list.separator"))), fontSize = 12.sp, color = C.warnInk, modifier = Modifier.padding(top = 6.dp))
 }
 
 /** Pages to pick between, as a row of pills scrolled across when they do not fit (none for a single page): a skill's

@@ -99,7 +99,7 @@ private fun PublishedRow(app: AppState, station: String, thread: Long, link: Cha
 /** A link's words as a button (in the accent, no frame), as the phone's web draws one (parts.tsx LinkButton). */
 @Composable
 private fun TextAction(label: String, onClick: () -> Unit) {
-    Text(label, fontSize = 14.sp, color = C.accent, modifier = Modifier.clip(Smooth(6.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 2.dp))
+    Text(label, fontSize = 14.sp, color = C.link, modifier = Modifier.clip(Smooth(6.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 2.dp))
 }
 
 /** Puts a link on the clipboard, saying so. */

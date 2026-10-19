@@ -349,7 +349,7 @@ private fun openRunPicker(app: AppState, station: String) {
         val draft = v.draft
         if (accounts) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp).windowInsetsPadding(WindowInsets.navigationBars)) {
-                v.dropped?.let { Text(it, fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
+                v.dropped?.let { Text(it, fontSize = 12.sp, color = C.warnInk, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
                 CascadeOption(t("android-chat.new.auto"), v.autoNote, draft.profile == null) { set { put("profile", null as String?) }; accounts = false }
                 v.accounts.forEach { a ->
                     CascadeOption(a.name, a.quotaLine?.text, draft.profile == a.id, subColor = if (a.quotaLine?.level != null) C.warn else C.muted,
@@ -402,7 +402,7 @@ private fun openRunPicker(app: AppState, station: String) {
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(t("android-chat.new.account"), fontSize = 14.sp, color = C.muted)
-                Text(v.who, fontSize = 14.sp, color = if (v.whoLevel != null) C.warn else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(v.who, fontSize = 14.sp, color = if (v.whoLevel != null) C.warnInk else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 IconIn(Icons.ChevronRight, 14.dp, C.muted)
             }
             if (borrow != null) {

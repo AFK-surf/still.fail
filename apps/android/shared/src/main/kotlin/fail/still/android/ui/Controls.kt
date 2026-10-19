@@ -71,7 +71,7 @@ fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enable
                     mark()
                     Text(label, fontSize = 15.sp, color = if (enabled) color else C.subtle)
                 }
-                if (sub != null) Text(sub, fontSize = 12.sp, color = if (done) C.green else C.muted, maxLines = subLines, overflow = TextOverflow.Ellipsis)
+                if (sub != null) Text(sub, fontSize = 12.sp, color = if (done) C.greenInk else C.muted, maxLines = subLines, overflow = TextOverflow.Ellipsis)
             }
             if (busy || failed != null) DoingMark(busy, failed)
             else if (done) IconIn(Icons.Check, 14.dp, C.green)
@@ -113,7 +113,8 @@ val BUTTON_HEIGHT = 38.dp
 @Composable
 fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, height: Dp = BUTTON_HEIGHT, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val on = enabled && !busy
-    val ink = if (primary && danger && enabled) Color.White else if (primary) C.bg else C.ink
+    // A solid one not yet to be pressed: its words still read (muted on its pale ground), not paper on paper.
+    val ink = if (primary && !enabled) C.muted else if (primary && danger) Color.White else if (primary) C.bg else C.ink
     // Its words in the middle: the same as wrapped round them, centred where `modifier` makes it wider (full width).
     Row(
         modifier.height(height).clip(Smooth(height / 2)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)

@@ -242,7 +242,7 @@ private fun ArchivePolicySection(station: String, policy: ArchivePolicyView) {
                     Text("${o.count}", fontSize = 13.sp, color = C.muted)
                 }
             } }
-            ListRow(onClick = if (busy) null else ({ add(archive) })) { Text(t("web-pages.archivePolicy.add"), fontSize = 15.sp, color = C.accent) }
+            ListRow(onClick = if (busy) null else ({ add(archive) })) { Text(t("web-pages.archivePolicy.add"), fontSize = 15.sp, color = C.link) }
         }
     }
     val line = listOfNotNull(policy.changeText, policy.summaryText?.ifEmpty { null }).joinToString(" · ")

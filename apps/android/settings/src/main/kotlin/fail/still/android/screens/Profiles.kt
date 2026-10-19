@@ -402,7 +402,7 @@ private fun openPickShare(app: AppState, s: StationView, p: Profile, stations: L
             stations.forEach { x ->
                 PickRow(x.name, checked = x.id == s.id || x.id in ticked, enabled = x.id != s.id) { ticked = if (x.id in ticked) ticked - x.id else ticked + x.id }
             }
-            PickRow(t("web-pages.profiles.share.done"), color = C.accent) {
+            PickRow(t("web-pages.profiles.share.done"), color = C.link) {
                 app.sheet = null
                 val allow = if (all) null else (ticked + s.id).toList()
                 app.act(t("web-pages.profiles.share.stations")) { app.api(s.station).shareProfile(p.id, true, allow) }
@@ -442,7 +442,7 @@ internal fun ProfileRow(station: String, p: Profile) {
             val problem = p.trouble
             if (problem != null) {
                 Text("${problem.title} · ${problem.detail}", fontSize = 13.sp, color = C.muted)
-                Text(t("android-settings.profile.seeFix"), fontSize = 13.sp, color = C.accent)
+                Text(t("android-settings.profile.seeFix"), fontSize = 13.sp, color = C.link)
             } else trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
         }
         val calls = setOf("profile.check", "profile.quota")
@@ -574,7 +574,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                         }
                         // A key saved (the sheet that asked gone): a spinner until the station has it.
                         DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
-                        Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.accent)
+                        Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.link)
                     }
                     // Where a provider is at an address of the person's own, that can be changed too.
                     p.access.endpoint?.let { endpoint ->
@@ -587,7 +587,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                                 Text(t("common.provider.endpoint"), fontSize = 15.sp, color = C.ink)
                                 Text(endpoint, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
                             }
-                            Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.accent)
+                            Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.link)
                         }
                     }
                 }
@@ -604,7 +604,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                         }
                     }
                     ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) } }) {
-                        Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+                        Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.link, modifier = Modifier.weight(1f))
                         // Saved (the sheet gone): a spinner until the station has them.
                         DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
                     }
@@ -694,7 +694,7 @@ private fun QuotaSection(station: String, p: Profile) {
             app.act(t("android-settings.quota.checkWhat"), t("android-settings.quota.updated")) { app.api(station).refreshQuota(p.id) }
         }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             DoingMark(refreshing, failed, inline = true)
-            Text(if (refreshing) t("android-settings.quota.checking") else t("android-settings.quota.check"), fontSize = 14.sp, color = if (refreshing) C.muted else C.accent)
+            Text(if (refreshing) t("android-settings.quota.checking") else t("android-settings.quota.check"), fontSize = 14.sp, color = if (refreshing) C.muted else C.link)
         }
     }
     if (checked != null && !refreshing) Text(checked, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, bottom = 8.dp))
@@ -734,7 +734,7 @@ private fun QuotaSection(station: String, p: Profile) {
                 Text(quota.resetText ?: "", fontSize = 13.sp, color = C.muted)
             }
             DoingMark(resetting, app.failedOf("profile.resetQuota", "station" to station, "id" to p.id))
-            Text(t("android-settings.quota.reset"), fontSize = 14.sp, color = if (count > 0) C.accent else C.muted)
+            Text(t("android-settings.quota.reset"), fontSize = 14.sp, color = if (count > 0) C.link else C.muted)
         } } }
     }
 }
@@ -742,7 +742,7 @@ private fun QuotaSection(station: String, p: Profile) {
 /** A check's state in its words on a soft pill of its tone (the core's: accent | green | blue | red | amber | neutral). */
 @Composable
 internal fun TonePill(text: String, tone: String, size: androidx.compose.ui.unit.TextUnit = 12.sp) {
-    val color = when (tone) { "green" -> C.green; "red" -> C.red; "blue" -> C.blue; "accent" -> C.accentInk; "amber" -> C.warn; else -> C.muted }
+    val color = when (tone) { "green" -> C.greenInk; "red" -> C.red; "blue" -> C.blue; "accent" -> C.accentInk; "amber" -> C.warnInk; else -> C.muted }
     val bg = if (tone == "neutral") C.chip else color.copy(alpha = if (tone == "amber") 0.14f else 0.12f)
     Text(text, fontSize = size, color = color, maxLines = 1, modifier = Modifier.clip(Smooth(6.dp)).background(bg).padding(horizontal = 6.dp, vertical = 1.dp))
 }
@@ -774,12 +774,12 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
         Row(Modifier.pressText(enabled = !checking) { app.act(t("android-settings.models.refreshWhat"), t("android-settings.models.refreshed")) { app.api(station).checkProfile(p.id) } },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             DoingMark(checking, checkFailed, inline = true)
-            Text(if (checking) t("android-settings.refreshing") else t("android-settings.models.refresh"), fontSize = 14.sp, color = if (checking) C.muted else C.accent)
+            Text(if (checking) t("android-settings.refreshing") else t("android-settings.models.refresh"), fontSize = 14.sp, color = if (checking) C.muted else C.link)
         }
         Spacer(Modifier.weight(1f))
         if (all.isNotEmpty()) {
-            Text(if (filtered) t("android-settings.models.allFiltered") else t("android-settings.all"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText(enabled = !saving) { save(models + shown) })
-            Text(if (filtered) t("android-settings.models.noneFiltered") else t("android-settings.none"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText(enabled = !saving) { save(models - shown.toSet()) })
+            Text(if (filtered) t("android-settings.models.allFiltered") else t("android-settings.all"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText(enabled = !saving) { save(models + shown) })
+            Text(if (filtered) t("android-settings.models.noneFiltered") else t("android-settings.none"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText(enabled = !saving) { save(models - shown.toSet()) })
         }
     }
     // A provider that does not list its models: one is named by hand.
@@ -789,7 +789,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
         Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Field(typed, { typed = it }, t("web-mobile.profiles.addModelPlaceholder"), mono = true, modifier = Modifier.weight(1f))
             if (adding) Spinner()
-            else Text(t("web-mobile.profiles.addModel"), fontSize = 14.sp, color = if (typed.isBlank()) C.muted else C.accent, modifier = Modifier.pressText(enabled = typed.isNotBlank()) {
+            else Text(t("web-mobile.profiles.addModel"), fontSize = 14.sp, color = if (typed.isBlank()) C.muted else C.link, modifier = Modifier.pressText(enabled = typed.isNotBlank()) {
                 val model = typed.trim(); typed = ""
                 app.act(t("android-settings.models.refreshWhat")) { app.api(station).addModel(p.id, model) }
             })
@@ -982,14 +982,14 @@ private fun ColumnScope.EnvSheet(station: String, p: Profile) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Field(r.key, { r.key = it }, "NAME", mono = true, modifier = Modifier.weight(1f))
-                    Text(t("common.delete"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText { rows = rows.filter { it.row != r.row } })
+                    Text(t("common.delete"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { rows = rows.filter { it.row != r.row } })
                 }
                 val placeholder = if (r.masked != null) t("android-settings.tokens.kept", "token" to r.masked) else t("android-settings.env.value")
                 if (r.masked != null || Regex("KEY|TOKEN|SECRET|PASSWORD|AUTH", RegexOption.IGNORE_CASE).containsMatchIn(r.key)) SecretField(r.value, { r.value = it }, placeholder)
                 else Field(r.value, { r.value = it }, placeholder, mono = true)
             }
         }
-        Text(t("android-settings.env.add"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText { rows = rows + EnvRow(next++, "", "", null, null) })
+        Text(t("android-settings.env.add"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { rows = rows + EnvRow(next++, "", "", null, null) })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button(t("common.cancel"), primary = false) { app.sheet = null }
             Button(t("common.save"), primary = true, enabled = !busy) {
@@ -1187,7 +1187,7 @@ private fun MachineLoginRow(l: MachineLogin, busy: Boolean, onUse: () -> Unit) {
         // A refused account is said so, with nothing to do with it here.
         if (!blocked) {
             if (busy) Spinner()
-            else Text(if (l.usable == true) t("android-settings.machine.use") else t("android-settings.login.signIn"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText(onClick = onUse))
+            else Text(if (l.usable == true) t("android-settings.machine.use") else t("android-settings.login.signIn"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText(onClick = onUse))
         }
     }
 }
