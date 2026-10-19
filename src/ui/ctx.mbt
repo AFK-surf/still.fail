@@ -7,6 +7,10 @@ struct ListState {
   mut anchor : Int
   mut anchor_off : Double
   heights : Array[Double]
+  // the rows' heights (est for those not measured) summed as a Fenwick
+  // tree (1-based: sums[i] holds rows i - lowbit(i) until i): what is
+  // above a row and the whole, without adding every row up (list.mbt)
+  sums : Array[Double]
   est : Double
   mut count : Int
   mut vp_h : Double

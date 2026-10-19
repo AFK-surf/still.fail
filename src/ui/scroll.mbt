@@ -710,11 +710,7 @@ fn Ctx::stretch_rows(
 /// The list's scroll position: how far its top is from the top of its first
 /// row (rows not measured yet counted at their estimate).
 fn ListState::offset(self : ListState) -> Double {
-  let mut y = self.anchor_off
-  for i in 0..<imin(self.anchor, self.count) {
-    y = y + self.height(i)
-  }
-  y
+  self.anchor_off + self.above(imin(self.anchor, self.count))
 }
 
 ///|

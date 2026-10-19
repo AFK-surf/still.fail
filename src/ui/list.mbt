@@ -13,6 +13,62 @@ fn ListState::height(self : ListState, i : Int) -> Double {
 }
 
 ///|
+/// Rows `0..<k` laid end to end: how far row k's top is below row 0's.
+fn ListState::above(self : ListState, k : Int) -> Double {
+  let mut i = imin(k, self.sums.length() - 1)
+  let mut t = 0.0
+  while i > 0 {
+    t = t + self.sums[i]
+    i = i - (i & -i)
+  }
+  t
+}
+
+///|
+/// A row more at the end, not measured yet.
+fn ListState::add_row(self : ListState) -> Unit {
+  self.heights.push(-1.0)
+  if self.sums.length() == 0 {
+    self.sums.push(0.0)
+  }
+  // node i holds rows i - lowbit(i) until i (1-based)
+  let i = self.sums.length()
+  self.sums.push(self.est + self.above(i - 1) - self.above(i - (i & -i)))
+}
+
+///|
+/// Row `k` measured at `h`.
+fn ListState::set_height(self : ListState, k : Int, h : Double) -> Unit {
+  let d = h - self.height(k)
+  self.heights[k] = h
+  if d != 0.0 {
+    let mut i = k + 1
+    while i < self.sums.length() {
+      self.sums[i] = self.sums[i] + d
+      i = i + (i & -i)
+    }
+  }
+}
+
+///|
+/// The sums again from the heights (rows came or went in the middle).
+fn ListState::resum(self : ListState) -> Unit {
+  self.sums.clear()
+  self.sums.push(0.0)
+  for k in 0..<self.heights.length() {
+    self.sums.push(self.height(k))
+  }
+  // each node passes what it holds on to the one above it
+  let n = self.sums.length()
+  for i in 1..<n {
+    let j = i + (i & -i)
+    if j < n {
+      self.sums[j] = self.sums[j] + self.sums[i]
+    }
+  }
+}
+
+///|
 fn ListState::scroll_to(self : ListState, item : Int) -> Unit {
   self.anchor = item
   self.anchor_off = 0.0
@@ -107,6 +163,7 @@ pub fn Ctx::list(
         anchor: 0,
         anchor_off: 0.0,
         heights: [],
+        sums: [],
         est,
         count: 0,
         vp_h: 600.0,
@@ -145,7 +202,7 @@ pub fn Ctx::list(
     self.bench_list = id
   }
   while st.heights.length() < count {
-    st.heights.push(-1.0)
+    st.add_row()
   }
   st.count = count
   st.row = row
@@ -241,7 +298,7 @@ fn Ctx::place_list(
   let lay = fn(k : Int, y : Double) -> (Int, Double) {
     let r = self.build_row(li, st, k)
     let h = self.layout(r, ix, y, iw, nan)
-    st.heights[k] = h
+    st.set_height(k, h)
     (r, h)
   }
   let bottom_edge = iy + ih
@@ -415,15 +472,8 @@ fn Ctx::paint_scrollbar(self : Ctx, n : Node, alpha : Double) -> Unit {
         return
       }
       let fade = if age < 600.0 { 1.0 } else { 1.0 - (age - 600.0) / 300.0 }
-      let mut total = 0.0
-      let mut before = 0.0
-      for i in 0..<st.count {
-        let h = st.height(i)
-        if i < st.anchor {
-          before = before + h
-        }
-        total = total + h
-      }
+      let total = st.above(st.count)
+      let before = st.above(imin(st.anchor, st.count))
       let vp = n.fh
       if total <= vp + 1.0 {
         return
@@ -558,6 +608,7 @@ fn ListState::moved(self : ListState, at : Int, n : Int) -> Unit {
   for i in from..<was.length() {
     self.heights.push(was[i])
   }
+  self.resum()
   if self.stick_end && self.at_end {
     return
   }

@@ -759,3 +759,113 @@ test "kept layouts: nothing that did not change is laid out again" {
   // left where it was
   assert_eq(commit_counts[0] - placed2, 4)
 }
+
+///|
+/// The list's sums (the scroll bar's place and length) against the rows'
+/// heights added up one by one, as rows are measured, added and moved.
+test "a list's running sums are its rows' heights added up" {
+  let st : ListState = {
+    anchor: 0,
+    anchor_off: 0.0,
+    heights: [],
+    sums: [],
+    est: 30.0,
+    count: 0,
+    vp_h: 600.0,
+    vel: 0.0,
+    at_end: false,
+    stick_end: false,
+    last_scroll: 0.0,
+    pending: 0.0,
+    row: fn(_i) {  },
+    seed: 0,
+    vis_first: -1,
+    vis_last: -1,
+    owner: 0,
+    below: 0.0,
+    glide: false,
+    fling: 0,
+    fling_v: 0.0,
+    fling_t0: -1.0,
+    fling_dist: 0.0,
+    fling_dur: 0.0,
+    fling_done: 0.0,
+    drag_pending: 0.0,
+    held: false,
+    over: 0.0,
+    over_edge: 0,
+    over_state: 0,
+    over_v: 0.0,
+    over_t: -1.0,
+  }
+  let mut seed = 7
+  let next = fn(n : Int) -> Int {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff
+    seed % n
+  }
+  for round in 0..<400 {
+    let what = next(10)
+    if what < 3 || st.heights.length() == 0 {
+      for _ in 0..<(1 + next(20)) {
+        st.add_row()
+      }
+    } else if what < 8 {
+      st.set_height(next(st.heights.length()), (10 + next(60)).to_double() + 0.25)
+    } else {
+      st.moved(next(st.heights.length()), next(7) - 3)
+    }
+    let mut naive = 0.0
+    for k in 0..=st.heights.length() {
+      if (st.above(k) - naive).abs() > 1.0e-6 {
+        fail("round \{round}: above(\{k}) \{st.above(k)}, rows add up to \{naive}")
+      }
+      if k < st.heights.length() {
+        naive = naive + st.height(k)
+      }
+    }
+  }
+}
+
+///|
+/// A node reused from the pool keeps nothing of what was there before,
+/// whichever builder takes it (each resets only what it does not set).
+test "a slot taken by another builder starts afresh" {
+  let flip = Ref::new(false)
+  let t = Tester::new(
+    fn(c) {
+      c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.row(h=Px(30.0), fn() {
+          if flip.val {
+            c.spacer()
+            c.box(fn() {  }) |> ignore
+          } else {
+            c.box(w=Px(50.0), pad=5.0, bg=0x336699FFL, fn() {  }) |> ignore
+            c.text("words", size=30.0, weight=700, color=0x00FF00FFL) |> ignore
+          }
+        })
+        |> ignore
+        if flip.val {
+          c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
+        } else {
+          c.pager("p", 3, 0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
+        }
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == 0x336699FFL }))
+  assert_eq(g.scroll_ids.length(), 1)
+  flip.val = true
+  t.frame()
+  // nothing drawn: no colour, no words, no pager to drag
+  assert_eq(t.drawn_rects().length(), 0)
+  assert_eq(t.drawn_glyphs().length(), 0)
+  assert_eq(g.scroll_ids.length(), 0)
+  assert_eq(g.hit_ids.length(), 0)
+  // the spacer has no padding, no colour, no id (words it may keep: only
+  // texts read them)
+  let n = g.nodes[3]
+  assert_eq((n.pad_l, n.pad_t, n.bg, n.id), (0.0, 0.0, 0L, 0))
+}
