@@ -242,3 +242,22 @@ test "separator, aspect ratio, accessible icon, visually hidden: what the tree s
   assert_eq(w, 160.0)
   assert_eq(h, 90.0)
 }
+
+///|
+test "text field: typed in, its words the view's to read; Enter hands them on" {
+  let got = Ref("")
+  let sent = Ref(0)
+  let t = @ui.Tester::new(fn(c) {
+    let f = text_field(c, "name", placeholder="Name")
+    got.val = f.text
+    if f.submitted {
+      sent.val += 1
+    }
+  })
+  t.tap_text("Name")
+  t.type_text("Ada")
+  assert_eq(got.val, "Ada")
+  assert_eq(t.get(@ui.TextField, label="Name").value, "Ada")
+  t.enter()
+  assert_eq(sent.val, 1)
+}

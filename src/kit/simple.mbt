@@ -41,7 +41,7 @@ pub fn separator(
   let i = c.box(
     w=if vertical { Px(thickness) } else { Fill(1.0) },
     h=if vertical { Fill(1.0) } else { Px(thickness) },
-    bg=color.unwrap_or(t.border),
+    bg=color.unwrap_or(t.line),
     fn() {  },
   )
   if !decorative {

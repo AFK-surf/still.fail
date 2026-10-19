@@ -86,3 +86,31 @@ pub fn part_id(id : Int, k : Int) -> Int {
     h
   }
 }
+
+///|
+fn dmin(a : Double, b : Double) -> Double {
+  if a < b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+fn dmax(a : Double, b : Double) -> Double {
+  if a > b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+/// `yes` (a widget's value changed as it was built): a frame again, so that what the view builds from the value it
+/// keeps shows it.
+fn told(c : @ui.Ctx, yes : Bool) -> Bool {
+  if yes {
+    c.request_frame()
+  }
+  yes
+}

@@ -66,52 +66,53 @@ pub fn radio_group(
     })
   })
   c.semantics(gi, RadioGroup, label~, disabled~)
-  { value: now, response: { ..any, id, changed: now != value } }
+  { value: now, response: { ..any, id, changed: told(c, now != value) } }
 }
 
 ///|
-/// A radio item's look by its sizes: a circle `size` across, edged in `edge` (the theme's border) when off, filled
-/// with `on_color` (its accent) round a dot of `dot` (its on_accent) when on; its words after it.
+/// A radio item's look by its sizes (still.fail's): a circle `size` across edged in `edge` (the theme's control edge;
+/// darker pointed at), when chosen edged in `on_color` (its words' colour) round a dot `dot` across of it; its words
+/// after it.
 pub fn radio_look_of(
-  size? : Double = 20.0,
+  size? : Double = 18.0,
+  dot? : Double = 8.0,
   on_color? : Int64,
-  dot? : Int64,
   edge? : Int64,
 ) -> (@ui.Ctx, RadioState) -> Unit {
   fn(c, s) {
     let t = c.theme()
-    c.box(
-      dir=Row,
-      gap=8.0,
-      align=ACenter,
-      opacity=if s.disabled { disabled_alpha } else { 1.0 },
-      fn() {
-        let ground = if s.on { on_color.unwrap_or(t.accent) } else { t.surface }
-        c.box(
-          w=Px(size),
-          h=Px(size),
-          radius=size / 2.0,
-          bg=tinted(c, ground, s.hovered && !s.disabled, s.pressed && !s.disabled),
-          border=if s.on { 0.0 } else { 1.5 },
-          border_color=edge.unwrap_or(t.border),
-          align=ACenter,
-          justify=JCenter,
-          fn() {
-            if s.on {
-              let d = size * 0.4
-              c.box(w=Px(d), h=Px(d), radius=d / 2.0, bg=dot.unwrap_or(t.on_accent), fn() {  }) |> ignore
-            }
-          },
-        )
-        |> ignore
-        c.text(s.label, size=t.font, wrap=false) |> ignore
-        focus_ring(c, s.focus_shown, s.rect, 6.0)
-      },
-    )
+    let ink = on_color.unwrap_or(t.fg)
+    let line = if s.on {
+      ink
+    } else if s.hovered && !s.disabled {
+      t.field_hover
+    } else {
+      edge.unwrap_or(t.border)
+    }
+    c.box(dir=Row, gap=8.0, align=ACenter, opacity=if s.disabled { 0.45 } else { 1.0 }, fn() {
+      c.box(
+        w=Px(size),
+        h=Px(size),
+        radius=size / 2.0,
+        bg=t.bg,
+        border=1.5,
+        border_color=line,
+        align=ACenter,
+        justify=JCenter,
+        fn() {
+          if s.on {
+            c.box(w=Px(dot), h=Px(dot), radius=dot / 2.0, bg=ink, fn() {  }) |> ignore
+          }
+        },
+      )
+      |> ignore
+      c.text(s.label, size=t.font, wrap=false) |> ignore
+      focus_ring(c, s.focus_shown, s.rect, 6.0)
+    })
     |> ignore
   }
 }
 
 ///|
-/// The default look: a 20 circle, filled with the accent round a dot when checked, its words beside it.
+/// The default look: an 18 circle, a dot in the words' colour when chosen, its words beside it.
 pub let radio_look : (@ui.Ctx, RadioState) -> Unit = radio_look_of()

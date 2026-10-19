@@ -35,31 +35,42 @@ pub fn progress(
 }
 
 ///|
-/// A progress bar's look: `h` high in `track` (the theme's faint), filled in `fill` (its accent); not known, a third
-/// of it goes along and back once every `period` ms.
+/// A progress bar's look (still.fail's): `h` high on `track` (18% of the fill), filled in `fill` (the theme's accent);
+/// not known, a piece 40% of it sweeps across, eased there and back, once every `period` ms.
 pub fn progress_look_of(
-  h? : Double = 6.0,
+  h? : Double = 3.0,
   track? : Int64,
   fill? : Int64,
-  period? : Double = 1200.0,
+  period? : Double = 1400.0,
 ) -> (@ui.Ctx, ProgressState) -> Unit {
   fn(c, s) {
     let th = c.theme()
-    c.box(w=Fill(1.0), h=Px(h), radius=h / 2.0, bg=track.unwrap_or(th.faint), clip=true, dir=Row, fn() {
+    let ink = fill.unwrap_or(th.accent)
+    c.box(w=Fill(1.0), h=Px(h), radius=h / 2.0, bg=track.unwrap_or(@ui.alpha(ink, 0.18)), clip=true, dir=Row, fn() {
       match s.t {
         Some(k) => {
           // grown in proportion: the filled part `k` of the track, the rest after it
-          c.box(w=Fill(k + 0.0001), h=Fill(1.0), radius=h / 2.0, bg=fill.unwrap_or(th.accent), fn() {  }) |> ignore
+          c.box(w=Fill(k + 0.0001), h=Fill(1.0), radius=h / 2.0, bg=ink, fn() {  }) |> ignore
           c.box(w=Fill(1.0 - k + 0.0001), h=Fill(1.0), fn() {  }) |> ignore
         }
         None => {
-          // the band's place along the track: from the start to the end and back (still: in the middle)
-          let p = if c.still() { 0.25 } else { s.now / period - (s.now / period).floor() }
-          let k = if p < 0.5 { p * 2.0 } else { 2.0 - p * 2.0 }
-          let room = 2.0 / 3.0
-          c.box(w=Fill(room * k + 0.0001), h=Fill(1.0), fn() {  }) |> ignore
-          c.box(w=Fill(1.0 / 3.0), h=Fill(1.0), radius=h / 2.0, bg=fill.unwrap_or(th.accent), fn() {  }) |> ignore
-          c.box(w=Fill(room * (1.0 - k) + 0.0001), h=Fill(1.0), fn() {  }) |> ignore
+          // where the sweep is (still: 0.3 of the way), eased in and out; the piece from -40% to all the way across
+          let f = if c.still() {
+            0.3
+          } else {
+            let x = s.now / period - (s.now / period).floor()
+            0.5 - 0.5 * @math.cos(3.141592653589793 * x)
+          }
+          let start = -0.4 + 1.4 * f
+          if start > 0.0 {
+            c.box(w=Fill(start), fn() {  }) |> ignore
+          }
+          let shown = if start < 0.0 { 0.4 + start } else { 0.4 }
+          c.box(w=Fill(shown + 0.0001), h=Fill(1.0), radius=h / 2.0, bg=ink, fn() {  }) |> ignore
+          let rest = 1.0 - dmax(start, 0.0) - shown
+          if rest > 0.0 {
+            c.box(w=Fill(rest), fn() {  }) |> ignore
+          }
         }
       }
     })
@@ -68,7 +79,7 @@ pub fn progress_look_of(
 }
 
 ///|
-/// The default look: 6 high, the accent over the faint.
+/// The default look: 3 high, the accent over 18% of it.
 pub let progress_look : (@ui.Ctx, ProgressState) -> Unit = progress_look_of()
 
 ///|

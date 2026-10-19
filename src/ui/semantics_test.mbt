@@ -49,7 +49,7 @@ test "the theme: words, and the old button, take their colours from it unless to
     |> ignore
   })
   let glyphs = t.drawn_glyphs()
-  assert_eq(glyphs[0].2, 0x1D1D1FFFL)
+  assert_eq(glyphs[0].2, Theme::light().fg)
   assert_eq(glyphs[1].2, 0x112233FFL)
   assert_eq(glyphs[2].2, 0xFFFFFFFFL)
   assert_eq(glyphs[3].2, 0x778899FFL)

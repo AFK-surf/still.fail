@@ -311,5 +311,9 @@ fn view(c : @ui.Ctx, rows : Array[Row], st : State) -> Unit {
 fn main {
   let rows = corpus_rows(@host.env("MBUI_TEXTDIFF_ONLY"))
   let st = { page: 0, frames: 0, starts: [], laid_h: -1.0 }
-  @ui.run("textdiff", fn(c) { view(c, rows, st) })
+  @ui.run("textdiff", fn(c) {
+    // drawn in the colours Core Text's side is (iOS's)
+    c.set_theme(@ui.Theme::ios_light())
+    view(c, rows, st)
+  })
 }

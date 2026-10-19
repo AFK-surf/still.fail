@@ -44,15 +44,15 @@ pub fn switch(
     [],
     [Activate],
   ))
-  { value: on, response: r.changed_to(on != checked) }
+  { value: on, response: r.changed_to(told(c, on != checked)) }
 }
 
 ///|
 /// A switch's look by its sizes: `w` by `h`, its knob `inset` in from the edge, on in `on_color` (the theme's
-/// positive), off in `off_color` (its faint), the knob in `knob` (its thumb) with a shadow unless not `shadow`.
+/// accent), off in `off_color` (its control edge), the knob in `knob` (its thumb) with a shadow unless not `shadow`.
 pub fn switch_look_of(
-  w? : Double = 51.0,
-  h? : Double = 31.0,
+  w? : Double = 36.0,
+  h? : Double = 22.0,
   inset? : Double = 2.0,
   on_color? : Int64,
   off_color? : Int64,
@@ -68,19 +68,19 @@ pub fn switch_look_of(
       w=Px(w),
       h=Px(h),
       radius=h / 2.0,
-      bg=blend(off_color.unwrap_or(t.faint), on_color.unwrap_or(t.positive), s.t),
+      bg=blend(off_color.unwrap_or(t.border), on_color.unwrap_or(t.accent), s.t),
       justify=JCenter,
       align=AStart,
-      opacity=if s.disabled { disabled_alpha } else { 1.0 },
+      opacity=if s.disabled { 0.5 } else { 1.0 },
       fn() {
         c.box(
           w=Px(d),
           h=Px(d),
           radius=d / 2.0,
           bg=knob.unwrap_or(t.thumb),
-          shadow=if shadow { 4.0 } else { 0.0 },
-          shadow_color=0x00000040L,
-          shadow_y=1.5,
+          shadow=if shadow { 2.0 } else { 0.0 },
+          shadow_color=0x00000033L,
+          shadow_y=1.0,
           tx=inset + travel * k,
           fn() {  },
         )
@@ -93,5 +93,5 @@ pub fn switch_look_of(
 }
 
 ///|
-/// The default look: iOS's switch, 51 by 31, green when on.
+/// The default look: still.fail's switch, 36 by 22, its 18 knob white, the accent when on.
 pub let switch_look : (@ui.Ctx, SwitchState) -> Unit = switch_look_of()

@@ -621,6 +621,12 @@ pub fn Ctx::request_frame(self : Ctx) -> Unit {
 }
 
 ///|
+/// The window's size in logical pixels (w, h), as this frame lays it out: what a dialog is put in the middle of.
+pub fn Ctx::window_size(self : Ctx) -> (Double, Double) {
+  (self.width, self.height)
+}
+
+///|
 pub fn Ctx::now(self : Ctx) -> Double {
   self.now
 }

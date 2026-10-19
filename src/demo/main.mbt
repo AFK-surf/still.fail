@@ -144,6 +144,8 @@ fn send(text : String) -> Unit {
 
 ///|
 fn view(c : @ui.Ctx) -> Unit {
+  // the demo keeps iOS's colours (its goldens on every platform are drawn in them)
+  c.set_theme(@ui.Theme::ios_light())
   c.box(w=Fill(1.0), h=Fill(1.0), bg=0xF5F5F7FFL, fn() {
     // header
     c.box(

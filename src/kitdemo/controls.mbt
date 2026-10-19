@@ -42,7 +42,7 @@ fn controls(c : @ui.Ctx) -> Unit {
           pressed: false,
           focus_shown: true,
           disabled: false,
-          rect: ring(51.0, 31.0),
+          rect: ring(36.0, 22.0),
         })
       })
       |> ignore
@@ -62,7 +62,7 @@ fn controls(c : @ui.Ctx) -> Unit {
           pressed: false,
           focus_shown: true,
           disabled: false,
-          rect: ring(20.0, 20.0),
+          rect: ring(18.0, 18.0),
         })
       })
       |> ignore

@@ -384,6 +384,11 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
 /// go from anything but a field (a field keeps it: what is tapped beside it, a send button, does not take its keys).
 fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
   self.focus_visible = false
+  // a press on the ground of a layer that traps the focus leaves it where it is (in the layer)
+  let trap = self.trapping_layer()
+  if trap != 0 && target == trap {
+    return
+  }
   for f in self.last_focusables {
     if f.id == target && f.on_press {
       self.focus = target

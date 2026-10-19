@@ -54,43 +54,51 @@ pub fn button(
 }
 
 ///|
-/// The default look: the theme's control height and corner, its accent (or what the variant says), tinted when
-/// pointed at and held, faded when disabled, ringed when it has the focus by the keyboard.
+/// The default look (still.fail's buttons): a pill the theme's control height; Solid in the primary ink (lighter
+/// pointed at), Outline on the page's ground with a line round it, Soft on the faint ground, Ghost its words alone,
+/// Danger solid in the danger colour; faded when disabled, ringed when it has the focus by the keyboard.
 pub fn button_look(c : @ui.Ctx, s : ButtonState) -> Unit {
   let t = c.theme()
-  let (ground, ink, line) = match s.variant {
-    Solid => (t.accent, t.on_accent, 0L)
-    Soft => (t.faint, t.fg, 0L)
-    Outline => (0L, t.fg, t.border)
-    Ghost => (0L, t.fg, 0L)
-    Danger => (t.danger, t.on_danger, 0L)
-  }
   let live = !s.disabled
-  let bg = if ground == 0L {
-    if live && s.pressed {
-      doubled(t.hover)
-    } else if live && s.hovered {
-      t.hover
-    } else {
-      0L
-    }
+  let lit = if live && s.pressed {
+    2.0
+  } else if live && s.hovered {
+    1.0
   } else {
-    tinted(c, ground, live && s.hovered, live && s.pressed)
+    0.0
   }
+  // a solid ground pointed at: a step towards the page
+  let solid = fn(g : Int64) { blend(g, t.bg, 0.12 * lit) }
+  let tint = if lit == 2.0 {
+    doubled(t.hover)
+  } else if lit == 1.0 {
+    t.hover
+  } else {
+    0L
+  }
+  let (ground, ink, line) = match s.variant {
+    Solid => (solid(t.primary), t.on_primary, 0L)
+    Danger => (solid(t.danger), t.on_danger, 0L)
+    Soft => (@ui.over(t.faint, tint), t.fg, 0L)
+    Outline => (@ui.over(t.bg, tint), t.fg, t.border)
+    Ghost => (tint, t.fg, 0L)
+  }
+  let h = t.control_h
   c.box(
     dir=Row,
-    h=Px(t.control_h),
-    padx=14.0,
+    h=Px(h),
+    padx=16.0,
+    gap=6.0,
     align=ACenter,
     justify=JCenter,
-    bg~,
-    radius=t.radius,
+    bg=ground,
+    radius=h / 2.0,
     border=if line != 0L { 1.0 } else { 0.0 },
     border_color=line,
-    opacity=if s.disabled { disabled_alpha } else { 1.0 },
+    opacity=if s.disabled { 0.45 } else { 1.0 },
     fn() {
-      c.text(s.label, size=t.font, weight=600, color=ink, wrap=false) |> ignore
-      focus_ring(c, s.focus_shown, s.rect, t.radius)
+      c.text(s.label, size=t.font, weight=500, color=ink, wrap=false) |> ignore
+      focus_ring(c, s.focus_shown, s.rect, h / 2.0)
     },
   )
   |> ignore

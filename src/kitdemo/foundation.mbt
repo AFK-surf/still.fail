@@ -12,9 +12,10 @@ fn foundation(c : @ui.Ctx) -> Unit {
         ("fg", t.fg),
         ("muted", t.muted),
         ("faint", t.faint),
+        ("line", t.line),
         ("border", t.border),
+        ("primary", t.primary),
         ("accent", t.accent),
-        ("positive", t.positive),
         ("danger", t.danger),
       ] {
         c.box(gap=4.0, align=ACenter, fn() {

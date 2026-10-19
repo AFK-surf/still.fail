@@ -29,29 +29,13 @@ pub fn password_field(
   let r = c.interact(bid, disabled~)
   let shows = if r.clicked { !visible } else { visible }
   let mut words = ""
-  c.box(
-    dir=Row,
-    w~,
-    h=Px(t.control_h),
-    radius=t.radius,
-    border=1.0,
-    border_color=t.border,
-    bg=t.surface,
-    padx=12.0,
-    gap=8.0,
-    align=ACenter,
-    opacity=if disabled { disabled_alpha } else { 1.0 },
-    fn() {
-      let e = c.editor(key, placeholder~, w=Fill(1.0), max_lines=1, plain=true, secret=!shows, enter_sends=true)
-      words = e.text
-      let label = if shows { hide_label } else { show_label }
-      let i = c.box(id=if disabled { 0 } else { bid }, padx=4.0, pady=4.0, radius=6.0, fn() {
-        c.text(label, size=t.font_sm, color=if r.hovered { t.fg } else { t.muted }, wrap=false) |> ignore
-        focus_ring(c, r.focus_shown, r.rect, 6.0)
-      })
-      c.semantics(i, Button, id=bid, label~, pressed=shows, disabled~, actions=pick(disabled, [], [Activate]))
-    },
-  )
-  |> ignore
-  { text: words, visible: shows, toggle: r.changed_to(shows != visible) }
+  pill_field(c, key, w, disabled, !shows, placeholder, fn(e) { words = e.text }, fn() {
+    let label = if shows { hide_label } else { show_label }
+    let i = c.box(id=if disabled { 0 } else { bid }, padx=8.0, pady=4.0, radius=12.0, bg=pick(r.hovered, t.hover, 0L), fn() {
+      c.text(label, size=t.font_sm, color=if r.hovered { t.fg } else { t.muted }, wrap=false) |> ignore
+      focus_ring(c, r.focus_shown, r.rect, 12.0)
+    })
+    c.semantics(i, Button, id=bid, label~, pressed=shows, disabled~, actions=pick(disabled, [], [Activate]))
+  })
+  { text: words, visible: shows, toggle: r.changed_to(told(c, shows != visible)) }
 }

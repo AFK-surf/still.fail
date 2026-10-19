@@ -18,10 +18,61 @@ priv struct Wait {
 /// What the components keep from frame to frame outside the Ctx, made anew when a Tester starts.
 priv struct KitState {
   waits : Map[Int, Wait]
+  /// what opens by itself (a tooltip, a hover card), by its id: open last frame
+  opens : Map[Int, Bool]
+  /// a tooltip kept shut until the pointer leaves its trigger (pressed, or Escape)
+  shut : Map[Int, Bool]
+  /// when a tooltip last closed (-1 never): one opened soon after skips its delay
+  mut tip_closed : Double
+  /// toasts as drawn (toast.mbt), by their viewport's id
+  toasts : Map[Int, Kept]
+  /// a menu's panel's open submenu (its entry's index, menu.mbt), by the panel's id
+  subs : Map[Int, Int]
+  /// what was typed to find an entry by its first letters, and when, by the panel's id
+  typed : Map[Int, (String, Double)]
+  /// where a context menu opened, by its id; which of a menubar's menus is open (-1 none), by its id
+  at : Map[Int, (Double, Double)]
+  bars : Map[Int, Int]
+  /// the pointer this frame and the last (whether it moved: what moves a menu's highlight), as of frame `ptr_frame`
+  mut ptr : (Double, Double)
+  mut ptr_was : (Double, Double)
+  mut ptr_frame : Int
 }
 
 ///|
-let kit : Ref[KitState] = Ref({ waits: {} })
+fn KitState::new() -> KitState {
+  {
+    waits: {},
+    opens: {},
+    shut: {},
+    tip_closed: -1.0,
+    toasts: {},
+    subs: {},
+    typed: {},
+    at: {},
+    bars: {},
+    ptr: (-1.0, -1.0),
+    ptr_was: (-1.0, -1.0),
+    ptr_frame: -1,
+  }
+}
+
+///|
+/// Whether the pointer moved since the last frame.
+fn pointer_moved(c : @ui.Ctx) -> Bool {
+  install()
+  let k = kit.val
+  if k.ptr_frame != c.frame_number() {
+    k.ptr_frame = c.frame_number()
+    k.ptr_was = k.ptr
+    let (x, y, _) = c.pointer()
+    k.ptr = (x, y)
+  }
+  k.ptr != k.ptr_was
+}
+
+///|
+let kit : Ref[KitState] = Ref(KitState::new())
 
 ///|
 let installed : Ref[Bool] = Ref(false)
@@ -33,7 +84,7 @@ fn install() -> Unit {
     return
   }
   installed.val = true
-  @ui.on_reset(fn() { kit.val = { waits: {} } })
+  @ui.on_reset(fn() { kit.val = KitState::new() })
 }
 
 ///|

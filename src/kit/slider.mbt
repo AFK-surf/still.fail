@@ -118,71 +118,57 @@ pub fn slider(
   c.semantics(i, Slider, id~, label~, value=shown, range=(min, max, now), disabled~, actions=pick(disabled, [], [
     Increment, Decrement,
   ]))
-  { value: now, response: r.changed_to(now != value) }
+  { value: now, response: r.changed_to(told(c, now != value)) }
 }
 
 ///|
-/// A slider's look by its sizes: a track `track_h` high in `track` (the theme's faint), filled up to the thumb in
-/// `fill` (its accent), a round thumb `thumb_d` across in `thumb` (its thumb) with a shadow.
+/// A slider's look by its sizes (still.fail's): a hairline track `track_h` high in `track` (16% of the words' colour),
+/// filled up to the thumb in `fill` (the theme's accent); a round thumb `thumb_d` across in the fill with a ring of
+/// `ring` (the page's ground) round it, a size up while held.
 pub fn slider_look_of(
-  track_h? : Double = 4.0,
-  thumb_d? : Double = 24.0,
+  track_h? : Double = 2.0,
+  thumb_d? : Double = 22.0,
   track? : Int64,
   fill? : Int64,
-  thumb? : Int64,
+  ring? : Int64,
 ) -> (@ui.Ctx, SliderState) -> Unit {
   fn(c, s) {
     let t = c.theme()
     let (_, _, w, _) = s.rect
     let travel = if w > thumb_d { w - thumb_d } else { 0.0 }
     let k = if c.rtl() { 1.0 - s.t } else { s.t }
-    c.box(
-      w=Fill(1.0),
-      h=Px(thumb_d),
-      justify=JCenter,
-      opacity=if s.disabled { disabled_alpha } else { 1.0 },
-      fn() {
-        c.box(
-          w=Fill(1.0),
-          h=Px(track_h),
-          radius=track_h / 2.0,
-          bg=track.unwrap_or(t.faint),
-          dir=Row,
-          justify=if c.rtl() { JEnd } else { JStart },
-          fn() {
-            c.box(
-              w=Px(thumb_d / 2.0 + travel * s.t),
-              h=Fill(1.0),
-              radius=track_h / 2.0,
-              bg=fill.unwrap_or(t.accent),
-              fn() {  },
-            )
+    let ink = fill.unwrap_or(t.accent)
+    let d = if s.pressed { thumb_d + 4.0 } else { thumb_d }
+    c.box(w=Fill(1.0), h=Px(thumb_d + 6.0), justify=JCenter, opacity=if s.disabled { 0.45 } else { 1.0 }, fn() {
+      c.box(
+        w=Fill(1.0),
+        h=Px(track_h),
+        padx=thumb_d / 2.0,
+        dir=Row,
+        justify=if c.rtl() { JEnd } else { JStart },
+        fn() {
+          c.box(w=Px(travel * s.t), h=Fill(1.0), bg=ink, fn() {  }) |> ignore
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=track.unwrap_or(@ui.alpha(t.fg, 0.16)), fn() {  }) |> ignore
+        },
+      )
+      |> ignore
+      c.layer(fn() {
+        c.box(h=Fill(1.0), justify=JCenter, fn() {
+          c.box(w=Px(thumb_d), h=Px(thumb_d), tx=travel * k, align=ACenter, justify=JCenter, fn() {
+            c.box(w=Px(d), h=Px(d), radius=d / 2.0, bg=ink, border=3.0, border_color=ring.unwrap_or(t.bg), fn() {  })
             |> ignore
-          },
-        )
-        |> ignore
-        c.layer(fn() {
-          c.box(
-            w=Px(thumb_d),
-            h=Px(thumb_d),
-            radius=thumb_d / 2.0,
-            bg=tinted(c, thumb.unwrap_or(t.thumb), s.hovered, s.pressed),
-            shadow=4.0,
-            shadow_color=0x00000040L,
-            shadow_y=1.5,
-            tx=travel * k,
-            fn() {  },
-          )
+            focus_ring(c, s.focus_shown, (0.0, 0.0, thumb_d, thumb_d), thumb_d / 2.0)
+          })
           |> ignore
         })
         |> ignore
-        focus_ring(c, s.focus_shown, s.rect, thumb_d / 2.0)
-      },
-    )
+      })
+      |> ignore
+    })
     |> ignore
   }
 }
 
 ///|
-/// The default look: a 4 high track, filled with the accent, a 24 white thumb.
+/// The default look: a 2 high hairline, a 22 thumb in the accent ringed in the page's ground.
 pub let slider_look : (@ui.Ctx, SliderState) -> Unit = slider_look_of()

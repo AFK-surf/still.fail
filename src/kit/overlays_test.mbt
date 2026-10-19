@@ -1,0 +1,257 @@
+// The overlays (batch 2) driven as a person and a screen reader drive them, whether each is open kept by the test
+// (the view's), the clock the tester's.
+
+///|
+test "dialog: opened by its trigger, the page hidden under it, the focus in it; Escape closes it, the focus goes back" {
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    if button(c, "Edit profile").clicked {
+      open.val = true
+    }
+    open.val = dialog(c, "edit", open.val, "Edit profile", description="Your name as others see it", fn() {
+      c.editor("name", placeholder="Name") |> ignore
+      button(c, "Save") |> ignore
+    }).value
+  })
+  t.tab()
+  t.press("Enter")
+  assert_true(open.val)
+  let d = t.get(@ui.Dialog, label="Edit profile")
+  assert_eq(d.description, "Your name as others see it")
+  assert_true(d.modal)
+  // the page under it is out of the tree; the focus went to its first
+  assert_true(t.query(@ui.Button, label="Edit profile") is None)
+  assert_true(t.get(@ui.TextField, label="Name").focused)
+  // Tab stays in it: the field, Save, the close button, round
+  t.tab()
+  t.tab()
+  assert_eq(t.focused().unwrap().label, "关闭")
+  t.tab()
+  assert_eq(t.focused().unwrap().label, "Name")
+  t.press("Escape")
+  assert_false(open.val)
+  t.settle() |> ignore
+  assert_true(t.query(@ui.Dialog) is None)
+  assert_eq(t.focused().unwrap().label, "Edit profile")
+}
+
+///|
+test "dialog: a press outside it closes it, as its close button does; one inside does not" {
+  let open = Ref(true)
+  let t = @ui.Tester::new(fn(c) {
+    open.val = dialog(c, "d", open.val, "Hello", fn() { c.text("Inside") |> ignore }).value
+  })
+  t.settle() |> ignore
+  t.tap_text("Inside")
+  assert_true(open.val)
+  t.tap(5.0, 5.0)
+  assert_false(open.val)
+  open.val = true
+  t.frame()
+  t.settle() |> ignore
+  t.click(@ui.Button, label="关闭")
+  assert_false(open.val)
+}
+
+///|
+test "alert dialog: opens on cancel (Enter does not do it), a press outside leaves it, its action confirms" {
+  let open = Ref(true)
+  let done = Ref(0)
+  let t = @ui.Tester::new(fn(c) {
+    let a = alert_dialog(c, "del", open.val, "Delete the chat?", "Delete", description="It cannot be undone", danger=true)
+    open.val = a.open
+    if a.confirmed {
+      done.val += 1
+    }
+  })
+  t.settle() |> ignore
+  assert_eq(t.get(@ui.AlertDialog, label="Delete the chat?").description, "It cannot be undone")
+  assert_eq(t.focused().unwrap().label, "取消")
+  t.tap(5.0, 5.0)
+  assert_true(open.val)
+  t.press("Enter")
+  assert_false(open.val)
+  assert_eq(done.val, 0)
+  open.val = true
+  t.frame()
+  t.settle() |> ignore
+  t.click(@ui.Button, label="Delete")
+  assert_false(open.val)
+  assert_eq(done.val, 1)
+}
+
+///|
+test "popover: beside its trigger, the focus in it; its trigger toggles it, a press outside closes it" {
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let tr = button(c, "Filters", key="filters")
+    if tr.clicked {
+      open.val = !open.val
+    }
+    open.val = popover(c, "pop", open.val, tr.id, label="Filters", fn() { button(c, "Apply") |> ignore }).value
+  })
+  t.click(@ui.Button, label="Filters")
+  assert_true(open.val)
+  t.settle() |> ignore
+  let (_, ty, _, th) = t.get(@ui.Button, label="Filters").rect
+  let (_, py, _, _) = t.get(@ui.Dialog, label="Filters").rect
+  assert_true(py >= ty + th)
+  // not modal: the page stays in the tree
+  assert_true(t.query(@ui.Button, label="Filters") is Some(_))
+  assert_eq(t.focused().map(fn(s) { s.label }), Some("Apply"))
+  // its trigger closes it (a press on it is not outside)
+  t.click(@ui.Button, label="Filters")
+  assert_false(open.val)
+  t.click(@ui.Button, label="Filters")
+  assert_true(open.val)
+  t.tap(380.0, 800.0)
+  assert_false(open.val)
+}
+
+///|
+test "tooltip: shown once the pointer has rested on its trigger; at once by the keyboard; shut by a press" {
+  let shown = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(gap=40.0, pad=80.0, fn() {
+      let r = button(c, "Bold", key="bold")
+      shown.val = tooltip(c, "tip", r.id, "Bold (⌘B)")
+      button(c, "Other", key="other") |> ignore
+    })
+    |> ignore
+  })
+  let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.frame(ms=600.0)
+  assert_false(shown.val)
+  t.frame(ms=100.0)
+  assert_true(shown.val)
+  t.settle() |> ignore
+  ignore(t.get(@ui.Tooltip, label="Bold (⌘B)"))
+  // a press shuts it until the pointer leaves
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_false(shown.val)
+  t.frame(ms=1000.0)
+  assert_false(shown.val)
+  t.move(1.0, 1.0)
+  assert_false(shown.val)
+  // by the keyboard: at once; Escape shuts it
+  t.tab()
+  assert_true(shown.val)
+  t.press("Escape")
+  assert_false(shown.val)
+}
+
+///|
+test "tooltip: one shown soon after another closed skips the wait" {
+  let a = Ref(false)
+  let b = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.row(gap=40.0, pad=80.0, fn() {
+      let ra = button(c, "A", key="a")
+      a.val = tooltip(c, "ta", ra.id, "First")
+      let rb = button(c, "B", key="b")
+      b.val = tooltip(c, "tb", rb.id, "Second")
+    })
+    |> ignore
+  })
+  let (ax, ay, aw, ah) = t.get(@ui.Button, label="A").rect
+  let (bx, by, bw, bh) = t.get(@ui.Button, label="B").rect
+  t.move(ax + aw / 2.0, ay + ah / 2.0)
+  t.frame(ms=700.0)
+  assert_true(a.val)
+  t.move(bx + bw / 2.0, by + bh / 2.0)
+  t.frame()
+  t.frame()
+  assert_false(a.val)
+  assert_true(b.val)
+  // long after: the wait again
+  t.move(1.0, 1.0)
+  t.frame(ms=1000.0)
+  t.move(ax + aw / 2.0, ay + ah / 2.0)
+  t.frame()
+  assert_false(a.val)
+}
+
+///|
+test "hover card: opened once the pointer rests on its trigger, kept while over it or the card, closed after" {
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(pad=40.0, fn() {
+      let r = button(c, "@ada", key="ada", variant=Ghost)
+      open.val = hover_card(c, "card", r.id, fn() { c.text("Ada Lovelace, the first programmer") |> ignore })
+    })
+    |> ignore
+  })
+  let (x, y, w, h) = t.get(@ui.Button, label="@ada").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.frame(ms=699.0)
+  assert_false(open.val)
+  t.frame(ms=1.0)
+  assert_true(open.val)
+  t.settle() |> ignore
+  // onto the card: still open
+  let (cx, cy, cw, ch) = t.rect_of("Ada Lovelace").unwrap()
+  t.move(cx + cw / 2.0, cy + ch / 2.0)
+  t.frame(ms=1000.0)
+  assert_true(open.val)
+  // off both: closed after its delay
+  t.move(380.0, 800.0)
+  t.frame(ms=200.0)
+  assert_true(open.val)
+  t.frame(ms=100.0)
+  assert_false(open.val)
+}
+
+///|
+test "toasts: each goes after its time, paused under the pointer; closed, acted on, swiped away" {
+  let list : Ref[Array[Toast]] = Ref([])
+  let acted : Ref[String?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) {
+    let r = toaster(c, "toasts", list.val, duration=3000.0)
+    list.val = r.open
+    if r.acted is Some(_) {
+      acted.val = r.acted
+    }
+  })
+  list.val = [toast("a", "Saved"), toast("b", "Sent", description="To the team", action="Undo")]
+  t.frame()
+  t.settle() |> ignore
+  assert_eq(t.all(@ui.Status).length(), 2)
+  assert_eq(t.get(@ui.Status, label="Sent").description, "To the team")
+  ignore(t.get(@ui.Region, label="通知"))
+  // paused while the pointer is over them
+  let (x, y, w, h) = t.get(@ui.Status, label="Saved").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.frame(ms=5000.0)
+  assert_eq(list.val.length(), 2)
+  // (some 300 ms went by as they came in)
+  t.move(1.0, 1.0)
+  t.frame(ms=2000.0)
+  assert_eq(list.val.length(), 2)
+  t.frame(ms=1000.0)
+  assert_eq(list.val.map(fn(x) { x.id }), [])
+  t.settle() |> ignore
+  assert_eq(t.all(@ui.Status).length(), 0)
+  // the action
+  list.val = [toast("c", "Archived", action="Undo")]
+  t.frame()
+  t.settle() |> ignore
+  t.click(@ui.Button, label="Undo")
+  assert_eq(acted.val, Some("c"))
+  assert_eq(list.val.length(), 0)
+  // the close button
+  list.val = [toast("d", "Copied")]
+  t.frame()
+  t.settle() |> ignore
+  t.click(@ui.Button, label="关闭")
+  assert_eq(list.val.length(), 0)
+  // a swipe to the right
+  list.val = [toast("e", "Moved")]
+  t.frame()
+  t.settle() |> ignore
+  let (x, y, w, h) = t.get(@ui.Status, label="Moved").rect
+  t.drag(x + 20.0, y + h / 2.0, x + 20.0 + w / 2.0, y + h / 2.0)
+  assert_eq(list.val.length(), 0)
+  t.settle() |> ignore
+  assert_true(t.query(@ui.Status, label="Moved") is None)
+}

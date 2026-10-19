@@ -44,14 +44,15 @@ pub fn checkbox(
   }
   let i = c.box(id=if disabled { 0 } else { id }, fn() { look(c, st) })
   c.semantics(i, Checkbox, id~, label~, check=now, disabled~, actions=pick(disabled, [], [Activate]))
-  { value: now, response: r.changed_to(now != checked) }
+  { value: now, response: r.changed_to(told(c, now != checked)) }
 }
 
 ///|
-/// A checkbox's look by its sizes: `size` square, its corner `radius`, on in `on_color` (the theme's accent) with
-/// its mark in `mark` (its on_accent), off edged in `edge` (its border).
+/// A checkbox's look by its sizes (still.fail's): `size` square, its corner `radius`, on the page's ground edged in
+/// `edge` (the theme's control edge; darker pointed at); checked (or neither) filled with `on_color` (its primary
+/// ink), its mark in `mark` (on the primary).
 pub fn checkbox_look_of(
-  size? : Double = 20.0,
+  size? : Double = 18.0,
   radius? : Double = 6.0,
   on_color? : Int64,
   mark? : Int64,
@@ -60,26 +61,31 @@ pub fn checkbox_look_of(
   fn(c, s) {
     let t = c.theme()
     let on = s.check != Off
-    let fill = on_color.unwrap_or(t.accent)
-    let ground = if on { fill } else { t.surface }
+    let fill = on_color.unwrap_or(t.primary)
+    let line = if on {
+      fill
+    } else if s.hovered && !s.disabled {
+      t.field_hover
+    } else {
+      edge.unwrap_or(t.border)
+    }
     c.box(
       w=Px(size),
       h=Px(size),
       radius~,
-      bg=tinted(c, ground, s.hovered && !s.disabled, s.pressed && !s.disabled),
-      border=if on { 0.0 } else { 1.5 },
-      border_color=edge.unwrap_or(t.border),
+      bg=if on { fill } else { t.bg },
+      border=1.0,
+      border_color=line,
       align=ACenter,
       justify=JCenter,
-      opacity=if s.disabled { disabled_alpha } else { 1.0 },
+      opacity=if s.disabled { 0.45 } else { 1.0 },
       fn() {
         match s.check {
           On =>
-            c.text("✓", size=size * 0.7, weight=700, color=mark.unwrap_or(t.on_accent), wrap=false, line=size)
+            c.text("✓", size=size * 0.7, weight=700, color=mark.unwrap_or(t.on_primary), wrap=false, line=size)
             |> ignore
           Mixed =>
-            c.box(w=Px(size * 0.5), h=Px(2.0), radius=1.0, bg=mark.unwrap_or(t.on_accent), fn() {  })
-            |> ignore
+            c.box(w=Px(size * 0.5), h=Px(2.0), radius=1.0, bg=mark.unwrap_or(t.on_primary), fn() {  }) |> ignore
           Off => ()
         }
         focus_ring(c, s.focus_shown, s.rect, radius)
@@ -90,5 +96,5 @@ pub fn checkbox_look_of(
 }
 
 ///|
-/// The default look: 20 square, its corner 6, filled with the accent when on.
+/// The default look: 18 square, its corner 6, filled with the primary ink when checked.
 pub let checkbox_look : (@ui.Ctx, CheckboxState) -> Unit = checkbox_look_of()

@@ -58,33 +58,28 @@ pub fn toggle(
   }
   let i = c.box(id=if disabled { 0 } else { id }, fn() { look(c, st) })
   c.semantics(i, Button, id~, label~, pressed=on, disabled~, actions=pick(disabled, [], [Activate]))
-  { value: on, response: r.changed_to(on != pressed) }
+  { value: on, response: r.changed_to(told(c, on != pressed)) }
 }
 
 ///|
-/// The default look: the theme's control height, its words alone, a ground when pointed at, the faint ground when
-/// pressed.
+/// The default look (still.fail's icon buttons, as words): 32 high, its corner the theme's, its words muted until
+/// pointed at; pressed, on an 8% tint of the words' colour.
 pub fn toggle_look(c : @ui.Ctx, s : ToggleState) -> Unit {
   let t = c.theme()
   let live = !s.disabled
-  let ground = if s.on { t.faint } else { 0L }
-  let bg = if ground == 0L {
-    pick(live && s.pressed, doubled(t.hover), pick(live && s.hovered, t.hover, 0L))
-  } else {
-    tinted(c, ground, live && s.hovered, live && s.pressed)
-  }
+  let lit = live && (s.hovered || s.pressed)
   c.box(
     dir=Row,
-    h=Px(t.control_h),
-    min_w=t.control_h,
+    h=Px(32.0),
+    min_w=32.0,
     padx=10.0,
     align=ACenter,
     justify=JCenter,
-    bg~,
+    bg=if s.on { @ui.alpha(t.fg, 0.08) } else { pick(lit, t.hover, 0L) },
     radius=t.radius,
-    opacity=if s.disabled { disabled_alpha } else { 1.0 },
+    opacity=if s.disabled { 0.35 } else { 1.0 },
     fn() {
-      c.text(s.label, size=t.font, weight=if s.on { 600 } else { 500 }, color=pick(s.on, t.fg, t.muted), wrap=false)
+      c.text(s.label, size=t.font, weight=if s.on { 600 } else { 500 }, color=pick(s.on || lit, t.fg, t.muted), wrap=false)
       |> ignore
       focus_ring(c, s.focus_shown, s.rect, t.radius)
     },
@@ -175,7 +170,7 @@ pub fn toggle_group(
   })
   c.semantics(gi, Group, label~, disabled~)
   let changed = now.length() != value.length() || now.iter().any(fn(v) { !value.contains(v) })
-  { value: now, response: { ..any, id, changed } }
+  { value: now, response: { ..any, id, changed: told(c, changed) } }
 }
 
 ///|
@@ -184,49 +179,47 @@ pub fn group_look(c : @ui.Ctx, s : GroupState, items : () -> Unit) -> Unit {
   let t = c.theme()
   c.box(
     dir=if s.vertical { Column } else { Row },
-    pad=2.0,
+    pad=3.0,
     gap=2.0,
     bg=t.faint,
-    radius=t.radius,
-    opacity=if s.disabled { disabled_alpha } else { 1.0 },
+    radius=18.0,
+    opacity=if s.disabled { 0.4 } else { 1.0 },
     items,
   )
   |> ignore
 }
 
 ///|
-/// A toggle group's default item: words on nothing, raised on the surface when pressed.
+/// A toggle group's default item (still.fail's segmented choice): its words, muted until pressed; pressed, raised on
+/// the page's ground with a hairline and a soft shadow.
 pub fn group_item_look(c : @ui.Ctx, s : ToggleState) -> Unit {
   let t = c.theme()
-  let h = t.control_h - 4.0
-  let r = t.radius - 2.0
   let live = !s.disabled
-  let bg = if s.on {
-    if t.dark {
-      0x636366FFL
-    } else {
-      t.surface
-    }
-  } else {
-    pick(live && s.pressed, doubled(t.hover), pick(live && s.hovered, t.hover, 0L))
-  }
   c.box(
     dir=Row,
-    h=Px(h),
-    min_w=h,
+    h=Px(30.0),
+    min_w=30.0,
     padx=12.0,
     align=ACenter,
     justify=JCenter,
-    bg~,
-    radius=r,
-    shadow=if s.on { 3.0 } else { 0.0 },
+    bg=if s.on { pick(t.dark, t.surface, t.bg) } else { 0L },
+    radius=15.0,
+    border=if s.on { 0.5 } else { 0.0 },
+    border_color=t.line,
+    shadow=if s.on { 2.0 } else { 0.0 },
     shadow_color=t.shadow,
-    shadow_y=1.0,
-    opacity=if s.disabled { disabled_alpha } else { 1.0 },
+    shadow_y=0.0,
+    opacity=if s.disabled { 0.4 } else { 1.0 },
     fn() {
-      c.text(s.label, size=t.font_sm + 1.0, weight=if s.on { 600 } else { 500 }, color=pick(s.on, t.fg, t.muted), wrap=false)
+      c.text(
+        s.label,
+        size=t.font,
+        weight=if s.on { 500 } else { 400 },
+        color=pick(s.on || (live && s.hovered), t.fg, t.muted),
+        wrap=false,
+      )
       |> ignore
-      focus_ring(c, s.focus_shown, s.rect, r)
+      focus_ring(c, s.focus_shown, s.rect, 15.0)
     },
   )
   |> ignore

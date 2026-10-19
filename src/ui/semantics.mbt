@@ -214,6 +214,21 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
   let hid = Array::make(count, false)
   let named = Array::make(count, false)
   let in_modal = Array::make(count, modal_node < 0)
+  // the layers opened in the modal one (a submenu of a menu): theirs too, though laid over the window apart from it
+  let over_modal : Array[Int] = []
+  if modal_node >= 0 {
+    let mut modal_id = 0
+    for l in self.last_layers {
+      if l.node == modal_node {
+        modal_id = l.id
+      }
+    }
+    for l in self.last_layers {
+      if l.id != modal_id && !l.inert && self.layer_within(l.id, modal_id) {
+        over_modal.push(l.node)
+      }
+    }
+  }
   // the nodes built in hidden parts
   let hidden_node = Array::make(count, false)
   for r in self.sem_hidden {
@@ -230,7 +245,7 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
     if p >= 0 && in_modal[p] {
       in_modal[i] = true
     }
-    if i == modal_node {
+    if i == modal_node || over_modal.contains(i) {
       in_modal[i] = true
     }
     up[i] = parent_out

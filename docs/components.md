@@ -15,8 +15,13 @@ the gallery: every component in its states, light beside dark (`APP=kitdemo`, `M
    disabled, how far its motion has gone), and the component lays out nothing of its own around it but the box that
    takes its input (Radix and shadcn/ui's split). An app's own design system (still.fail's `@sf`) is a set of looks.
 2. **The theme is in the Ctx** (SwiftUI's environment, Compose's CompositionLocal, egui's Style): `Ctx::set_theme`
-   once, `Ctx::with_theme` for a part. Widgets read their defaults from it (`Theme::light`, `Theme::dark`: iOS's
-   colours, what mbui had hard-coded); what a call says wins.
+   once, `Ctx::with_theme` for a part. Widgets read their defaults from it; what a call says wins. **The default is
+   still.fail's** (its web's and apps' tokens): `Theme::light` and `Theme::dark` the wide screen's (the white canvas,
+   ink, ember orange), `Theme::narrow_light` and `Theme::narrow_dark` the phone's (warm paper, words a size up).
+   The components' default looks are still.fail's parts: pill buttons and fields, the ink for what is to be done (a
+   solid button, a checked box, a tooltip, a toast), the accent for what is on or moving (a switch, a slider,
+   progress), small panels 6 in with rows on the hover's ground. `Theme::ios_light` and `Theme::ios_dark` keep the
+   iOS colours mbui had (the demo's).
 3. **Interactive widgets return a `Response`** (egui's): clicked, long-pressed, right-clicked, hovered, pressed,
    focused, focus shown, changed, rect. A widget with a value returns `Changed[T]`: the value and the response.
    Widgets that returned a Bool (`Ctx::button`) still do.
@@ -83,8 +88,21 @@ The gallery's page for each is `MBUI_SCREEN=<page>`.
 | ToggleGroup | `@kit.toggle_group(c, key, items, value, multiple?) -> Changed[Array[String]]`, a roving group | controls |
 | RadioGroup | `@kit.radio_group(c, key, items, value) -> Changed[String]`: the arrows check what they reach | controls |
 | Slider | `@kit.slider(c, key, value, min?, max?, step?) -> Changed[Double]` | controls |
+| (a one-line field) | `@kit.text_field(c, key, placeholder?) -> Field`: still.fail's pill field | |
 | Password Toggle Field | `@kit.password_field(c, key, visible) -> Password`: the words, whether they show | controls |
 | One-Time Password Field | `Ctx::code_field` (src/ui): a code complete is handed on once | |
+| Dialog | `@kit.dialog(c, key, open, title, description?, modal?) -> Changed[Bool]`: in the window's middle; Escape, the back, a press outside, its close button close it | overlays |
+| AlertDialog | `@kit.alert_dialog(c, key, open, title, action, cancel?, danger?) -> Alert`: opens on cancel; a press outside leaves it | overlays |
+| Popover | `@kit.popover(c, key, open, anchor, side?, along?) -> Changed[Bool]`: by its trigger, the focus in it | overlays |
+| HoverCard | `@kit.hover_card(c, key, trigger, open_delay?, close_delay?) -> Bool`: a mouse resting on its trigger | overlays |
+| Tooltip | `@kit.tooltip(c, key, trigger, text, delay?, skip?) -> Bool`: the pointer resting, or the keyboard's focus at once | overlays |
+| Toast | `@kit.toaster(c, key, toasts, duration?) -> Toasts`: at the bottom of the window in its middle, paused under the pointer, swiped away (F8 waits for the hosts' function keys) | overlays |
+| DropdownMenu | `@kit.dropdown_menu(c, key, open, trigger, entries) -> Menu`: entries by `menu_item`, `menu_check`, `menu_radio`, `menu_sub`, `menu_separator`, `menu_label`; letters typed find an item | menus |
+| ContextMenu | `@kit.context_menu(c, key, area, entries) -> Menu`: a right click or a long press, at the pointer | menus |
+| Menubar | `@kit.menubar(c, key, menus) -> String?` | menus |
+| Select | `@kit.select(c, key, value, options, placeholder?) -> Changed[String]`: a listbox on the chosen option | menus |
+| Toolbar | `@kit.toolbar(c, key, body)`: one roving group | menus |
+| NavigationMenu | `@kit.navigation_menu(c, key, items) -> String?`: `nav_trigger` (content by a resting pointer), `nav_link` | menus |
 
 ## Radix's utilities
 
