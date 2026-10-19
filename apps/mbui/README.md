@@ -38,8 +38,8 @@ apps/mbui/e2e/win.sh                                # Windows: signed in against
 ```
 
 These are mbui's own scripts (`mbui/scripts/`) building this module (`MBUI_APP_MOD`), with what still.fail adds:
-the core's engine and bytecode for Android (`scripts/android-core.sh`), its shell and script on macOS
-(`scripts/core.sh`).
+the core in Hermes, the same `core.hbc` on both: on Android still.fail's prebuilt engine (`scripts/android-core.sh`),
+on macOS `src/host/apple_core.mm` with React Native 0.81.4's Hermes framework and the Rust shell (`scripts/core.sh apple`).
 
 ## The macOS app
 

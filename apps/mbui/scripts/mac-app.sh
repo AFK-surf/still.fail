@@ -1,7 +1,8 @@
 #!/bin/bash
 # still.fail mbui on macOS as an app: out/mac/still.fail mbui.app (fail.still.mbui; arm64, as still.fail's desktop app
 # ships), its zip beside it. The app is APP=stillfail's release build (scripts/mac.sh) with what it carries: the core's
-# script (Resources/core.js, which the core host finds in the app: src/host/apple_core.m), its icon
+# bytecode (Resources/core.hbc, which the core host finds in the app: src/host/apple_core.mm) and Hermes
+# (Frameworks/hermes.framework, React Native 0.81.4's, as Android's; scripts/core.sh hermes-apple), its icon
 # (scripts/mac-icon.swift), an Info.plist of its own. Signed with MAC_SIGN_IDENTITY (CI: still.fail's, imported by
 # scripts/mac-sign.py), else ad hoc; checked with codesign's strict verify.
 #   apps/mbui/scripts/mac-app.sh            build and bundle it, then sign it (below)
@@ -12,7 +13,8 @@
 # The oldest macOS it runs on: still.fail's desktop app's (Electron's: 12.0), MACOSX_DEPLOYMENT_TARGET for clang and
 # cargo alike, and its Info.plist's LSMinimumSystemVersion; an object built for a newer one fails the build.
 # MBUI_BUILD: the build's number (default git rev-list --count HEAD of still.fail); MBUI_CORE_FRESH=1 makes the core's
-# shell and script again (cargo decides what is out of date), else only when missing.
+# shell again (cargo decides what is out of date), else only when missing; the engine and core.hbc are made when stale
+# (scripts/core.sh apple).
 set -eo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -38,7 +40,9 @@ export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$A/out/core-target}-macos$MACOSX_DEP
 
 sign() {
   local t=$(now)
-  # signed: still.fail's identity (as its desktop app: no hardened runtime, not notarized), else ad hoc
+  # signed: still.fail's identity (as its desktop app: no hardened runtime, not notarized), else ad hoc; what it carries
+  # (Hermes's framework) first
+  codesign --force --sign "${MAC_SIGN_IDENTITY:--}" --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
   codesign --force --sign "${MAC_SIGN_IDENTITY:--}" --timestamp=none "$APPDIR"
   codesign --verify --deep --strict --verbose=2 "$APPDIR" 2>&1 | sed 's/^/codesign: /'
   codesign -dvv "$APPDIR" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Signature|Format)=' | sed 's/^/codesign: /'
@@ -53,9 +57,9 @@ if [ "${1:-build}" = sign ]; then
   exit 0
 fi
 
-# the core's parts: its Rust shell (linked in) and its script (carried)
+# the core's parts: its Rust shell and its engine (linked in), Hermes and its bytecode (carried)
 if [ "${MBUI_CORE_FRESH:-}" = 1 ] || [ ! -f out/core/aarch64-apple-darwin/libstillfail_shell.a ]; then bash "$D/core.sh" shell > "$OUT/shell.log" 2>&1 || { tail -30 "$OUT/shell.log"; exit 1; }; fi
-if [ "${MBUI_CORE_FRESH:-}" = 1 ] || [ ! -f out/core/core.js ]; then bash "$D/core.sh" bundle > "$OUT/bundle.log" 2>&1 || { tail -30 "$OUT/bundle.log"; exit 1; }; fi
+bash "$D/core.sh" apple aarch64-apple-darwin > "$OUT/core.log" 2>&1 || { tail -30 "$OUT/core.log"; exit 1; }
 t1=$(now)
 APP=stillfail MODE=release bash "$D/mac.sh" build > "$OUT/build.log" 2>&1 || { tail -40 "$OUT/build.log"; exit 1; }
 if grep -q 'built for newer macOS version' "$OUT/build.log"; then
@@ -70,9 +74,12 @@ ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12).icns
 [ -f "$ICON" ] || swift "$D/mac-icon.swift" "$ICON" > /dev/null
 
 rm -rf "$APPDIR" "$ZIP"
-mkdir -p "$APPDIR/Contents/MacOS" "$APPDIR/Contents/Resources"
+mkdir -p "$APPDIR/Contents/MacOS" "$APPDIR/Contents/Resources" "$APPDIR/Contents/Frameworks"
 cp "$BIN" "$APPDIR/Contents/MacOS/$EXE"
-cp out/core/core.js "$APPDIR/Contents/Resources/core.js"
+# Hermes from the app's Frameworks (@executable_path/../Frameworks), not from the build's tree (the other rpath, gone)
+install_name_tool -delete_rpath @executable_path/../../../../../../out/core/hermes/Library/Frameworks/macosx "$APPDIR/Contents/MacOS/$EXE"
+ditto out/core/hermes/Library/Frameworks/macosx/hermes.framework "$APPDIR/Contents/Frameworks/hermes.framework"
+cp out/core/core.hbc "$APPDIR/Contents/Resources/core.hbc"
 cp "$ICON" "$APPDIR/Contents/Resources/AppIcon.icns"
 # the oldest macOS the program runs on, as it was linked: the one asked for
 MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" { print $2; exit }')
@@ -103,6 +110,7 @@ PY
 plutil -lint "$APPDIR/Contents/Info.plist" > /dev/null
 
 # ad hoc for now: `sign` after (still.fail's identity in CI)
+codesign --force --sign - --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
 codesign --force --sign - --timestamp=none "$APPDIR"
 echo "mac-app.sh: $NAME.app 0.1.$N in $(secs $t0) s: the core's parts $(python3 -c "print(f'{$t1-$t0:.1f}')") s," \
   "the app $(python3 -c "print(f'{$t2-$t1:.1f}')") s, the bundle $(secs $t2) s"
