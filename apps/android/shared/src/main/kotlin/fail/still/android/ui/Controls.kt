@@ -29,6 +29,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -79,6 +80,33 @@ fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enable
     }
 }
 
+/**
+ * A text button's press (a link's, 全选, 删除 beside a row): its ground under the finger rounded and PRESS_OUT past its
+ * words on each side, they stay where they are laid out (in line with the text round them); not a square ripple, which
+ * in a rounded card's corner squares it off.
+ */
+fun Modifier.pressText(enabled: Boolean = true, onClick: () -> Unit): Modifier = this
+    .layout { m, c ->
+        val out = PRESS_OUT.roundToPx()
+        val p = m.measure(c.copy(maxWidth = if (c.hasBoundedWidth) c.maxWidth + out * 2 else c.maxWidth, minWidth = c.minWidth + out * 2, maxHeight = if (c.hasBoundedHeight) c.maxHeight + out else c.maxHeight))
+        layout(p.width - out * 2, p.height - out) { p.place(-out, -out / 2) }
+    }
+    .clip(Smooth(PRESS_CORNER)).clickable(enabled = enabled, onClick = onClick).padding(horizontal = PRESS_OUT, vertical = PRESS_OUT / 2)
+
+/**
+ * Out to `x` past each side of what it is in (a sheet's padded column): rows that keep their own room from the sheet's
+ * edges (PickRow) laid there, their words in line with the column's.
+ */
+fun Modifier.bleed(x: Dp): Modifier = layout { m, c ->
+    val px = x.roundToPx()
+    val w = if (c.hasBoundedWidth) c.maxWidth + px * 2 else c.maxWidth
+    val p = m.measure(c.copy(minWidth = w, maxWidth = w))
+    layout(p.width - px * 2, p.height) { p.place(-px, 0) }
+}
+
+private val PRESS_OUT = 6.dp
+private val PRESS_CORNER = 8.dp
+
 /** A button's height: a capsule, BUTTON_HEIGHT / 2 its corner (what a card's corner with one in it is taken from). */
 val BUTTON_HEIGHT = 38.dp
 
@@ -100,9 +128,9 @@ fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Bool
 
 /** A line to type in, on a soft frame; `lines` above one: a few lines, of any length (a pasted list). */
 @Composable
-fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier, lines: Int = 1, max: Int = if (mono) 32 else 80) {
+fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier, lines: Int = 1, max: Int = if (mono) 32 else 80, corner: Dp = 12.dp) {
     Box(
-        modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
+        modifier.fillMaxWidth().clip(Smooth(corner)).background(C.surface).border(1.dp, C.line, Smooth(corner)).padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null)
         BasicTextField(

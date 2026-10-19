@@ -77,6 +77,7 @@ import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentric
 import fail.still.android.ui.Spinner
 import fail.still.android.ui.chatSubtle
 import fail.still.core.CoreException
@@ -274,8 +275,9 @@ private fun CardCode(app: AppState, code: String) {
 private fun PasteCode(app: AppState, station: String, id: String) {
     var code by remember { mutableStateOf("") }
     val sending = app.isDoing("machineLogin.answer", "station" to station, "id" to id)
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Field(code, { code = it }, t("web-main.logins.pasteCode"), mono = true, modifier = Modifier.weight(1f).testTag("login-paste"), max = 2_000)
+    // The card's last row, in its bottom corners: the field concentric with the card, the pill CARD_PAD from the bottom too.
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
+        Field(code, { code = it }, t("web-main.logins.pasteCode"), mono = true, modifier = Modifier.weight(1f).testTag("login-paste"), max = 2_000, corner = concentric(CARD_CORNER, CARD_PAD))
         Pill(t("web-main.logins.finish"), filled = true, busy = sending) {
             val text = code.trim()
             if (text.isNotEmpty()) app.act(t("web-main.logins.answerWhat")) { app.api(station).answerMachineLogin(id, text); code = "" }
@@ -321,8 +323,8 @@ fun StationLogins(station: String, marked: String? = null) {
     if (past.isNotEmpty()) ListCard {
         past.forEach { l ->
             val said = listOfNotNull(l.chatTitle?.let { t("web-main.logins.startedIn", "chat" to it) }, l.doneByText, l.whenText.takeIf { it.isNotEmpty() }, if (l.doneByText != null) null else l.statusText).joinToString(" · ")
-            ListRow {
-                Column(Modifier.weight(1f).let { if (l.id == marked) it.background(C.accent.copy(alpha = 0.12f)) else it }) {
+            ListRow(ground = if (l.id == marked) C.accent.copy(alpha = 0.12f) else Color.Transparent) {
+                Column(Modifier.weight(1f)) {
                     Text(l.command, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(said, fontSize = 13.sp, color = if (l.state == "failed") C.red else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }

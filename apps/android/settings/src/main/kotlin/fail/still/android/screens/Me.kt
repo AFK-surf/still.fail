@@ -2,6 +2,7 @@
 // signed in, the accounts on this device, where it is signed in, and deleting it.
 package fail.still.android.screens
 
+import fail.still.android.ui.pressText
 import fail.still.android.ui.Spinner
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -70,7 +71,7 @@ fun MeScreen(current: WorkspaceEntry) {
                     Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     // Signing out: home at once, the sign-out going on by itself (a toast if it could not); not asked twice meanwhile.
                     if (app.isDoing("auth.signOut", "account" to a.sub)) Spinner(inline = true)
-                    else Text(if (list.size > 1) t("android-settings.me.signOut") else t("android-settings.me.signOutOnly"), fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
+                    else Text(if (list.size > 1) t("android-settings.me.signOut") else t("android-settings.me.signOutOnly"), fontSize = 15.sp, color = C.red, modifier = Modifier.pressText {
                         app.home()
                         app.act(t("android-settings.me.signOutWhat"), if (list.size > 1) t("android-settings.me.signedOut", "email" to a.email) else null) { Auth.signOut(app.core, a.sub) }
                     })

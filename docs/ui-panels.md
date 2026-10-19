@@ -34,7 +34,7 @@
 - **内容卡**（`pagesCss.card`：标题、说明、按钮）：四边都是 `CARD_PAD`（20）。文字和**有常驻底色的按钮**（实心按钮）站在同一条线上，对齐的是按钮底色的边，不是按钮里的字，因为底色很显眼，字对字反而看着没对齐。实心按钮在角上时（按钮那排 `pagesCss.cardFoot` 在最下面，或者最后一行以实心按钮结尾），卡片圆角 = 20 + 按钮半高 18 = 38，和按钮同心；角上没有带底色的东西时，圆角照旧 22。卡片里不是实心的按钮是文字按钮，悬停时底色往外伸，和行一样（`pageControls.css.ts`）。
 - **列表卡**（`pagesCss.listCard`，以及决策选项 `Decisions.css.ts`）：每一行都能点，平时没有底色，悬停才有。底色伸到离卡片边 `LIST_PAD`（8），行圆角 `ROW_CORNER`（18），卡片圆角 = 行圆角 + 8，同心；行里的字离卡片边还是 20，和内容卡对齐。决策选项的编号圆圈离行边 8，和行的角同心。
 - 卡片标题前不放圆点：状态由标题的文字说（圆点放在线内会把标题往右推，挂到线外又贴着卡片边，都不对）。
-- 安卓同一套（`ui/Parts.kt` 的 `Card` / `ListCard` / `RowsCard`，`ui/Controls.kt` 的 `PickRow`、`Button`）：`Card(foot = true)` 是角上有实心按钮的内容卡，`RowsCard` 是放在 sheet 或表单里的列表卡，行（`ListRow` / `PickRow`）在卡上时自己知道（`LocalOnCard`），按下的底色是圆角的、离卡边 8。`Smooth` 会把圆角画大 1.25 倍：方块套方块用 `concentric(外, 距离)` / `concentricOut(内, 距离)`；胶囊或圆放在角里，外圆角 = 距离 + 半高，不再除 1.25（除了会在胶囊旁边空出月牙）。sheet 角上的按钮用 `SheetHead(action = …)`，32 高，放在离顶和侧边都是 10 的地方，和 sheet 的 26 圆角同心。
+- 安卓同一套（`ui/Parts.kt` 的 `Card` / `ListCard` / `RowsCard`，`ui/Controls.kt` 的 `PickRow`、`Button`）：`Card(foot = true)` 是角上有实心按钮的内容卡，`RowsCard` 是放在 sheet 或表单里的列表卡，行（`ListRow` / `PickRow`）在卡上时自己知道（`LocalOnCard`），按下的底色是圆角的、离卡边 8。`Smooth` 会把圆角画大 1.25 倍：方块套方块用 `concentric(外, 距离)` / `concentricOut(内, 距离)`；胶囊或圆放在角里，外圆角 = 距离 + 半高，不再除 1.25（除了会在胶囊旁边空出月牙）。sheet 角上的按钮用 `SheetHead(action = …)`，32 高，放在离顶和侧边都是 10 的地方，和 sheet 的 26 圆角同心。不在滚动区里的角上按钮用 `Modifier.sheetCorner`（滚动区会把移上去的部分裁掉）。文字按钮（链接、全选、删除）用 `Modifier.pressText`：按下的底色是圆角的、比字多出 6，字的位置不动；不直接 `clickable`（方的涟漪在卡片角上会把角压方）。行在已经有左右内边距的 sheet 里时用 `Modifier.bleed` 伸出去，字和输入框对齐。
 
 ## 等待
 

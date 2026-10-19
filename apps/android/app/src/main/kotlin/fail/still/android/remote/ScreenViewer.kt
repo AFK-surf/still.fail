@@ -7,6 +7,7 @@
 // the core's, said over the frame, which stays as it was last shown.
 package fail.still.android.remote
 
+import fail.still.android.ui.BUTTON_HEIGHT
 import android.content.ClipData
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.WaitPill
@@ -697,9 +698,8 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
 private fun Drops(session: ScreenSession, acts: DropActs) {
     val list = session.drops.list
     if (list.isEmpty()) return
-    // Its corner as the panel the view's end is said in (Over); a row's round key (34) 8 from its top and end, the
-    // first's in its corner, about concentric with it (8 and its half).
-    Column(Modifier.fillMaxWidth().floatingStill(Smooth(24.dp))) {
+    // A row's round key (34) 8 from its top and end, the first's in its corner: concentric with it (8 and its half).
+    Column(Modifier.fillMaxWidth().floatingStill(Smooth(8.dp + 17.dp))) {
         list.forEach { d -> key(d) { DropRow(session, d, acts) } }
     }
 }
@@ -802,7 +802,8 @@ private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onEx
         "connecting" -> Waiting(message ?: t("common.connecting"), modifier)
         "reconnecting" -> Waiting(message ?: t("common.reconnecting"), modifier)
         else -> Column(
-            modifier.padding(24.dp).widthIn(max = 360.dp).floatingStill(Smooth(24.dp)).padding(horizontal = 24.dp, vertical = 20.dp),
+            // Its buttons at the foot, toward its corners: 20 from every edge, its corner theirs and that, concentric.
+            modifier.padding(24.dp).widthIn(max = 360.dp).floatingStill(Smooth(20.dp + BUTTON_HEIGHT / 2)).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             IconIn(if (session.state?.kind == "browser") Icons.Web else Icons.Monitor, 28.dp, C.muted)

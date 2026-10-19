@@ -10,6 +10,11 @@
 // as the phone web's (web/src/mobile/Drive.tsx), the reference for the phone (docs/mobile-parity.md).
 package fail.still.android.drive
 
+import androidx.compose.ui.graphics.Color
+import fail.still.android.ui.CARD_PAD
+import fail.still.android.ui.LIST_ROW_CORNER
+import fail.still.android.ui.LIST_PAD
+import fail.still.android.ui.LIST_CARD_CORNER
 import android.content.ActivityNotFoundException
 import android.content.ContentResolver
 import android.content.Context
@@ -40,6 +45,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import fail.still.android.ui.pressText
 import fail.still.android.ui.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -386,7 +392,7 @@ private fun RootRow(app: AppState, station: String, r: DriveRoot, roots: List<Dr
     val c = C
     val trouble = rootTrouble(r.state)
     Row(
-        Modifier.cardRow(first, last).background(c.surface)
+        Modifier.cardRow(first, last, c.surface)
             .combinedClickable(onClick = { app.push(Screen.Drive(station, r.path, "")) }, onLongClick = if (manage) ({
                 app.sheet = SheetSpec(0.3f, fit = fit(1)) {
                     SheetGrab()
@@ -394,7 +400,7 @@ private fun RootRow(app: AppState, station: String, r: DriveRoot, roots: List<Dr
                     PickRow(t("android-misc.drive.roots.stop"), color = C.accent, leading = { IconIn(Icons.Close, 20.dp, C.accent) }) { unshare(app, station, roots, r) }
                 }
             }) else null)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = CARD_PAD - LIST_PAD, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         IconIn(Icons.Folder, 22.dp, c.muted)
@@ -553,14 +559,19 @@ private fun Empty(text: String, action: @Composable () -> Unit = {}) {
     }
 }
 
-/** Card rows in a lazy list: each row its part of one rounded card (the first and last carry its corners). */
+/**
+ * Card rows in a lazy list: each row its part of one rounded card (the first and last carry its corners), a list card's
+ * (ui/Parts.kt RowsCard): each row's own ground (pressed, chosen) LIST_PAD in from the card's edge and rounded
+ * LIST_ROW_CORNER, concentric with it; its words CARD_PAD in.
+ */
 private fun cardShape(first: Boolean, last: Boolean) = Smooth(
-    topStart = if (first) 16.dp else 0.dp, topEnd = if (first) 16.dp else 0.dp,
-    bottomEnd = if (last) 16.dp else 0.dp, bottomStart = if (last) 16.dp else 0.dp,
+    topStart = if (first) LIST_CARD_CORNER else 0.dp, topEnd = if (first) LIST_CARD_CORNER else 0.dp,
+    bottomEnd = if (last) LIST_CARD_CORNER else 0.dp, bottomStart = if (last) LIST_CARD_CORNER else 0.dp,
 )
 
-private fun Modifier.cardRow(first: Boolean, last: Boolean) =
-    padding(horizontal = 12.dp).padding(bottom = if (last) 10.dp else 0.dp).fillMaxWidth().clip(cardShape(first, last))
+private fun Modifier.cardRow(first: Boolean, last: Boolean, ground: Color) =
+    padding(horizontal = 12.dp).padding(bottom = if (last) 10.dp else 0.dp).fillMaxWidth().clip(cardShape(first, last)).background(ground)
+        .padding(start = LIST_PAD, end = LIST_PAD, top = if (first) LIST_PAD else 0.dp, bottom = if (last) LIST_PAD else 0.dp).clip(Smooth(LIST_ROW_CORNER))
 
 /** Where the folder is under its root: the root, then each folder down to this one, each but the last a way back to it. */
 @Composable
@@ -608,7 +619,7 @@ private fun EntryRow(station: String, root: String, path: String, e: DriveEntry,
     val failed = app.failedOf("drive.remove", "root" to root, "path" to path) ?: app.failedOf("drive.rename", "root" to root, "from" to path)
     val fetching = DriveFetches.progress[DriveFetches.id(station, root, path)]
     Row(
-        Modifier.cardRow(first, last).background(if (chosen == true) c.accent.copy(alpha = 0.12f) else c.surface).combinedClickable(enabled = !busy, onClick = onOpen, onLongClick = onHold).padding(horizontal = 16.dp, vertical = 11.dp),
+        Modifier.cardRow(first, last, c.surface).background(if (chosen == true) c.accent.copy(alpha = 0.12f) else c.surface).combinedClickable(enabled = !busy, onClick = onOpen, onLongClick = onHold).padding(horizontal = CARD_PAD - LIST_PAD, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Choosing: each row's mark says whether it is chosen.
@@ -635,7 +646,7 @@ private fun EntryRow(station: String, root: String, path: String, e: DriveEntry,
 private fun UploadRow(app: AppState, context: Context, u: DriveUpload, first: Boolean, last: Boolean, held: () -> List<DriveEntry>) {
     val c = C
     Row(
-        Modifier.cardRow(first, last).background(c.surface).padding(start = 16.dp, end = 8.dp, top = 11.dp, bottom = 11.dp),
+        Modifier.cardRow(first, last, c.surface).padding(start = CARD_PAD - LIST_PAD, end = 0.dp, top = 11.dp, bottom = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         IconIn(Icons.Upload, 22.dp, c.muted)
@@ -644,8 +655,8 @@ private fun UploadRow(app: AppState, context: Context, u: DriveUpload, first: Bo
             when (u.state) {
                 "taken" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(t("android-misc.drive.exists.title"), fontSize = 12.sp, lineHeight = 16.sp, color = c.muted)
-                    Text(t("android-misc.drive.exists.replace"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent, modifier = Modifier.clickable { DriveUploads.settle(u, true) })
-                    Text(t("android-misc.drive.exists.both"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent, modifier = Modifier.clickable { DriveUploads.settle(u, false) })
+                    Text(t("android-misc.drive.exists.replace"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent, modifier = Modifier.pressText { DriveUploads.settle(u, true) })
+                    Text(t("android-misc.drive.exists.both"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent, modifier = Modifier.pressText { DriveUploads.settle(u, false) })
                 }
                 "failed" -> Text(t("android-misc.drive.upload.failed", "error" to (u.error ?: "")), fontSize = 12.sp, lineHeight = 16.sp, color = c.red, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 else -> {

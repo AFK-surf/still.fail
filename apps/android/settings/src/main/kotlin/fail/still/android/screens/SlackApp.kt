@@ -66,6 +66,7 @@ import fail.still.android.data.Buddy
 import fail.still.android.data.StillFailJson
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
+import fail.still.android.ui.pressText
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
@@ -328,7 +329,7 @@ internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, Strin
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(t("android-settings.slack.iconNote"), fontSize = 13.sp, color = C.muted)
-                Text(t("android-settings.slack.uploadImage"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openPicker() })
+                Text(t("android-settings.slack.uploadImage"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText { openPicker() })
             }
         }
         AvatarGrid(buddyList + MAKER_AVATARS, picked?.id) { pick(it) }
@@ -337,7 +338,7 @@ internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, Strin
             Box(Modifier.size(44.dp).clip(Smooth(12.dp)).background(Color(parseColor(draft.color))))
             Field(draft.color, { colour(it.trim().uppercase(), true) }, "#RRGGBB", mono = true, modifier = Modifier.weight(1f))
             if (recommended != null && colourSet && !recommended.equals(draft.color, ignoreCase = true)) {
-                Text(t("android-settings.slack.recommended"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { colour(recommended, false) })
+                Text(t("android-settings.slack.recommended"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText { colour(recommended, false) })
             }
         }
     }
@@ -425,7 +426,7 @@ fun SlackAppScreen(station: String, connect: String) {
                 }
             }
             view.links?.settings?.takeIf { it.isNotEmpty() }?.let { url ->
-                Text(t("android-settings.slack.open"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(url) }.padding(vertical = 4.dp))
+                Text(t("android-settings.slack.open"), fontSize = 14.sp, color = C.accent, modifier = Modifier.pressText { open(url) }.padding(vertical = 4.dp))
             }
         }
     }

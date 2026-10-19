@@ -6,6 +6,8 @@
 // says none (not a Mac, or older) shows nothing.
 package fail.still.android.screens
 
+import androidx.compose.ui.draw.clip
+import fail.still.android.ui.Smooth
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -111,7 +113,7 @@ private fun EndWords(text: String, color: Color, weight: FontWeight = FontWeight
 @Composable
 private fun RowAction(label: String, description: String? = null, busy: Boolean = false, failed: String? = null, onClick: () -> Unit) {
     Row(
-        Modifier.clickable(enabled = !busy, role = Role.Button, onClick = onClick)
+        Modifier.clip(Smooth(8.dp)).clickable(enabled = !busy, role = Role.Button, onClick = onClick)
             .let { m -> if (description != null) m.semantics { contentDescription = description } else m }
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),

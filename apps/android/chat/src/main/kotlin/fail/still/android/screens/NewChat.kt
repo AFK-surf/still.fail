@@ -3,6 +3,9 @@
 // (or file) makes the session on that station; then the page becomes the chat.
 package fail.still.android.screens
 
+import fail.still.android.ui.LIST_ROW_CORNER
+import fail.still.android.ui.SHEET_ROW_TOP
+import fail.still.android.ui.sheetCorner
 import fail.still.android.data.t
 import fail.still.android.shared.BuildConfig
 import fail.still.android.ui.BusyIcon
@@ -337,7 +340,8 @@ private fun openRunPicker(app: AppState, station: String) {
         SheetGrab()
         if (accounts) {
             Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(36.dp).clip(Smooth(18.dp)).clickable { accounts = false }, contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 20.dp, C.ink) }
+                // In the sheet's corner, concentric with it.
+                Box(Modifier.sheetCorner(side = 8.dp, top = SHEET_ROW_TOP, end = false).size(36.dp).clip(Smooth(18.dp)).clickable { accounts = false }, contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 20.dp, C.ink) }
                 Text(t("android-chat.new.account"), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
             }
         } else SheetHead(t("android-chat.new.model"))
@@ -495,7 +499,7 @@ private fun openMachineSessions(app: AppState, view: StationView, sessions: List
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             sessions.forEach { s ->
                 Row(
-                    Modifier.fillMaxWidth().clickable { lookAtMachineSession(app, view, sessions, s) }.padding(horizontal = 20.dp, vertical = 10.dp),
+                    Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).clickable { lookAtMachineSession(app, view, sessions, s) }.padding(horizontal = 8.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     MakerIcon(null, s.runtime, 18.dp)

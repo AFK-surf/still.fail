@@ -222,8 +222,22 @@ fun SheetHost(spec: SheetSpec?, haze: HazeState, close: () -> Unit) {
 val SHEET_CORNER = 26.dp
 /** How tall the grabber's band is (SheetGrab: 8 and 4 round it, 4 more each side of its 5), and where a head's row begins. */
 private val GRAB_HEIGHT = 25.dp
-private val HEAD_TOP = GRAB_HEIGHT + 4.dp
+/** Where a sheet's first row begins: under the grabber's band and 4 more. */
+val SHEET_ROW_TOP = GRAB_HEIGHT + 4.dp
+private val HEAD_TOP = SHEET_ROW_TOP
 private val HEAD_SIDE = 18.dp
+/**
+ * A round button or capsule laid `side` in from the sheet's side and `top` down from its top (where its row puts it, it
+ * the tallest there), moved into the sheet's corner: SHEET_CORNER less its half from both edges, concentric with it.
+ * `end`: the end's corner (else the start's).
+ */
+fun Modifier.sheetCorner(side: Dp, top: Dp, end: Boolean = true): Modifier = layout { m, c ->
+    val p = m.measure(c)
+    val inset = SHEET_CORNER.roundToPx() - p.height / 2
+    val dx = side.roundToPx() - inset
+    layout(p.width, p.height) { p.place(if (end) dx else -dx, inset - top.roundToPx()) }
+}
+
 /** A button in a sheet's corner (SheetHead action): this high, SHEET_CORNER less its half from both edges. */
 val SHEET_ACTION = 32.dp
 
@@ -251,12 +265,7 @@ fun SheetHead(title: String, trailing: (@Composable () -> Unit)? = null, lead: (
         lead?.invoke()
         Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.weight(1f))
         trailing?.invoke()
-        if (action != null) Box(Modifier.layout { m, c ->
-            val p = m.measure(c)
-            // Its top HEAD_TOP down the sheet (it is the tallest in the row) and its end HEAD_SIDE in: moved to `inset` from both.
-            val inset = SHEET_CORNER.roundToPx() - p.height / 2
-            layout(p.width, p.height) { p.place(HEAD_SIDE.roundToPx() - inset, inset - HEAD_TOP.roundToPx()) }
-        }) { action() }
+        if (action != null) Box(Modifier.sheetCorner(side = HEAD_SIDE, top = HEAD_TOP)) { action() }
     }
 }
 
