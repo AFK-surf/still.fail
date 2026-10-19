@@ -279,9 +279,9 @@ export class FeishuSurface implements ChatSurface {
             resume(Effect.void);
           }
         };
-        socket.on("upgrade", (response) => {
-          const status = response.headers["handshake-status"];
-          if (status !== undefined && status !== "200") end(new Error(`feishu refused the connection: ${status} ${response.headers["handshake-msg"] ?? ""}`.trim()));
+        // Feishu says no in the handshake's answer (an app without the long connection, too many connections).
+        socket.on("unexpected-response", (_request, response) => {
+          end(new Error(`feishu refused the connection: HTTP ${response.statusCode} ${response.headers["handshake-msg"] ?? ""}`.trim()));
         });
         socket.on("open", () => {
           heard = clock.currentTimeMillisUnsafe();
