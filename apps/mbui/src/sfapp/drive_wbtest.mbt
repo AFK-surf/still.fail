@@ -22,6 +22,18 @@ test "decoding: UTF-8, its byte order mark, UTF-16, a character cut at the end" 
 }
 
 ///|
+test "decoding: a file that is not UTF-8 read as GB18030 (第一章 开始)" {
+  // 第 B5DA, 一 D2BB, 章 D5C2, a space, 开 BFAA, 始 CABC
+  let gb = Bytes::from_array(
+    [b'\xB5', b'\xDA', b'\xD2', b'\xBB', b'\xD5', b'\xC2', b' ', b'\xBF', b'\xAA', b'\xCA', b'\xBC'][:],
+  )
+  assert_eq(decode_text(gb), ("第一章 开始", "GB18030"))
+  // the front of a bigger file, its last character cut in half: dropped
+  let cut = Bytes::from_array([b'\xB5', b'\xDA', b'\xD2'][:])
+  assert_eq(decode_text(cut, truncated=true), ("第", "GB18030"))
+}
+
+///|
 test "chapters: 第…章, front matter, Chapter N; a stray title-like line only far enough from the last" {
   let text = "序章\n很久以前的事。\n第一章 车站\n他到了。\n第 12 节\n又一节。\nChapter 3 The Key\nwords.\n正文 第三卷 回程\n"
   let marks = find_chapters(text, weak=false)

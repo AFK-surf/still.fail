@@ -1,0 +1,33 @@
+# Picking words where they are (MessagePick.kt): held still on the agent's words, the word under the finger is picked,
+# the bar over it (引用, 复制, 全选); 复制 copies just that word (已复制); held again and widened by sliding on, the
+# passage quoted (引用) and sent: the quote is that passage, not the whole message.
+timeout 60000
+tap 端到端测试
+until =studio
+until 发消息
+wait 1000
+tap 发消息
+type 说一句长一点的话 {T} post:选词测试 {T} 这一句话里有好几个可以单独选中的词语
+tap icon:arrow-up
+timeout 120000
+untiln 2 选词测试 {T}
+until 归档此对话
+timeout 60000
+wait 1500
+hold 700 可以单独选中的词语
+until =复制
+shot 1-word
+tap =复制
+until =已复制
+gone =复制
+hold 700 可以单独选中的词语
+until =引用
+shot 2-picked
+tap =引用
+until 添加说明
+shot 3-quoted
+tap 发消息
+type 引用了一个词 {T}
+tap icon:arrow-up
+until 引用了一个词 {T}
+gone 正在发送

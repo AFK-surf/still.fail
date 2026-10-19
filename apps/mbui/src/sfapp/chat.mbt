@@ -257,7 +257,10 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         |> ignore
         // words sent, as typed, until their row is in the list (flight.mbt)
         flight_waiting(c, draft_key(r))
-        pick_bar(c, src, r)
+        // a passage picked: its handles and its bar over the list (pick.mbt)
+        pick_layer(c, src, r)
+        // a link held: its menu (link_menu.mbt)
+        link_menu_layer(c)
       }
     }
   })
@@ -282,7 +285,36 @@ fn messages(
 ) -> Unit {
   let key = list_key(r)
   let rd = reading_of(r.station + "\u{1}" + r.session)
-  let list = with_lingering(c, rd, v, read)
+  // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
+  // wait out of the list (emit.mbt, ChatMotion.kt)
+  let ek = r.station + "\u{1}" + r.session
+  let em = emits_of(ek)
+  // (once under way, it goes on while the end is near: the answer coming in grows the list under the reader, who is
+  // a moment short of its end until the list follows; only scrolled away, as the way to the newest shows, it ends)
+  let playing = em.current is Some(_) || em.queue.length() > 0
+  em.watched = (rd.at_end || (playing && !rd.jump)) && !v.newer && !c.stable() && app_in_front()
+  let showing : Map[String, Bool] = {}
+  for a in v.agents {
+    if a.status == "running" {
+      showing[a.key] = true
+    }
+  }
+  for k, _ in rd.linger {
+    showing[k] = true
+  }
+  emit_take(c, em, v, showing)
+  emit_step(c, em)
+  let read = if em.queue.length() > 0 || em.current is Some(_) {
+    read.filter(fn(e) {
+      match e {
+        Said(m) => !emit_held(em, m.seq)
+        _ => true
+      }
+    })
+  } else {
+    read
+  }
+  let list = with_lingering(c, rd, v, read, keeps=emit_keeps(em))
   let keys = row_keys(c, rd, v, list, key)
   let dkey = draft_key(r)
   flight_frame(c, dkey)
@@ -363,8 +395,9 @@ fn messages(
                 activity(c, src, here, a, leaving~)
               })
               @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(200.0)))
-              // pushed down by what comes in above it, it glides there (Chat.kt ACTIVITY_GLIDE: spring(1, 300))
-              if !older_came && flight is None {
+              // pushed down by what comes in above it, it glides there (Chat.kt ACTIVITY_GLIDE: spring(1, 300)), not
+              // while its avatar is away flying
+              if !older_came && flight is None && !emit_away(em, a.key) {
                 @motion.layout(c, ri, mk, spec=@motion.spring(stiffness=300.0, threshold=1.0), listed=false)
               }
               c.look(ri, @ui.look(alpha=p * fade, scale=0.5 + 0.5 * p, ox=(row_side(c) + 9.0) / c.width, oy=0.5))
@@ -418,9 +451,16 @@ fn messages(
             } else {
               @motion.keyed(c, ri, mk)
             }
+            // (one out of an avatar does not rise in as well)
+            let emitted = match e {
+              Said(m) => emit_goes(em, m.seq)
+              _ => false
+            }
             if rd.fresh.contains(keys[i]) {
               rd.fresh.remove(keys[i])
-              @motion.entering(c, ri, mk, @motion.trans(fade=0.0, dy=14.0, spec=@motion.tween(320.0)))
+              if !emitted {
+                @motion.entering(c, ri, mk, @motion.trans(fade=0.0, dy=14.0, spec=@motion.tween(320.0)))
+              }
             }
           }
         }
@@ -578,6 +618,8 @@ fn messages(
       None => false
     }
     jump_to_latest(c, src, r, v, rd, away || v.newer)
+    // the avatar flying out of an activity to its message and back, over the list
+    emit_flyer(c, ek, em, v)
     chat_bench(c, key, rd, v.more, n)
   })
   |> ignore
@@ -585,7 +627,13 @@ fn messages(
 
 ///|
 /// The list with the activities of agents whose turn just ended, kept a moment (Chat.kt: 600 ms, then fading 220).
-fn with_lingering(c : @ui.Ctx, rd : Reading, v : ChatView, list : Array[Entry]) -> Array[Entry] {
+fn with_lingering(
+  c : @ui.Ctx,
+  rd : Reading,
+  v : ChatView,
+  list : Array[Entry],
+  keeps? : Map[String, Bool] = {},
+) -> Array[Entry] {
   let now = c.now()
   let running : Map[String, Agent] = {}
   if !v.newer {
@@ -601,6 +649,12 @@ fn with_lingering(c : @ui.Ctx, rd : Reading, v : ChatView, list : Array[Entry]) 
     }
   }
   let over : Array[String] = []
+  // an agent whose messages are still coming out of its avatar stays (ChatMotion.keeps)
+  for k, l in rd.linger {
+    if keeps.contains(k) && !running.contains(k) {
+      rd.linger[k] = (l.0, now)
+    }
+  }
   for k, l in rd.linger {
     if running.contains(k) || now - l.1 >= 820.0 {
       over.push(k)
@@ -961,6 +1015,18 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   let jobs = (src.topic)("chatJobs", chat_params(r))
   let has_jobs = items(jobs.value, "jobs").length() > 0
   let archive = v.archivable && !v.archived
+  // 归档 comes and goes as nothing is left in the chat or something is again (Chat.kt ChatBar: 280 ms, ArchiveEase;
+  // fading, from or to 85%, its width from its end)
+  let archive_key = "bar-archive/" + r.station + "/" + r.session
+  let archive_look = @motion.presence(
+    c,
+    archive_key,
+    archive,
+    enter=@motion.trans(fade=0.0, scale=0.85, spec=archive_tween),
+  )
+  let archive_w = @motion.anim(c, archive_key + "/w", if archive { 1.0 } else { 0.0 }, global=true)
+  archive_w.follow(if archive { 1.0 } else { 0.0 }, archive_tween)
+  let archive_share = if archive_look is None { 0.0 } else { archive_w.get() }
   let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
   // what follows the title, as wide as it is drawn
   let mut room = 0.0
@@ -979,7 +1045,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   }
   room = room + (if v.thread is Some(_) { 34.0 } else { 0.0 }) +
     (if has_jobs { 34.0 } else { 0.0 }) +
-    (if archive { 34.0 } else { 0.0 })
+    34.0 * archive_share
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     bar_frame(
       c,
@@ -1011,15 +1077,24 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
         }
       },
       fn() {
-        if archive {
-          if doing("archive/" + r.station + "/" + r.session) {
-            c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() {
-              @sf.spinner(c) |> ignore
+        match archive_look {
+          Some(look) =>
+            c.box(dir=Row, w=Px(34.0 * archive_share), justify=JEnd, fn() {
+              let b = c.box(w=Px(34.0), min_w=34.0, h=Px(34.0), fn() {
+                if doing("archive/" + r.station + "/" + r.session) {
+                  c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() {
+                    @sf.spinner(c) |> ignore
+                  })
+                  |> ignore
+                } else if nav_button(c, "archive", 20.0, key="chat-archive") && archive {
+                  archive_chat(src, r, v)
+                }
+              })
+              c.look(b, look)
+              @motion.leaving(c, b, archive)
             })
             |> ignore
-          } else if nav_button(c, "archive", 20.0, key="chat-archive") {
-            archive_chat(src, r, v)
-          }
+          None => ()
         }
         if has_jobs {
           // a dot when one died lately (red) or a service is started again (amber)

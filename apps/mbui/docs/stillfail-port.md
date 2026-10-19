@@ -47,9 +47,12 @@ Done (branch fw-richtext-nav, 2026-10-19):
   (UAX #14 over the whole paragraph). Hosts shape and measure by run: a
   `style` (italic, mono) beside size and weight on every host. The layout
   answers offsets, carets and a range's rects, for selection later.
-  src/md parses Markdown; `@sf.markdown` draws it as a message does
-  (Markdown.kt). Not yet: tables, code highlighting, a code block's sideways
-  scroll, a link's long-press menu, selection itself.
+  src/md parses Markdown (GFM's tables too); `@sf.markdown` draws it as a message does
+  (Markdown.kt): tables in a card's frame, their columns as wide as their words allow up to the message's width,
+  then scrolled sideways; code highlighted as the web's Shiki (vitesse light and dark, src/sf/highlight.mbt from
+  Highlight.kt) and scrolled sideways rather than wrapped (mbui's `Ctx::sideways`: a finger moving sideways first
+  drags it, up or down first the list); a link held is its menu (打开链接, 复制链接; src/sfapp/link_menu.mbt, Links.kt
+  linkHold over mbui's `on_link_hold`). Selection: slice 5's picking.
 - 2, the page stack: `Nav[P]` and `Ctx::nav` (src/ui/nav.mbt), App.kt's
   Pages: push/pop sliding side by side (300 ms, standard curve), the left
   edge's swipe and the system's back gesture (`@host.set_back`; Android's
@@ -158,12 +161,9 @@ ChatFiles.kt, Decisions.kt, LoginCards.kt, Follow.kt):
   3000 messages): `scripts/shots.sh chat web-chat` compares it with
   goldens/mac-chat*.png and web-chat.png.
 
-Not yet, against the current app: answering cards, letting go, archiving and keeping from the chat (the
-buttons are drawn, inert); the long-press menu and picking words;
-the file preview (slice 11) and opening links outside the app; tables and
-code highlighting in Markdown, a code block's sideways scroll; the messages'
-motion (rising in, coming out of an agent's avatar, the activity's glide and
-its floor); a new message followed from its top when it is taller than the
+Not yet, against the current app:
+the file preview (slice 11); the activity's floor (the room it leaves kept as it
+folds away), the crossfade of what it says and its stepping ring; a new message followed from its top when it is taller than the
 screen; the asks' bell; the chat's sheets ("…", the agent's card, jobs);
 images on Android (no decoding there yet: their boxes and likenesses only);
 the station's update control in the bar.
@@ -207,12 +207,18 @@ PastedText.kt; SendText.kt; MessagePick.kt):
   文件 its documents UI (ACTION_OPEN_DOCUMENT) on Android, the open panel on
   macOS (`@host.pick`, src/host/pick.mbt; Picks.java); the camera tile takes
   a photo on Android (ACTION_IMAGE_CAPTURE's picture, as the app's
-  TakePicturePreview). Not yet (the same tiles, a toast saying so): the
-  recent photos (they need the gallery's permission and its thumbnails),
-  Station 文件 (slice 12's drive), any picker on iOS, Windows and the web.
-- Quoting: a message's words held still half a second are picked (all of
-  them: the Android app picks a word and widens it by words, with handles),
-  a bar over them with 引用 (into the draft as a quote) and 复制.
+  TakePicturePreview); the recent photos across the top and Station 文件 (both
+  branch mbui-media-complete, below). Not yet: any picker on iOS, Windows and
+  the web (a toast says so).
+- Quoting: a message's words held still a long press's time (400 ms) pick the word under the finger, widened by
+  words as it slides on (the list holds still meanwhile: `Ctx::take_press`), the passage drawn behind the words in the
+  accent at 26%; lifted, handles at its ends (a line down its side with a knob, the finger's room 36 round it) move
+  them, and a bar over it (under it when the top bar is too near; gone while it changes or the list moves) has 引用
+  (into the draft as a quote), 复制 (已复制) and 全选. A tap anywhere else, or back, lets go (src/sfapp/pick.mbt,
+  MessagePick.kt, ui/Pick.kt). The words are mbui's (`Ctx::words`: a box's rich paragraphs as one text, kept as laid
+  out, their offsets, rects and the passage drawn behind them; `@ui.word_at`: the host's word boundaries, Android's
+  ICU BreakIterator, Apple's CFStringTokenizer, the browser's Intl.Segmenter, else letters and digits together and a
+  Han character alone, as on Windows and in the tests).
 - The soft keyboard (Android): MainActivity follows its insets as they move
   (WindowInsetsAnimation), MBView lays the app out above it without
   resizing the surface, so the composer rides on the keyboard as it comes and
@@ -228,13 +234,13 @@ PastedText.kt; SendText.kt; MessagePick.kt):
   composer so: `scripts/shots.sh composer web-composer` compares them with
   goldens/mac-composer-*.png and web-composer-*.png.
 
-Not yet, against the current app: the words flying from the field into their
-bubble (and the capsule's morph as it changes height), `@` references to
+Not yet, against the current app: `@` references to
 other chats and pasted chat links as marks (chat.ref, chatSearch), sharing
-what they refer to before sending, the recent photos' strip, Station 文件 (slice 12's drive, below), a
+what they refer to before sending, a
 picture's preview from its tile, files pasted or sent by the keyboard (only
 words are), the text toolbar of the field
-(select, cut, copy by touch; the keyboard's own paste works), a new chat
+(select, cut, copy by touch; the keyboard's own paste works), links drawn but not tapped while words are picked (a tap
+on one lets go of the pick and follows it), the long press's haptic tick (no host haptics yet), a new chat
 (slice 6).
 
 Slice 12 without the player, the drive and the reader (branch drive, 2026-10-19; ember apps/android drive/Files.kt,
@@ -278,14 +284,11 @@ DriveScreen.kt, Reader.kt, TextModel.kt, Novel.kt, ReaderMarkdown.kt; chat/scree
   made-up drive that takes renames, deletes, new folders and uploads while it runs): `scripts/shots.sh drive
   web-drive` compares them with goldens/mac-<mode>.png and web-<mode>.png.
 
-Not yet, against the current app: downloading a file to the device, sharing it
-to another app, a folder as a zip (each says so in a toast: no host API to keep a file yet), GB18030 text (no
-table here: such a file opens as UTF-8 with replacement characters), the serif face (the reader draws its sans
-face either way), 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light one),
-the system bars' icons following the paper, the frosted glass of the bars and sheets (their tint only), the
+Not yet, against the current app (GB18030, the serif face, the system bars following the paper: branch
+mbui-media-complete, below): 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light
+one), the frosted glass of the bars and sheets (their tint only), the
 system's back closing a sheet or ending a choice (it goes back a page), dragging sheets by the grabber, the
-long-press ripple, a station file sent as a file (`drive.stage`, the card's sheet, 此对话默认发送文件) and station
-files kept with the draft on the device, the station page's way into a drive (slice 13).
+long-press ripple, station files kept with the draft on the device, the station page's way into a drive (slice 13).
 
 The rest of slice 12, the player (branch player-share, 2026-10-19; ember apps/android drive/Player.kt, Playlist.kt,
 chat/screens/VideoViewer.kt AudioViewer): a video or a song of a drive, or a song of a chat, played as it streams through
@@ -337,6 +340,18 @@ OpenJobs.kt, History.kt, ui/ToolStep.kt, ui/Sheet.kt):
   all-done post, as the bar's 归档 (`chat.archive`: Home at once, 已归档 said); a login card for one who may finish it
   (the station's `machineLogins.canLogin`) says what to do now by its step, with its pill and 取消
   (`machineLogin.cancel`). Anything that fails is said in a toast (无法…：…), as AppState.act says it.
+- Their states and motion (branch mbui-chat-complete, src/sfapp/decide.mbt `under_post`): an option pressed is drawn at
+  97% (80 ms in, 180 out, Ease.Out) on the ripple's ground; answered, the options stay as they were (the one picked
+  whole, the rest at half) while they go (200 ms, CSS's ease-out: fading, to 90%), their room closing on the rows'
+  spring 100 ms late (ListMotion.kt closeGap), 忽略 going with them, and how it went (你 选择了「…」) fades in once they
+  have gone (200 after 200), its room opening on the same spring; 忽略 tapped goes on ArchiveEase (280 ms, fading, to 85%
+  from its top left, its room closing); 保留 / 归档此对话 come and go on ArchiveEase (to 85% about their top's middle,
+  their room opening or closing), 保留 that failed keeps the red mark for 6 s (the core's doing, DoingMark); the bar's
+  归档 comes and goes as nothing is left in the chat or something is again (280 ms, ArchiveEase, fading, from 85%, its
+  width from its end). Only drawn, but for the rooms (as the Android app lays them out): going, they take no tap. Each
+  is in the motion log (`under/options/…`, `under/outcome/…`, `under/dismiss/…`, `under/archive/…`, `bar-archive/…`).
+  `APP=sffix MBUI_FIXTURE=chat-cards|chat-answering` (the fixture answers, lets go and keeps as the core does; 保留
+  fails in chat-cards): `scripts/shots.sh cards web-cards`.
 - Sheets over the chat, one at a time, coming up over the scrim (Sheet.kt's 26 corners, the grabber, as tall as what
   they show): "…" opens the chat's own (its name with renaming it, `chat.rename`; who started it, how many take part,
   its latest; its agents with where each stands and its account's allowance; 固定到列表顶部 / 取消固定 `chat.pin`, 复制会话
@@ -368,11 +383,13 @@ OpenJobs.kt, History.kt, ui/ToolStep.kt, ui/Sheet.kt):
   chat-agent | chat-jobs | chat-job | home-jobs` (src/sfapp/decide_fixture.mbt): `scripts/shots.sh decide web-decide`
   compares them with goldens/mac-decide-*.png and web-decide-*.png.
 
-Not yet, against the current app: code highlighting in tool steps (code is drawn in the code face, in the ink) and a
-capped block's own scroll (it is cut at its height); the run settings page (RunSettings: its rows are shown, not
+Tool steps' code is highlighted by its language (a command as shell, a file by its extension: ToolStep.kt Block) and
+a capped block scrolls within its height (mbui's `Ctx::capped`: a finger up or down moves it while it can go that way,
+else the page), branch mbui-chat-complete.
+
+Not yet, against the current app: the run settings page (RunSettings: its rows are shown, not
 opened); the station's card from an agent's; sharing the chat with other
-workspaces and making it public (their rows are shown); a watched chat's question before archiving; opening a login's
-page in the browser (there is no URL hand-off on the hosts yet: its pill copies the link or the code and says so); the
+workspaces and making it public (their rows are shown); a watched chat's question before archiving; the
 reply on the 奏 page takes words only (no files, quotes or its own draft kept by the core) and its card neither tilts
 nor shrinks as it goes (boxes have no rotation or scale yet); a sheet dragged by its grabber; the segmented control's
 sliding thumb; a history opened at an entry; a Slack user's 这是我.
@@ -409,8 +426,7 @@ Not yet, against the current app: marking the page for the chat's agent (the edi
 the draft), its page script (assets/preview/page.js: WebSockets, request bodies on Android, marks) and so a service's
 sockets (a dev server's hot reload), the sized page moved and pinched on its canvas, typing a size of one's own (自定义
 lists the sizes), the size and the toolbar's folding kept on the device (kept while the app runs), a visualization's
-page (PreviewFileScreen), a link elsewhere opened in the browser (no URL hand-off on the hosts: it is copied and said
-so), document.cookie (the cookies are the app's, not the web view's), the opening and closing motion of the page's own,
+page (PreviewFileScreen), document.cookie (the cookies are the app's, not the web view's), the opening and closing motion of the page's own,
 the sized page's screen corners (a native view is clipped to a rectangle: its shadow and square corners on the canvas).
 
 Slice 14's updates (branch player-share, 2026-10-19; ember apps/android app/Updates.kt, shared/Install.kt, Home.kt's
@@ -457,9 +473,8 @@ drive/DriveScreen.kt hand; docs/share-in.md): src/sfapp/share.mbt, Shares.java.
 
 Not yet, against the current app: the sheet over the app it came from (Android's ShareActivity is an activity of its own,
 translucent over that app; here still.fail comes to the front and shows it over itself), signing in first from the sheet
-(signed out, the app's sign-in page shows and the share waits), a file shared in (only text and links, as the Android
-app takes), how far a drive's file has come while it is read for sharing (its row's progress), downloading a drive's
-file to the device, sharing on iOS, Windows and the web (no share sheet there yet).
+(signed out, the app's sign-in page shows and the share waits), sharing on iOS, Windows and the web (no share sheet
+there yet).
 
 Glass (branch glass, 2026-10-19): frosted glass and liquid glass, a pass of every renderer (Metal on macOS and iOS,
 GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
@@ -639,11 +654,8 @@ FileData; Zoom.kt):
   script, code, Markdown, a table, a file of no kind): `scripts/shots.sh preview web-preview` compares them with
   goldens/mac-preview-*.png and web-preview-*.png.
 
-Not yet, against the current app: the flight from the chat's thumbnail and back (a video closed into its thumbnail at
-the frame it was left at), stepping through the chat's images (`imageNear`) and swiping between them, pinching on iOS (its host
-tells no second finger yet), marking an image (ImageMarks.kt), a video's
-frame-exact steps (the file's frames' times, MediaExtractor; here steps of a 60th of a second), saving a frame,
-landscape, code highlighting and a code file's sideways scroll,
+Not yet, against the current app (the viewer's flight, stepping, pinching on iOS, marking, a video's frames and
+landscape: branch mbui-media-complete, below): code highlighting and a code file's sideways scroll,
 installing an APK, an SVG drawn by a page when it is not a bitmap, the progress of a whole file coming (`progress`), a
 big file read to the disk, a web view's own scrolling under the canvas on macOS while something is painted over it,
 the frosted glass over a picture or a document (where nothing native is under it: `@sf` glass could take it).
@@ -754,6 +766,115 @@ delivered push (notice.pushed, the notification, notice.bring) is there and test
 not: the client.wake before notice.bring (the app is awake when a push reaches it here), the notification's language
 when the app is not running (KeptLang: the app's words are the Chinese catalog's).
 
+Files and media, kept on the device (branch mbui-media-complete, 2026-10-19; ember apps/android shared/screens/
+FileKinds.kt download, drive/DriveScreen.kt saveToDownloads, saveZip, DriveFetches, ui/Parts.kt DownloadChip):
+
+- mbui's host keeps a file the app has read (@host.keep_begin / append / finish, src/host/keep.mbt): its bytes put a
+  part at a time into a file of the host's temporary directory (never whole in memory), then moved where the person
+  keeps files: Android's MediaStore Downloads (no permission asked; `Choose` the documents UI's ACTION_CREATE_DOCUMENT),
+  macOS's ~/Downloads (`Choose` a save panel over the window), iOS's Files sheet either way, Windows' Downloads known
+  folder; MBUI_DOWNLOADS_DIR the downloads for scripted runs. How it went comes back a frame later (Keeping, KeptAt,
+  CalledOff, Failed).
+- A drive's file 下载 (its sheet, or several chosen: 下载 n 个文件, each at once): 正在下载「名字」, read through the core
+  a part at a time (`drive.read`) straight into the keep, how far on its row meanwhile (n% in the accent's filling box,
+  DownloadChip, moving smoothly over 500 ms), then 已保存到「下载」 or 下载失败; 无法获取「名字」：… when the station could
+  not give it (src/sfapp/keep.mbt). A folder's 下载为 zip: the station zips it (`drive.zip`: where the zip is, a root of
+  its own), then it is read and kept as any file; the folder's row shows it under way (0% while zipped, then how far:
+  the Android app shows nothing there). 分享 reads the same way, its row's progress shown too. The chat's preview's 下载
+  keeps its file through the same host (a save panel nowhere: Downloads as the Android app has it).
+- `APP=sffix MBUI_FIXTURE=drive-download` (a file and a folder under way): goldens/mac-drive-download.png,
+  web-drive-download.png.
+
+Not yet: the bytes downloaded kept for the drive's next open (DriveCache: each download reads through the core again),
+a big file's download going on while the app is away (it is the app's: Android stops it with the process).
+
+Files shared in (branch mbui-media-complete): another app's share sheet hands still.fail files, not only words and
+links (the Android app takes text only; its sheet and composer are the reference): ACTION_SEND with a stream and
+ACTION_SEND_MULTIPLE of any type, read whole by mbui's host (Shares.java; 1 GB each at most, as the composer takes)
+and taken by the app (@host.shared_in's `files`, shared_in_file). The sheet heads with them as the composer shows files
+(pictures as 56 tiles, a file's mark, its name and size, n 个文件 and their names for several), 发到 the chats as for a
+link (the site's last chat not said: files have none); a tap opens that chat (or a new chat on that station, made the
+one new chats start on: `newChat.pick`) with the files in its composer, going up at once as ＋'s do; words shared with
+them still go in through `shareIn.open`. MBUI_SHARE_FILES (paths split by |) stands for another app on macOS.
+`APP=sffix MBUI_FIXTURE=share-in-files`: goldens/mac-share-in-files.png, web-share-in-files.png. Flow 93 share-files
+(Android: an ACTION_SEND intent with the photo through the app's own provider, `#android-intent`; macOS: a photo and a
+PDF).
+
+Recent photos and Station 文件 in ＋'s sheet (branch mbui-media-complete; Attach.kt RecentPhotos, latest; StationFiles.kt
+RefCard, openRefSheet, sendUp):
+
+- The recent photos: across the top of ＋'s sheet after the camera, the gallery's latest 30 (mbui's @host.gallery_*:
+  MediaStore's images and their times, read off the app's thread; ranked here as Attach.kt `latest` does: each by the
+  latest of its times that can be believed, one in milliseconds taken as the seconds it means, one ahead of now left
+  out), each its thumbnail as the gallery has it (Images.java loads a content:// source by loadThumbnail), 92 × 122 on
+  14 corners; a tap reads it whole (@host.pick_photo) into the draft, up at once. Without leave to read the gallery
+  the last tile asks (显示最近照片: the system's dialog; asked and refused for good, the app's settings), with only the
+  photos chosen for the app (Android 14 on) it chooses more (选择更多照片); read again as the sheet opens and as the
+  system answers. The strip moves sideways under a finger and glides on once let go (a drag area: it is no list).
+  macOS, iOS and Windows have no gallery here: the tile says so (as before). Apple's own Photos picker is not used yet
+  (照片 is the open panel on macOS; iOS has no picker).
+- Station 文件: ticked files go in named by their path, or as files where the chat says so (此对话默认发送文件: the
+  core's prefs `dropFiles` by the chat's key, else `dropAs`); a card tapped opens its sheet (where it is, 发送方式 路径 /
+  文件 (a folder of the chat's own station: zip), the chat's say as a switch). As a file it is staged on the chat's
+  own station (`drive.stage`: a folder zipped there) or read from the station that has it (`drive.read`) and put up to
+  the chat's (`station.upload.part`); the card turns the bubble's grey with a spinner, how far, its size once up, why it
+  failed; the message carries it as an attachment, nothing goes while it goes up.
+- `APP=sffix MBUI_FIXTURE=chat-station-file | chat-station-sheet` (one sent as a file, a folder as a zip going up; a
+  card's sheet); the recent photos' strip is Android's (its shots from the emulator, flow 95). Flows 94
+  station-file-sent, 95 recent-photos (Android).
+
+The image viewer, complete (branch mbui-media-complete; FilePreview.kt ViewerLayer, Viewer, Gallery, Leaving, Beside;
+VideoViewer.kt frameStarts, saveFrame, landscape; ImageMarks.kt):
+
+- Stepping through a chat's images: the core says those beside the one shown (`imageNear` by the chat's thread, else
+  its session: each with the session that keeps it), a drive's folder its pictures in its order. The one shown and those
+  beside it are one strip, the stage's width and 24 apart: fitted (not zoomed), a finger sideways carries it (past the
+  first or the last a third as far), let go past 80 (or a fifth of the width) or flung that way it goes on to that one,
+  else back, on SLIDE (critically damped, stiffness 400) at the finger's speed; the one going is drawn from its
+  picture where it was. Over the image's sides, in the middle, while the bars show, the ways to the one before and
+  after (36 discs of the dark canvas at 80%). Those beside it are read ahead (and the last few read kept), so a step
+  shows the next at once; their thumbnails stand in meanwhile.
+- The flight: an image opened from the chat grows from its thumbnail (its box, its corners, the picture cropped as the
+  chat crops it) to its place on the stage in 320 ms on (.2, .8, .2, 1), the black and the bars coming with it; closed,
+  it shrinks back into its thumbnail in 280 ms (from where a flight in had got to); the thumbnail hidden meanwhile (one
+  picture on the screen, never two). With no thumbnail on the screen (or its size not known yet) it fades as before.
+- Pinching on iOS: the host tells a second finger now (4 down, 5 moved, 6 up, as Android's).
+- Marking an image (标注图片, its whole picture here): 选择, 框, 箭头, 画笔, 文字 at the foot on the dark glass, the
+  colour (seven, each with the halo that edges its words), 删除 the picked mark, 撤销 / 重做; boxes and arrows numbered,
+  a pin on each (tapped: its note), the note written in a box at the foot (完成, 删除), the notes as cards over the tools.
+  The marks are in the picture's own pixels, drawn on the screen at its zoom (boxes bordered, lines and arrows as dots
+  along them, words with their halo round them); a picked mark moves with the finger, an arrow's end stretches it. 取消
+  / 下载标注后的图片 / 添加到对话 in the bar: the host draws the marks on the picture at its own size (mbui's
+  @host.draw_marks: Android's Canvas, Core Graphics), then it is kept with the downloads or put in the chat's draft with
+  a quote per numbered mark (图片 … 标注 n: where it is, on which image, what was said), and the viewer closes to the
+  chat (已添加到对话，返回对话发送). Back steps out of a note, the words, the colours, the pick, then marking.
+- A video's frames: their times read from the file as the system reads it (mbui's NativeView::frames: Android's
+  MediaExtractor over the same reads as the player, Apple's sample cursor), so ‹ › step to the very next frame the file
+  has whatever its rate, and n / N 帧 counts them (正在读取帧 meanwhile; a 60th of a second where none are read). 保存此帧
+  (paused): the frame showing grabbed at its own size (MediaMetadataRetriever, AVAssetImageGenerator) and kept with the
+  downloads as name-n.png. 横屏: the phone turned for it, upright again as the viewer closes.
+- `APP=sffix MBUI_FIXTURE=chat-preview-step | chat-preview-swipe` (a second picture beside the first: the ways to it;
+  halfway to it under a finger): goldens/mac-preview-step.png, mac-preview-swipe.png; mac-preview-image changed on
+  purpose (标注图片 in its bar, as the Android app's).
+
+Not yet: a video flown back into its thumbnail at the frame it was left at (videos fade), marks' text drawn with the
+words' own shaping on the image (the host's face, not mbui's), a marked image bigger than memory (the Android app
+draws it in bands), Windows' marks, frames and grabs.
+
+The reader, the rest (branch mbui-media-complete; TextModel.kt decodeText, Reader.kt PaperBars, FontFamily.Serif; the
+web's reader's download):
+
+- GB18030: a text that is neither marked nor UTF-8 is read as GB18030 by the system's own tables (mbui's
+  @host.decode_charset: java.nio's Charset, CoreFoundation's encodings, Windows' code page 54936, the browser's
+  TextDecoder), a character the end of a cut file halves dropped, as the Android app reads it.
+- The serif face: 字体 宋体 draws the text in the serif face (mbui's run `serif`: Noto Serif and its CJK on Android,
+  Songti SC on Apple, SimSun on Windows).
+- 下载 in the top bar's right end (the web's reader has it): the whole file kept on the device as the drive's 下载 keeps
+  it (keep.mbt), a novel cut at 16 MB too. reader-bars' golden changed on purpose.
+- The system bars follow the paper: a reader's as dark as its paper (night on a light theme, white on a dark one), the
+  viewer over a picture or a video dark, the player dark; the theme's again as each goes.
+- Flow 98 reader.
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
@@ -818,6 +939,18 @@ A flow's `#env K=V` lines are put in the app's environment for that flow (the dr
 MBUI_OPEN_PAGE=files until the bottom bar reaches it). Before the flows, `scripts/e2e-local.sh drive-seed <tag>` makes
 the drive flows' folder in the test station's home (e2e-<tag>: a text, a novel of made-up chapters, a folder with a
 file), a run's own, which flow 15 lends through the app.
+
+A run is also kept to be seen again without a backend: with MBUI_CORE_TRACE=1 (only on a local cloud) the app logs
+every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace.py
+out/e2e/mac/NN-name.log NAME` makes it e2e/traces/NAME.trace and src/sfreplay/trace_NAME.mbt (with the flow's script as
+the run had it; a sign-in's tokens put as "-"), and a test runs the flow's script in a Tester over the app with that
+conversation as its core (src/core/replay.mbt, src/sfreplay/flow.mbt): what came given as each frame begins, all that
+may or one at a time, the ids of now matched to the run's, and whatever the app asks that the run did not
+(`diverged`), asks with other params (`fuzzy`), or the run asked and the app does not (`unmade`) said. One flow a test
+process (src/sfreplay/send_text, send_text_frames, agent_reply), as the app's pages keep what they were told. Recorded
+2026-10-20 on Studio (flows 01, 02, 03, 05, all passing): 03 (54 messages) and 05 (62) seen again with nothing
+diverged or fuzzy and every message given; 03 ends on the same screen given all at once or one a frame (正在发送 drawn
+for four frames in the second, none in the first), its one ask not made again a `client.focus` of the run's.
 
 The flows (macOS, 390×844, and Android on the emulator, Pixel 7 size). On 2026-10-19 all 14 passed on macOS; on
 Android 13 of 14 in the full run and 11 (the quote) alone, twice, once it waited for the all-done card (it had held
@@ -886,6 +1019,27 @@ while the card moved the list):
 | 64 wide-new-chat | (1280×800) ⌘N: a new chat beside the list; its first words sent with Enter make the chat, the page becomes it, the agent answers (in the chat and its row) | the first message once, in a thread of its own; the agent's answer there |
 | 65 wide-places | (1280×800) the rail: 文件 (the stations' folders in the sidebar), the chats, settings (外观: 深色, then 跟随系统), back to the chats | the host told dark; the core's store on the device keeps appearance system |
 | 66 wide-resize | 390 wide: Home; the window resized to 1280 (the wide frame; the chat pressed in the sidebar), then to 390 again: the same chat, a phone's page; words sent | the window resized twice (the host's RESIZED); the words at the station, once, in the test chat |
+| 70 card-motion | an options card answered in the chat (the options go, 你 选择了「…」 comes in their place), another let go with 忽略 | alice's answer quoting the post; `dismissed` has alice's row for the second, nothing answered; the motion log has the options going (to 90%, their room closing), the line coming, 忽略 going (to 85%) |
+| 71 card-keep | a chat ended all done (made by the other device before the app starts): 保留 under its last post; 已保留…; the buttons and the bar's 归档 go | the station's `kept_chats` has alice's row for that chat's thread; the motion log has the buttons and the bar's 归档 going |
+| 72 bar-archive | the same kind of chat archived from its bar's 归档: Home at once, 已归档 | the session archived by hand at the station; the test chat not |
+| 73 pick-words | held still on the agent's words: a word picked, 复制 (已复制); held again, 引用, sent with words (flow 11 now takes 全选 first) | alice's message quotes a passage of the agent's words, not all of them; on macOS the pasteboard holds just a word of them |
+| 74 markdown | the agent's Markdown (e2e/fake `md:`): a table, TypeScript highlighted, its long line scrolled sideways by a finger; a link held: its menu, 复制链接 | the entry has the table and the code; the motion log has the code scrolled across; the link was not handed to the browser; on macOS the pasteboard has the address |
+| 75 open-link | a link in a message tapped: handed to the system (a scripted macOS run only logs it; Android's ACTION_VIEW) | `open-url:` with the address on the app's log |
+| 90 drive-download | a file of the lent folder held, ⋯ → 下载: 正在下载「说明.txt」, then 已保存到「下载」 | drive.read through the core; the device keeps the station's file byte for byte (macOS: MBUI_DOWNLOADS_DIR; Android: the emulator's Download/, as MediaStore named it) |
+| 91 drive-download-many | in a folder of its own (drive-big), a 48 MB file and a small one chosen, 下载 2 个文件: the big one's row says how far, then gone; 已保存到「下载」 | the big file read in a dozen parts; both kept byte for byte |
+| 92 drive-zip | a folder held, ⋯ → 下载为 zip: 正在下载「子文件夹.zip」, 已保存到「下载」 | the station zipped it (drive.zip); the kept zip holds the folder's file, its words the same |
+| 93 share-files | files shared in (Android: an ACTION_SEND intent of a photo; macOS: a photo and a PDF): the sheet heads with them, the test chat tapped, the files in its composer going up, sent with words | the entry's attachments; the photo at the station byte for byte; on Android the intent's file taken in |
+| 94 station-file-sent | ＋ → Station 文件, the novel ticked, 添加; its card's sheet: 文件; sent with words | drive.stage called; the entry's attachment is the file, no path line; the station keeps it byte for byte |
+| 95 recent-photos | (Android) the photo put in the emulator's gallery; ＋: the strip shows it after the camera; tapped, it goes up; sent | the gallery read and ranked; the entry's attachment, the photo byte for byte at the station |
+| 96 viewer | two pictures from the other device: the first grows from its thumbnail; ›; a swipe back; a box marked, its note said, 下载标注后的图片, 添加到对话, sent | imageNear stepped; the marks drawn by the host; the marked PNG kept on the device; the entry's attachment and the note's quote |
+| 97 video-frames | a video from the other device: 120 帧 read from the file (wherever it has played to), ‹ ‹ ›, 保存此帧 | 120 frames read; ‹ then › one frame apart; the kept frame a PNG of 640 × 360 named by that frame |
+| 98 reader | a novel in GB18030 (drive-gb) opened: its words; 排版 → 宋体; 下载 in the top bar | drive.read through the core; the serif face kept in the core's prefs; the kept file byte for byte |
+
+Flows 70–75 (branch mbui-chat-complete, 2026-10-20, Studio): the whole suite on macOS 63 of 67 at first, then the four
+again: 70 and 73 had checks macOS's grep and pbpaste read wrongly (fixed), 29 passed again (its composer row was 0.10,
+the bar at 0.1), 47's fixed service port 18978 was another run's server; on Android (the emulator) 11 and 70–73 passed,
+74 passed once run again (the app was gone once after its sideways drag), 75 hands the link over and so now ends at the
+tap (the browser comes in front), passing on both. Android's words are ICU's (选 alone where macOS's tokenizer has 选中).
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once
@@ -969,6 +1123,29 @@ change of shape, the way to the newest, toasts, ＋'s sheet on the sheet's sprin
 the ripple's timing. MBUI_MOTION_LOG=1 logs every moving frame; scripts/record.sh records a motion on macOS frame by
 frame (MBUI_RECORD), `scripts/android.sh record` on the emulator, scripts/motionplot.py compares the frames with the
 Android app's curves. At rest nothing of it is drawn: every golden is unchanged.
+
+## A chat's messages in motion (branch mbui-chat-complete)
+
+The motion branch's rows rising in, the list gliding after them, the activity's glide and the words flying from the
+composer into their bubble (docs/stillfail-motion.md), and now an agent's answer coming out of its activity's avatar
+(src/sfapp/emit.mbt, ChatMotion.kt): an answer said while its agent's activity shows (the reader at the end, the app in
+front) waits out of the list; the activity's line folds to its avatar (170 ms), a copy of the avatar hops to where the
+answer goes (440 ms: up 34 over the higher end in 42% of the time, then falling ever faster, stretched), the answer
+comes out of it (380 ms: from 35% at its corner, unrolling from its top, the avatar flattened and springing back), and
+the avatar goes home (320 ms); the same agent's next answer waiting, it drops on to it (280 ms). Not watched, all of
+it at once. Each frame of the flight is in the motion log (`emit/<seq> pose=…`). The fixture's agent now works on
+what is sent (its activity shows) and answers while the chat shows, so sffix plays it.
+
+## Opening links outside the app (branch selection-links in mbui, mbui-chat-complete here)
+
+`@host.open_url` (and `Ctx::open_url`, `@ui.open_url`) hands a URL to the system: Android's ACTION_VIEW (a task of its
+own, the browser or the app that takes the link), macOS's NSWorkspace, iOS's UIApplication, Windows' ShellExecute
+(http, https and mailto only), the browser's window.open (noopener). A scripted macOS run (MBUI_SCRIPT, MBUI_DRIVE)
+only says it on the log (`open-url: …`). In use: a link tapped in a message (App.kt's UriHandler: a chat's own link
+opens it here, any other goes out; 无法打开此链接 when nothing takes it), a link's menu's 打开链接, a login card's pill
+(复制并打开 copies the device code and opens its page; 在浏览器里登录 opens the page, a loopback login once the core
+listens for its callback, `machineLogin.open`; LoginCards.kt), a service page's link elsewhere (PreviewWeb.kt leave).
+The Android app opens a login's page in a Custom Tab; here it is the browser (no Custom Tabs in the host yet).
 
 ## What the hosts need (platform)
 

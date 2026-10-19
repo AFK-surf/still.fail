@@ -52,7 +52,8 @@ fn wide_chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit
         })
         |> ignore
         flight_waiting(c, draft_key(r))
-        pick_bar(c, src, r)
+        pick_layer(c, src, r)
+        link_menu_layer(c)
       }
     }
   })

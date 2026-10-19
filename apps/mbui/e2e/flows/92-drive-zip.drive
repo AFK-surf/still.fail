@@ -1,0 +1,18 @@
+# A folder downloaded as a zip (DriveScreen.kt saveZip): held, ⋯ → 下载为 zip: the station zips it (drive.zip), the zip
+# is read through the core and kept with the downloads.
+#env MBUI_OPEN_PAGE=files
+timeout 90000
+until =e2e-{T}
+tap =e2e-{T}
+until 子文件夹
+wait 500
+hold 900 子文件夹
+until 已选 1 项
+tap icon:more
+until 下载为 zip
+shot 1-sheet
+tap 下载为 zip
+until 正在下载「子文件夹.zip」
+timeout 120000
+until 已保存到「下载」
+shot 2-saved

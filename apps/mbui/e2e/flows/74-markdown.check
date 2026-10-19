@@ -1,0 +1,4 @@
+check "the station has the agent's Markdown: the table and the code" '[ "$(sql "select count(*) from entries where author_kind=\"agent\" and text like \"表格和代码 $TAG%\" and text like \"%| 首页 | 完成 |%\" and text like \"%\`\`\`ts%\"")" -ge 1 ]'
+check "the code block was scrolled sideways (the motion log)" 'grep -q "MOTION .* scrolled/across at=[1-9]" $OUT/$name.log'
+check "the link held opened its menu, not the link (nothing handed to the browser)" '! grep -q "open-url: https://example.com/e2e" $OUT/$name.log'
+check "复制链接 put the address on the clipboard (macOS's pasteboard; not read on Android)" '[ "$PLATFORM" = android ] || pbpaste | grep -q "^https://example.com/e2e/"'

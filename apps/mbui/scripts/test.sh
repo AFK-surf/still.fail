@@ -7,6 +7,8 @@ cd "$A"
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
 moon test --target js -p stillfail/sf -p stillfail/sfapp -p stillfail/gallery -p stillfail/player ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
 code=${PIPESTATUS[0]}
-moon test --target js -p stillfail/core 2>&1 | grep -v "$F" | tail -8
+# (the runs seen again: a package each, one app a process, src/sfreplay/flow.mbt)
+moon test --target js -p stillfail/core -p stillfail/sfreplay -p stillfail/sfreplay/send_text \
+  -p stillfail/sfreplay/send_text_frames -p stillfail/sfreplay/agent_reply 2>&1 | grep -v "$F" | tail -8
 [ ${PIPESTATUS[0]} = 0 ] || code=1
 exit $code

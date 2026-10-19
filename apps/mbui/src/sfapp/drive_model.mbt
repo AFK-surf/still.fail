@@ -102,7 +102,9 @@ fn dv_station(v : Json) -> DvStation {
     anywhere: flag(d, "anywhere"),
     home: text(d, "home"),
     trash: flag(d, "trash"),
-    zip: flag(d, "zip"),
+    // a folder zips for one who browses every folder (the station's rule, routes/drive.ts: GET /drive says `zip`, its
+    // overview does not)
+    zip: flag(d, "zip") || flag(d, "anywhere"),
     role: text(field(ov, "viewer"), "role"),
   }
 }

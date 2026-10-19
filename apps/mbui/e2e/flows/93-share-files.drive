@@ -1,0 +1,27 @@
+# Files shared in from another app (Android: ACTION_SEND of a photo through the app's own provider, as a gallery shares
+# one; macOS: MBUI_SHARE_FILES, a photo and a PDF): the sheet heads with them (the picture's tile), 发到 the chats; the
+# test chat tapped: they are in its composer, going up at once as ＋'s files do; sent with words.
+#before android-stage e2e-photo.jpg
+#android-intent -a android.intent.action.SEND -t image/jpeg --eu android.intent.extra.STREAM content://{PKG}.shared/e2e-photo.jpg
+#env MBUI_SHARE_FILES={FILES}/e2e-photo.jpg|{FILES}/e2e-doc.pdf
+timeout 60000
+until 发到
+until e2e-photo.jpg
+until 新 chat
+wait 1000
+shot 1-sheet
+tap 端到端测试
+until 发消息
+wait 1500
+shot 2-composer
+tap 发消息
+type 分享进来的文件 {T}
+timeout 120000
+until icon:arrow-up
+wait 3000
+tap icon:arrow-up
+empty
+gone 正在发送
+until 分享进来的文件 {T}
+wait 1000
+shot 3-sent

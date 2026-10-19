@@ -63,8 +63,8 @@ fn tx_starts(s : String, what : String, at : Int) -> Bool {
 ///|
 /// A file's bytes as text, and the encoding that made it (TextModel.kt decodeText): a byte order mark settles it;
 /// else strict UTF-8 (a character cut in half at the end of a `truncated` front, or of a half-copied file, dropped);
-/// else UTF-8 with replacement characters where the damage is. (The Android app reads such a file as GB18030; there is
-/// no GB18030 table here.)
+/// else GB18030, as the system's tables decode it (@host.decode_charset), as the Android app reads such a file; UTF-8
+/// with replacement characters where the host knows no GB18030.
 fn decode_text(b : Bytes, truncated? : Bool = false) -> (String, String) {
   let n = b.length()
   if n == 0 {
@@ -93,7 +93,20 @@ fn decode_text(b : Bytes, truncated? : Bool = false) -> (String, String) {
       return (s, "UTF-8")
     }
   }
-  (@utf8.decode_lossy(whole), "UTF-8 (lossy)")
+  // not UTF-8: GB18030 (a superset of GBK, the usual answer for older Chinese text), as the system's tables decode it
+  // (@host.decode_charset); a character the end cuts in half dropped
+  match @host.decode_charset(b, "GB18030") {
+    Some(s) => {
+      let mut text = s
+      if truncated {
+        while text.has_suffix("\u{FFFD}") {
+          text = text.view(end_offset=text.length() - 1).to_owned()
+        }
+      }
+      (text, "GB18030")
+    }
+    None => (@utf8.decode_lossy(whole), "UTF-8 (lossy)")
+  }
 }
 
 ///|

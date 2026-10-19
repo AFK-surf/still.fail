@@ -5,23 +5,13 @@
 
 ///|
 /// `file` of a drive opened to be looked at; `near`: the others of its folder to step to (pictures: the folder's
-/// pictures, `file` among them; otherwise none: stepping is not done here yet).
+/// pictures, `file` among them, stepped through and swiped between as a chat's are).
 pub fn open_file(c : @ui.Ctx, src : Source, file : DriveFile, near : Array[DriveFile]) -> Unit {
   ignore(src)
-  ignore(near)
-  open_preview(
-    file.station,
-    "",
-    {
-      name: file.name,
-      path: file.path,
-      size: file.size,
-      width: 0.0,
-      height: 0.0,
-      thumbhash: "",
-      owner: "",
-    },
-    drive=Some(file),
-  )
+  open_preview(file.station, "", drive_attachment(file), drive=Some(file), steps=if near.length() > 1 {
+    InFolder(near)
+  } else {
+    NoSteps
+  })
   c.request_frame()
 }

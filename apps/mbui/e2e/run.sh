@@ -51,6 +51,8 @@ mkdir -p $FILES
 [ -f $FILES/e2e-doc.pdf ] || python3 $MBUI_DIR/test/apple_views/make_pdf.py $FILES/e2e-doc.pdf
 [ -f $FILES/e2e-clip.mp4 ] || ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=640x360:rate=30 -t 4 \
   -c:v libx264 -profile:v baseline -pix_fmt yuv420p -movflags +faststart $FILES/e2e-clip.mp4
+# a second picture beside the first, upright (96-viewer: stepping, swiping, marking)
+[ -f $FILES/e2e-photo2.png ] || ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=480x640:rate=1 -frames:v 1 $FILES/e2e-photo2.png
 # a song for the chat's player (46-chat-audio): 20 s of AAC, its index first
 [ -f $FILES/e2e-tune.m4a ] || ffmpeg -loglevel error -y -f lavfi -i sine=frequency=440:sample_rate=44100 -t 20 \
   -c:a aac -movflags +faststart $FILES/e2e-tune.m4a
@@ -92,6 +94,25 @@ core_has() {
 # whether the device's own values the core keeps with the host (its prefs: `storage.set` of device/prefs) hold $1
 core_device_has() { grep -rqaF "$1" $CORE 2>/dev/null; }
 peer() { "$ROOT/scripts/e2e-local.sh" peer "$@"; }
+# a file the app kept on the device (its log's "kept NAME: WHERE", @host.keep: on macOS a path in MBUI_DOWNLOADS_DIR,
+# on Android Download/<name as MediaStore made it>): its path here (on Android a copy pulled from the emulator)
+kept_file() {
+  local where=$(sed -n "s/^kept $1: //p" $OUT/$name.log | tail -1)
+  [ -n "$where" ] || return 1
+  if [ $PLATFORM = android ]; then
+    local f="$OUT/$name/kept-$1"
+    $ADB exec-out cat "/sdcard/$where" > "$f" && [ -s "$f" ] && echo "$f"
+  else
+    echo "$where"
+  fi
+}
+# the file the app kept as $1 is $2, byte for byte
+kept_same() { local f; f=$(kept_file "$1") && cmp -s "$f" "$2"; }
+# the zip the app kept as $1 holds a file named $2 the same as $3
+kept_zip_has() {
+  local f; f=$(kept_file "$1") || return 1
+  python3 -c "import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); m = [n for n in z.namelist() if n.endswith(sys.argv[2])]; sys.exit(0 if m and z.read(m[0]) == open(sys.argv[3], 'rb').read() else 1)" "$f" "$2" "$3"
+}
 # the folders the test station lends (its config's drive.roots)
 drive_roots() { python3 -c "import json; print('\n'.join(json.load(open('$STATION/data/config.json')).get('drive', {}).get('roots', [])))"; }
 FAILS=""
@@ -147,7 +168,9 @@ fi
 # environment for that run (MBUI_OPEN_PAGE=files: the drive's 文件 pushed over Home)
 run_flow() {
   local name=$1 log=$OUT/$name.log script=$OUT/$name.drive
-  sed "s/{T}/$TAG/g; s/{SVC}/$SVC/g" $2 > $script
+  # {T} this run's tag; {SVC} the service port; {FILES} where the files to attach are (on Android the app's own copy of them); {PKG} the app
+  local files=$FILES; [ $PLATFORM = android ] && files=/data/data/$E2E_PKG/files/e2e
+  sed "s/{T}/$TAG/g; s/{SVC}/$SVC/g; s|{FILES}|$files|g; s/{PKG}/${E2E_PKG:-}/g" $2 > $script
   mkdir -p $OUT/$name
   local extra=$(grep '^#env ' $script | sed 's/^#env //' | tr '\n' ' ')
   # what the runner does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, as a chat made elsewhere)
@@ -159,6 +182,7 @@ run_flow() {
     env MBUI_WIN=390x844 $extra MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
       MBUI_SHOT_DIR=$OUT/$name MBUI_DRIVE_B64=$(base64 < $script | tr -d '\n') \
       MBUI_PICK_FILES="$FILES/e2e-photo.jpg|$FILES/e2e-data.bin" MBUI_CALL_LOG=1 MBUI_MOTION_LOG=1 \
+      MBUI_DOWNLOADS_DIR=$OUT/$name/downloads \
       timeout ${E2E_FLOW_TIMEOUT:-300} "$EXE" 2>&1 | while IFS= read -r line; do
         echo "$line" >> $log
         case "$line" in

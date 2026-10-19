@@ -1,0 +1,2 @@
+check "the station zipped the folder (drive.zip)" 'grep -q "CALL drive.zip .*子文件夹" $OUT/$name.log'
+check "the device keeps a zip of the folder: its file, the same words" 'kept_zip_has 子文件夹.zip 里面.txt "$DRIVE/子文件夹/里面.txt"'

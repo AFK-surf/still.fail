@@ -566,7 +566,11 @@ fn reader_book(
   )
   c.layer(fn() {
     if k > 0.0 {
-      reader_top_bar(c, p, novel.title, sub, k)
+      // the whole file kept on the device (keep.mbt), as the drive's 下载 keeps it: a novel cut at 16 MB too
+      reader_top_bar(c, p, novel.title, sub, k, download=Some(fn() {
+        say(c, fill("android-misc.drive.downloading", [("name", dv_name(at.path))]))
+        download_drive_file(c, src, at.station, at.root.unwrap_or(""), at.path, dv_name(at.path), "")
+      }))
     }
     if r.hit >= 0 && r.matches.length() > 0 {
       c.box(w=Fill(1.0), align=ACenter, fn() { found_pill(c, r, novel, p) }) |> ignore
@@ -653,6 +657,8 @@ fn reader_chunk(
   } else {
     reader_marked(runs, fn(o) { reader_drawn_offset(novel, k, o, prefs.indent, p) }, mine, now, mark, mark_now)
   }
+  // in the serif face where the layout says so (Reader.kt: FontFamily.Serif; code stays in the code face)
+  let runs = if prefs.face == "serif" { runs.map(fn(x) { { ..x, serif: true } }) } else { runs }
   let id = c.id("chunk/\{k}")
   if c.clicked(id) {
     reader_toggle(c, r)
@@ -743,8 +749,16 @@ fn reader_icon(c : @ui.Ctx, key : String, icon : String, p : PaperInk) -> Bool {
 }
 
 ///|
-/// What is open and where in it (Reader.kt TopBar): back, its name, its chapter under it; 52 high, 16 corners.
-fn reader_top_bar(c : @ui.Ctx, p : PaperInk, title : String, sub : String, shown : Double) -> Unit {
+/// What is open and where in it (Reader.kt TopBar): back, its name, its chapter under it; 52 high, 16 corners. With
+/// `download`, the file kept on the device from its right end (the web's reader: ViewerBar's ViewerDownload).
+fn reader_top_bar(
+  c : @ui.Ctx,
+  p : PaperInk,
+  title : String,
+  sub : String,
+  shown : Double,
+  download? : (() -> Unit)? = None,
+) -> Unit {
   c.box(w=Fill(1.0), padx=8.0, pady=6.0, opacity=shown, fn() {
     c.box(
       w=Fill(1.0),
@@ -759,6 +773,15 @@ fn reader_top_bar(c : @ui.Ctx, p : PaperInk, title : String, sub : String, shown
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), align=ACenter, fn() {
           if reader_icon(c, "reader-back", "chevron-left", p) {
             app.nav.pop() |> ignore
+          }
+          match download {
+            Some(f) => {
+              c.spacer()
+              if reader_icon(c, "reader-download", "download", p) {
+                f()
+              }
+            }
+            None => ()
           }
         })
         |> ignore
@@ -1346,4 +1369,14 @@ fn reader_toggle(c : @ui.Ctx, r : TextReading) -> Unit {
   }
   r.chrome = !r.chrome
   r.chrome_at = c.now()
+}
+
+///|
+/// The paper's darkness while a reader is on top (Reader.kt PaperBars: the system bars' icons readable on it), None
+/// otherwise.
+fn reader_paper_dark(src : Source) -> Bool? {
+  match app.nav.top() {
+    DriveRead(_) => Some(paper_ink(reader_prefs(src).paper).dark)
+    _ => None
+  }
 }

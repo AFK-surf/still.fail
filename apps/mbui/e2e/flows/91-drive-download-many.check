@@ -1,0 +1,3 @@
+check "the big file was read in parts (several drive.read calls)" '[ $(grep -c "CALL drive.read .*大文件.bin" $OUT/$name.log) -ge 6 ]'
+check "the device keeps the 48 MB file, byte for byte" 'kept_same 大文件.bin "$DRIVE/大文件/大文件.bin"'
+check "the device keeps the other, byte for byte" 'kept_same 附件.txt "$DRIVE/大文件/附件.txt"'

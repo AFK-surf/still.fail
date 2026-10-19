@@ -111,6 +111,10 @@ let drafts : Map[String, Draft] = {}
 let next_pending : Ref[Int] = { val: 1 }
 
 ///|
+/// The quotes whose comment line has been given the comment they came with (by id: ids are never used again).
+let quote_seeded : Map[Int, Bool] = Map([])
+
+///|
 fn draft_key(r : ChatRef) -> String {
   r.station + ":" + r.session
 }
@@ -308,7 +312,7 @@ fn keep_draft_soon(c : @ui.Ctx, src : Source, d : Draft) -> Unit {
 
 ///|
 fn uploading(d : Draft) -> Bool {
-  d.files.iter().any(fn(f) { f.done is None && f.error is None })
+  d.files.iter().any(fn(f) { f.done is None && f.error is None }) || refs_uploading(d.key)
 }
 
 ///|
@@ -337,13 +341,14 @@ fn draft_quote(d : Draft, author : String, words : String, ts : String, role : S
 // ── files ──────────────────────────────────────────────────────────────
 
 ///|
-/// An upload's id: 32 hex digits, new each time (the Android app's UUID without its dashes).
+/// An upload's id: 32 hex digits, new each time (the Android app's UUID without its dashes): from the source's time
+/// of day and a count, so a fixture or a test (whose time stands) gets the same ids each run.
 let upload_serial : Ref[Int] = { val: 0 }
 
 ///|
 fn upload_id(src : Source) -> String {
   upload_serial.val += 1
-  let seed = "\{(src.now)()}/\{@host.now()}/\{upload_serial.val}"
+  let seed = "\{(src.now)()}/\{upload_serial.val}"
   let hex = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
   ]
@@ -471,7 +476,7 @@ fn upload_part(
   have : Int,
 ) -> Unit {
   // taken out of the draft meanwhile: nothing more goes
-  if !d.files.iter().any(fn(f) { f.id == p.id }) && p.done is None {
+  if !d.files.iter().any(fn(f) { f.id == p.id }) && !ref_upload(d.key, p.id) && p.done is None {
     return
   }
   let size = bytes.length()
@@ -594,14 +599,6 @@ priv struct ComposerUi {
   mut room : Double
   /// the outbox's entries being sent again or dropped (their buttons spin meanwhile)
   doing : Map[String, Bool]
-  /// a message held: its words picked, the bar over them (MessagePick.kt)
-  mut hold : Int
-  mut hold_at : Double
-  mut picked : String
-  mut picked_id : Int
-  mut picked_author : String
-  mut picked_role : String
-  mut picked_text : String
 }
 
 ///|
@@ -620,13 +617,6 @@ let cui : ComposerUi = {
   outside: false,
   room: 0.0,
   doing: {},
-  hold: 0,
-  hold_at: 0.0,
-  picked: "",
-  picked_id: 0,
-  picked_author: "",
-  picked_role: "",
-  picked_text: "",
 }
 
 ///|
@@ -659,9 +649,13 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   }
   // the station files named by their paths, a line each under the words
   let words = with_link_words(with_ref_words(d.text.trim(chars=" \n\t").to_string(), d.key), d)
+  // (the station files sent as files with them, taken before the draft lets go of its refs)
+  let files = up_files(d)
+  for a in ref_attachments(d.key) {
+    files.push(a)
+  }
   let taken_refs = refs_of(d.key)
   draft_refs.remove(d.key)
-  let files = up_files(d)
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   // what was taken, to put back
   let taken_text = d.text
@@ -879,11 +873,46 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
       }
     None => ()
   }
+  // its station files switched to go as files: up (station_files.mbt)
+  for x in refs_of(d.key) {
+    if x.mode == "file" && x.up is None {
+      ref_send_up(c, src, d, r.station, x)
+    }
+  }
+  // marked images of this chat's pictures (preview_marks.mbt), up as ＋'s files go, each with a quote per mark
+  match marked_into.get(d.key) {
+    Some(list) => {
+      marked_into.remove(d.key)
+      for x in list {
+        add_file(src, d, r.station, x.0, x.1, None)
+        for q in x.2 {
+          let id = next_pending.val
+          next_pending.val += 1
+          d.quotes.push({ id, author: q.0, text: q.1, ts: "", role: "image", file: "" })
+          d.comments[id] = q.2
+        }
+      }
+      c.request_frame()
+    }
+    None => ()
+  }
+  // files another app shared into this chat (share.mbt), up as ＋'s are
+  match shared_into.get(d.key) {
+    Some(list) => {
+      shared_into.remove(d.key)
+      for f in list {
+        add_file(src, d, r.station, f.name, f.bytes, None)
+      }
+      c.request_frame()
+    }
+    None => ()
+  }
   // ＋'s sheet: up from below and back down on the sheet's spring, the scrim in and out (Sheet.kt SheetHost, mbui's
   // @kit.sheet); drawn until it has gone
   attach_sheet(c, src, r, d)
   // ＋'s Station 文件 (station_files.mbt)
   station_files_sheet(c, src, workspace_of(r.station), d.key)
+  ref_sheet(c, src, d.key, r.station)
 }
 
 ///|
@@ -1133,6 +1162,14 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
           d.comments.remove(q.id)
         }
         let key = "composer/quote/\{q.id}"
+        // the comment it came with (a kept draft's, a mark's note) put in its line once, before the line reads it back
+        if !quote_seeded.contains(q.id) {
+          quote_seeded[q.id] = true
+          match d.comments.get(q.id) {
+            Some(w) if w != "" => c.set_editor_text(key, w)
+            _ => ()
+          }
+        }
         if d.focus == q.id {
           c.focus_editor(key)
           d.focus = 0
@@ -1475,8 +1512,8 @@ fn file_icon(name : String) -> String {
 let attach_h : Double = 25.0 + 4.0 + 122.0 + 12.0 + 70.0 + 18.0
 
 ///|
-/// ＋'s sheet: the recent photos across the top (the camera first; reading the gallery is not in this build, so its
-/// tile only says so), then 照片, 文件 and Station 文件 (station_files.mbt). As tall as those two rows.
+/// ＋'s sheet: the recent photos across the top (the camera first, recent.mbt), then 照片, 文件 and Station 文件
+/// (station_files.mbt). As tall as those two rows.
 fn attach_sheet(
   c : @ui.Ctx,
   src : Source,
@@ -1502,25 +1539,44 @@ fn attach_sheet(
         )
     }
   }
-  ignore(src)
   ignore(r)
-  let camera = c.id("attach/camera")
-  let recent = c.id("attach/recent")
+  // the gallery's recent photos (recent.mbt), read again as the sheet opens
+  recent_frame(c, src, cui.attach)
+  let tapped_tile = fn(i : Int) {
+    if i == 0 {
+      ask(Camera)
+    } else if i > 0 {
+      cui.attach = false
+      let pick = match recent.photos.get(i - 1) {
+        Some(photo) => @host.pick_photo(photo.src)
+        None => None
+      }
+      match pick {
+        Some(p) => {
+          cui.picking = Some(p)
+          cui.picking_for = d.key
+        }
+        None => ()
+      }
+    } else {
+      match recent.access {
+        // no gallery on this host: said so
+        NoGallery => {
+          cui.attach = false
+          say(c, "这个版本还不能读相册的最近照片")
+        }
+        _ => @host.gallery_ask()
+      }
+    }
+  }
   let photos = c.id("attach/photos")
   let files = c.id("attach/files")
   let station = c.id("attach/station")
-  if c.clicked(camera) {
-    ask(Camera)
-  }
   if c.clicked(photos) {
     ask(Photos)
   }
   if c.clicked(files) {
     ask(Files)
-  }
-  if c.clicked(recent) {
-    cui.attach = false
-    say(c, "这个版本还不能读相册的最近照片")
   }
   if c.clicked(station) {
     cui.attach = false
@@ -1541,24 +1597,8 @@ fn attach_sheet(
           c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
         })
         |> ignore
-        c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pt=4.0, pb=12.0, gap=6.0, fn() {
-          attach_tile(c, camera, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
-          attach_tile(c, recent, fn() {
-            c.box(padx=8.0, gap=8.0, align=ACenter, fn() {
-              @sf.icon(c, "photo", size=22.0, color=t.p.muted) |> ignore
-              c.text(
-                tr("android-chat.attach.recent.allow"),
-                size=12.0,
-                color=t.p.muted,
-                line=16.0,
-                center=true,
-              )
-              |> ignore
-            })
-            |> ignore
-          })
-        })
-        |> ignore
+        // the camera, the gallery's recent photos, the tile that asks for them (recent.mbt)
+        recent_strip(c, tapped_tile)
         c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pb=18.0, gap=8.0, fn() {
           for item in [
             (photos, tr("android-chat.attach.photos"), "photo"),
@@ -1595,173 +1635,6 @@ fn attach_sheet(
 }
 
 ///|
-/// A tile of the recent photos' strip (92 × 122).
-fn attach_tile(c : @ui.Ctx, id : Int, body : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  c.box(
-    w=Px(92.0),
-    h=Px(122.0),
-    radius=14.0,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.1) } else { t.p.chip },
-    align=ACenter,
-    justify=JCenter,
-    id~,
-    body,
-  )
-  |> ignore
-}
-
-// ── picking a message's words (MessagePick.kt) ───────────────────────────
-
-///|
-/// A message's words that a finger held still on picks (all of them: MessagePick.kt picks a word and widens it by
-/// words), to quote into the draft or copy; the bar over them (pick_bar) does that.
-fn pickable(
-  c : @ui.Ctx,
-  ts : String,
-  author : String,
-  role : String,
-  words : String,
-  fill_w : Bool,
-  body : () -> Unit,
-) -> Unit {
-  let id = c.id("pick/" + ts)
-  // a tap on it: the keyboard goes, and what was picked is let go of
-  if c.clicked(id) {
-    c.blur()
-    if cui.picked != "" && cui.picked != ts {
-      cui.picked = ""
-    }
-  }
-  // held still on it half a second: picked (by where the finger is, whatever in it took the press: a link, a code
-  // block)
-  let (px, py, down) = c.pointer()
-  if down && !cui.moved && cui.picked != ts && words.trim(chars=" \n\t") != "" {
-    match c.rect_of(id) {
-      Some((x, y, w, h)) if px >= x && px < x + w && py >= y && py < y + h => {
-        let held = c.now() - cui.down_at
-        if held >= 500.0 {
-          cui.picked = ts
-          cui.picked_id = id
-          cui.picked_author = author
-          cui.picked_role = role
-          cui.picked_text = words
-          cui.hold = id
-          c.request_frame()
-        } else {
-          c.wake_in(500.0 - held)
-        }
-      }
-      _ => ()
-    }
-  }
-  let lit = cui.picked == ts
-  c.box(
-    w=if fill_w { Fill(1.0) } else { Auto },
-    radius=if lit { 6.0 } else { 0.0 },
-    bg=if lit { @sf.alpha(ink().accent, 0.2) } else { 0L },
-    id~,
-    body,
-  )
-  |> ignore
-}
-
-///|
-/// Over the list: what to do with the picked words (MessagePick.kt PickBar), over them (under them when the bar is
-/// too near); a tap anywhere else lets go of them.
-fn pick_bar(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
-  if cui.picked == "" {
-    return
-  }
-  let t = @sf.theme()
-  let quote = c.id("pick/quote")
-  let copy = c.id("pick/copy")
-  let bar = c.id("pick/bar")
-  let (px, py, _) = c.pointer()
-  if c.clicked(quote) {
-    let d = draft_of(src, r)
-    draft_quote(d, cui.picked_author, cui.picked_text.trim(chars=" \n\t").to_string(), cui.picked, cui.picked_role)
-    cui.picked = ""
-    c.request_frame()
-    return
-  }
-  if c.clicked(copy) {
-    c.copy_text(cui.picked_text)
-    say(c, tr("android-chat.annotate.copied"))
-    cui.picked = ""
-    c.request_frame()
-    return
-  }
-  // the press that picked it, lifted, is not a tap elsewhere
-  if cui.released {
-    cui.hold = 0
-  }
-  // a new press elsewhere than the bar lets go
-  if cui.press_new {
-    let on_bar = match c.rect_of(bar) {
-      Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
-      None => false
-    }
-    if !on_bar {
-      cui.picked = ""
-      return
-    }
-  }
-  let (x, y, w, h) = match c.rect_of(cui.picked_id) {
-    Some(rect) => rect
-    None => return
-  }
-  let over = y - 52.0
-  let top = chat_bar_h + 8.0
-  let at_y = if over < top { y + h + 12.0 } else { over }
-  let at_y = dmax(top, dmin(at_y, c.height - composer_room_of(c) - 48.0))
-  let mid = dmax(130.0, dmin(x + w / 2.0, c.width - 130.0))
-  let button = fn(id : Int, label : String, icon : String) {
-    c.box(
-      dir=Row,
-      h=Px(32.0),
-      padx=12.0,
-      gap=5.0,
-      radius=16.0,
-      align=ACenter,
-      bg=@sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)),
-      id~,
-      fn() {
-        @sf.icon(c, icon, size=15.0, color=t.p.text) |> ignore
-        c.text(label, size=14.0, color=t.p.text, wrap=false) |> ignore
-      },
-    )
-    |> ignore
-  }
-  c.layer(fn() {
-    c.box(dir=Row, w=Fill(1.0), pt=at_y, justify=JCenter, fn() {
-      c.box(tx=mid - c.width / 2.0, fn() {
-        c.box(
-          dir=Row,
-          h=Px(40.0),
-          padx=4.0,
-          radius=20.0,
-          bg=t.p.raised,
-          border=1.0,
-          border_color=t.p.line,
-          shadow=8.0,
-          align=ACenter,
-          id=bar,
-          fn() {
-            button(quote, tr("android-chat.pick.quote"), "quote")
-            button(copy, tr("common.copy"), "copy")
-          },
-        )
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
 /// The chat left: its draft kept as it is now, ＋'s sheet and what was picked let go.
 fn composer_left(src : Source, r : ChatRef) -> Unit {
   match drafts.get(draft_key(r)) {
@@ -1772,8 +1645,7 @@ fn composer_left(src : Source, r : ChatRef) -> Unit {
     None => ()
   }
   cui.attach = false
-  cui.picked = ""
-  cui.hold = 0
+  pick_clear()
 }
 
 ///|

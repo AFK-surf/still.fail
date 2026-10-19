@@ -308,6 +308,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
     }
     "job" | "previewLoad" => fixture_service_topic(f, name, params)
     "shareIn" => fixture_share_topic(params)
+    "imageNear" => fixture_image_near(params)
     "chats" => fixture_chats(f, params)
     "workspaceMarks" =>
       Some({
@@ -427,6 +428,9 @@ pub fn fixture(mode : String) -> Source {
             Some(r) => done(r)
             None if name == "shareIn.open" => done(fixture_share_call(name, params).unwrap())
             None =>
+              match fixture_card_call(f, name, params) {
+                Some(r) => done(r)
+                None =>
               match fixture_chat_call(f, name, params) {
                 Some(r) => done(r)
                 None =>
@@ -434,6 +438,7 @@ pub fn fixture(mode : String) -> Source {
                     Some(r) => done(r)
                     None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
                   }
+              }
               }
           }
       }

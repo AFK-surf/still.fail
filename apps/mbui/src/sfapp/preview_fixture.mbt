@@ -2,7 +2,9 @@
 // of it open in the preview; scripts/shots.sh preview, web-preview): a picture, a PDF of two pages, a video (whose
 // reads are never answered: the player waits, as on a slow link, the same on every run), a song (its reads the same,
 // how its player stands pinned), a page of HTML, code,
-// Markdown, a table, and a file of no kind that can be shown. Its bytes are made here; none is a real document.
+// Markdown, a table, and a file of no kind that can be shown; a second picture beside the first (the `imageNear` view:
+// chat-preview-step with the ways to it, chat-preview-swipe halfway to it under a finger). Its bytes are made here;
+// none is a real document.
 
 ///|
 /// The made-up files, by the name the preview fetches them by: the file as a message has it, and its bytes.
@@ -12,6 +14,7 @@ fn preview_files() -> Array[(Attachment, () -> Bytes)] {
   }
   [
     (at("界面草图.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
+    (at("第二版.png", 21000.0, 400.0, 560.0), fn() { fixture_png(400, 560) }),
     (at("设计说明.pdf", 2400.0, 0.0, 0.0), fn() { fixture_pdf() }),
     (at("演示录屏.mp4", 5242880.0, 1280.0, 720.0), fn() { b"" }),
     (at("会议录音.m4a", 1489000.0, 0.0, 0.0), fn() { b"" }),
@@ -27,7 +30,7 @@ fn preview_files() -> Array[(Attachment, () -> Bytes)] {
 /// MBUI_FIXTURE=chat-preview-<what>: which file opens.
 fn fixture_preview(mode : String) -> Unit {
   let which = match mode {
-    "chat-preview-image" => "界面草图.png"
+    "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" => "界面草图.png"
     "chat-preview-pdf" => "设计说明.pdf"
     "chat-preview-video" => "演示录屏.mp4"
     "chat-preview-audio" => "会议录音.m4a"
@@ -40,7 +43,14 @@ fn fixture_preview(mode : String) -> Unit {
   }
   for f in preview_files() {
     if f.0.name == which {
-      open_preview("ws1/st1", "s-c1", f.0)
+      open_preview("ws1/st1", "s-c1", f.0, steps=if mode == "chat-preview-image" {
+        NoSteps
+      } else {
+        InChat(Some(1.0), "s-c1")
+      })
+      if mode == "chat-preview-swipe" {
+        pv_strip.pinned = Some(-150.0)
+      }
       // its bars kept up: a shot taken late (a busy machine, the browser's) sees what one taken early does
       if viewer.val is Some(v) {
         v.rests = false
@@ -238,3 +248,33 @@ let fixture_csv : String =
   #|聊天,安卓,0.57,是
   #|聊天,mac,0.31,是
   #|"设置, 外观",web,0.66,否
+
+///|
+/// The `imageNear` view of the made-up chat: 界面草图.png has 第二版.png after it.
+fn fixture_image_near(params : Map[String, Json]) -> Json? {
+  match params.get("path") {
+    Some(String("uploads/fx/界面草图.png")) =>
+      Some({
+        "after": {
+          "name": "第二版.png",
+          "path": "uploads/fx/第二版.png",
+          "size": 21000,
+          "width": 400,
+          "height": 560,
+          "owner": "s-c1",
+        },
+      })
+    Some(String("uploads/fx/第二版.png")) =>
+      Some({
+        "before": {
+          "name": "界面草图.png",
+          "path": "uploads/fx/界面草图.png",
+          "size": 18000,
+          "width": 600,
+          "height": 400,
+          "owner": "s-c1",
+        },
+      })
+    _ => Some(Json::object({}))
+  }
+}

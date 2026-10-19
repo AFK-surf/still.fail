@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""A scripted run's conversation with its core (MBUI_CORE_TRACE=1: CORETRACE lines on a flow's log, e2e/run.sh) made a
+test's: e2e/traces/NAME.trace, and src/sfreplay/trace_NAME.mbt holding it (`@sfreplay.trace_NAME`), for a Tester to
+give again (src/core/replay.mbt, src/sfreplay/flow.mbt), with the flow's script as the run had it (`drive_NAME`:
+NAME.drive beside the log, its {T} the run's mark) when it is there. Bytes beside a message over MAX_BYTES (16 KB)
+are left out (a picture comes as none). A sign-in's tokens (the values of keys SECRET names) are put as "-": not even
+the local cloud's made-up account's are kept.
+
+  scripts/trace.py out/e2e/mac/03-send-text.log [NAME]
+"""
+import json, os, re, sys
+
+MAX_BYTES = int(os.environ.get("MAX_BYTES", 16384))
+SECRET = re.compile(r"^(access|refresh|accessToken|refreshToken|idToken|id_token|token|secret|password|code_verifier)$", re.I)
+src = sys.argv[1]
+name = sys.argv[2] if len(sys.argv) > 2 else re.sub(r"^\d+-", "", os.path.basename(src).rsplit(".", 1)[0])
+ident = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def scrub(v):
+    if isinstance(v, dict):
+        return {k: ("-" if SECRET.match(k) and isinstance(x, str) else scrub(x)) for k, x in v.items()}
+    if isinstance(v, list):
+        return [scrub(x) for x in v]
+    return v
+
+
+lines = []
+for line in open(src, encoding="utf-8", errors="replace"):
+    i = line.find("CORETRACE ")
+    if i < 0:
+        continue
+    ev = scrub(json.loads(line[i + 10:]))
+    if len(ev.get("b", "")) > MAX_BYTES * 2:
+        del ev["b"]
+    lines.append(json.dumps(ev, ensure_ascii=False, separators=(",", ":")))
+if not lines:
+    sys.exit(f"trace.py: no CORETRACE lines in {src} (was the run's app given MBUI_CORE_TRACE=1?)")
+drive = src.rsplit(".", 1)[0] + ".drive"
+script = open(drive, encoding="utf-8").read().rstrip("\n").split("\n") if os.path.exists(drive) else None
+os.makedirs(f"{root}/e2e/traces", exist_ok=True)
+with open(f"{root}/e2e/traces/{name}.trace", "w", encoding="utf-8") as f:
+    f.write("\n".join(lines) + "\n")
+with open(f"{root}/src/sfreplay/trace_{ident}.mbt", "w", encoding="utf-8") as f:
+    f.write(f"// e2e/traces/{name}.trace, made by scripts/trace.py from {os.path.basename(src)}: not edited by hand.\n\n")
+    f.write(f"///|\n/// What the app and its core said in the run, a line each.\npub let trace_{ident} : String =\n")
+    for l in lines:
+        f.write(f"  #|{l}\n")
+    if script is not None:
+        f.write(f"\n///|\n/// The flow's script as the run had it ({os.path.basename(drive)}).\npub let drive_{ident} : String =\n")
+        for l in script:
+            f.write(f"  #|{l}\n")
+print(f"{len(lines)} messages: e2e/traces/{name}.trace, src/sfreplay/trace_{ident}.mbt"
+      + (f" (with {os.path.basename(drive)})" if script is not None else ""))

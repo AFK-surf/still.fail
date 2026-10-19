@@ -1,6 +1,7 @@
-// What another app shares in, over the fixture (APP=sffix MBUI_FIXTURE=share-in | share-in-stations; scripts/shots.sh
-// share, web-share): a link with the app's subject, the sheet over Home (the `shareIn` view: two chats, the one a thing
-// from the same site went to last first; two stations up), its stations' choice opened. Every word in it is made up.
+// What another app shares in, over the fixture (APP=sffix MBUI_FIXTURE=share-in | share-in-stations | share-in-files;
+// scripts/shots.sh share, web-share): a link with the app's subject, the sheet over Home (the `shareIn` view: two chats,
+// the one a thing from the same site went to last first; two stations up), its stations' choice opened; two pictures
+// and a document shared instead. Every word in it is made up.
 
 ///|
 let fix_shared : (String, String?) = (
@@ -74,6 +75,18 @@ fn open_share_fixture(mode : String) -> Unit {
       raise_sheet(ShareSheet)
       share_in.raised = true
       share_in.choosing = mode == "share-in-stations"
+    }
+    // files from another app's share sheet (ACTION_SEND_MULTIPLE): two pictures (the chat fixture's) and a document
+    "share-in-files" => {
+      share_in.shared = Some(("", None))
+      share_in.files = [
+        { name: "home-after.png", bytes: Bytes::new(182345), image: fixture_file("home-after.png") },
+        { name: "compare.png", bytes: Bytes::new(96512), image: fixture_file("compare.png") },
+        { name: "季度数据.csv", bytes: Bytes::new(23110), image: "" },
+      ]
+      share_in.env_taken = true
+      raise_sheet(ShareSheet)
+      share_in.raised = true
     }
     _ => ()
   }
