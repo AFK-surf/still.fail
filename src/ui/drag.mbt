@@ -1,7 +1,9 @@
 // What a finger drags that is not a list or a pager: a sheet by its top, the bottom bar's ball and panel. A box
 // given a drag (Ctx::drag_area) takes the presses and drags that land on it as a list would (nothing under it, a
 // list behind a sheet, scrolls), and says each frame where the finger has it: pressed, moved past the slop along its
-// axis (then it is the drag's, not a tap), let go and how fast. What the drag does is the view's.
+// axis (then it is the drag's, not a tap), let go and how fast. What the drag does is the view's. One `in_list` (a row
+// swiped away across a list that scrolls up and down) is the finger's only if it moves along its axis first: moved
+// the other way first, the list it lies in takes the press from there, as a sideways box hands it on (sideways.mbt).
 
 ///|
 /// A drag's axis: what it waits for before it is the finger's. `Hold` takes the press and nothing moves it (a scrim,
@@ -40,6 +42,9 @@ pub(all) struct Drag {
   mut vy : Double
   mut ended : Bool
   mut tapped : Bool
+  /// it hands a move the other way first to what it lies in (Ctx::drag_area `in_list`), found as the finger went down
+  in_list : Bool
+  mut outer : Int
 }
 
 ///|
@@ -56,10 +61,11 @@ pub fn Ctx::drag_area(
   w? : Size = Auto,
   h? : Size = Auto,
   ty? : Double = 0.0,
+  in_list? : Bool = false,
   body : () -> Unit,
 ) -> Int {
   match drags.get(id) {
-    Some(d) if d.axis.same(axis) => ()
+    Some(d) if d.axis.same(axis) && d.in_list == in_list => ()
     _ => {
       drags[id] = {
         axis,
@@ -75,6 +81,8 @@ pub fn Ctx::drag_area(
         vy: 0.0,
         ended: false,
         tapped: false,
+        in_list,
+        outer: 0,
       }
       self.own(id)
     }
@@ -135,6 +143,48 @@ fn drag_down(id : Int, x : Double, y : Double) -> Bool {
     }
     None => false
   }
+}
+
+///|
+/// A press landing on drag area `id` that lies in a list (`in_list`): what scrolls under it, for a move the other way.
+fn drag_find_outer(c : Ctx, id : Int, x : Double, y : Double) -> Unit {
+  guard drags.get(id) is Some(d) && d.in_list else { return }
+  d.outer = 0
+  let ids = c.scroll_ids
+  let rects = c.scroll_rects
+  let mut k = ids.length() - 1
+  while k >= 0 {
+    let r = k * 4
+    if ids[k] != id &&
+      !drags.contains(ids[k]) &&
+      !sideways.contains(ids[k]) &&
+      x >= rects[r] &&
+      x < rects[r + 2] &&
+      y >= rects[r + 1] &&
+      y < rects[r + 3] {
+      d.outer = ids[k]
+      return
+    }
+    k = k - 1
+  }
+}
+
+///|
+/// The finger moved on drag area `id` lying in a list, not yet its drag: moved past the slop the other way first, the
+/// list takes the press from here (true: handed over, the caller goes on as for a list; the area is let go, no tap).
+fn drag_yield(c : Ctx, id : Int, x : Double, y : Double) -> Bool {
+  guard drags.get(id) is Some(d) && d.in_list && d.down && !d.moving && d.outer != 0 else { return false }
+  let (along, across) = match d.axis {
+    Horizontal => ((x - d.x0).abs(), (y - d.y0).abs())
+    Vertical => ((y - d.y0).abs(), (x - d.x0).abs())
+    _ => return false
+  }
+  if across > touch_slop() && across > along {
+    d.down = false
+    c.drag_scroll = d.outer
+    return true
+  }
+  false
 }
 
 ///|

@@ -381,6 +381,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     // a drag area (a sheet's top, the bottom bar) is the finger's from here: no edge swipe under it
     if drag_down(c.drag_scroll, x, y) {
       c.edge = 0
+      drag_find_outer(c, c.drag_scroll, x, y)
     }
     // a desktop's page: the mouse drags no list and swipes no page back (the wheel scrolls; Ctx::mouse_drags_lists)
     if !desk.mouse_drags {
@@ -447,7 +448,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         !sideways_move(c, c.drag_scroll, x, y) {
         // dragged sideways (or not yet past the slop); moved up or down first, the list takes it below
         ()
-      } else if drags.contains(c.drag_scroll) {
+      } else if drags.contains(c.drag_scroll) && !drag_yield(c, c.drag_scroll, x, y) {
         if drag_move(c.drag_scroll, x, y) && !c.dragging {
           c.dragging = true
           c.active = 0
