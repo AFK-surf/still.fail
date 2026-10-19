@@ -15,7 +15,7 @@ import { useToast } from "@stillfail/ui/toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard } from "../ProfileCard.tsx";
-import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip, Spinner, Waiting, WaitLine } from "../ui.tsx";
+import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip, Progress, Spinner, Waiting, WaitLine } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as baseCss from "../styles/base.css.ts";
 import * as css from "./Accounts.css.ts";
@@ -614,16 +614,16 @@ export function InstallStep({ install }: { install: RuntimeInstall }) {
   const busy = useDoing("software.update", { station, id: install.runtime });
   const api = useApi();
   const act = useAct();
+  const installing = install.state === "installing";
   return (
-    <>
-      <p className={shellCss.muted}>
-        {install.state === "installing" && <span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />}
-        {install.title}{install.state === "installing" && install.percent != null && ` ${install.percent}%`}
-      </p>
-      {install.detail && <p className={controlsCss.fieldError} role="alert">{install.detail}</p>}
-      {install.note && <p className={shellCss.muted}>{install.note}</p>}
-      {install.action && <Button variant="primary" busy={busy} onClick={() => act(api.updateSoftware(install.runtime), install.action!)}>{install.action}</Button>}
-    </>
+    <div className={pagesCss.card}>
+      <div className={pagesCss.cardRowText}>
+        <strong>{install.title}</strong>
+        {install.detail ? <span className={controlsCss.fieldError} role="alert">{install.detail}</span> : <span className={shellCss.muted}>{install.note ?? t("web-pages.profiles.installThenSignIn")}</span>}
+      </div>
+      {installing && <Progress part={install.percent != null ? install.percent / 100 : null} label={install.title} />}
+      {install.action && <div className={pagesCss.cardFoot}><Button variant="primary" busy={busy} onClick={() => act(api.updateSoftware(install.runtime), install.action!)}>{install.action}</Button></div>}
+    </div>
   );
 }
 

@@ -132,14 +132,14 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
           ))}
         </div>
       ) : d.method === "plan" ? (
-        d.install ? <div className={css.form}><InstallStep install={d.install} /></div>
+        d.install ? <InstallStep install={d.install} />
         : pending?.error || pending?.job?.state === "failed" || pending?.job?.state === "cancelled"
           ? <div className={css.form}><p className={controlsCss.fieldError}>{pending?.error ?? pending?.job?.error ?? t("web-pages.profiles.signInUnfinished")}</p><Button onClick={() => { if (login) void api.dropLogin(login).catch(() => undefined); setLogin(null); void start.run(); }}>{t("web-pages.profiles.restart")}</Button></div>
           : <div className={css.form}><LoginSteps job={pending?.job ?? null} provider={signInTo} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} /></div>
       ) : (
         <ConnectForm key={d.tile?.id} d={d} edit={edit} submitting={submitting} onSubmit={() => void submit().then(added, () => undefined)} />
       )}
-      {d.method === "plan" && d.usesLine && <p className={css.uses}>{d.usesLine}</p>}
+      {d.method === "plan" && d.usesLine && <p className={`${css.uses} ${css.usesBelow}`}>{d.usesLine}</p>}
     </div>
   );
 }

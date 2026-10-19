@@ -1712,5 +1712,6 @@
   "web-pages.stations.search.section": "Search",
   "web-pages.stations.search.personal": "Search personal data",
   "web-pages.stations.search.personalLine": "Workspace members can also search mail, messages, calendars, contacts, notes and photos",
-  "web-pages.stations.search.what": "change search settings"
+  "web-pages.stations.search.what": "change search settings",
+  "web-pages.profiles.installThenSignIn": "Sign-in starts once it is installed"
 }
