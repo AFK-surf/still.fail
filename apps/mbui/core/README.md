@@ -203,9 +203,10 @@ memory).
 - **Engine**: `apps/mbui/engine` (engine.cpp, Android's engine.cpp without JNI, behind a C API, engine.h), built with
   clang-cl in Hermes's own CMake tree from facebook/hermes at the tag React Native 0.81.4's Hermes is (MSVC fails on
   Hermes at that tag), Hermes static in `stillfail_engine.dll`; the shell `stillfail_shell.dll` (client/shell for
-  `x86_64-pc-windows-msvc`). Both are this repository's native parts (`node scripts/native.ts path engine|shell
-  win32-x64`): published to `native-artifacts` by the pipeline's `natives-win` jobs from main, built on Windows
-  only, nothing committed. win.sh puts them and `core.hbc` beside the app's .exe.
+  `x86_64-pc-windows-msvc`). Both are this repository's native parts (`node scripts/native.ts fetch engine|shell
+  win32-x64`), prebuilt on a Mac (Studio: `node scripts/native.ts prebuild`, cross-built with cargo-xwin and clang-cl
+  on xwin's SDK) into the releases bucket by their keys; CI only fetches them, nothing is committed. win.sh puts them
+  and `core.hbc` beside the app's .exe.
 - **Script**: `scripts/core.sh hermes` with the engine's own hermesc (`hermesc.exe` in the engine part).
 - **Host** (`src/host/win_core.c`, included by `src/sfcore/win_engine.c`, which mbui's win.sh puts in place of the
   app's Apple stub): `mb_core_start` hands the engine the bytecode, the data directory and the host's calls; what the

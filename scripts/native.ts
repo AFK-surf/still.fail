@@ -623,9 +623,9 @@ async function get(part: string, target: Target, mode: "any" | "fetch" | "build"
       const got = await download(part, target, k);
       if (got) return got;
     }
-    if (mode === "fetch" || policy === "offline") throw new Error(`${part} ${target} ${k} is not prebuilt (STILLFAIL_NATIVE=${policy || "-"}, ${mode})`);
     // What a development machine prebuilds is never built on CI: said, with how.
-    if (onWindows(part, target) && process.env.CI) throw new Error(`${part} ${target} ${k} is not prebuilt: prebuild it on a Mac (Studio), node scripts/native.ts prebuild ${part}:${target}`);
+    if (onWindows(part, target) && (process.env.CI || mode === "fetch")) throw new Error(`${part} ${target} ${k} is not prebuilt: prebuild it on a Mac (Studio), node scripts/native.ts prebuild ${part}:${target}`);
+    if (mode === "fetch" || policy === "offline") throw new Error(`${part} ${target} ${k} is not prebuilt (STILLFAIL_NATIVE=${policy || "-"}, ${mode})`);
     // n0's relay is downloaded from n0 whatever the policy: "building" it is that.
     return buildHere(part, target, k);
   });
