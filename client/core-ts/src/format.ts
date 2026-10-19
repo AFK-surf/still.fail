@@ -405,7 +405,7 @@ export function runtimeLabel(runtime: string): string {
 }
 
 /// A connect's link to Slack in words, and its dot.
-export function connection(state: unknown): [string, string] {
+export function connection(state: unknown, kind?: string | null): [string, string] {
   switch (str(get(state, "state")) ?? "") {
     case "connected":
       return [said("core-logic.format.connection.connected"), "online"];
@@ -418,7 +418,7 @@ export function connection(state: unknown): [string, string] {
     case "disabled":
       return [said("core-logic.format.connection.disabled"), "offline"];
     default:
-      return [said("core-logic.format.connection.no_slack"), "offline"];
+      return [said(kind === "feishu" ? "core-logic.format.connection.no_feishu" : "core-logic.format.connection.no_slack"), "offline"];
   }
 }
 

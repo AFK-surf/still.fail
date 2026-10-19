@@ -215,6 +215,13 @@
   "web-mobile.connects.mentionOn.feishu": "Once mentioned, later messages in the same group need no @.",
   "web-mobile.connects.mentionOff.feishu": "Every message in the groups it is in goes to the session.",
   "web-mobile.connects.noSessions.feishu": "No sessions yet. @-mention {name} in a Feishu group or message it directly to start",
+  "web-mobile.connects.disableNote.feishu": "Disconnects from Feishu",
+  "web-mobile.connects.disabled.feishu": "Disabled, Feishu disconnected",
+  "web-mobile.connects.deleteText.feishu": "Disconnects from Feishu. You need to delete the app in the developer console yourself.",
+  "web-mobile.connects.deleteTextSessions.feishu": {
+    "one": "Disconnects from Feishu. Its 1 session keeps its history but gets no new messages. You need to delete the app in the developer console yourself.",
+    "other": "Disconnects from Feishu. Its {n} sessions keep their history but get no new messages. You need to delete the app in the developer console yourself."
+  },
   "web-mobile.decisions.title": "Decisions",
   "web-mobile.history.account": "Account",
   "web-mobile.history.accountNote": "In auto mode, the account switches when quota runs out or sign-in expires; a chosen account is always used.",

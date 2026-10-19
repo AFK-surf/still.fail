@@ -318,12 +318,12 @@ function ConnectMenu({ connect }: { connect: Connect }) {
         {connect.kind !== "feishu" && workspace?.url && <PickRow label={t("web-mobile.connects.openSlack")} onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
         {connect.feishu?.console && <PickRow label={t("web-mobile.connects.feishu.openConsole")} onClick={() => window.open(connect.feishu!.console!, "_blank", "noopener")} />}
         {connect.enabled
-          ? <PickRow label={t("web-mobile.connects.disable")} sub={t("web-mobile.connects.disableNote")} busy={putting} failed={putFailed} enabled={!busy} onClick={() => go(api.putConnect(connect.id, { enabled: false }), t("web-mobile.connects.disabled"), "web-mobile.connects.disableFailed")} />
+          ? <PickRow label={t("web-mobile.connects.disable")} sub={t(kindKey("web-mobile.connects.disableNote", connect.kind))} busy={putting} failed={putFailed} enabled={!busy} onClick={() => go(api.putConnect(connect.id, { enabled: false }), t(kindKey("web-mobile.connects.disabled", connect.kind)), "web-mobile.connects.disableFailed")} />
           : <PickRow label={t("web-mobile.connects.enable")} busy={putting} failed={putFailed} enabled={!busy} onClick={() => go(api.putConnect(connect.id, { enabled: true }), t("web-mobile.connects.enabled"), "web-mobile.connects.enableFailed")} />}
         <PickRow label={t("web-mobile.connects.changeOwner")} sub={connect.createdBy?.shown?.display ?? connect.createdBy?.name} enabled={!busy} onClick={() => app.sheet({ height: 0.6, content: () => <OwnerSheet connect={connect} /> })} />
         <PickRow label={t("web-mobile.connects.delete")} accent busy={deleting} failed={deleteFailed} enabled={!busy} onClick={() => confirm(app, {
           title: t("web-mobile.archive.deleteAsk", { title: connect.name }), action: t("web-mobile.connects.delete"), danger: true,
-          text: connect.sessions ? t("web-mobile.connects.deleteTextSessions", { n: connect.sessions }) : t("web-mobile.connects.deleteText"),
+          text: connect.sessions ? t(kindKey("web-mobile.connects.deleteTextSessions", connect.kind), { n: connect.sessions }) : t(kindKey("web-mobile.connects.deleteText", connect.kind)),
           atOnce: "web-main.chat.deleteFailed",
           run: () => { app.pop(); return api.deleteConnect(connect.id).then(() => app.toast(t("web-mobile.connects.deleted"))); },
         })} />

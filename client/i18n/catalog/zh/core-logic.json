@@ -175,6 +175,7 @@
   "core-logic.format.connection.no_slack": "未连接 Slack",
   "core-logic.format.connection.reconnecting": "正在重新连接",
   "core-logic.format.connection.starting": "连接中",
+  "core-logic.format.connection.no_feishu": "未连接飞书",
   "core-logic.format.date.1": "1月{day}日",
   "core-logic.format.date.10": "10月{day}日",
   "core-logic.format.date.11": "11月{day}日",

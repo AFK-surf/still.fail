@@ -116,7 +116,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
           ...(feishu && connect.feishu?.console ? [{ label: t("web-pages.connect.feishu.openConsole"), icon: External, onSelect: () => window.open(connect.feishu!.console!, "_blank", "noopener") }] : []),
           "separator",
           connect.enabled
-            ? { label: t("web-pages.profiles.disable"), icon: Power, disabled: saving, onSelect: () => save.put({ enabled: false }, () => toast(t("web-pages.connect.disabled"))) }
+            ? { label: t("web-pages.profiles.disable"), icon: Power, disabled: saving, onSelect: () => save.put({ enabled: false }, () => toast(t(kindKey("web-pages.connect.disabled", connect.kind)))) }
             : { label: t("web-pages.connect.enable"), icon: Power, disabled: saving, onSelect: () => save.put({ enabled: true }, () => toast(t("web-pages.connect.enabled"))) },
           { label: t("web-pages.connect.changeOwner"), icon: User, onSelect: () => setOwning(true) },
           "separator",
@@ -136,7 +136,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
       {/* Back to the list at once: its row turns there until the station has dropped it, a failure said by toast. */}
       <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); navigate(`${station.settings}/connects`); void remove.run(); }}
         title={t("web-pages.archive.deleteConfirm", { title: connect.name })} action={t("web-pages.connect.delete")}
-        description={connect.sessions ? t("web-pages.connect.deleteBodySessions", { n: connect.sessions }) : t("web-pages.connect.deleteBody")} />
+        description={connect.sessions ? t(kindKey("web-pages.connect.deleteBodySessions", connect.kind), { n: connect.sessions }) : t(kindKey("web-pages.connect.deleteBody", connect.kind))} />
     </div>
   );
 }
@@ -267,7 +267,7 @@ function RunSection({ item }: { item: ConnectItem }) {
 export function consequences(connect: Connect, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
   const out: string[] = [];
   // A Feishu connect's groups in place of Slack's threads and channels.
-  const t = (key: string, o?: Record<string, unknown>) => tr(["toSingle", "toMulti", "threadsRestart", "mentionOnly", "noMention"].some((k) => key.endsWith(`.${k}`)) ? kindKey(key, connect.kind) : key, o);
+  const t = (key: string, o?: Parameters<typeof tr>[1]) => tr(["toSingle", "toMulti", "threadsRestart", "mentionOnly", "noMention"].some((k) => key.endsWith(`.${k}`)) ? kindKey(key, connect.kind) : key, o);
   if (connect.mode === "multi-session" && next.mode === "single-session") {
     out.push(t("web-pages.connect.effects.toSingle"));
     out.push(connect.session ? t("web-pages.connect.effects.resumeSingle") : t("web-pages.connect.effects.newSingle"));

@@ -582,7 +582,7 @@ export function maker(m: string | null | undefined): J {
 export function connect(c: J): J {
   if (!isObject(c)) return c;
   const o = c as J;
-  const [text, presence] = format.connection(o.connection ?? null);
+  const [text, presence] = format.connection(o.connection ?? null, str(o.kind) ?? null);
   const mode = str(o.mode) ?? "multi-session";
   const [modeText, modeShort] = format.modeText(mode, typeof o.requireMention === "boolean" ? o.requireMention : true);
   const bind = o.bind ?? null;

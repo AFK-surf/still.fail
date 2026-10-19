@@ -511,6 +511,12 @@
   "web-pages.connect.mentionOn.feishu": "Once mentioned, later messages in the same group need no @.",
   "web-pages.connect.mentionOff.feishu": "Every message in the groups it is in goes to the session.",
   "web-pages.connect.recentNone.feishu": "No sessions yet. @-mention {name} in a Feishu group or message it directly to start",
+  "web-pages.connect.disabled.feishu": "Disabled, Feishu disconnected",
+  "web-pages.connect.deleteBody.feishu": "Disconnects from Feishu. You need to delete the app in the developer console yourself.",
+  "web-pages.connect.deleteBodySessions.feishu": {
+    "one": "Disconnects from Feishu. Its 1 session keeps its history but gets no new messages. You need to delete the app in the developer console yourself.",
+    "other": "Disconnects from Feishu. Its {n} sessions keep their history but get no new messages. You need to delete the app in the developer console yourself."
+  },
   "web-pages.connects.about": "A connect is how people reach {name}, such as a Slack app. Each lives on a station and is bound to a model.",
   "web-pages.connects.add": "Add connect",
   "web-pages.connects.addFirst": "Add your first connect",

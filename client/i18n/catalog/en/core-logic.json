@@ -211,6 +211,7 @@
   "core-logic.format.connection.no_slack": "No Slack",
   "core-logic.format.connection.reconnecting": "Reconnecting",
   "core-logic.format.connection.starting": "Connecting",
+  "core-logic.format.connection.no_feishu": "No Feishu",
   "core-logic.format.date.1": "Jan {day}",
   "core-logic.format.date.10": "Oct {day}",
   "core-logic.format.date.11": "Nov {day}",
