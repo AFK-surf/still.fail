@@ -23,6 +23,8 @@ fn reset_globals() -> Unit {
   c.dt = 16.0
   c.last_now = -1.0
   c.frame_no = 0
+  // nothing laid out by an earlier test is reused
+  c.epoch = c.epoch + 1
   c.wants_frame = false
   c.wake_at = -1.0
   c.hit_ids.clear()
@@ -96,6 +98,7 @@ pub fn Tester::new(
     image_sizes: {},
     image_loads: [],
     images: {},
+    bold: 0.0,
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
@@ -764,4 +767,11 @@ pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
 pub fn Tester::app_state(self : Tester, visible : Bool, focused : Bool) -> Unit {
   on_app_state((if visible { 1 } else { 0 }) | (if focused { 2 } else { 0 }))
   self.frame()
+}
+
+///|
+/// Bold text `em` ems wider a character than regular from now on (the fake
+/// host's shapes ignore weight otherwise).
+pub fn Tester::bold_wider(self : Tester, em : Double) -> Unit {
+  self.fake.bold = em
 }

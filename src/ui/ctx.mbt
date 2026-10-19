@@ -105,6 +105,9 @@ pub struct Ctx {
   mut dt : Double
   mut last_now : Double
   mut frame_no : Int
+  // the layout epoch: when it moves on, nothing laid out before is reused
+  // (Ctx::flex_tree)
+  mut epoch : Int
   mut wants_frame : Bool
   mut wake_at : Double
   // hit targets of the last frame, in paint order, and those being collected
@@ -181,6 +184,7 @@ fn Ctx::new() -> Ctx {
     dt: 16.0,
     last_now: -1.0,
     frame_no: 0,
+    epoch: 0,
     wants_frame: false,
     wake_at: -1.0,
     hit_ids: [],

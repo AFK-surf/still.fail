@@ -209,12 +209,28 @@ pub(all) struct Node {
   // sizes found during the current compute(), 8 numbers each
   cache : Array[Double]
   mut cache_gen : Int
-  // what its style says about its box, within the current compute(), and
-  // the containing block that was for (box_for)
-  mut box_gen : Int
+  // what its style says about its box, and the containing block that was
+  // for (box_for), while its caches hold
   mut box_cbw : Double
   mut box_cbh : Double
   mut box_memo : Box?
+  // Kept from one compute(reuse=true) to the next (see compute): set it
+  // when the node's style, measure function or children change, and on
+  // every node above it; its sizes are then found again.
+  mut dirty : Bool
+  // its last layout (perform), while not dirty: what it was asked (known
+  // size, containing block) and what it came to
+  mut p_ok : Bool
+  mut p_kw : Double
+  mut p_kh : Double
+  mut p_cbw : Double
+  mut p_cbh : Double
+  mut p_w : Double
+  mut p_h : Double
+  // the compute() that last laid it out, and the last whose layout of it
+  // was the one before, reused
+  mut laid_gen : Int
+  mut skip_gen : Int
 }
 
 ///|
@@ -230,11 +246,40 @@ pub fn Node::new() -> Node {
     line: 0,
     cache: [],
     cache_gen: -1,
-    box_gen: -1,
     box_cbw: 0.0,
     box_cbh: 0.0,
     box_memo: None,
+    dirty: true,
+    p_ok: false,
+    p_kw: 0.0,
+    p_kh: 0.0,
+    p_cbw: 0.0,
+    p_cbh: 0.0,
+    p_w: 0.0,
+    p_h: 0.0,
+    laid_gen: -1,
+    skip_gen: -1,
   }
+}
+
+///|
+/// Whether the last compute() laid this node out again, rather than
+/// reusing its layout from before (or not reaching it, its parent's being
+/// reused): when it did not, nothing under it moved or changed size.
+pub fn Node::laid_out(self : Node) -> Bool {
+  self.laid_gen == generation.val
+}
+
+///|
+/// The compute() that last laid this node out (as `computes` counts them).
+pub fn Node::laid_out_at(self : Node) -> Int {
+  self.laid_gen
+}
+
+///|
+/// How many compute()s there have been.
+pub fn computes() -> Int {
+  generation.val
 }
 
 ///|

@@ -152,24 +152,49 @@ fn box_of(s : Style, cb_w : Double, cb_h : Double) -> Box {
 }
 
 ///|
-/// box_of for a node, kept on it for the rest of the compute(): a node is
+/// box_of for a node, kept on it while its caches hold (touch): a node is
 /// sized several times (its basis, its cross size, for real), each time
 /// against the same containing block.
 fn box_for(node : Node, cb_w : Double, cb_h : Double) -> Box {
-  if node.box_gen == generation.val &&
-    same(node.box_cbw, cb_w) &&
-    same(node.box_cbh, cb_h) {
+  touch(node)
+  if same(node.box_cbw, cb_w) && same(node.box_cbh, cb_h) {
     match node.box_memo {
       Some(b) => return b
       None => ()
     }
   }
   let b = box_of(node.style, cb_w, cb_h)
-  node.box_gen = generation.val
   node.box_cbw = cb_w
   node.box_cbh = cb_h
   node.box_memo = Some(b)
   b
+}
+
+///|
+/// A node's first visit in a compute(): what it kept from before is
+/// forgotten unless the compute reuses it and the node is not dirty.
+fn touch(node : Node) -> Unit {
+  if node.cache_gen != generation.val {
+    node.cache_gen = generation.val
+    if !reusing.val || node.dirty {
+      node.cache.clear()
+      node.box_memo = None
+      node.p_ok = false
+      node.dirty = false
+    }
+  }
+}
+
+///|
+/// Whether the current compute() reuses what nodes kept from the last.
+let reusing : Ref[Bool] = { val: false }
+
+///|
+/// Whether `n`'s layout in this compute() is the one it had (its subtree
+/// untouched). (A node is laid out at most once in a compute but for
+/// baselines, which reuse does not take.)
+fn kept(n : Node) -> Bool {
+  n.skip_gen == generation.val
 }
 
 ///|
@@ -189,13 +214,24 @@ fn Box::pbh(self : Box) -> Double {
 /// Lays out the tree under `root` in a space of `width` × `height` (NaN:
 /// unbounded), as Yoga's calculateLayout does. Results are relative to the
 /// parent's border box; with `round` they snap to whole units.
+///
+/// With `reuse` (and without `round`), what nodes found in the last
+/// compute is kept: sizes a node was measured at, and its last layout,
+/// which stands (with its whole subtree) when it is asked for the same
+/// again. The caller marks `dirty` every node whose style, measure
+/// function (or what it measures) or children changed, and every node
+/// above one; a node moved under another parent dirties both parents.
+/// Nothing may be aligned by baseline (finding one lays items out while
+/// only measuring their container): reuse aborts on it.
 pub fn compute(
   root : Node,
   width? : Double = undef,
   height? : Double = undef,
   round? : Bool = true,
+  reuse? : Bool = false,
 ) -> Unit {
   generation.val = generation.val + 1
+  reusing.val = reuse && !round
   let b = box_of(root.style, width, height)
   let w = or_else(b.w, if root.style.position == Absolute { undef } else { width })
   let h = or_else(b.h, if root.style.position == Absolute { undef } else { height })
@@ -222,7 +258,9 @@ pub fn compute(
   }
   root.left = b.mar_l + dx
   root.top = b.mar_t + dy
-  layout_static_absolute(root, root, 0.0, 0.0)
+  if !(kept(root) && s.position != Static) {
+    layout_static_absolute(root, root, 0.0, 0.0)
+  }
   if round {
     round_layout(root, 0.0, 0.0)
   }
@@ -320,12 +358,24 @@ fn size_node(
   cb_h : Double,
   perform : Bool,
 ) -> (Double, Double) {
-  if node.cache_gen != generation.val {
-    node.cache.clear()
-    node.cache_gen = generation.val
-  }
+  touch(node)
   let c = node.cache
-  if !perform {
+  if perform {
+    // laid out before as now asked, nothing under it changed since: it
+    // stands as it is. (A layout is always asked with the space available
+    // the size it is to have, or for a root, its containing block: those
+    // two say it all.)
+    if reusing.val &&
+      node.p_ok &&
+      same(node.p_kw, kw) &&
+      same(node.p_kh, kh) &&
+      same(node.p_cbw, cb_w) &&
+      same(node.p_cbh, cb_h) {
+      node.skip_gen = generation.val
+      counters[1] = counters[1] + 1
+      return (node.p_w, node.p_h)
+    }
+  } else {
     let mut k = 0
     while k < c.length() {
       if same(c[k + 4], cb_w) &&
@@ -340,6 +390,16 @@ fn size_node(
   }
   counters[0] = counters[0] + 1
   let (w, h) = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, perform)
+  if perform {
+    node.p_ok = true
+    node.p_kw = kw
+    node.p_kh = kh
+    node.p_cbw = cb_w
+    node.p_cbh = cb_h
+    node.p_w = w
+    node.p_h = h
+    node.laid_gen = generation.val
+  }
   if c.length() >= 8 * 16 {
     c.clear()
   }
@@ -737,6 +797,11 @@ fn layout_flex(
       let it = items[k]
       it.line = li
       if it.align == Baseline && row {
+        // its baseline is found by laying it out, while this one may be
+        // only measured: a layout kept above it could hold that one
+        if reusing.val {
+          abort("flex: compute(reuse=true) with an item aligned by baseline")
+        }
         let (iw, ih) = (it.main, it.cross)
         let (rw, rh) = size_node(it.node, iw, ih, iw, ih, cb_w, cb_h, true)
         it.node.width = rw
@@ -890,6 +955,8 @@ fn layout_flex(
       if s.wrap == WrapReverse {
         it.cross_pos = cross_size - it.cross_pos - it.cross
       }
+      // (for baselines only, which reuse does not take: measuring may
+      // write them too)
       it.node.line = it.line
     }
   }
@@ -1121,12 +1188,15 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
       layout_static_absolute(cb, c, ox, oy)
       continue
     }
+    // a box whose layout was reused holds its absolute boxes as they were
     if cs.position == Absolute {
       place_absolute(cb, node, c, ox, oy)
-      layout_static_absolute(c, c, 0.0, 0.0)
+      if !kept(c) {
+        layout_static_absolute(c, c, 0.0, 0.0)
+      }
     } else if cs.position == Static {
       layout_static_absolute(cb, c, ox + c.left, oy + c.top)
-    } else {
+    } else if !kept(c) {
       layout_static_absolute(c, c, 0.0, 0.0)
     }
   }

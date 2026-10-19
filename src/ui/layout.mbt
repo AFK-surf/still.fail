@@ -14,25 +14,12 @@ fn Ctx::editor_display(self : Ctx, n : Node) -> String {
 ///|
 /// The text laid out in `max_w`. The engine asks for a few widths per frame;
 /// greedy wrapping gives the same lines for any width from the widest line
-/// up to the one it was laid out in, so one layout serves them all.
+/// up to the one it was laid out in, so one layout serves them all, frame
+/// after frame while the text stays (Ctx::flex_tree forgets it when not).
 fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
-  match self.tl {
-    Some(tl) if !self.wrap || (tl.w <= max_w + 0.01 && max_w <= self.tl_max) =>
-      return tl
-    _ => ()
-  }
-  // the same text as this slot laid out last frame: no lookup by string
-  match self.kept_tl {
-    Some(tl) if self.kept_size == self.font_size &&
-      self.kept_weight == self.weight &&
-      self.kept_line == self.line_h &&
-      self.kept_wrap == self.wrap &&
-      (!self.wrap || (tl.w <= max_w + 0.01 && max_w <= self.kept_max)) &&
-      tl.text == self.text => {
-      self.tl = Some(tl)
-      self.tl_max = self.kept_max
-      return tl
-    }
+  match self.full {
+    Some(tl) if !self.wrap ||
+      (tl.w <= max_w + 0.01 && max_w <= self.full_max) => return tl
     _ => ()
   }
   let tl = layout_text(
@@ -43,14 +30,8 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
     self.wrap,
     line=self.line_h,
   )
-  self.tl = Some(tl)
-  self.tl_max = max_w
-  self.kept_tl = Some(tl)
-  self.kept_max = max_w
-  self.kept_size = self.font_size
-  self.kept_weight = self.weight
-  self.kept_line = self.line_h
-  self.kept_wrap = self.wrap
+  self.full = Some(tl)
+  self.full_max = max_w
   tl
 }
 
@@ -115,100 +96,394 @@ fn pt(v : Double) -> @flex.Dim {
 }
 
 ///|
-/// The flex node for node `i` and its subtree, styled from the builder's
-/// sizes: Fill along the parent's direction grows from nothing, across it
-/// stretches; content-sized children of a row may shrink (and wrap), except
-/// text that must stay on one line.
-fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
+/// What `d` must become to be `Pt(v)`; None when it is.
+fn pt_change(d : @flex.Dim, v : Double) -> @flex.Dim? {
+  match d {
+    Pt(x) if x == v => None
+    _ => Some(pt(v))
+  }
+}
+
+///|
+/// What `d` must become to be `Pt(v)` when `has`, else Auto; None when it
+/// is.
+fn opt_change(d : @flex.Dim, has : Bool, v : Double) -> @flex.Dim? {
+  if has {
+    pt_change(d, v)
+  } else if is_auto(d) {
+    None
+  } else {
+    Some(Auto)
+  }
+}
+
+///|
+fn is_pct100(d : @flex.Dim) -> Bool {
+  match d {
+    Pct(p) => p == 100.0
+    _ => false
+  }
+}
+
+///|
+fn is_auto(d : @flex.Dim) -> Bool {
+  match d {
+    Auto => true
+    _ => false
+  }
+}
+
+///|
+/// The parts of a rich paragraph its layout depends on are the same.
+fn rich_same(a : Rich?, b : Rich?) -> Bool {
+  match (a, b) {
+    (Some(a), Some(b)) =>
+      a.size == b.size &&
+      a.weight == b.weight &&
+      a.line == b.line &&
+      a.wrap == b.wrap &&
+      a.code_scale == b.code_scale &&
+      a.code_bg == b.code_bg &&
+      (physical_equal(a.runs, b.runs) || a.runs == b.runs)
+    (None, None) => true
+    _ => false
+  }
+}
+
+///|
+/// The flex node for node `i` (laid out in direction `pdir`: 0 none, 1
+/// row, 2 column) and its subtree,
+/// styled from the builder's sizes: Fill along the parent's direction
+/// grows from nothing, across it stretches; content-sized children of a
+/// row may shrink (and wrap), except text that must stay on one line.
+///
+/// Styles, children and what leaves measure are compared with what the
+/// flex node was given last frame, and only what differs is set: a flex
+/// node that changed, and every one above it, is marked dirty, and the
+/// engine keeps the layout of the rest (@flex.compute's reuse). Returns
+/// for the parent: 1 when it must lay out again (this subtree changed), 2
+/// when it is not to be moved as a whole (Ctx::commit): something in it
+/// changed, moved by itself, or is placed anew every frame (lists,
+/// editors, pager pages).
+///
+/// A child changes parents only with both parents' children changing (a
+/// slot is taken before the slots of what it holds, and every slot in use
+/// is reached here), so the parents lay out again as the engine needs.
+fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let n = self.nodes[i]
   let f = n.fl
   let s = f.style
-  s.reset()
-  f.children.clear()
-  f.measure = None
-  s.direction = if n.dir == Row { Row } else { Column }
-  s.padding.left = pt(n.pad_l)
-  s.padding.top = pt(n.pad_t)
-  s.padding.right = pt(n.pad_r)
-  s.padding.bottom = pt(n.pad_b)
-  s.gap_row = pt(n.gap)
-  s.gap_col = pt(n.gap)
-  s.align_items = match n.align {
+  let mut ch = n.lk_epoch != self.epoch || n.lk_kind != n.kind
+  if !layout_reuse.val {
+    n.full = None
+    n.rl = None
+  }
+  n.lk_epoch = self.epoch
+  n.lk_kind = n.kind
+  let dir : @flex.FlexDirection = if n.dir == Row { Row } else { Column }
+  if s.direction != dir {
+    s.direction = dir
+    ch = true
+  }
+  match pt_change(s.padding.left, n.pad_l) {
+    Some(d) => {
+      s.padding.left = d
+      ch = true
+    }
+    None => ()
+  }
+  match pt_change(s.padding.top, n.pad_t) {
+    Some(d) => {
+      s.padding.top = d
+      ch = true
+    }
+    None => ()
+  }
+  match pt_change(s.padding.right, n.pad_r) {
+    Some(d) => {
+      s.padding.right = d
+      ch = true
+    }
+    None => ()
+  }
+  match pt_change(s.padding.bottom, n.pad_b) {
+    Some(d) => {
+      s.padding.bottom = d
+      ch = true
+    }
+    None => ()
+  }
+  match pt_change(s.gap_row, n.gap) {
+    Some(d) => {
+      s.gap_row = d
+      s.gap_col = d
+      ch = true
+    }
+    None => ()
+  }
+  let ai : @flex.Align = match n.align {
     AStart => FlexStart
     ACenter => Center
     AEnd => FlexEnd
     AStretch => Stretch
   }
-  s.justify = match n.justify {
+  if s.align_items != ai {
+    s.align_items = ai
+    ch = true
+  }
+  let ju : @flex.Align = match n.justify {
     JStart => FlexStart
     JCenter => Center
     JEnd => FlexEnd
     JBetween => SpaceBetween
   }
-  if n.min_h > 0.0 {
-    s.min_height = Pt(n.min_h)
+  if s.justify != ju {
+    s.justify = ju
+    ch = true
   }
-  if n.max_h < 1.0e9 {
-    s.max_height = Pt(n.max_h)
+  // 0 and 1e9: none (Auto)
+  match opt_change(s.min_height, n.min_h > 0.0, n.min_h) {
+    Some(d) => {
+      s.min_height = d
+      ch = true
+    }
+    None => ()
   }
-  if n.min_w > 0.0 {
-    s.min_width = Pt(n.min_w)
+  match opt_change(s.max_height, n.max_h < 1.0e9, n.max_h) {
+    Some(d) => {
+      s.max_height = d
+      ch = true
+    }
+    None => ()
   }
-  if n.max_w < 1.0e9 {
-    s.max_width = Pt(n.max_w)
+  match opt_change(s.min_width, n.min_w > 0.0, n.min_w) {
+    Some(d) => {
+      s.min_width = d
+      ch = true
+    }
+    None => ()
   }
-  let in_row = parent == Some(Row)
-  let in_col = parent == Some(Column)
+  match opt_change(s.max_width, n.max_w < 1.0e9, n.max_w) {
+    Some(d) => {
+      s.max_width = d
+      ch = true
+    }
+    None => ()
+  }
+  let in_row = pdir == 1
+  let in_col = pdir == 2
+  let mut grow = 0.0
+  let mut shrink = 0.0
+  let mut basis0 = false
+  let mut stretch = false
+  // the width (and height) said in points
+  let mut wpx = 0.0
+  let mut hpx = 0.0
+  let mut has_w = false
+  let mut has_h = false
   match n.w {
-    Px(p) => s.width = Pt(p)
+    Px(p) => {
+      wpx = p
+      has_w = true
+    }
     Fill(k) =>
       if in_row {
-        s.grow = k
-        s.shrink = 1.0
-        s.basis = @flex.pt_zero
+        grow = k
+        shrink = 1.0
+        basis0 = true
       } else if in_col {
-        s.align_self = Stretch
+        stretch = true
       }
     Auto =>
       if in_row && !((n.kind == kind_text || n.kind == kind_rich) && !n.wrap) {
-        s.shrink = 1.0
+        shrink = 1.0
       }
   }
-  if n.pager != 0 || n.layer {
-    // a pager's pages lie over each other, moved sideways as they turn
-    s.position = Absolute
-    s.inset.left = @flex.pt_zero
-    s.inset.top = @flex.pt_zero
-    s.width = Pct(100.0)
-    s.height = Pct(100.0)
-  }
+  // a pager's pages lie over each other, moved sideways as they turn
+  let over = n.pager != 0 || n.layer
   match n.h {
-    Px(p) => s.height = Pt(p)
+    Px(p) => {
+      hpx = p
+      has_h = true
+    }
     Fill(k) =>
       if in_col {
-        s.grow = k
-        s.shrink = 1.0
-        s.basis = @flex.pt_zero
+        grow = k
+        shrink = 1.0
+        basis0 = true
       } else if in_row {
-        s.align_self = Stretch
+        stretch = true
       }
     Auto => ()
   }
-  if n.kind == kind_text ||
-    n.kind == kind_rich ||
-    n.kind == kind_editor ||
-    n.kind == kind_list ||
-    n.kind == kind_image {
-    f.measure = n.leaf
+  if s.grow != grow {
+    s.grow = grow
+    ch = true
+  }
+  // (shrink never changes alone: with the width said another way, which
+  // changes the width, grow, basis or alignment; with the parent's
+  // direction, which changes the parent; with a text's wrapping or kind.
+  // A node's own size does not depend on it, only its parent's layout)
+  if s.shrink != shrink {
+    s.shrink = shrink
+  }
+  if is_auto(s.basis) == basis0 {
+    s.basis = if basis0 { @flex.pt_zero } else { Auto }
+    ch = true
+  }
+  let als : @flex.Align = if stretch { Stretch } else { Auto }
+  if s.align_self != als {
+    s.align_self = als
+    ch = true
+  }
+  if over {
+    // (only when it has just become a layer: its position changes too)
+    if !is_pct100(s.width) {
+      s.width = Pct(100.0)
+    }
   } else {
-    let mut c = n.first
-    while c >= 0 {
-      f.children.push(self.flex_tree(c, Some(n.dir)))
-      c = self.nodes[c].next
+    match opt_change(s.width, has_w, wpx) {
+      Some(d) => {
+        s.width = d
+        ch = true
+      }
+      None => ()
     }
   }
-  f
+  if !has_h && over {
+    if !is_pct100(s.height) {
+      s.height = Pct(100.0)
+      ch = true
+    }
+  } else {
+    match opt_change(s.height, has_h, hpx) {
+      Some(d) => {
+        s.height = d
+        ch = true
+      }
+      None => ()
+    }
+  }
+  let pos : @flex.PositionType = if over { Absolute } else { Relative }
+  if s.position != pos {
+    s.position = pos
+    s.inset.left = if over { @flex.pt_zero } else { Auto }
+    s.inset.top = if over { @flex.pt_zero } else { Auto }
+    ch = true
+  }
+  let mut up = 0
+  let k = n.kind
+  if k == kind_text ||
+    k == kind_rich ||
+    k == kind_editor ||
+    k == kind_list ||
+    k == kind_image {
+    // (measured or not goes with its kind, compared above)
+    if f.measure is None {
+      f.measure = n.leaf
+    }
+    if f.children.length() > 0 {
+      f.children.clear()
+      ch = true
+    }
+    if k == kind_text {
+      if n.lk_text != n.text ||
+        n.lk_size != n.font_size ||
+        n.lk_weight != n.weight ||
+        n.lk_line != n.line_h ||
+        n.lk_wrap != n.wrap {
+        n.lk_text = n.text
+        n.lk_size = n.font_size
+        n.lk_weight = n.weight
+        n.lk_line = n.line_h
+        n.lk_wrap = n.wrap
+        n.full = None
+        ch = true
+      }
+    } else if k == kind_rich {
+      if !rich_same(n.lk_rich, n.rich) {
+        n.lk_rich = n.rich
+        n.rl = None
+        ch = true
+      }
+    } else if k == kind_image {
+      let (iw, ih) = match image_size(n.text) {
+        Some(sz) => sz
+        None => (-1.0, -1.0)
+      }
+      if n.lk_text != n.text || n.lk_iw != iw || n.lk_ih != ih {
+        n.lk_text = n.text
+        n.lk_iw = iw
+        n.lk_ih = ih
+        ch = true
+      }
+    } else if k == kind_editor {
+      // what it shows changes as it is typed in: measured (and placed)
+      // every frame
+      ch = true
+    }
+    if k == kind_list {
+      up = 2
+    }
+  } else {
+    if f.measure is Some(_) {
+      f.measure = None
+    }
+    let kids = f.children
+    let pd = if n.dir == Row { 1 } else { 2 }
+    let mut j = 0
+    let mut c = n.first
+    while c >= 0 {
+      let cn = self.nodes[c]
+      let r = self.flex_tree(c, pd)
+      if (r & 1) != 0 {
+        ch = true
+      }
+      if (r & 2) != 0 ||
+        cn.tx != cn.otx ||
+        cn.ty != cn.oty ||
+        cn.slide != cn.oslide {
+        up = 2
+      }
+      if j < kids.length() {
+        // another slot here only when one before it holds more or fewer
+        // than it did (slots are taken in order): that one changed
+        // already, and this one says so if it differs
+        if !physical_equal(kids[j], cn.fl) {
+          kids[j] = cn.fl
+        }
+      } else {
+        kids.push(cn.fl)
+        ch = true
+      }
+      j = j + 1
+      c = cn.next
+    }
+    if j < kids.length() {
+      kids.truncate(j)
+      ch = true
+    }
+  }
+  if n.pager != 0 {
+    up = 2
+  }
+  if ch {
+    f.dirty = true
+    up = 3
+  }
+  n.same = up == 0
+  up
 }
+
+///|
+/// Work done by commits so far: nodes placed, subtrees moved as a whole,
+/// subtrees left where they were. For tests and benchmarks.
+let commit_counts : FixedArray[Int] = FixedArray::make(3, 0)
+
+///|
+/// Off (tests only): every frame laid out from nothing, as before layouts
+/// were kept, to compare with.
+let layout_reuse : Ref[Bool] = Ref::new(true)
 
 ///|
 /// Lays out node `i` and its subtree at (x, y), `w` wide and `h` high (NaN:
@@ -221,22 +496,61 @@ fn Ctx::layout(
   w : Double,
   h : Double,
 ) -> Double {
-  let root = self.flex_tree(i, None)
-  @flex.compute(root, width=w, height=h, round=false)
-  self.commit(i, x, y)
+  self.flex_tree(i, 0) |> ignore
+  let root = self.nodes[i].fl
+  @flex.compute(root, width=w, height=h, round=false, reuse=true)
+  // (lists lay out their rows as they are placed: computes of their own)
+  self.commit(i, x, y, @flex.computes())
   root.height
+}
+
+///|
+/// Places a subtree laid out as before under its parent's new origin
+/// (px, py): what commit would make of it, without its leaves' layouts.
+fn Ctx::replace(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
+  let n = self.nodes[i]
+  let f = n.fl
+  n.x = px + f.left + n.tx + n.slide * f.width
+  n.y = py + f.top + n.ty
+  let mut c = n.first
+  while c >= 0 {
+    self.replace(c, n.x, n.y)
+    c = self.nodes[c].next
+  }
 }
 
 ///|
 /// Copies the flex engine's results back as absolute rectangles (with each
 /// node's visual offset, which its subtree follows), and lays out what is
-/// inside the leaves.
-fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
+/// inside the leaves. A subtree the same as when it was placed last, that
+/// the engine did not lay out again in compute `gen` (so nothing in it
+/// moved or changed size), is put where it now goes instead: every slot in
+/// use is placed every frame, so what it holds was placed as it is.
+fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit {
   let n = self.nodes[i]
+  let f = n.fl
+  if n.same && f.laid_out_at() != gen {
+    let x = px + f.left + n.tx + n.slide * f.width
+    let y = py + f.top + n.ty
+    n.otx = n.tx
+    n.oty = n.ty
+    n.oslide = n.slide
+    if x != n.x || y != n.y {
+      commit_counts[1] = commit_counts[1] + 1
+      self.replace(i, px, py)
+    } else {
+      // where it was, and so is all of it
+      commit_counts[2] = commit_counts[2] + 1
+    }
+    return
+  }
   if n.pager != 0 {
     self.place_pager_slot(i)
   }
-  let f = n.fl
+  commit_counts[0] = commit_counts[0] + 1
+  n.otx = n.tx
+  n.oty = n.ty
+  n.oslide = n.slide
   n.x = px + f.left + n.tx + n.slide * f.width
   n.y = py + f.top + n.ty
   n.fw = f.width
@@ -247,9 +561,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   let ih = dmax(n.fh - n.pad_t - n.pad_b, 0.0)
   if n.kind == kind_text {
     let tl = n.text_layout(iw)
-    if !n.wrap && tl.w > iw + 0.5 {
-      n.tl = Some(ellipsized(n, tl, iw))
-    }
+    n.tl = Some(if !n.wrap && tl.w > iw + 0.5 { ellipsized(n, tl, iw) } else { tl })
   } else if n.kind == kind_rich {
     n.rich_layout(iw) |> ignore
   } else if n.kind == kind_editor {
@@ -276,7 +588,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   } else {
     let mut c = n.first
     while c >= 0 {
-      self.commit(c, n.x, n.y)
+      self.commit(c, n.x, n.y, gen)
       c = self.nodes[c].next
     }
   }

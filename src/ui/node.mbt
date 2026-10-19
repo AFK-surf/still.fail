@@ -112,23 +112,18 @@ struct Node {
   mut pager : Int
   // laid over its parent rather than beside its siblings
   mut layer : Bool
-  // layout results, absolute, in logical pixels
+  // layout results, absolute, in logical pixels, kept from frame to frame
+  // in the slot (a subtree laid out as last frame is moved, not laid out)
   mut x : Double
   mut y : Double
   mut fw : Double
   mut fh : Double
+  // the text as shown: its layout, or that cut to fit with an ellipsis
   mut tl : TextLayout?
-  // the width tl was laid out in
-  mut tl_max : Double
-  // the last text laid out in this slot of the pool (kept by reset, for
-  // the frames that build the same text in the same place) and what it
-  // was laid out with: max width, size, weight, line height, wrapping
-  mut kept_tl : TextLayout?
-  mut kept_max : Double
-  mut kept_size : Double
-  mut kept_weight : Int
-  mut kept_line : Double
-  mut kept_wrap : Bool
+  // the text laid out, in a width up to full_max (one layout serves every
+  // width from its widest line up to that)
+  mut full : TextLayout?
+  mut full_max : Double
   // rich text: its runs, and as laid out (in rl_max)
   mut rich : Rich?
   mut rl : RichLayout?
@@ -141,6 +136,26 @@ struct Node {
     Double,
     Double,
   ))?
+  // what the flex node was last given (layout.mbt, Ctx::flex_tree): the
+  // kind, what a leaf measures (text and its font, a rich paragraph, an
+  // image's size), the layout epoch
+  mut lk_kind : Int
+  mut lk_text : String
+  mut lk_size : Double
+  mut lk_weight : Int
+  mut lk_line : Double
+  mut lk_wrap : Bool
+  mut lk_rich : Rich?
+  mut lk_iw : Double
+  mut lk_ih : Double
+  mut lk_epoch : Int
+  // its offsets (tx, ty, slide) when last placed
+  mut otx : Double
+  mut oty : Double
+  mut oslide : Double
+  // this frame: nothing in its subtree changed since it was last placed
+  // but where it is (Ctx::commit moves it as a whole)
+  mut same : Bool
 }
 
 ///|
@@ -197,19 +212,28 @@ fn Node::new() -> Node {
     fw: 0.0,
     fh: 0.0,
     tl: None,
-    tl_max: 0.0,
-    kept_tl: None,
-    kept_max: 0.0,
-    kept_size: 0.0,
-    kept_weight: 0,
-    kept_line: 0.0,
-    kept_wrap: false,
+    full: None,
+    full_max: 0.0,
     rich: None,
     rl: None,
     rl_max: 0.0,
     item: -1,
     fl: @flex.Node::new(),
     leaf: None,
+    lk_kind: -1,
+    lk_text: "",
+    lk_size: 0.0,
+    lk_weight: 0,
+    lk_line: 0.0,
+    lk_wrap: false,
+    lk_rich: None,
+    lk_iw: -1.0,
+    lk_ih: -1.0,
+    lk_epoch: -1,
+    otx: 0.0,
+    oty: 0.0,
+    oslide: 0.0,
+    same: false,
   }
   n.leaf = Some(fn(w, wm, h, hm) { leaf_size(n, w, wm, h, hm) })
   n
@@ -263,15 +287,7 @@ fn Node::reset(self : Node) -> Unit {
   self.page_no = -1
   self.pager = 0
   self.layer = false
-  self.x = 0.0
-  self.y = 0.0
-  self.fw = 0.0
-  self.fh = 0.0
-  self.tl = None
-  self.tl_max = 0.0
   self.rich = None
-  self.rl = None
-  self.rl_max = 0.0
   self.item = -1
 }
 

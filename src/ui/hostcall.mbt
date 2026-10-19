@@ -23,6 +23,9 @@ struct FakeHost {
   image_sizes : Map[String, (Int, Int)]
   image_loads : Array[(String, Int)]
   images : Map[Int, FakeImage]
+  // what bold adds to a cluster's advance, in ems (0 by default: weight
+  // changes nothing)
+  mut bold : Double
 }
 
 ///|
@@ -143,7 +146,7 @@ fn h_shape(
   out : FixedArray[Double],
 ) -> Int {
   match fake.val {
-    Some(_) => {
+    Some(f) => {
       let n = text.length()
       let cap = out.length() / 4
       let mut i = 0
@@ -162,6 +165,7 @@ fn h_shape(
         } else {
           size
         }
+        let adv = if weight >= 600 && c != 10 { adv + size * f.bold } else { adv }
         out[k * 4] = i.to_double()
         out[k * 4 + 1] = len.to_double()
         out[k * 4 + 2] = adv

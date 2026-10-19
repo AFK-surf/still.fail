@@ -85,15 +85,26 @@ pub fn frame_offscreen(
 }
 
 ///|
+/// Called at the end of every frame (tests).
+let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
+
+///|
 /// Builds, lays out and paints a frame; returns when it started.
 fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
   c.width = w
   c.height = h
+  if scale != c.scale {
+    // images are as large as their pixels at this scale
+    c.epoch = c.epoch + 1
+  }
   c.scale = scale
   c.now = t
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }
   c.last_now = t
   c.frame_no = c.frame_no + 1
+  if !layout_reuse.val {
+    c.epoch = c.epoch + 1
+  }
   c.wants_frame = false
   c.wake_at = -1.0
   check_atlas()
@@ -148,6 +159,10 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.scroll_rects = c.next_scroll_rects
   c.next_scroll_rects = sr
   c.sync_ime()
+  match frame_hook.val {
+    Some(f) => f()
+    None => ()
+  }
   let t3 = h_now()
   c.t_build = t1 - t0
   c.t_layout = t2 - t1
