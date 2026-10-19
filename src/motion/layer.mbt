@@ -233,7 +233,7 @@ fn reset() -> Unit {
 }
 
 ///|
-fn mix(a : Int, b : Int) -> Int {
+fn hash_mix(a : Int, b : Int) -> Int {
   let mut h = a ^ (b * 0x5bd1e995)
   h = h ^ (h >> 15)
   h = h * 0x27d4eb2d
@@ -249,7 +249,7 @@ fn mix(a : Int, b : Int) -> Int {
 /// A motion key: the same string is the same thing wherever it is built (a row moving from one index of its list to
 /// another keeps its key).
 fn motion_key(key : String) -> Int {
-  mix(0x6d6f7469, key.hash())
+  hash_mix(0x6d6f7469, key.hash())
 }
 
 ///|
@@ -763,6 +763,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
               Spring(a, b, t, _) => Spring(a, b, t, delay)
               Tween(a, b, _) => Tween(a, b, delay)
               Snap(_) => Snap(delay)
+              Motion(tr) => Motion(tr.delayed(delay))
             }
             r.driven = false
             r.ox.step(c)

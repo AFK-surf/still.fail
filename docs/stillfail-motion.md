@@ -197,9 +197,24 @@ so a tap meanwhile is what is under it's (the field, the rows). The package plug
 laid out; `on_list_underlay`: copies of rows gone drawn under a list's rows, `Drawing`; `on_reset`) and reads a frame
 through ui's accessors (`node_rect`, `list_above`, `list_scrolled`, …): ui does not know it.
 
-- `spec.mbt`: `Ease` (every curve above; `cubic_bezier`), `Spec` (`spring`, `tween`, `motion_spring`, `Snap`;
-  `move_spring`, `row_spring`, `sheet_spring`, `menu_spring`), `spring_at` (SpringSimulation), `spring_duration`
-  (SpringEstimation), `Spec::value_at` (as Compose plays it: whole milliseconds, at its end at its duration).
+- `spec.mbt`: `Ease` (every curve above; `bezier_at`, Compose's CubicBezierEasing), `Spec` (`spring`, `tween`,
+  `motion_spring`, `Snap`; `move_spring`, `row_spring`, `sheet_spring`, `menu_spring`; `Motion`: one of Motion's
+  transitions), `spring_at` (SpringSimulation), `spring_duration` (SpringEstimation), `Spec::value_at` (as Compose
+  plays it: whole milliseconds, at its end at its duration).
+- Motion's API, after Motion (motion.dev, MIT; ported with its copyright): `easing.mbt` (`cubic_bezier` by Motion's
+  own solver, `ease_in`/`ease_out`/`ease_in_out`, `circ_*`, `back_*`, `anticipate`, `steps`, `mirror_easing`,
+  `reverse_easing`, `easing_named`); `utils.mbt` (`clamp`, `progress`, `wrap`, `velocity_per_second`, `mix`,
+  `interpolate`, `pipe`); `generators.mbt` (`spring_generator`: by stiffness, damping and mass or by duration /
+  visual duration and bounce, `find_spring` and `bounce_to_damping_ratio` the conversion, a negative bounce
+  overdamping it, rest by `rest_speed` / `rest_delta`, `retarget`; `inertia_generator`: power, time constant,
+  `modify_target`, sprung back at `min` / `max`; `keyframes_generator`: values at times, eased piece by piece;
+  `calc_generator_duration`, `pregenerate_keyframes`, `generator_easing`, `linear_easing`, `Generator::to_css`);
+  `transition.mbt` (`spring_to`, `tween_to`, `keyframes_to`, `inertia_to` as a `Spec` for `animate` and `Anim`, which
+  play a generator frame by frame; `compose_to_motion`, `motion_to_compose`, `visual_to_compose`: Compose's springs
+  and Motion's, both damped harmonic oscillators); `projection.mbt` (Motion's layout projection geometry: `Axis`, `Box`,
+  `calc_axis_delta` / `calc_box_delta`, `apply_*_delta`, `calc_relative_*`, `transform_box`: the arithmetic `layout`
+  does on laid-out rects). `motion_port_test.mbt` and `projection_port_test.mbt` are Motion's own unit tests for
+  those, with their inputs and expected numbers, and the two kinds of spring checked against each other.
 - `anim.mbt`: `Anim` (Animatable: `animate`, `follow`, `snap`, `get`, `moving`), `anim`, `animate`
   (animateFloatAsState), `pressing` (the ripple's timing).
 - `layer.mbt`: layout animation by key, `layout` (FLIP, Motion's `layout`; in a list by the list's content so scrolling

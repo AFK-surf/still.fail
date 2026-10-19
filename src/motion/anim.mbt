@@ -11,7 +11,11 @@ pub struct Anim {
   /// per second
   mut velocity : Double
   mut target : Double
+  /// where it ends (its target, or where a transition of Motion's ends: inertia, keyframes)
+  mut end : Double
   mut spec : Spec
+  /// a transition of Motion's: its generator, made when it was told to go
+  mut gen : Generator?
   mut from : Double
   mut v0 : Double
   /// when it started (ms); -1: it starts at the first frame after `asked`
@@ -31,7 +35,9 @@ pub fn Anim::new(v : Double) -> Anim {
     value: v,
     velocity: 0.0,
     target: v,
+    end: v,
     spec: Snap(0.0),
+    gen: None,
     from: v,
     v0: 0.0,
     start: -1.0,
@@ -66,6 +72,26 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
     self.start = c.now()
   }
   let ms = c.now() - self.start
+  match (self.gen, self.spec) {
+    (Some(g), Motion(tr)) => {
+      // as Motion plays it: its generator at the time since it started (whole ms), done when it says so
+      let t = ms.floor() - tr.delay
+      if t < 0.0 {
+        c.request_frame()
+        return
+      }
+      let st = g.next(t)
+      self.value = st.value
+      self.velocity = g.velocity(t, initial=self.v0)
+      if st.done || ms.floor() >= self.dur {
+        self.finish()
+      } else {
+        c.request_frame()
+      }
+      return
+    }
+    _ => ()
+  }
   let (x, v) = self.spec.value_at(ms, self.dur, self.from, self.target, self.v0)
   self.value = x
   self.velocity = v
@@ -78,7 +104,7 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
 
 ///|
 fn Anim::finish(self : Anim) -> Unit {
-  self.value = self.target
+  self.value = self.end
   self.velocity = 0.0
   self.running = false
 }
@@ -116,11 +142,24 @@ pub fn Anim::animate(self : Anim, target : Double, spec : Spec, velocity? : Doub
   }
   self.target = target
   self.spec = spec
-  self.dur = spec.duration(self.from, target, self.v0)
+  match spec {
+    Motion(tr) => {
+      let g = tr.generator(self.from, target, self.v0)
+      self.gen = Some(g)
+      let d = generator_duration(g)
+      self.dur = tr.delay + d
+      self.end = g.next(d).value
+    }
+    _ => {
+      self.gen = None
+      self.dur = spec.duration(self.from, target, self.v0)
+      self.end = target
+    }
+  }
   self.start = -1.0
   self.asked = c.frame_number()
   self.stepped = c.frame_number()
-  if c.still() || (self.dur <= 0.0 && self.from == target) {
+  if c.still() || (self.dur <= 0.0 && self.from == self.end) {
     self.finish()
   } else {
     self.running = true
@@ -144,6 +183,8 @@ pub fn Anim::follow(self : Anim, target : Double, spec : Spec) -> Unit {
 pub fn Anim::snap(self : Anim, v : Double) -> Unit {
   self.value = v
   self.target = v
+  self.end = v
+  self.gen = None
   self.velocity = 0.0
   self.running = false
   self.stepped = @ui.current().frame_number()

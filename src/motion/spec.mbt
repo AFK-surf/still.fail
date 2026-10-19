@@ -1,12 +1,13 @@
-// Motion's numbers: curves (CSS's cubic-beziers, as Compose's CubicBezierEasing plays them), and how something
+// Compose's numbers: curves (CSS's cubic-beziers, as Compose's CubicBezierEasing plays them), and how something
 // animates (Compose's AnimationSpec): springs by damping ratio and stiffness in closed form (SpringSimulation), with
 // Compose's own reckoning of how long they take (SpringEstimation), tweens of whole milliseconds on a curve. Equal,
-// frame for frame, to what Compose's animation-core prints (scripts/compose_ref.sh, motion_test.mbt).
+// frame for frame, to what Compose's animation-core prints (scripts/compose_ref.sh, motion_test.mbt). Motion's own
+// transitions are a Spec too (Motion: transition.mbt).
 
 ///|
-/// CSS's cubic-bezier(x1, y1, x2, y2) at `t` (0-1 of the time): how far
-/// along (0-1).
-pub fn cubic_bezier(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) -> Double {
+/// CSS's cubic-bezier(x1, y1, x2, y2) at `t` (0-1 of the time), as Compose's CubicBezierEasing finds it: how far
+/// along (0-1). (Motion's own solver, as an easing: cubic_bezier, easing.mbt.)
+pub fn bezier_at(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) -> Double {
   if t <= 0.0 {
     return 0.0
   }
@@ -94,20 +95,20 @@ pub(all) enum Ease {
 /// The curve at `t` (0-1 of the time).
 pub fn Ease::at(self : Ease, t : Double) -> Double {
   match self {
-    Standard => cubic_bezier(0.4, 0.0, 0.2, 1.0, t)
-    Arrive => cubic_bezier(0.2, 0.8, 0.2, 1.0, t)
-    Out => cubic_bezier(0.2, 0.7, 0.2, 1.0, t)
-    LetGo => cubic_bezier(0.25, 0.46, 0.45, 0.94, t)
+    Standard => bezier_at(0.4, 0.0, 0.2, 1.0, t)
+    Arrive => bezier_at(0.2, 0.8, 0.2, 1.0, t)
+    Out => bezier_at(0.2, 0.7, 0.2, 1.0, t)
+    LetGo => bezier_at(0.25, 0.46, 0.45, 0.94, t)
     Linear => dclamp(t, 0.0, 1.0)
-    Flight => cubic_bezier(0.6, 0.0, 0.2, 1.0, t)
-    CssOut => cubic_bezier(0.0, 0.0, 0.58, 1.0, t)
-    Css => cubic_bezier(0.25, 0.1, 0.25, 1.0, t)
-    Decel => cubic_bezier(0.0, 0.0, 0.2, 1.0, t)
-    LeaveFade => cubic_bezier(0.3, 0.0, 0.5, 1.0, t)
-    InOut => cubic_bezier(0.42, 0.0, 0.58, 1.0, t)
-    Soft => cubic_bezier(0.16, 1.0, 0.3, 1.0, t)
-    Accelerate => cubic_bezier(0.4, 0.0, 1.0, 1.0, t)
-    Bezier(a, b, c, d) => cubic_bezier(a, b, c, d, t)
+    Flight => bezier_at(0.6, 0.0, 0.2, 1.0, t)
+    CssOut => bezier_at(0.0, 0.0, 0.58, 1.0, t)
+    Css => bezier_at(0.25, 0.1, 0.25, 1.0, t)
+    Decel => bezier_at(0.0, 0.0, 0.2, 1.0, t)
+    LeaveFade => bezier_at(0.3, 0.0, 0.5, 1.0, t)
+    InOut => bezier_at(0.42, 0.0, 0.58, 1.0, t)
+    Soft => bezier_at(0.16, 1.0, 0.3, 1.0, t)
+    Accelerate => bezier_at(0.4, 0.0, 1.0, 1.0, t)
+    Bezier(a, b, c, d) => bezier_at(a, b, c, d, t)
   }
 }
 
@@ -120,6 +121,8 @@ pub(all) enum Spec {
   Spring(Double, Double, Double, Double)
   Tween(Double, Ease, Double)
   Snap(Double)
+  /// one of Motion's transitions (transition.mbt: spring_to, tween_to, keyframes_to, inertia_to)
+  Motion(Transition)
 } derive(Eq, Show)
 
 ///|
@@ -286,6 +289,7 @@ pub fn Spec::duration(self : Spec, from : Double, to : Double, v : Double) -> Do
       delay + spring_duration(ratio, k, from - to, v, thr)
     Tween(ms, _, delay) => delay + ms
     Snap(delay) => delay
+    Motion(tr) => tr.delay + generator_duration(tr.generator(from, to, v))
   }
 }
 
@@ -302,6 +306,18 @@ pub fn Spec::value_at(
   v : Double,
 ) -> (Double, Double) {
   let t = ms.floor()
+  match self {
+    // where its generator is (it may end elsewhere than `to`: inertia, keyframes)
+    Motion(tr) => {
+      if t < tr.delay {
+        return (from, v)
+      }
+      let g = tr.generator(from, to, v)
+      let u = dmin(t, dur) - tr.delay
+      return (g.next(u).value, if t >= dur { 0.0 } else { g.velocity(u, initial=v) })
+    }
+    _ => ()
+  }
   if t >= dur {
     return (to, 0.0)
   }
@@ -327,6 +343,7 @@ pub fn Spec::value_at(
       (x, (x - at(t - 1.0)) * 1000.0)
     }
     Snap(_) => (from, v)
+    Motion(_) => (from, v)
   }
 }
 
