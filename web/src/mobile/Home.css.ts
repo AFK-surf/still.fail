@@ -228,11 +228,16 @@ export const mSearchResults = style({
   selectors: { [`${mSearchPage}[data-leaving] &`]: { opacity: "0" } },
 });
 globalStyle(`${mSearchPage}[data-leaving] ${mSearchCancel}`, { opacity: "0", transition: "opacity 150ms" });
-/** A found message's first line: its chat (as a row's title, not bold), who said it and when at its end. */
+/** A found message's first line: what it says with the words, the row's width (not bold but the words). */
 export const mFoundChat = style({
   flex: "1", minWidth: "0", fontSize: vars.textBody, lineHeight: "22px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const mFoundMeta = style({ flex: "none", fontSize: vars.textCaption, color: "var(--m-muted)", whiteSpace: "nowrap" });
+/** A found line's second: the chat it is in, cut where it meets who said it and when. */
+export const mFoundUnder = style({
+  flex: "1", minWidth: "0", fontSize: vars.textMeta, lineHeight: "20px", color: "var(--m-muted)", overflow: "hidden",
+  textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
 /** 查看更多 under a kind found, and 全部结果 over one kind alone: a quiet row, as a list's own link. */
 export const mFoundMore = style({
   display: "flex", alignItems: "center", gap: "4px", width: "100%", height: "44px", padding: "0 22px", border: "0",

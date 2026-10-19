@@ -60,6 +60,8 @@ export const bubbleFlashHeldKeyframes = keyframes({ "0%, 100%": bubbleFlashPeak 
 export const passageFlashHeldKeyframes = keyframes({ "0%, 100%": { opacity: "1" } });
 /** A search's stroke under a word it found, drawn in left to right (global.css.ts [data-search-marks]). */
 export const searchStrokeKeyframes = keyframes({ to: { strokeDashoffset: "0" } });
+/** A found line's stroke (web/src/Marked.tsx) drawn in from its left. */
+export const strokeRevealKeyframes = keyframes({ from: { clipPath: "inset(0 100% 0 0)" }, to: { clipPath: "inset(0 0 0 0)" } });
 export const buddyHopKeyframes = keyframes({ "50%": { transform: "translateY(-9px)" } });
 export const msgWaitingInKeyframes = keyframes({ "from": { visibility: "hidden" }, "to": { visibility: "visible" } });
 export const mFromRightKeyframes = keyframes({ "from": { transform: "translateX(100%)" }, "to": { transform: "none" } });

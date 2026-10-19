@@ -1,6 +1,6 @@
 import { globalStyle } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { passageFlashHeldKeyframes, passageFlashKeyframes, searchStrokeKeyframes, splashFloatKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { passageFlashHeldKeyframes, passageFlashKeyframes, searchStrokeKeyframes, splashFloatKeyframes, strokeRevealKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { STILL, stillAtOnce, stillFlash, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 /**
@@ -275,6 +275,17 @@ globalStyle("[data-search-marks] path", {
 });
 globalStyle("[data-search-marks][data-settled] path", { animation: "none", strokeDashoffset: "0" });
 globalStyle(`${STILL} [data-search-marks] path`, stillAtOnce);
+/** The words in a found line (⌘K's and the phones' search, Marked.tsx): the same hand-drawn stroke under each, drawn in
+ *  from its left one after another (`--n`: which it is). */
+const STROKE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 9' preserveAspectRatio='none'%3E%3Cpath d='M1 6 C 25 3, 55 8, 99 4' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E")`;
+globalStyle("mark[data-stroke]", { position: "relative" });
+globalStyle("mark[data-stroke]::after", {
+  content: '""', position: "absolute", left: "-2px", right: "-2px", top: "calc(100% - 5px)", height: "6px", pointerEvents: "none",
+  background: vars.accent, maskImage: STROKE, WebkitMaskImage: STROKE, maskSize: "100% 100%", WebkitMaskSize: "100% 100%",
+  maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", clipPath: "inset(0 100% 0 0)",
+  animation: `${strokeRevealKeyframes} 520ms cubic-bezier(.4, 0, .2, 1) calc(var(--n, 0) * 180ms) forwards`,
+});
+globalStyle(`${STILL} mark[data-stroke]::after`, stillAtOnce);
 /** The quoted passage, marked for a moment where it was said after following a quote (Chat.tsx flashRange): a rounded
  *  ground behind each of its lines, under the words (the layer is below the text of the block it is in). */
 globalStyle("[data-passage-host]", { position: "relative", isolation: "isolate" });

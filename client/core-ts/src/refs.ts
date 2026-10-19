@@ -168,8 +168,9 @@ export function terms(query: string): string[] {
   return [...new Set(query.toLowerCase().split(/\s+/).filter((w) => w !== ""))];
 }
 
-/// How much of a line goes before the first word found, at most, when the line is cut to show it.
-const LEAD = 24;
+/// How much of a line goes before the first word found, at most, when the line is cut to show it: little, so a phone's
+/// narrow row still shows the words.
+const LEAD = 8;
 /// How much of a line a found message gives (the page fits it to its width).
 const LINE_MAX = 240;
 
