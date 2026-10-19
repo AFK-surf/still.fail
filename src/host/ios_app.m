@@ -437,6 +437,8 @@ void mb_host_clipboard_set(moonbit_string_t s) {
 
 void mb_host_log(moonbit_string_t s) { NSLog(@"%@", mb_ns_from_string(s)); }
 
+int32_t mb_host_reduce_motion(void) { return UIAccessibilityIsReduceMotionEnabled() ? 1 : 0; }
+
 int32_t mb_host_bench_mode(void) {
   const char *b = getenv("MBUI_BENCH");
   return b ? atoi(b) : 0;

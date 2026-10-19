@@ -169,6 +169,10 @@ fn Ctx::emit_text(
 
 ///|
 fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
+  // drawn by its look, tapped as laid out (draw.mbt), when it has one
+  if dr.any && self.drawn_paint(i, alpha_in) {
+    return
+  }
   let n = self.nodes[i]
   let alpha = alpha_in * n.opacity
   if alpha <= 0.002 {
@@ -180,7 +184,8 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   let cx1 = clip_stack[k + 2]
   let cy1 = clip_stack[k + 3]
   // cull what is outside the clip
-  if n.x > cx1 || n.y > cy1 || n.x + n.fw < cx0 || n.y + n.fh < cy0 {
+  if (n.x > cx1 || n.y > cy1 || n.x + n.fw < cx0 || n.y + n.fh < cy0) &&
+    !(dr.any && dr.mode != mode_hits && self.draw_carries(i)) {
     return
   }
   match n.glass {
@@ -299,10 +304,29 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     }
     _ => ()
   }
+  if n.kind == kind_list {
+    // under its rows: what the motion package draws there (its rows gone, leaving)
+    self.paint_underlay(i)
+  }
   let mut c = n.first
+  let mut over = false
   while c >= 0 {
-    self.paint(c, alpha)
+    if dr.any && self.drawn_z(c) == 1 {
+      over = true
+    } else {
+      self.paint(c, alpha)
+    }
     c = self.nodes[c].next
+  }
+  if over {
+    // what goes over its siblings, after them
+    c = n.first
+    while c >= 0 {
+      if self.drawn_z(c) == 1 {
+        self.paint(c, alpha)
+      }
+      c = self.nodes[c].next
+    }
   }
   glass_paint.ink_x = ink.0
   glass_paint.ink_y = ink.1

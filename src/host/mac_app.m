@@ -104,6 +104,13 @@ static void run_script_step(int step);
   [self requestFrame];
 }
 
+// MBUI_RECORD=<dir>: a recording, every frame on a clock of its own (60 a second, whatever the machine keeps up
+// with), each drawn into <dir>/f<n>.png from frame MBUI_RECORD_FROM on (0), MBUI_RECORD_FRAMES of them (600):
+// motion as it is, frame by frame (scripts/record.sh makes the video).
+static const char *record_dir;
+static int record_n, record_from = 0, record_frames = 600;
+static double record_t0 = -1;
+
 - (void)drawFrame {
   NSSize s = self.bounds.size;
   double scale = self.window.backingScaleFactor ?: 2.0;
@@ -111,6 +118,24 @@ static void run_script_step(int step);
   mb_text_scale = scale;
   mb_render_set_size(s.width, s.height, scale);
   self.wantFrame = NO;
+  if (record_dir) {
+    if (record_t0 < 0) {
+      record_t0 = mb_now_ms();
+      fprintf(stdout, "RECORD t0 %.6f\n", record_t0);
+      fflush(stdout);
+    }
+    mb_cb.frame(s.width, s.height, scale, record_t0 + record_n * (1000.0 / 60.0));
+    if (record_n >= record_from && record_n < record_from + record_frames) {
+      char p[1024];
+      snprintf(p, sizeof p, "%s/f%05d.png", record_dir, record_n - record_from);
+      mb_render_snapshot(p);
+    }
+    record_n++;
+    if (record_n >= record_from + record_frames) exit(0);
+    // every frame drawn, moving or not: the video's clock
+    self.wantFrame = YES;
+    return;
+  }
   mb_cb.frame(s.width, s.height, scale, mb_now_ms());
 }
 
@@ -456,6 +481,9 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   mb_cb = (mb_callbacks){frame, pointer, wheel, key, text};
   shot_path = getenv("MBUI_SHOT_DIR");
   script = getenv("MBUI_SCRIPT");
+  record_dir = getenv("MBUI_RECORD");
+  if (getenv("MBUI_RECORD_FROM")) record_from = atoi(getenv("MBUI_RECORD_FROM"));
+  if (getenv("MBUI_RECORD_FRAMES")) record_frames = atoi(getenv("MBUI_RECORD_FRAMES"));
   @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
@@ -545,6 +573,10 @@ void mb_host_clipboard_set(moonbit_string_t s) {
 void mb_host_log(moonbit_string_t s) {
   fprintf(stdout, "%s\n", mb_ns_from_string(s).UTF8String);
   fflush(stdout);
+}
+
+int32_t mb_host_reduce_motion(void) {
+  return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion ? 1 : 0;
 }
 
 int32_t mb_host_bench_mode(void) {

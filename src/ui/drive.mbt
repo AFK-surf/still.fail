@@ -91,7 +91,7 @@ fn drive_start(script : String, dir : String) -> Unit {
 
 ///|
 /// The words on screen a step looks for: text, rich text, a field's placeholder; `icon:NAME` an @sf icon. Only what
-/// is laid out inside the window counts.
+/// is laid out inside the window counts; what is only drawn (Ctx::draw_only) does not.
 fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
   let found = []
   let icon = if what.has_prefix("icon:") {
@@ -118,7 +118,8 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
           None => n.text.contains(what)
         })
     }
-    if hit && n.fw > 0.0 && n.fh > 0.0 {
+    if hit && n.fw > 0.0 && n.fh > 0.0 && !c.in_draw_only(i) {
+      // where it is laid out: where it is tapped (a look moves only what is drawn: draw.mbt)
       let x = n.x + n.fw / 2.0
       let y = n.y + n.fh / 2.0
       if x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {

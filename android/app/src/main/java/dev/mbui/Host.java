@@ -137,6 +137,14 @@ final class Host {
         return bench;
     }
 
+    /** Whether the system's animations are off (its animator duration scale 0): motion reduced (src/ui/motion_anim.mbt). */
+    static int reduceMotion() {
+        MainActivity a = activity;
+        if (a == null) return 0;
+        float scale = android.provider.Settings.Global.getFloat(a.getContentResolver(), android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f);
+        return scale == 0f ? 1 : 0;
+    }
+
     /**
      * A scripted run's input (src/ui/drive.mbt, from the GL thread), sent as an input method sends it: committed
      * words, composed words, Enter and backspace through the view's InputConnection, a paste as KEYCODE_PASTE (the

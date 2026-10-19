@@ -80,6 +80,9 @@ extern "C" fn ffi_log(s : String) -> Unit = "mb_host_log"
 
 extern "C" fn ffi_bench_mode() -> Int = "mb_host_bench_mode"
 
+///|
+extern "C" fn ffi_reduce_motion() -> Int = "mb_host_reduce_motion"
+
 extern "C" fn ffi_exit(code : Int) -> Unit = "mb_host_exit"
 
 extern "C" fn ffi_mem_bytes() -> Double = "mb_host_mem_bytes"
@@ -229,6 +232,25 @@ pub fn log(s : String) -> Unit {
 pub fn bench_mode() -> Int {
   ffi_bench_mode()
 }
+
+///|
+/// Whether the system asks for less motion (macOS and iOS: Reduce Motion;
+/// Android: animations off, its animator duration scale 0). Read at most
+/// once a second.
+pub fn reduce_motion() -> Bool {
+  let t = ffi_now()
+  if t - reduce_read.val > 1000.0 || reduce_read.val < 0.0 {
+    reduce_read.val = t
+    reduce_said.val = ffi_reduce_motion() != 0
+  }
+  reduce_said.val
+}
+
+///|
+let reduce_read : Ref[Double] = { val: -1.0 }
+
+///|
+let reduce_said : Ref[Bool] = { val: false }
 
 ///|
 pub fn exit(code : Int) -> Unit {

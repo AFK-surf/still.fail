@@ -506,6 +506,13 @@ void mb_host_log(moonbit_string_t s) {
   free(u);
 }
 
+int32_t mb_host_reduce_motion(void) {
+  // the system's "show animations in Windows" off
+  BOOL on = TRUE;
+  SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &on, 0);
+  return on ? 0 : 1;
+}
+
 int32_t mb_host_bench_mode(void) {
   const char *b = getenv("MBUI_BENCH");
   return b ? atoi(b) : 0;

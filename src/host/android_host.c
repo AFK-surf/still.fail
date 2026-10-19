@@ -31,6 +31,7 @@ static struct {
 
 static JavaVM *vm;
 static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, pdfs_cls;
+static jmethodID m_reduce_motion;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
@@ -67,6 +68,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_clipboard = (*env)->GetStaticMethodID(env, host_cls, "clipboardSet", "(Ljava/lang/String;)V");
   m_log = (*env)->GetStaticMethodID(env, host_cls, "log", "(Ljava/lang/String;)V");
   m_bench = (*env)->GetStaticMethodID(env, host_cls, "benchMode", "()I");
+  m_reduce_motion = (*env)->GetStaticMethodID(env, host_cls, "reduceMotion", "()I");
   m_exit = (*env)->GetStaticMethodID(env, host_cls, "exit", "(I)V");
   m_back_enabled = (*env)->GetStaticMethodID(env, host_cls, "backEnabled", "(Z)V");
   m_drive = (*env)->GetStaticMethodID(env, host_cls, "drive", "(ILjava/lang/String;)I");
@@ -865,6 +867,11 @@ void mb_host_log(moonbit_string_t s) {
   jstring j = jstr(env, s);
   (*env)->CallStaticVoidMethod(env, host_cls, m_log, j);
   (*env)->DeleteLocalRef(env, j);
+}
+
+int32_t mb_host_reduce_motion(void) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, host_cls, m_reduce_motion);
 }
 
 int32_t mb_host_bench_mode(void) {

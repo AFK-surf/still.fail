@@ -223,6 +223,12 @@ pub fn bench_mode() -> Int {
 }
 
 ///|
+/// Whether the system asks for less motion: the web host does not say.
+pub fn reduce_motion() -> Bool {
+  false
+}
+
+///|
 pub fn exit(code : Int) -> Unit {
   js_exit(code)
 }

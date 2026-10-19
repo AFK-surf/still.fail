@@ -154,6 +154,7 @@ pub fn Ctx::list(
   h? : Size = Fill(1.0),
   stick_end? : Bool = false,
   bg? : Int64 = 0L,
+  glide_on_growth? : Bool = false,
 ) -> Int {
   let id = self.id(key)
   let st = match self.lists.get(id) {
@@ -209,6 +210,12 @@ pub fn Ctx::list(
   st.seed = self.id_seed
   st.owner = self.owner
   self.step_scroll(st)
+  // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was
+  // (still.fail's Follow), rather than being put at its end at once
+  if self.list_grew(id, count) && glide_on_growth && st.stick_end && st.at_end && !self.still() {
+    st.at_end = false
+    st.glide = true
+  }
   let i = self.alloc_part(kind_list, true, false)
   let n = self.nodes[i]
   n.id = id
@@ -642,5 +649,30 @@ fn ListState::moved(self : ListState, at : Int, n : Int) -> Unit {
     }
     self.anchor = at + n
     self.anchor_off = off
+  }
+}
+
+///|
+/// Whether list `key` (in this scope) moves: a finger on it, flung, gliding or springing back from an end.
+pub fn Ctx::list_moving(self : Ctx, key : String) -> Bool {
+  match self.lists.get(self.id(key)) {
+    Some(st) => st.held || st.moving() || st.glide
+    None => false
+  }
+}
+
+///|
+/// How many rows each list had (Ctx::list_grew).
+let list_counts : Map[Int, Int] = {}
+
+///|
+/// Whether list `id` has more rows than when it was last built.
+fn Ctx::list_grew(self : Ctx, id : Int, count : Int) -> Bool {
+  ignore(self)
+  let was = list_counts.get(id)
+  list_counts[id] = count
+  match was {
+    Some(n) => count > n && n > 0
+    None => false
   }
 }

@@ -74,6 +74,7 @@ fn reset_globals() -> Unit {
   captures.clear()
   second_ptr[2] = 0.0
   bench.mode = 0
+  reset_drawing()
 }
 
 ///|
@@ -868,4 +869,27 @@ pub fn Tester::app_state(self : Tester, visible : Bool, focused : Bool) -> Unit 
 /// host's shapes ignore weight otherwise).
 pub fn Tester::bold_wider(self : Tester, em : Double) -> Unit {
   self.fake.bold = em
+}
+
+///|
+/// Where the first text node containing `s` is drawn (its top left), moved as it and what holds it move
+/// (draw.mbt).
+pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
+  ignore(self)
+  let c = g
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
+      return Some(c.drawn_at(i))
+    }
+  }
+  None
+}
+
+///|
+/// A tap and the one frame after it, nothing settled (what moves after it is the test's to step).
+pub fn Tester::tap_once(self : Tester, x : Double, y : Double) -> Unit {
+  on_pointer(0, x, y, 0)
+  on_pointer(2, x, y, 0)
+  self.frame()
 }

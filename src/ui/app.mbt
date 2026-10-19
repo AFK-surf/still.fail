@@ -115,6 +115,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.scroll_list(c.bench_list, bench.speed)
   }
   let t0 = h_now()
+  drawing_begin()
   c.count = 0
   c.cur = -1
   c.back_next = None
@@ -126,6 +127,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let t1 = h_now()
   // lists build their rows while laid out, and those see clicks too
   c.layout(root, 0.0, 0.0, w, h) |> ignore
+  // how things are drawn this frame, from where they are laid out (draw.mbt: the motion package's looks)
+  c.drawing_after_layout()
   c.clicked.clear()
   if scroll_logging() {
     c.log_scroll()
@@ -138,6 +141,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.next_scroll_rects.clear()
   c.glass_frame()
   c.paint(root, 1.0)
+  c.paint_overlays()
   c.sync_views()
   // back goes where the stack drawn now says (Ctx::nav, while building)
   c.back = c.back_next
