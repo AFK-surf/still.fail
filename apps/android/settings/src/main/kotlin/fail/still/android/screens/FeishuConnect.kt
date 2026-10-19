@@ -49,6 +49,7 @@ import fail.still.android.ui.Button
 import fail.still.android.ui.C
 import fail.still.android.ui.Field
 import fail.still.android.ui.PickRow
+import fail.still.android.ui.pressText
 import fail.still.android.ui.RowsCard
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
@@ -128,7 +129,7 @@ internal fun FeishuSteps(station: String, view: ConnectFlowView, flow: ConnectFl
                 f.stateText?.let { Text(it, fontSize = 14.sp, color = if (f.failed || f.error != null) C.red else C.muted) }
             }
             if (waiting) {
-                Text(t("web-mobile.connects.feishu.openInFeishu"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(r!!.url) })
+                Text(t("web-mobile.connects.feishu.openInFeishu"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { open(r!!.url) })
                 f.qr?.let { code -> Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) { Qr(code, 220.dp, t("web-mobile.connects.feishu.qr")) } }
                 Text(t("web-mobile.connects.feishu.scanHint"), fontSize = 12.sp, color = C.muted)
             }
@@ -168,7 +169,7 @@ private fun OwnApp(flow: ConnectFlow, view: ConnectFlowView) {
     val identity = f.identity
     if (f.verified && identity != null) {
         val tenant = identity.tenant?.name
-        Text(if (tenant != null) t("web-mobile.connects.feishu.verified", "bot" to identity.botName, "tenant" to tenant) else t("web-mobile.connects.feishu.verifiedBot", "bot" to identity.botName), fontSize = 12.sp, color = C.green)
+        Text(if (tenant != null) t("web-mobile.connects.feishu.verified", "bot" to identity.botName, "tenant" to tenant) else t("web-mobile.connects.feishu.verifiedBot", "bot" to identity.botName), fontSize = 12.sp, color = C.greenInk)
     }
     f.errors.forEach { Text(it, fontSize = 13.sp, color = C.red) }
     f.error?.let { Text(it, fontSize = 13.sp, color = C.red) }

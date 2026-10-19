@@ -283,7 +283,7 @@ fun ConnectScreen(station: String, id: String) {
                             Text("App Secret", fontSize = 15.sp, color = C.ink)
                             Text(feishu.appSecret.ifEmpty { "••••••••" }, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Text(t("web-mobile.connects.feishu.replaceShort"), fontSize = 14.sp, color = C.accent)
+                        Text(t("web-mobile.connects.feishu.replaceShort"), fontSize = 14.sp, color = C.link)
                     }
                 }
             }
