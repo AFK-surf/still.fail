@@ -33,6 +33,8 @@ APP=sffix apps/mbui/scripts/web.sh build            # the browser build (tests a
 apps/mbui/scripts/shots.sh home web-home            # screenshots against goldens/ (UPDATE=1 accepts them)
 apps/mbui/scripts/android.sh build                  # the Android app, debug (APP=stillfail); VARIANT=release the beta
 apps/mbui/scripts/e2e-local.sh all                  # the end-to-end flows against a local still.fail (e2e/)
+apps/mbui/scripts/win.sh build                      # Windows (Git Bash, MSVC): APP=stillfail, the core in Hermes (engine/)
+apps/mbui/e2e/win.sh                                # Windows: signed in against a local cloud, then Home (CI: mbui.yml)
 ```
 
 These are mbui's own scripts (`mbui/scripts/`) building this module (`MBUI_APP_MOD`), with what still.fail adds:

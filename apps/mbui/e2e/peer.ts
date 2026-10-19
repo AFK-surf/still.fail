@@ -27,13 +27,15 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const ember = process.env.E2E_EMBER!;
 const origin = process.env.E2E_ORIGIN!;
 const dir = process.env.E2E_PEER_DATA!;
 mkdirSync(dir, { recursive: true });
-const { start } = await import(join(ember, "client/core-ts/src/hosts/node.ts"));
-const { apply } = await import(join(ember, "client/core-ts/src/delta.ts"));
+// (as URLs: a Windows path is no module specifier)
+const { start } = await import(pathToFileURL(join(ember, "client/core-ts/src/hosts/node.ts")).href);
+const { apply } = await import(pathToFileURL(join(ember, "client/core-ts/src/delta.ts")).href);
 
 type J = any;
 const pending = new Map<number, (m: J) => void>();

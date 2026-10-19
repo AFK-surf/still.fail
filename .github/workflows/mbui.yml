@@ -100,7 +100,8 @@ jobs:
   # The app on Windows (APP=stillfail), on GitHub's Windows (no runner of ours is Windows), main's and a branch's: built
   # with MSVC (apps/mbui/scripts/win.sh) on the Windows engine and shell (scripts/native.ts, win32-x64: the release's, or
   # built here, kept in the job's cache by their sources), the core in Hermes; then signed in through its loopback
-  # redirect against a local still.fail cloud started in the job, and Home (apps/mbui/e2e/win.sh). Its shots and logs
+  # redirect against a local still.fail started in the job (its cloud, a relay, a test station with a chat), and Home
+  # (apps/mbui/e2e/win.sh). Its shots and logs
   # are the run's artifact (mbui-windows-<sha>). Nothing is put anywhere: packaging and signing a Windows app come later.
   windows:
     if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -132,11 +133,14 @@ jobs:
         run: |
           node scripts/native.ts path shell win32-x64
           node scripts/native.ts path engine win32-x64
-      - name: Packages (the core's, the cloud's)
+      - name: Packages (the core's, the cloud's; the test station built)
         run: |
+          # (the packages' scripts in bash, not cmd: the station's build is sh)
+          export npm_config_script_shell="$(cygpath -w "$(command -v bash)")"
           pnpm install --frozen-lockfile --prefer-offline --ignore-scripts > /dev/null
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null && pnpm run build > /dev/null)
       - name: Build (APP=stillfail)
         run: |
           moon version --all
