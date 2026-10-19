@@ -51,12 +51,18 @@ pub let press_enter : Int = 1
 pub let press_space : Int = 2
 
 ///|
+/// The arrows, Home, End, Page Up and Page Down are its own (a slider's thumb: Ctx::take_key reads them), not a list's
+/// under the pointer.
+pub let own_arrows : Int = 4
+
+///|
 /// The key code of Space with no field focused (a character as 1000 + it).
 pub let key_space : Int = 1032
 
 ///|
 /// `id` can take the focus (from Tab, the arrows of its group, `on_press` a press on it): said each frame it is
-/// built, in the order Tab goes. `keys`: which of Enter (press_enter) and Space (press_space) press it.
+/// built, in the order Tab goes. `keys`: which of Enter (press_enter) and Space (press_space) press it, and whether
+/// the arrows are its own (own_arrows).
 pub fn Ctx::focusable(self : Ctx, id : Int, node? : Int = -1, keys? : Int = 3, on_press? : Bool = false) -> Unit {
   if id == 0 {
     return
@@ -97,6 +103,16 @@ pub fn Ctx::roving(
 }
 
 ///|
+/// The roving group being built has `id` hold its stop from now on while none of its items has been focused (a radio
+/// checked by a tap as it is built: Tab lands on it next frame, though no frame comes between).
+pub fn Ctx::roving_prefer(self : Ctx, id : Int) -> Unit {
+  match self.groups.get(self.group_cur) {
+    Some(gr) => gr.preferred = id
+    None => ()
+  }
+}
+
+///|
 /// Whether `id` has the keyboard's focus.
 pub fn Ctx::has_focus(self : Ctx, id : Int) -> Bool {
   id != 0 && self.focus == id
@@ -123,6 +139,13 @@ pub fn Ctx::focus_on(self : Ctx, id : Int, visible? : Bool = false) -> Unit {
 /// Whether `id` came to have the focus since the last frame (a radio's, a tab's: chosen as the arrows reach it).
 pub fn Ctx::focus_gained(self : Ctx, id : Int) -> Bool {
   id != 0 && self.focus == id && self.focus_before != id
+}
+
+///|
+/// Whether the focus came to `id` since the last frame by the arrows of its roving group (a radio's: chosen so; not
+/// by Tab, which only lands on it).
+pub fn Ctx::focus_roved_to(self : Ctx, id : Int) -> Bool {
+  self.focus_gained(id) && self.focus_roved
 }
 
 ///|
@@ -175,7 +198,6 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
       desk.keys[k] = (code, mods, true)
     }
   }
-  self.focus_before = self.focus
 }
 
 ///|
@@ -265,9 +287,10 @@ fn Ctx::tab(self : Ctx, back : Bool) -> Unit {
 
 ///|
 /// The focus moved to `id` by the keyboard: it shows; its group (if any) has it as its current item.
-fn Ctx::move_focus(self : Ctx, id : Int) -> Unit {
+fn Ctx::move_focus(self : Ctx, id : Int, roved? : Bool = false) -> Unit {
   self.focus = id
   self.focus_visible = true
+  self.focus_roved = roved
   for f in self.last_focusables {
     if f.id == id && f.group != 0 {
       match self.groups.get(f.group) {
@@ -336,7 +359,7 @@ fn Ctx::rove(self : Ctx, code : Int) -> Bool {
   } else {
     imax(0, imin(n - 1, at + step))
   }
-  self.move_focus(items[next].id)
+  self.move_focus(items[next].id, roved=true)
   true
 }
 
@@ -375,6 +398,9 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
 ///|
 /// As the frame ends: what can take the focus now is what Tab goes among next frame.
 fn Ctx::focus_frame_end(self : Ctx) -> Unit {
+  // what has it now is what the next frame's keys and presses move it from (Ctx::focus_gained)
+  self.focus_before = self.focus
+  self.focus_roved = false
   let last = self.last_focusables
   self.last_focusables = self.focusables
   last.clear()
@@ -400,7 +426,18 @@ fn Ctx::focus_takes(self : Ctx, code : Int) -> Bool {
     if f.id == self.focus {
       return f.group != 0 ||
         (code == key_enter && (f.keys & press_enter) != 0) ||
-        (code == key_space && (f.keys & press_space) != 0)
+        (code == key_space && (f.keys & press_space) != 0) ||
+        ((f.keys & own_arrows) != 0 &&
+        (
+          code == key_left ||
+          code == key_right ||
+          code == key_up ||
+          code == key_down ||
+          code == key_home ||
+          code == key_end ||
+          code == key_page_up ||
+          code == key_page_down
+        ))
     }
   }
   false

@@ -191,6 +191,7 @@ pub struct Ctx {
   // frame started; what can take it, as this frame builds it and as the last one did; roving groups' state, and the
   // group being built
   mut focus_visible : Bool
+  mut focus_roved : Bool
   mut focus_before : Int
   mut focusables : Array[Focusable]
   mut last_focusables : Array[Focusable]
@@ -284,6 +285,7 @@ fn Ctx::new() -> Ctx {
     asked_actions: [],
     actions: [],
     focus_visible: false,
+    focus_roved: false,
     focus_before: 0,
     focusables: [],
     last_focusables: [],

@@ -28,6 +28,7 @@ fn half(c : @ui.Ctx, t : @ui.Theme, page : String) -> Unit {
         c.text(if t.dark { "Dark" } else { "Light" }, size=t.font_sm, weight=600, color=t.muted) |> ignore
         match page {
           "foundation" => foundation(c)
+          "controls" => controls(c)
           _ => c.text("No page \"\{page}\"") |> ignore
         }
       })

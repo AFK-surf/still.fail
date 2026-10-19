@@ -66,6 +66,26 @@ its own.
 Transitions are `@motion.Spec` (Motion's: `spring()`, `tween(ms, ease)`); reduced motion and screenshots
 (`Ctx::still`) put every one at its end at once.
 
+## The components
+
+The gallery's page for each is `MBUI_SCREEN=<page>`.
+
+| Radix | mbui | page |
+|---|---|---|
+| Label | `@kit.label(c, text, for_id?, field?)`: a tap turns its control, or focuses its field | controls |
+| Separator | `@kit.separator(c, vertical?, decorative?)` | controls |
+| AspectRatio | `@kit.aspect_ratio(c, ratio, body)` | controls |
+| Avatar | `@kit.avatar(c, src, name, size?, radius?)`: the picture, else the name's initials | controls |
+| Progress | `@kit.progress(c, value?, max?)`: `None` not known (a band runs; still in screenshots) | controls |
+| Switch | `@kit.switch(c, key, checked) -> Changed[Bool]` | controls |
+| Checkbox | `@kit.checkbox(c, key, check) -> Changed[Check]` (`Off`, `On`, `Mixed`) | controls |
+| Toggle | `@kit.toggle(c, label, pressed) -> Changed[Bool]` | controls |
+| ToggleGroup | `@kit.toggle_group(c, key, items, value, multiple?) -> Changed[Array[String]]`, a roving group | controls |
+| RadioGroup | `@kit.radio_group(c, key, items, value) -> Changed[String]`: the arrows check what they reach | controls |
+| Slider | `@kit.slider(c, key, value, min?, max?, step?) -> Changed[Double]` | controls |
+| Password Toggle Field | `@kit.password_field(c, key, visible) -> Password`: the words, whether they show | controls |
+| One-Time Password Field | `Ctx::code_field` (src/ui): a code complete is handed on once | |
+
 ## Radix's utilities
 
 | Radix | mbui |

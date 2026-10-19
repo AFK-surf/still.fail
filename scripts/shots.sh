@@ -26,7 +26,7 @@ for p in $PLATFORMS; do
       APP=kitdemo MODE=release bash scripts/mac.sh build >/dev/null
       rm -rf out/shot-kit; mkdir -p out/shot-kit
       names=""
-      for s in ${KIT_PAGES:-foundation}; do
+      for s in ${KIT_PAGES:-foundation controls}; do
         MBUI_BENCH=-1 MBUI_SCREEN=$s MBUI_WIN=960x720 MBUI_SCRIPT=shot MBUI_SHOT_NAME=$s MBUI_SHOT_DIR=$PWD/out/shot-kit \
           ./_build/native/release/build/kitdemo/kitdemo.exe >/dev/null
         cp out/shot-kit/$s.png out/shots/mac-kit-$s.png

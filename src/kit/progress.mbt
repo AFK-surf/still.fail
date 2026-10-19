@@ -1,0 +1,121 @@
+// A progress bar (Radix's Progress): how far something has gone, `value` of `max`, or not known (None: a band runs
+// along it). And an avatar (Radix's Avatar): a picture, or its fallback (initials) while it has none.
+
+///|
+/// What a progress bar's look is given: how far (0 … 1), or None not known; the time (for what runs while unknown).
+pub(all) struct ProgressState {
+  t : Double?
+  now : Double
+}
+
+///|
+/// A progress bar at `value` of `max` (None: not known), `w` wide, named `label` for the semantics tree.
+pub fn progress(
+  c : @ui.Ctx,
+  value : Double?,
+  max? : Double = 100.0,
+  w? : @ui.Size = Fill(1.0),
+  label? : String = "",
+  look? : (@ui.Ctx, ProgressState) -> Unit = progress_look,
+) -> Unit {
+  let t = match value {
+    Some(v) => Some(if max <= 0.0 { 0.0 } else if v <= 0.0 { 0.0 } else if v >= max { 1.0 } else { v / max })
+    None => None
+  }
+  if t is None {
+    // a band runs while it is not known: the next frame is wanted
+    c.request_frame()
+  }
+  let i = c.box(w~, fn() { look(c, { t, now: c.now() }) })
+  match (value, t) {
+    (Some(v), Some(k)) =>
+      c.semantics(i, ProgressBar, label~, value="\{(k * 100.0).round().to_int()}%", range=(0.0, max, v))
+    _ => c.semantics(i, ProgressBar, label~)
+  }
+}
+
+///|
+/// A progress bar's look: `h` high in `track` (the theme's faint), filled in `fill` (its accent); not known, a third
+/// of it goes along and back once every `period` ms.
+pub fn progress_look_of(
+  h? : Double = 6.0,
+  track? : Int64,
+  fill? : Int64,
+  period? : Double = 1200.0,
+) -> (@ui.Ctx, ProgressState) -> Unit {
+  fn(c, s) {
+    let th = c.theme()
+    c.box(w=Fill(1.0), h=Px(h), radius=h / 2.0, bg=track.unwrap_or(th.faint), clip=true, dir=Row, fn() {
+      match s.t {
+        Some(k) => {
+          // grown in proportion: the filled part `k` of the track, the rest after it
+          c.box(w=Fill(k + 0.0001), h=Fill(1.0), radius=h / 2.0, bg=fill.unwrap_or(th.accent), fn() {  }) |> ignore
+          c.box(w=Fill(1.0 - k + 0.0001), h=Fill(1.0), fn() {  }) |> ignore
+        }
+        None => {
+          // the band's place along the track: from the start to the end and back (still: in the middle)
+          let p = if c.still() { 0.25 } else { s.now / period - (s.now / period).floor() }
+          let k = if p < 0.5 { p * 2.0 } else { 2.0 - p * 2.0 }
+          let room = 2.0 / 3.0
+          c.box(w=Fill(room * k + 0.0001), h=Fill(1.0), fn() {  }) |> ignore
+          c.box(w=Fill(1.0 / 3.0), h=Fill(1.0), radius=h / 2.0, bg=fill.unwrap_or(th.accent), fn() {  }) |> ignore
+          c.box(w=Fill(room * (1.0 - k) + 0.0001), h=Fill(1.0), fn() {  }) |> ignore
+        }
+      }
+    })
+    |> ignore
+  }
+}
+
+///|
+/// The default look: 6 high, the accent over the faint.
+pub let progress_look : (@ui.Ctx, ProgressState) -> Unit = progress_look_of()
+
+///|
+/// The initials of `name`: the first letters of its first two words (one word: its first letter), upper-cased.
+pub fn initials(name : String) -> String {
+  let out = StringBuilder()
+  let mut n = 0
+  for word in name.split(" ") {
+    if n >= 2 {
+      break
+    }
+    for ch in word {
+      out.write_char(if ch >= 'a' && ch <= 'z' { (ch.to_int() - 32).unsafe_to_char() } else { ch })
+      n += 1
+      break
+    }
+  }
+  out.to_string()
+}
+
+///|
+/// An avatar `size` across: the picture at `src` ("" none) over its fallback, `name`'s initials on `bg` (the
+/// theme's faint), round unless `radius` says otherwise; named `name` for the semantics tree.
+pub fn avatar(
+  c : @ui.Ctx,
+  src : String,
+  name : String,
+  size? : Double = 40.0,
+  radius? : Double = -1.0,
+  bg? : Int64,
+) -> Unit {
+  let t = c.theme()
+  let r = if radius < 0.0 { size / 2.0 } else { radius }
+  let i = c.box(
+    w=Px(size),
+    h=Px(size),
+    radius=r,
+    clip=true,
+    bg=bg.unwrap_or(t.faint),
+    align=ACenter,
+    justify=JCenter,
+    fn() {
+      c.text(initials(name), size=size * 0.4, weight=600, color=t.muted, wrap=false) |> ignore
+      if src != "" {
+        c.layer(fn() { c.image(src, w=Px(size), h=Px(size), radius=r, bg=0L) |> ignore }) |> ignore
+      }
+    },
+  )
+  c.semantics(i, Image, label=name)
+}

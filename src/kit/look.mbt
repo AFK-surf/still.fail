@@ -50,3 +50,39 @@ pub fn doubled(tint : Int64) -> Int64 {
   let a = (tint & 0xFFL) * 2L
   (tint & 0xFFFFFF00L) | (if a > 255L { 255L } else { a })
 }
+
+///|
+/// `a` going to `b` as `t` goes from 0 to 1, channel by channel (alpha too).
+pub fn blend(a : Int64, b : Int64, t : Double) -> Int64 {
+  let k = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t }
+  let ch = fn(sh : Int) -> Int64 {
+    let x = ((a >> sh) & 0xFFL).to_double()
+    let y = ((b >> sh) & 0xFFL).to_double()
+    (x + (y - x) * k).round().to_int64() << sh
+  }
+  ch(24) | ch(16) | ch(8) | ch(0)
+}
+
+///|
+/// Of two values by `on`.
+fn[T] pick(on : Bool, yes : T, no : T) -> T {
+  if on {
+    yes
+  } else {
+    no
+  }
+}
+
+///|
+/// The id of part `k` of the widget `id` (a group's item, a slider's thumb).
+pub fn part_id(id : Int, k : Int) -> Int {
+  let mut h = id ^ ((k + 1) * 0x5bd1e995)
+  h = h ^ (h >> 15)
+  h = h * 0x27d4eb2d
+  h = h ^ (h >> 13)
+  if h == 0 {
+    1
+  } else {
+    h
+  }
+}

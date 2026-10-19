@@ -57,6 +57,18 @@ pub let key_code_left : Int = 3
 pub let key_code_right : Int = 4
 
 ///|
+pub let key_code_home : Int = 8
+
+///|
+pub let key_code_end : Int = 9
+
+///|
+pub let key_code_page_up : Int = 15
+
+///|
+pub let key_code_page_down : Int = 16
+
+///|
 /// Modifiers in a key's `mods`: Shift, Ctrl, Alt (Option), ⌘ (the Windows key, Meta).
 pub let mod_shift_key : Int = 1
 
@@ -274,6 +286,21 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
   ignore(self)
   for k in desk.keys {
     if k.0 == code && k.1 == mods && (in_field || !k.2) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Key `code` with exactly `mods` held, if it came since the last frame and nothing took it yet: taken now (what reads
+/// keys after this does not see it). For a widget's own keys while it has the focus (a slider's arrows).
+pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
+  ignore(self)
+  for k in 0..<desk.keys.length() {
+    let (kc, km, taken) = desk.keys[k]
+    if kc == code && km == mods && !taken {
+      desk.keys[k] = (kc, km, true)
       return true
     }
   }
