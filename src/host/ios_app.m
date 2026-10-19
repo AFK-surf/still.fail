@@ -81,7 +81,8 @@ static void run_script_step(int step);
   self.doc = @"";
   self.marked = NSMakeRange(NSNotFound, 0);
   self.tok = [[UITextInputStringTokenizer alloc] initWithTextInput:self];
-  self.multipleTouchEnabled = NO;
+  // a second finger told too (a pinch: 4 down, 5 moved, 6 up), as Android's MBView tells it
+  self.multipleTouchEnabled = YES;
   self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
   self.link.preferredFrameRateRange = CAFrameRateRangeMake(60, 120, 120);
   [self.link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
@@ -132,20 +133,51 @@ static void touch(int kind, UITouch *t, UIView *v) {
   mb_cb.pointer(kind, p.x, p.y, 0);
   event_time = -1;
 }
+// The first finger is the pointer (0 down, 1 moved, 2 up, 3 cancelled); a second one is told apart (4 down, 5 moved,
+// 6 up) for a pinch, a third and on not at all. The first lifted while a second is down: the pinch ends (6, where the
+// first was) and the one left becomes the first, its moves coming as the first's.
+static __weak UITouch *first_touch, *second_touch;
 - (void)touchesBegan:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  touch(0, t.anyObject, self);
+  for (UITouch *u in t) {
+    if (!first_touch) {
+      first_touch = u;
+      touch(0, u, self);
+    } else if (!second_touch) {
+      second_touch = u;
+      touch(4, u, self);
+    }
+  }
 }
 - (void)touchesMoved:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  UITouch *u = t.anyObject;
-  NSArray<UITouch *> *all = [e coalescedTouchesForTouch:u];
-  if (all.count == 0) all = @[ u ];
-  for (UITouch *c in all) touch(1, c, self);
+  UITouch *u = first_touch && [t containsObject:first_touch] ? first_touch : nil;
+  if (u) {
+    NSArray<UITouch *> *all = [e coalescedTouchesForTouch:u];
+    if (all.count == 0) all = @[ u ];
+    for (UITouch *c in all) touch(1, c, self);
+  }
+  if (second_touch && [t containsObject:second_touch]) touch(5, second_touch, self);
+}
+static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
+  if (second_touch && [t containsObject:second_touch]) {
+    touch(6, second_touch, v);
+    second_touch = nil;
+  }
+  if (first_touch && [t containsObject:first_touch]) {
+    if (second_touch) {
+      touch(6, first_touch, v);
+      first_touch = second_touch;
+      second_touch = nil;
+    } else {
+      touch(end, first_touch, v);
+      first_touch = nil;
+    }
+  }
 }
 - (void)touchesEnded:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  touch(2, t.anyObject, self);
+  touch_gone(2, t, self);
 }
 - (void)touchesCancelled:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  touch(3, t.anyObject, self);
+  touch_gone(3, t, self);
 }
 
 // ---- hardware keys ----

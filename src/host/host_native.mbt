@@ -835,6 +835,33 @@ pub fn pdf_close(doc : Int) -> Unit {
 }
 
 ///|
+extern "C" fn ffi_view_text(id : Int, what : Int) -> String = "mb_host_view_text"
+
+///|
+extern "C" fn ffi_view_text_known(id : Int, what : Int) -> Int = "mb_host_view_text_known"
+
+///|
+extern "C" fn ffi_view_still(id : Int) -> Bytes = "mb_host_view_still"
+
+///|
+/// What a video view says beyond its info: `what` 1 its frames' times (ms, comma between: view_control 20 asks them
+/// read), 2 how a frame grabbed stands (view_control 21 at a time in ms: "1" grabbing, "2" here, "-1" failed, "0"
+/// none); None while not known.
+pub fn view_text(id : Int, what : Int) -> String? {
+  if ffi_view_text_known(id, what) == 0 {
+    None
+  } else {
+    Some(ffi_view_text(id, what))
+  }
+}
+
+///|
+/// A video view's frame grabbed (PNG), taken once.
+pub fn view_still(id : Int) -> Bytes {
+  ffi_view_still(id)
+}
+
+///|
 #borrow(name, data)
 extern "C" fn ffi_save_file(name : String, data : Bytes) -> Int = "mb_host_save_file"
 

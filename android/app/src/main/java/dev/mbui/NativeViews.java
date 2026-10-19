@@ -4,7 +4,12 @@ import android.annotation.SuppressLint;
 import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Bitmap;
 import android.graphics.Matrix;
+import android.media.MediaDataSource;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
+import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.provider.MediaStore;
 import android.view.TextureView;
@@ -32,6 +37,7 @@ import androidx.media3.exoplayer.SeekParameters;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
@@ -189,6 +195,25 @@ final class NativeViews {
         return v.state;
     }
 
+    /** A video's frames' times (`what` 1: ms, comma between; null not read yet) or how its grab stands (2: "0".."2", "-1"). */
+    static String text(int id, int what) {
+        NView v = views.get(id);
+        if (!(v instanceof Video)) return null;
+        Video vid = (Video) v;
+        return what == 1 ? vid.frames : Integer.toString(vid.stillState);
+    }
+
+    /** A video's frame grabbed (PNG), taken once. */
+    static byte[] still(int id) {
+        NView v = views.get(id);
+        if (!(v instanceof Video)) return new byte[0];
+        Video vid = (Video) v;
+        byte[] b = vid.still;
+        vid.still = new byte[0];
+        if (vid.stillState == 2) vid.stillState = 0;
+        return b;
+    }
+
     static int readNext(int id, double[] out) {
         NView v = views.get(id);
         if (!(v instanceof Video)) return 0;
@@ -306,9 +331,106 @@ final class NativeViews {
             }
         };
 
+        /** When each frame of its video starts (ms, comma between, in time order): null not read yet, "" none to read. */
+        volatile String frames;
+        volatile boolean framesAsked;
+        /** A frame grabbed (PNG): its bytes once taken, how that stands (0 none asked, 1 grabbing, 2 here, -1 failed). */
+        volatile byte[] still = new byte[0];
+        volatile int stillState;
+
         Video(int id, String type) {
             super(id, 1);
             this.type = type;
+        }
+
+        /** The file through the app's reads, for the system's extractor and retriever (as the player reads it). */
+        final class Media extends MediaDataSource {
+            @Override
+            public int readAt(long position, byte[] buffer, int offset, int size) throws IOException {
+                if (size == 0) return 0;
+                if (total >= 0 && position >= total) return -1;
+                Read r = ask(position, Math.min(size, 4 << 20));
+                if (r.data.length == 0) return -1;
+                int n = Math.min(size, r.data.length);
+                System.arraycopy(r.data, 0, buffer, offset, n);
+                return n;
+            }
+
+            @Override
+            public long getSize() throws IOException {
+                if (total < 0) ask(0, 1);
+                return total;
+            }
+
+            @Override
+            public void close() {
+            }
+        }
+
+        /** Its frames' times read from the file (MediaExtractor: the video track's samples, sorted), off the main thread. */
+        void readFrames() {
+            if (framesAsked) return;
+            framesAsked = true;
+            new Thread(() -> {
+                MediaExtractor x = new MediaExtractor();
+                StringBuilder out = new StringBuilder();
+                try {
+                    x.setDataSource(new Media());
+                    int track = -1;
+                    for (int i = 0; i < x.getTrackCount(); i++) {
+                        String mime = x.getTrackFormat(i).getString(MediaFormat.KEY_MIME);
+                        if (mime != null && mime.startsWith("video/")) { track = i; break; }
+                    }
+                    if (track >= 0) {
+                        x.selectTrack(track);
+                        java.util.ArrayList<Long> times = new java.util.ArrayList<>();
+                        while (true) {
+                            long t = x.getSampleTime();
+                            if (t < 0) break;
+                            times.add(t);
+                            if (!x.advance()) break;
+                        }
+                        java.util.Collections.sort(times);
+                        for (int i = 0; i < times.size(); i++) {
+                            if (i > 0) out.append(',');
+                            out.append(times.get(i) / 1000.0);
+                        }
+                    }
+                    Host.log("view " + id + ": " + (out.length() == 0 ? 0 : out.toString().split(",").length) + " frames read");
+                } catch (Exception e) {
+                    Host.log("view " + id + ": frames not read: " + e);
+                } finally {
+                    x.release();
+                }
+                frames = out.toString();
+                Host.requestFrame();
+            }, "mbui-frames").start();
+        }
+
+        /** The frame showing at `ms` grabbed whole at its own size (MediaMetadataRetriever, the closest), as a PNG. */
+        void grab(double ms) {
+            stillState = 1;
+            still = new byte[0];
+            new Thread(() -> {
+                MediaMetadataRetriever r = new MediaMetadataRetriever();
+                try {
+                    r.setDataSource(new Media());
+                    Bitmap b = r.getFrameAtTime((long) (ms * 1000), MediaMetadataRetriever.OPTION_CLOSEST);
+                    if (b == null) throw new IOException("no frame at " + ms + " ms");
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    b.compress(Bitmap.CompressFormat.PNG, 100, out);
+                    b.recycle();
+                    still = out.toByteArray();
+                    stillState = 2;
+                    Host.log("view " + id + ": frame at " + ms + " ms grabbed (" + still.length + " bytes)");
+                } catch (Exception e) {
+                    Host.log("view " + id + ": frame not grabbed: " + e);
+                    stillState = -1;
+                } finally {
+                    try { r.release(); } catch (Exception ignored) { }
+                }
+                Host.requestFrame();
+            }, "mbui-grab").start();
         }
 
         /** Bytes from `offset` (at most `length`), asked of the app and waited for: on the player's loading thread. */
@@ -430,6 +552,8 @@ final class NativeViews {
                     position = value;
                     break;
                 case 4: player.setPlaybackParameters(new PlaybackParameters((float) value)); break;
+                case 20: readFrames(); break;
+                case 21: grab(value); break;
                 default: break;
             }
         }

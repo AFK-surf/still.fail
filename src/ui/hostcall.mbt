@@ -482,6 +482,23 @@ fn h_view_site_state(id : Int) -> String {
 }
 
 ///|
+fn h_view_text(id : Int, what : Int) -> String? {
+  match fake.val {
+    // the fake player's video: three frames a 30th of a second apart
+    Some(_) => if what == 1 { Some("0,33.333,66.667") } else { Some("0") }
+    None => @host.view_text(id, what)
+  }
+}
+
+///|
+fn h_view_still(id : Int) -> Bytes {
+  match fake.val {
+    Some(_) => b""
+    None => @host.view_still(id)
+  }
+}
+
+///|
 fn h_view_site_load(id : Int, path : String) -> Unit {
   match fake.val {
     Some(f) => f.views.push("site load \{id} \{path}")

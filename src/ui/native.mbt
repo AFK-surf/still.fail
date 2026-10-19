@@ -28,6 +28,8 @@ pub struct NativeView {
   priv told : FixedArray[Double]
   priv mut told_shown : Bool
   priv mut closed : Bool
+  /// a video's frames' times asked of the host
+  priv mut frames_asked : Bool
   /// a site's: who answers its requests, who hears of a link left by, the replies under way, where its page is
   priv serve : ((SiteRequest, SiteReply) -> Unit)?
   priv leave : (String) -> Unit
@@ -141,6 +143,7 @@ fn NativeView::make(
     told: FixedArray::make(8, -1.0),
     told_shown: false,
     closed: false,
+    frames_asked: false,
   }
   if v.id == 0 {
     v.state = -1
@@ -252,6 +255,58 @@ pub fn NativeView::close(self : NativeView) -> Unit {
 pub fn NativeView::play(self : NativeView) -> Unit {
   if self.id != 0 && !self.closed {
     h_view_control(self.id, 1, 0.0)
+  }
+}
+
+///|
+/// A video's frames' times (ms, in time order), read from its file as the system reads it (Android's MediaExtractor
+/// over the same reads as its player; Apple's sample cursor): asked once, None until they are here (and where the host
+/// reads none); empty when there were none to read.
+pub fn NativeView::frames(self : NativeView) -> Array[Double]? {
+  if self.id == 0 || self.closed {
+    return None
+  }
+  if !self.frames_asked {
+    self.frames_asked = true
+    h_view_control(self.id, 20, 0.0)
+  }
+  match h_view_text(self.id, 1) {
+    Some(t) =>
+      Some(
+        t
+        .split(",")
+        .filter_map(fn(x) {
+          let v : Json? = try Some(@json.parse(x.to_owned())) catch { _ => None }
+          match v {
+            Some(Number(n, ..)) => Some(n)
+            _ => None
+          }
+        })
+        .to_array(),
+      )
+    None => None
+  }
+}
+
+///|
+/// The video's frame showing at `ms` grabbed whole at its own size, as a PNG (`grabbed` once it is here).
+pub fn NativeView::grab_frame(self : NativeView, ms : Double) -> Unit {
+  if self.id != 0 && !self.closed {
+    h_view_control(self.id, 21, ms)
+  }
+}
+
+///|
+/// A frame grabbed: None while it is grabbed (or none was asked), Some(png) once here (taken once), Some(empty) when it
+/// could not be.
+pub fn NativeView::grabbed(self : NativeView) -> Bytes? {
+  if self.id == 0 {
+    return None
+  }
+  match h_view_text(self.id, 2) {
+    Some("2") => Some(h_view_still(self.id))
+    Some("-1") => Some(b"")
+    _ => None
   }
 }
 

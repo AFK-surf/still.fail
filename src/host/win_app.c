@@ -790,6 +790,9 @@ void mb_host_pdf_page_size(int32_t doc, int32_t page, double *out) { (void)doc; 
 int32_t mb_host_pdf_page_load(int32_t doc, int32_t page, int32_t max_px) { (void)doc; (void)page; (void)max_px; return 0; }
 void mb_host_pdf_close(int32_t doc) { (void)doc; }
 int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data);  // below, with keep.mbt's
+moonbit_string_t mb_host_view_text(int32_t id, int32_t what) { (void)id; (void)what; return moonbit_make_string_raw(0); }
+int32_t mb_host_view_text_known(int32_t id, int32_t what) { (void)id; (void)what; return 0; }
+moonbit_bytes_t mb_host_view_still(int32_t id) { (void)id; return moonbit_make_bytes(0, 0); }
 
 // ---------------------------------------------------------------------------
 // Files kept (keep.mbt) and saved (save_file): into the Downloads known folder (MBUI_DOWNLOADS_DIR instead, for

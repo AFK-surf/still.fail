@@ -13,6 +13,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <CoreMedia/CoreMedia.h>
 #import <CoreVideo/CoreVideo.h>
+#import <ImageIO/ImageIO.h>
 #import <WebKit/WebKit.h>
 #if TARGET_OS_OSX
 #import <Cocoa/Cocoa.h>
@@ -176,6 +177,12 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBRead *> *taken;  // taken, not answered
 @property(nonatomic, strong) NSMutableArray<MBLoad *> *loads;
 @property(nonatomic) CVPixelBufferRef lastFrame;
+// its frames' times (ms, comma between: nil not read yet) and a frame grabbed (PNG; stillState 1 grabbing, 2 here,
+// -1 failed)
+@property(nonatomic, copy) NSString *frames;
+@property(nonatomic) BOOL framesAsked;
+@property(nonatomic, strong) NSData *still;
+@property(nonatomic) int stillState;
 // a page's
 @property(nonatomic, strong) WKWebView *web;
 @property(nonatomic) BOOL loaded;
@@ -251,6 +258,87 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
 @end
 
 @implementation MBNative
+// The video track's frames' times (its samples' presentation times, through a sample cursor: the index only), on a
+// queue of its own; said once read.
+- (void)readFrames {
+  if (self.framesAsked) return;
+  self.framesAsked = YES;
+  if (@available(macOS 12.0, iOS 16.0, *)) {
+    AVAsset *asset = self.item.asset;
+    __weak MBNative *wv = self;
+    int32_t vid = self.vid;
+    [asset loadTracksWithMediaType:AVMediaTypeVideo
+                 completionHandler:^(NSArray<AVAssetTrack *> *tracks, NSError *error) {
+                   NSMutableArray<NSNumber *> *times = [NSMutableArray new];
+                   AVAssetTrack *track = tracks.firstObject;
+                   {
+                     if (track.canProvideSampleCursors) {
+                       AVSampleCursor *cur = [track makeSampleCursorAtFirstSampleInDecodeOrder];
+                       while (cur) {
+                         CMTime t = cur.presentationTimeStamp;
+                         if (CMTIME_IS_NUMERIC(t)) [times addObject:@(CMTimeGetSeconds(t) * 1000.0)];
+                         if ([cur stepInDecodeOrderByCount:1] != 1) break;
+                       }
+                     }
+                   }
+                   [times sortUsingSelector:@selector(compare:)];
+                   NSMutableArray<NSString *> *words = [NSMutableArray new];
+                   for (NSNumber *n in times) [words addObject:[NSString stringWithFormat:@"%.3f", n.doubleValue]];
+                   NSString *joined = [words componentsJoinedByString:@","];
+                   dispatch_async(dispatch_get_main_queue(), ^{
+                     vlog(@"view %d: %lu frames read%@", vid, (unsigned long)times.count,
+                          error ? [@": " stringByAppendingString:error.localizedDescription] : @"");
+                     if (wv) wv.frames = joined;
+                     mb_host_request_frame();
+                   });
+                 }];
+  } else {
+    self.frames = @"";
+  }
+}
+
+// The frame showing at `ms` at its own size, the closest (no tolerance), as a PNG.
+- (void)grabAt:(double)ms {
+  if (@available(macOS 13.0, iOS 16.0, *)) {
+    self.stillState = 1;
+    self.still = nil;
+    AVAssetImageGenerator *g = [AVAssetImageGenerator assetImageGeneratorWithAsset:self.item.asset];
+    g.appliesPreferredTrackTransform = YES;
+    g.requestedTimeToleranceBefore = kCMTimeZero;
+    g.requestedTimeToleranceAfter = kCMTimeZero;
+    __weak MBNative *wv = self;
+    int32_t vid = self.vid;
+    [g generateCGImageAsynchronouslyForTime:CMTimeMake((int64_t)llround(ms), 1000)
+                          completionHandler:^(CGImageRef img, CMTime actual, NSError *error) {
+                            NSMutableData *png = nil;
+                            if (img) {
+                              png = [NSMutableData new];
+                              CGImageDestinationRef dst =
+                                  CGImageDestinationCreateWithData((__bridge CFMutableDataRef)png, CFSTR("public.png"), 1, NULL);
+                              if (dst) {
+                                CGImageDestinationAddImage(dst, img, NULL);
+                                if (!CGImageDestinationFinalize(dst)) png = nil;
+                                CFRelease(dst);
+                              } else {
+                                png = nil;
+                              }
+                            }
+                            dispatch_async(dispatch_get_main_queue(), ^{
+                              vlog(@"view %d: frame at %.0f ms %@", vid, ms,
+                                   png ? [NSString stringWithFormat:@"grabbed (%lu bytes)", (unsigned long)png.length]
+                                       : [@"not grabbed: " stringByAppendingString:error.localizedDescription ?: @"?"]);
+                              if (wv) {
+                                wv.still = png;
+                                wv.stillState = png ? 2 : -1;
+                              }
+                              mb_host_request_frame();
+                            });
+                          }];
+  } else {
+    self.stillState = -1;
+  }
+}
+
 
 - (void)dealloc {
   if (_lastFrame) CVPixelBufferRelease(_lastFrame);
@@ -830,7 +918,32 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
       v.speed = value;
       if (v.player.rate > 0) v.player.rate = (float)value;
       break;
+    case 20: [v readFrames]; break;
+    case 21: [v grabAt:value]; break;
   }
+}
+
+// A video's frames' times and a frame grabbed (native.mbt `frames`, `grabbed`).
+moonbit_string_t mb_host_view_text(int32_t vid, int32_t what) {
+  MBNative *v = views[@(vid)];
+  if (!v || v.kind != 1) return moonbit_make_string_raw(0);
+  return mb_string_from_ns(what == 1 ? (v.frames ?: @"") : [NSString stringWithFormat:@"%d", v.stillState]);
+}
+
+int32_t mb_host_view_text_known(int32_t vid, int32_t what) {
+  MBNative *v = views[@(vid)];
+  if (!v || v.kind != 1) return 0;
+  return what == 1 ? (v.frames != nil) : 1;
+}
+
+moonbit_bytes_t mb_host_view_still(int32_t vid) {
+  MBNative *v = views[@(vid)];
+  NSData *d = v.still ?: [NSData data];
+  moonbit_bytes_t out = moonbit_make_bytes((int32_t)d.length, 0);
+  memcpy(out, d.bytes, d.length);
+  v.still = nil;
+  if (v.stillState == 2) v.stillState = 0;
+  return out;
 }
 
 int32_t mb_host_view_info(int32_t vid, double *out) {

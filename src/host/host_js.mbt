@@ -712,6 +712,19 @@ pub fn pdf_close(doc : Int) -> Unit {
 }
 
 ///|
+pub fn view_text(id : Int, what : Int) -> String? {
+  ignore(id)
+  ignore(what)
+  None
+}
+
+///|
+pub fn view_still(id : Int) -> Bytes {
+  ignore(id)
+  b""
+}
+
+///|
 pub fn save_file(name : String, data : Bytes) -> Bool {
   ignore(name)
   ignore(data)
