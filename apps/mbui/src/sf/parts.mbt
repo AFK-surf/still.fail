@@ -549,68 +549,26 @@ pub fn wait_line(c : @ui.Ctx, text : String, key? : String = "", error? : Bool =
 }
 
 ///|
-/// How much of something with a size has come (Progress): a 3 high pill on
-/// 18% of the accent; `part` None when the whole is not known, a 40% piece
-/// sweeping across.
+/// How much of something with a size has come (Progress): mbui's progress bar (@kit.progress) in still.fail's look, a 3
+/// high pill on 18% of the accent; `part` None when the whole is not known, a 40% piece sweeping across.
 pub fn progress(c : @ui.Ctx, part : Double?, w? : @ui.Size = Fill(1.0), color? : Int64) -> Unit {
-  let t = theme()
-  let accent = color.unwrap_or(t.p.accent)
-  c.box(
-    dir=Row,
-    w~,
-    h=Px(3.0),
-    bg=alpha(accent, 0.18),
-    radius=1.5,
-    clip=true,
-    fn() {
-      match part {
-        Some(k) => {
-          let k = if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }
-          if k > 0.0 {
-            c.box(w=Fill(k), h=Px(3.0), bg=accent, radius=1.5, fn() {  })
-            |> ignore
-          }
-          if k < 1.0 {
-            c.box(w=Fill(1.0 - k), fn() {  }) |> ignore
-          }
-        }
-        None => {
-          // the box's width is known only at layout: sweep in shares of it
-          let f = if c.stable() {
-            0.3
-          } else {
-            c.request_frame()
-            let k = c.now() / 1400.0
-            let x = k - k.floor()
-            // ease-in-out there and back, as the keyframes
-            let e = 0.5 - 0.5 * @math.cos(3.141592653589793 * x)
-            e
-          }
-          // the 40% piece from -100% of itself to 250%: its start from -0.4
-          // to 1.0 of the track
-          let start = -0.4 + 1.4 * f
-          if start > 0.0 {
-            c.box(w=Fill(start), fn() {  }) |> ignore
-          }
-          let shown = if start < 0.0 { 0.4 + start } else { 0.4 }
-          c.box(w=Fill(shown), h=Px(3.0), bg=accent, radius=1.5, fn() {  })
-          |> ignore
-          let rest = 1.0 - (if start > 0.0 { start } else { 0.0 }) - shown
-          if rest > 0.0 {
-            c.box(w=Fill(rest), fn() {  }) |> ignore
-          }
-        }
-      }
+  let accent = color.unwrap_or(theme().p.accent)
+  @kit.progress(
+    c,
+    match part {
+      Some(k) => Some(k * 100.0)
+      None => None
     },
+    max=100.0,
+    w~,
+    look=@kit.progress_look_of(fill=accent),
   )
-  |> ignore
 }
 
 ///|
-/// A setting along a hairline with a knob (Reader.css.ts slider): the line
-/// 2 high on 16% of the ink, the part up to the knob in the accent, the knob
-/// 16 with a ring of the ground round it; dragged or tapped along. Returns
-/// the value, snapped to `step`.
+/// A setting along a hairline with a knob (Reader.css.ts slider): mbui's slider (@kit.slider) in still.fail's look, the
+/// line 2 high on 16% of the ink, the part up to the knob in the accent, the knob 22 with a ring of the ground round
+/// it; dragged or tapped along, and with the keyboard. Returns the value, snapped to `step` (0: none).
 pub fn slider(
   c : @ui.Ctx,
   key : String,
@@ -623,67 +581,18 @@ pub fn slider(
   ground? : Int64,
 ) -> Double {
   let t = theme()
-  let ink = ink.unwrap_or(t.p.text)
-  let accent = accent.unwrap_or(t.p.accent)
-  let ground = ground.unwrap_or(t.p.canvas)
-  let id = c.id(key)
-  let edge = 11.0
-  let mut v = value
-  let (px, _, down) = c.pointer()
-  if down && c.pressed(id) {
-    match c.rect_of(id) {
-      Some((x, _, w, _)) if w > 2.0 * edge => {
-        let f = (px - x - edge) / (w - 2.0 * edge)
-        let f = if f < 0.0 { 0.0 } else if f > 1.0 { 1.0 } else { f }
-        v = min + f * (max - min)
-        if step > 0.0 {
-          v = min + ((v - min) / step).round() * step
-        }
-      }
-      _ => ()
-    }
-  }
-  let f = if max > min { (v - min) / (max - min) } else { 0.0 }
-  let f = if f < 0.0 { 0.0 } else if f > 1.0 { 1.0 } else { f }
-  let held = c.pressed(id)
-  c.box(w=Fill(1.0), h=Px(28.0), justify=JCenter, id~, fn() {
-    c.box(dir=Row, padx=edge, h=Px(2.0), fn() {
-      if f > 0.0 {
-        c.box(w=Fill(f), h=Px(2.0), bg=accent, fn() {  }) |> ignore
-      }
-      if f < 1.0 {
-        c.box(w=Fill(1.0 - f), h=Px(2.0), bg=alpha(ink, 0.16), fn() {  })
-        |> ignore
-      }
-    })
-    |> ignore
-    c.layer(fn() {
-      c.box(dir=Row, h=Fill(1.0), align=ACenter, fn() {
-        if f > 0.0 {
-          c.box(w=Fill(f), fn() {  }) |> ignore
-        }
-        let k = if held { 26.0 } else { 22.0 }
-        c.box(w=Px(22.0), h=Px(22.0), align=ACenter, justify=JCenter, fn() {
-          c.box(
-            w=Px(k),
-            h=Px(k),
-            bg=accent,
-            radius=k / 2.0,
-            border=3.0,
-            border_color=ground,
-            fn() {  },
-          )
-          |> ignore
-        })
-        |> ignore
-        if f < 1.0 {
-          c.box(w=Fill(1.0 - f), fn() {  }) |> ignore
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-  v
+  @kit.slider(
+    c,
+    key,
+    value,
+    min~,
+    max~,
+    step~,
+    w=Fill(1.0),
+    look=@kit.slider_look_of(
+      ink=ink.unwrap_or(t.p.text),
+      fill=accent.unwrap_or(t.p.accent),
+      ring=ground.unwrap_or(t.p.canvas),
+    ),
+  ).value
 }
