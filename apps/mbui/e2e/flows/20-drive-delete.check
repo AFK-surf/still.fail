@@ -1,0 +1,2 @@
+check "the station's folder no longer has it" '[ ! -e "$DRIVE/照片-$TAG.jpg" ]'
+check "the others are still there" '[ -f "$DRIVE/e2e-data.bin" ] && [ -f "$DRIVE/小说-e2e.txt" ]'

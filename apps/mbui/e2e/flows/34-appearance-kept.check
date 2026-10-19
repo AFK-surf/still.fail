@@ -1,0 +1,2 @@
+check "dark from the start, as kept" '[ "$(grep -m1 "^theme:" $OUT/$name.log)" = "theme: dark" ]'
+check "the core keeps the system's again (its prefs: appearance system)" 'grep -rqF "\"appearance\":\"system\"" $CORE'

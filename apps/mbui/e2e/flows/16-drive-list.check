@@ -1,0 +1,2 @@
+check "the station's folder holds what the page listed" '[ -f "$DRIVE/小说-e2e.txt" ] && [ -f "$DRIVE/说明.txt" ] && [ -f "$DRIVE/子文件夹/里面.txt" ]'
+check "the app read it from the station (drive topic) and nothing was written" 'grep -q "e2e-$TAG" $OUT/16-drive-list.log && ! grep -q "CALL drive\.\(rename\|remove\|mkdir\|upload\)" $OUT/16-drive-list.log'

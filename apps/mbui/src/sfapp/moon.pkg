@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbitlang/core/math",
+  "mbui/ui",
+  "mbui/motion",
+  "stillfail/sf",
+  "stillfail/gallery",
+  "mbui/host",
+  "stillfail/sfapp/settings",
+}

@@ -1,0 +1,3 @@
+check "the station's entry names the file by its path, under the words" '[ "$(sql "select count(*) from entries where text = \"看看这个文件 $TAG
+studio 上的文件：$DRIVE/说明.txt\"")" = 1 ]'
+check "nothing of it went up as an attachment" '[ "$(sql "select attachments from entries where text like \"看看这个文件 $TAG%\"")" = "[]" ] || [ -z "$(sql "select attachments from entries where text like \"看看这个文件 $TAG%\"" | grep 说明)" ]'

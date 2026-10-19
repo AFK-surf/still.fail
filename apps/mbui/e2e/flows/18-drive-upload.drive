@@ -1,0 +1,18 @@
+# ＋ → 上传文件 (MBUI_PICK_FILES answers the picker): a photo and a 9 MB file, each a row going up a part at a time
+# (drive.upload.part), then the folder's entries.
+#env MBUI_OPEN_PAGE=files
+timeout 90000
+until =e2e-{T}
+tap =e2e-{T}
+until 小说-e2e.txt
+tap icon:plus
+until 上传文件
+shot 1-sheet
+tap 上传文件
+until e2e-data.bin
+shot 2-going
+timeout 180000
+until 9.0 MB ·
+until e2e-photo.jpg
+until 1 个文件夹 · 4 个文件
+shot 3-uploaded

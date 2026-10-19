@@ -1,0 +1,13 @@
+# The app started again: dark from its first frame, as the core kept it; 跟随系统 chosen again for the runs after.
+timeout 60000
+until 端到端测试
+shot 1-home-dark
+tap icon:settings
+until 外观
+tap 外观
+until 跟随系统
+tap1 =跟随系统
+wait 1500
+shot 2-system
+back
+until Workspace

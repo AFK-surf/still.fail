@@ -1,0 +1,13 @@
+# The app started again: the draft is still there; emptied, it is gone.
+timeout 60000
+tap 端到端测试
+until =studio
+until 发消息
+wait 1000
+field 还没发出去的草稿 {T}
+shot 1-after-restart
+tap 发消息
+clear
+empty
+wait 1500
+shot 2-emptied

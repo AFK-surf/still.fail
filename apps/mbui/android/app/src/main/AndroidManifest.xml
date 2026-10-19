@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- images from http(s) URLs -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- LoginService: the app held up while a loopback listener waits for the browser (BrowserLogin, the core's listen.*) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- BrowserLogin asks whether there is a browser to open a login page in -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+    <application android:label="${appLabel}" android:icon="@mipmap/ic_launcher" android:hasCode="true" android:enableOnBackInvokedCallback="true" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <!-- singleTask, as still.fail's: coming back (BrowserLogin, or the page's link) closes the Custom Tab above it -->
+        <activity android:name=".MainActivity" android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustNothing"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection|colorMode|touchscreen|mcc|mnc">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- A browser login's page, once the browser has come back, links here: <package>://back (the build's own package) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${applicationId}" android:host="back" />
+            </intent-filter>
+        </activity>
+        <service android:name=".LoginService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a local loopback listener alive for a few minutes while the user signs in in their browser, so the browser's OAuth redirect to 127.0.0.1 reaches the app." />
+        </service>
+    </application>
+</manifest>

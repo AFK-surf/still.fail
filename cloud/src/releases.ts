@@ -152,6 +152,8 @@ const FEEDS: Record<string, string> = {
   "android-beta": "android/beta/latest.json",
   win: "desktop/stillfail.yml",
   "win-beta": "desktop/stillfail-beta.yml",
+  // still.fail mbui (apps/mbui), the test app in mbui
+  "android-mbui": "android/mbui/latest.json",
 };
 
 /**

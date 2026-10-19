@@ -1,0 +1,2 @@
+check "the station has the card closed" '[ "$(sql "select count(*) from closed_cards c join entries e on e.thread = c.thread and e.n = c.n where e.text = \"要不要部署 $TAG\"")" = 1 ]'
+check "no message was sent for it" '[ "$(sql "select count(*) from entries where author_kind=\"person\" and text like \"%不需要部署 $TAG%\" and text not like \"%card:%\"")" = 0 ]'

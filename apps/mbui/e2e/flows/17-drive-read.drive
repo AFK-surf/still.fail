@@ -1,0 +1,26 @@
+# A text of the drive read: its chapters found, the bars a tap away, the contents going to a chapter; left, where it
+# was is kept on the device (drive.place) and its row says how far.
+#env MBUI_OPEN_PAGE=files
+timeout 90000
+until =e2e-{T}
+tap =e2e-{T}
+tap 小说-e2e.txt
+# (the text's blocks are taller than the window: what is waited on is the bars' words)
+wait 3000
+shot 1-text
+tapxy 195 420
+until 目录
+until 下一章
+until 第一章 雨后的车站
+shot 2-bars
+tap 目录
+until 第三章 灯塔的钥匙
+shot 3-contents
+tap 第三章 灯塔的钥匙
+gone 第四章 回程
+wait 1500
+shot 4-chapter
+back
+until 小说-e2e.txt
+until %
+shot 5-row

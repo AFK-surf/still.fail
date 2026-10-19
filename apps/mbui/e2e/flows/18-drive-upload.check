@@ -1,0 +1,3 @@
+check "the 9 MB file is in the station's folder, byte for byte" 'cmp -s "$DRIVE/e2e-data.bin" $FILES/e2e-data.bin'
+check "the photo is in the station's folder, byte for byte" 'cmp -s "$DRIVE/e2e-photo.jpg" $FILES/e2e-photo.jpg'
+check "it went up in parts (several drive.upload.part calls)" '[ $(grep -c "CALL drive.upload.part" $OUT/18-drive-upload.log) -ge 4 ]'

@@ -1,0 +1,4 @@
+check "文件's page came in place of the chats'" 'grep -q "DRIVE ok until =文件" $OUT/$name.log'
+check "let go on 奏 in the panel: its page" 'grep -q "DRIVE ok until =奏" $OUT/$name.log'
+check "the bar chosen is kept as the workspace's on the device (prefs.set barsBy)" 'core_device_has barsBy'
+check "back on the chats from the panel" 'grep -q "DRIVE ok until 端到端测试" $OUT/$name.log && grep -q "DRIVE PASS" $OUT/$name.log'

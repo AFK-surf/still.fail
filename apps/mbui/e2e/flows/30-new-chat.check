@@ -1,0 +1,8 @@
+# the station has the new chat's first words, as alice's, in a chat of their own (not the test chat's thread)
+first_thread=$(sql "select thread from entries where text like '新对话来自 mbui $TAG post:%' and author_kind='person' limit 1")
+test_thread=$(sql "select thread from entries where text like '端到端测试的对话 post:%' limit 1")
+check "the station has the new chat's first message, once" '[ "$(sql "select count(*) from entries where text like '"'"'新对话来自 mbui $TAG post:%'"'"'")" = 1 ]'
+check "it is a chat of its own" '[ -n "$first_thread" ] && [ "$first_thread" != "$test_thread" ]'
+check "its agent answered in it" '[ -n "$(sql "select n from entries where thread=$first_thread and author_kind=\"agent\" and text=\"新对话里的回答 $TAG\"")" ]'
+check "the page became the chat (the answer shown in it)" 'grep -q "DRIVE ok until =新对话里的回答" $OUT/$name.log'
+check "alice's other device lists it among the workspace's chats" 'peer chats 新对话里的回答 $TAG | grep -q "新对话里的回答 $TAG"'

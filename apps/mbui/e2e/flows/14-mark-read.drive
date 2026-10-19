@@ -1,0 +1,19 @@
+# On Home, alice's other device asks the agent something: its answer comes unread (the row bold, its dot); the chat
+# opened, the app tells the core it is read at its end (client.focus) and the station marks it so.
+timeout 90000
+until 端到端测试
+log do: peer send 再问一次 post:这一条应当显示为未读 {T}
+until =这一条应当显示为未读 {T}
+wait 1000
+shot 1-unread
+log do: reads
+wait 1500
+tap =这一条应当显示为未读 {T}
+untiln 2 这一条应当显示为未读 {T}
+wait 4000
+shot 2-read
+log do: reads
+wait 1500
+tap icon:chevron-left
+wait 1500
+shot 3-home-read

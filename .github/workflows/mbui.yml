@@ -1,0 +1,67 @@
+# still.fail mbui (apps/mbui: still.fail's Android app written in mbui, fail.still.mbui, a test app of its own beside
+# still.fail's): on main, each push that changes what it is built from is out in a few minutes, signed with every
+# still.fail Android release's key, at https://app.still.fail/releases/latest/android-mbui (its feed
+# android/mbui/latest.json, still.fail's AppRelease). A branch's push builds it (no key, nothing put): the evidence.
+# A workflow of its own, not a job of pipeline.yml: it does not wait for the pipeline's run before it (main's runs queue
+# one after the other, and the checks take longer than this app's whole release), and nothing of the pipeline waits
+# for it or fails with it (deployed/beta, put, done). As asked (2026-10-19), its tests do not hold it back: it is a
+# test app. The feed moves only once its APK is fetched back from where it is served, the same bytes.
+# Warm on mini1 (apps/mbui/scripts/beta.sh): the latest MoonBit (installed again only when there is a newer one), the
+# pinned mbui, core.hbc by its inputs, moonc's and the compiler's outputs and Gradle's in ~/stillfail-ci/mbui (out of
+# the checkout, which other jobs clean), Gradle's daemon for its idle timeout.
+name: mbui
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/mbui/**"
+      - "client/**"
+      - "media/**"
+      - "vendor/**"
+      - "scripts/native.ts"
+      - "scripts/release-put.sh"
+      - ".github/workflows/mbui.yml"
+  workflow_dispatch:
+# main: one at a time, a push meanwhile waits as one run of the newest; a branch: only its newest push matters.
+concurrency:
+  group: mbui-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions:
+  contents: read
+jobs:
+  beta:
+    # Trusted repository pushes only (as pipeline.yml): never pull_request here, the job has production's secrets.
+    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 } # versionCode is the commits in the history
+      - uses: ./.github/actions/setup-mac
+      - name: Tools (MoonBit, mbui, the core's packages)
+        run: bash apps/mbui/scripts/beta.sh tools
+      - name: Build and sign
+        env:
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: bash apps/mbui/scripts/beta.sh build
+      - name: Put it, check it, then its feed
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: bash apps/mbui/scripts/beta.sh publish
+
+  build:
+    if: github.repository == 'AFK-surf/still.fail' && github.ref != 'refs/heads/main' && github.event_name == 'push'
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - name: Tools (MoonBit, mbui, the core's packages)
+        run: bash apps/mbui/scripts/beta.sh tools
+      # its own copy and caches (WORK, MBUI_CACHE): main's stay main's
+      - name: Build (unsigned)
+        env:
+          MBUI_CACHE: ${{ runner.temp }}/mbui
+        run: bash apps/mbui/scripts/beta.sh build

@@ -1,0 +1,1 @@
+check "the station never got it" '[ "$(sql "select count(*) from entries where text = '"'"'这条没发出去就删掉 $TAG'"'"'")" = 0 ]'

@@ -1,0 +1,24 @@
+# A new chat from the app: 令 in the bottom bar's notch, the new chat rising from the bottom; its first message makes
+# the chat on the station (newChat.create, chat.send by its key) and the page becomes that chat in place; the agent
+# answers there; back on Home, its row.
+timeout 90000
+until 端到端测试
+tap icon:ling
+until 想让 agent 做什么？
+wait 800
+shot 1-new-chat
+tap 做任何事
+type 新对话来自 mbui {T} post:新对话里的回答 {T}
+shot 2-typed
+tap icon:arrow-up
+until 新对话来自 mbui {T}
+gone 想让 agent 做什么？
+shot 3-became-chat
+timeout 120000
+until =新对话里的回答 {T}
+shot 4-answered
+tap icon:chevron-left
+timeout 60000
+until 新对话里的回答 {T}
+until 端到端测试
+shot 5-home

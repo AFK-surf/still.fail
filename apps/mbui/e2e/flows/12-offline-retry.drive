@@ -1,0 +1,22 @@
+# The station out of reach (frozen: SIGSTOP) as a message goes: 未发送, with why; back in reach, 重试 sends it.
+timeout 60000
+tap 端到端测试
+until =studio
+until 发消息
+wait 1000
+log do: freeze
+wait 2000
+tap 发消息
+type 断网时发出的消息 {T}
+tap icon:arrow-up
+timeout 180000
+until 未发送
+shot 1-unsent
+log do: thaw
+wait 30000
+shot 2-thawed
+tap =重试
+timeout 120000
+gone 未发送
+gone 正在发送
+shot 3-retried

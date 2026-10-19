@@ -1,0 +1,29 @@
+# ＋ → Station 文件 in a chat: the station's folder lent (this run's e2e-{T}), a file ticked, 添加: its card in the
+# draft; sent with words, the message names it by its path (nothing goes up).
+timeout 60000
+tap 端到端测试
+until =studio
+until 发消息
+wait 1000
+tap icon:plus
+until Station 文件
+tap Station 文件
+until 所有位置
+until =e2e-{T}
+shot 1-places
+tap =e2e-{T}
+until 整个文件夹
+until 说明.txt
+tap 说明.txt
+until 添加 1 个
+shot 2-ticked
+tap 添加 1 个
+gone 所有位置
+until studio · 路径
+shot 3-card
+tap 发消息
+type 看看这个文件 {T}
+tap icon:arrow-up
+until 看看这个文件 {T}
+gone 正在发送
+shot 4-sent

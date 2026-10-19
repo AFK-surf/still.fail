@@ -1,0 +1,1 @@
+check "the station has alice's answer from the 奏 page" 'sql "select quotes from entries where author_kind=\"person\" and author=\"alice@example.test\" and text like \"%测试版 $TAG%\" and text not like \"%card:%\"" | grep -q "发布到哪里 $TAG"'

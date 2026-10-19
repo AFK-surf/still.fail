@@ -87,6 +87,10 @@ const APP_FILES: [RegExp, string][] = [
   [/^android\/latest\.json$/, "application/json"],
   // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
   [/^android\/(stillfail|ember|stillfail-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  // still.fail mbui (apps/mbui: the Android app in mbui, fail.still.mbui, a test app of its own; apps/mbui/scripts/beta.sh):
+  // its feed and the builds it names.
+  [/^android\/mbui\/latest\.json$/, "application/json"],
+  [/^android\/stillfail-mbui-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
 ];
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */

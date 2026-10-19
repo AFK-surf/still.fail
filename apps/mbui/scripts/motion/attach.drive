@@ -1,0 +1,8 @@
+# ＋'s sheet opened, then closed by a tap on its scrim.
+timeout 20000
+until 发消息
+wait 600
+tap icon:plus
+wait 1200
+tapxy 195 120
+wait 1200

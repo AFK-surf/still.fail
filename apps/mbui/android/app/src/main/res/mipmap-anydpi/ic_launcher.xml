@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- still.fail's launcher face (its eyes and cheeks, as fail.still.android's) under a crescent (MoonBit), on a colour
+     of its own: violet for the beta app (release), grey for the debug build (src/debug/res); still.fail's apps are
+     orange (#E5704A) and near-black (#1C1D20). -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/launcher_bg" />
+    <foreground android:drawable="@drawable/launcher_face" />
+    <monochrome android:drawable="@drawable/launcher_face_mono" />
+</adaptive-icon>
