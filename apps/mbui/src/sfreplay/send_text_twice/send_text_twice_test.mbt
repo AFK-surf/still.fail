@@ -6,7 +6,7 @@
 /// One run of the flow: its drive's log, what it left of the trace, its frames once settled.
 fn send_text_once() -> (Array[String], String, Array[Int64]) {
   let (r, t, log) = @sfreplay.run_flow(@sfreplay.trace_send_text, @sfreplay.drive_send_text, skip=["client.device"])
-  t.settle() |> ignore
+  t.draw()
   let left = "\{r.left()} \{r.diverged()} \{r.fuzzy()} \{r.unmade().length()}"
   let frames = [t.frame_hash()] + t.frames(30)
   @core.Replay::detach()

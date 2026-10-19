@@ -435,6 +435,10 @@ fn reader_jump(r : TextReading, chunk : Int, offset : Int) -> Unit {
 }
 
 ///|
+/// How long the reader holds still before where it is is kept (not on every pixel).
+let reader_still_ms : Double = 800.0
+
+///|
 /// The column of text and what floats over it (Reader.kt Book).
 fn reader_book(
   c : @ui.Ctx,
@@ -468,10 +472,10 @@ fn reader_book(
     }
   }
   // kept as the reader stops (not on every pixel)
-  if r.moved_at > r.kept_at && c.now() - r.moved_at > 800.0 {
+  if r.moved_at > r.kept_at && c.now() - r.moved_at >= reader_still_ms {
     reader_keep(src, at, r, novel, false, c.now())
   } else if r.moved_at > r.kept_at {
-    c.wake_in(820.0 - (c.now() - r.moved_at))
+    c.wake_in(reader_still_ms - (c.now() - r.moved_at))
   }
   // a jump: its block at the top, then slid to the offset in it once it is laid out
   if r.jump_step == 1 {
@@ -1374,9 +1378,6 @@ fn reader_toggle(c : @ui.Ctx, r : TextReading) -> Unit {
   }
   r.chrome = !r.chrome
   r.chrome_at = c.now()
-  // the bars' way in or out drawn from the next frame: a block's tap is seen as its row is built, after this frame
-  // has drawn its bars
-  c.request_frame()
 }
 
 ///|

@@ -279,7 +279,10 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the draft, 
 test "a text read where it was left goes there, then asks for no frame more" {
   // (the fixture's 长篇小说.txt was left at 2400 in every reader mode but `reader`: in its third block)
   let t = drive_tester("reader-bars")
-  assert_true(t.settle() < 600)
+  // the reader's page in, then where it went kept once it holds still
+  t.run_for(@ui.nav_push_ms)
+  t.run_for(reader_still_ms)
+  t.assert_idle()
   let r = reading_for(reader_key({ station: "ws1/st1", root: Some(fix_docs), path: "长篇小说.txt" }))
   assert_eq(r.jump_step, 0)
   assert_eq(r.chunk, 2)
