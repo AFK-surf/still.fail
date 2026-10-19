@@ -25,7 +25,12 @@ fi
 EXE=_build/native/$MODE/build/$PKG/$PKG.exe
 case "${1:-build}" in
   build)
-    /usr/bin/time -p moon build --target native $FLAG src/$PKG 2>&1 | python3 "$D/errs.py"
+    # moon's build, with the C that moonc generates split and compiled in parallel (scripts/mbc.py: a `cc` first on
+    # PATH that moon uses for every C step, all but that one passed through; MBC_SPLIT=0 compiles it whole)
+    rm -f out/mbc.log
+    PATH="$(python3 "$D/mbc.py" shim "$PWD/out/mbc/bin"):$PATH" MBC_LOG=$PWD/out/mbc.log \
+      /usr/bin/time -p moon build --target native $FLAG src/$PKG 2>&1 | python3 "$D/errs.py"
+    cat out/mbc.log 2>/dev/null || true
     ls -la $EXE ;;
   run)
     ./$EXE ;;

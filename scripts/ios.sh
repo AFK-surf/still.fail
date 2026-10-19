@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build the iOS simulator app from the C that `moon build --target native`
-# generates, plus the MoonBit runtime and the Objective-C host, then install
-# and launch it.  scripts/ios.sh build | run [SCRIPT] | shot NAME
+# generates (split and compiled in parallel: scripts/mbc.py), plus the MoonBit runtime and the Objective-C host, then
+# install and launch it.  scripts/ios.sh build | run [SCRIPT] | shot NAME
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -36,17 +36,22 @@ for rt,ds in d.items():
 case "${1:-build}" in
   build)
     T0=$(python3 -c 'import time;print(time.time())')
-    moon build --target native --release src/demo 2>&1 | python3 "$D/errs.py" | grep -v '_main' || true
-    C=_build/native/release/build/demo/demo.c
+    # the C that moonc generates (scripts/mbc.py gen: moon's own compile of it for macOS left out), compiled split
+    # into units with the runtime and the Objective-C host, all at once (scripts/mbc.py compile)
     mkdir -p $OUT/obj $APP
-    $CC $CFLAGS -c $C -o $OUT/obj/demo.o
-    for f in runtime env utf sync_io backtrace; do
-      [ -f $MOON_HOME/lib/runtime/$f.c ] && { $CC $CFLAGS -c $MOON_HOME/lib/runtime/$f.c -o $OUT/obj/rt_$f.o 2>$OUT/rt_$f.err || echo "skip runtime/$f.c: $(head -1 $OUT/rt_$f.err)"; }
-    done
+    GEN=$(python3 "$D/mbc.py" gen --target-dir $OUT/_build src/demo 2>$OUT/moon.log) \
+      || { python3 "$D/errs.py" < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
+    python3 "$D/errs.py" < $OUT/moon.log | grep -v '^errors: 0' || true
+    R=$MOON_HOME/lib/runtime
+    EXTRA=
     for f in apple_render apple_text apple_image apple_listen apple_browser_login apple_views ios_app; do
-      $CC $CFLAGS -fobjc-arc -c src/host/$f.m -o $OUT/obj/$f.o
+      EXTRA="$EXTRA --extra=src/host/$f.m"
     done
-    $CC $OUT/obj/*.o -o $APP/mbui -framework UIKit -framework Metal -framework QuartzCore \
+    python3 "$D/mbc.py" compile "--cc=$CC" "--cflags=$CFLAGS" --objc-flags=-fobjc-arc --obj=$OUT/obj \
+      --link-flags=$OUT/link-flags.txt \
+      --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
+      $EXTRA "$GEN" > $OUT/objs.txt
+    python3 "$D/mbc.py" link --out=$APP/mbui --stamp=$OUT/mbui.mbc-link -- $CC $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) -o $APP/mbui -framework UIKit -framework Metal -framework QuartzCore \
       -framework CoreText -framework CoreGraphics -framework ImageIO -framework Foundation \
       -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit -lm
     cp ios/Info.plist $APP/Info.plist

@@ -16,7 +16,9 @@ D="$(cd "$(dirname "$0")" && pwd)"
 cd "$D/.."
 EXE=_build/native/release/build/bench/bench.exe
 build() {
-  moon build --target native --release src/bench 2>&1 | python3 "$D/errs.py" >&2
+  # as scripts/mac.sh builds (the C split: scripts/mbc.py; MBC_SPLIT=0 compiles it whole, to compare)
+  PATH="$(python3 "$D/mbc.py" shim "$PWD/out/mbc/bin"):$PATH" \
+    moon build --target native --release src/bench 2>&1 | python3 "$D/errs.py" >&2
   [ -x $EXE ]
 }
 quiet() {
