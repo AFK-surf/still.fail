@@ -99,6 +99,8 @@ def main():
                 continue
             s = open(p, encoding='utf-8').read()
             n = BUILT.sub(r'\1stillfail/', s)
+            # mbui's own test files, in its checkout
+            n = re.sub(r'(?<![/$\w])test/(images|apple_views)\b', r'$MBUI_DIR/test/\1', n)
             n = n.replace('E2E_PKG:-dev.mbui.demo', 'E2E_PKG:-fail.still.mbui.debug').replace('PKG=dev.mbui.demo', 'PKG=${E2E_PKG:-fail.still.mbui.debug}')
             if n != s:
                 open(p, 'w', encoding='utf-8').write(n)
