@@ -69,7 +69,9 @@ station_env() {
 token=$(grep -m1 '^ENROLL ' "$OUT/cloud.log" | awk '{print $NF}' | tr -d '\r')
 station_ok=0
 if (station_env && node "$SF/station/dist/main.js" enroll "$ORIGIN" "$token" --data "$(w "$STATION/data")") > "$OUT/enroll.log" 2>&1; then
-  (station_env && exec node "$SF/station/dist/main.js" run --data "$(w "$STATION/data")" > "$OUT/station.log" 2>&1) &
+  # (straight on Node, not under its launcher: the app directory is only where its build's files would be)
+  mkdir -p "$STATION/app"
+  (station_env && exec node "$SF/station/dist/main.js" run --app "$(w "$STATION/app")" --data "$(w "$STATION/data")" > "$OUT/station.log" 2>&1) &
   station=$!
   for _ in $(seq 120); do [ -f "$STATION/data/stillfail.db" ] && break; sleep 0.5; done
   # alice's other device: the chat the app's Home shows, made on the station, with its first words
@@ -92,7 +94,8 @@ check() {  # check WHAT COMMAND…
 # app NAME WINDOW: the app run with e2e/win/NAME.drive in a window of WINDOW points, its output in NAME.log; the
 # script's `#station ` lines are steps when the station is up
 app() {
-  local name=$1 size=$2 script=$OUT/$name.drive
+  local name=$1 size=$2
+  local script=$OUT/$name.drive
   if [ $station_ok = 1 ]; then sed 's/^#station //' "$D/win/$name.drive" > "$script"; else cp "$D/win/$name.drive" "$script"; fi
   MBUI_CLOUD=$ORIGIN MBUI_CORE_DATA="$(w "$CORE")" BROWSER="$(w "$D/win/browser.cmd")" E2E_BROWSER_LOG="$(w "$OUT/browser.log")" \
     MBUI_WIN=$size MBUI_SHOT_DIR="$(w "$OUT/shots")" MBUI_DRIVE_B64=$(base64 < "$script" | tr -d '\n') \
