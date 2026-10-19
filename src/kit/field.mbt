@@ -56,7 +56,8 @@ fn pill_field(
     border_color=edge,
     bg=t.bg,
     pl=16.0,
-    pr=8.0,
+    // a button at its end stands 6 in, as from its top and bottom (password.mbt)
+    pr=6.0,
     gap=8.0,
     align=ACenter,
     opacity=if disabled { 0.45 } else { 1.0 },

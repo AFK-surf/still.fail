@@ -31,7 +31,10 @@ pub fn password_field(
   let mut words = ""
   pill_field(c, key, w, disabled, !shows, placeholder, fn(e) { words = e.text }, fn() {
     let label = if shows { hide_label } else { show_label }
-    let i = c.box(id=if disabled { 0 } else { bid }, padx=8.0, pady=4.0, radius=12.0, bg=pick(r.hovered, t.hover, 0L), fn() {
+    // in the pill's end, as far from its end as from its top and bottom, its corner the pill's less that (concentric)
+    let inset = 6.0
+    let bh = t.control_h - 2.0 * inset
+    let i = c.box(id=if disabled { 0 } else { bid }, h=Px(bh), padx=10.0, justify=JCenter, radius=bh / 2.0, bg=pick(r.hovered, t.hover, 0L), fn() {
       c.text(label, size=t.font_sm, color=if r.hovered { t.fg } else { t.muted }, wrap=false) |> ignore
       focus_ring(c, r.focus_shown, r.rect, 12.0)
     })

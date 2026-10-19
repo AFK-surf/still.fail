@@ -47,7 +47,7 @@ pub fn dialog(
       centered(c, key, p.t, Dialog, title, description, modal, fn() {
         look(c, st, fn() {
           body()
-          if close_label != "" && close_button(c, key + "/close", close_label, inset=25.0, size=32.0) {
+          if close_label != "" && close_button(c, key + "/close", close_label, inset=26.0, size=32.0) {
             now = false
           }
         })
@@ -205,7 +205,8 @@ pub fn dialog_look_of(pad? : Double = 24.0, gap? : Double = 16.0) -> (@ui.Ctx, D
     c.box(
       w=Px(s.w),
       pad~,
-      pt=pad + 1.0,
+      // the title's middle on the close button's: 26 + 16, the dialog's corner (the button in it, concentric)
+      pt=pad + 2.0,
       gap~,
       bg=t.surface,
       radius=t.radius_dialog,
@@ -215,8 +216,9 @@ pub fn dialog_look_of(pad? : Double = 24.0, gap? : Double = 16.0) -> (@ui.Ctx, D
       shadow_color=t.shadow,
       shadow_y=24.0,
       fn() {
-        c.box(gap=6.0, pr=pick(s.closes, 40.0, 0.0), fn() {
-          c.box(min_h=32.0, justify=JCenter, fn() {
+        c.box(gap=6.0, fn() {
+          // the title beside the close button (in its corner, its middle on the title's), the description under both
+          c.box(min_h=32.0, justify=JCenter, pr=pick(s.closes, 44.0, 0.0), fn() {
             c.text(s.title, size=t.font_heading, weight=600, line=30.0) |> ignore
           })
           |> ignore

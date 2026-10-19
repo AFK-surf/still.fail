@@ -142,7 +142,7 @@ pub fn select_look(c : @ui.Ctx, s : SelectState) -> Unit {
         c.text(s.text, size=t.font + 1.0, color=pick(s.placeholder, t.subtle, t.fg), wrap=false) |> ignore
       })
       |> ignore
-      c.text("⌄", size=t.font, color=t.muted, wrap=false) |> ignore
+      chevron(c, false, t.muted)
       focus_ring(c, s.focus_shown, s.rect, t.control_h / 2.0)
     },
   )

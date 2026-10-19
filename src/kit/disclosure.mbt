@@ -97,7 +97,7 @@ pub fn trigger_look(c : @ui.Ctx, s : TriggerState) -> Unit {
     opacity=pick(s.disabled, 0.45, 1.0),
     fn() {
       c.box(w=Fill(1.0), fn() { c.text(s.label, size=t.font, weight=500, wrap=false) |> ignore }) |> ignore
-      c.text(if s.open { "⌃" } else { "⌄" }, size=t.font, color=t.muted, wrap=false) |> ignore
+      chevron(c, s.open, t.muted)
       focus_ring(c, s.focus_shown, s.rect, t.radius)
     },
   )

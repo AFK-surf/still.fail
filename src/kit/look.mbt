@@ -114,3 +114,13 @@ fn told(c : @ui.Ctx, yes : Bool) -> Bool {
   }
   yes
 }
+
+///|
+/// A chevron down (or, `up`, up) in `color`, on the middle of the words beside it (the glyphs sit low and high).
+fn chevron(c : @ui.Ctx, up : Bool, color : Int64) -> Unit {
+  let t = c.theme()
+  c.box(ty=if up { 3.0 } else { -3.0 }, fn() {
+    c.text(if up { "⌃" } else { "⌄" }, size=t.font + 1.0, color~, wrap=false) |> ignore
+  })
+  |> ignore
+}

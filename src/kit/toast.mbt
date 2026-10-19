@@ -205,10 +205,9 @@ pub fn toast_look(c : @ui.Ctx, s : ToastState, action : () -> Unit, close : () -
   let t = c.theme()
   let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
   c.box(
+    // a small panel's: 6 in, its words 10 further (16), its buttons at the 6 in its corners, concentric
     dir=Row,
-    pl=18.0,
-    pr=6.0,
-    pady=6.0,
+    pad=6.0,
     gap=8.0,
     align=AStart,
     bg=t.primary,
@@ -222,13 +221,16 @@ pub fn toast_look(c : @ui.Ctx, s : ToastState, action : () -> Unit, close : () -
     opacity=k,
     fn() {
       // the first line of words on the close button's middle
-      c.box(gap=2.0, pady=4.0, fn() {
-        c.text(s.toast.title, size=t.font, weight=500, color=t.on_primary, line=20.0) |> ignore
-        if s.toast.description != "" {
-          c.text(s.toast.description, size=t.font_sm, color=@ui.alpha(t.on_primary, 0.7), line=18.0) |> ignore
-        }
+      c.box(fn() {
+        c.box(gap=2.0, padx=10.0, pt=4.0, pb=pick(s.toast.action != "", 0.0, 4.0), fn() {
+          c.text(s.toast.title, size=t.font, weight=500, color=t.on_primary, line=20.0) |> ignore
+          if s.toast.description != "" {
+            c.text(s.toast.description, size=t.font_sm, color=@ui.alpha(t.on_primary, 0.7), line=18.0) |> ignore
+          }
+        })
+        |> ignore
         if s.toast.action != "" {
-          c.box(dir=Row, pt=6.0, fn() { action() }) |> ignore
+          c.box(dir=Row, pt=8.0, fn() { action() }) |> ignore
         }
       })
       |> ignore
@@ -249,7 +251,8 @@ pub fn toast_button(c : @ui.Ctx, key : String, text : String, label : String, ro
     id~,
     h=Px(28.0),
     min_w=28.0,
-    padx=if round { 0.0 } else { 12.0 },
+    // its words on the toast's words' line (6 + 10)
+    padx=if round { 0.0 } else { 10.0 },
     radius=14.0,
     align=ACenter,
     justify=JCenter,
