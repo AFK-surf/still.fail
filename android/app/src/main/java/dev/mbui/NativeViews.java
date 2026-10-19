@@ -343,17 +343,64 @@ final class NativeViews {
             this.type = type;
         }
 
+        /**
+         * What the extractor and the retriever have read, in blocks of BLOCK by their place in the file (the last few
+         * kept): they ask a few KB at a time, each of which would be a read through the app (and the core's round trip).
+         */
+        static final int BLOCK = 256 << 10;
+        final java.util.LinkedHashMap<Long, byte[]> blocks = new java.util.LinkedHashMap<Long, byte[]>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(java.util.Map.Entry<Long, byte[]> e) {
+                return size() > 16;
+            }
+        };
+
+        /** Block `at` of the file (BLOCK long, shorter at its end), read once and kept. */
+        byte[] block(long at) throws IOException {
+            synchronized (blocks) {
+                byte[] b = blocks.get(at);
+                if (b != null) return b;
+            }
+            Read r = ask(at * BLOCK, BLOCK);
+            // kept whole, or the file's last (a shorter answer before the end is used once, not kept)
+            if (r.data.length == BLOCK || (total >= 0 && at * BLOCK + r.data.length >= total)) {
+                synchronized (blocks) {
+                    blocks.put(at, r.data);
+                }
+            }
+            return r.data;
+        }
+
         /** The file through the app's reads, for the system's extractor and retriever (as the player reads it). */
         final class Media extends MediaDataSource {
             @Override
             public int readAt(long position, byte[] buffer, int offset, int size) throws IOException {
                 if (size == 0) return 0;
                 if (total >= 0 && position >= total) return -1;
-                Read r = ask(position, Math.min(size, 4 << 20));
-                if (r.data.length == 0) return -1;
-                int n = Math.min(size, r.data.length);
-                System.arraycopy(r.data, 0, buffer, offset, n);
-                return n;
+                int n = 0;
+                while (n < size) {
+                    long p = position + n;
+                    if (total >= 0 && p >= total) break;
+                    byte[] b = block(p / BLOCK);
+                    int in = (int) (p % BLOCK);
+                    if (in >= b.length) {
+                        // the app gave less than a block before the end: what is asked, as it was before blocks
+                        if (total >= 0 && p < total) {
+                            Read r = ask(p, Math.min(size - n, 4 << 20));
+                            if (r.data.length == 0) break;
+                            int k = Math.min(size - n, r.data.length);
+                            System.arraycopy(r.data, 0, buffer, offset + n, k);
+                            n += k;
+                        }
+                        break;
+                    }
+                    int k = Math.min(size - n, b.length - in);
+                    System.arraycopy(b, in, buffer, offset + n, k);
+                    n += k;
+                    // a short block: the file's end (or a short answer: the rest asked next time)
+                    if (b.length < BLOCK) break;
+                }
+                return n == 0 ? -1 : n;
             }
 
             @Override
