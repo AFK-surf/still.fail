@@ -3,11 +3,13 @@
 
 ///|
 /// A list of rows, the second holding a line 600 wide that scrolls sideways.
-fn sideways_view() -> @ui.Tester {
+fn sideways_view(at : Ref[Double]) -> @ui.Tester {
   @ui.Tester::new(
     fn(c) {
       c.list("rows", 30, 40.0, fn(i) {
         if i == 1 {
+          // where it is scrolled to, read where it is built (its key is the row's)
+          at.val = c.sideways_at("wide")
           c.sideways("wide", fn() {
             c.rich([@ui.plain("x".repeat(120))], size=10.0, wrap=false) |> ignore
           })
@@ -25,41 +27,43 @@ fn sideways_view() -> @ui.Tester {
 
 ///|
 test "sideways: what it holds is laid out as wide as it is, cut to the box" {
-  let t = sideways_view()
+  let t = sideways_view(Ref::new(0.0))
   t.settle() |> ignore
-  let rs = t.run_rects("xxxx")
-  assert_eq(rs[0].2, 600.0)
+  let (_, _, w, _) = t.rect_of("xxxx").unwrap()
+  assert_eq(w, 600.0)
 }
 
 ///|
 test "sideways: a finger moving sideways drags it; up or down, the list scrolls" {
-  let t = sideways_view()
+  let at = Ref::new(0.0)
+  let t = sideways_view(at)
   t.settle() |> ignore
-  let (_, y, _, _) = t.run_rects("xxxx")[0]
+  let (_, y, _, _) = t.rect_of("xxxx").unwrap()
   t.drag(250.0, y + 5.0, 50.0, y + 5.0)
   t.settle() |> ignore
-  let at = t.ctx().sideways_at("wide")
-  assert_true(at > 150.0)
+  let was = at.val
+  assert_true(was > 150.0)
   assert_eq(t.list_offset(), 0.0)
   t.drag(250.0, y + 5.0, 250.0, y - 115.0)
   t.settle() |> ignore
   assert_true(t.list_offset() > 80.0)
-  assert_eq(t.ctx().sideways_at("wide"), at)
 }
 
 ///|
 test "sideways: it stops at its ends" {
-  let t = sideways_view()
+  let at = Ref::new(0.0)
+  let t = sideways_view(at)
   t.settle() |> ignore
-  let (_, y, _, _) = t.run_rects("xxxx")[0]
+  let (_, y, _, _) = t.rect_of("xxxx").unwrap()
   t.drag(50.0, y + 5.0, 250.0, y + 5.0)
   t.settle() |> ignore
-  assert_eq(t.ctx().sideways_at("wide"), 0.0)
+  assert_eq(at.val, 0.0)
   for _ in 0..<4 {
     t.drag(280.0, y + 5.0, 20.0, y + 5.0)
     t.settle() |> ignore
   }
-  assert_eq(t.ctx().sideways_at("wide"), 300.0)
+  t.frame()
+  assert_eq(at.val, 300.0)
 }
 
 ///|

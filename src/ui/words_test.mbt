@@ -121,7 +121,8 @@ test "a press taken by the app is no tap of what it went down on, and scrolls no
   t.settle() |> ignore
   assert_eq(taps.val, 1)
   take.val = true
-  t.tap(50.0, 20.0)
+  t.press_at(50.0, 20.0)
+  t.release(50.0, 20.0)
   t.settle() |> ignore
   assert_eq(taps.val, 1)
 }
