@@ -84,6 +84,48 @@ test "toggle group: single, a tap picks one and a second tap lets it go; multipl
 }
 
 ///|
+test "toggle group that slides: its thumb behind the pressed item, getting there on a spring" {
+  let v : Ref[Array[String]] = Ref(["l"])
+  let t = @ui.Tester::new(fn(c) {
+    c.box(pad=20.0, fn() {
+      v.val = toggle_group(
+        c,
+        "seg",
+        [item("l", label="Left"), item("m", label="Middle"), item("r", label="Right")],
+        v.val,
+        slide=true,
+        thumb=fn(c, w, h) { c.box(w=Px(w), h=Px(h), bg=0x123456FFL, fn() {  }) |> ignore },
+        label="Seg",
+      ).value
+    })
+    |> ignore
+  })
+  t.settle() |> ignore
+  let thumb = fn() {
+    t.drawn_rects().filter(fn(r) { r.4 == 0x123456FFL }).map(fn(r) { (r.0.round(), r.1.round(), r.2.round(), r.3.round()) })
+  }
+  let under = fn(s : String) {
+    let (x, y, w, h) = t.rect_of(s).unwrap()
+    match thumb() {
+      [(tx, ty, tw, th)] => tx <= x && x + w <= tx + tw && ty <= y && y + h <= ty + th
+      _ => false
+    }
+  }
+  assert_true(under("Left"))
+  t.click(@ui.Radio, label="Right")
+  assert_eq(v.val, ["r"])
+  assert_true(under("Right"))
+  assert_false(under("Left"))
+  // the view's choice: on its way a few frames, not yet under the words it goes to
+  v.val = ["m"]
+  t.frame()
+  t.frame()
+  assert_false(under("Middle"))
+  t.settle() |> ignore
+  assert_true(under("Middle"))
+}
+
+///|
 test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment and Decrement; held in range" {
   let v = Ref(50.0)
   let t = @ui.Tester::new(fn(c) {

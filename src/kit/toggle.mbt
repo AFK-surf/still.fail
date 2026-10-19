@@ -1,7 +1,8 @@
 // A toggle (Radix's Toggle): a button that stays pressed, the value the view's; a tap, a click, Enter or Space with
 // the focus, the Activate action turn it. A toggle group (Radix's ToggleGroup): toggles in a roving group (one stop
 // for Tab, the arrows moving among them), one of them pressed at most (`multiple` false: pressing the pressed one
-// lets it go) or any of them.
+// lets it go) or any of them. A group that `slide`s (still.fail's segmented choice) has one thumb behind its items,
+// moving on a spring to the pressed one.
 
 ///|
 /// An item of a group (a toggle group's, a radio group's): its value, its words, whether it is disabled.
@@ -96,8 +97,9 @@ pub(all) struct GroupState {
 
 ///|
 /// A toggle group (see the file's head) of `items`, those of `value` pressed (its id `key`'s), named `label` for the
-/// semantics tree; `orientation` the arrows that move along it, round unless not `wrap`. What is pressed now, and what
-/// happened to the group (`changed`; `clicked` when an item was).
+/// semantics tree; `orientation` the arrows that move along it, round unless not `wrap`; one pressed at most sliding
+/// a thumb (`thumb` its look, given its width and height) to it when `slide`. What is pressed now, and what happened to
+/// the group (`changed`; `clicked` when an item was).
 pub fn toggle_group(
   c : @ui.Ctx,
   key : String,
@@ -108,10 +110,14 @@ pub fn toggle_group(
   wrap? : Bool = true,
   disabled? : Bool = false,
   label? : String = "",
-  look? : (@ui.Ctx, ToggleState) -> Unit = group_item_look,
+  slide? : Bool = false,
+  look? : (@ui.Ctx, ToggleState) -> Unit,
+  thumb? : (@ui.Ctx, Double, Double) -> Unit = group_thumb_look,
   ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit = group_look,
 ) -> @ui.Changed[Array[String]] {
   let id = c.id(key)
+  let slide = slide && !multiple
+  let look = look.unwrap_or(if slide { group_slid_item_look } else { group_item_look })
   let mut now = value.copy()
   let mut any = @ui.Response::none()
   let first_on = items.search_by(fn(it) { value.contains(it.value) })
@@ -123,6 +129,9 @@ pub fn toggle_group(
   let gi = c.box(fn() {
     c.roving(key, orientation~, wrap~, current~, fn() {
       ground(c, { vertical, disabled }, fn() {
+        if slide {
+          slid_thumb(c, key, id, first_on, thumb)
+        }
         for k, it in items {
           let iid = part_id(id, k)
           let off = disabled || it.disabled
@@ -171,6 +180,91 @@ pub fn toggle_group(
   c.semantics(gi, Group, label~, disabled~)
   let changed = now.length() != value.length() || now.iter().any(fn(v) { !value.contains(v) })
   { value: now, response: { ..any, id, changed: told(c, changed) } }
+}
+
+///|
+/// A sliding group's thumb (see `toggle_group`): over its whole ground, behind its items, at item `on`'s place of the
+/// last frame (measured from the ground's own), getting there on a spring; none until it has been drawn once.
+fn slid_thumb(
+  c : @ui.Ctx,
+  key : String,
+  id : Int,
+  on : Int?,
+  thumb : (@ui.Ctx, Double, Double) -> Unit,
+) -> Unit {
+  let area = c.id(key + "/thumb-area")
+  let at = match (on, c.rect_of(area)) {
+    (Some(k), Some((gx, gy, _, _))) =>
+      match c.rect_of(part_id(id, k)) {
+        Some((x, y, w, h)) => Some((x - gx, y - gy, w, h))
+        None => None
+      }
+    _ => None
+  }
+  c.layer(fn() {
+    c.box(id=area, w=Fill(1.0), h=Fill(1.0), fn() {
+      match at {
+        Some((x, y, w, h)) => {
+          let x = c.spring(key + "/thumb-x", x)
+          let y = c.spring(key + "/thumb-y", y)
+          let w = c.spring(key + "/thumb-w", w)
+          let h = c.spring(key + "/thumb-h", h)
+          c.box(w=Px(0.0), h=Px(0.0), tx=x, ty=y, fn() { thumb(c, w, h) }) |> ignore
+        }
+        None => if on is Some(_) { c.request_frame() }
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A sliding group's default thumb (still.fail's segmented choice): `w` by `h`, raised on the page's ground with a
+/// hairline and a soft shadow.
+pub fn group_thumb_look(c : @ui.Ctx, w : Double, h : Double) -> Unit {
+  let t = c.theme()
+  c.box(
+    w=Px(w),
+    h=Px(h),
+    bg=pick(t.dark, t.surface, t.bg),
+    radius=h / 2.0,
+    border=0.5,
+    border_color=t.line,
+    shadow=2.0,
+    shadow_color=t.shadow,
+    shadow_y=0.0,
+    fn() {  },
+  )
+  |> ignore
+}
+
+///|
+/// A sliding group's default item: `group_item_look`'s words, on no ground of their own (the thumb is behind them).
+pub fn group_slid_item_look(c : @ui.Ctx, s : ToggleState) -> Unit {
+  let t = c.theme()
+  let live = !s.disabled
+  c.box(
+    dir=Row,
+    h=Px(30.0),
+    min_w=30.0,
+    padx=12.0,
+    align=ACenter,
+    justify=JCenter,
+    opacity=if s.disabled { 0.4 } else { 1.0 },
+    fn() {
+      c.text(
+        s.label,
+        size=t.font,
+        weight=if s.on { 500 } else { 400 },
+        color=pick(s.on || (live && s.hovered), t.fg, t.muted),
+        wrap=false,
+      )
+      |> ignore
+      focus_ring(c, s.focus_shown, s.rect, 15.0)
+    },
+  )
+  |> ignore
 }
 
 ///|

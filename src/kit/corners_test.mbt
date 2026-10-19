@@ -56,6 +56,7 @@ test "corners: toasts, fields, segmented choices, a toolbar" {
     c.column(gap=12.0, pad=20.0, fn() {
       password_field(c, "pw", false, placeholder="Password") |> ignore
       toggle_group(c, "g", [item("a", label="Left"), item("b", label="Right")], ["a"]) |> ignore
+      toggle_group(c, "s", [item("a", label="Day"), item("b", label="Week")], ["b"], slide=true) |> ignore
       toolbar(c, "tb", fn() {
         toggle(c, "B", true, key="b") |> ignore
         toggle(c, "I", false, key="i") |> ignore
