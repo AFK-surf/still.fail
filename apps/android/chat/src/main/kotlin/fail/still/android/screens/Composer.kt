@@ -501,7 +501,7 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
             else -> items.forEach { item ->
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(Smooth(20.dp)).clickable { pick(item) }.padding(horizontal = 12.dp, vertical = 8.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(Smooth(concentric(ComposerCorner, 12.dp))).clickable { pick(item) }.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Box(Modifier.width(16.dp), contentAlignment = Alignment.Center) { item.agents.firstOrNull()?.let { MakerIcon(it.maker, it.runtime, 14.dp) } }
@@ -713,7 +713,8 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                         )
                     }
                 }
-                Box(Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 7.dp).size(28.dp).clip(CircleShape).clickable { draft.quotes.remove(q) }, contentAlignment = Alignment.Center) {
+                // In the quote's corner as far from both edges, round in its corner (its half and that: the quote's).
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(28.dp).clip(CircleShape).clickable { draft.quotes.remove(q) }, contentAlignment = Alignment.Center) {
                     IconIn(Icons.Close, 12.dp, chatSubtle())
                 }
             }

@@ -76,6 +76,7 @@ import fail.still.android.ui.Waiting
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.BUTTON_HEIGHT
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import java.io.ByteArrayOutputStream
@@ -444,7 +445,8 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
     val changes = draft.changes()
     val dirty = changes.isNotEmpty() || icon != null
     if (approve && links != null) Column(
-        Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.blue.copy(alpha = 0.10f)).padding(horizontal = 12.dp, vertical = 10.dp),
+        // Its button in its corner, 12 from both edges: its corner that and the button's half, concentric.
+        Modifier.fillMaxWidth().clip(Smooth(12.dp + BUTTON_HEIGHT / 2)).background(C.blue.copy(alpha = 0.10f)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

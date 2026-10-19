@@ -72,6 +72,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentric
 import kotlin.math.roundToInt
 import fail.still.android.ui.PickRow
 
@@ -156,7 +157,7 @@ private fun ViewConfiguration.exact(): ViewConfiguration = object : ViewConfigur
  */
 @Composable
 private fun BarCard(app: AppState, i: Int, set: List<String>, only: Boolean, onAdd: () -> Unit, onMove: (Int, Int) -> Unit) {
-    BoxWithConstraints(Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(20.dp)).background(C.surface).padding(horizontal = 4.dp, vertical = 8.dp)) {
+    BoxWithConstraints(Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(20.dp)).background(C.surface).padding(6.dp)) {
         val slot = maxWidth / BAR_SIZE
         val move by androidx.compose.runtime.rememberUpdatedState(onMove)
         Row(Modifier.fillMaxWidth()) {
@@ -167,7 +168,7 @@ private fun BarCard(app: AppState, i: Int, set: List<String>, only: Boolean, onA
                 Box(
                     Modifier.width(slot).zIndex(if (lifted) 2f else 0f)
                         .graphicsLayer { translationX = dx; val s = if (lifted) 1.08f else 1f; scaleX = s; scaleY = s }
-                        .then(if (lifted) Modifier.shadow(6.dp, Smooth(16.dp), ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.14f)).clip(Smooth(16.dp)).background(C.surface) else Modifier)
+                        .then(if (lifted) Modifier.shadow(6.dp, Smooth(concentric(20.dp, 6.dp)), ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.14f)).clip(Smooth(concentric(20.dp, 6.dp))).background(C.surface) else Modifier)
                         .pointerInput(key, j, set.size) {
                             detectHorizontalDragGestures(
                                 onDragStart = { lifted = true; dx = 0f },

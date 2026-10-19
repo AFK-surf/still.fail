@@ -60,6 +60,8 @@ import fail.still.android.ui.Markdown
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.Seg
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.CARD_PAD
+import fail.still.android.ui.concentricOut
 import fail.still.android.ui.WaitShape
 import fail.still.android.ui.Waiting
 
@@ -193,7 +195,8 @@ private fun Lists(view: UsageView, open: (UsageItem) -> Unit) {
     var shown by rememberSaveable { mutableIntStateOf(0) }
     val list: UsageList = view.lists.getOrNull(shown) ?: view.lists.firstOrNull() ?: return
     var all by rememberSaveable(list.key) { mutableStateOf(false) }
-    Card {
+    // Its switch (a Seg, rounded 10) in its top corners: the card's corner taken from it, concentric.
+    Card(corner = concentricOut(10.dp, CARD_PAD)) {
         Seg(view.lists.map { it.title }, view.lists.indexOf(list).coerceAtLeast(0), { shown = it }, fill = true)
         Spacer(Modifier.height(6.dp))
         val items = if (all) list.items else list.items.take(8)

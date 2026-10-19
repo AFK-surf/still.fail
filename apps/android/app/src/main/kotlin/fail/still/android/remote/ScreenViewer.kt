@@ -697,8 +697,9 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
 private fun Drops(session: ScreenSession, acts: DropActs) {
     val list = session.drops.list
     if (list.isEmpty()) return
-    // Its corner as the panel the view's end is said in (Over).
-    Column(Modifier.fillMaxWidth().floatingStill(Smooth(24.dp)).padding(vertical = 6.dp)) {
+    // Its corner as the panel the view's end is said in (Over); a row's round key (34) 8 from its top and end, the
+    // first's in its corner, about concentric with it (8 and its half).
+    Column(Modifier.fillMaxWidth().floatingStill(Smooth(24.dp))) {
         list.forEach { d -> key(d) { DropRow(session, d, acts) } }
     }
 }

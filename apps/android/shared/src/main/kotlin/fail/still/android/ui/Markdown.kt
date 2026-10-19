@@ -514,7 +514,8 @@ fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Mo
         if (bar) Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp).height(24.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             Text(language ?: "text", fontSize = 10.sp, letterSpacing = 0.2.sp, color = webSubtle, modifier = Modifier.padding(horizontal = 6.dp))
             Row(
-                Modifier.height(24.dp).clip(Smooth(6.dp)).background(C.surface.copy(alpha = 0.8f)).clickable {
+                // In the block's corner, 4 from both its edges: concentric with it.
+                Modifier.height(24.dp).clip(Smooth(concentric(12.dp, 4.dp))).background(C.surface.copy(alpha = 0.8f)).clickable {
                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("code", code))
                     copied = true
                 }.padding(horizontal = 7.dp),
