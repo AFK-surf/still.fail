@@ -7,7 +7,7 @@ until 发消息
 wait 1500
 log do: peer send 看着的时候 {T} card:这个不该通知 {T}|好 {T}|不好 {T}
 timeout 150000
-until =不好 {T}
+untiln 2 这个不该通知 {T}
 wait 5000
 nonotice 这个不该通知 {T}
 shot 1-chat

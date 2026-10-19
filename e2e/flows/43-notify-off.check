@@ -3,4 +3,4 @@ check "this device's pushes taken off the accounts" 'grep -q "^CALL push.unregis
 check "no notice for the card asked meanwhile" '! grep -qF "关着的时候 $TAG" <(grep "^NOTICE" $OUT/$name.log)'
 check "the station has the card" '[ -n "$(sql "select n from entries where author_kind = \"agent\" and text = \"关着的时候 $TAG\"")" ]'
 check "switched on again: the core took it" 'grep "^ANSWER notify.set ok" $OUT/$name.log | tail -1 | grep -q "\"on\":true"'
-check "the core keeps it on the device (on)" 'grep -rqaF "\"on\":true,\"asked\"" $CORE'
+check "the core keeps it on the device (on)" 'grep -rqaF "\"on\":true,\"preview\"" $CORE'

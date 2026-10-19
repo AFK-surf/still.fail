@@ -8,6 +8,6 @@ noticed 看一眼就行 {T}
 shot 1-noticed
 timeout 60000
 tap 端到端测试
-until =不好 {T}
+untiln 2 看一眼就行 {T}
 nonotice 看一眼就行 {T}
 shot 2-chat
