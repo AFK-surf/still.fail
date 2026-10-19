@@ -632,6 +632,61 @@
     out[4] = e.ox || 0; out[5] = e.oy || 0; out[6] = e.color || 0;
   };
 
+  // ---- the platform's own text drawing (textref_js.mbt, src/textdiff) ----
+  // A 2D canvas drawn with fillText at the places mbui draws the same words, and the window's own picture read back
+  // as it is drawn; both kept as PNG data URLs in window.__mbref for whoever drives the page (scripts/textdiff-web.mjs).
+  window.__mbref = {};
+  let refCanvas = null, refCtx = null, refFrameName = null;
+  const hex = (c) => '#' + (c & 0xffffff).toString(16).padStart(6, '0');
+  H.refBegin = (w, h, s, bg) => {
+    refCanvas = document.createElement('canvas');
+    refCanvas.width = Math.round(w * s);
+    refCanvas.height = Math.round(h * s);
+    refCtx = refCanvas.getContext('2d');
+    refCtx.fillStyle = hex(bg);
+    refCtx.fillRect(0, 0, refCanvas.width, refCanvas.height);
+    refCtx.scale(s, s);
+  };
+  H.refText = (text, size, weight, style, x, base, color, out) => {
+    for (let i = 0; i < 5; i++) out[i] = 0;
+    if (!refCtx) return;
+    refCtx.font = font(size, weight, style);
+    refCtx.fillStyle = hex(color);
+    refCtx.textBaseline = 'alphabetic';
+    refCtx.fillText(text, x, base);
+    const m = refCtx.measureText(text);
+    out[0] = m.width;
+    out[1] = -m.actualBoundingBoxLeft;
+    out[2] = -m.actualBoundingBoxAscent;
+    out[3] = m.actualBoundingBoxRight;
+    out[4] = m.actualBoundingBoxDescent;
+  };
+  H.refEnd = (name) => {
+    if (!refCanvas) return false;
+    window.__mbref[name] = refCanvas.toDataURL('image/png');
+    refCanvas = refCtx = null;
+    return true;
+  };
+  // the next frame drawn, read back before the browser shows it (a WebGL canvas keeps nothing after)
+  H.refFrame = (name) => { refFrameName = name; return true; };
+  const presentFrame = H.present;
+  H.present = (buf, n, r, g, b) => {
+    presentFrame(buf, n, r, g, b);
+    if (refFrameName === null) return;
+    const w = canvas.width, h = canvas.height;
+    const px = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    const c2 = document.createElement('canvas');
+    c2.width = w;
+    c2.height = h;
+    const x2 = c2.getContext('2d');
+    const img = x2.createImageData(w, h);
+    for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+    x2.putImageData(img, 0, 0);
+    window.__mbref[refFrameName] = c2.toDataURL('image/png');
+    refFrameName = null;
+  };
+
   // ---- input ----
   let imeActive = false;
   H.setIme = (active, x, y, w, h, text, s, e) => {

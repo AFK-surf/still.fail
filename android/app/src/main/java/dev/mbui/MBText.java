@@ -9,7 +9,14 @@ import android.graphics.Typeface;
 import android.icu.text.BreakIterator;
 import android.opengl.GLES30;
 import android.opengl.GLUtils;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextPaint;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -177,5 +184,96 @@ final class MBText {
         e.color = isColor(e.text) ? 1 : 0;
         packX += pw + 1;
         packH = Math.max(packH, ph);
+    }
+
+    // ---- the platform's own text drawing (textref_native.mbt, for src/textdiff) ----
+    // A line drawn as an app's text is (StaticLayout, as Compose's Text and TextView draw it, with the default font
+    // features) into a bitmap at the places mbui draws it; and the window's own picture, read back from GL right after
+    // the next frame is drawn. PNGs in the app's files/textdiff.
+
+    static Bitmap refBitmap;
+    static Canvas refCanvas;
+    static float refScale;
+    static String frameName;
+
+    static File refFile(String name) {
+        File d = new File(Host.activity.getFilesDir(), "textdiff");
+        d.mkdirs();
+        return new File(d, name + ".png");
+    }
+
+    static boolean save(Bitmap b, String name) {
+        try (FileOutputStream o = new FileOutputStream(refFile(name))) {
+            return b.compress(Bitmap.CompressFormat.PNG, 100, o);
+        } catch (Exception e) {
+            Host.log("textdiff: " + name + ": " + e);
+            return false;
+        }
+    }
+
+    static void refBegin(double w, double h, double scale, int bg) {
+        refScale = (float) scale;
+        refBitmap = Bitmap.createBitmap((int) Math.round(w * scale), (int) Math.round(h * scale), Bitmap.Config.ARGB_8888);
+        refCanvas = new Canvas(refBitmap);
+        refCanvas.drawColor(0xFF000000 | bg);
+    }
+
+    static void refText(String text, double size, int weight, int style, double x, double base, int color, double[] out) {
+        for (int i = 0; i < 5; i++) out[i] = 0;
+        if (refCanvas == null) return;
+        float d = refScale;
+        TextPaint p = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        Typeface face = (style & 2) != 0 ? Typeface.MONOSPACE : Typeface.DEFAULT;
+        p.setTypeface(Typeface.create(face, weight, (style & 1) != 0));
+        p.setTextSize((float) size * d);
+        p.setColor(0xFF000000 | color);
+        StaticLayout l = StaticLayout.Builder.obtain(text, 0, text.length(), p, 1 << 20)
+                .setIncludePad(false).setAlignment(Layout.Alignment.ALIGN_NORMAL).build();
+        // the line's left edge at x (a right-to-left paragraph is laid out against the right of its width)
+        float left = l.getLineLeft(0);
+        refCanvas.save();
+        refCanvas.translate((float) x * d - left, (float) base * d - l.getLineBaseline(0));
+        l.draw(refCanvas);
+        refCanvas.restore();
+        out[0] = l.getLineWidth(0) / d;
+        Rect b = new Rect();
+        p.getTextBounds(text, 0, text.length(), b);
+        out[1] = b.left / d;
+        out[2] = b.top / d;
+        out[3] = b.right / d;
+        out[4] = b.bottom / d;
+    }
+
+    static boolean refEnd(String name) {
+        if (refBitmap == null) return false;
+        boolean ok = save(refBitmap, name);
+        refBitmap.recycle();
+        refBitmap = null;
+        refCanvas = null;
+        return ok;
+    }
+
+    static boolean refFrame(String name) {
+        frameName = name;
+        return true;
+    }
+
+    /** After each frame is drawn, on the GL thread: the picture asked for (refFrame), before it is shown. */
+    static void frameDrawn() {
+        if (frameName == null) return;
+        String name = frameName;
+        frameName = null;
+        int w = Host.view.getWidth(), h = Host.view.getHeight();
+        ByteBuffer buf = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.nativeOrder());
+        GLES30.glReadPixels(0, 0, w, h, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, buf);
+        Bitmap up = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        up.copyPixelsFromBuffer(buf);
+        // GL's rows go up from the bottom
+        android.graphics.Matrix m = new android.graphics.Matrix();
+        m.preScale(1, -1);
+        Bitmap b = Bitmap.createBitmap(up, 0, 0, w, h, m, false);
+        save(b, name);
+        up.recycle();
+        b.recycle();
     }
 }

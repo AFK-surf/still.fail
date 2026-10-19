@@ -414,3 +414,114 @@ extern "C" void mb_host_glyph(int32_t key, double *out) {
   out[5] = e->oy;
   out[6] = e->color;
 }
+
+// ---------------------------------------------------------------------------
+// The platform's own drawing of a line (textref_native.mbt, for src/textdiff): DirectWrite's text layout with its
+// default features (ligatures as any app has them) and the fonts above, drawn by Direct2D into a WIC bitmap with the
+// rasterizer settings above, at the places mbui draws the same words.
+
+static IWICBitmap *ref_bmp;
+static ID2D1RenderTarget *ref_rt;
+static ID2D1SolidColorBrush *ref_brush;
+static int ref_w, ref_h;
+
+static void ref_path(moonbit_string_t name, WCHAR *out, size_t cap) {
+  const WCHAR *dir = _wgetenv(L"MBUI_SHOT_DIR");
+  int n = Moonbit_array_length(name);
+  _snwprintf(out, cap, L"%ls\\%.*ls.png", dir ? dir : L".", n, (const WCHAR *)name);
+}
+
+static void ref_release(void) {
+  if (ref_brush) ref_brush->Release();
+  if (ref_rt) ref_rt->Release();
+  if (ref_bmp) ref_bmp->Release();
+  ref_brush = NULL;
+  ref_rt = NULL;
+  ref_bmp = NULL;
+}
+
+static D2D1_COLOR_F rgb(int c) {
+  return D2D1::ColorF(((c >> 16) & 255) / 255.0f, ((c >> 8) & 255) / 255.0f, (c & 255) / 255.0f, 1);
+}
+
+extern "C" void mb_host_ref_begin(double w, double h, double scale, int32_t bg) {
+  init();
+  ref_release();
+  ref_w = (int)floor(w * scale + 0.5);
+  ref_h = (int)floor(h * scale + 0.5);
+  wic->CreateBitmap(ref_w, ref_h, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnDemand, &ref_bmp);
+  float dpi = (float)(96.0 * scale);
+  D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties(
+      D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+      D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), dpi, dpi);
+  d2d->CreateWicBitmapRenderTarget(ref_bmp, &p, &ref_rt);
+  ref_rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+  ref_rt->SetTextRenderingParams(params);
+  ref_rt->CreateSolidColorBrush(D2D1::ColorF(0, 0, 0, 1), &ref_brush);
+  ref_rt->BeginDraw();
+  ref_rt->Clear(rgb(bg));
+}
+
+extern "C" void mb_host_ref_text(moonbit_string_t text, double size, int32_t weight, int32_t style, double x,
+                                 double base, int32_t color, double *out) {
+  for (int i = 0; i < 5; i++) out[i] = 0;
+  if (!ref_rt) return;
+  int len = Moonbit_array_length(text);
+  IDWriteTextLayout *l = NULL;
+  dw->CreateTextLayout((const WCHAR *)text, (UINT32)len, format_for(size, weight, style), 1e6f, 1e6f, &l);
+  IDWriteTextLayout2 *l2 = NULL;
+  if (SUCCEEDED(l->QueryInterface(__uuidof(IDWriteTextLayout2), (void **)&l2))) {
+    l2->SetFontFallback(fallback);
+    l2->Release();
+  }
+  DWRITE_LINE_METRICS lm;
+  UINT32 nl = 0;
+  l->GetLineMetrics(&lm, 1, &nl);
+  DWRITE_TEXT_METRICS tm;
+  l->GetMetrics(&tm);
+  ref_brush->SetColor(rgb(color));
+  ref_rt->DrawTextLayout(D2D1::Point2F((FLOAT)x, (FLOAT)(base - (nl ? lm.baseline : 0))), l, ref_brush,
+                         D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT | D2D1_DRAW_TEXT_OPTIONS_NO_SNAP);
+  out[0] = tm.widthIncludingTrailingWhitespace;
+  l->Release();
+}
+
+extern "C" int32_t mb_host_ref_end(moonbit_string_t name) {
+  if (!ref_rt) return 0;
+  ref_rt->EndDraw();
+  WCHAR path[1024];
+  ref_path(name, path, 1024);
+  int ok = 0;
+  WICRect r = {0, 0, ref_w, ref_h};
+  IWICBitmapLock *lock = NULL;
+  IWICStream *stream = NULL;
+  IWICBitmapEncoder *enc = NULL;
+  IWICBitmapFrameEncode *frame = NULL;
+  if (SUCCEEDED(ref_bmp->Lock(&r, WICBitmapLockRead, &lock))) {
+    UINT stride = 0, bytes = 0;
+    BYTE *px = NULL;
+    lock->GetStride(&stride);
+    lock->GetDataPointer(&bytes, &px);
+    // the ground is opaque: premultiplied or not, the same bytes
+    WICPixelFormatGUID fmt = GUID_WICPixelFormat32bppBGRA;
+    if (SUCCEEDED(wic->CreateStream(&stream)) && SUCCEEDED(stream->InitializeFromFilename(path, GENERIC_WRITE)) &&
+        SUCCEEDED(wic->CreateEncoder(GUID_ContainerFormatPng, NULL, &enc)) &&
+        SUCCEEDED(enc->Initialize(stream, WICBitmapEncoderNoCache)) && SUCCEEDED(enc->CreateNewFrame(&frame, NULL)) &&
+        SUCCEEDED(frame->Initialize(NULL)) && SUCCEEDED(frame->SetSize((UINT)ref_w, (UINT)ref_h)) &&
+        SUCCEEDED(frame->SetPixelFormat(&fmt)))
+      ok = SUCCEEDED(frame->WritePixels((UINT)ref_h, stride, stride * ref_h, px)) && SUCCEEDED(frame->Commit()) &&
+           SUCCEEDED(enc->Commit());
+    lock->Release();
+  }
+  if (frame) frame->Release();
+  if (enc) enc->Release();
+  if (stream) stream->Release();
+  ref_release();
+  return ok;
+}
+
+extern "C" int32_t mb_host_ref_frame(moonbit_string_t name) {
+  WCHAR path[1024];
+  ref_path(name, path, 1024);
+  return mb_render_snapshot(path);
+}

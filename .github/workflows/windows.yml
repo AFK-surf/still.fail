@@ -71,6 +71,10 @@ jobs:
           APP=photos scripts/win.sh build
           MBUI_BENCH=-1 APP=photos scripts/win.sh script photos
           ls -la out/photos
+      - name: Text against DirectWrite's own (scripts/textdiff.sh windows; the report is in the artifact)
+        run: |
+          mkdir -p out/node && (cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i pngjs >/dev/null)
+          scripts/textdiff.sh windows
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -81,4 +85,5 @@ jobs:
             out/shot-kit/
             out/ime/
             out/photos/
+            out/textdiff/
           if-no-files-found: warn

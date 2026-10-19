@@ -394,3 +394,20 @@ fn TextLayout::line_range(self : TextLayout, line : Int) -> (Int, Int) {
   let end = if b < s.starts.length() { s.starts[b] } else { s.len }
   (start, end)
 }
+
+///|
+/// The width `text` advances on one line in that font (style: @host.style_italic, style_mono), as mbui lays it out:
+/// for comparing with the platform's own (src/textdiff).
+pub fn text_advance(
+  text : String,
+  size? : Double = 15.0,
+  weight? : Int = 400,
+  style? : Int = 0,
+) -> Double {
+  let s = shape(text, size, weight, style~)
+  let mut w = 0.0
+  for a in s.adv {
+    w = w + a
+  }
+  w
+}

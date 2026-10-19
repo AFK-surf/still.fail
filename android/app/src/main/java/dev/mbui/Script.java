@@ -44,7 +44,9 @@ final class Script {
         return v.input != null ? v.input : v.onCreateInputConnection(new android.view.inputmethod.EditorInfo());
     }
 
-    static void frameDrawn() {}
+    static void frameDrawn() {
+        MBText.frameDrawn();
+    }
 
     /**
      * Scripted flings (--es script fling, scripts/android.sh fling-test): swipes at set speeds, delivered as the

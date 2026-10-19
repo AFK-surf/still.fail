@@ -34,7 +34,7 @@ static jclass host_cls, text_cls, images_cls, login_cls, picks_cls;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
-    m_pk_end, m_drive;
+    m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -72,6 +72,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
   m_generation = (*env)->GetStaticMethodID(env, text_cls, "atlasGeneration", "()I");
+  m_ref_begin = (*env)->GetStaticMethodID(env, text_cls, "refBegin", "(DDDI)V");
+  m_ref_text = (*env)->GetStaticMethodID(env, text_cls, "refText", "(Ljava/lang/String;DIIDDI[D)V");
+  m_ref_end = (*env)->GetStaticMethodID(env, text_cls, "refEnd", "(Ljava/lang/String;)Z");
+  m_ref_frame = (*env)->GetStaticMethodID(env, text_cls, "refFrame", "(Ljava/lang/String;)Z");
   m_img_load = (*env)->GetStaticMethodID(env, images_cls, "load", "(ILjava/lang/String;[BI)V");
   m_img_free = (*env)->GetStaticMethodID(env, images_cls, "free", "(I)V");
   m_img_reload = (*env)->GetStaticMethodID(env, images_cls, "reload", "()V");
@@ -760,6 +764,38 @@ void mb_host_glyph(int32_t key, double *out) {
 int32_t mb_host_atlas_generation(void) {
   JNIEnv *env = env_();
   return (*env)->CallStaticIntMethod(env, text_cls, m_generation);
+}
+
+// The platform's own text drawing beside mbui's (textref_native.mbt, src/textdiff): MBText's StaticLayout into a
+// bitmap, and the window's picture read back after the next frame.
+void mb_host_ref_begin(double w, double h, double scale, int32_t bg) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, text_cls, m_ref_begin, w, h, scale, bg);
+}
+
+void mb_host_ref_text(moonbit_string_t text, double size, int32_t weight, int32_t style, double x, double base,
+                      int32_t color, double *out) {
+  JNIEnv *env = env_();
+  jstring s = jstr(env, text);
+  (*env)->CallStaticVoidMethod(env, text_cls, m_ref_text, s, size, weight, style, x, base, color, small_buf);
+  (*env)->DeleteLocalRef(env, s);
+  (*env)->GetDoubleArrayRegion(env, small_buf, 0, 5, out);
+}
+
+int32_t mb_host_ref_end(moonbit_string_t name) {
+  JNIEnv *env = env_();
+  jstring s = jstr(env, name);
+  jboolean ok = (*env)->CallStaticBooleanMethod(env, text_cls, m_ref_end, s);
+  (*env)->DeleteLocalRef(env, s);
+  return ok;
+}
+
+int32_t mb_host_ref_frame(moonbit_string_t name) {
+  JNIEnv *env = env_();
+  jstring s = jstr(env, name);
+  jboolean ok = (*env)->CallStaticBooleanMethod(env, text_cls, m_ref_frame, s);
+  (*env)->DeleteLocalRef(env, s);
+  return ok;
 }
 
 void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moonbit_string_t text,

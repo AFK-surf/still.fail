@@ -2,6 +2,7 @@
 // and rasterizing each cluster into the RGBA atlas when it is first drawn.
 #import "apple.h"
 #import <CoreGraphics/CoreGraphics.h>
+#import <ImageIO/ImageIO.h>
 #include <math.h>
 
 double mb_text_scale = 2.0;
@@ -403,5 +404,90 @@ void mb_host_glyph(int32_t key, double *out) {
     out[4] = e->ox;
     out[5] = e->oy;
     out[6] = e->color;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The platform's own drawing of a line (textref_native.mbt, for src/textdiff): Core Text's CTLineDraw into a bitmap
+// context, the same fonts as above and the same rasterizer settings (no font smoothing), so what differs from
+// mbui's picture is where and how mbui puts each cluster.
+
+static CGContextRef ref_ctx;
+static uint8_t *ref_px;
+static double ref_h, ref_sc;
+
+static void ref_path(NSString *name, char *out, size_t cap) {
+  const char *dir = getenv("MBUI_SHOT_DIR");
+  snprintf(out, cap, "%s/%s.png", dir ? dir : ".", name.UTF8String);
+}
+
+void mb_host_ref_begin(double w, double h, double scale, int32_t bg) {
+  if (ref_ctx) {
+    CGContextRelease(ref_ctx);
+    free(ref_px);
+  }
+  int pw = (int)round(w * scale), ph = (int)round(h * scale);
+  ref_px = calloc((size_t)pw * ph * 4, 1);
+  CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+  ref_ctx = CGBitmapContextCreate(ref_px, pw, ph, 8, (size_t)pw * 4, cs, kCGImageAlphaPremultipliedLast);
+  CGColorSpaceRelease(cs);
+  CGContextSetRGBFillColor(ref_ctx, ((bg >> 16) & 255) / 255.0, ((bg >> 8) & 255) / 255.0, (bg & 255) / 255.0, 1);
+  CGContextFillRect(ref_ctx, CGRectMake(0, 0, pw, ph));
+  CGContextScaleCTM(ref_ctx, scale, scale);
+  CGContextSetShouldSmoothFonts(ref_ctx, false);
+  ref_h = h;
+  ref_sc = scale;
+}
+
+void mb_host_ref_text(moonbit_string_t text, double size, int32_t weight, int32_t style, double x, double base,
+                      int32_t color, double *out) {
+  @autoreleasepool {
+    for (int i = 0; i < 5; i++) out[i] = 0;
+    if (!ref_ctx) return;
+    CTLineRef line = make_line(mb_ns_from_string(text), font_for(size, weight, style));
+    CGContextSetRGBFillColor(ref_ctx, ((color >> 16) & 255) / 255.0, ((color >> 8) & 255) / 255.0,
+                             (color & 255) / 255.0, 1);
+    CGContextSetTextMatrix(ref_ctx, CGAffineTransformIdentity);
+    CGContextSetTextPosition(ref_ctx, x, ref_h - base);
+    CTLineDraw(line, ref_ctx);
+    out[0] = CTLineGetTypographicBounds(line, NULL, NULL, NULL);
+    CGRect b = CTLineGetBoundsWithOptions(line, kCTLineBoundsUseGlyphPathBounds);
+    out[1] = b.origin.x;
+    out[2] = -(b.origin.y + b.size.height);
+    out[3] = b.origin.x + b.size.width;
+    out[4] = -b.origin.y;
+    CFRelease(line);
+  }
+}
+
+int32_t mb_host_ref_end(moonbit_string_t name) {
+  @autoreleasepool {
+    if (!ref_ctx) return 0;
+    char path[4096];
+    ref_path(mb_ns_from_string(name), path, sizeof path);
+    CGImageRef img = CGBitmapContextCreateImage(ref_ctx);
+    CFURLRef url = CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8 *)path, strlen(path), false);
+    CGImageDestinationRef dst = CGImageDestinationCreateWithURL(url, CFSTR("public.png"), 1, NULL);
+    int ok = 0;
+    if (dst) {
+      CGImageDestinationAddImage(dst, img, NULL);
+      ok = CGImageDestinationFinalize(dst);
+      CFRelease(dst);
+    }
+    CFRelease(url);
+    CGImageRelease(img);
+    CGContextRelease(ref_ctx);
+    free(ref_px);
+    ref_ctx = NULL;
+    ref_px = NULL;
+    return ok;
+  }
+}
+
+int32_t mb_host_ref_frame(moonbit_string_t name) {
+  @autoreleasepool {
+    char path[4096];
+    ref_path(mb_ns_from_string(name), path, sizeof path);
+    return mb_render_snapshot(path);
   }
 }
