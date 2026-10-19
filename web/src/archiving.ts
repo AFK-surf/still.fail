@@ -28,6 +28,13 @@ export const modeOf = (v: ArchivingView): ArchiveMode => (v.days <= 0 ? "off" : 
 export const modeLabel = (m: ArchiveMode) => t(`web-pages.archiving.mode.${m}`);
 export const modeNote = (m: ArchiveMode) => t(`web-pages.archiving.mode.${m}Hint`);
 
+/** How a station archives on its own, in a line (its row in 设置 › 归档). */
+export function summaryOf(v: ArchivingView): string {
+  const mode = modeOf(v);
+  const how = mode === "off" ? modeLabel(mode) : `${modeLabel(mode)} · ${daysLabel(v.days)}`;
+  return t("web-pages.archiving.summary", { how, slack: daysLabel(v.slackDays) });
+}
+
 /** The days offered, with the one kept when it is none of them. */
 export function daysOffered(kept: number, base: number[]): number[] {
   return kept > 0 && !base.includes(kept) ? [...base, kept].sort((a, b) => a - b) : base;

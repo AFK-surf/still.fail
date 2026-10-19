@@ -69,8 +69,11 @@ export const segmentedOption = style({
   whiteSpace: "nowrap",
   fontSize: vars.textUi, cursor: "pointer", transition: `color ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    "&:hover:not([data-state=\"on\"])": { color: vars.text },
+    "&:hover:not([data-state=\"on\"]):not(:disabled)": { color: vars.text },
     "&[data-state=\"on\"]": { color: vars.text, fontWeight: "500" },
+    // One that cannot be chosen: fainter, and no pointer or hover saying otherwise.
+    "&:disabled": { cursor: "default" },
+    "&:disabled:not([data-state=\"on\"])": { opacity: ".4" },
   },
 });
 /** The label, and under it the same in the chosen weight, unseen: an option is as wide unchosen as chosen, so the

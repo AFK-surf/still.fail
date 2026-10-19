@@ -42,8 +42,11 @@ export const inlineLink = style({
 });
 export const appearanceSetting = style({});
 /** What the option chosen above it does (Appearance.tsx ArchiveSetting): as a section's words, under its control. */
-/** A station's setting's name over its control (pages/Archiving.tsx): as a section's words, a step up. */
-export const archivingLabel = style({ margin: "16px 0 8px", fontSize: vars.textMeta, fontWeight: 500, color: vars.text });
+/** Under a station's name in 设置 › 归档 (pages/Archiving.tsx): how it archives; red where it is set to and cannot. */
+export const archivingNote = style({
+  fontSize: vars.textMeta, color: vars.muted,
+  selectors: { "&[data-bad]": { color: vars.red } },
+});
 export const appearanceHint = style({ margin: "8px 0 0", fontSize: vars.textMeta, color: vars.muted, maxWidth: "52em" });
 export const textButton = style({
   padding: "0", border: "0", background: "none", color: vars.text, font: "inherit", textDecoration: "underline",
