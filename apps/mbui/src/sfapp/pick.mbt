@@ -60,6 +60,15 @@ fn pick_clear() -> Unit {
 }
 
 ///|
+/// As at the start (tests): nothing picked, no press remembered.
+fn pick_reset() -> Unit {
+  pick_clear()
+  pk.picked_at = -1.0
+  link_menu.at = -1.0
+  link_menu.open = false
+}
+
+///|
 /// How long a finger is held still for a long press (ViewConfiguration's long press timeout, as Compose has it).
 let long_press_ms : Double = @ui.long_press_ms
 

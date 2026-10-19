@@ -178,7 +178,7 @@ fn reset() -> Unit {
   cui.outside = false
   cui.room = 0.0
   cui.doing.clear()
-  pick_clear()
+  pick_reset()
   fix_chats.clear()
   fix_timers.clear()
   fix_drafts.clear()
