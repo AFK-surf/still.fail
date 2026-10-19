@@ -5,6 +5,7 @@
 // stillfail-feedback goes with the feedback_send tool (feedback/module.ts): stable channel, still.fail cloud.
 import { type FSWatcher, watch } from "node:fs";
 import { Effect, Layer } from "effect";
+import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { Agents } from "../sessions/agents.ts";
 import { agentHomePaths, linkAgentHome, writeBuiltinSkills } from "../sessions/agent-home.ts";
@@ -30,13 +31,15 @@ export const AgentHomeLive = Layer.effectDiscard(
     };
     keep();
     const unlisten = config.listen(keep);
-    // A skill made, shared in or taken away: looked at once things settle (a skill is written a file at a time).
-    let soon: ReturnType<typeof setTimeout> | undefined;
+    // A skill made, shared in or taken away: looked at once things settle (a skill is written a file at a time). On
+    // the hub's clock, ended with the station.
+    const time = yield* Effect.acquireRelease(Effect.sync(() => new Fibers("agent_home", hub.clock)), (t) => Effect.promise(() => t.close()));
+    let soon = () => {};
     let skills: FSWatcher | undefined;
     try {
       skills = watch(agentHomePaths(hub.config().agentHome)[1], () => {
-        clearTimeout(soon);
-        soon = setTimeout(keep, SETTLE_MS);
+        soon();
+        soon = time.after(SETTLE_MS, keep);
       });
       skills.on("error", () => skills?.close());
     } catch (error) {
@@ -46,7 +49,6 @@ export const AgentHomeLive = Layer.effectDiscard(
       Effect.sync(() => {
         unlisten();
         skills?.close();
-        clearTimeout(soon);
       }),
     );
   }),
