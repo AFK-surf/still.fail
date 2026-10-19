@@ -347,13 +347,13 @@ private fun openConnectMenu(app: AppState, station: String, connect: Connect) {
             else PickRow(t("android-settings.connect.changeTokens")) { openTokens(app, station, connect) }
             if (!feishu) connect.connection.workspace?.url?.let { url -> PickRow(t("android-settings.connect.openSlack")) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
             connect.feishu?.console?.let { url -> PickRow(t("web-mobile.connects.feishu.openConsole")) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
-            if (connect.enabled) PickRow(t("android-settings.connect.disable"), t(if (feishu) "android-settings.connect.disableNote.feishu" else "android-settings.connect.disableNote"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.disableWhat"), t(if (feishu) "android-settings.connect.disabled.feishu" else "android-settings.connect.disabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
+            if (connect.enabled) PickRow(t("android-settings.connect.disable"), t(if (feishu) "web-mobile.connects.disableNote.feishu" else "android-settings.connect.disableNote"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.disableWhat"), t(if (feishu) "web-mobile.connects.disabled.feishu" else "android-settings.connect.disabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
             else PickRow(t("android-settings.connect.enable"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.enableWhat"), t("android-settings.connect.enabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
             PickRow(t("android-settings.connect.changeOwner"), connect.createdBy?.shown?.display ?: connect.createdBy?.name) { app.sheet = SheetSpec(0.6f) { OwnerSheet(station, connect) } }
             PickRow(t("android-settings.connect.delete"), color = C.red) {
                 confirm(app, t("android-settings.connect.deleteTitle", "name" to connect.name),
-                    if (connect.sessions > 0) t(if (feishu) "android-settings.connect.deleteTextSessions.feishu" else "android-settings.connect.deleteTextSessions", "n" to connect.sessions)
-                    else t(if (feishu) "android-settings.connect.deleteText.feishu" else "android-settings.connect.deleteText"),
+                    if (connect.sessions > 0) t(if (feishu) "web-mobile.connects.deleteTextSessions.feishu" else "android-settings.connect.deleteTextSessions", "n" to connect.sessions)
+                    else t(if (feishu) "web-mobile.connects.deleteText.feishu" else "android-settings.connect.deleteText"),
                     t("android-settings.connect.delete"), danger = true, what = t("android-settings.connect.deleteWhat"), then = app::pop) { api.deleteConnect(connect.id); app.toast = t("android-settings.connect.deleted") }
             }
         }
