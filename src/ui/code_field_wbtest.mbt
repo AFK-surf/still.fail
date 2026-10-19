@@ -1,0 +1,141 @@
+///|
+/// The digits the code field's boxes show, first to last.
+fn code_boxes() -> String {
+  let b = StringBuilder()
+  for i in 0..<g.count {
+    if g.nodes[i].kind == kind_rich {
+      b.write_string(g.nodes[i].text)
+    }
+  }
+  b.to_string()
+}
+
+///|
+/// The code field's boxes (those edged), as (x, edge colour), first to last.
+fn code_edges() -> Array[(Double, Int64)] {
+  let out = []
+  for i in 0..<g.count {
+    let n = g.nodes[i]
+    if n.kind == kind_box && n.border_w > 0.0 {
+      out.push((n.x, n.border_c))
+    }
+  }
+  out
+}
+
+///|
+fn code_view(handed : Array[String], wrong? : Bool = false, enabled? : Bool = true) -> (Ctx) -> Unit {
+  fn(c) {
+    c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+      if c.code_field("code", wrong~, enabled~) is Some(code) {
+        handed.push(code)
+      }
+      c.spacer()
+    })
+    |> ignore
+  }
+}
+
+///|
+test "a code field: digits only, as many as it has boxes, the field taking the keys as it shows" {
+  let handed = []
+  let t = Tester::new(code_view(handed))
+  t.type_text("1a2-3 ")
+  assert_eq(code_boxes(), "123")
+  assert_true(t.dump().contains("\"123\" caret=3"))
+  t.type_text("45678")
+  assert_eq(code_boxes(), "123456")
+  assert_true(t.dump().contains("\"123456\" caret=6"))
+  // a code pasted whole, its dash and spaces left out
+  t.ctx().clear_code_field("code")
+  t.frame()
+  t.type_text(" 987-654 ")
+  assert_eq(code_boxes(), "987654")
+  assert_eq(handed, ["123456", "987654"])
+}
+
+///|
+test "a code field: a complete code handed on once, however many frames, and again only once it changed" {
+  let handed = []
+  let t = Tester::new(code_view(handed))
+  t.type_text("12345")
+  for _ in 0..<30 {
+    t.frame()
+  }
+  assert_eq(handed, [])
+  t.type_text("6")
+  for _ in 0..<30 {
+    t.frame()
+  }
+  assert_eq(handed, ["123456"])
+  // a seventh digit is no new code
+  t.type_text("7")
+  t.frame()
+  assert_eq(handed, ["123456"])
+  // a digit taken back and typed again is
+  t.backspace()
+  t.frame()
+  t.type_text("6")
+  t.frame()
+  assert_eq(handed, ["123456", "123456"])
+  t.backspace()
+  t.type_text("9")
+  for _ in 0..<30 {
+    t.frame()
+  }
+  assert_eq(handed, ["123456", "123456", "123459"])
+}
+
+///|
+test "a code field: emptied as asked between frames, the same code typed again handed again" {
+  let handed = []
+  let t = Tester::new(code_view(handed))
+  t.type_text("424242")
+  assert_eq(handed, ["424242"])
+  // (as an answer refusing it comes, between frames)
+  t.ctx().clear_code_field("code")
+  t.frame()
+  assert_eq(code_boxes(), "")
+  assert_true(t.dump().contains("\"\" caret=0"))
+  t.frame()
+  assert_eq(code_boxes(), "")
+  t.type_text("424242")
+  assert_eq(handed, ["424242", "424242"])
+}
+
+///|
+test "a code field: the next box edged, all red while wrong and empty, nothing typed while it may not" {
+  let handed = []
+  let wrong = Ref(false)
+  let enabled = Ref(true)
+  let t = Tester::new(fn(c) { code_view(handed, wrong=wrong.val, enabled=enabled.val)(c) })
+  let plain = 0x1D1D1F2EL
+  let next = 0x1D1D1FFFL
+  let red = 0xFF3B30FFL
+  let edges = code_edges()
+  assert_eq(edges.length(), 6)
+  assert_eq(edges.map(fn(e) { e.1 }), [next, plain, plain, plain, plain, plain])
+  // three and three: 8 between boxes, a room 8 wide between the groups (and the gaps either side of it)
+  assert_eq(edges[1].0 - edges[0].0, 50.0)
+  assert_eq(edges[3].0 - edges[2].0, 66.0)
+  t.type_text("12")
+  assert_eq(code_edges().map(fn(e) { e.1 }), [plain, plain, next, plain, plain, plain])
+  t.type_text("3456")
+  assert_eq(code_edges().map(fn(e) { e.1 }), [plain, plain, plain, plain, plain, next])
+  // refused: red until a digit is typed
+  wrong.val = true
+  t.ctx().clear_code_field("code")
+  t.frame()
+  assert_eq(code_edges().map(fn(e) { e.1 }), [red, red, red, red, red, red])
+  t.type_text("1")
+  assert_eq(code_edges().map(fn(e) { e.1 }), [plain, next, plain, plain, plain, plain])
+  // while it may not change (a code being checked), typing does nothing and no box is the next
+  enabled.val = false
+  t.frame()
+  t.type_text("23456")
+  t.frame()
+  assert_eq(code_boxes(), "1")
+  assert_true(t.dump().contains("\"1\" caret=1"))
+  assert_eq(code_edges().map(fn(e) { e.1 }), [plain, plain, plain, plain, plain, plain])
+  assert_eq(handed, ["123456"])
+}

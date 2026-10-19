@@ -68,6 +68,8 @@ fn reset_globals() -> Unit {
   text_cache.generation = -1
   image_cache.clear()
   pagers.clear()
+  code_fields.clear()
+  code_clears.clear()
   image_data.clear()
   open_views.clear()
   native_nodes.clear()

@@ -29,6 +29,7 @@ src/ui      the framework (MoonBit, target independent)
   motion.mbt  CSS curves (cubic-bezier) for timed motion
   list.mbt    virtual list, rows of any height, anchored scrolling, fling
   editor.mbt  multi-line text field with input-method composition
+  code_field.mbt  a one-time code typed into boxes, handed on once
   widgets.mbt button, segmented control with a spring indicator
   scene.mbt   paint: one flat array of 24-float instances
   app.mbt     frame loop, input dispatch, bench mode
