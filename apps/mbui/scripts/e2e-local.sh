@@ -22,6 +22,7 @@
 #   scripts/e2e-local.sh drive-seed TAG   the drive flows' folder in the test station's home (e2e-TAG)
 #   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
 #   scripts/e2e-local.sh drive-big TAG    the downloads' folder in it (e2e-TAG/大文件: 48 MB and a small file)
+#   scripts/e2e-local.sh drive-gb TAG     a novel in GB18030 in it (e2e-TAG/旧小说-gb.txt)
 #   scripts/e2e-local.sh android-stage FILE…  files to attach put where the app's provider serves them (a share's intent)
 #   scripts/e2e-local.sh android-gallery FILE…  files put in the emulator's gallery, the app let read it
 #   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
@@ -259,6 +260,22 @@ drive_big() {
   say "drive big $d"
 }
 
+# a novel of made-up chapters in GB18030 (98-reader: not UTF-8, read as the Android app reads it), e2e-<tag>/旧小说-gb.txt
+drive_gb() {
+  local d=$STATION/home/e2e-${1:?a tag}
+  mkdir -p $d
+  python3 - "$d/旧小说-gb.txt" <<'PY'
+import sys
+out = []
+for i, t in enumerate(["第一章 雨后的车站", "第二章 旧仓库"]):
+    out.append(t)
+    for k in range(30):
+        out.append("\u3000\u3000这是用国标编码写成的段落，第%d章第%d段，读出来的字应当和写进去的一样。" % (i + 1, k + 1))
+open(sys.argv[1], "wb").write(("\n".join(out) + "\n").encode("gb18030"))
+PY
+  say "drive gb18030 $d/旧小说-gb.txt"
+}
+
 # the player's flows' folder (e2e/flows/45-…), 影音 in the drive flows' e2e-<tag>, which flow 15 lends: two episodes
 # (H.264 and AAC, their index first; the first 20 s with a subtitle beside it, the second 4 s) and a song of 5 s
 drive_media() {
@@ -354,6 +371,7 @@ case "${1:-all}" in
   drive-seed) shift; drive_seed "$@" ;;
   drive-media) shift; drive_media "$@" ;;
   drive-big) shift; drive_big "$@" ;;
+  drive-gb) shift; drive_gb "$@" ;;
   android-stage) shift; android_stage "$@" ;;
   android-gallery) shift; android_gallery "$@" ;;
   release-seed) release_seed ;;

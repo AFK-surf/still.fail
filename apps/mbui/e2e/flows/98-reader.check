@@ -1,0 +1,3 @@
+check "the GB18030 file was read through the core and shown as its words" 'grep -q "CALL drive.read .*旧小说-gb.txt" $OUT/$name.log'
+check "the serif face is kept in the reader's prefs" 'core_has "\"face\":\"serif\"" || core_device_has "\"face\":\"serif\""'
+check "the device keeps the whole file, byte for byte" 'kept_same 旧小说-gb.txt "$DRIVE/旧小说-gb.txt"'

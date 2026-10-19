@@ -277,10 +277,9 @@ DriveScreen.kt, Reader.kt, TextModel.kt, Novel.kt, ReaderMarkdown.kt; chat/scree
   made-up drive that takes renames, deletes, new folders and uploads while it runs): `scripts/shots.sh drive
   web-drive` compares them with goldens/mac-<mode>.png and web-<mode>.png.
 
-Not yet, against the current app: GB18030 text (no
-table here: such a file opens as UTF-8 with replacement characters), the serif face (the reader draws its sans
-face either way), 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light one),
-the system bars' icons following the paper, the frosted glass of the bars and sheets (their tint only), the
+Not yet, against the current app (GB18030, the serif face, the system bars following the paper: branch
+mbui-media-complete, below): 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light
+one), the frosted glass of the bars and sheets (their tint only), the
 system's back closing a sheet or ending a choice (it goes back a page), dragging sheets by the grabber, the
 long-press ripple, station files kept with the draft on the device, the station page's way into a drive (slice 13).
 
@@ -842,6 +841,20 @@ Not yet: a video flown back into its thumbnail at the frame it was left at (vide
 words' own shaping on the image (the host's face, not mbui's), a marked image bigger than memory (the Android app
 draws it in bands), Windows' marks, frames and grabs.
 
+The reader, the rest (branch mbui-media-complete; TextModel.kt decodeText, Reader.kt PaperBars, FontFamily.Serif; the
+web's reader's download):
+
+- GB18030: a text that is neither marked nor UTF-8 is read as GB18030 by the system's own tables (mbui's
+  @host.decode_charset: java.nio's Charset, CoreFoundation's encodings, Windows' code page 54936, the browser's
+  TextDecoder), a character the end of a cut file halves dropped, as the Android app reads it.
+- The serif face: 字体 宋体 draws the text in the serif face (mbui's run `serif`: Noto Serif and its CJK on Android,
+  Songti SC on Apple, SimSun on Windows).
+- 下载 in the top bar's right end (the web's reader has it): the whole file kept on the device as the drive's 下载 keeps
+  it (keep.mbt), a novel cut at 16 MB too. reader-bars' golden changed on purpose.
+- The system bars follow the paper: a reader's as dark as its paper (night on a light theme, white on a dark one), the
+  viewer over a picture or a video dark, the player dark; the theme's again as each goes.
+- Flow 98 reader.
+
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
 `scripts/e2e-local.sh all` runs the app (APP=stillfail) through what the slices do, against a still.fail that lives
@@ -982,6 +995,7 @@ while the card moved the list):
 | 95 recent-photos | (Android) the photo put in the emulator's gallery; ＋: the strip shows it after the camera; tapped, it goes up; sent | the gallery read and ranked; the entry's attachment, the photo byte for byte at the station |
 | 96 viewer | two pictures from the other device: the first grows from its thumbnail; ›; a swipe back; a box marked, its note said, 下载标注后的图片, 添加到对话, sent | imageNear stepped; the marks drawn by the host; the marked PNG kept on the device; the entry's attachment and the note's quote |
 | 97 video-frames | a video from the other device: 120 帧 read from the file, › › to the third, 保存此帧 | 120 frames read; the kept frame a PNG of 640 × 360 |
+| 98 reader | a novel in GB18030 (drive-gb) opened: its words; 排版 → 宋体; 下载 in the top bar | drive.read through the core; the serif face kept in the core's prefs; the kept file byte for byte |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once
