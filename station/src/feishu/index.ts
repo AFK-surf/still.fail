@@ -9,7 +9,6 @@ import type { ChatEvent, ChatSurface } from "../sessions/chat.ts";
 import type { Store } from "../store/store.ts";
 import { type ConnectState, type Connection, Connections } from "../slack/connections.ts";
 import { NameBook } from "../slack/names.ts";
-import { shownIdentity } from "../slack/surface.ts";
 import { Registrations } from "./register.ts";
 import { FeishuSurface } from "./surface.ts";
 import { FeishuThreads } from "./threads.ts";
