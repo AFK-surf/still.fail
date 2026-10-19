@@ -242,7 +242,8 @@ function FoundItemRow({ item }: { item: SearchItem }) {
   );
 }
 
-/** A message the words found: the line that has them (those drawn out), who said it and when, over its chat; tapped,
+/** A message the words found: the line that has them (those drawn out) the width of the row, over its chat, who said
+ *  it and when; tapped,
  *  its chat opens at it, the words marked there (../jumpTo.ts). */
 function FoundRow({ found, words }: { found: FoundMessage; words: string[] | undefined }) {
   const app = useApp();
@@ -253,10 +254,10 @@ function FoundRow({ found, words }: { found: FoundMessage; words: string[] | und
       <span className={css.mChatText}>
         <span className={css.mChatLine1}>
           <span className={css.mFoundChat}><Marked text={found.text} marks={found.marks} className={css.mFoundHit} /></span>
-          <span className={css.mFoundMeta}>{[found.by, found.time?.createdAt?.ago].filter(Boolean).join(" · ")}</span>
         </span>
         <span className={css.mChatLine2}>
-          <span className={css.mLastText}>{item.title}</span>
+          <span className={css.mFoundUnder}>{item.title}</span>
+          <span className={css.mFoundMeta}>{[found.by, found.time?.createdAt?.ago].filter(Boolean).join(" · ")}</span>
         </span>
       </span>
     </button>
@@ -271,10 +272,10 @@ function FoundChatRow({ item }: { item: ChatItem }) {
       <span className={css.mChatText}>
         <span className={css.mChatLine1}>
           <span className={css.mFoundChat}><Marked text={item.foundText ?? ""} marks={item.foundMarks ?? []} className={css.mFoundHit} /></span>
-          <span className={css.mFoundMeta}>{[item.archived ? t("web-mobile.home.searchArchived") : null, item.time?.lastActiveAt?.ago].filter(Boolean).join(" · ")}</span>
         </span>
         <span className={css.mChatLine2}>
-          <span className={css.mLastText}>{item.title}</span>
+          <span className={css.mFoundUnder}>{item.title}</span>
+          <span className={css.mFoundMeta}>{[item.archived ? t("web-mobile.home.searchArchived") : null, item.time?.lastActiveAt?.ago].filter(Boolean).join(" · ")}</span>
         </span>
       </span>
     </button>

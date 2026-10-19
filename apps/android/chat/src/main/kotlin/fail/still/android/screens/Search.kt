@@ -366,7 +366,8 @@ private fun FoundChatRow(item: ChatItem, found: String) {
     HitRow(found, item.foundMarks.orEmpty(), meta, item.title) { app.push(Screen.Chat(item.station, item.page)) }
 }
 
-/** What has the words, on its first line (they in ink and bold), when beside it; where it is (its chat) under it. */
+/** What has the words, on its first line the row's width (they bold); where it is (its chat) under it, who and when beside
+ *  that. */
 @Composable
 private fun HitRow(text: String, marks: List<TextMark>, meta: String, under: String, onClick: () -> Unit) {
     val ink = C.ink
@@ -375,10 +376,10 @@ private fun HitRow(text: String, marks: List<TextMark>, meta: String, under: Str
         Modifier.fillMaxWidth().height(66.dp).clickable(onClick = onClick).padding(start = 22.dp, end = 16.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(line, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(line, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(22.dp))
+        Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(under, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (meta.isNotEmpty()) Text(meta, fontSize = 12.sp, color = C.muted, maxLines = 1)
         }
-        Text(under, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(20.dp))
     }
 }
