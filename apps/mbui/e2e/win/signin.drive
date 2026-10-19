@@ -1,0 +1,11 @@
+# Signed out, the sign-in page; 登录或注册 pressed: the login page goes to the browser (browser.cmd), which comes back to
+# the app's loopback listener; the sign-in finished, Home.
+timeout 60000
+until 登录或注册
+shot 1-signed-out
+tap 登录或注册
+timeout 90000
+gone 登录或注册
+wait 4000
+shot 2-home
+exit

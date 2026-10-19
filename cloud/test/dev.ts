@@ -13,6 +13,9 @@
 // Development-only routes (never in the Worker), on either port:
 //   /__dev/login?user=alice  signs that account into the browser (on that origin) and goes to /
 //   /__dev/account?user=alice  that account as JSON, for the core's `migrate` (native apps)
+//   /__dev/google?…&user=alice  Google's sign-in page as a browser that picks that account leaves it: the query the
+//                                cloud sent to accounts.google.com, back to its callback with a code its mocked Google
+//                                takes (a browser stand-in signing a native app in through its loopback redirect)
 //   /__dev/credential?device=hex  a mstill.fail's credential for alice's first workspace
 //   /__dev/move?station=hex&token=t  what a compromised cloud can do: the station moved into the token's workspace,
 //                                    without its signature (the workspace lock's tests, docs/workspace-lock.md)
@@ -116,6 +119,15 @@ async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
   if (url.pathname === "/__dev/account") {
     const account = await signIn(url.searchParams.get("user") ?? "alice");
     return void res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(account));
+  }
+  if (url.pathname === "/__dev/google") {
+    const code = crypto.randomUUID();
+    const q = url.searchParams;
+    h.codes.set(code, { nonce: q.get("nonce") ?? "", challenge: q.get("code_challenge") ?? "", sub: q.get("user") ?? "alice" });
+    const back = new URL(q.get("redirect_uri") ?? `${origin}/v1/auth/google/callback`);
+    back.searchParams.set("state", q.get("state") ?? "");
+    back.searchParams.set("code", code);
+    return void res.writeHead(302, { location: back.toString() }).end();
   }
   if (url.pathname === "/__dev/login") {
     const account = await signIn(url.searchParams.get("user") ?? "alice");
