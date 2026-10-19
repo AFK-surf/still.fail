@@ -119,12 +119,13 @@ test("registration: the link carries what the app is to get; asked until its id 
 });
 
 /// A surface on Feishu's stand-in, with its threads in a temporary directory.
-async function surfaceRig(o: { topics?: boolean } = {}) {
+async function surfaceRig(o: { topics?: boolean; before?: (threads: FeishuThreads, fake: FakeFeishu) => void } = {}) {
   const fake = await FakeFeishu.start();
   if (o.topics) fake.answer("GET /open-apis/im/v1/chats/oc_t", { code: 0, data: { name: "话题群", chat_mode: "group", group_message_type: "thread" } });
   const dir = mkdtempSync(join(tmpdir(), "fs-"));
   const t = testClock();
   const threads = new FeishuThreads(join(dir, "threads.json"));
+  o.before?.(threads, fake);
   const surface = new FeishuSurface({ connect: "fs", appId: "cli_test", appSecret: "s", domain: "feishu", threads, client: new FeishuClient("cli_test", "s", "feishu", fake.base), clock: t.clock });
   const events: ChatEvent[] = [];
   await surface.start(async (e) => void events.push(e));
@@ -163,6 +164,37 @@ test("surface: the first @ begins the chat's conversation, the rest of the chat 
     r.fake.message({ id: "om_x", chat: "oc_other", text: "闲聊" });
     await r.fake.until("heard", () => r.events.length === 5);
     assert.equal(r.threads.current("fs", "oc_other"), null);
+  } finally {
+    await r.close();
+  }
+});
+
+test("surface: what was said in a conversation's chat while the station was away is read once it connects", async () => {
+  const r = await surfaceRig({
+    before: (threads, fake) => {
+      threads.begin("fs", "oc_g", "om_a");
+      threads.heard("fs", "oc_g", 1_000_000);
+      fake.answer("GET /open-apis/im/v1/messages", (s: Json) => ({
+        code: 0,
+        data: {
+          has_more: false,
+          items:
+            s.query.container_id === "oc_g" && s.query.start_time === "1000"
+              ? [
+                  { message_id: "om_old", create_time: "1000000", msg_type: "text", body: { content: JSON.stringify({ text: "已经听过" }) }, sender: { id: "ou_ada", sender_type: "user" } },
+                  { message_id: "om_away", create_time: "1000500", msg_type: "text", body: { content: JSON.stringify({ text: "@_user_1 不在时说的" }) }, sender: { id: "ou_ada", sender_type: "user" }, mentions: [{ key: "@_user_1", id: "ou_bot", name: "Bot" }] },
+                  { message_id: "om_mine", create_time: "1000600", msg_type: "interactive", body: { content: "{}" }, sender: { id: "cli_test", sender_type: "app" } },
+                ]
+              : [],
+        },
+      }));
+    },
+  });
+  try {
+    await r.fake.until("caught up", () => r.events.length === 1);
+    const e = r.events[0]!;
+    assert.deepEqual(e.type === "message" ? [e.message.threadTs, e.message.ts, e.message.text, e.message.addressed] : null, ["om_a", "om_away", "@Bot 不在时说的", true]);
+    assert.deepEqual(r.threads.conversations("fs"), [["oc_g", 1_000_500]]);
   } finally {
     await r.close();
   }

@@ -4,7 +4,7 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { log } from "../ops/log.ts";
 
-type Kept = Record<string, { chats?: Record<string, string>; topics?: Record<string, string> }>;
+type Kept = Record<string, { chats?: Record<string, string>; topics?: Record<string, string>; seen?: Record<string, number> }>;
 
 export class FeishuThreads {
   readonly path: string;
@@ -24,7 +24,8 @@ export class FeishuThreads {
     const at = (this.kept[connect] ??= {});
     at.chats ??= {};
     at.topics ??= {};
-    return at as { chats: Record<string, string>; topics: Record<string, string> };
+    at.seen ??= {};
+    return at as { chats: Record<string, string>; topics: Record<string, string>; seen: Record<string, number> };
   }
 
   private save() {
@@ -45,6 +46,21 @@ export class FeishuThreads {
   /// A conversation of the chat begins with `message`.
   begin(connect: string, chat: string, message: string) {
     this.of(connect).chats[chat] = message;
+    this.save();
+  }
+
+  /// The chats with a conversation, and when the last message heard in each was said (ms): what is read again after the
+  /// station was away (Feishu does not send what was said meanwhile).
+  conversations(connect: string): [string, number][] {
+    const at = this.kept[connect];
+    return Object.keys(at?.chats ?? {}).map((chat) => [chat, at?.seen?.[chat] ?? 0]);
+  }
+
+  /// A message said at `when` was heard in `chat` (kept when it is the latest).
+  heard(connect: string, chat: string, when: number) {
+    const seen = this.of(connect).seen;
+    if (!(when > (seen[chat] ?? 0))) return;
+    seen[chat] = when;
     this.save();
   }
 

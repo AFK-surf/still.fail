@@ -13,7 +13,7 @@ import type { NameBook } from "../slack/names.ts";
 import type { SlackIdentity, SocketStatus } from "../slack/surface.ts";
 import { type Answer, answeredCard, inline, questionCard, textCards } from "./cards.ts";
 import { CONTROL, DATA, type Frame, Parts, decode, encode, header } from "./frame.ts";
-import { type FeishuMessage, cardAnswerOf, messageOf, resourceOf } from "./parse.ts";
+import { type FeishuMessage, cardAnswerOf, listedAsEvent, messageOf, resourceOf } from "./parse.ts";
 import { FeishuStatus } from "./status.ts";
 import type { FeishuThreads } from "./threads.ts";
 import { type Domain, FeishuClient } from "./web.ts";
@@ -288,6 +288,7 @@ export class FeishuSurface implements ChatSurface {
           self.setStatus(true, null);
           Deferred.doneUnsafe(opened, Effect.void);
           ping();
+          void self.catchUp(handler).catch((error) => log.warn("feishu", "what was said while away not read", { connect: self.connect, error: (error as Error).message }));
         });
         const alive = () => {
           heard = clock.currentTimeMillisUnsafe();
@@ -388,10 +389,29 @@ export class FeishuSurface implements ChatSurface {
     return info;
   }
 
+  /// What was said in the chats with a conversation while the station was not connected (Feishu keeps no events for a
+  /// connection that is not there), heard as if it had come: the store keeps each message once.
+  async catchUp(handler: Handler) {
+    for (const [chat, since] of this.threads.conversations(this.connect)) {
+      if (since === 0) continue;
+      let token = "";
+      for (let page = 0; page < 10; page++) {
+        const d = (await this.client.api("GET", "/open-apis/im/v1/messages", null, { container_id_type: "chat", container_id: chat, start_time: String(Math.floor(since / 1000)), sort_type: "ByCreateTimeAsc", page_size: "50", ...(token ? { page_token: token } : {}) }))?.data ?? {};
+        for (const item of Array.isArray(d.items) ? d.items : []) {
+          const m = messageOf(listedAsEvent(item), this.botUserId());
+          if (m !== null && m.at > since) await this.heard(m, handler);
+        }
+        token = text(d.page_token);
+        if (d.has_more !== true || token === "") break;
+      }
+    }
+  }
+
   /// Which thread a message is in (docs/feishu.md「会话怎么分」): a topic group's topic is its own; anything else said in
   /// the chat is the chat's conversation now, begun by the first message that @s the bot (or a new one asked for).
   private async heard(m: FeishuMessage, handler: Handler) {
     this.heardIn.set(m.user, m.chat);
+    if (m.at > 0) this.threads.heard(this.connect, m.chat, m.at);
     let threadTs: string;
     const topics = m.topic !== null && !m.p2p && (await this.chatInfo(m.chat)).topics;
     if (topics) {
@@ -554,7 +574,9 @@ export class FeishuSurface implements ChatSurface {
           const id = text(item?.message_id);
           if (id === before) return all.slice(Math.max(0, all.length - limit));
           const fromBot = text(item?.sender?.sender_type) === "app";
-          const m = messageOf({ sender: { sender_type: "user", sender_id: { open_id: text(item?.sender?.id) } }, message: { ...item, content: item?.body?.content, message_type: item?.msg_type } }, this.botUserId());
+          const event = listedAsEvent(item);
+          event.sender.sender_type = "user";
+          const m = messageOf(event, this.botUserId());
           if (m !== null) all.push({ ts: id, user: m.user, text: m.text, fromBot, ...(m.files.length > 0 ? { files: m.files } : {}) });
         }
         token = text(d.page_token);

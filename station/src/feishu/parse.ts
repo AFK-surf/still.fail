@@ -22,6 +22,8 @@ export type FeishuMessage = {
   fresh: boolean;
   p2p: boolean;
   files: InboundFile[];
+  /// When it was said (ms), as Feishu says.
+  at: number;
 };
 
 /// A card's button pressed, or its form sent.
@@ -143,6 +145,21 @@ export function messageOf(event: Json, bot: string): FeishuMessage | null {
     fresh,
     p2p,
     files,
+    at: Number(text(m?.create_time)) || 0,
+  };
+}
+
+/// A message as the OpenAPI lists it (`GET /im/v1/messages`) in the shape its event has: what `messageOf` reads.
+export function listedAsEvent(item: Json): Json {
+  const sender = item?.sender ?? {};
+  return {
+    sender: { sender_type: text(sender.sender_type) === "app" ? "app" : "user", sender_id: { open_id: text(sender.id) } },
+    message: {
+      ...item,
+      content: item?.body?.content,
+      message_type: item?.msg_type,
+      mentions: (Array.isArray(item?.mentions) ? item.mentions : []).map((x: Json) => ({ key: x?.key, name: x?.name, id: typeof x?.id === "string" ? { open_id: x.id } : x?.id })),
+    },
   };
 }
 

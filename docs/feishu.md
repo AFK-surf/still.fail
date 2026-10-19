@@ -25,6 +25,7 @@
 - image、file、audio、media：附件，`GET /im/v1/messages/:id/resources/:key` 下载到会话的 uploads（50 MB 以内）。
 - 其他类型（表情包、卡片、合并转发、分享群名片……）：一个 `[类型]` 占位。
 - 飞书没有「消息被编辑」的事件，改过的消息 station 不知道。
+- 长连接断着的时候飞书不补发事件（2026-10-20 实测：建好就发的第一条私聊丢了）。所以每次连上，station 都按 `feishu-threads.json` 里记的「最后听到的时间」把有会话的群从那之后的消息读一遍（`GET /im/v1/messages`），库按消息 id 去重。话题群和还没开过会话的私聊不补。
 
 ## 发出去的样子
 
