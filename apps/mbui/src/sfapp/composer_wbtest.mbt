@@ -248,8 +248,8 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.settle() |> ignore
   assert_true(t.find("未发送") is None)
   assert_true(t.find("这条会失败") is Some(_))
-  fix_clock.val = fn() { @host.now() }
-  fix_wake.val = fn(ms) { @host.wake_after(ms) }
+  fix_clock.val = fix_frame_clock
+  fix_wake.val = fix_frame_wake
 }
 
 ///|

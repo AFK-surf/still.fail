@@ -837,6 +837,18 @@ MBUI_OPEN_PAGE=files until the bottom bar reaches it). Before the flows, `script
 the drive flows' folder in the test station's home (e2e-<tag>: a text, a novel of made-up chapters, a folder with a
 file), a run's own, which flow 15 lends through the app.
 
+A run is also kept to be seen again without a backend: with MBUI_CORE_TRACE=1 (only on a local cloud) the app logs
+every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace.py
+out/e2e/mac/NN-name.log NAME` makes it e2e/traces/NAME.trace and src/sfreplay/trace_NAME.mbt (with the flow's script as
+the run had it; a sign-in's tokens put as "-"), and a test runs the flow's script in a Tester over the app with that
+conversation as its core (src/core/replay.mbt, src/sfreplay/flow.mbt): what came given as each frame begins, all that
+may or one at a time, the ids of now matched to the run's, and whatever the app asks that the run did not
+(`diverged`), asks with other params (`fuzzy`), or the run asked and the app does not (`unmade`) said. One flow a test
+process (src/sfreplay/send_text, send_text_frames, agent_reply), as the app's pages keep what they were told. Recorded
+2026-10-20 on Studio (flows 01, 02, 03, 05, all passing): 03 (54 messages) and 05 (62) seen again with nothing
+diverged or fuzzy and every message given; 03 ends on the same screen given all at once or one a frame (正在发送 drawn
+for four frames in the second, none in the first), its one ask not made again a `client.focus` of the run's.
+
 The flows (macOS, 390×844, and Android on the emulator, Pixel 7 size). On 2026-10-19 all 14 passed on macOS; on
 Android 13 of 14 in the full run and 11 (the quote) alone, twice, once it waited for the all-done card (it had held
 while the card moved the list):

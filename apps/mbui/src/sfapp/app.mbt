@@ -212,6 +212,7 @@ fn home() -> Unit {
 ///|
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
+  fix_ctx.val = Some(c)
   appearance(src)
   let t = @sf.begin(c)
   // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages

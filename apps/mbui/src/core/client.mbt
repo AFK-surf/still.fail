@@ -302,3 +302,17 @@ pub fn Client::restarted(self : Client) -> Unit {
     self.ask(s)
   }
 }
+
+///|
+/// Everything forgotten, as a new client: no subscription, no call waiting, ids from 1 (a Replay attached to the
+/// app's client starts it so).
+pub fn Client::reset(self : Client) -> Unit {
+  self.subs.clear()
+  self.by_key.clear()
+  self.calls.clear()
+  self.progress.clear()
+  self.next_id = 1
+  self.beside = None
+  self.version = 0
+  self.fatal = None
+}
