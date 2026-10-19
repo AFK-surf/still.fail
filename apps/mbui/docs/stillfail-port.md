@@ -431,8 +431,7 @@ Not yet, against the current app: marking the page for the chat's agent (the edi
 the draft), its page script (assets/preview/page.js: WebSockets, request bodies on Android, marks) and so a service's
 sockets (a dev server's hot reload), the sized page moved and pinched on its canvas, typing a size of one's own (自定义
 lists the sizes), the size and the toolbar's folding kept on the device (kept while the app runs), a visualization's
-page (PreviewFileScreen), a link elsewhere opened in the browser (no URL hand-off on the hosts: it is copied and said
-so), document.cookie (the cookies are the app's, not the web view's), the opening and closing motion of the page's own,
+page (PreviewFileScreen), document.cookie (the cookies are the app's, not the web view's), the opening and closing motion of the page's own,
 the sized page's screen corners (a native view is clipped to a rectangle: its shadow and square corners on the canvas).
 
 Slice 14's updates (branch player-share, 2026-10-19; ember apps/android app/Updates.kt, shared/Install.kt, Home.kt's
@@ -912,6 +911,8 @@ while the card moved the list):
 | 71 card-keep | a chat ended all done (made by the other device before the app starts): 保留 under its last post; 已保留…; the buttons and the bar's 归档 go | the station's `kept_chats` has alice's row for that chat's thread; the motion log has the buttons and the bar's 归档 going |
 | 72 bar-archive | the same kind of chat archived from its bar's 归档: Home at once, 已归档 | the session archived by hand at the station; the test chat not |
 | 73 pick-words | held still on the agent's words: a word picked, 复制 (已复制); held again, 引用, sent with words (flow 11 now takes 全选 first) | alice's message quotes a passage of the agent's words, not all of them; on macOS the pasteboard holds just a word of them |
+| 74 markdown | the agent's Markdown (e2e/fake `md:`): a table, TypeScript highlighted, its long line scrolled sideways by a finger; a link held: its menu, 复制链接 | the entry has the table and the code; the motion log has the code scrolled across; the link was not handed to the browser; on macOS the pasteboard has the address |
+| 75 open-link | a link in a message tapped: handed to the system (a scripted macOS run only logs it; Android's ACTION_VIEW) | `open-url:` with the address on the app's log |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once

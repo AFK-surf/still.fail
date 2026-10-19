@@ -583,12 +583,12 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
 }
 
 ///|
-/// A link tapped in a message: one to another chat opens it here (AppState.openLink); the rest are not opened yet.
+/// A link tapped in a message (App.kt's UriHandler, AppState.openLink): one to another chat opens it here; any other
+/// is handed to the system (its browser, or the app that takes it: mbui's Ctx::open_url), said when nothing took it.
 fn open_link(c : @ui.Ctx, href : String) -> Unit {
-  ignore(c)
   match chat_of_link(href) {
     Some(r) => app.nav.push(Chat(r))
-    None => ()
+    None => if !c.open_url(href) { say(c, tr("android-misc.link.cantOpen")) }
   }
 }
 

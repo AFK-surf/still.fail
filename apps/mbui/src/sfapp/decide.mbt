@@ -522,8 +522,9 @@ fn option_button(
 
 ///|
 /// A login under way, for one who may finish it (the station's `machineLogins` says `canLogin`): what to do now by its
-/// step, then the step's own pill (filled) and 取消. The page itself is not opened here: there is no browser hand-off
-/// in the app yet, so its link (or the code) goes on the clipboard, said in a toast.
+/// step, then the step's own pill (filled) and 取消 (LoginCards.kt ActiveCard). The pill opens the login's page in the
+/// system's browser (Ctx::open_url; LoginPages.open): a device code first copied (复制并打开), a loopback login's page
+/// once the core listens for its callback (`machineLogin.open`, the browser's answer coming back to this device).
 fn login_active(c : @ui.Ctx, src : Source, station : String, l : Json?, relay : Bool) -> Unit {
   let t = @sf.theme()
   let id = text(l, "id")
@@ -548,15 +549,23 @@ fn login_active(c : @ui.Ctx, src : Source, station : String, l : Json?, relay : 
   }
   let mut main = ""
   let mut copy = ""
+  let mut page = ""
   match step {
     "device" if code != "" => {
       said(fill("web-main.logins.device", [("domain", text(l, "domain"))]), false, false)
-      c.box(padx=10.0, pady=4.0, fn() {
+      // the code, large enough to read and copy by eye; pressed, it is copied (nothing opened), said so
+      let code_id = c.id("login-code/" + id)
+      if c.clicked(code_id) {
+        c.copy_text(code)
+        say(c, tr("web-main.logins.codeCopied"))
+      }
+      c.box(padx=10.0, pady=4.0, id=code_id, fn() {
         c.text(code, size=22.0, weight=600, color=t.p.text, wrap=false, line=29.0) |> ignore
       })
       |> ignore
       main = tr("web-main.logins.copyOpen")
       copy = code
+      page = url
     }
     "loopback" if !relay => {
       said(tr("web-main.logins.needsDesktop"), false, false)
@@ -574,23 +583,44 @@ fn login_active(c : @ui.Ctx, src : Source, station : String, l : Json?, relay : 
         said(domain, false, false)
       }
       main = tr(if flag(l, "listening") { "web-main.logins.openAgain" } else { "web-main.logins.signIn" })
-      copy = url
+      page = "\u{1}relay"
     }
     "open" if url != "" => {
       if domain != "" {
         said(domain, false, false)
       }
       main = tr("web-main.logins.signIn")
-      copy = url
+      page = url
     }
     _ => said(text(l, "statusText"), false, true)
   }
   let cancel_key = "login-cancel/" + station + "/" + id
   c.box(dir=Row, pt=6.0, gap=4.0, align=ACenter, fn() {
     if main != "" {
-      if login_pill(c, "login-main/" + id, main, true, false) {
-        c.copy_text(copy)
-        say(c, tr("web-main.logins.codeCopied"))
+      let open_key = "login-open/" + station + "/" + id
+      if login_pill(c, "login-main/" + id, main, true, doing(open_key)) {
+        if copy != "" {
+          c.copy_text(copy)
+        }
+        if page == "\u{1}relay" {
+          // the core listens for the browser's callback first, then the page opens (LoginCards.kt relay); this
+          // device's port taken is said on the card (relayText), nothing opened
+          act(
+            src,
+            tr("web-main.logins.openWhat"),
+            open_key,
+            "machineLogin.open",
+            { "station": Json::string(station), "id": Json::string(id), "here": Json::boolean(false) },
+            ok=fn(v) {
+              let u = text(Some(v), "url")
+              if u != "" && !@ui.open_url(u) {
+                toast_later(tr("android-misc.link.cantOpen"))
+              }
+            },
+          )
+        } else if page != "" && !c.open_url(page) {
+          say(c, tr("android-misc.link.cantOpen"))
+        }
       }
     }
     if login_pill(c, "login-cancel/" + id, tr("common.cancel"), false, doing(cancel_key)) {
