@@ -295,10 +295,18 @@ pub fn Ctx::take_press(self : Ctx) -> Unit {
     return
   }
   self.active = 0
+  self.taken_at = self.press_at
   self.drag_scroll = 0
   self.dragging = false
   self.editor_drag = false
   if self.edge != 2 {
     self.edge = 0
   }
+}
+
+///|
+/// Where a tap landed since the last frame, wherever it was (on a button, a list, nothing), if one did: a press let
+/// go without dragging, not one the app took (Ctx::take_press). For what a tap anywhere lets go of (a pick of words).
+pub fn Ctx::tapped_anywhere(self : Ctx) -> (Double, Double)? {
+  self.tapped
 }

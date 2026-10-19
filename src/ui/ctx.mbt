@@ -146,6 +146,10 @@ pub struct Ctx {
   /// when the press under way went down (ms), and the press a link's hold was last told of
   mut press_at : Double
   mut held_told : Double
+  /// a tap this frame (a press let go without dragging, not taken by the app: Ctx::tapped_anywhere), and the press
+  /// the app took (Ctx::take_press)
+  mut tapped : (Double, Double)?
+  mut taken_at : Double
   mut press_y : Double
   mut last_y : Double
   mut last_x : Double
@@ -223,6 +227,8 @@ fn Ctx::new() -> Ctx {
     press_x: 0.0,
     press_at: -1.0,
     held_told: -1.0,
+    tapped: None,
+    taken_at: -1.0,
     press_y: 0.0,
     last_y: 0.0,
     last_x: 0.0,

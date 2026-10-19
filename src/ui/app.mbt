@@ -135,6 +135,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // how far what scrolls sideways can (sideways.mbt)
   c.sideways_after_layout()
   c.clicked.clear()
+  c.tapped = None
   if scroll_logging() {
     c.log_scroll()
   }
@@ -442,6 +443,10 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.active != 0 && target == c.active && !c.dragging {
       c.clicked.push(c.active)
+    }
+    // a tap wherever it lands (Ctx::tapped_anywhere), not a drag, not a press the app took
+    if !c.dragging && c.taken_at != c.press_at {
+      c.tapped = Some((x, y))
     }
     if drags.contains(c.drag_scroll) {
       drag_up(
