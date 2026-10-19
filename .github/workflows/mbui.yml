@@ -125,14 +125,23 @@ jobs:
           echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"
           powershell -NoProfile -Command 'irm https://cli.moonbitlang.com/install/powershell.ps1 | iex'
           echo "$USERPROFILE\.moon\bin" >> "$GITHUB_PATH"
-      - uses: actions/cache@v4
+      # saved as soon as they are there (not only when the whole job passes)
+      - id: natives
+        uses: actions/cache/restore@v4
         with:
           path: ~/AppData/Local/stillfail-native
           key: mbui-windows-natives-${{ hashFiles('client/shell/**', 'client/Cargo.toml', 'client/Cargo.lock', 'apps/mbui/engine/**', 'scripts/native.ts') }}
+          # (an older one: each part is kept under its own key, so what did not change is still there)
+          restore-keys: mbui-windows-natives-
       - name: The Windows engine and shell (the release's, else built here)
         run: |
           node scripts/native.ts path shell win32-x64
           node scripts/native.ts path engine win32-x64
+      - if: steps.natives.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/AppData/Local/stillfail-native
+          key: ${{ steps.natives.outputs.cache-primary-key }}
       - name: Packages (the core's, the cloud's; the test station built)
         run: |
           # (the packages' scripts in bash, not cmd: the station's build is sh)
