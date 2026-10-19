@@ -13,6 +13,8 @@ pub struct Tester {
 ///|
 fn reset_globals() -> Unit {
   let c = g
+  app_state.val = 3
+  driver.val = None
   c.count = 0
   c.cur = -1
   c.id_seed = 17
@@ -755,4 +757,11 @@ pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
     }
   }
   out
+}
+
+///|
+/// The host says the app is shown or not, in front or not (as a window's or an activity's changes are told).
+pub fn Tester::app_state(self : Tester, visible : Bool, focused : Bool) -> Unit {
+  on_app_state((if visible { 1 } else { 0 }) | (if focused { 2 } else { 0 }))
+  self.frame()
 }

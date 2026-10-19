@@ -28,6 +28,7 @@ static void go_back(void) {
 static MBView *the_view;
 static int bench_mode;
 static const char *shot_path;
+static void tell_state(void);
 static const char *script;
 
 double mb_now_ms(void) { return CACurrentMediaTime() * 1000.0; }
@@ -471,6 +472,17 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
                                                       object:w
                                                        queue:nil
                                                   usingBlock:^(NSNotification *n) { exit(0); }];
+    for (NSNotificationName name in @[ NSWindowDidBecomeKeyNotification, NSWindowDidResignKeyNotification,
+                                       NSWindowDidMiniaturizeNotification, NSWindowDidDeminiaturizeNotification,
+                                       NSWindowDidChangeOcclusionStateNotification ]) {
+      [[NSNotificationCenter defaultCenter] addObserverForName:name object:w queue:nil
+                                                    usingBlock:^(NSNotification *n) { tell_state(); }];
+    }
+    for (NSNotificationName name in @[ NSApplicationDidBecomeActiveNotification, NSApplicationDidResignActiveNotification ]) {
+      [[NSNotificationCenter defaultCenter] addObserverForName:name object:nil queue:nil
+                                                    usingBlock:^(NSNotification *n) { tell_state(); }];
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{ tell_state(); });
     [NSApp run];
   }
 }
@@ -528,6 +540,49 @@ void mb_host_back_enabled(int32_t on) { back_on = on; }
 moonbit_string_t mb_host_env(moonbit_string_t name) {
   const char *v = getenv(mb_ns_from_string(name).UTF8String);
   return mb_string_from_ns(v ? [NSString stringWithUTF8String:v] ?: @"" : @"");
+}
+
+// The app in front or not (@host.set_app_state): 1 while the window is shown (not hidden, minimized or covered), | 2
+// while it is also the active app's key window; told as any of that changes.
+static void (*state_cb)(int32_t);
+void mb_host_set_app_state(void (*f)(int32_t)) { state_cb = f; }
+static void tell_state(void) {
+  NSWindow *w = the_view.window;
+  if (!state_cb || !w) return;
+  int shown = w.isVisible && !w.isMiniaturized && (w.occlusionState & NSWindowOcclusionStateVisible) != 0;
+  int front = shown && NSApp.isActive && w.isKeyWindow;
+  state_cb((shown ? 1 : 0) | (front ? 2 : 0));
+  [the_view requestFrame];
+}
+
+// A scripted run's input (src/ui/drive.mbt), sent as the system sends it: the input method's calls on the view
+// (insertText, setMarkedText, insertNewline:, deleteBackward:), Cmd+V as a key event through keyDown (the
+// pasteboard read there), the window's picture saved.
+int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
+  MBView *v = the_view;
+  NSString *s = mb_ns_from_string(text);
+  switch (kind) {
+    case 0: [v insertText:s replacementRange:NSMakeRange(NSNotFound, 0)]; break;
+    case 1: [v setMarkedText:s selectedRange:NSMakeRange(s.length, 0) replacementRange:NSMakeRange(NSNotFound, 0)]; break;
+    case 2: [v doCommandBySelector:@selector(insertNewline:)]; break;
+    case 3: {
+      NSEvent *e = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagCommand
+                                   timestamp:0 windowNumber:v.window.windowNumber context:nil characters:@"v"
+                 charactersIgnoringModifiers:@"v" isARepeat:NO keyCode:9];
+      [v keyDown:e];
+      break;
+    }
+    case 4: {
+      int ok = mb_render_snapshot(s.fileSystemRepresentation);
+      fprintf(stdout, "SHOT %s %s\n", s.UTF8String, ok ? "ok" : "failed");
+      fflush(stdout);
+      break;
+    }
+    case 5: [v doCommandBySelector:@selector(deleteBackward:)]; break;
+    default: return 0;
+  }
+  [v requestFrame];
+  return 1;
 }
 
 double mb_host_mem_bytes(void) {

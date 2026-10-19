@@ -444,6 +444,16 @@ static int back_on;
 void mb_host_set_back(mb_back_fn f) { back_cb = f; }
 void mb_host_back_enabled(int32_t on) { back_on = on; }
 
+// The app in front or not (@host.set_app_state): not told here yet (the app counts itself shown and in front).
+void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
+
+// Scripted runs' input given to the host (src/ui/drive.mbt): none of its paths here yet (the app is sent it itself).
+int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
+  (void)kind;
+  (void)text;
+  return 0;
+}
+
 moonbit_string_t mb_host_env(moonbit_string_t name) {
   const char *v = getenv(mb_ns_from_string(name).UTF8String);
   return mb_string_from_ns(v ? [NSString stringWithUTF8String:v] ?: @"" : @"");

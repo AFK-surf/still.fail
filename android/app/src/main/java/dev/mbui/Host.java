@@ -23,6 +23,23 @@ final class Host {
     /** The soft keyboard's height over the app's view, in px, as it moves (MainActivity): MBView lays out above it. */
     static volatile int imeBottom;
 
+    /** MBUI_IME_LOG=1: what the input method asks of the field, and what it is told, on the log. */
+    static boolean imeLog() { return "1".equals(android.system.Os.getenv("MBUI_IME_LOG")); }
+
+    /** The activity resumed, and its window with the focus (MainActivity): what Native.appState is told. */
+    static volatile boolean resumed, focused;
+
+    /** 1 while the app is shown (resumed), | 2 while its window also has the focus (in front). */
+    static int appState() {
+        return (resumed ? 1 : 0) | (resumed && focused ? 2 : 0);
+    }
+
+    /** Tells the app (on the GL thread, before it pauses when the activity does). */
+    static void tellAppState() {
+        int s = appState();
+        if (view != null) view.toGL(() -> Native.appState(s));
+    }
+
     static void requestFrame() {
         if (view != null) view.wantFrame();
     }
@@ -34,11 +51,27 @@ final class Host {
     static void setIme(boolean active, double x, double y, double w, double h,
                        String text, int a, int b) {
         boolean was = imeActive;
-        boolean cleared = text.length() < imeText.length() && text.isEmpty();
+        boolean cleared = text.isEmpty() && !imeText.isEmpty();
+        // MoonBit's text leaves out what the input method is composing (it is at the caret until committed); the input
+        // method's view of the field has it in, the selection after it and the composing region on it. Told without it
+        // (no composing region), an input method takes its composition as ended and commits what it had composed:
+        // Chinese typed through pinyin came out as "ni'hao你好".
+        MBView.MBInput in = view != null ? view.input : null;
+        String comp = in != null && in.composing ? in.composingText : "";
+        int cs = -1, ce = -1;
+        if (active && !comp.isEmpty()) {
+            int at = Math.max(0, Math.min(Math.min(a, b), text.length()));
+            text = text.substring(0, at) + comp + text.substring(at);
+            cs = at;
+            ce = at + comp.length();
+            a = ce;
+            b = ce;
+        }
         imeActive = active;
         imeText = text;
         selStart = a;
         selEnd = b;
+        final int sa = a, sb = b, ca = cs, cb = ce;
         main.post(() -> {
             InputMethodManager imm = (InputMethodManager)
                     activity.getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -52,7 +85,8 @@ final class Host {
                 if (cleared && (view.input == null || !view.input.composing)) {
                     imm.restartInput(view);
                 } else {
-                    imm.updateSelection(view, a, b, -1, -1);
+                    if (imeLog()) log("ime: updateSelection " + sa + "," + sb + " composing " + ca + "," + cb);
+                    imm.updateSelection(view, sa, sb, ca, cb);
                 }
             }
         });
@@ -77,6 +111,32 @@ final class Host {
 
     static int benchMode() {
         return bench;
+    }
+
+    /**
+     * A scripted run's input (src/ui/drive.mbt, from the GL thread), sent as an input method sends it: committed
+     * words, composed words, Enter and backspace through the view's InputConnection, a paste as KEYCODE_PASTE (the
+     * clipboard read there). 0 for what has no path here (4, the window's picture: adb's screencap takes it).
+     */
+    static int drive(int kind, String text) {
+        if (kind == 4 || kind > 5) return 0;
+        main.post(() -> {
+            MBView v = view;
+            if (v == null) return;
+            android.view.inputmethod.InputConnection ic = Script.ic(v);
+            switch (kind) {
+                case 0: ic.commitText(text, 1); break;
+                case 1: ic.setComposingText(text, 1); break;
+                case 2:
+                    ic.sendKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER));
+                    break;
+                case 3:
+                    v.dispatchKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_PASTE));
+                    break;
+                case 5: ic.deleteSurroundingText(1, 0); break;
+            }
+        });
+        return 1;
     }
 
     static void exit(int code) {

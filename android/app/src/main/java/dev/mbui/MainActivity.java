@@ -191,6 +191,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        // told before the GL thread pauses (its queued events run first): the core hears the app left the front
+        Host.resumed = false;
+        Host.tellAppState();
         Host.view.onPause();
     }
 
@@ -198,5 +201,14 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         Host.view.onResume();
+        Host.resumed = true;
+        Host.tellAppState();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean has) {
+        super.onWindowFocusChanged(has);
+        Host.focused = has;
+        Host.tellAppState();
     }
 }

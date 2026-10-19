@@ -206,7 +206,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      */
     static class MBInput extends BaseInputConnection {
         final MBView view;
-        boolean composing;
+        volatile boolean composing;
+        /** What is being composed (shown at the caret, not yet in MoonBit's text). */
+        volatile String composingText = "";
 
         MBInput(MBView v) {
             super(v, false);
@@ -216,7 +218,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         @Override
         public boolean commitText(CharSequence text, int pos) {
             String s = text.toString();
+            if (Host.imeLog()) Host.log("ime: commitText " + s);
             composing = false;
+            composingText = "";
             if (s.equals("\n")) {
                 view.toGL(() -> Native.key(7, 0));
             } else {
@@ -228,6 +232,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         @Override
         public boolean setComposingText(CharSequence text, int pos) {
             String s = text.toString();
+            if (Host.imeLog()) Host.log("ime: setComposingText " + s);
+            composingText = s;
             composing = s.length() > 0;
             view.toGL(() -> Native.text(1, s, s.length(), 0));
             return true;
@@ -235,8 +241,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
         @Override
         public boolean finishComposingText() {
+            if (Host.imeLog()) Host.log("ime: finishComposingText (composing " + composing + ")");
             if (composing) {
                 composing = false;
+                composingText = "";
                 view.toGL(() -> Native.text(2, "", 0, 0));
             }
             return true;

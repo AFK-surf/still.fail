@@ -298,3 +298,34 @@ test "a composer's field: Enter a new line, a long paste handed over, its words 
   assert_eq(kept, "kept")
   assert_eq(a, 4)
 }
+
+///|
+test "a scripted run (MBUI_DRIVE) taps words on screen, types through the input method and waits on what comes" {
+  let taps = Ref::new(0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+      if c.button("按一下") {
+        taps.val = taps.val + 1
+      }
+      c.text("按了 \{taps.val} 次") |> ignore
+      c.editor("field", placeholder="写点什么", enter_sends=false) |> ignore
+    })
+    |> ignore
+  })
+  let log = t.drive(
+    "# a comment\ntap 按一下\nuntil 按了 1 次\ntap 写点什么\nmark ni\ntype 你好\nenter\ntype 第二行\nfield 你好\\n第二行\nexit",
+  )
+  assert_true(log.contains("DRIVE PASS"))
+  assert_true(log.contains("EXIT 0"))
+  assert_eq(taps.val, 1)
+  let (_, text, _, _) = t.ime()
+  assert_eq(text, "你好\n第二行")
+  // the field emptied
+  let cleared = t.drive("clear\nempty")
+  assert_true(cleared.contains("DRIVE PASS"))
+  // what never comes fails the run, saying where and what was on screen
+  let failed = t.drive("timeout 100\nuntil 没有这句话")
+  assert_true(failed.iter().any(fn(l) { l.has_prefix("DRIVE FAIL line 2: until 没有这句话") }))
+  assert_true(failed.iter().any(fn(l) { l.contains("按了 1 次") }))
+  assert_true(failed.contains("EXIT 1"))
+}

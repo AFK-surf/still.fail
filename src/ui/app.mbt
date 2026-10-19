@@ -34,7 +34,9 @@ struct Bench {
 pub fn run(title : String, view : (Ctx) -> Unit) -> Unit {
   g_view.val = view
   bench.mode = @host.bench_mode()
+  drive_init()
   @host.set_back(fn(k, x, p, e) { on_back(k, x, p, e) })
+  @host.set_app_state(fn(s) { on_app_state(s) })
   @host.run(
     title,
     fn(w, h, s, t) { on_frame(w, h, s, t) },
@@ -57,6 +59,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if bench.mode > 0 {
     bench_step(c, t3 - t0, t4 - t3)
   }
+  drive_frame(c)
   if c.wants_frame || bench.mode > 0 {
     h_request_frame()
   } else if c.wake_at > 0.0 {
@@ -519,4 +522,50 @@ fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
 /// Moves focus to an editor (used by tests and the bench).
 pub fn Ctx::focus_editor(self : Ctx, key : String) -> Unit {
   self.focus = self.id(key)
+}
+
+///|
+/// Whether the app is shown (1) and in front (2), as the host last said (shown and in front until it says).
+let app_state : Ref[Int] = Ref::new(3)
+
+///|
+/// Who is told when that changes (the app's one: `on_app_change`).
+let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref::new(None)
+
+///|
+fn on_app_state(s : Int) -> Unit {
+  // a scripted run stands for someone looking at the app: what the host says meanwhile (a locked screen's window
+  // is covered, a task's app not active) is let be
+  if driver.val is Some(_) {
+    h_log("DRIVE the host says the app is \{s} (1 shown, 2 in front): kept in front for the run")
+    return
+  }
+  if s == app_state.val {
+    return
+  }
+  app_state.val = s
+  match app_change.val {
+    Some(f) => f((s & 1) != 0, (s & 2) != 0)
+    None => ()
+  }
+  h_request_frame()
+}
+
+///|
+/// Whether the app's window is shown (not hidden, minimized, covered; Android: the activity resumed).
+pub fn app_visible() -> Bool {
+  (app_state.val & 1) != 0
+}
+
+///|
+/// Whether it is also in front (the key window of the active app; Android: with the window's focus).
+pub fn app_focused() -> Bool {
+  (app_state.val & 2) != 0
+}
+
+///|
+/// `f` is told (shown, in front) as soon as that changes, even when no frame comes after (Android tells it as the
+/// activity pauses, its GL thread about to stop); one at a time, the last given.
+pub fn on_app_change(f : (Bool, Bool) -> Unit) -> Unit {
+  app_change.val = Some(f)
 }

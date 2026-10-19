@@ -33,7 +33,7 @@ static jclass host_cls, text_cls, images_cls, login_cls, picks_cls;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
-    m_pk_end;
+    m_pk_end, m_drive;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -66,6 +66,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_bench = (*env)->GetStaticMethodID(env, host_cls, "benchMode", "()I");
   m_exit = (*env)->GetStaticMethodID(env, host_cls, "exit", "(I)V");
   m_back_enabled = (*env)->GetStaticMethodID(env, host_cls, "backEnabled", "(Z)V");
+  m_drive = (*env)->GetStaticMethodID(env, host_cls, "drive", "(ILjava/lang/String;)I");
   m_metrics = (*env)->GetStaticMethodID(env, text_cls, "fontMetrics", "(DII[D)V");
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
@@ -356,6 +357,13 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_text(JNIEnv *env, jclass c, jint kin
 
 // The system's back (MainActivity: OnBackAnimationCallback, its predictive back gesture; on older systems
 // onBackPressed): kind 0 started, 1 moved, 2 gone back, 3 called off; x in logical pixels, edge 0 left, 1 right.
+// The app in front or not (@host.set_app_state), as MainActivity tells it (Host.appState), on the GL thread.
+static void (*state_cb)(int32_t);
+void mb_host_set_app_state(void (*f)(int32_t)) { state_cb = f; }
+JNIEXPORT void JNICALL Java_dev_mbui_Native_appState(JNIEnv *env, jclass c, jint state) {
+  if (state_cb) state_cb(state);
+}
+
 JNIEXPORT void JNICALL Java_dev_mbui_Native_back(JNIEnv *env, jclass c, jint kind, jfloat x, jfloat progress,
                                                 jint edge) {
   if (back_cb) back_cb(kind, x, progress, edge);
@@ -456,6 +464,16 @@ void mb_host_set_back(mb_back_fn f) { back_cb = f; }
 void mb_host_back_enabled(int32_t on) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_back_enabled, (jboolean)(on != 0));
+}
+
+// A scripted run's input (src/ui/drive.mbt), as the system sends it (Host.drive: the view's InputConnection, a
+// KEYCODE_PASTE); 0 for what it has no path for (the window's picture: adb's screencap takes it).
+int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
+  JNIEnv *env = env_();
+  jstring s = jstr(env, text);
+  jint r = (*env)->CallStaticIntMethod(env, host_cls, m_drive, (jint)kind, s);
+  (*env)->DeleteLocalRef(env, s);
+  return r;
 }
 
 // MainActivity sets the intent's `env` extras as the process's environment before the app starts.

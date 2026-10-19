@@ -41,8 +41,35 @@ final class Picks {
     static synchronized int start(int kind) {
         int id = next++;
         asks.put(id, new Ask());
-        Host.main.post(() -> open(id, kind));
+        String given = android.system.Os.getenv("MBUI_PICK_FILES");
+        if (given != null && !given.isEmpty()) {
+            // scripted runs (as on macOS): every ask answered at once with these files (paths the app can read, as
+            // its own files'), no picker
+            new Thread(() -> given(id, given.split("\\|")), "mbui-pick").start();
+        } else {
+            Host.main.post(() -> open(id, kind));
+        }
         return id;
+    }
+
+    private static void given(int id, String[] paths) {
+        Ask k = asks.get(id);
+        if (k == null) return;
+        for (String p : paths) {
+            java.io.File f = new java.io.File(p);
+            try (InputStream in = new java.io.FileInputStream(f)) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] buf = new byte[1 << 16];
+                for (int r; (r = in.read(buf)) > 0; ) out.write(buf, 0, r);
+                synchronized (k) {
+                    k.names.add(f.getName());
+                    k.bytes.add(out.toByteArray());
+                }
+            } catch (Exception e) {
+                Host.log("pick: " + p + ": " + e);
+            }
+        }
+        done(id, k.names.isEmpty() ? -1 : 1);
     }
 
     private static void open(int id, int kind) {

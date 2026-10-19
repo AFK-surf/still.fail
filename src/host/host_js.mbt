@@ -233,6 +233,21 @@ pub fn env(name : String) -> String {
 }
 
 ///|
+/// Who to tell when the app comes to the front or leaves it (host_native.mbt): the browser's page never tells (shown
+/// and in front).
+pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
+  ignore(f)
+}
+
+///|
+/// A scripted run's input given to the host (see host_native.mbt): the browser has none of these paths.
+pub fn drive(kind : Int, text : String) -> Bool {
+  ignore(kind)
+  ignore(text)
+  false
+}
+
+///|
 extern "js" fn js_image_load(src : String, max_px : Int) -> Int =
   #|(s, m) => globalThis.__mbhost.imageLoad(s, m)
 

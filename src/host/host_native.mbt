@@ -85,6 +85,11 @@ extern "C" fn ffi_back_enabled(on : Int) -> Unit = "mb_host_back_enabled"
 #borrow(name)
 extern "C" fn ffi_env(name : String) -> String = "mb_host_env"
 
+#borrow(text)
+extern "C" fn ffi_drive(kind : Int, text : String) -> Int = "mb_host_drive"
+
+extern "C" fn ffi_set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit = "mb_host_set_app_state"
+
 ///|
 pub fn run(
   title : String,
@@ -235,6 +240,25 @@ pub fn back_enabled(on : Bool) -> Unit {
 /// parameter of that name).
 pub fn env(name : String) -> String {
   ffi_env(name)
+}
+
+///|
+/// Who to tell when the app comes to the front or leaves it: `f` gets 1 while its window is shown, | 2 while it is
+/// also in front (the key window of the active app; Android: the activity resumed with the window's focus). Told on
+/// each change, on the app's thread (Android: before the GL thread pauses). Hosts that never tell leave the app as
+/// shown and in front.
+pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
+  ffi_set_app_state(f)
+}
+
+///|
+/// A scripted run's input given to the host to send as its own (src/ui/drive.mbt): `drive_insert` words committed and
+/// `drive_mark` composed by the input method (macOS: NSTextInputClient's insertText and setMarkedText; Android: the
+/// view's InputConnection), `drive_newline` its Enter, `drive_paste` the system's paste of the clipboard (Cmd+V,
+/// KEYCODE_PASTE), `drive_backspace`, `drive_shot` the window's picture saved at `text` (a path). False where the host
+/// has no such path (the caller sends it to the app itself).
+pub fn drive(kind : Int, text : String) -> Bool {
+  ffi_drive(kind, text) != 0
 }
 
 // Images: decoded off the UI thread to at most max_px on the long side,
