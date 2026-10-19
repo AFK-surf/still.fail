@@ -648,9 +648,9 @@ export class Hub {
   }
 
   /// What every runtime process starts with changed (the station's variables for its agents, ops/agent-env.ts): each
-  /// session's process takes it now if idle, else before its next turn.
+  /// session's process ends now if idle, else before its next turn, and the next starts with it (none retuned in place).
   everyChanged() {
-    for (const actor of [...this.actors.values()]) void actor.changed().catch(() => {});
+    for (const actor of [...this.actors.values()]) void actor.changed(true).catch(() => {});
   }
 
   /// A profile was deleted: the sessions on it are taken on by another of their runtime's (their process ends now if

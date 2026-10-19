@@ -143,6 +143,8 @@ export type Snapshot = {
   stopRequested: boolean;
   /// Changed while busy (optional: a station from before it does not say).
   stale?: boolean;
+  /// What it was changed in needs a new process, not one retuned (optional: a station from before it does not say).
+  restart?: boolean;
 };
 
 const t = (key: string, args?: Record<string, unknown>) => tr(stationLang(), key, args);
@@ -168,6 +170,8 @@ export class SessionActor {
   /// How it runs was changed and its process has not caught up: before the next turn it takes the new model and effort
   /// in place, or ends so the next one starts as changed.
   private stale = false;
+  /// What changed is not a model or an effort (the station's variables for its agents): no taking it in place.
+  private restart = false;
   private profile: string | null = null;
   private generation = 0;
   private phase: Phase = "idle";
@@ -400,9 +404,13 @@ export class SessionActor {
     });
   }
 
-  /// How it runs (profile, model, effort) changed: its process takes it now if idle, else before its next turn.
-  changed(): Promise<void> {
-    if (this.agent) this.stale = true;
+  /// How it runs (profile, model, effort) changed: its process takes it now if idle, else before its next turn. `restart`:
+  /// what changed is what its process started with (its variables), which only a new one takes.
+  changed(restart = false): Promise<void> {
+    if (this.agent) {
+      this.stale = true;
+      if (restart) this.restart = true;
+    }
     return this.enqueue(() => this.catchUp(!this.turn && this.waiting === null));
   }
 
@@ -469,6 +477,7 @@ export class SessionActor {
       nudges: this.nudges,
       stopRequested: this.stopRequested,
       stale: this.stale,
+      restart: this.restart,
     };
     agent?.detach();
     this.close();
@@ -491,6 +500,7 @@ export class SessionActor {
     this.nudges = snap.nudges;
     this.stopRequested = snap.stopRequested;
     this.stale = snap.stale ?? false;
+    this.restart = snap.restart ?? false;
     this.idleSince = this.now();
     if (snap.waitingMs !== null) this.waitMs(snap.waitingSeconds, snap.waitingMs);
   }
@@ -749,13 +759,14 @@ export class SessionActor {
     try {
       profile = row ? this.deps.runOn(this.key) : null;
     } catch {}
-    if (row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
+    if (!this.restart && row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
       this.stale = false;
       log.info("session", "session process takes the change in place", { session: this.key, model: row.model ?? "", effort: row.effort ?? "" });
       return;
     }
     if (!end) return;
     this.stale = false;
+    this.restart = false;
     this.agent = null;
     log.info("session", "ending the process from before the session was changed", { session: this.key });
     await agent.session.dispose();
@@ -805,6 +816,7 @@ export class SessionActor {
     this.deps.ranIn?.(this.key, agent.id(), profile.id);
     this.agent = { generation, session: agent };
     this.stale = false;
+    this.restart = false;
     this.profile = profile.id;
     return agent;
   }

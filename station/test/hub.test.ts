@@ -1337,6 +1337,37 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await r.close();
 });
 
+test("the station's variables for its agents changed: a process that could take a model in place still ends, the next starts with them", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const running = r.claude.last();
+  // Changed while a turn runs: that turn goes on; its process ends before the next.
+  r.hub.everyChanged();
+  await settle();
+  assert.ok(!running.disposed, "the running turn is not cut off");
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  running.complete();
+  await settle();
+  await r.accept({ ...say("<@UBOT> once more"), threadTs: m.threadTs });
+  await settle();
+  assert.ok(running.disposed, "its process ended before the next turn");
+  assert.deepEqual(running.retuned, [], "not retuned in place");
+  const next = r.claude.last();
+  assert.notEqual(next, running);
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  next.complete();
+  await settle();
+  // Idle: it ends at once.
+  r.hub.everyChanged();
+  await settle();
+  assert.ok(next.disposed);
+  assert.deepEqual(next.retuned, []);
+  await r.close();
+});
+
 test("a deleted profile's sessions go on on another, and stop when no other can run them", async () => {
   const r = new Rig();
   const m = say("<@UBOT> fix the build");
