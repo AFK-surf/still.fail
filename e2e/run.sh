@@ -40,7 +40,7 @@ export E2E_ACCOUNT_B64=$(curl -sf "$MBUI_CLOUD/__dev/account?user=alice" | base6
 mkdir -p $FILES
 [ -f $FILES/e2e-photo.jpg ] || cp test/images/$(ls test/images | grep -i '\.jpg$' | head -1) $FILES/e2e-photo.jpg
 [ -f $FILES/e2e-data.bin ] || head -c 9437184 /dev/urandom > $FILES/e2e-data.bin
-# what alice's other device sends for the preview (22-preview): a PDF of two pages, a short video (H.264, its index
+# what alice's other device sends for the preview (29-preview): a PDF of two pages, a short video (H.264, its index
 # first), a page with a script
 [ -f $FILES/e2e-doc.pdf ] || python3 test/apple_views/make_pdf.py $FILES/e2e-doc.pdf
 [ -f $FILES/e2e-clip.mp4 ] || ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=640x360:rate=30 -t 4 \
