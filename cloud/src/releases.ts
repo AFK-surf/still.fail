@@ -154,6 +154,7 @@ const FEEDS: Record<string, string> = {
   "win-beta": "desktop/stillfail-beta.yml",
   // still.fail mbui (apps/mbui), the test app in mbui
   "android-mbui": "android/mbui/latest.json",
+  "mac-mbui": "mac/mbui/latest.json",
 };
 
 /**
@@ -165,7 +166,8 @@ export async function latestDownload(bucket: ReleaseBucket | undefined, app: str
   const object = feed ? await bucket?.get(feed) : null;
   if (!object) return null;
   const text = await new Response(object.body).text();
-  if (app.startsWith("mac") || app.startsWith("win")) {
+  // electron-updater's feeds (the desktop app's) are YAML; the rest are an AppRelease's JSON
+  if (feed!.endsWith(".yml")) {
     const file = /^path:\s*(\S+)\s*$/m.exec(text)?.[1];
     return file ? `desktop/${file}` : null;
   }

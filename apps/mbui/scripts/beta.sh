@@ -8,9 +8,13 @@
 #                                        Android release's key), into $RELEASE_DIR as android/stillfail-mbui-<n>.apk
 #                                        and android/mbui/latest.json (still.fail's AppRelease, news: the commits since
 #                                        the build the feed names now, of what the app is built from)
-#   apps/mbui/scripts/beta.sh publish    the APK put (scripts/release-put.sh), fetched back from where it is served
-#                                        and checked (size, SHA-256), then the feed: https://app.still.fail/releases/
-#                                        latest/android-mbui is the newest from then on
+#   apps/mbui/scripts/beta.sh mac        the macOS app (scripts/mac-app.sh: still.fail mbui.app, fail.still.mbui),
+#                                        signed with still.fail's identity (scripts/mac-sign.py), zipped, into
+#                                        $RELEASE_DIR as mac/stillfail-mbui-<n>-arm64-mac.zip and mac/mbui/latest.json
+#   apps/mbui/scripts/beta.sh publish android|mac
+#                                        what `build` or `mac` made put (scripts/release-put.sh), fetched back from where
+#                                        it is served and checked (size, SHA-256), then its feed: https://app.still.fail/
+#                                        releases/latest/android-mbui (mac-mbui) is the newest from then on
 # Warm between runs (WORK, MBUI_CACHE): the build runs in a copy of apps/mbui kept outside the job's checkout (which the
 # other jobs' clean takes), so moonc's and the compiler's outputs, the link and Gradle's build stay; core.hbc is kept
 # by its inputs (HBC_CACHE); Gradle's daemon lives on between builds for its idle timeout (android/gradle.properties).
@@ -102,11 +106,29 @@ for root, dirs, names in os.walk(dst):
 ' "$A" "$WORK"
 }
 
+# feed PART N NAME FILE: $RELEASE_DIR/PART/PART/mbui/latest.json (still.fail's AppRelease) for FILE, put as NAME; news:
+# what came since the build the feed names now (versionCode n is main's nth commit), of what the app is made of
+feed() {
+  local part=$1 n=$2 name=$3 file=$4 prev prev_sha
+  prev=$(curl -fsS --max-time 10 "$ORIGIN/releases/$part/mbui/latest.json" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionCode"])' 2>/dev/null || true)
+  prev_sha=
+  [ -z "$prev" ] || prev_sha=$(git -C "$REPO" rev-list --reverse HEAD | sed -n "${prev}p")
+  mkdir -p "$RELEASE_DIR/$part/$part/mbui"
+  git -C "$REPO" log --format=%s ${prev_sha:+$prev_sha..}HEAD -n 30 -- apps/mbui client media \
+    | python3 -c '
+import json, sys
+n, name, sha, size, out = sys.argv[1:6]
+news = [l.strip() for l in sys.stdin if l.strip()]
+json.dump({"versionCode": int(n), "versionName": "0.1." + n, "file": name, "sha256": sha, "size": int(size), "news": news},
+          open(out, "w"), ensure_ascii=False)' "$n" "$name" "$(shasum -a 256 "$file" | cut -d' ' -f1)" "$(wc -c < "$file" | tr -d ' ')" \
+      "$RELEASE_DIR/$part/$part/mbui/latest.json"
+}
+
 build() {
   local t0=$(now) n apk name sum size badging cert prev prev_sha
   n=$(build_number)
   copy
-  rm -rf "$RELEASE_DIR" && mkdir -p "$RELEASE_DIR/android/mbui"
+  rm -rf "$RELEASE_DIR/android" && mkdir -p "$RELEASE_DIR/android/android/mbui"
   # every still.fail Android release's key (the Android Gradle plugin's signingConfigs.debug: $ANDROID_USER_HOME's)
   if [ -n "${ANDROID_DEBUG_KEYSTORE_B64:-}" ]; then
     export ANDROID_USER_HOME=$(mktemp -d "${RUNNER_TEMP:-/tmp}/mbui-key.XXXXXX")
@@ -126,24 +148,36 @@ build() {
   echo "$badging" | grep -q "name='fail.still.mbui' versionCode='$n' " || { echo "beta: not this build's APK: $badging" >&2; exit 1; }
   cert=$("$BT/apksigner" verify --print-certs "$apk" | grep 'certificate SHA-256 digest' | head -1 | sed 's/.*: //')
   name=android/stillfail-mbui-$n.apk
-  cp "$apk" "$RELEASE_DIR/$name"
+  cp "$apk" "$RELEASE_DIR/android/$name"
   sum=$(shasum -a 256 "$apk" | cut -d' ' -f1)
   size=$(wc -c < "$apk" | tr -d ' ')
-  # news: what came since the build the feed names now (versionCode n is main's nth commit), of what the app is made of
-  prev=$(curl -fsS --max-time 10 "$ORIGIN/releases/android/mbui/latest.json" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionCode"])' 2>/dev/null || true)
-  prev_sha=
-  [ -z "$prev" ] || prev_sha=$(git -C "$REPO" rev-list --reverse HEAD | sed -n "${prev}p")
-  git -C "$REPO" log --format=%s ${prev_sha:+$prev_sha..}HEAD -n 30 -- apps/mbui client media \
-    | python3 -c '
-import json, sys
-n, name, sha, size, out = sys.argv[1:6]
-news = [l.strip() for l in sys.stdin if l.strip()]
-json.dump({"versionCode": int(n), "versionName": "0.1." + n, "file": name, "sha256": sha, "size": int(size), "news": news},
-          open(out, "w"), ensure_ascii=False)' "$n" "$name" "$sum" "$size" "$RELEASE_DIR/android/mbui/latest.json"
+  feed android "$n" "$name" "$apk"
   summary "- APK 0.1.$n: $size bytes, SHA-256 $sum, signed by $cert"
   summary "- $(grep '^android.sh: APP=' "$C/build.log" | sed 's/^android.sh: //'); $(grep '^core.hbc ' "$C/build.log" | head -1); build in $(secs $t0) s"
   # what this app's Gradle daemon (android/gradle.properties: -Xmx2048m, 30 minutes idle) holds of the machine's memory
   summary "- its Gradle daemon: $(ps -eo rss,args | grep '[G]radleDaemon' | grep -e '-Xmx2048m' | awk '{s += $1} END {printf "%d MB resident", s / 1024}')"
+}
+
+# The macOS app, built in WORK (warm as the APK's: moon's outputs, the compiler's, the Rust shell's target kept in
+# $C/cargo-target), signed under scripts/mac-sign.py (still.fail's identity, its signing lock held for the signing only).
+mac() {
+  local t0=$(now) n zip name tb
+  n=$(build_number)
+  copy
+  rm -rf "$RELEASE_DIR/mac" && mkdir -p "$RELEASE_DIR/mac/mac"
+  # the core's Rust shell, linked in: cargo decides what changed (its target kept; through the job's sccache)
+  CARGO_TARGET_DIR=$C/cargo-target MBUI_CORE_FRESH=1 MBUI_BUILD=$n EMBER="$REPO" bash "$WORK/scripts/mac-app.sh" build 2>&1 \
+    | tee "$C/mac-build.log"
+  tb=$(secs $t0)
+  MBUI_BUILD=$n EMBER="$REPO" python3 "$A/scripts/mac-sign.py" -- bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"
+  zip=$WORK/out/mac/stillfail-mbui-$n-arm64-mac.zip
+  [ -f "$zip" ] || { echo "beta: no zip of the app" >&2; exit 1; }
+  grep -q '^codesign: Authority=' "$C/mac-sign.log" || { echo "beta: the app is not signed with an identity" >&2; exit 1; }
+  name=mac/stillfail-mbui-$n-arm64-mac.zip
+  cp "$zip" "$RELEASE_DIR/mac/$name"
+  feed mac "$n" "$name" "$zip"
+  summary "- macOS app 0.1.$n: $(wc -c < "$zip" | tr -d ' ') bytes, $(grep '^codesign: Authority=' "$C/mac-sign.log" | head -1 | sed 's/^codesign: //'); built in $tb s, signed and zipped in $(secs $t0) s"
+  summary "- $(grep '^mac-app.sh: .*\.app' "$C/mac-build.log" | sed 's/^mac-app.sh: //')"
 }
 
 # fetched back from where it is served (the public URL; Cloudflare's API while the cloud does not serve it yet), and
@@ -166,22 +200,24 @@ check_put() {
 }
 
 publish() {
-  local t0=$(now) name n
-  n=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["versionCode"])' "$RELEASE_DIR/android/mbui/latest.json")
-  name=android/stillfail-mbui-$n.apk
-  cp "$RELEASE_DIR/$name" "$C/last.apk"
+  local part=${1:-android} t0=$(now) name n dir
+  dir=$RELEASE_DIR/$part
+  n=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["versionCode"])' "$dir/$part/mbui/latest.json")
+  name=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["file"])' "$dir/$part/mbui/latest.json")
+  cp "$dir/$name" "$C/last-$part"
   (cd "$REPO/cloud" && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-  sh "$REPO/scripts/release-put.sh" --files "$RELEASE_DIR"
+  sh "$REPO/scripts/release-put.sh" --files "$dir"
   local tp=$(secs $t0)
-  check_put "$name" "$C/last.apk" || { echo "beta: $name did not come back as made: the feed stays as it was" >&2; exit 1; }
+  check_put "$name" "$C/last-$part" || { echo "beta: $name did not come back as made: the feed stays as it was" >&2; exit 1; }
   local tc=$(secs $t0)
-  sh "$REPO/scripts/release-put.sh" --feeds "$RELEASE_DIR"
-  summary "- put $name (${tp} s), checked (${tc} s), the feed: $ORIGIN/releases/android/mbui/latest.json, $ORIGIN/releases/latest/android-mbui ($(secs $t0) s)"
+  sh "$REPO/scripts/release-put.sh" --feeds "$dir"
+  summary "- put $name (${tp} s), checked (${tc} s), the feed: $ORIGIN/releases/$part/mbui/latest.json, $ORIGIN/releases/latest/$part-mbui ($(secs $t0) s)"
 }
 
 case "${1:-}" in
   tools) tools ;;
   build) build ;;
-  publish) publish ;;
+  mac) mac ;;
+  publish) publish "${2:-android}" ;;
   *) sed -n '2,20p' "$0"; exit 1 ;;
 esac

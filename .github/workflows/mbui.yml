@@ -1,7 +1,8 @@
 # still.fail mbui (apps/mbui: still.fail's Android app written in mbui, fail.still.mbui, a test app of its own beside
 # still.fail's): on main, each push that changes what it is built from is out in a few minutes, signed with every
 # still.fail Android release's key, at https://app.still.fail/releases/latest/android-mbui (its feed
-# android/mbui/latest.json, still.fail's AppRelease). A branch's push builds it (no key, nothing put): the evidence.
+# android/mbui/latest.json, still.fail's AppRelease); its macOS app after it, signed with still.fail's macOS identity,
+# at /releases/latest/mac-mbui (mac/mbui/latest.json). A branch's push builds it (no key, nothing put): the evidence.
 # A workflow of its own, not a job of pipeline.yml: it does not wait for the pipeline's run before it (main's runs queue
 # one after the other, and the checks take longer than this app's whole release), and nothing of the pipeline waits
 # for it or fails with it (deployed/beta, put, done). As asked (2026-10-19), its tests do not hold it back: it is a
@@ -51,7 +52,33 @@ jobs:
       - name: Put it, check it, then its feed
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: bash apps/mbui/scripts/beta.sh publish
+        run: bash apps/mbui/scripts/beta.sh publish android
+
+  # The macOS app, after the APK (out by then, whatever happens here), on the same runner: signed with still.fail's
+  # identity as its desktop app is (.github/release-desktop.py: an Apple Development certificate, no hardened runtime,
+  # not notarized).
+  mac:
+    needs: beta
+    if: ${{ !cancelled() && github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    runs-on: mbui
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - name: Tools (MoonBit, mbui, the core's packages)
+        run: bash apps/mbui/scripts/beta.sh tools
+      - name: The macOS app, built and signed
+        env:
+          MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
+          MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
+        run: bash apps/mbui/scripts/beta.sh mac
+      - name: Put it, check it, then its feed (mac)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: bash apps/mbui/scripts/beta.sh publish mac
 
   build:
     if: github.repository == 'AFK-surf/still.fail' && github.ref != 'refs/heads/main' && github.event_name == 'push'

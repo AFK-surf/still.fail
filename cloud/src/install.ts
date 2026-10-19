@@ -91,6 +91,9 @@ const APP_FILES: [RegExp, string][] = [
   // its feed and the builds it names.
   [/^android\/mbui\/latest\.json$/, "application/json"],
   [/^android\/stillfail-mbui-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  // and its macOS app (apps/mbui/scripts/mac-app.sh): the same kind of feed, the zips it names
+  [/^mac\/mbui\/latest\.json$/, "application/json"],
+  [/^mac\/stillfail-mbui-[0-9]+-arm64-mac\.zip$/, "application/zip"],
 ];
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */

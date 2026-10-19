@@ -12,10 +12,10 @@
 const BUCKET = "stillfail-releases";
 const FEEDS = [
   "desktop/stillfail-beta-mac.yml", "desktop/stillfail-beta.yml", "android/beta/latest.json",
-  "desktop/stillfail-mac.yml", "desktop/stillfail.yml", "android/latest.json", "android/mbui/latest.json",
+  "desktop/stillfail-mac.yml", "desktop/stillfail.yml", "android/latest.json", "android/mbui/latest.json", "mac/mbui/latest.json",
 ];
 /** An installer: its name before and after the version, and the version; then .blockmap or .sig when it is one. */
-const INSTALLER = /^((?:desktop|android)\/stillfail-(?:beta-|mbui-)?)(\d+(?:\.\d+\.\d+)?)(-[\w-]+\.(?:zip|exe)|\.apk)(\.blockmap|\.sig)?$/;
+const INSTALLER = /^((?:desktop|android|mac)\/stillfail-(?:beta-|mbui-)?)(\d+(?:\.\d+\.\d+)?)(-[\w-]+\.(?:zip|exe)|\.apk)(\.blockmap|\.sig)?$/;
 /** How many of a beta's newest installers, and of its blockmaps, stay. */
 const BETA_INSTALLERS = 5;
 const BETA_BLOCKMAPS = 30;

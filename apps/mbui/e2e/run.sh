@@ -135,7 +135,8 @@ if [ $PLATFORM = android ]; then
 fi
 if [ $PLATFORM = mac ]; then
   [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/mac.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
-  EXE=$ROOT/_build/native/release/build/stillfail/stillfail/stillfail.exe
+  # (E2E_EXE: another build of it, as the app bundle's, out/mac/still.fail mbui.app/Contents/MacOS/stillfail-mbui)
+  EXE=${E2E_EXE:-$ROOT/_build/native/release/build/stillfail/stillfail/stillfail.exe}
   export MB_CORE_BUNDLE=$ROOT/out/core/core.js
 fi
 
@@ -155,7 +156,7 @@ run_flow() {
     env MBUI_WIN=390x844 $extra MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
       MBUI_SHOT_DIR=$OUT/$name MBUI_DRIVE_B64=$(base64 < $script | tr -d '\n') \
       MBUI_PICK_FILES="$FILES/e2e-photo.jpg|$FILES/e2e-data.bin" MBUI_CALL_LOG=1 MBUI_MOTION_LOG=1 \
-      timeout ${E2E_FLOW_TIMEOUT:-300} $EXE 2>&1 | while IFS= read -r line; do
+      timeout ${E2E_FLOW_TIMEOUT:-300} "$EXE" 2>&1 | while IFS= read -r line; do
         echo "$line" >> $log
         case "$line" in
           "DRIVE LOG do: "*) "$ROOT/scripts/e2e-local.sh" ${line#DRIVE LOG do: } < /dev/null >> $log 2>&1 & ;;

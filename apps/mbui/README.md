@@ -39,6 +39,19 @@ These are mbui's own scripts (`mbui/scripts/`) building this module (`MBUI_APP_M
 the core's engine and bytecode for Android (`scripts/android-core.sh`), its shell and script on macOS
 (`scripts/core.sh`).
 
+## The macOS app
+
+`scripts/mac-app.sh` makes `out/mac/still.fail mbui.app` (`fail.still.mbui`, arm64 as still.fail's desktop app): the
+release build of `APP=stillfail`, the core's script in its Resources (the core host finds it there), its icon
+(`scripts/mac-icon.swift`: the Android icon on macOS's rounded square), an Info.plist of its own; then signs, checks
+and zips it (`out/mac/stillfail-mbui-<n>-arm64-mac.zip`). In CI it is signed with still.fail's macOS identity as its
+desktop app is (`scripts/mac-sign.py`, after `.github/release-desktop.py`): an Apple Development certificate, no
+hardened runtime, **not notarized** (still.fail has no notarization, and that certificate cannot be notarized: it
+needs a Developer ID). So Gatekeeper refuses the app downloaded from the web on first open (`spctl` says rejected):
+System Settings → Privacy & Security → Open Anyway once, or `xattr -dr com.apple.quarantine "still.fail mbui.app"`.
+As a bundle it has the system's notifications (mbui's mac host: UNUserNotificationCenter), its own Keychain items
+and data (`~/Library/Application Support/fail.still.mbui`).
+
 ## The beta
 
 Every push to main that changes what the app is built from (this directory, `client/`, `media/`, the native parts) is
@@ -46,6 +59,10 @@ built, signed with every still.fail Android release's key and put out by `.githu
 (`scripts/beta.sh`), its feed `android/mbui/latest.json` (still.fail's `AppRelease`):
 
 https://app.still.fail/releases/latest/android-mbui
+
+and after it, on the same runner, the macOS app (`scripts/beta.sh mac`; feed `mac/mbui/latest.json`):
+
+https://app.still.fail/releases/latest/mac-mbui
 
 Measured (2026-10-19, mini1-6, push to main → the feed out): ~70 s with a fresh build directory and no Gradle daemon
 (build 28.5 s, of it Gradle 17.5 s; the put and its check 9 s), ~38 s warm with nothing of the app changed (build
