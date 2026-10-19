@@ -57,6 +57,7 @@ export const NOTES: [number, string][] = [
   [50, "A week after a chat is archived (the station's setting), its workspace keeps only the files sent in the chat; its history stays. Push or move elsewhere what must outlive the chat."],
   [51, "A fourth runtime, Grok Build (runtime grok, on SuperGrok or an xAI key): chat_create takes runtime \"grok\"."],
   [52, "Before a login {command}, read the stillfail-login skill: which command each common CLI (gh, gcloud, aws, az, npm, docker…) takes so the card can finish it. A command that prints a page and then asks for its code (gcloud --no-launch-browser) is the person's to paste on the login card: do not answer that prompt yourself."],
+  [53, "station_task start with a dir whose sync takes longer than about 40 s now answers syncing: true while the sync goes on: call start again with the same key (it waits on that sync; a new key or a retry no longer restarts it)."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

@@ -26,7 +26,7 @@ import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
 import { detailed, summary } from "./load.ts";
 import { type Inbox, MESH_WAIT_MS, type PeerCall, PeerBus, Refused } from "../mesh/bus.ts";
-import { LINK, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
+import { Bulk, LINK, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
 
 // The requests between stations are the platform's bus (mesh/bus.ts); its types, here as they always were.
 export { type Inbox, MESH_WAIT_MS, type PeerCall, Refused } from "../mesh/bus.ts";
@@ -64,6 +64,16 @@ export type RemoteOptions = {
   /// must reach it itself, looked at off its thread. Default: without still.fail Helper.
   places?: Places;
 };
+
+/// A start that syncs a directory answers within this, synced or not (the sync goes on): an agent's tool call is given
+/// up on after a minute, and the agent asking again (the same key) began another sync over the first, which the target
+/// then refused as over, again and again (2026-10-19). Asked again, the start takes up the sync under way.
+export const SYNC_ANSWER_MS = 40_000;
+/// A sync that ended while no start waited for it is what the next start of its task gets, this long after.
+const SYNC_KEPT_MS = 10 * 60_000;
+
+/// A directory's sync to a station, for one task: the start that began it, and later ones of the same task, wait on it.
+type Syncing = { key: string; result: Promise<Synced | null>; endedAt: number | null };
 
 /// station_list asks every station of the workspace at once and lists one that has not answered within this as offline.
 export const LIST_WAIT_MS = 2000;
@@ -166,6 +176,11 @@ export class Remote {
   private serial: Promise<unknown> = Promise.resolve();
   /// The records followed now (outgoing tasks, closing sessions).
   private watching = new Set<string>();
+  /// The station's bulk requests to the others (syncs' contents, files' chunks), one at a time (dirsync.ts).
+  private bulk = new Bulk();
+  /// The sync of each directory to each station of each session (by `hash([workspace, session, station, dir])`), the
+  /// latest: one at a time, and a start asked again takes up its own task's.
+  private syncs = new Map<string, Syncing>();
   private scope: Scope.Closeable;
   private run: (effect: Effect.Effect<void>) => Promise<void>;
 
@@ -926,7 +941,7 @@ export class Remote {
       try {
         let offset = 0;
         for (;;) {
-          const answer = await ask({ ...request, method: "file.get", offset });
+          const answer = await this.bulk.run(() => ask({ ...request, method: "file.get", offset }));
           const data = fromBase64(text(answer, "data"));
           if (data.length > CHUNK || offset + data.length > MAX_FILE) throw new Error("invalid file response");
           for (let at = 0; at < data.length; ) at += writeSync(fd, data, at, data.length - at);
@@ -953,7 +968,7 @@ export class Remote {
   private async fetchFile(ask: (request: Json) => Promise<Json>, path: string, limit: number): Promise<Buffer | null> {
     const parts: Buffer[] = [];
     for (let offset = 0; ; ) {
-      const answer = await ask({ method: "file.get", path, offset });
+      const answer = await this.bulk.run(() => ask({ method: "file.get", path, offset }));
       if ((asU64(field(answer, "size")) ?? 0) > limit) return null;
       const data = fromBase64(text(answer, "data"));
       parts.push(data);
@@ -1062,6 +1077,19 @@ export class Remote {
     return out;
   }
 
+  /// The sync of a directory to a station (`id`) for task `key`: the one under way, or ended and not yet taken, when it
+  /// is that task's; otherwise a new one, begun once the one before it (another task's) has ended.
+  private syncOf(id: string, key: string, sync: () => Promise<Synced | null>): Syncing {
+    const was = this.syncs.get(id);
+    if (was !== undefined && was.key === key && (was.endedAt === null || this.store.now() - was.endedAt < SYNC_KEPT_MS)) return was;
+    const before = was === undefined ? Promise.resolve() : was.result.then(() => undefined, () => undefined);
+    const now: Syncing = { key, result: before.then(sync), endedAt: null };
+    const ended = () => void (now.endedAt = this.store.now());
+    now.result.then(ended, ended);
+    this.syncs.set(id, now);
+    return now;
+  }
+
   /// What the station_* tools do, as `session`: among the stations of its workspace.
   async tool(tool: string, session: string, args: Json): Promise<Json> {
     const row = this.store.getSession(session);
@@ -1122,8 +1150,25 @@ export class Remote {
           local = readJson(prepared);
         } catch {}
         if (typeof local?.dir === "string") {
+          const dir: string = local.dir;
+          const id = hash([workspace, session, station, dir]);
+          const sync = this.syncOf(id, key, () =>
+            syncDir((method, more) => this.ask(station, { workspace, session, key, method, ...more }), dir, () => this.store.now(), this.bulk),
+          );
+          const got = await this.bounded(sync.result, SYNC_ANSWER_MS);
+          if (got === null) {
+            return {
+              key,
+              syncing: true,
+              dir: local.dir,
+              note: `${local.dir} is still being synced to ${station}; nothing was started yet. Call start again with the same key: it waits on this sync rather than beginning another`,
+            };
+          }
+          // Taken: the next start of this task syncs anew.
+          if (this.syncs.get(id) === sync) this.syncs.delete(id);
           try {
-            synced = await syncDir((method, more) => this.ask(station, { workspace, session, key, method, ...more }), local.dir, () => this.store.now());
+            if ("error" in got) throw got.error;
+            synced = got.ok;
           } catch (error) {
             const message = (error as Error).message;
             if (error instanceof Refused && /unsupported peer method/.test(message)) {
@@ -1187,7 +1232,7 @@ export class Remote {
           request.offset = offset;
           request.data = chunk.subarray(0, n).toString("base64");
           request.final = offset + n === size;
-          await this.ask(station, { ...request });
+          await this.bulk.run(() => this.ask(station, { ...request }));
           offset += n;
           if (offset === size) break;
           if (n === 0) throw new Error("input changed while reading");

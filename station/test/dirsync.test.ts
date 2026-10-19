@@ -106,9 +106,24 @@ async function pair() {
   })();
   const port = target.sockets()[0]!.split(":").at(-1);
   const call = peerCall(source, cloudOf(source.id(), [B]), (id) => ({ id, ips: [`127.0.0.1:${port}`] }));
-  const state = { old: false, asked: [] as string[] };
+  /// `hold`: the methods held before they are asked, until `release`d. `bulk`/`most`: the bulk requests (contents,
+  /// files' chunks) under way now, and the most there were at once.
+  const state = { old: false, asked: [] as string[], hold: new Set<string>(), held: [] as (() => void)[], bulk: 0, most: 0 };
+  const release = () => {
+    state.hold.clear();
+    for (const go of state.held.splice(0)) go();
+  };
   const transport: PeerCall = async (to, workspace, request) => {
     if (to !== "") state.asked.push(request.method);
+    if (state.hold.has(request.method)) await new Promise<void>((go) => state.held.push(go));
+    if (/^(sync\.put|file\.put|file\.get)$/.test(request.method)) {
+      state.most = Math.max(state.most, ++state.bulk);
+      try {
+        return await call(to, workspace, request);
+      } finally {
+        state.bulk--;
+      }
+    }
     if (state.old && request.method === "describe") {
       const { sync: _, ...before } = await call(to, workspace, request);
       return before;
@@ -127,7 +142,7 @@ async function pair() {
     return { prepared, started, sync: started.sync };
   };
   const mirror = (name: string) => join(b.remote.room("ws", source.id(), "s1"), "work", name);
-  return { a, b, A: source.id(), B, home, clock, use, run, mirror, state };
+  return { a, b, A: source.id(), B, home, clock, use, run, mirror, state, release };
 }
 
 const stamp = (path: string) => {
@@ -268,6 +283,73 @@ describe("dirsync", { concurrency: true }, () => {
     const next = await p.use("station_task", { key: "next", action: "start" });
     assert.equal(next.sync.sent.files, 1);
     assert.equal(readFileSync(join(p.mirror("busy"), "f"), "utf8"), "2\n");
+  });
+
+  test("a station's syncs send their contents one request at a time, side by side as they go", async () => {
+    const p = await pair();
+    const dirs = ["one", "two", "three"].map((name) => {
+      const dir = join(tempdir(), name);
+      mkdirSync(dir);
+      // Random, so nothing packs small: each file is several requests.
+      for (let i = 0; i < 3; i++) writeFileSync(join(dir, `f${i}`), randomBytes(900 * 1024));
+      return dir;
+    });
+    for (const [i, dir] of dirs.entries()) await p.use("station_task", { key: `k${i}`, action: "prepare", command: "cat f0 f1 f2 | wc -c", dir });
+    const started = await Promise.all(dirs.map((_, i) => p.use("station_task", { key: `k${i}`, action: "start" })));
+    for (const s of started) assert.equal(s.sync.sent.files, 3);
+    assert.ok(p.state.asked.filter((m) => m === "sync.put").length >= 9, "each file in pieces");
+    assert.equal(p.state.most, 1, "never two contents' requests under way at once");
+    for (const s of started) await until("it ends", () => p.b.store.getJob(s.job.id)!.state !== "running");
+    // A file uploaded meanwhile waits its turn the same way.
+    const input = join(p.home, "input.bin");
+    writeFileSync(input, randomBytes(700 * 1024));
+    for (let i = 0; i < 3; i++) writeFileSync(join(dirs[0]!, `f${i}`), randomBytes(900 * 1024));
+    await p.use("station_task", { key: "up", action: "prepare", command: "wc -c input.bin" });
+    await p.use("station_task", { key: "k3", action: "prepare", command: "true", dir: dirs[0] });
+    const [upload, synced] = await Promise.all([
+      p.use("station_file", { key: "up", direction: "upload", local: input, path: "input.bin" }),
+      p.use("station_task", { key: "k3", action: "start" }),
+    ]);
+    assert.equal(synced.sync.sent.files, 3);
+    assert.equal(upload.bytes, 700 * 1024);
+    assert.equal(p.state.most, 1);
+  });
+
+  test("a start whose sync outlasts its answer says so; asked again with the key it takes up that sync, not another", async () => {
+    const p = await pair();
+    const dir = join(tempdir(), "big");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "f"), randomBytes(64 * 1024));
+    await p.use("station_task", { key: "k", action: "prepare", command: "wc -c f", dir });
+    p.state.hold.add("sync.put");
+    const ask = () => {
+      const answer = { value: null as Json };
+      const asked = p.use("station_task", { key: "k", action: "start" }).then((v) => (answer.value = v));
+      return { answer, asked };
+    };
+    // Its answer comes once SYNC_ANSWER_MS has gone by on the clock, whatever the sync does meanwhile.
+    const first = ask();
+    await until("the contents are sent", () => p.state.held.length === 1);
+    await rounds(p.clock, "5 seconds", () => first.answer.value !== null);
+    assert.equal(first.answer.value.syncing, true);
+    assert.match(first.answer.value.note, /still being synced .*same key/);
+    const again = ask();
+    await rounds(p.clock, "5 seconds", () => again.answer.value !== null);
+    assert.equal(again.answer.value.syncing, true);
+    assert.equal(p.state.asked.filter((m) => m === "sync.begin").length, 1, "asked again: no other sync began");
+    assert.equal(p.state.held.length, 1, "and nothing more was sent");
+    // The sync ends while no start waits: the next start takes what it did and starts the task.
+    p.release();
+    await until("it is committed", () => p.state.asked.includes("sync.commit"));
+    const last = await p.use("station_task", { key: "k", action: "start" });
+    assert.equal(last.sync.sent.files, 1);
+    assert.equal(last.job.state, "running");
+    assert.equal(p.state.asked.filter((m) => m === "sync.begin").length, 1);
+    await until("it ends", () => p.b.store.getJob(last.job.id)!.state !== "running");
+    // A start after that is one asked again: the same job (its sync only finds the task started).
+    const after = await p.use("station_task", { key: "k", action: "start" });
+    assert.equal(after.job.id, last.job.id);
+    assert.equal(p.state.asked.filter((m) => m === "sync.begin").length, 2);
   });
 
   test("a station from before directory sync is refused before anything runs there", async () => {

@@ -218,6 +218,22 @@ const byPath = (a: { path: string }, b: { path: string }) => (a.path < b.path ? 
 /// A sync request to the target, for the task being started (`sync.<method>`, its session and key added).
 export type Ask = (method: string, more: Json) => Promise<Json>;
 
+/// The station's bulk requests to other stations (a sync's contents, a file's chunks), one at a time, in the order
+/// they came. What a station sends another waits in one queue with everything else it sends on the way (a relay's,
+/// iroh's: first in, first out): with several syncs pushing at once that queue grew to ten seconds, and members'
+/// devices, whose handshakes waited in it behind them, gave up connecting (2026-10-19, ccvm). One request at a time
+/// keeps at most one request's worth (under 1 MiB) ahead of them.
+export class Bulk {
+  private last: Promise<unknown> = Promise.resolve();
+
+  /// `f` once the request before it is answered (or failed).
+  run<T>(f: () => Promise<T>): Promise<T> {
+    const result = this.last.then(f, f);
+    this.last = result.catch(() => undefined);
+    return result;
+  }
+}
+
 export type Synced = {
   files: number;
   git: boolean;
@@ -251,7 +267,8 @@ function pages<T>(items: T[]): T[][] {
 
 /// Brings the target's mirror up to date with `dir`; null when the task started already (nothing synced: a start
 /// asked again returns the job that started).
-export async function syncDir(ask: Ask, dir: string, now: () => number = Date.now): Promise<Synced | null> {
+/// `bulk`: where its contents wait their turn with the station's other bulk requests.
+export async function syncDir(ask: Ask, dir: string, now: () => number = Date.now, bulk: Bulk = new Bulk()): Promise<Synced | null> {
   const t0 = now();
   const begun = await ask("sync.begin", {});
   if (begun?.started === true) return null;
@@ -290,7 +307,7 @@ export async function syncDir(ask: Ask, dir: string, now: () => number = Date.no
   }
   const local = new Set(listing.files.map((f) => f.path));
   const remove = [...there.keys()].filter((p) => !local.has(p));
-  const sent = await sendBlobs(ask, id, dir, [...need.values()]);
+  const sent = await sendBlobs(ask, id, dir, [...need.values()], bulk);
   const plan = [...set.map((s) => ({ s })), ...remove.map((r) => ({ r }))];
   const parts = pages(plan);
   let answer: Json = null;
@@ -319,7 +336,7 @@ export async function syncDir(ask: Ask, dir: string, now: () => number = Date.no
 type Piece = { hash: string; size: number; offset: number; data: Buffer };
 
 /// Sends the contents in `need` in packed requests, each within BODY; checks each file is still what was hashed.
-async function sendBlobs(ask: Ask, id: string, dir: string, need: Local[]): Promise<Synced["sent"]> {
+async function sendBlobs(ask: Ask, id: string, dir: string, need: Local[], bulk: Bulk): Promise<Synced["sent"]> {
   const sent = { files: need.length, bytes: 0, packed: 0, requests: 0 };
   // How much a request's pieces shrink, from the last one (assumed not at all at first).
   let ratio = 1;
@@ -337,7 +354,7 @@ async function sendBlobs(ask: Ask, id: string, dir: string, need: Local[]): Prom
       return;
     }
     ratio = Math.max(0.02, packed.length / Math.max(1, plain.length));
-    await ask("sync.put", { id, blobs: pieces.map((p) => [p.hash, p.size, p.offset, p.data.length]), data });
+    await bulk.run(() => ask("sync.put", { id, blobs: pieces.map((p) => [p.hash, p.size, p.offset, p.data.length]), data }));
     sent.requests++;
     sent.packed += packed.length;
   };
