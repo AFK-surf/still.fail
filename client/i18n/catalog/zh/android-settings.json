@@ -211,7 +211,6 @@
   "android-settings.login.step2Short": "把页面上显示的授权码粘贴到这里",
   "android-settings.login.finishShort": "完成",
   "android-settings.login.manualShort": "在机器上手动登录",
-  "android-settings.login.subscription": "{provider} 订阅",
   "android-settings.login.unfinished": "登录未完成",
   "android-settings.machine.added": "已添加 Profile，使用此机器的登录",
   "android-settings.machine.signedIn": "已登录",

@@ -241,7 +241,6 @@
   "android-settings.login.step2Short": "Paste the code the page shows here",
   "android-settings.login.finishShort": "Finish",
   "android-settings.login.manualShort": "Sign in on the machine",
-  "android-settings.login.subscription": "{provider} subscription",
   "android-settings.login.unfinished": "Sign-in didn't finish",
   "android-settings.machine.added": "Profile added with this machine's login",
   "android-settings.machine.signedIn": "Signed in",

@@ -480,7 +480,9 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
         NavBar(s.name, app::pop, p.name, sub = { Text(if (p.machine == true) t("android-settings.profile.machine") else p.providerName ?: ACCESS_LABEL[kind] ?: kind, fontSize = 11.sp, color = C.muted) },
             trailing = if (copy) null else ({ NavButton(Icons.More, { openProfileMenu(app, address, p) }) }))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
-            Card {
+            // Where it stands: its mark, its pill, what the check said. A subscription's is the head of its sign-in's
+            // card (one card for the account, not a card of a pill over another).
+            val status = @Composable {
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ProviderMark(p.runtime, kind, 26.dp, p.providerMark)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -498,9 +500,10 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     }
                 }
             }
+            val signs = !copy && (kind == "subscription" || (kind == "opencode-go" && p.access.login == true)) && p.machine != true
+            if (signs) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN, head = status)
+            else Card { status() }
             if (p.trouble != null) ProfileRecovery(s, p)
-            // A subscription, or an OpenCode Go profile on an OpenCode account: signed in (again) here.
-            if (!copy && (kind == "subscription" || (kind == "opencode-go" && p.access.login == true)) && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             if (p.trouble?.action != "quota") QuotaSection(address, p)
             if (s.overview?.sharing == true) ShareSection(current, s, p)
             if (!copy) WorkspacesSection(address, p)
@@ -820,9 +823,12 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
     }
 }
 
-/** A subscription's sign-in: run on the station's machine, the browser steps relayed here. */
+/**
+ * A subscription's sign-in (or an OpenCode Go profile's on an OpenCode account), run on the station's machine, the
+ * browser steps relayed here; `head`, where the account stands, on top of its card.
+ */
 @Composable
-private fun SignIn(station: String, p: Profile, needed: Boolean) {
+private fun SignIn(station: String, p: Profile, needed: Boolean, head: @Composable () -> Unit) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val api = app.api(station)
@@ -837,19 +843,21 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
         previous = job?.state
     }
     val cancelling = app.isDoing("profile.cancelLogin", "station" to station, "id" to p.id)
-    // Its title says what it is; where it stands is said once, in the card (and in the pill above).
-    SectionHeader(t("android-settings.login.subscription", "provider" to provider), start = 24.dp, action = if (!active) null else ({
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            DoingMark(cancelling, app.failedOf("profile.cancelLogin", "station" to station, "id" to p.id), inline = true)
-            Text(t("android-settings.login.cancel"), fontSize = 14.sp, color = C.muted, modifier = Modifier.pressText(enabled = !cancelling) { app.act(t("android-settings.login.cancelWhat")) { api.cancelLogin(p.id) } })
-        }
-    }))
     // Its buttons at its foot, in its corners (a field beside one: rounded as they are); a command box last instead: the
     // card's corner taken from it.
     val commandLast = !active && p.loginCommand.isNotEmpty() && manual
     val waits = active && (job?.state == "starting" || job?.state == "verifying" || job?.state == "done")
     Card(foot = !commandLast && !waits, corner = if (commandLast) concentricOut(COMMAND_BOX_CORNER, CARD_PAD) else null) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Where it stands (its pill says it once, no title over the card saying it again), and while signing in, a way
+            // out of it at its end.
+            Row(verticalAlignment = Alignment.Top) {
+                Box(Modifier.weight(1f)) { head() }
+                if (active) Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DoingMark(cancelling, app.failedOf("profile.cancelLogin", "station" to station, "id" to p.id), inline = true)
+                    Text(t("android-settings.login.cancel"), fontSize = 14.sp, color = C.muted, modifier = Modifier.pressText(enabled = !cancelling) { app.act(t("android-settings.login.cancelWhat")) { api.cancelLogin(p.id) } })
+                }
+            }
             if (active) LoginSteps(job, provider) { code -> api.loginCode(p.id, code) }
             else {
                 // Signed in: the pill above says so; only what was off, or how it is done, in words.
