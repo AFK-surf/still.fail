@@ -151,6 +151,12 @@ down() {
   stop station
   # whatever of the test station is left (its node, runner): only processes on its own data directory
   pkill -f "$STATION/data" 2>/dev/null || true
+  # a web service its agent started (flow 47's, on E2E_PORT + 7: e2e/run.sh's SVC) outlives the station: ended when it
+  # runs in the station's own directories (never another's on that port)
+  local p
+  for p in $(lsof -tnP -iTCP:$((PORT + 7)) -sTCP:LISTEN 2>/dev/null); do
+    lsof -a -p $p -d cwd -Fn 2>/dev/null | grep -qE "^n(/private)?$STATION/" && kill $p 2>/dev/null
+  done
   stop cloud
   pkill -f "$E/cloud/node_modules" 2>/dev/null || true
   stop relay
