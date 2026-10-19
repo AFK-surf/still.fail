@@ -372,3 +372,29 @@ test "list: what is built from how it stood is built again once a scroll of one 
   assert_true(!t.list_moving())
   assert_true(away[0])
 }
+
+///|
+test "a click seen in a list's row is drawn by the next frame" {
+  let on : Ref[Bool] = Ref::new(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      if on.val {
+        c.text("开着") |> ignore
+      }
+      c.list("rows", 3, 40.0, fn(i) {
+        let id = c.id("row/\{i}")
+        if c.clicked(id) {
+          on.val = !on.val
+        }
+        c.box(id~, h=Px(40.0), fn() { c.text("第 \{i} 行") |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.tap_text("第 1 行")
+  t.settle() |> ignore
+  assert_true(on.val)
+  assert_true(t.find("开着") is Some(_))
+}

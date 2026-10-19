@@ -602,7 +602,15 @@ pub fn Ctx::text(
 
 ///|
 pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {
-  self.clicked.contains(id)
+  if self.clicked.contains(id) {
+    // what a click changes is drawn by the next frame, wherever it was seen: a list's row is built after the rest of
+    // the frame has been, so what it changes there would wait for some other frame (a tap in a reader's text that
+    // brings its bars)
+    self.wants_frame = true
+    true
+  } else {
+    false
+  }
 }
 
 ///|
