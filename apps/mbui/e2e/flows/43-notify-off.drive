@@ -4,10 +4,7 @@ timeout 60000
 until 端到端测试
 tap icon:settings
 until Workspace
-# (the page in place first: a drag while it slides in is not the page's)
-wait 1500
 drag 195 600 0 -400 400
-wait 1200
 until =通知
 tap =通知
 until 不接收通知
@@ -17,18 +14,17 @@ until 端到端测试
 log do: peer send 关了通知 {T} card:关着的时候 {T}|好 {T}|不好 {T}
 timeout 150000
 until 关着的时候 {T}
+# (time for a notice that should not come to come: the core's, the system's)
 wait 5000
 nonotice 关着的时候 {T}
 shot 2-home
 timeout 60000
 tap icon:settings
 until Workspace
-# (the page in place first: a drag while it slides in is not the page's)
-wait 1500
 drag 195 600 0 -400 400
-wait 1200
 until =通知
 tap =通知
 until 任务完成、需要处理
 shot 3-on
+# (the core's answer to notify.set logged before the run ends: the check reads it)
 wait 2000

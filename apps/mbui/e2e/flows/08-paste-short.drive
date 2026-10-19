@@ -3,7 +3,6 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 tap 发消息
 paste 一段短的粘贴文字，来自剪贴板 {T}
 field 一段短的粘贴文字，来自剪贴板 {T}

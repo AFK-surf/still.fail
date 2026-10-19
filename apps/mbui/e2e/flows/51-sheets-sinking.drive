@@ -5,11 +5,11 @@ timeout 60000
 until 端到端测试
 tap =Dev
 until 切换 workspace
-wait 800
 tapxy 195 120
+# (60 ms into the sheet's going down: 文件 tapped under it as it sinks)
 wait 60
-shot 1-sinking
-tap icon:folder
+now shot 1-sinking
+now tap icon:folder
 until =文件
 gone 切换 workspace
 shot 2-files
@@ -18,20 +18,18 @@ until 端到端测试
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 tap icon:more
 until =固定到列表顶部
-wait 600
 tapxy 195 60
+# (60 ms into the sheet's going down: the composer tapped through it)
 wait 60
-shot 3-going
-tapxy 120 -36
-wait 200
+now shot 3-going
+now tapxy 120 -36
 type 穿过下去的面板 {T}
 tap icon:arrow-up
 until 穿过下去的面板 {T}
 gone 正在发送
-wait 800
 shot 4-sent
 log do: pins
+# (the command beside the run reads the station's pins)
 wait 1500

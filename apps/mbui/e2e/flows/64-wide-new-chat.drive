@@ -5,7 +5,6 @@ timeout 90000
 until 新建对话
 key cmd+n
 until 想让 agent 做什么？
-wait 800
 shot 1-new-chat
 tap 做任何事
 type 宽屏新对话 {T} post:宽屏新对话的回答 {T}

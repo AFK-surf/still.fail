@@ -8,17 +8,14 @@ timeout 60000
 until 发到
 until 列表视频{T}
 until 新 chat
-wait 1000
 shot 1-sheet
 tap 端到端测试
 until youtube.com
-wait 1000
 shot 2-composer
 tap icon:arrow-up
 gone 正在发送
 timeout 120000
 until 列表视频{T}
-wait 1000
 shot 3-sent
 back
 timeout 60000
@@ -27,7 +24,6 @@ tap icon:folder
 until =e2e-{T}
 tap =e2e-{T}
 until 说明.txt
-wait 500
 hold 900 说明.txt
 until 已选 1 项
 tap icon:more

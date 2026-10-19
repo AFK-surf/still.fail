@@ -4,25 +4,23 @@
 # where it lands from the first frame); the panel again, the chats picked in it.
 timeout 60000
 until 端到端测试
-wait 500
 shot 1-home
 tap icon:folder
-until =文件
+# (90 ms into the notch's icon swap)
+now until =文件
 wait 90
-shot 2-swapping
-wait 1000
+now shot 2-swapping
 tap icon:chats
 until 端到端测试
-wait 600
 dragon 0 -64 1000 icon:chats
+# (50 ms into the chosen bar's landing: 用量 tapped on it as it lands)
 wait 50
-shot 3-landing
-tapxy 133 -50
+now shot 3-landing
+now tapxy 133 -50
 until =用量
-wait 1200
 shot 4-usage
 dragon 0 -64 1000 icon:zou
 until 端到端测试
 shot 5-chats
-# (the prefs written behind)
+# (the core writes the prefs to the device behind the app's change: not to be cut off by the app ending)
 wait 2000

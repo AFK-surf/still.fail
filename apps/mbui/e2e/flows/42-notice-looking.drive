@@ -4,14 +4,17 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
+# (the app's client.focus reaches the station before the other device asks: outside the app)
 wait 1500
 log do: peer send 看着的时候 {T} card:这个不该通知 {T}|好 {T}|不好 {T}
 timeout 150000
 untiln 2 这个不该通知 {T}
+# (time for a notice that should not come to come: the core's, the system's)
 wait 5000
 nonotice 这个不该通知 {T}
 shot 1-chat
 back
 until 端到端测试
+# (the same, after leaving the chat)
 wait 3000
 nonotice 这个不该通知 {T}

@@ -4,7 +4,6 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 tap 发消息
 type 再回答一句 {T} post:这句话会被引用 {T}
 tap icon:arrow-up
@@ -13,7 +12,6 @@ untiln 2 这句话会被引用 {T}
 # (its turn ends just after: the all-done card comes under the answer and moves the list; held once it is in)
 until 归档此对话
 timeout 60000
-wait 1500
 hold 700 这句话会被引用 {T}
 until =引用
 shot 1-picked

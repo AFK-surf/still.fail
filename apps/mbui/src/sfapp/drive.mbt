@@ -766,7 +766,7 @@ fn entry_row(
   let busy = dv.busy.contains(busy_key)
   let failed = match dv.failed.get(busy_key) {
     Some((why, when)) if c.now() - when < 4000.0 => {
-      c.wake_in(4000.0 - (c.now() - when))
+      c.wake_in(4000.0 - (c.now() - when), later=true)
       Some(why)
     }
     _ => None

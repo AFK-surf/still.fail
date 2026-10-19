@@ -433,7 +433,7 @@ fn history_item(c : @ui.Ctx, src : Source, r : ChatRef, key : String, item : Jso
               let since = number(wait, "since")
               let now = if c.stable() { since } else { (src.now)() }
               if !c.stable() {
-                c.wake_in(1000.0)
+                c.wake_in(1000.0, later=true)
               }
               let waited = dmax((now - since) / 1000.0, 0.0)
               let waited = match opt_number(wait, "seconds") {
@@ -862,7 +862,7 @@ fn phase_line(c : @ui.Ctx, src : Source, p : Json?) -> Unit {
   let secs = if c.stable() {
     0
   } else {
-    c.wake_in(1000.0)
+    c.wake_in(1000.0, later=true)
     dmax(((src.now)() - number(p, "since")) / 1000.0, 0.0).to_int()
   }
   c.box(dir=Row, gap=8.0, align=ACenter, fn() {

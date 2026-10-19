@@ -14,34 +14,36 @@ until 第01集.mp4
 until 片尾曲.m4a
 shot 1-folder
 tap 第01集.mp4
-until 2 / 3
-until 第一句字幕
-shot 2-playing
-until 0:03
-shot 3-later
-back
+# (a video playing moves on its own, never settled: what is looked at and done while it plays is `now`)
+now until 2 / 3
+now until 第一句字幕
+now shot 2-playing
+now until 0:03
+now shot 3-later
+now back
 until 第02集.mp4
-wait 1500
 tap 第01集.mp4
-until 2 / 3
-until / 0:20
-shot 4-resumed
-tap icon:forward-15
+now until 2 / 3
+now until / 0:20
+now shot 4-resumed
+now tap icon:forward-15
+# (the system's player takes the first seek before the second)
 wait 500
-tap icon:forward-15
+now tap icon:forward-15
 until 播放结束
 until 下一个：第02集.mp4
 shot 5-ended
 tap 下一个：第02集.mp4
-until 3 / 3
-until / 0:04
+now until 3 / 3
+now until / 0:04
+# (it plays on, in real time: its frames for the shot)
 wait 1500
-shot 6-next
-back
+now shot 6-next
+now back
 until 片尾曲.m4a
 tap 片尾曲.m4a
-until 1 / 3
-until 0:01
-shot 7-song
-back
+now until 1 / 3
+now until 0:01
+now shot 7-song
+now back
 until 片尾曲.m4a

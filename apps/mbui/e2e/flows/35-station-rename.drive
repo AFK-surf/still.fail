@@ -20,6 +20,7 @@ tap =保存
 until =e2e-{T}
 shot 3-renamed
 log do: peer station-name e2e-{T}
+# (the other device reads the name from still.fail cloud: the command beside the run, done before it is named back)
 wait 25000
 tap icon:more
 until 重命名

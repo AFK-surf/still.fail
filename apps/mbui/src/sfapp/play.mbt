@@ -159,7 +159,7 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
       play_keep(src, at, pl)
       pl.kept_at = now
     }
-    c.wake_in(5000.0 - (now - pl.kept_at))
+    c.wake_in(5000.0 - (now - pl.kept_at), later=true)
   }
   let list = @player.playlist_of(
     entries

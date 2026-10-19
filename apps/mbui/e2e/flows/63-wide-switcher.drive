@@ -7,7 +7,6 @@ until 端到端测试
 key cmd+k
 until 搜索全部内容和操作
 type 端到端
-wait 500
 shot 1-switcher
 enter
 gone 搜索全部内容和操作

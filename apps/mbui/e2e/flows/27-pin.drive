@@ -3,7 +3,6 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 tap icon:more
 until =固定到列表顶部
 shot 1-info
@@ -11,8 +10,10 @@ tap =固定到列表顶部
 until =取消固定
 shot 2-pinned
 log do: pins
+# (the command beside the run reads the station's pins before the next change)
 wait 2000
 tap =取消固定
 until =固定到列表顶部
 log do: pins
+# (the command beside the run reads the station's pins before the next change)
 wait 2000

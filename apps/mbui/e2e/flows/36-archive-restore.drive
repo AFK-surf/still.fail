@@ -3,7 +3,8 @@
 timeout 120000
 until 端到端测试
 log do: peer archive 要归档的对话 {T} post:归档前的回复 {T}
-# (its row may come and go on Home meanwhile: the other device archives it once the station has it)
+# (its row may come and go on Home meanwhile: the other device archives it once the station has it; outside the
+# app, and no `until` can tell its coming from its going)
 wait 30000
 gone 要归档的对话 {T}
 shot 1-home

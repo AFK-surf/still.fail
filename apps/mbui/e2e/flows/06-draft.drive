@@ -3,18 +3,14 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 tap 发消息
 type 还没发出去的草稿 {T}
-wait 1200
 shot 1-typed
 tap icon:chevron-left
-wait 1000
 until 端到端测试
 shot 2-home
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 field 还没发出去的草稿 {T}
 shot 3-back-again

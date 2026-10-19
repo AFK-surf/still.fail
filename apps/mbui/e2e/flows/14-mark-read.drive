@@ -4,16 +4,17 @@ timeout 90000
 until 端到端测试
 log do: peer send 再问一次 post:这一条应当显示为未读 {T}
 until =这一条应当显示为未读 {T}
-wait 1000
 shot 1-unread
 log do: reads
+# (the command beside the run reads the station before the chat is opened)
 wait 1500
 tap =这一条应当显示为未读 {T}
 untiln 2 这一条应当显示为未读 {T}
+# (the read mark goes from the core to the station: outside the app)
 wait 4000
 shot 2-read
 log do: reads
+# (the command beside the run reads it)
 wait 1500
 tap icon:chevron-left
-wait 1500
 shot 3-home-read

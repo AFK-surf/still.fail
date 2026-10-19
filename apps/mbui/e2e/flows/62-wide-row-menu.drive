@@ -5,23 +5,22 @@ timeout 60000
 until 新建对话
 until 端到端测试
 hover 端到端测试
-wait 500
 shot 1-hover
 rightclick 端到端测试
 until =固定
-wait 400
 shot 2-menu
 tap =固定
 gone =重命名
 until 已固定
 log do: pins
+# (the command beside the run reads the station's pins)
 wait 2000
 shot 3-pinned
 rightclick 端到端测试
 until =取消固定
-wait 400
 shot 4-menu-pinned
 tap =取消固定
 gone 已固定
 log do: pins
+# (the command beside the run reads the station's pins)
 wait 2000

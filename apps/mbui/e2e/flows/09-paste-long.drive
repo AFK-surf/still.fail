@@ -3,7 +3,6 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 tap 发消息
 pasten 6000 长段落粘贴测试。
 until 6000 字符

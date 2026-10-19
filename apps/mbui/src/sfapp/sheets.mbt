@@ -269,7 +269,7 @@ fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {
   if c.stable() {
     return ""
   }
-  c.wake_in(1000.0)
+  c.wake_in(1000.0, later=true)
   let now = (src.now)()
   match wait {
     Some(Object(_)) => {

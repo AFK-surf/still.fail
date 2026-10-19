@@ -3,13 +3,13 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 shot 1-chat
 tap 发消息
 type 第一条来自 mbui 的消息 {T}
 shot 2-typed
 tap icon:arrow-up
-until 第一条来自 mbui 的消息 {T}
-shot 3-sending
+# (the bubble while it goes, at once: it is still sending, not settled)
+now until 第一条来自 mbui 的消息 {T}
+now shot 3-sending
 gone 正在发送
 shot 4-sent

@@ -5,33 +5,32 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 tap 发消息
 type 开个网页 {T} serve:e2e-web|18978|网页开好了 {T}
 tap icon:arrow-up
 gone 正在发送
 timeout 120000
 untiln 2 网页开好了 {T}
-wait 1500
 tap icon:web
 until 服务
-wait 1000
 shot 1-jobs
 tap 在线
 until 自适应
 timeout 60000
-wait 5000
 shot 2-page
 tap icon:web
 clear
 type /b.html
 enter
+# (the page's own navigation in the web view, which the app does not await: the host's)
 wait 4000
 shot 3-second
 tap icon:arrow-left
+# (the same, back in its history)
 wait 3000
 shot 4-back
 tap 手机
+# (the page laid out again by the web view at a phone's width and its picture taken again: the host's own)
 wait 3000
 shot 5-phone
 back

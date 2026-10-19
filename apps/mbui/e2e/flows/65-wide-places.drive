@@ -13,10 +13,8 @@ until 返回会话
 until 跟随系统
 shot 2-settings
 tap =深色
-wait 1500
 shot 3-dark
 tap1 =跟随系统
-wait 1500
 tap 返回会话
 until 新建对话
 shot 4-back

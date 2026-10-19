@@ -4,16 +4,15 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 tap 发消息
 type 先飞的一条 {T}
 tap icon:arrow-up
+# (150 ms into the first one's flight: the second sent while its words still fly)
 wait 150
-type 紧跟着的一条 {T}
-tap icon:arrow-up
+now type 紧跟着的一条 {T}
+now tap icon:arrow-up
 until 先飞的一条 {T}
 until 紧跟着的一条 {T}
 gone 正在发送
-wait 800
 shot 1-landed
 empty

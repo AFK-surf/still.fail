@@ -418,14 +418,14 @@ pub fn Player::view(
     if now >= p.rest_at {
       p.awake = false
     } else {
-      c.wake_in(p.rest_at - now)
+      c.wake_in(p.rest_at - now, later=true)
     }
   }
   if p.note != "" {
     if now - p.note_at >= note_ms {
       p.note = ""
     } else {
-      c.wake_in(note_ms - (now - p.note_at))
+      c.wake_in(note_ms - (now - p.note_at), later=true)
     }
   }
   // a tap left single: the controls shown or hidden

@@ -691,7 +691,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String) -> Unit {
   let copied = match copied_at.get(id) {
     Some(at) =>
       if c.now() - at < 1500.0 {
-        c.wake_in(1500.0 - (c.now() - at))
+        c.wake_in(1500.0 - (c.now() - at), later=true)
         true
       } else {
         false

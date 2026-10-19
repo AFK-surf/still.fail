@@ -9,7 +9,6 @@ gone 端到端测试
 shot 1-files
 tap icon:chats
 until 端到端测试
-wait 500
 dragon 0 -64 1000 icon:chats
 until =奏
 shot 2-decisions
@@ -19,5 +18,5 @@ shot 3-usage
 dragon 0 -64 1000 icon:zou
 until 端到端测试
 shot 4-chats
-# (the prefs written behind)
+# (the core writes the prefs to the device behind the app's change: not to be cut off by the app ending)
 wait 2000

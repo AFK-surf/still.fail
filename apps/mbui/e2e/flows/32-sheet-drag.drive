@@ -5,34 +5,27 @@ timeout 60000
 until 端到端测试
 tap =Dev
 until 切换 workspace
-wait 600
 shot 1-sheet
 dragon 0 -300 400 切换 workspace
-wait 800
 shot 2-full
 dragon 0 640 400 切换 workspace
 gone 切换 workspace
-wait 800
 shot 3-closed
 tap icon:ling
 until 想让 agent 做什么？
-wait 800
 tap =studio
 until 选择运行的 station
-wait 600
 dragon 0 40 300 选择运行的 station
-wait 800
 until 选择运行的 station
 shot 4-back
 dragon 0 200 300 选择运行的 station
 gone 选择运行的 station
-wait 800
 shot 5-closed
 tap =studio
 until 选择运行的 station
-wait 600
 tap1 =studio
 gone 选择运行的 station
+# (the core's answer to the pick, newChat.pick, logged before the run ends: the check reads it)
 wait 1500
 tap =取消
 until 端到端测试

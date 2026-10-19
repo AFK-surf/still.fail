@@ -8,6 +8,7 @@ until 等待批准此设备
 until 发送批准请求
 shot 1-waiting
 log do: peer lock-await 60
+# (the other device listening for the request before it goes: the command beside the run)
 wait 3000
 tap 发送批准请求
 until 输入你的受信任设备上显示的安全码
@@ -15,6 +16,7 @@ shot 2-code
 type 000000
 until 安全码不对
 shot 3-wrong
+# (the other device's lock-await done before safe mode goes off: the command beside the run)
 wait 15000
 log do: peer lock-off
 until 端到端测试

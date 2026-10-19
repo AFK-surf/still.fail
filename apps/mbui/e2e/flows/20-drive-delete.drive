@@ -5,7 +5,6 @@ timeout 90000
 until =e2e-{T}
 tap =e2e-{T}
 until 照片-{T}.jpg
-wait 500
 hold 900 照片-{T}.jpg
 until 已选 1 项
 tap icon:more

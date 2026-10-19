@@ -1472,7 +1472,7 @@ fn activity(
     ""
   } else {
     let now = (src.now)()
-    c.wake_in(1000.0)
+    c.wake_in(1000.0, later=true)
     match a.wait {
       Some((since, most, _)) => {
         let waited = match most {

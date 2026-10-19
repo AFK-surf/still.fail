@@ -4,7 +4,6 @@
 timeout 60000
 tap 端到端测试
 until 发消息
-wait 1000
 tap 发消息
 type 玻璃下的第一条：这句话写得长一些，让气泡占上好几行，消息多了，最上面的就滚到顶栏的玻璃下面去 {T}
 tap icon:arrow-up
@@ -25,8 +24,6 @@ type 玻璃下的第四条：系统要求降低透明度的时候，玻璃换成
 tap icon:arrow-up
 until 玻璃下的第四条
 gone 正在发送
-wait 1500
 shot 1-under-bar
 wheel -500
-wait 1500
 shot 2-under-composer

@@ -781,7 +781,12 @@ need); the station starts with what the shell has of the machine's own station (
   and `type`: on macOS the input method's setMarkedText and insertText; on Android the view's InputConnection;
   `paste`: the clipboard and Cmd+V, KEYCODE_PASTE), shots (`shot`), and `log do: …`, which has the runner do
   something beside the app (`peer send …`, `peer create …`, `freeze` / `thaw` the station, `reads`). It runs on any
-  host; `Tester::drive` runs a script in tests.
+  host; `Tester::drive` runs a script in tests. Each step that looks at the screen or acts on it first waits for the
+  app to be settled (mbui's Ctx::settled: nothing animating, no image or page still awaited from the host, no timer
+  that is not `later`), so no `wait` is needed for a page, a sheet, a list or a picture; `now STEP` is for what is
+  done or shot while something still moves (a sheet going down, a video playing). The `wait MS` left are each
+  commented: what they wait for is outside the app (a command beside the run, the other device, the station, the
+  core's writes behind the app) or a point inside a motion.
 - e2e/run.sh runs each flow (e2e/flows/NN-name.drive) in the app, in order, on one sign-in, then its check
   (NN-name.check) against the backend's own state, not the screen: the station's database (entries: the words, the
   author, the attachments' and quotes' JSON; reads: how far alice has read), the files it keeps (the photo and the

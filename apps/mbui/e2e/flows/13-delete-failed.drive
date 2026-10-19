@@ -3,8 +3,8 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 log do: freeze
+# (the station stopped by the command beside the run: outside the app)
 wait 2000
 tap 发消息
 type 这条没发出去就删掉 {T}
@@ -17,6 +17,7 @@ tap =删除
 gone 这条没发出去就删掉 {T}
 shot 2-deleted
 log do: thaw
+# (the station started again and reached: time for it to have the deleted message, if it wrongly would)
 wait 10000
 gone 这条没发出去就删掉 {T}
 shot 3-after-thaw

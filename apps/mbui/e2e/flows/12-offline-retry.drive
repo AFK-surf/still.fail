@@ -3,8 +3,8 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 log do: freeze
+# (the station stopped by the command beside the run: outside the app)
 wait 2000
 tap 发消息
 type 断网时发出的消息 {T}
@@ -13,6 +13,7 @@ timeout 180000
 until 未发送
 shot 1-unsent
 log do: thaw
+# (the station started again and reached by the core: nothing on screen says so until 重试)
 wait 30000
 shot 2-thawed
 tap =重试

@@ -7,7 +7,8 @@ until 外观
 tap 外观
 until 跟随系统
 tap1 =跟随系统
-wait 1500
 shot 2-system
 back
 until Workspace
+# (the core keeps 跟随系统 on the device behind: the runs after start from it)
+wait 1500

@@ -6,7 +6,6 @@ until 新建对话
 until 端到端测试
 tap 端到端测试
 until 按空格输入
-wait 800
 shot 1-open
 tap 按空格输入
 type 宽屏里发出的消息 {T}

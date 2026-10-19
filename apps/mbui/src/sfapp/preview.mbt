@@ -869,7 +869,7 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
     if now >= v.rest_at {
       v.awake = false
     } else {
-      c.wake_in(v.rest_at - now)
+      c.wake_in(v.rest_at - now, later=true)
     }
   }
   let t = @sf.theme()

@@ -9,13 +9,14 @@ noticed 要不要发通知 {T}
 shot 1-home
 timeout 30000
 notice 要不要发通知 {T}
-until =发 {T}
+# (the card flashes as the chat opens at it: 700 ms into the flash)
+now until =发 {T}
 wait 700
-shot 2-flash
-wait 2500
+now shot 2-flash
 shot 3-chat
 log do: reads
 nonotice 要不要发通知 {T}
+# (the command beside the run reads the station)
 wait 1500
 back
 until 端到端测试

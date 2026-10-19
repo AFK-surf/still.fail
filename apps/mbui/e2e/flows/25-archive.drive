@@ -10,7 +10,6 @@ until 归档用的对话 {T}
 until 这件事做完了 {T}
 tap 归档用的对话 {T}
 until 归档此对话
-wait 1500
 shot 1-offered
 tap =归档此对话
 until =已归档

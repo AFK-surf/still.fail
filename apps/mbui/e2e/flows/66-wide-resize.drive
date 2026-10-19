@@ -8,12 +8,10 @@ resize 1280 800
 until 新建对话
 tap 端到端测试
 until 按空格输入
-wait 800
 shot 2-wide
 resize 390 844
 gone 新建对话
 until 发消息
-wait 800
 shot 3-phone-chat
 tap 发消息
 type 窗口变窄后发出 {T}

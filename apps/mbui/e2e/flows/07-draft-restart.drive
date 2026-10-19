@@ -3,11 +3,11 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 field 还没发出去的草稿 {T}
 shot 1-after-restart
 tap 发消息
 clear
 empty
-wait 1500
 shot 2-emptied
+# (the core keeps the emptied draft on the device behind the app's draft.put: not to be cut off by the app ending)
+wait 1500

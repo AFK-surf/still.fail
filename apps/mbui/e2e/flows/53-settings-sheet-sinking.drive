@@ -14,18 +14,18 @@ tap 重命名
 until station 名称
 clear
 type e2e-not-{T}
-wait 600
 shot 1-asked
 tapxy 195 60
+# (60 ms into the sheet's going down: 保存 tapped where it is only drawn)
 wait 60
-shot 2-sinking
-tapxy -60 -330
-tapxy -60 -300
-tapxy -60 -270
-tapxy -60 -240
-wait 1500
+now shot 2-sinking
+now tapxy -60 -330
+now tapxy -60 -300
+now tapxy -60 -270
+now tapxy -60 -240
 gone station 名称
 until =studio
 shot 3-gone
 log do: peer station-name studio
+# (the command beside the run reads still.fail cloud)
 wait 3000

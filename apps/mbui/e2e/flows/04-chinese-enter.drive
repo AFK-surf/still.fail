@@ -3,12 +3,11 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 # (on Android the emulator's keyboard is turned off for this: it ends any composition it did not make itself)
 log do: android-ime off
+# (the command beside the run switches the emulator's keyboard: outside the app, nothing on screen says it is done)
 wait 2000
 tap 发消息
-wait 500
 mark ni'hao
 shot 1-composing
 type 你好
@@ -23,4 +22,5 @@ until 第二行 {T}
 gone 正在发送
 shot 4-sent
 log do: android-ime on
+# (the same, back on, before the app ends)
 wait 1500

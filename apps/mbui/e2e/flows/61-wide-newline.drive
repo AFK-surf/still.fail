@@ -4,7 +4,6 @@ timeout 60000
 until 端到端测试
 tap 端到端测试
 until 按空格输入
-wait 800
 tap 按空格输入
 type 第一行 {T}
 key shift+enter

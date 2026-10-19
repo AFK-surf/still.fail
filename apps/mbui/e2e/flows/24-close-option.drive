@@ -3,14 +3,12 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 tap 发消息
 type 部署吗 {T} card:要不要部署 {T}|现在部署 {T}*|不需要部署 {T}!
 tap icon:arrow-up
 gone 正在发送
 timeout 120000
 until =不需要部署 {T}
-wait 1500
 shot 1-card
 tap =不需要部署 {T}
 gone =不需要部署 {T}

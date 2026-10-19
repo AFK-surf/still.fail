@@ -10,11 +10,11 @@ tap 外观
 until 跟随系统
 shot 2-appearance
 tap =浅色
-wait 1500
 shot 3-light
 tap =深色
-wait 1500
 shot 4-dark
 back
 until Workspace
 shot 5-settings-dark
+# (the core keeps the appearance on the device behind: 34 starts from it)
+wait 1500
