@@ -36,5 +36,6 @@ fn main {
   if mode.has_prefix("settings") {
     @sfapp.open_setting(@settings.fixture_page(mode))
   }
+  @sfapp.desktop_window()
   @ui.run("still.fail", fn(c) { @sfapp.view(c, src) })
 }

@@ -191,6 +191,7 @@ fn reset() -> Unit {
   go_tos.clear()
   flash_held.val = false
   notices_reset()
+  wide_reset()
 }
 
 ///|
@@ -212,6 +213,8 @@ fn home() -> Unit {
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   appearance(src)
   let t = @sf.begin(c)
+  // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages
+  wide_on.val = is_wide(c)
   track_press(c)
   for p in left_pages {
     match p {
@@ -276,20 +279,26 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       update_first(src)
       // what another app shared in (share.mbt)
       share_in_frame(c)
-      c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
-      |> ignore
-      // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
-      let root = app.nav.top()
-      if app.nav.depth() == 1 && root != Home && !app.menu && !sheet_open() {
-        c.on_back(fn() { go_place(c, "chats", [], -1) })
+      if wide_on.val {
+        // the rail, the sidebar and the page beside it (wide.mbt)
+        wide_frame(c, src, w, all, invited)
+        preview(c, src)
+      } else {
+        c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
+        |> ignore
+        // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
+        let root = app.nav.top()
+        if app.nav.depth() == 1 && root != Home && !app.menu && !sheet_open() {
+          c.on_back(fn() { go_place(c, "chats", [], -1) })
+        }
+        // the player sideways: back turns it upright first
+        play_back(c)
+        // the bottom bar: on a place's top page with nothing over it
+        bottom_bar(c, src, w, place_of(root), app.nav.depth() == 1 && place_of(root) is Some(_))
+        // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
+        preview(c, src)
+        filter_menu(c, src, w)
       }
-      // the player sideways: back turns it upright first
-      play_back(c)
-      // the bottom bar: on a place's top page with nothing over it
-      bottom_bar(c, src, w, place_of(root), app.nav.depth() == 1 && place_of(root) is Some(_))
-      // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
-      preview(c, src)
-      filter_menu(c, src, w)
       sheet_layer(c, fn(kind) {
         match kind {
           Workspaces => workspaces_sheet(c, src, w, all)

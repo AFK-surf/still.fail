@@ -222,6 +222,7 @@ let core_source : @sfapp.Source = {
 ///|
 fn main {
   if core_linked() == 0 || !@sfcore.start() {
+    @sfapp.desktop_window()
     @ui.run("still.fail", fn(c) {
       @sf.begin(c) |> ignore
       c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
@@ -260,6 +261,7 @@ fn main {
       @sfapp.set_update_source(Some(@sfapp.cloud_updates(core_source, feed, origin)))
     }
   }
+  @sfapp.desktop_window()
   @ui.run("still.fail", fn(c) {
     @sfcore.frame(@core.subscribe("accounts"))
     @sfapp.view(c, core_source)
