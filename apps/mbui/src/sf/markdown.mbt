@@ -883,11 +883,26 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
       pad=1.0,
       clip=true,
       fn() {
+        // the head's tint behind the rows, not scrolled with them: in the frame's top corners as the web's
+        // overflow-hidden card cuts it (docs/ui-panels.md: concentric, 20 less the 1 it sits in, 19; square under it).
+        // A clip is a rectangle, so the tint is a round box taller than the head, cut at the head's foot.
+        match @motion.measured(c, key + "/head") {
+          Some(hh) if hh > 0.0 =>
+            c.layer(pad=1.0, fn() {
+              c.box(w=Fill(1.0), h=Px(hh), clip=true, fn() {
+                c.box(w=Fill(1.0), h=Px(hh + 19.0), radius=19.0, bg=theme().p.code_ground, fn() {  })
+                |> ignore
+              })
+              |> ignore
+            })
+            |> ignore
+          _ => ()
+        }
         c.sideways(key, fn() {
           c.box(fn() {
             for r, row in rows {
               let head = r == 0
-              c.box(dir=Row, align=AStretch, bg=if head { theme().p.code_ground } else { 0L }, fn() {
+              let row_box = c.box(dir=Row, align=AStretch, fn() {
                 for k in 0..<cols {
                   c.box(w=Px(widths[k]), padx=12.0, pady=7.0, justify=JCenter, fn() {
                     if head {
@@ -899,7 +914,9 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
                   |> ignore
                 }
               })
-              |> ignore
+              if head {
+                @motion.measure(c, row_box, key + "/head")
+              }
               // a rule under every row but the last
               if r < rows.length() - 1 {
                 c.box(w=Px(total), h=Px(1.0), bg=w.line, fn() {  }) |> ignore
