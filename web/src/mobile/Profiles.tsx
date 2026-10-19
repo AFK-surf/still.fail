@@ -5,7 +5,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAction, useMemberships, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
-import type { MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
+import type { MachineLogin, ProfileFlowView, RuntimeInstall, WorkspaceProfile } from "../core/shapes.ts";
 import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
 import { Check, ChevronRight, More } from "@stillfail/ui/icons.tsx";
@@ -782,6 +782,27 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
   );
 }
 
+/**
+ * A plan's sign-in on a station without the runtime it signs in with (core `install`): installing it first, how that
+ * stands, and its button when the viewer may (`software.update`). The sign-in starts once it is installed.
+ */
+function InstallStep({ install }: { install: RuntimeInstall }) {
+  const station = useStation().address;
+  const busy = useDoing("software.update", { station, id: install.runtime });
+  const api = useApi();
+  const act = useAct();
+  return (
+    <>
+      {install.state === "installing"
+        ? <WaitLine text={`${install.title}${install.percent != null ? ` ${install.percent}%` : ""}`} />
+        : <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{install.title}</p>}
+      {install.detail && <p className={partsCss.mError}>{install.detail}</p>}
+      {install.note && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{install.note}</p>}
+      {install.action && <Button label={install.action} primary busy={busy} onClick={() => act(api.updateSoftware(install.runtime), install.action!)} />}
+    </>
+  );
+}
+
 /** What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude), or copy the code and open the page (Codex). */
 function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined; provider: string; send: (code: string) => Promise<unknown> }) {
   const app = useApp();
@@ -896,7 +917,8 @@ export function NewProfileScreen() {
   // The sign-in made its profile: on to it.
   useEffect(() => { if (pending?.created) go(pending.created, t("web-mobile.profiles.signedInAdded")); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
   // A plan's sign-in starts when it is chosen; leaving before it made its profile leaves nothing behind.
-  const planning = d?.step === "connect" && d.method === "plan";
+  // A station without the runtime it signs in with installs it first (core `install`): the sign-in starts after.
+  const planning = d?.step === "connect" && d.method === "plan" && !d.install;
   const started = useRef(false);
   const dropped = (e: Error) => app.toast(t("web-mobile.profiles.dropFailed", { error: e.message }));
   useEffect(() => {
@@ -934,7 +956,8 @@ export function NewProfileScreen() {
             {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" && d.tile?.kind !== "opencode-go" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}
           </ListCard>
         ) : d.method === "plan" ? (
-          error || pending?.error || job?.state === "failed" || job?.state === "cancelled" ? (
+          d.install ? <InstallStep install={d.install} />
+          : error || pending?.error || job?.state === "failed" || job?.state === "cancelled" ? (
             <>
               <p className={partsCss.mError}>{error ?? pending?.error ?? job?.error ?? t("web-mobile.profiles.loginIncomplete")}</p>
               <Button label={t("web-mobile.profiles.restart")} primary={false} onClick={() => { if (login) api.dropLogin(login).catch(dropped); setLogin(null); setError(null); void begin(); }} />

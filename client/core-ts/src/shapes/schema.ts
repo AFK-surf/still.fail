@@ -215,7 +215,7 @@ export const SHAPES: Record<string, Shape> = {
     ["note", opt("String"), { doc: "Not installable by the viewer from here: who can, or why the station cannot." }],
     ["action", opt("String"), { doc: "The button's label (安装, 重试) when the viewer can install it now. Absent otherwise." }],
     ["percent", opt("i64"), { client: opt("I54"), doc: "While installing, how much of its download is in, 0–100, when known." }],
-  ], { doc: "A runtime a chat's notice says is not installed, and installing it there (core views.ts `installView`): once\ninstalled, the station gives the chat's waiting messages to the agent." }),
+  ], { doc: "A runtime the station does not have (a chat's notice says so, or a plan's sign-in needs it), and installing it there\n(core present.ts `installView`): once installed, the station gives the chat's waiting messages to the agent." }),
   MessageCard: struct([
     ["assignee", opt("String"), { doc: "The person the agent asks to decide, by email. Absent on legacy cards." }],
     ["assigneeText", opt("String"), { doc: "Who needs to decide, in the viewer's words; prepared by the core." }],
@@ -645,7 +645,8 @@ export const SHAPES: Record<string, Shape> = {
     ["pending", "bool"],
     ["submitLabel", "String"],
     ["usesLine", "String", { doc: "What the profile will be usable for, in words (the line under the page)." }],
-    ["signIn", opt("FlowSignIn"), { default: true, doc: "At a plan's connect step: the sign-in to start." }],
+    ["signIn", opt("FlowSignIn"), { default: true, doc: "At a plan's connect step: the sign-in to start. Absent while its runtime is to be installed (`install`)." }],
+    ["install", opt("RuntimeInstall"), { doc: "At a plan's connect step on a station without the runtime it signs in with: installing it there; the sign-in\nstarts once it is installed. Absent otherwise." }],
   ], { doc: "The add-profile pages, as the core keeps them for one device: the picker, how to connect what was picked (a plan or\na key), and the form with what it will be usable for. The views draw it and name what changed (`profile.flow.edit`)." }),
   FlowSignIn: struct([
     ["runtime", "RuntimeKind", { doc: "The runtime whose subscription is signed in to (`login.new` runtime)." }],
