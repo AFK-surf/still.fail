@@ -9,8 +9,9 @@
 // app as its login command: it takes the page from BROWSER, sees the loopback `redirect_uri`, and the person's phone
 // relays the browser's way back to this process. The system opens it on iOS. On Android (android/…/BrowserLogin.java)
 // it opens in a Custom Tab on the app's task, the app holds itself up while it listens (a frozen process answers
-// nobody), and it comes back in front of the browser once the browser has come back. Not on Windows or the web yet
-// (`browser_login` is None there).
+// nobody), and it comes back in front of the browser once the browser has come back. On Windows
+// (win_browser_login.c) it is $BROWSER, else the system's browser (ShellExecute). Not on the web (`browser_login` is
+// None there).
 
 ///|
 /// A sign-in under way in the browser.

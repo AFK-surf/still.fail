@@ -7,7 +7,9 @@
 # no Apple frameworks (the Windows libraries come from #pragma comment), and
 # where photos shows src/photos/pictures/windows.mbt. MBUI_APP_MOD=<a module outside this repository whose
 # moon.work names mbui> (still.fail's apps/mbui): its app APP, built from a copy of it in out/win/app whose workspace
-# names that copy of mbui instead, its apps linking no Apple frameworks either.
+# names that copy of mbui instead, its apps linking no Apple frameworks either; a package whose stubs are Apple's own
+# (.m: a core host's) takes its win_engine.c in their place where it has one (still.fail's: the core in Hermes on
+# Windows), else is left out.
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -29,7 +31,7 @@ sync() {
   cp -p moon.mod $M/
   # exactly src/: a file gone from it goes from the copy too (then the copy's own files, after; Git Bash has no rsync)
   if command -v rsync >/dev/null; then rsync -a --delete src/ $M/src/; else rm -rf $M/src && cp -rp src $M/src; fi
-  sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp", "win_image.cpp" ]/' \
+  sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp", "win_image.cpp", "win_listen.c", "win_browser_login.c" ]/' \
       -e 's/-fobjc-arc *//' src/host/moon.pkg > $M/src/host/moon.pkg
   # every app (demo, photos…) links no Apple frameworks
   for p in src/*/moon.pkg; do
@@ -49,8 +51,14 @@ sync_app() {
   cp -p "$APPMOD/moon.mod" $AM/
   rm -rf $AM/src && cp -rp "$APPMOD/src" $AM/src
   printf 'members = [\n  ".",\n  "../mod",\n]\n' > $AM/moon.work
-  # (its packages with Apple's own native stubs, a core host's, are not for here)
-  for p in $(grep -l '\.m"' $AM/src/*/moon.pkg 2>/dev/null); do rm -rf "$(dirname $p)"; done
+  # (its packages with Apple's own native stubs, a core host's: their Windows one, win_engine.c, instead, else left out)
+  for p in $(grep -l '\.m"' $AM/src/*/moon.pkg 2>/dev/null); do
+    if [ -f "$(dirname $p)/win_engine.c" ]; then
+      sed -i -e 's/"native-stub": *\[[^]]*\.m"[^]]*\]/"native-stub": [ "win_engine.c" ]/' -e 's/-fobjc-arc *//' $p
+    else
+      rm -rf "$(dirname $p)"
+    fi
+  done
   for p in $AM/src/*/moon.pkg; do
     grep -q '"is-main"' $p && sed -i -e '/"cc-link-flags"/d' $p
   done

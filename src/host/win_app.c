@@ -71,10 +71,17 @@ static void run_script_step(int step);
 static void ime_place(void);
 double mb_host_mem_bytes(void);
 
+// What an app's engine said since the last frame (still.fail's core client, core_native.c `mbc_frame`), drained as
+// each frame begins, as on Android; an app without it links the stand-in (MSVC has no weak symbols: /alternatename).
+void mbc_frame(void);
+void mb_win_no_core_frame(void) {}
+#pragma comment(linker, "/alternatename:mbc_frame=mb_win_no_core_frame")
+
 static void draw_frame(void) {
   RECT rc;
   GetClientRect(hwnd, &rc);
   want_frame = 0;
+  mbc_frame();
   if (rc.right <= 0 || rc.bottom <= 0) return;  // minimized; WM_SIZE asks again
   double was = scale;
   scale = GetDpiForWindow(hwnd) / 96.0;
@@ -729,12 +736,7 @@ double mb_host_mem_bytes(void) {
 }
 
 
-// A sign-in in the browser that comes back here (host_native.mbt `browser_login`): not on this host yet.
-int32_t mb_host_browser_login_start(moonbit_string_t path) { return 0; }
-int32_t mb_host_browser_login_port(int32_t id) { return 0; }
-int32_t mb_host_browser_login_open(int32_t id, moonbit_string_t url) { return 0; }
-moonbit_string_t mb_host_browser_login_back(int32_t id) { return moonbit_make_string_raw(0); }
-void mb_host_browser_login_end(int32_t id) {}
+// A sign-in in the browser that comes back here (host_native.mbt `browser_login`): win_browser_login.c.
 
 // Files picked (pick.mbt): not on this host yet.
 int32_t mb_host_pick_start(int32_t kind) { return 0; }
