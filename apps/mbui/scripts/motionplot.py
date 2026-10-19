@@ -153,28 +153,37 @@ def emit_poses(runs):
 
 
 def by_pose(key, lines):
+    """The frames of one message's flight: each Float frame's y against ChatMotion.kt's hop (or, on from the message
+    before, its drop) between where it set out and where it lands as that frame had them (the log's from= and to=: the
+    list may move under it), at that frame's share of the pose (u=); that share against the clock (440 ms; the drop 280);
+    each Spit frame's squash at its share (380 ms)."""
     res = []
-    floats = [(t, v) for t, v in lines if v.get("_pose") == "Float"]
-    spits = [(t, v) for t, v in lines if v.get("_pose") == "Spit"]
+    floats = [(t, v) for t, v in lines if v.get("_pose") == "Float" and "u" in v]
+    spits = [(t, v) for t, v in lines if v.get("_pose") == "Spit" and "u" in v]
     if len(floats) >= 3:
-        t0, t1 = floats[0][0], floats[-1][0]
-        ms = 440.0
-        sy, ly = floats[0][1]["y"], floats[-1][1]["y"]
-        top = min(sy, ly) - 34.0
-        worst, way = 0.0, max(abs(ly - sy), 34.0)
+        lo = min(min(v["from"], v["to"]) for _, v in floats)
+        hop = min(v["y"] for _, v in floats) < lo - 5.0
+        ms = 440.0 if hop else 280.0
+        rise = 0.42 if hop else 0.0
+        worst, way = 0.0, 0.0
         for t, v in floats:
-            u = min((t - t0) / ms, 1.0)
-            if u < 0.42:
-                want = sy + (top - sy) * (1 - (1 - u / 0.42) ** 2.5)
+            u, sy, ly = v["u"], v["from"], v["to"]
+            top = min(sy, ly) - 34.0 if hop else sy
+            way = max(way, abs(ly - sy), 34.0 if hop else 1.0)
+            if u < rise:
+                want = sy + (top - sy) * (1 - (1 - u / rise) ** 2.5)
             else:
-                want = top + (ly - top) * ((u - 0.42) / 0.58) ** 2.5
+                want = top + (ly - top) * ((u - rise) / (1 - rise)) ** 2.5
             worst = max(worst, abs(v["y"] - want))
-        res.append((f"the avatar's hop (ChatMotion.kt Float: 440 ms) — {key}, over {t1 - t0:.0f} ms", len(floats), worst / way))
+        t0, u0 = floats[0][0], floats[0][1]["u"]
+        late = max(abs(v["u"] - min(u0 + (t - t0) / ms, 1.0)) for t, v in floats)
+        what = "hop (440 ms)" if hop else "drop (280 ms)"
+        res.append((f"the avatar's {what} (ChatMotion.kt Float) — {key}: its height", len(floats), worst / way))
+        res.append((f"the avatar's {what} — {key}: its share of the time against the clock", len(floats), late))
     if len(spits) >= 3:
-        t0 = spits[0][0]
         worst = 0.0
         for t, v in spits:
-            u = min((t - t0) / 380.0, 1.0)
+            u = v["u"]
             w0 = math.sqrt(520.0)
             z = 14.0 / (2 * w0)
             wd = w0 * math.sqrt(1 - z * z)
@@ -183,7 +192,10 @@ def by_pose(key, lines):
             sm = lambda x: x * x * (3 - 2 * x)
             swell = 1 + 0.12 * (sm(u / 0.4) if u < 0.4 else (1 - sm((u - 0.4) / 0.35)) if u < 0.75 else 0.0)
             worst = max(worst, abs(v["sx"] - swell * (1 + 0.16 * k)) / 0.28)
+        t0, u0 = spits[0][0], spits[0][1]["u"]
+        late = max(abs(v["u"] - min(u0 + (t - t0) / 380.0, 1.0)) for t, v in spits)
         res.append((f"the answer let out, the avatar squashed (ChatMotion.kt Spit: 380 ms) — {key}", len(spits), worst))
+        res.append((f"the answer let out — {key}: its share of the time against the clock", len(spits), late))
     return res
 
 

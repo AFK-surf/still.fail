@@ -64,6 +64,8 @@ priv struct Emits {
   mut watched : Bool
   /// the agent whose avatar the flying copy shows as (its activity's own hidden), "" none
   mut copied : String
+  /// the flight as last worked out: how far through its pose, from where (y) to where (y), for the motion log
+  mut trace : (Double, Double, Double)
 }
 
 ///|
@@ -84,6 +86,7 @@ fn emits_of(key : String) -> Emits {
         landed: None,
         watched: false,
         copied: "",
+        trace: (0.0, 0.0, 0.0),
       }
       emits[key] = e
       e
@@ -348,6 +351,7 @@ fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String]) -> 
   e.aimed = Some(landing)
   e.aimed_at = t.seq
   let u = emit_clock(c, t)
+  e.trace = (u, avatar.1, landing.1)
   match t.pose {
     Float => {
       // on from the message before it: only the drop
@@ -355,6 +359,7 @@ fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String]) -> 
         Some(f) => f
         None => avatar
       }
+      e.trace = (u, start.1, landing.1)
       let rise = if t.from is Some(_) { 0.0 } else { emit_rise }
       let top = if t.from is Some(_) { start.1 } else { dmin(start.1, landing.1) - emit_hop }
       let up = if rise > 0.0 { u / rise } else { 1.0 }
@@ -411,7 +416,10 @@ fn emit_flyer(c : @ui.Ctx, key : String, e : Emits, v : ChatView) -> Unit {
   })
   |> ignore
   match e.current {
-    Some(t) => @motion.log_frame(c, "emit/" + seq_s(t.seq), "pose=\{t.pose} x=\{x} y=\{y} sx=\{sx} sy=\{sy}")
+    Some(t) => {
+      let (u, fy, ly) = e.trace
+      @motion.log_frame(c, "emit/" + seq_s(t.seq), "pose=\{t.pose} x=\{x} y=\{y} sx=\{sx} sy=\{sy} u=\{u} from=\{fy} to=\{ly}")
+    }
     None => ()
   }
 }
