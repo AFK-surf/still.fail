@@ -10,7 +10,7 @@ ROOT=$(cd "$D/.." && pwd)
 SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
 ADB="$SDK/platform-tools/adb -s emulator-${EMU_PORT:-5580}"
 OUT=$(dirname $LOG)/$NAME
-PKG=dev.mbui.demo
+PKG=${E2E_PKG:-dev.mbui.demo}
 mkdir -p $OUT
 . ${E2E_WORK:-$(cd $ROOT/.. && pwd)/e2e-local}/run/e2e-env.sh
 DIR=/data/data/$PKG/files/e2e

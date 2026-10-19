@@ -40,11 +40,12 @@ app_libs() {
 
 hbc_key() {
   [ -n "${HBC_CACHE:-}" ] && [ -z "${CORE_SCRIPT:-}" ] || return 1
-  local here=$(git rev-parse --show-prefix 2>/dev/null) || return 1
-  git diff --quiet HEAD -- core scripts/core.sh 2>/dev/null || return 1
+  git -C "$EMBER" rev-parse -q --verify HEAD:client/core-ts >/dev/null 2>&1 || return 1
   [ -z "$(git -C "$EMBER" status --porcelain -uno -- client/core-ts media 2>/dev/null)" ] || return 1
-  echo "$(git -C "$EMBER" rev-parse HEAD:client/core-ts HEAD:media)-$(git rev-parse HEAD:${here}core)-$(git hash-object $H/core.sh)-${ENTRY:-media-hermes}" \
-    | shasum -a 256 | cut -c1-24
+  { git -C "$EMBER" rev-parse HEAD:client/core-ts HEAD:media
+    (cd core && find . -type f | LC_ALL=C sort | xargs shasum -a 256)
+    shasum -a 256 < "$H/core.sh"
+    echo "${ENTRY:-media-hermes}"; } | shasum -a 256 | cut -c1-24
 }
 
 # the core's bytecode, which only Gradle needs

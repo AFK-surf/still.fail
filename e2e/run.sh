@@ -5,6 +5,8 @@
 #
 #   e2e/run.sh mac [NAME…]        APP=stillfail on macOS (390×844), every flow or those named (NN-name or name)
 #   e2e/run.sh android [NAME…]    the same on the emulator (AVD, EMU_PORT; scripts/android.sh), recorded
+#     E2E_APK=FILE E2E_PKG=PACKAGE: that APK instead of a debug build (the beta app: fail.still.mbui; not debuggable, so
+#     the files to attach are not put in it and the core's store is not read back: flows that need them fail)
 #
 # A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed);
 # its `#env K=V` lines are given to the app (as MBUI_OPEN_PAGE=decisions: a page opened at the start), its `#before
@@ -106,16 +108,19 @@ if [ $PLATFORM = android ]; then
   export AVD=${AVD:-mbui-avd-e2e} EMU_PORT=${EMU_PORT:-5586}
   SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
   ADB="$SDK/platform-tools/adb -s emulator-$EMU_PORT"
-  [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/android.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  export E2E_PKG=${E2E_PKG:-dev.mbui.demo}
+  [ -n "${E2E_NOBUILD:-}${E2E_APK:-}" ] || APP=stillfail scripts/android.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
   scripts/android.sh emu >$OUT/emu.log 2>&1 || { tail $OUT/emu.log; exit 1; }
-  $ADB install -r android/app/build/outputs/apk/debug/app-debug.apk >/dev/null || exit 1
-  $ADB shell pm clear dev.mbui.demo >/dev/null
+  $ADB install -r ${E2E_APK:-android/app/build/outputs/apk/debug/app-debug.apk} >/dev/null || exit 1
+  $ADB shell pm clear $E2E_PKG >/dev/null
   $ADB reverse tcp:$E2E_PORT tcp:$E2E_PORT >/dev/null
   $ADB reverse tcp:$E2E_RELAY tcp:$E2E_RELAY >/dev/null
-  $ADB shell run-as dev.mbui.demo mkdir -p files/e2e
-  for f in e2e-photo.jpg e2e-data.bin; do
-    $ADB exec-in run-as dev.mbui.demo sh -c "cat > files/e2e/$f" < $FILES/$f
-  done
+  if [ -z "${E2E_APK:-}" ]; then
+    $ADB shell run-as $E2E_PKG mkdir -p files/e2e
+    for f in e2e-photo.jpg e2e-data.bin; do
+      $ADB exec-in run-as $E2E_PKG sh -c "cat > files/e2e/$f" < $FILES/$f
+    done
+  fi
 fi
 if [ $PLATFORM = mac ]; then
   [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/mac.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
@@ -150,7 +155,7 @@ run_flow() {
     local r=$?
     # the core's store on the device, for the checks (the app has ended)
     rm -rf $CORE && mkdir -p $CORE
-    $ADB exec-out run-as dev.mbui.demo tar cf - files/core 2>/dev/null | tar xf - -C $CORE 2>/dev/null
+    $ADB exec-out run-as $E2E_PKG tar cf - files/core 2>/dev/null | tar xf - -C $CORE 2>/dev/null
     return $r
   fi
 }
