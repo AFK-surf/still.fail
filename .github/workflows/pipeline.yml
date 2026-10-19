@@ -9,7 +9,8 @@
 # The native parts (scripts/native.ts: the station's mesh addon, launcher and runner, the web's iroh, Android's shell
 # and engine, the desktop's dock, the media service's ffmpeg) are prebuilt: the natives job builds those whose key the release
 # native-artifacts lacks, on mini1, and on main publishes them there; every other job gets them from the release (a
-# branch's: from its natives job's run artifact), so a change that is not to a native part compiles no Rust.
+# branch's: from its natives job's run artifact), so a change that is not to a native part compiles no Rust. What only
+# Windows builds (the mbui app's shell and engine there, MSVC's) natives-win builds the same way on GitHub's Windows.
 # Stable: the manual Publish stable workflow. Relay remains manual (deploying it drops every connection).
 name: pipeline
 on:
@@ -28,6 +29,8 @@ env:
   # The native parts a branch's checks and builds use (the Linux station parts are built and published from main; the
   # Linux check's mesh addon is built on a branch that changed it). ffmpeg, all three, on a branch that changed
   # scripts/ffmpeg.ts: nothing on a branch runs it, but its build there is the evidence for the merge.
+  # (and natives-win's: the mbui app's shell and engine for Windows, built on a branch that changed them)
+  BRANCH_NATIVES_WIN: shell:win32-x64 engine:win32-x64
   BRANCH_NATIVES: mesh:darwin-arm64 dock:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 window-controls:win32-x64 notify-permission:darwin-arm64 notify-permission:win32-x64 helper:darwin-arm64 ffmpeg:darwin-arm64 ffmpeg:linux-x64 ffmpeg:linux-arm64
 jobs:
   # What can runs on mini1; what needs Linux (the Linux check) and the small jobs (plan, the API's deploy, put, the
@@ -54,6 +57,7 @@ jobs:
       desktop_web: ${{ steps.plan.outputs.desktop_web }}
       windows: ${{ steps.plan.outputs.windows }}
       natives: ${{ steps.natives.outputs.natives }}
+      natives_win: ${{ steps.natives.outputs.natives_win }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true }
@@ -66,10 +70,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$GITHUB_REF" = refs/heads/main ]; then missing=$(node scripts/native.ts missing)
-          else missing=$(node scripts/native.ts missing $BRANCH_NATIVES); fi
-          echo "missing: ${missing:-none}"
+          if [ "$GITHUB_REF" = refs/heads/main ]; then missing=$(node scripts/native.ts missing); windows=$(node scripts/native.ts missing --windows)
+          else missing=$(node scripts/native.ts missing $BRANCH_NATIVES); windows=$(node scripts/native.ts missing $BRANCH_NATIVES_WIN); fi
+          echo "missing: ${missing:-none}; on Windows: ${windows:-none}"
           echo "natives=$([ -n "$missing" ] && echo needed || echo ready)" >> "$GITHUB_OUTPUT"
+          # natives-win's matrix: one job a part
+          echo "natives_win=$(printf '%s\n' "$windows" | jq -Rsc 'split("\n") | map(select(length > 0))')" >> "$GITHUB_OUTPUT"
       - id: plan
         run: |
           if [ "$GITHUB_REF" = refs/heads/main ]; then base=$(git rev-parse -q --verify "refs/tags/deployed/beta^{commit}" || true)
@@ -167,6 +173,44 @@ jobs:
       - if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
+
+  # The native parts only Windows builds (scripts/native.ts `msvc`: the mbui app's shell, MSVC's, and its engine, Hermes
+  # built from its source with clang-cl), each whose key the release lacks in a job of its own on GitHub's Windows (no
+  # runner of ours is Windows), side by side: main publishes them, a branch passes them on as a run artifact (the
+  # evidence for its merge; the mbui app's Windows job, mbui.yml, gets or builds its own). A cold shell is ~6 minutes,
+  # Hermes and the engine ~4.
+  natives-win:
+    needs: plan
+    if: needs.plan.outputs.natives_win != '[]' && needs.plan.outputs.natives_win != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ${{ fromJSON(needs.plan.outputs.natives_win) }}
+    runs-on: windows-2025
+    timeout-minutes: 15
+    permissions:
+      contents: write # the release native-artifacts' assets, on main only
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # the keys are git's blobs: the checkout as git has it
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ilammy/msvc-dev-cmd@v1
+      # Git Bash's /usr/bin/link shadows MSVC's link.exe for cargo
+      - run: echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"
+      - name: Get or build ${{ matrix.part }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF" = refs/heads/main ]; then node scripts/native.ts ensure --publish ${{ matrix.part }}
+          else node scripts/native.ts ensure --outbox "$RUNNER_TEMP/natives" ${{ matrix.part }}; fi
+      - if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with: { name: "natives-win-${{ strategy.job-index }}-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
 
   # mini1-5 (label quick, on mini1 too) takes only the short jobs everything else waits on: natives (what a run's
   # builds and checks need), and main's done and station-update. Behind the builds in mini1's four, natives waited
