@@ -76,6 +76,7 @@ export const PARAMS: Record<string, string> = {
   "chats.archived": "",
   "chat.forSession": "session?:string",
   "widget.state": "key:string path:string",
+  "session.transcript": "key:string",
   "file.peek": "key:string path:string line?:number",
   "link.preview": "url:string",
   "widget.setState": "key:string path?:string state?:json",
@@ -330,6 +331,9 @@ function stationOp(name: string, params: unknown): Request | null {
     // A web link in a message: what the station finds it is (its title, a pull request's state).
     case "link.preview":
       return op("GET", () => `/link-preview?url=${p.at("url")}`, null, NONE);
+    // Where its runtime keeps the session's transcript on the station's machine (null before it is written).
+    case "session.transcript":
+      return op("GET", () => `/sessions/${p.at("key")}/transcript`, null, NONE);
     case "widget.state":
       return op("GET", () => `/sessions/${p.at("key")}/widget-state?path=${p.at("path")}`, null, NONE);
     case "widget.setState":

@@ -6,7 +6,7 @@ import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 /** A field is absent until assigned; assigning null sends JSON null (reset to default). */
-val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state")
+val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state")
 
 open class OperationFields {
     internal val fields = mutableMapOf<String, JsonElement>()
@@ -157,6 +157,11 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["key"] = JsonPrimitive(key)
         values["path"] = JsonPrimitive(path)
         return call("widget.state", JsonObject(values))
+    }
+    suspend fun sessionTranscript(key: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["key"] = JsonPrimitive(key)
+        return call("session.transcript", JsonObject(values))
     }
     class FilePeekFields : OperationFields() {
         var line: Long? by field<Long>("line") { JsonPrimitive(it) }

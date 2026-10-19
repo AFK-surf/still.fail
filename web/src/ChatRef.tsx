@@ -3,7 +3,7 @@
 // The agent reads that chat by the link (the station's chat_read and session_history tools).
 import { Fragment, useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { hrefOf } from "./go.ts";
-import { useChats, useChatSearch, useStationLook, type ChatItem } from "./api.ts";
+import { stationApi, useChats, useChatSearch, useStationCall, useStationLook, type ChatItem } from "./api.ts";
 import { ChatMark, stateLine } from "./ChatMark.tsx";
 import { StationMark } from "./StationMark.tsx";
 import { scopeOf, useStation } from "./station.tsx";
@@ -149,6 +149,24 @@ export function useCopyChatLink(toast: (text: string) => void) {
       () => toast(t(history ? "web-main.chat.historyLinkCopied" : "web-main.chat.linkCopied")),
       (e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })),
     );
+  };
+}
+
+/**
+ * Copying where the agents' sessions keep their transcripts on the station's machine (`keys`: theirs), one per line,
+ * to open them or hand them to another tool. `toast` says it is copied, that none is written yet, or why not.
+ */
+export function useCopyTranscripts(station: string, toast: (text: string) => void) {
+  const api = stationApi(useStationCall(station));
+  return (keys: string[]) => {
+    void Promise.all(keys.map((key) => api.transcriptPath(key)))
+      .then(async (paths) => {
+        const found = paths.filter((p): p is string => p !== null);
+        if (found.length === 0) return toast(t("web-main.chat.transcriptNone"));
+        await navigator.clipboard.writeText(found.join("\n"));
+        toast(found.length > 1 ? t("web-main.chat.transcriptsCopied", { n: found.length }) : t("web-main.chat.transcriptCopied"));
+      })
+      .catch((e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })));
   };
 }
 

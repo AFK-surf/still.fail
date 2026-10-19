@@ -1,6 +1,6 @@
-import { Archive, Copy, Edit, Pin, ShieldCheck, Unplug } from "@stillfail/ui/icons.tsx";
+import { Archive, Copy, Edit, File, Pin, ShieldCheck, Unplug } from "@stillfail/ui/icons.tsx";
 import { StationMark } from "./StationMark.tsx";
-import { useCopyChatLink } from "./ChatRef.tsx";
+import { useCopyChatLink, useCopyTranscripts } from "./ChatRef.tsx";
 import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
 import { NavSection, NavTop } from "./SidebarList.tsx";
@@ -291,7 +291,9 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
   const archiveAsked = () => { if (item.watch) setAsking(true); else void archive(); };
   const pin = usePin(item);
   const keep = useKeep(item);
-  const copyLink = useCopyChatLink(useToast());
+  const toast = useToast();
+  const copyLink = useCopyChatLink(toast);
+  const copyTranscripts = useCopyTranscripts(item.station, toast);
   const rename = useRename(item.station);
   const [editing, setEditing] = useState(false);
   // Pinned, renamed (its new name shown meanwhile) or brought back from the archive, until the station answers.
@@ -360,6 +362,8 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
             {item.thread != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={keep}><ShieldCheck size={14} />{item.kept ? t("web-main.chat.unkeep") : t("web-main.chat.keep")}</ContextMenu.Item>}
             {/* Its link, for another chat's agent to read it (chat_read / session_history), on any station of the workspace. */}
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => copyLink(item)}><Copy size={14} />{t("web-main.chat.copyLink")}</ContextMenu.Item>
+            {/* Where its agents' sessions are kept on the station's machine: each agent's, one per line. */}
+            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => copyTranscripts(item.agents.length > 0 ? item.agents.map((a) => a.key) : [item.session])}><File size={14} />{t("web-main.chat.copyTranscript")}</ContextMenu.Item>
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={archiveAsked}><Archive size={14} />{t("web-main.chat.archive")}</ContextMenu.Item>
           </ContextMenu.Content>
         </ContextMenu.Portal>

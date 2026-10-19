@@ -36,7 +36,7 @@ import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useReady, useTopicSelect } from "../core/react.ts";
 import { chatPage, useChatPageActions } from "../chatPage.ts";
-import { useAct, useToast } from "@stillfail/ui/toast.tsx";
+import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
@@ -797,6 +797,37 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
           </span>
         )}
       </div>
+      <TranscriptLine session={session.key} />
+    </div>
+  );
+}
+
+/**
+ * Where its runtime keeps the session's transcript on the station's machine: its file's name (the whole path on
+ * hover), and its path to copy. Nothing before it is written, nor from a station from before it (404).
+ */
+function TranscriptLine({ session }: { session: string }) {
+  const api = useApi();
+  const toast = useToast();
+  const [path, setPath] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    setPath(null);
+    api.transcriptPath(session).then((p) => { if (current) setPath(p); }, () => {});
+    return () => { current = false; };
+  }, [api, session]);
+  if (path === null) return null;
+  const copy = () => navigator.clipboard.writeText(path).then(
+    () => toast(t("web-main.chat.transcriptCopied")),
+    (e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })),
+  );
+  return (
+    <div className={css.sessionLine}>
+      <span className={css.sessionLineMark}><File size={16} /></span>
+      <Tip label={path}>
+        <span className={css.sessionLineText}>{t("web-pages.chat.transcript")} · <span className={css.sessionFile}>{path.split(/[\\/]/).pop()}</span></span>
+      </Tip>
+      <button type="button" className={`${css.detailLink} ${css.detailButton}`} onClick={() => void copy()}>{t("web-pages.chat.copyPath")}</button>
     </div>
   );
 }
@@ -812,7 +843,7 @@ function Evict({ session }: { session: string }) {
   const evicting = useDoing("session.evict", { station, key: session });
   const failed = useDoingFailed("session.evict", { station, key: session });
   return (
-    <button type="button" className={`${css.detailLink} ${css.evict}`} disabled={evicting} onClick={() => act(api.evict(session), t("web-pages.chat.evict"), t("web-pages.chat.evicted"))}>
+    <button type="button" className={`${css.detailLink} ${css.detailButton}`} disabled={evicting} onClick={() => act(api.evict(session), t("web-pages.chat.evict"), t("web-pages.chat.evicted"))}>
       {t("web-pages.chat.evict")}<DoingShown state={{ running: evicting, error: failed }} inline />
     </button>
   );

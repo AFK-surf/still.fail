@@ -290,6 +290,8 @@
   "web-pages.chat.openPanel": "打开侧栏",
   "web-pages.chat.pickSaved": "已更改，下一轮起生效",
   "web-pages.chat.profileDetails": "Profile 详情",
+  "web-pages.chat.transcript": "Session 文件",
+  "web-pages.chat.copyPath": "复制路径",
   "web-pages.chat.resizePanel": "调整侧栏宽度",
   "web-pages.chat.serviceFailed": "「{name}」启动失败",
   "web-pages.chat.serviceStopped": "「{name}」已停止",

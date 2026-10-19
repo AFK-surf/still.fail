@@ -1,7 +1,7 @@
 // Sessions, threads and jobs as the pages read them (admin/mod.rs `route`): GET /sessions, /sessions/:key and its
-// timeline, files and widget-state; GET /threads, /threads/:id; GET /jobs, /jobs/:id, /jobs/:id/log. As the Rust
-// splits a path, its parts are those between slashes that are not empty, each percent-decoded (a `+` stays itself),
-// and parts after the third do not count.
+// timeline, files, transcript and widget-state; GET /threads, /threads/:id; GET /jobs, /jobs/:id, /jobs/:id/log. As
+// the Rust splits a path, its parts are those between slashes that are not empty, each percent-decoded (a `+` stays
+// itself), and parts after the third do not count.
 import { createReadStream } from "node:fs";
 import { access, mkdir, open, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -237,6 +237,7 @@ export const routes = (tools: Tools): Route[] => {
         if (action === "files") return file(read, r, { key, name: param(r, "name") ?? "", thumb: param(r, "thumb") === "1", lang: r.lang });
         if (action === "parts") return part(read, r, key);
         if (action === "poster") return posterOf(tools.read, r, key, tools.agents?.hub.config().dataDir);
+        if (action === "transcript") return read(r, "transcriptFile", { key, lang: r.lang });
         if (action === "widget-state") return read(r, "widgetState", { key, path: param(r, "path"), lang: r.lang });
         if (action === "peek") return peek(tools.read, r, key, tools.agents?.hub.config().dataDir);
         if (action === "open") return openFile(read, r, key);
