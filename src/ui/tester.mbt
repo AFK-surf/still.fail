@@ -385,7 +385,7 @@ fn dump_node(sb : StringBuilder, i : Int, depth : Int) -> Unit {
   }
   if n.kind == kind_editor {
     match c.editors.get(n.id) {
-      Some(st) => sb.write_string(" \{st.display().escape()} caret=\{st.caret}")
+      Some(st) => sb.write_string(" \{st.shown().escape()} caret=\{st.caret}")
       None => ()
     }
   }

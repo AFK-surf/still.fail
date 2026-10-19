@@ -6,7 +6,7 @@
 ///|
 fn Ctx::editor_display(self : Ctx, n : Node) -> String {
   match self.editors.get(n.id) {
-    Some(st) => st.display()
+    Some(st) => st.shown()
     None => ""
   }
 }
@@ -567,7 +567,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
   } else if n.kind == kind_editor {
     match self.editors.get(n.id) {
       Some(st) => {
-        let tl = layout_text(st.display(), n.font_size, n.weight, iw, true, line=n.line_h)
+        let tl = layout_text(st.shown(), n.font_size, n.weight, iw, true, line=n.line_h)
         st.tl = Some(tl)
         // taller than the field: scrolled so that the caret's line shows
         let (_, cl) = tl.caret(st.caret + st.marked.length())

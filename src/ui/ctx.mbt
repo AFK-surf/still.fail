@@ -92,6 +92,8 @@ struct EditorState {
   mut ph_color : Int64
   mut caret_color : Int64
   mut sel_color : Int64
+  /// what it holds is a secret (a key, a token, a password): drawn as dots, never copied or cut out of it
+  mut secret : Bool
 }
 
 ///|

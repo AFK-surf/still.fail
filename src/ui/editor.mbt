@@ -33,6 +33,21 @@ fn EditorState::display(self : EditorState) -> String {
 }
 
 ///|
+/// What it shows: its words (with what is being composed), each a dot where they are a secret (as many UTF-16 units,
+/// so the caret's and the selection's places are the same).
+fn EditorState::shown(self : EditorState) -> String {
+  let d = self.display()
+  if !self.secret {
+    return d
+  }
+  let b = StringBuilder()
+  for _ in 0..<d.length() {
+    b.write_char('\u{2022}')
+  }
+  b.to_string()
+}
+
+///|
 fn EditorState::sel(self : EditorState) -> (Int, Int) {
   if self.anchor < self.caret {
     (self.anchor, self.caret)
@@ -194,7 +209,8 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
     self.caret = t.length()
   } else if code == key_copy || code == key_cut {
     let (a, b) = self.sel()
-    if a != b {
+    // (a secret is not copied or cut out)
+    if a != b && !self.secret {
       h_clipboard_set(sub(t, a, b))
       if code == key_cut {
         self.delete_selection() |> ignore
@@ -266,6 +282,7 @@ pub fn Ctx::editor(
   caret_color? : Int64 = 0x0A84FFFFL,
   enter_sends? : Bool = true,
   paste_limit? : Int = 0,
+  secret? : Bool = false,
 ) -> EditorResult {
   let id = self.id(key)
   let st = match self.editors.get(id) {
@@ -293,6 +310,7 @@ pub fn Ctx::editor(
         ph_color: 0L,
         caret_color: 0L,
         sel_color: 0L,
+        secret: false,
       }
       self.editors[id] = s
       self.own(id)
@@ -301,6 +319,7 @@ pub fn Ctx::editor(
   }
   st.limit = paste_limit
   st.enter_sends = enter_sends
+  st.secret = secret
   st.line = line
   st.color = color
   st.ph_color = placeholder_color
@@ -514,6 +533,7 @@ pub fn Ctx::set_editor_text(self : Ctx, key : String, text : String) -> Unit {
         ph_color: 0L,
         caret_color: 0L,
         sel_color: 0L,
+        secret: false,
       }
       self.editors[id] = st
       self.own(id)
