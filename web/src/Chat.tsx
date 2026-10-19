@@ -1939,10 +1939,15 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     let width = el.clientWidth;
     const resize = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; fit(); } });
     resize.observe(el);
+    // What is above it changing (a file or quote added or gone, a picture loaded) moves it down or up, its text the
+    // same: the mirror follows. Its box's size changes with it.
+    const moved = new ResizeObserver(() => over());
+    const box = el.closest("form");
+    if (box) moved.observe(box);
     const scrolled = () => { edges(); over(); };
     el.addEventListener("scroll", scrolled);
     window.addEventListener("resize", fit);
-    return () => { resize.disconnect(); window.removeEventListener("resize", fit); el.removeEventListener("scroll", scrolled); probe.remove(); };
+    return () => { resize.disconnect(); moved.disconnect(); window.removeEventListener("resize", fit); el.removeEventListener("scroll", scrolled); probe.remove(); };
   }, [text, lines, layout]); // eslint-disable-line react-hooks/exhaustive-deps
   const menu = reference && !locked && (
     <div className={refCss.refAnchor}>
