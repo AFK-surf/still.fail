@@ -13,7 +13,7 @@ if [ "$APP" = stillfail ]; then
   engine=$(cd "$EMBER" && node scripts/native.ts path engine win32-x64) || exit 1
   shell=$(cd "$EMBER" && node scripts/native.ts path shell win32-x64) || exit 1
   export LIB="$(cygpath -w "$engine");$LIB"
-  export CL="/I$(cygpath -w "$A/engine") ${CL:-}"
+  export CL="/I$(cygpath -w "$A/engine") /I$(cygpath -w "$MBUI_DIR/src/host") ${CL:-}"
   if [ "${1:-build}" = build ]; then
     HERMESC=$(cygpath -m "$engine/hermesc.exe") bash "$D/core.sh" hermes || exit 1
   fi
@@ -21,7 +21,8 @@ fi
 bash "$MBUI_DIR/scripts/win.sh" "$@" || exit $?
 if [ "$APP" = stillfail ] && [ "${1:-build}" = build ]; then
   . "$MBUI_DIR/scripts/env.sh"
-  dir=$A/out/win/mod/$(cd "$A/out/win/mod" && pkg_build $APP native ${MODE:-release})
+  # (mbui's win.sh builds this module in its copy, out/win/app beside mbui's own)
+  dir=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release})
   cp "$engine/stillfail_engine.dll" "$shell/stillfail_shell.dll" "$A/out/core/core.hbc" "$dir/"
   ls -la "$dir"
 fi

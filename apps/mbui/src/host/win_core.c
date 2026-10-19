@@ -26,7 +26,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "core_api.h"
-#include "listen_api.h"
+// mbui's own (scripts/win.sh puts its src/host first in cl's include path, CL): the forwarding listen_api.h beside this
+// file names mbui where the module's checkout has it, which win.sh's copy of the module does not
+#include <listen_api.h>
 #include "engine.h"
 
 #pragma comment(lib, "crypt32.lib")

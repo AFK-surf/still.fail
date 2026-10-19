@@ -24,7 +24,7 @@ ORIGIN=http://127.0.0.1:$PORT
 OUT=$ROOT/out/e2e/windows
 rm -rf "$OUT" && mkdir -p "$OUT/shots"
 CORE=$OUT/core
-EXE=$ROOT/out/win/mod/$(cd "$ROOT/out/win/mod" && pkg_build stillfail native ${MODE:-release})/stillfail.exe
+EXE=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build stillfail native ${MODE:-release})/stillfail.exe
 [ -x "$EXE" ] || { echo "e2e: no app at $EXE (scripts/win.sh build)"; exit 1; }
 w() { cygpath -w "$1"; }
 
