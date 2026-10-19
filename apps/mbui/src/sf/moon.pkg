@@ -1,5 +1,6 @@
 import {
   "mbui/ui",
+  "mbui/kit",
   "mbui/md",
   "moonbitlang/core/math",
 }
