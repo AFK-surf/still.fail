@@ -16,6 +16,8 @@ set -u
 D="$(cd "$(dirname "$0")" && pwd)"
 ROOT=$(cd "$D/.." && pwd)
 EMBER=$(cd "$ROOT/../.." && pwd)
+# (the station's environment drops every EMBER* variable, as e2e-local.sh's does: this checkout by another name there)
+SF=$EMBER
 . "$ROOT/scripts/env.sh"
 PORT=${E2E_PORT:-18787}
 ORIGIN=http://127.0.0.1:$PORT
@@ -57,22 +59,22 @@ STATION=$WORK/station
 mkdir -p "$STATION/data/homes/cc" "$STATION/home" "$WORK/peer-home"
 echo '{"profiles":[{"id":"cc","runtime":"claude","home":"homes/cc","models":["claude-sonnet-5-5"]}],"autoUpdate":false}' > "$STATION/data/config.json"
 echo '{}' > "$STATION/data/homes/cc/.credentials.json"
-mesh=$(cd "$EMBER" && node scripts/native.ts file mesh win32-x64)
-runner=$(cd "$EMBER" && node scripts/native.ts file runner win32-x64)
+mesh=$(cd "$SF" && node scripts/native.ts file mesh win32-x64)
+runner=$(cd "$SF" && node scripts/native.ts file runner win32-x64)
 station_env() {
   for v in $(env | grep -Eo '^(EMBER|STILLFAIL|CLAUDE|CODEX)[A-Z0-9_]*=' | tr -d =); do unset $v; done
-  export HOME="$(w "$STATION/home")" USERPROFILE="$(w "$STATION/home")" PATH="$EMBER/station/test/fake:$PATH"
+  export HOME="$(w "$STATION/home")" USERPROFILE="$(w "$STATION/home")" PATH="$SF/station/test/fake:$PATH"
   export STILLFAIL_NO_DISCOVERY=1 STILLFAIL_DATA="$(w "$STATION/data")" STILLFAIL_MESH_NATIVE="$mesh" STILLFAIL_RUNNER="$runner"
 }
 token=$(grep -m1 '^ENROLL ' "$OUT/cloud.log" | awk '{print $NF}' | tr -d '\r')
 station_ok=0
-if (station_env && node "$EMBER/station/dist/main.js" enroll "$ORIGIN" "$token" --data "$(w "$STATION/data")") > "$OUT/enroll.log" 2>&1; then
-  (station_env && exec node "$EMBER/station/dist/main.js" run --data "$(w "$STATION/data")" > "$OUT/station.log" 2>&1) &
+if (station_env && node "$SF/station/dist/main.js" enroll "$ORIGIN" "$token" --data "$(w "$STATION/data")") > "$OUT/enroll.log" 2>&1; then
+  (station_env && exec node "$SF/station/dist/main.js" run --data "$(w "$STATION/data")" > "$OUT/station.log" 2>&1) &
   station=$!
   for _ in $(seq 120); do [ -f "$STATION/data/stillfail.db" ] && break; sleep 0.5; done
   # alice's other device: the chat the app's Home shows, made on the station, with its first words
   if (export HOME="$(w "$WORK/peer-home")" USERPROFILE="$(w "$WORK/peer-home")" STILLFAIL_MESH_NATIVE="$mesh" \
-        E2E_EMBER="$(w "$EMBER")" E2E_ORIGIN=$ORIGIN E2E_PEER_DATA="$(w "$WORK/peer")" E2E_FILES="$(w "$WORK")" &&
+        E2E_EMBER="$(w "$SF")" E2E_ORIGIN=$ORIGIN E2E_PEER_DATA="$(w "$WORK/peer")" E2E_FILES="$(w "$WORK")" &&
       timeout 180 node "$D/peer.ts" setup) > "$OUT/peer.log" 2>&1; then
     station_ok=1
   fi
