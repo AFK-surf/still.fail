@@ -682,7 +682,7 @@ fn decision_composer(c : @ui.Ctx, src : Source, item : Json, key : String, place
       gap=2.0,
       radius=composer_corner,
       align=AEnd,
-      bg=floating_ground(),
+      glass=@sf.glass_floating(),
       shadow=2.0,
       shadow_color=0x0000004DL,
       shadow_y=0.5,
