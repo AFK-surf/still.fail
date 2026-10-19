@@ -38,6 +38,10 @@ fn fixture_preview(mode : String) -> Unit {
   for f in preview_files() {
     if f.0.name == which {
       open_preview("ws1/st1", "s-c1", f.0)
+      // its bars kept up: a shot taken late (a busy machine, the browser's) sees what one taken early does
+      if viewer.val is Some(v) {
+        v.rests = false
+      }
     }
   }
 }

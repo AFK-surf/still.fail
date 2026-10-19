@@ -421,6 +421,8 @@ priv struct Viewer {
   /// the bars shown, and when they go
   mut awake : Bool
   mut rest_at : Double
+  /// whether they fade when left alone after it opens (not in the fixture's shots, which come when they come)
+  mut rests : Bool
   zoom : Zoom
   vzoom : Zoom
   /// 源码 rather than 预览
@@ -477,6 +479,7 @@ fn open_preview(station : String, key : String, a : Attachment, drive? : DriveFi
     save_after: false,
     awake: true,
     rest_at: -1.0,
+    rests: true,
     zoom: Zoom::new(),
     vzoom: Zoom::new(),
     source: false,
@@ -633,7 +636,7 @@ fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Json]) 
               parts.push(bytes)
               got.val += bytes.length()
               if bytes.length() == 0 || got.val >= total {
-                let all = @buffer.new(size_hint=got.val)
+                let all = Buffer(size_hint=got.val)
                 for b in parts {
                   all.write_bytes(b)
                 }
@@ -833,7 +836,7 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
   let now = c.now()
   if v.opened < 0.0 {
     v.opened = now
-    v.rest_at = now + rest_ms
+    v.rest_at = if v.rests { now + rest_ms } else { -1.0 }
     // it comes up in the keyboard's place: what was being typed into lets go of it first
     c.blur()
   }
