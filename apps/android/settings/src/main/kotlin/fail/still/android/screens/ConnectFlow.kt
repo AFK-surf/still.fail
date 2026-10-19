@@ -10,7 +10,7 @@ import kotlinx.serialization.json.*
 /** UI adapter only: the core owns the steps, draft, model choices and writes. */
 internal class ConnectFlow(private val app: AppState, val station: String, val form: String) {
     var view by mutableStateOf<ConnectFlowView?>(null)
-    private val calls = setOf("config", "make", "verify", "create").map { "connect.flow.$it" }.toSet()
+    private val calls = setOf("config", "make", "verify", "register", "create").map { "connect.flow.$it" }.toSet()
     val busy get() = app.isDoing(calls, "station" to station, "form" to form)
     val error get() = app.failedOf(calls, "station" to station, "form" to form)
     suspend fun call(action: String, input: JsonObject = buildJsonObject {}) = app.core.call("connect.flow.$action", buildJsonObject {

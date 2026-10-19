@@ -118,6 +118,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun putConnect(id: String, body: JsonObject) { ops.connectPut(id = id) { this.input = body } }
     suspend fun deleteConnect(id: String) { ops.connectDelete(id = id) }
     suspend fun reconnect(id: String) { ops.connectReconnect(id = id) }
+    /** A Feishu connect's App Secret replaced: its station verifies it first (failing, it says why), then reconnects. */
+    suspend fun putFeishuSecret(id: String, appSecret: String) { ops.feishuPutSecret(id = id, appSecret = appSecret) }
     /** A single-session connect's session: `session` null makes a new one (named `title`). */
     suspend fun bindSession(connect: String, session: String?, title: String) {
         ops.connectBindSession(connect = connect) { this.session = session; if (title.isNotBlank()) this.title = title }

@@ -592,7 +592,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                 if (users.isEmpty()) ListRow { Text(t("android-settings.profile.noUsers"), fontSize = 15.sp, color = C.muted) }
                 users.forEach { c ->
                     ListRow(onClick = { app.push(Screen.Connect(address, c.id)) }) {
-                        SlackMark(15.dp)
+                        SlackMark(15.dp, c.kind)
                         Text(c.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(c.modelName ?: p.model?.let { p.names[it] ?: it } ?: t("android-settings.profile.defaultModel"), fontSize = 13.sp, color = C.muted)
                     }

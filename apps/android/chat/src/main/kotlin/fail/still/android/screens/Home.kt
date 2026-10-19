@@ -605,7 +605,7 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                     // Its station offline, or its link coming back: unplugged (a spinner is only something its person did).
                     else if (offline != null) Box(Modifier.semantics { contentDescription = offline }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
                     else if (reconnecting != null) Box(Modifier.semantics { contentDescription = reconnecting }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
-                    else if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp) }
+                    else if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp, item.originKind) }
                 }
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

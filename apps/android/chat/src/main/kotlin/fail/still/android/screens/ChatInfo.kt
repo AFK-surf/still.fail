@@ -66,11 +66,11 @@ import fail.still.android.ui.Field
 /**
  * The chat itself, from "…": its name (with a way to change it) over who started it, how many take part and when it was
  * last written in, in a line; its agents, each where it stands (a tap opens its card, AgentSheet.kt); then what can be
- * done with it, within reach: pin it, copy its link, open it in Slack, archive it. As tall as what it shows.
+ * done with it, within reach: pin it, copy its link, open it in Slack (or Feishu), archive it. As tall as what it shows.
  */
 fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread, first: ChatView? = null) {
     val publish = shownPublish(first?.publish)
-    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + 2) * 40 +
+    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.feishuUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + 2) * 40 +
         (if (publish != null) ((if (publish.may) 1 else 0) + publish.links.size) * 40 + 10 else 0)
     app.sheet = SheetSpec(0.55f, fit = (22 + 84 + rows + 10 + 30).dp) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
@@ -127,7 +127,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                 }
                 Spacer(Modifier.height(10.dp))
             }
-            if (open || link != null || view?.slackUrl != null || view?.xshare != null) InfoList {
+            if (open || link != null || view?.slackUrl != null || view?.feishuUrl != null || view?.xshare != null) InfoList {
                 // A station from before pins says nothing of them: its chats are not pinned from here.
                 if (open) view!!.pinned?.let { pinned ->
                     // Under way: a spinner on the row, not tapped again.
@@ -153,6 +153,17 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                     InfoRow(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }) {
                         SlackMark(16.dp)
                         Text(t("android-chat.info.slack.open"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                    }
+                }
+                view?.feishuUrl?.let { url ->
+                    val context = LocalContext.current
+                    InfoRow(onClick = {
+                        try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+                        catch (_: android.content.ActivityNotFoundException) { app.toast = t("android-chat.link.failed") }
+                    }) {
+                        SlackMark(16.dp, "feishu")
+                        Text(t("web-mobile.chat.openFeishu"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
                         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                     }
                 }

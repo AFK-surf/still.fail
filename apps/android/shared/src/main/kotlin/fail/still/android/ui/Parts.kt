@@ -649,8 +649,10 @@ fun Splash(label: String? = null, now: Boolean = false) {
 @Composable
 fun Mark(size: Dp = 14.dp) = Image(painterResource(if (C.dark) R.drawable.stillfail_mark_dark else R.drawable.stillfail_mark), null, Modifier.size(size))
 
+/** Where a thread elsewhere is, by `kind` (a connect's kind, a place's surface, a chat's origin): Feishu's mark for Feishu, else Slack's. */
 @Composable
-fun SlackMark(size: Dp = 13.dp) = Image(painterResource(R.drawable.slack), null, Modifier.size(size))
+fun SlackMark(size: Dp = 13.dp, kind: String? = null) =
+    Image(painterResource(if (kind == "feishu" || kind?.startsWith("feishu:") == true) R.drawable.feishu else R.drawable.slack), null, Modifier.size(size))
 
 @Composable
 fun Illustration(light: Int, dark: Int, width: Dp) = Image(painterResource(if (C.dark) dark else light), null, Modifier.width(width))

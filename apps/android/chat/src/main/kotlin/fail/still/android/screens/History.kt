@@ -412,7 +412,7 @@ internal fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
 
 /**
  * A place, as the core names it: its platform's mark and its name; a chat on still.fail's page leads to it, a Slack thread
- * opens in Slack (its link, while a connect is signed in to its workspace).
+ * opens in Slack (its link, while a connect is signed in to its workspace), a Feishu chat in Feishu.
  */
 @Composable
 internal fun Place(station: String, of: ChatOf, place: fail.still.android.data.Place) {
@@ -420,8 +420,8 @@ internal fun Place(station: String, of: ChatOf, place: fail.still.android.data.P
     val context = androidx.compose.ui.platform.LocalContext.current
     // A still.fail chat (surface "ember") is its agent's item: opened by the session it is bound to.
     val chat = place.session?.let { key -> { if (of != ChatOf.Session(key)) app.push(Screen.Chat(station, ChatOf.Session(key))) else app.pop() } }
-    // A Slack thread by its link: the Slack app takes it when installed, the browser otherwise.
-    val slack = place.url?.takeIf { place.surface == "slack" }?.let { url ->
+    // A Slack (or Feishu) thread by its link: the Slack (Feishu) app takes it when installed, the browser otherwise.
+    val slack = place.url?.takeIf { place.surface == "slack" || place.surface == "feishu" || place.surface.startsWith("feishu:") }?.let { url ->
         {
             try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
             catch (_: android.content.ActivityNotFoundException) { app.toast = t("android-chat.link.failed") }
@@ -432,7 +432,7 @@ internal fun Place(station: String, of: ChatOf, place: fail.still.android.data.P
         Modifier.clip(Smooth(4.dp)).let { if (open != null) it.clickable(onClick = open) else it },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        if (place.surface in setOf("ember", "stillfail")) Mark(12.dp) else SlackMark(12.dp)
+        if (place.surface in setOf("ember", "stillfail")) Mark(12.dp) else SlackMark(12.dp, place.surface)
         Text(place.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (open != null) C.accentInk else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
