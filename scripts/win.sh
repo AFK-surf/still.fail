@@ -31,12 +31,14 @@ sync() {
   cp -p moon.mod $M/
   # exactly src/: a file gone from it goes from the copy too (then the copy's own files, after; Git Bash has no rsync)
   if command -v rsync >/dev/null; then rsync -a --delete src/ $M/src/; else rm -rf $M/src && cp -rp src $M/src; fi
-  sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp", "win_image.cpp", "win_listen.c", "win_browser_login.c" ]/' \
+  sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp", "win_image.cpp", "win_listen.c", "win_browser_login.c", "win_views.cpp" ]/' \
       -e 's/-fobjc-arc *//' src/host/moon.pkg > $M/src/host/moon.pkg
   # every app (demo, photos…) links no Apple frameworks
   for p in src/*/moon.pkg; do
     grep -q '"is-main"' $p && sed -e '/"cc-link-flags"/d' $p > $M/$p
   done
+  # WebView2's SDK (win_views.cpp): its header beside the host's sources, its static loader where the linker looks
+  cp -p "$WV2/build/native/include/WebView2.h" $M/src/host/
   [ ! -f src/photos/pictures/windows.mbt ] || cp -p src/photos/pictures/windows.mbt $M/src/photos/pictures_native.mbt
   if ! grep -q win_app.c $M/src/host/moon.pkg || grep -q -e -framework -e '\.m"' $M/src/*/moon.pkg; then
     echo "win.sh: src/host/moon.pkg or an app's moon.pkg no longer has the expected shape" >&2
@@ -65,6 +67,18 @@ sync_app() {
   true
 }
 
+# WebView2's SDK, from NuGet (the header and the loader linked in statically; the browser is the system's own runtime)
+WV2_VERSION=1.0.4258.31
+WV2=out/webview2/$WV2_VERSION
+webview2_sdk() {
+  [ -f $WV2/build/native/include/WebView2.h ] && return
+  mkdir -p out/webview2
+  curl -sSfL --retry 3 -o $WV2.nupkg "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$WV2_VERSION"
+  PY=$(command -v python || command -v python3)
+  "$PY" -m zipfile -e "$WV2.nupkg" $WV2
+  rm -f $WV2.nupkg
+}
+
 shot_dir() {
   rm -rf "$1"; mkdir -p "$1"
   cygpath -w "$PWD/$1"
@@ -72,6 +86,8 @@ shot_dir() {
 
 case "${1:-build}" in
   build)
+    webview2_sdk
+    export LIB="$(cygpath -w "$PWD/$WV2/build/native/x64");$LIB"
     sync
     # moon's build, with the C that moonc generates split and compiled by cl in parallel, moonbit_init at /O1
     # (scripts/mbc.py: a cl.exe first on PATH, every other command passed to the real one; MBC_SPLIT=0 compiles it

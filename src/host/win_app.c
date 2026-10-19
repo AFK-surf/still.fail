@@ -87,10 +87,14 @@ static void draw_frame(void) {
   want_frame = 0;
   mbc_frame();
   mb_images_tell(outside_cb);
+  mb_views_tell(outside_cb);
   if (rc.right <= 0 || rc.bottom <= 0) return;  // minimized; WM_SIZE asks again
   double was = scale;
   scale = GetDpiForWindow(hwnd) / 96.0;
-  if (scale != was) ime_place();  // the candidate window is placed in pixels
+  if (scale != was) {
+    ime_place();  // the candidate window is placed in pixels
+    mb_views_rescale();
+  }
   frame_w = rc.right / scale;
   frame_h = rc.bottom / scale;
   mb_text_set_scale(scale);
@@ -287,6 +291,14 @@ static void wheel(WPARAM wp, LPARAM lp, int horizontal) {
 }
 
 static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+  // the mouse over a web view (win_views.cpp) is its page's
+  if (((msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST) || msg == WM_MOUSELEAVE) && mb_views_input(msg, wp, lp)) {
+    if (msg == WM_MOUSEMOVE && !tracking_leave) {
+      TRACKMOUSEEVENT t = {sizeof t, TME_LEAVE, h, 0};
+      tracking_leave = TrackMouseEvent(&t) ? 1 : 0;
+    }
+    return 0;
+  }
   switch (msg) {
     case WM_PAINT: {
       PAINTSTRUCT ps;
@@ -337,7 +349,11 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CONTEXTMENU: return 0;
     case WM_SETCURSOR:
       if (LOWORD(lp) == HTCLIENT) {
-        SetCursor(LoadCursor(NULL, cursor_name(cursor_kind)));
+        POINT p;
+        GetCursorPos(&p);
+        ScreenToClient(h, &p);
+        HCURSOR page = (HCURSOR)mb_views_cursor(p.x / scale, p.y / scale);
+        SetCursor(page ? page : LoadCursor(NULL, cursor_name(cursor_kind)));
         return TRUE;
       }
       break;
@@ -399,6 +415,13 @@ static void shot(const char *name) {
   char u[2048];
   WideCharToMultiByte(CP_UTF8, 0, p, -1, u, sizeof u, NULL, NULL);
   fprintf(stdout, "SHOT %s %s\n", u, ok ? "ok" : "failed");
+  // MBUI_SHOT_SCREEN=1: also what the screen shows (<name>-screen.png)
+  const char *sc = getenv("MBUI_SHOT_SCREEN");
+  if (sc && *sc == '1') {
+    _snwprintf(p, 1024, L"%ls\\%hs-screen.png", shot_dir, name);
+    p[1023] = 0;
+    fprintf(stdout, "SHOT screen %s\n", mb_screen_snapshot(hwnd, p) ? "ok" : "failed");
+  }
   fflush(stdout);
 }
 
@@ -450,8 +473,26 @@ static void run_script_step(int step) {
     }
     want_frame = 1;
   } else if (strcmp(script, "shot") == 0) {
-    if (step == 30) shot(getenv("MBUI_SHOT_NAME") ? getenv("MBUI_SHOT_NAME") : "main");
-    if (step == 31) exit(0);
+    // from the 30th frame, once the native views have opened (loaded or failed) and their pictures are taken anew;
+    // 30 s at most
+    static int snapped, done;
+    static double since;
+    if (step >= 30 && !done) {
+      if (!since) since = mb_now_ms();
+      int late = mb_now_ms() - since > 30000;
+      if (late || !mb_views_busy()) {
+        if (!snapped && mb_views_count() > 0 && !late) {
+          mb_views_snap_all();
+          snapped = 1;
+        } else {
+          if (late) fprintf(stdout, "shot: native views still busy after 30 s\n");
+          shot(getenv("MBUI_SHOT_NAME") ? getenv("MBUI_SHOT_NAME") : "main");
+          done = step;
+        }
+      }
+    } else if (done && step > done) {
+      exit(0);
+    }
     want_frame = 1;
   }
 }
@@ -528,6 +569,10 @@ int32_t mb_host_platform(void) { return 3; }
 void mb_host_request_frame(void) { want_frame = 1; }
 
 void mb_app_wake(void) { PostMessageW(hwnd, WM_APP, 0, 0); }
+
+void *mb_app_hwnd(void) { return hwnd; }
+
+double mb_app_scale(void) { return scale; }
 
 void mb_host_wake_after(double ms) {
   double t = mb_now_ms() + ms;
@@ -623,9 +668,9 @@ int32_t mb_host_reduce_motion(void) {
   return on ? 0 : 1;
 }
 
-// What the host did for the app is done (host_native.mbt's set_outside): kind 1 an image decoded (win_image.cpp,
-// told as each frame begins: on this thread, between frames, once per image). This host has no native views or PDFs
-// yet (view_open and pdf_page_load answer 0: nothing the app awaits).
+// What the host did for the app is done (host_native.mbt's set_outside): kind 1 an image decoded (win_image.cpp), 2 a
+// native view ready, failed, or waiting on the app (win_views.cpp); told as each frame begins: on this thread, between
+// frames. No PDFs yet (pdf_page_load answers 0: nothing the app awaits).
 int32_t mb_host_set_outside(mb_outside_fn f) {
   outside_cb = f;
   return 1;
@@ -799,42 +844,14 @@ moonbit_string_t mb_host_gallery_read_rows(int32_t id) { (void)id; return moonbi
 void mb_host_gallery_read_end(int32_t id) { (void)id; }
 int32_t mb_host_pick_photo(moonbit_string_t src) { (void)src; return 0; }
 
-// Native views over the canvas, PDFs (host_native.mbt): not on Windows yet. No view opens (0), no PDF is drawn (pages
-// -1); the app says it cannot show those here. (Saving a file: at the end, with keep.mbt's.)
-int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) { (void)kind; (void)arg; return 0; }
-void mb_host_view_place(int32_t id, double x, double y, double w, double h, double cx0, double cy0, double cx1,
-                        double cy1, int32_t shown) {
-  (void)id; (void)x; (void)y; (void)w; (void)h; (void)cx0; (void)cy0; (void)cx1; (void)cy1; (void)shown;
-}
-void mb_host_view_close(int32_t id) { (void)id; }
-void mb_host_view_control(int32_t id, int32_t op, double value) { (void)id; (void)op; (void)value; }
-int32_t mb_host_view_info(int32_t id, double *out) {
-  (void)id;
-  for (int i = 0; i < 10; i++) out[i] = 0;
-  return -1;
-}
-int32_t mb_host_view_read_next(int32_t id, double *out) { (void)id; (void)out; return 0; }
-moonbit_string_t mb_host_view_site_next(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
-moonbit_bytes_t mb_host_view_site_body(int32_t id, int32_t req) { (void)id; (void)req; return moonbit_make_bytes(0, 0); }
-void mb_host_view_site_head(int32_t id, int32_t req, int32_t status, moonbit_string_t headers) {
-  (void)id; (void)req; (void)status; (void)headers;
-}
-void mb_host_view_site_chunk(int32_t id, int32_t req, moonbit_bytes_t data) { (void)id; (void)req; (void)data; }
-void mb_host_view_site_end(int32_t id, int32_t req, moonbit_string_t error) { (void)id; (void)req; (void)error; }
-moonbit_string_t mb_host_view_site_state(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
-void mb_host_view_site_load(int32_t id, moonbit_string_t path) { (void)id; (void)path; }
-void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total) {
-  (void)id; (void)req; (void)data; (void)total;
-}
+// Native views over the canvas: win_views.cpp. PDFs (host_native.mbt): not on Windows yet; no PDF is drawn (pages -1),
+// the app says it cannot show it. (Saving a file: at the end, with keep.mbt's.)
 int32_t mb_host_pdf_open(moonbit_bytes_t data) { (void)data; return 0; }
 int32_t mb_host_pdf_pages(int32_t doc) { (void)doc; return -1; }
 void mb_host_pdf_page_size(int32_t doc, int32_t page, double *out) { (void)doc; (void)page; out[0] = out[1] = 0; }
 int32_t mb_host_pdf_page_load(int32_t doc, int32_t page, int32_t max_px) { (void)doc; (void)page; (void)max_px; return 0; }
 void mb_host_pdf_close(int32_t doc) { (void)doc; }
 int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data);  // below, with keep.mbt's
-moonbit_string_t mb_host_view_text(int32_t id, int32_t what) { (void)id; (void)what; return moonbit_make_string_raw(0); }
-int32_t mb_host_view_text_known(int32_t id, int32_t what) { (void)id; (void)what; return 0; }
-moonbit_bytes_t mb_host_view_still(int32_t id) { (void)id; return moonbit_make_bytes(0, 0); }
 
 // ---------------------------------------------------------------------------
 // Files kept (keep.mbt) and saved (save_file): into the Downloads known folder (MBUI_DOWNLOADS_DIR instead, for

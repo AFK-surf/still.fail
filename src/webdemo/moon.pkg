@@ -1,0 +1,15 @@
+import {
+  "mbui/host",
+  "mbui/ui",
+  "moonbitlang/core/encoding/utf8",
+}
+
+options(
+  "is-main": true,
+  link: {
+    "js": { "format": "iife" },
+    "native": {
+      "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
+    },
+  },
+)

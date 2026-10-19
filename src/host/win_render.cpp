@@ -1,10 +1,16 @@
 // Direct3D 11 renderer: one pipeline, one instanced quad per scene instance,
 // the Metal/GLES shader in HLSL. Without a usable GPU (CI) the device is WARP.
+// The canvas is a composition swap chain with alpha in a DirectComposition
+// tree, over a visual the native views (win_views.cpp) go in: they show through
+// the holes the app paints (kind 9, written transparent without blending), as
+// on the other hosts. Where DirectComposition cannot be had, the swap chain is
+// the window's own and there are no native views.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <objbase.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#include <dcomp.h>
 #include <d3dcompiler.h>
 #include <wincodec.h>
 #include <math.h>
@@ -15,6 +21,9 @@
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "dcomp.lib")
+#pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "user32.lib")
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "ole32.lib")
 
@@ -33,6 +42,10 @@ static ID3D11Texture2D *atlas;
 static ID3D11ShaderResourceView *atlas_srv;
 static ID3D11SamplerState *sampler;
 static ID3D11BlendState *blend;
+// the composition: its root, the native views' visual under the canvas's (NULL: the swap chain is the window's own)
+static IDCompositionDevice *dcomp;
+static IDCompositionTarget *dtarget;
+static IDCompositionVisual *droot, *dunder, *dcanvas;
 static ID3D11RasterizerState *raster;
 static int fb_w, fb_h;
 static double vw = 800, vh = 600, vscale = 1;
@@ -119,6 +132,7 @@ static const char *shader_src =
     "  float2 p = I.p;\n"
     "  if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard;\n"
     "  int kind = int(I.prm.y + 0.5);\n"
+    "  if (kind == 9) return float4(0.0, 0.0, 0.0, 0.0);\n"
     "  float4 col = I.color;\n"
     "  if (kind == 1 || kind == 3 || kind == 7) {\n"
     "    float2 uv = (I.c2.xy + (p - I.rect.xy) / I.rect.zw * I.c2.zw) / 2048.0;\n"
@@ -267,6 +281,53 @@ static HRESULT make_device(D3D_DRIVER_TYPE type) {
                            D3D11_SDK_VERSION, &dev, NULL, &ctx);
 }
 
+// The canvas as a composition swap chain (premultiplied alpha) on top of a DirectComposition tree whose other visual,
+// under it, holds the native views; 0 (nothing made) where that cannot be had. MBUI_NO_DCOMP=1: not tried.
+static int make_composed(IDXGIDevice1 *xdev, IDXGIFactory2 *factory, HWND hwnd) {
+  const char *no = getenv("MBUI_NO_DCOMP");
+  if (no && *no && *no != '0') return 0;
+  RECT rc;
+  GetClientRect(hwnd, &rc);
+  DXGI_SWAP_CHAIN_DESC1 sd = {};
+  sd.Width = rc.right > 0 ? (UINT)rc.right : 1;
+  sd.Height = rc.bottom > 0 ? (UINT)rc.bottom : 1;
+  sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+  sd.SampleDesc.Count = 1;
+  sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+  sd.BufferCount = 2;
+  sd.Scaling = DXGI_SCALING_STRETCH;
+  sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+  sd.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
+  HRESULT hr = DCompositionCreateDevice(xdev, __uuidof(IDCompositionDevice), (void **)&dcomp);
+  if (SUCCEEDED(hr)) hr = dcomp->CreateTargetForHwnd(hwnd, TRUE, &dtarget);
+  if (SUCCEEDED(hr)) hr = factory->CreateSwapChainForComposition(dev, &sd, NULL, &chain);
+  if (SUCCEEDED(hr)) hr = dcomp->CreateVisual(&droot);
+  if (SUCCEEDED(hr)) hr = dcomp->CreateVisual(&dunder);
+  if (SUCCEEDED(hr)) hr = dcomp->CreateVisual(&dcanvas);
+  if (SUCCEEDED(hr)) hr = dcanvas->SetContent(chain);
+  if (SUCCEEDED(hr)) hr = droot->AddVisual(dunder, FALSE, NULL);
+  if (SUCCEEDED(hr)) hr = droot->AddVisual(dcanvas, TRUE, dunder);
+  if (SUCCEEDED(hr)) hr = dtarget->SetRoot(droot);
+  if (SUCCEEDED(hr)) hr = dcomp->Commit();
+  if (SUCCEEDED(hr)) {
+    fb_w = (int)sd.Width;
+    fb_h = (int)sd.Height;
+    return 1;
+  }
+  fprintf(stderr, "no DirectComposition (0x%08lx): the window's own swap chain, no native views\n", (unsigned long)hr);
+  if (dcanvas) dcanvas->Release();
+  if (dunder) dunder->Release();
+  if (droot) droot->Release();
+  if (chain) chain->Release();
+  if (dtarget) dtarget->Release();
+  if (dcomp) dcomp->Release();
+  dcanvas = dunder = droot = NULL;
+  chain = NULL;
+  dtarget = NULL;
+  dcomp = NULL;
+  return 0;
+}
+
 int mb_render_init(void *hwnd) {
   if (FAILED(make_device(D3D_DRIVER_TYPE_HARDWARE)) && FAILED(make_device(D3D_DRIVER_TYPE_WARP))) {
     fprintf(stderr, "no Direct3D 11 device\n");
@@ -286,7 +347,10 @@ int mb_render_init(void *hwnd) {
   sd.BufferCount = 2;
   sd.Scaling = DXGI_SCALING_NONE;
   sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-  if (FAILED(factory->CreateSwapChainForHwnd(dev, (HWND)hwnd, &sd, NULL, NULL, &chain))) {
+  if (make_composed(xdev, factory, (HWND)hwnd)) {
+    // the composition's swap chain, made at the window's size (its first buffers' view: at the first frame's size)
+    fb_w = fb_h = 0;
+  } else if (FAILED(factory->CreateSwapChainForHwnd(dev, (HWND)hwnd, &sd, NULL, NULL, &chain))) {
     // before Windows 10
     sd.Scaling = DXGI_SCALING_STRETCH;
     sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
@@ -355,6 +419,12 @@ int mb_render_init(void *hwnd) {
 }
 
 void *mb_render_device(void) { return dev; }
+
+void *mb_render_dcomp(void) { return dcomp; }
+void *mb_render_views_visual(void) { return dunder; }
+void mb_render_commit(void) {
+  if (dcomp) dcomp->Commit();
+}
 
 void mb_render_set_size(int pw, int ph, double w, double h, double scale) {
   vw = w;
@@ -566,9 +636,15 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
       start = end;
       continue;
     }
+    // holes for native views (kind 9) apart, written without blending: transparent there
+    int hole = (int)(f[start * 24 + 5] + 0.5f) == 9;
+    end = start + 1;
+    while (end < count && (int)f[end * 24 + 20] == tid && ((int)(f[end * 24 + 5] + 0.5f) == 9) == hole) end++;
     ID3D11ShaderResourceView *t = tid ? (ID3D11ShaderResourceView *)mb_image_srv(tid) : atlas_srv;
     ctx->PSSetShaderResources(1, 1, t ? &t : &atlas_srv);
+    if (hole) ctx->OMSetBlendState(NULL, NULL, 0xffffffff);
     ctx->DrawInstanced(6, (UINT)(end - start), 0, (UINT)start);
+    if (hole) ctx->OMSetBlendState(blend, NULL, 0xffffffff);
     start = end;
   }
 }
@@ -654,13 +730,68 @@ int mb_render_snapshot(const wchar_t *path) {
   int ok = 0;
   D3D11_MAPPED_SUBRESOURCE m;
   if (SUCCEEDED(ctx->Map(staging, 0, D3D11_MAP_READ, 0, &m))) {
-    ok = write_png(path, (const uint8_t *)m.pData, w, h, (int)m.RowPitch);
+    const uint8_t *px = (const uint8_t *)m.pData;
+    int stride = (int)m.RowPitch;
+    uint8_t *out = NULL;
+    if (mb_views_count() > 0) {
+      // the native views' pictures under the canvas, seen through its holes (premultiplied: canvas + under × (1 - α))
+      out = (uint8_t *)calloc((size_t)w * h, 4);
+      mb_views_draw_under(out, w, h, vscale);
+      for (int y = 0; y < h; y++) {
+        const uint8_t *s = px + (size_t)y * stride;
+        uint8_t *d = out + (size_t)y * w * 4;
+        for (int x = 0; x < w; x++, s += 4, d += 4) {
+          int k = 255 - s[3];
+          for (int c = 0; c < 3; c++) d[c] = (uint8_t)(s[c] + (d[c] * k + 127) / 255);
+          d[3] = (uint8_t)(s[3] + (d[3] * k + 127) / 255);
+        }
+      }
+      px = out;
+      stride = w * 4;
+    }
+    ok = write_png(path, px, w, h, stride);
+    free(out);
     ctx->Unmap(staging, 0);
   }
   staging->Release();
   view->Release();
   tex->Release();
   if (rtv) ctx->OMSetRenderTargets(1, &rtv, NULL);
+  return ok;
+}
+
+// What the screen shows of the window's client area (the desktop's composition: the canvas over the native views),
+// as a PNG: a check of what the snapshot above puts together itself.
+int mb_screen_snapshot(void *hwnd, const wchar_t *path) {
+  RECT rc;
+  GetClientRect((HWND)hwnd, &rc);
+  POINT o = {0, 0};
+  ClientToScreen((HWND)hwnd, &o);
+  int w = rc.right, h = rc.bottom;
+  if (w <= 0 || h <= 0) return 0;
+  HDC screen = GetDC(NULL), mem = CreateCompatibleDC(screen);
+  BITMAPINFO bi = {};
+  bi.bmiHeader.biSize = sizeof bi.bmiHeader;
+  bi.bmiHeader.biWidth = w;
+  bi.bmiHeader.biHeight = -h;
+  bi.bmiHeader.biPlanes = 1;
+  bi.bmiHeader.biBitCount = 32;
+  void *bits = NULL;
+  HBITMAP bm = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
+  int ok = 0;
+  if (bm) {
+    HGDIOBJ was = SelectObject(mem, bm);
+    if (BitBlt(mem, 0, 0, w, h, screen, o.x, o.y, SRCCOPY | CAPTUREBLT)) {
+      GdiFlush();
+      uint8_t *px = (uint8_t *)bits;
+      for (int i = 0; i < w * h; i++) px[i * 4 + 3] = 255;
+      ok = write_png(path, px, w, h, w * 4);
+    }
+    SelectObject(mem, was);
+    DeleteObject(bm);
+  }
+  DeleteDC(mem);
+  ReleaseDC(NULL, screen);
   return ok;
 }
 

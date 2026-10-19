@@ -8,8 +8,9 @@
 // fetches them (still.fail: `station.file.part`, `drive.read` through the core) and answers.
 //
 // Hosts: Android (NativeViews.java: Media3's ExoPlayer on a TextureView, a WebView), macOS and iOS (apple_views.m:
-// AVPlayerLayer, WKWebView), the browser (web/host.js: <video>, a sandboxed <iframe>); Windows has none (`here` is
-// false: the app says it cannot show it).
+// AVPlayerLayer, WKWebView), the browser (web/host.js: <video>, a sandboxed <iframe>), Windows (win_views.cpp: WebView2,
+// pages and sites only; no player yet, nor any view where WebView2's runtime is not installed: `here` is false, the app
+// says it cannot show it).
 //
 // Also here: PDFs drawn by the host page by page into images (`Pdf`, shown with `Ctx::image(pdf.page_src(i))`), and
 // an image drawn at a rect of its own within its box (`Ctx::picture`: zoomed, panned).
@@ -174,8 +175,8 @@ pub fn NativeView::page(html : String) -> NativeView {
 /// A site served by the app (still.fail's preview of a service: Preview.kt, PreviewWeb.kt): a web view of a host of
 /// its own at `start` (a path), each request its page makes of that host handed to `serve` to answer, as a browser
 /// would have it from a server (its scripts on, its cookies kept by the app as it answers); a link elsewhere is not
-/// followed but told to `leave`. Android's WebView (its requests intercepted), Apple's WKWebView (a scheme of its own);
-/// the browser and Windows have none.
+/// followed but told to `leave`. Android's WebView and Windows' WebView2 (their requests intercepted), Apple's
+/// WKWebView (a scheme of its own); the browser has none.
 pub fn NativeView::site(
   start : String,
   serve : (SiteRequest, SiteReply) -> Unit,
@@ -233,7 +234,7 @@ pub fn NativeView::page_at(self : NativeView) -> (String, Bool, Bool, Bool, Stri
 }
 
 ///|
-/// Whether this host has such a view (Windows has none).
+/// Whether this host has such a view (none: the browser's sites, Windows' players, Windows without WebView2).
 pub fn NativeView::here(self : NativeView) -> Bool {
   self.id != 0
 }
