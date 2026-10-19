@@ -421,8 +421,9 @@ src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, S
   a bar chosen in the panel sliding down into the bar's place as the panel closes (Bar.kt Swap: the stack of bars
   inside the closing glass, the chosen bar's places laid out where they end and drawn coming from their row, from the
   rows' fade and offset and each place as lit as it was to the bar's look; the others and the bar left drawn only,
-  cut by the glass's top; the ball riding the place tapped; a finger down meanwhile is the bar's only once it has
-  landed).
+  cut by the glass's top; the ball riding the place tapped; a finger drawn on the bar meanwhile takes neither the
+  ball nor the panel until it has landed (Bar.kt), but a place tapped on it is that place's at once, where it is laid
+  out).
 - Sheets (Sheet.kt SheetHost): one at a time over a scrim (black at 28%, 300 ms), rising on SheetSpring (critically
   damped, stiffness (2π / 1.2·0.32)²); its top 64 drags it: a draggable one between 55% and 94% (or closed under 30%),
   any other only down (closed past 80, else back), let go at the finger's speed; a tap on a draggable one's grabber
@@ -745,7 +746,7 @@ while the card moved the list):
 | 42 notice-looking | the test chat open while the other device asks for a card in it: no notice, the card comes in the chat | the card at the station; no NOTICE for it; the app told the core it shows the chat (client.focus) |
 | 43 notify-off | settings → 通知 off (不接收通知); a card asked meanwhile shows no notice; on again | notify.set answered on false, then on true; push.unregister called; no NOTICE for the card; the card at the station; the core's store on the device keeps notifications on |
 | 44 notice-cancel | a notice shown on Home; the chat then opened from its row: its notification goes | the test chat's NOTICE, then its NOTICE CANCEL |
-| 50 bar-glass | the bar of glass: 文件 and back (the notch's icon swapping between 令 and ＋), the panel drawn up and let go on 奏 (that bar sliding down into the bar's place), the bar tapped as it lands (nothing), the chats again from the panel | the swap and the panel closing in the motion log; 奏's page, not 用量's; the bar chosen kept on the device (`prefs.set {barsBy}`) |
+| 50 bar-glass | the bar of glass: 文件 and back (the notch's icon swapping between 令 and ＋), the panel drawn up and let go on 奏 (that bar sliding down into the bar's place), 用量 tapped on it as it lands (its page at once), the chats again from the panel | the swap and the landing in the motion log; 用量's page; the bar chosen kept on the device (`prefs.set {barsBy}`) |
 | 51 sheets-sinking | the workspaces' sheet let go of, the bar's 文件 tapped under it as it sinks; the chat's own sheet let go of, the composer tapped through it as it goes down, words typed and sent | 文件 opened; the words at the station, once, alice's; no pin of alice's at the station |
 | 52 drive-sheet-closing | a file held, ⋯ → its sheet, the scrim tapped, the sheet's rows tapped where they are drawn as it closes | no rename asked; the station keeps the file, its name and words |
 | 53 settings-sheet-sinking | settings → Station → the test station → … → 重命名, a name typed, the scrim tapped, 保存 tapped where it is drawn as the sheet goes down | the station's page as it was; still.fail cloud has the old name |

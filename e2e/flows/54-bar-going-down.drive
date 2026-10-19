@@ -9,8 +9,9 @@ shot 1-going
 tapxy 200 -38
 wait 300
 type 栏下去时点的 {T}
-until 栏下去时点的 {T}
+field 栏下去时点的 {T}
 tap icon:arrow-up
+until 栏下去时点的 {T}
 gone 正在发送
 wait 800
 shot 2-sent

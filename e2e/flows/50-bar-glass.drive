@@ -1,7 +1,7 @@
 # The bottom bar, all glass (one capture: the bar with its notch, the action, the ball): 文件 tapped and the chats
 # again, the notch's icon swapping between 令 and 文件's ＋ (a short scale and fade); drawn up into the panel and let go
-# on 奏 there: that bar slides down into the bar's place, and a tap on the bar as it lands is nothing (Bar.kt: the
-# finger's only once it has landed); the panel again, the chats picked in it.
+# on 奏 there: that bar slides down into the bar's place, and 用量 tapped on it as it lands is 用量's at once (laid out
+# where it lands from the first frame); the panel again, the chats picked in it.
 timeout 60000
 until 端到端测试
 wait 500
@@ -18,10 +18,9 @@ dragon 0 -64 1000 icon:chats
 wait 50
 shot 3-landing
 tapxy 133 -50
-until =奏
+until =用量
 wait 1200
-gone =用量
-shot 4-decisions
+shot 4-usage
 dragon 0 -64 1000 icon:zou
 until 端到端测试
 shot 5-chats

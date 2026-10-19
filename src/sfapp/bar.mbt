@@ -1274,11 +1274,23 @@ fn bar_gesture(
   // a bar chosen landing: it lands on its own spring, untouched; a finger down meanwhile is the finger's once it has
   // (its stroke from there), lifted before, nothing
   if m.swap is Some(_) {
+    // a bar chosen landing lands on its own spring: a finger down meanwhile does not take the ball or the panel
+    // (Bar.kt waits); a tap on one of its places is that place's at once, where it is laid out (src/motion's rule)
     if d.down {
       m.waits = true
     }
     ignore(d.take_end())
-    ignore(d.take_tap())
+    if d.take_tap() {
+      m.waits = false
+      if items.length() > 0 && py >= row_top - 4.0 {
+        let now = bar_centres(w, m.k_now(), items.length())
+        let j = nearest(now, items.length(), px)
+        if (now[j] - px).abs() <= (w - 2.0 * c0) / 6.0 {
+          on_tab(items[j])
+        }
+      }
+      c.request_frame()
+    }
     return
   }
   if m.waits {

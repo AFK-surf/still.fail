@@ -1,5 +1,5 @@
 check "文件's ＋ swapped in for 令 in the notch and back (the motion log's icon swap)" '[ "$(grep -c "MOTION .* bar/icon-swap " $OUT/$name.log)" -gt 4 ]'
-check "the bar chosen in the panel slid down into the bar's place (the motion log's panel closing after 奏 was picked)" 'grep -q "MOTION .* bar/swap " $OUT/$name.log'
-check "a tap on the bar as it landed was nothing: 奏's page, not 用量's" 'grep -q "DRIVE ok gone =用量" $OUT/$name.log'
+check "the bar chosen in the panel slid down into the bar's place (the motion log's landing)" 'grep -q "MOTION .* bar/swap " $OUT/$name.log'
+check "用量 tapped on the bar as it landed: its page at once" 'grep -q "DRIVE ok until =用量" $OUT/$name.log'
 check "the bar chosen is kept as the workspace's on the device (prefs.set barsBy)" 'core_device_has barsBy'
 check "back on the chats from the panel" 'grep -q "DRIVE PASS" $OUT/$name.log'
