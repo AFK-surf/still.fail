@@ -196,8 +196,9 @@ pub fn chip(
 }
 
 ///|
-/// A choice of a few (Segmented): a quiet pill track, the chosen raised on
-/// the canvas and sliding to it. Returns the chosen index.
+/// A choice of a few (Segmented; the kit's sliding toggle group): a quiet
+/// pill track, the chosen raised on the canvas and sliding to it. Returns the
+/// chosen index.
 pub fn segmented(
   c : @ui.Ctx,
   key : String,
@@ -210,66 +211,52 @@ pub fn segmented(
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let thumb = thumb.unwrap_or(t.p.canvas)
-  let base = c.id(key)
-  let mut sel = chosen
-  for i, _ in labels {
-    if c.clicked(base + i + 1) {
-      sel = i
-    }
-  }
   // as wide as the widest, each, unless told
   let w = if item_w > 0.0 { item_w } else { 76.0 }
-  let x = c.spring(key + "/thumb", sel.to_double() * (w + 2.0))
-  c.box(
-    dir=Row,
-    pad=3.0,
-    gap=2.0,
-    bg=alpha(ink, 0.06),
-    radius=18.0,
-    fn() {
-      c.box(w=Px(0.0), h=Px(30.0), fn() {
-        c.box(
-          w=Px(w),
-          h=Px(30.0),
-          bg=thumb,
-          radius=15.0,
-          border=0.5,
-          border_color=t.p.line,
-          shadow=2.0,
-          shadow_color=t.p.shadow,
-          shadow_y=0.0,
-          tx=x,
-          fn() {  },
+  let items = labels.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
+  let now = @kit.toggle_group(
+    c,
+    key,
+    items,
+    [chosen.to_string()],
+    slide=true,
+    look=fn(c, s) {
+      c.box(w=Px(w), h=Px(30.0), align=ACenter, justify=JCenter, fn() {
+        c.text(
+          s.label,
+          size=t.t.ui,
+          weight=if s.on { 500 } else { 400 },
+          color=if s.on || s.hovered { ink } else { t.p.muted },
+          wrap=false,
         )
         |> ignore
       })
       |> ignore
-      for i, l in labels {
-        let on = i == sel
-        let id = base + i + 1
-        c.box(
-          w=Px(w),
-          h=Px(30.0),
-          align=ACenter,
-          justify=JCenter,
-          id~,
-          fn() {
-            c.text(
-              l,
-              size=t.t.ui,
-              weight=if on { 500 } else { 400 },
-              color=if on || c.hovered(id) { ink } else { t.p.muted },
-              wrap=false,
-            )
-            |> ignore
-          },
-        )
-        |> ignore
-      }
     },
-  )
-  |> ignore
-  sel
+    thumb=fn(c, w, h) {
+      c.box(
+        w=Px(w),
+        h=Px(h),
+        bg=thumb,
+        radius=15.0,
+        border=0.5,
+        border_color=t.p.line,
+        shadow=2.0,
+        shadow_color=t.p.shadow,
+        shadow_y=0.0,
+        fn() {  },
+      )
+      |> ignore
+    },
+    ground=fn(c, _, items) {
+      c.box(dir=Row, pad=3.0, gap=2.0, bg=alpha(ink, 0.06), radius=18.0, items) |> ignore
+    },
+  ).value
+  // the chosen one tapped again stays chosen
+  match now {
+    [v] => items.search_by(fn(it) { it.value == v }).unwrap_or(chosen)
+    _ => chosen
+  }
 }
 
 // ---------------------------------------------------------------------------
