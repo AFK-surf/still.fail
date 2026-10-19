@@ -13,7 +13,7 @@ timeout 180000
 until 未发送
 shot 1-unsent
 log do: thaw
-wait 8000
+wait 30000
 shot 2-thawed
 tap =重试
 timeout 120000

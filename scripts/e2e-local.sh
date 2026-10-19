@@ -243,18 +243,32 @@ freeze() {
   kill -STOP $(station_tree $p)
   say "station frozen ($(station_tree $p | tr '\n' ' '))"
 }
+# the station up and settled: its Node there with what it starts (its mesh), the same one two seconds on (a Node the
+# launcher starts anew may end at once and be started again)
+station_settled() {
+  local i p q
+  for i in $(seq 1 90); do
+    p=$(station_node)
+    if [ -n "$p" ] && [ -n "$(pgrep -P $p)" ]; then
+      sleep 2; q=$(station_node)
+      [ "$p" = "$q" ] && return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
 # thawed, the frozen Node and its own are ended and the launcher starts them anew: what the system's sockets kept for
 # them while they were stopped (a message sent "offline") goes with them, as it would have with the network gone; let
-# go on (CONT), they would still read it and take the message after all. A station not frozen is left as it is.
+# go on (CONT), they would still read it and take the message after all. Either way it returns once the station is
+# settled, so the next flow does not start on one still starting.
 thaw() {
-  local p=$(station_node); [ -n "$p" ] || die "no station to thaw"
-  case "$(ps -o state= -p $p 2>/dev/null)" in
-    T*) ;;
-    *) return 0 ;;
-  esac
-  kill -KILL $(station_tree $p)
-  wait_for "[ -n \"\$(station_node)\" ] && [ \"\$(station_node)\" != $p ]" 60 || die "the station did not start again ($RUN/station.log)"
-  say "station thawed: started anew ($(station_node))"
+  local p=$(station_node)
+  if [ -n "$p" ] && case "$(ps -o state= -p $p 2>/dev/null)" in T*) true ;; *) false ;; esac; then
+    kill -KILL $(station_tree $p)
+    say "station ended ($p), started anew"
+  fi
+  station_settled || die "the station did not start again ($RUN/station.log)"
+  say "station thawed ($(station_node))"
 }
 
 case "${1:-all}" in
