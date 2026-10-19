@@ -59,6 +59,8 @@ internal object HermesNative {
     external fun complete(handle: Long, id: Long, json: String?, error: String?, bytes: ByteArray?)
     /** The core's JS sampled for `seconds`, its trace written to `path` then (CoreProfile). */
     external fun profile(seconds: Int, path: String)
+    /** What the shell has been asked so far: `{calls: {op: [started, unanswered]}, handles: {kind: n}, sqls}`. */
+    external fun shellStats(): String
 }
 
 /**
@@ -67,6 +69,8 @@ internal object HermesNative {
  */
 object CoreProfile {
     fun sample(seconds: Int, path: String) = HermesNative.profile(seconds, path)
+    /** What the Rust shell has been asked since the process started, as JSON (client/shell `sf_shell_stats`). */
+    fun shellStats(): String = HermesNative.shellStats()
 }
 
 /** The core's script as the app carries it (apps/android/build.py: client/core-ts as Hermes bytecode). */

@@ -113,8 +113,11 @@ object Crashes {
      *  own bug. Sent at once, as the web's CoreFailed is. */
     fun coreFailed(context: Context, reason: String) = handled(context, "CoreFailed", reason.take(1000), "core_failed")
 
-    /** An error the app got past, sent at once as `type` with `value`, and `reason` as its property. */
-    private fun handled(context: Context, type: String, value: String, reason: String) {
+    /** The native heap past MemoryWatch's limit, with what was under way then (MemoryWatch.kt). */
+    fun memoryRunaway(context: Context, found: Pair<String, JsonObject>) = handled(context, "MemoryRunaway", found.first, "memory_runaway", found.second)
+
+    /** An error the app got past, sent at once as `type` with `value`, and `reason` and `facts` as its properties. */
+    private fun handled(context: Context, type: String, value: String, reason: String, facts: JsonObject? = null) {
         if (BuildConfig.POSTHOG_KEY.isEmpty()) return
         val account = account(context) ?: "android-anonymous"
         val at = System.currentTimeMillis()
@@ -125,7 +128,7 @@ object Crashes {
                     put("value", value)
                     putJsonObject("mechanism") { put("handled", true); put("synthetic", false); put("type", "generic") }
                 }
-            }, null, null, buildJsonObject { put("reason", reason) }, null)
+            }, null, null, buildJsonObject { put("reason", reason); facts?.forEach { (k, v) -> put(k, v) } }, null)
             try {
                 send(listOf(event(r, account, "error")))
             } catch (_: Exception) {

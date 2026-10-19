@@ -134,6 +134,7 @@ class MainActivity : ComponentActivity() {
         // The app's clock, reduced motion or not, under every window it draws (ui/Motion.kt).
         fail.still.android.ui.Motion.install(applicationContext)
         Crashes.install(applicationContext)
+        MemoryWatch.start(applicationContext)
         BarTiming.start(applicationContext)
         StillFailCore.onFailed = { reason -> Crashes.coreFailed(applicationContext, reason) }
         ListKeys.onDuplicate = { list, key -> Crashes.duplicateKey(applicationContext, list, key) }

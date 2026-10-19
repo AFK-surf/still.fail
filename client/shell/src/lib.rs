@@ -238,6 +238,56 @@ fn close_info(error: &iroh::endpoint::ConnectionError) -> Value {
     }
 }
 
+impl Handle {
+    fn kind(&self) -> &'static str {
+        match self {
+            Handle::Response(_) => "response",
+            Handle::Ws { .. } => "ws",
+            Handle::Tcp { .. } => "tcp",
+            Handle::Endpoint(..) => "endpoint",
+            Handle::Conn(_) => "conn",
+            Handle::IStream(_) => "stream",
+        }
+    }
+}
+
+/// What the shells have been asked, for when the app's memory runs away (the app's MemoryWatch.kt): the calls by
+/// operation since the process started and those not answered yet, and the shells' handles by kind. A loop between the
+/// core and the shell shows as one operation far ahead of the rest.
+#[derive(Default)]
+struct Stats {
+    calls: HashMap<String, (u64, i64)>,
+    shells: Vec<std::sync::Weak<Inner>>,
+}
+
+static STATS: std::sync::LazyLock<Mutex<Stats>> = std::sync::LazyLock::new(Mutex::default);
+
+fn counted(op: &str, started: bool) {
+    let mut stats = STATS.lock().unwrap();
+    let c = stats.calls.entry(op.to_string()).or_default();
+    if started {
+        c.0 += 1;
+        c.1 += 1;
+    } else {
+        c.1 -= 1;
+    }
+}
+
+fn stats_json() -> Value {
+    let mut stats = STATS.lock().unwrap();
+    stats.shells.retain(|w| w.strong_count() > 0);
+    let calls: serde_json::Map<String, Value> = stats.calls.iter().map(|(op, (n, open))| (op.clone(), json!([n, open]))).collect();
+    let mut handles: HashMap<&'static str, u64> = HashMap::new();
+    let mut sqls = 0;
+    for inner in stats.shells.iter().filter_map(std::sync::Weak::upgrade) {
+        for h in inner.handles.lock().unwrap().values() {
+            *handles.entry(h.kind()).or_default() += 1;
+        }
+        sqls += inner.sqls.lock().unwrap().len();
+    }
+    json!({ "calls": calls, "handles": handles, "sqls": sqls })
+}
+
 impl Inner {
     fn keep(&self, handle: Handle) -> u64 {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
@@ -757,14 +807,17 @@ impl Shell {
         let http = Mutex::new(http_client(&tls));
         let db = Arc::new(Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
         let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default() });
+        STATS.lock().unwrap().shells.push(Arc::downgrade(&inner));
         Ok(Shell { runtime, inner })
     }
 
     pub fn call(&self, id: u64, op: String, json: &[u8], bytes: Option<Vec<u8>>) {
         let inner = self.inner.clone();
         let args: Value = serde_json::from_slice(json).unwrap_or(Value::Null);
+        counted(&op, true);
         self.runtime.spawn(async move {
             let done = inner.run(&op, args, bytes).await;
+            counted(&op, false);
             let (json, error, bytes) = match done {
                 Ok(answer) => (serde_json::to_vec(&answer.json).unwrap_or_default(), Vec::new(), answer.bytes),
                 Err(e) => (Vec::new(), if e.is_empty() { b"failed".to_vec() } else { e.into_bytes() }, None),
@@ -779,6 +832,8 @@ impl Shell {
 
     pub fn call_sync(&self, op: &str, json: &[u8]) -> Vec<u8> {
         let args: Value = serde_json::from_slice(json).unwrap_or(Value::Null);
+        counted(op, true);
+        counted(op, false);
         let done = if op.starts_with("sql.") { self.inner.sql(op, &args) } else { self.inner.run_sync(op, &args) };
         let out = match done {
             Ok(value) => json!({ "value": value }),
@@ -830,8 +885,22 @@ pub unsafe extern "C" fn sf_shell_call_sync(shell: *const Shell, op: *const c_ch
     ptr
 }
 
+/// What the shells have been asked so far (`{calls: {op: [started, unanswered]}, handles: {kind: n}, sqls}`), as JSON
+/// to be let go with `sf_free`.
+///
 /// # Safety
-/// `ptr`/`len` from `sf_shell_call_sync`.
+/// `out_len` is written.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sf_shell_stats(out_len: *mut usize) -> *mut u8 {
+    let mut out = serde_json::to_vec(&stats_json()).unwrap_or_default().into_boxed_slice();
+    unsafe { *out_len = out.len() };
+    let ptr = out.as_mut_ptr();
+    std::mem::forget(out);
+    ptr
+}
+
+/// # Safety
+/// `ptr`/`len` from `sf_shell_call_sync` or `sf_shell_stats`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sf_free(ptr: *mut u8, len: usize) {
     if !ptr.is_null() {
@@ -942,5 +1011,14 @@ mod tests {
         assert!(sync("sql.open", r#"{"name":"../x"}"#)["error"].is_string());
         let memory = sync("sql.open", r#"{"name":":memory:"}"#)["value"]["id"].as_u64().unwrap();
         assert_eq!(sync("sql.all", &format!(r#"{{"id":{memory},"sql":"SELECT 2"}}"#))["value"], json!([[2]]));
+    }
+
+    #[test]
+    fn counts_calls_by_operation() {
+        counted("test.op", true);
+        counted("test.op", true);
+        counted("test.op", false);
+        let stats = stats_json();
+        assert_eq!(stats["calls"]["test.op"], json!([2, 1]));
     }
 }
