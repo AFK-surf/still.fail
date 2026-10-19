@@ -18,11 +18,13 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(f).pipe(res);
 });
 await new Promise((r) => server.listen(0, r));
-const browser = await chromium.launch();
+// a player plays when the app says so, as on the other hosts (Chromium's own rule wants a press on the page first)
+const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 let next = 0, failed = 0;
 async function worker() {
   while (next < shots.length) {
     const [query, out] = shots[next++];
+    fs.rmSync(out, { force: true });
     // (a machine this busy now and then keeps a page from loading in time: once more before it is a failure)
     for (let k = 1; k <= 2; k++) {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
@@ -30,8 +32,16 @@ async function worker() {
         const page = await ctx.newPage();
         await page.goto(`http://127.0.0.1:${server.address().port}/?bench=-1${query ? '&' + query : ''}`);
         await page.waitForFunction(() => window.__mb !== undefined);
-        await page.waitForTimeout(Number(process.env.WAIT || 800));
-        await page.screenshot({ path: out });
+        // taken once the app is settled (mbui's web/host.js __mbhost.settled: as its last frame said, no frame asked
+        // for since); one that ends itself first (exit: a stable run spinning idle) or is not settled within
+        // SETTLE_TIMEOUT (30000 ms) is a failure, said with why, and no picture
+        const settled = await page.waitForFunction(() => window.__done !== undefined || __mbhost.settled(), null, { timeout: Number(process.env.SETTLE_TIMEOUT || 30000) })
+          .then(() => page.evaluate(() => __mbhost.settled()), () => false);
+        if (settled) await page.screenshot({ path: out });
+        else {
+          console.log(`SETTLE FAIL ${path.basename(out)}: not settled: ${JSON.stringify(await page.evaluate(() => __mbhost.unsettled()))}`);
+          failed++;
+        }
         break;
       } catch (e) {
         console.log(`${path.basename(out)}: not taken${k === 1 ? ', again' : ''} (${e.message.split('\n')[0]})`);
