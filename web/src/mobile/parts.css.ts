@@ -78,10 +78,11 @@ export const mSegThumb = style({
   },
 });
 /** The chevron, then the word on the same line or not at all: a word that does not fit the room beside a bar's title
- * wraps to a second line, which the button's height leaves out (the chevron alone still says back, as on iOS). */
+ * wraps to a second line, which the button's height leaves out (the chevron alone still says back, as on iOS). The gap
+ * between the lines puts the second past the bottom padding, which the clip would show. */
 export const mNavBack = style({
   display: "inline-flex", flexWrap: "wrap", alignItems: "center", alignContent: "flex-start", height: "32px", maxWidth: "100%", overflow: "hidden",
-  gap: "0", padding: "4px 6px 4px 0", border: "0", background: "none", boxSizing: "border-box",
+  gap: "8px 0", padding: "4px 6px 4px 0", border: "0", background: "none", boxSizing: "border-box",
   borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, color: "var(--m-accent) !important",
   fontSize: `${vars.textTitle} !important`, lineHeight: "24px",
   cursor: "pointer",
