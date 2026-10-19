@@ -422,6 +422,7 @@
   "core-logic.jobs.span.seconds": "{n} sec",
   "core-logic.jobs.where.archived": "Archived",
   "core-logic.jobs.where.chat": "Chat",
+  "core-logic.jobs.where.from": "From {station}",
   "core-logic.jobs.where.none": "Not in a chat",
   "core-logic.jobs.word.crashed": "Crashed",
   "core-logic.jobs.word.ended": "Ended",

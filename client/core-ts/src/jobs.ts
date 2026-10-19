@@ -218,20 +218,39 @@ export function chatJobs(chat: J, c: Clock): [J, number] {
   ];
 }
 
-/// Those of the stations' open jobs up longer than `LONG`, watches aside, oldest first, services and jobs apart.
-export function longJobs(stations: [string, string | null, J[]][], c: Clock): J {
+/// Whose a task another station's agent runs here is (station/src/jobs/remote.ts names it
+/// `remote:<workspace>:<station>:<session>`): that station's address and the session there.
+export function remoteOwner(session: string): { station: string; session: string } | null {
+  const m = /^remote:([^:/]+):([^:/]+):(.+)$/.exec(session);
+  return m ? { station: `${m[1]}/${m[2]}`, session: m[3]! } : null;
+}
+
+/// The chat on another station a task runs for (`remoteOwner`): that station's name, and the chat as its sidebar has
+/// it (`station` its address), none when its row is not known here.
+export interface From {
+  name: string;
+  chat: { id: string; title: string | null; archived: boolean; station: string } | null;
+}
+
+/// Those of the stations' open jobs up longer than `LONG`, watches aside, oldest first, services and jobs apart. A task
+/// run for another station's chat (`from`, by its session) is in that chat, and says which station it came from.
+export function longJobs(stations: [string, string | null, J[]][], c: Clock, from: (session: string) => From | null = () => null): J {
   const long: J[] = [];
   for (const [address, name, jobs] of stations) {
     for (const j of jobs) {
       if (isWatch(j) || c.now - (msOf(j, "startedAt") ?? c.now) < LONG) continue;
       const job = shown(j, c);
       const chat = get(j, "chat");
-      const chatObj = chat !== null && typeof chat === "object" && !Array.isArray(chat) ? chat : null;
-      const title = chatObj && strOf(chatObj, "title") !== "" ? strOf(chatObj, "title") : t(chatObj ? "core-logic.jobs.where.chat" : "core-logic.jobs.where.none");
+      let chatObj = chat !== null && typeof chat === "object" && !Array.isArray(chat) ? chat : null;
+      const elsewhere = chatObj === null ? from(strOf(j, "session")) : null;
+      if (elsewhere?.chat) chatObj = job.chat = elsewhere.chat;
+      const title = chatObj && strOf(chatObj, "title") !== "" ? strOf(chatObj, "title")
+        : t(chatObj || elsewhere ? "core-logic.jobs.where.chat" : "core-logic.jobs.where.none");
       const archived = get(chatObj, "archived") === true ? t("core-logic.jobs.where.archived") : null;
+      const origin = elsewhere ? t("core-logic.jobs.where.from", { station: elsewhere.name }) : null;
       job.station = address;
       job.stationName = name;
-      job.whereText = [name, title, archived].filter((x) => x !== null).join(" · ");
+      job.whereText = [name, title, archived, origin].filter((x) => x !== null).join(" · ");
       long.push(job);
     }
   }

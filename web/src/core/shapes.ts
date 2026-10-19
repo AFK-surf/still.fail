@@ -1260,6 +1260,8 @@ export interface JobChat {
 	id: string;
 	title?: string;
 	archived?: boolean;
+	/** The station the chat is on, when not the job's: a task another station's chat runs there. */
+	station?: string;
 }
 
 /**

@@ -1999,6 +1999,7 @@ export const SHAPES: Record<string, Shape> = {
     ["id", "String"],
     ["title", opt("String")],
     ["archived", "bool", { default: true }],
+    ["station", opt("String"), { doc: "The station the chat is on, when not the job's: a task another station's chat runs there." }],
   ], { doc: "The chat an open job is in." }),
   JobNotice: struct([
     ["at", "i64", { client: "I54" }],

@@ -329,6 +329,7 @@
   "core-logic.jobs.span.seconds": "{n} 秒",
   "core-logic.jobs.where.archived": "已归档",
   "core-logic.jobs.where.chat": "对话",
+  "core-logic.jobs.where.from": "来自 {station}",
   "core-logic.jobs.where.none": "不属于任何对话",
   "core-logic.jobs.word.crashed": "意外退出",
   "core-logic.jobs.word.ended": "已结束",

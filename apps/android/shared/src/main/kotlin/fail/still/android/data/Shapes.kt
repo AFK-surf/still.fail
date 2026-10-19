@@ -1276,7 +1276,9 @@ data class JobPart (
 data class JobChat (
 	val id: String,
 	val title: String? = null,
-	val archived: Boolean? = null
+	val archived: Boolean? = null,
+	/// The station the chat is on, when not the job's: a task another station's chat runs there.
+	val station: String? = null
 )
 
 /// A background job an agent started (a web service when it has a port): shown by its name; the port is how the

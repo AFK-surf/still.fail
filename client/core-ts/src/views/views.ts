@@ -546,7 +546,14 @@ export class Views implements Owner {
         break;
       case "longJobs":
         scope = view.scope as string;
-        perStation = (s) => [{ topic: "jobs", station: s }];
+        // With the sidebar rows of the stations whose chats run tasks there (`#ranFrom`).
+        perStation = (s) => [
+          { topic: "jobs", station: s },
+          ...arr(this.ok({ topic: "jobs", station: s })).flatMap((j) => {
+            const owner = jobs.remoteOwner(str(get(j, "session")) ?? "");
+            return owner === null ? [] : [{ topic: "chatRows", station: owner.station }];
+          }),
+        ];
         break;
       case "usage":
         scope = view.scope as string;
@@ -899,10 +906,23 @@ export class Views implements Owner {
         if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
         const several = stations.length > 1;
         const open = stations.filter((s) => s.online).map((s) => [s.address, several ? s.name : null, arr(this.ok({ topic: "jobs", station: s.address }))] as [string, string | null, J[]]);
-        return { ok: jobs.longJobs(open, this.#clock()) };
+        return { ok: jobs.longJobs(open, this.#clock(), (session) => this.#ranFrom(stations, session)) };
       }
     }
     return undefined;
+  }
+
+  /// The chat on another of the scope's stations a task here runs for (`jobs.remoteOwner`), as that station's sidebar
+  /// has it: the session's own chat over one it only takes part in (as the station names its own jobs' chats).
+  #ranFrom(stations: StationInfo[], session: string): jobs.From | null {
+    const owner = jobs.remoteOwner(session);
+    const station = owner && stations.find((s) => s.address === owner.station);
+    if (!owner || !station) return null;
+    const rows = arr(this.ok({ topic: "chatRows", station: station.address }));
+    const row = rows.find((r) => get(r, "session") === owner.session) ??
+      rows.find((r) => arr(get(r, "agents")).some((a) => get(a, "key") === owner.session));
+    const id = str(get(row, "id"));
+    return { name: station.name, chat: id === null ? null : { id, title: str(get(row, "title")), archived: false, station: station.address } };
   }
 
   /// Has a view computed again in `ms` (the timer set last is the one that counts).
