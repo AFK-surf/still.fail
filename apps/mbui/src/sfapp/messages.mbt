@@ -559,7 +559,10 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
     Some(f) if f.placed_at >= 0.0 => flight_ground(flight_p(c, f))
     _ => 1.0
   }
-  let b = c.box(max_w=c.width - 36.0, padx=14.0, pady=8.0, radius=18.0, bg=@sf.alpha(k.neutral, ground), fn() {
+  // gone to (a notification's), the bubble takes the accent's ground as it flashes (Chat.kt Bubble: lit)
+  let lit = if flashing.val.0 == ts { flashing.val.1 } else { 0.0 }
+  let neutral = if lit > 0.0 { @sf.mix(flash_ground(), lit, k.neutral) } else { k.neutral }
+  let b = c.box(max_w=c.width - 36.0, padx=14.0, pady=8.0, radius=18.0, bg=@sf.alpha(neutral, ground), fn() {
     c.rich(
       ref_runs(words),
       key="bubble/" + ts,

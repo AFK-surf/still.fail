@@ -391,7 +391,8 @@ fn dv_fit(rows : Int) -> Double {
 
 ///|
 /// A sheet from the bottom over the page (Sheet.kt SheetHost): the scrim (black at 28%, a tap beside it closes it),
-/// top corners of 26, the page's paper under the card's ground at 80%; `h` tall (most of the screen at most). Its
+/// top corners of 26, frosted over the page and the scrim (sheet.mbt `sheet_glass`; `ground`: on that instead), only
+/// drawn while it closes; `h` tall (most of the screen at most). Its
 /// grabber (SheetGrab) and head (SheetHead), then `body`.
 fn dv_sheet_frame(
   c : @ui.Ctx,
@@ -413,29 +414,23 @@ fn dv_sheet_frame(
   }
   let k = opening(c, at, 300.0)
   let shown = if closing { 1.0 - k } else { k }
-  if !closing {
-    scrim(c, "dv-scrim", shown, fn() {
-      match close {
-        Some(f) => f()
-        None => dv_close(c)
-      }
-    })
-  } else {
-    c.layer(fn() {
-      c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(0x000000FFL, 0.28 * shown), fn() {  })
-      |> ignore
-    })
-    |> ignore
-  }
+  // closing, the scrim and the sheet are only drawn: a tap meanwhile is what is under them's
+  scrim(c, "dv-scrim", shown, open=!closing, fn() {
+    match close {
+      Some(f) => f()
+      None => dv_close(c)
+    }
+  })
   let h = dmin(h, c.height * 0.9)
-  c.layer(fn() {
+  let sheet = c.layer(fn() {
     c.spacer()
     c.box(
       w=Fill(1.0),
       h=Px(h + 26.0),
       ty=26.0 + (1.0 - shown) * (h + 26.0),
       radius=26.0,
-      bg=if ground != 0L { ground } else { @sf.mix(t.p.card, 0.8, t.p.bg) },
+      bg=ground,
+      glass?=if ground != 0L { None } else { Some(sheet_glass(shown)) },
       shadow=24.0,
       clip=true,
       id=c.id("dv-sheet"),
@@ -455,7 +450,7 @@ fn dv_sheet_frame(
     )
     |> ignore
   })
-  |> ignore
+  @motion.leaving(c, sheet, !closing)
 }
 
 ///|

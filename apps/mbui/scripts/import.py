@@ -26,7 +26,7 @@ CACHE = os.environ.get('STILLFAIL_MBUI_CACHE') or os.path.join(
 # mbui's paths that are still.fail's (directories whole), and its goldens of still.fail's screens
 PATHS = [
     'src/core', 'src/sf', 'src/sfapp', 'src/sfcore', 'src/sffix', 'src/stillfail', 'src/coredemo', 'src/gallery',
-    'src/shelf', 'src/videos', 'src/photos', 'src/books',
+    'src/shelf', 'src/videos', 'src/photos', 'src/books', 'src/player',
     'src/host/apple_core.m', 'src/host/android_core.c', 'src/host/core_api.h', 'src/host/apple_auth.m',
     'android/app/src/main/java/dev/mbui/CoreHost.java',
     'core', 'e2e', 'docs/stillfail-port.md', 'docs/stillfail-android-map.md', 'docs/stillfail-motion.md',
@@ -36,7 +36,7 @@ PATHS = [
 GOLDENS = re.compile(r'^goldens/(mac|web)-.*\.png$')
 # the packages that moved (moon.pkg imports them from this module, stillfail/…)
 MOVED = ['core', 'sf', 'sfapp', 'sfapp/settings', 'sfcore', 'sffix', 'stillfail', 'coredemo', 'gallery', 'shelf',
-         'videos', 'photos', 'books', 'sfkit']
+         'videos', 'photos', 'books', 'player', 'sfkit']
 # a workspace builds a package under its module's name: _build/<target>/<mode>/build/stillfail/<pkg>
 BUILT = re.compile(r'(_build/(?:native|js)/(?:release|debug|\$MODE)/build/)')
 

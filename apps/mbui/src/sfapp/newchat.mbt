@@ -590,8 +590,8 @@ fn send_first(
   if fresh.starting {
     return
   }
-  let words = d.text.trim(chars=" \n\t").to_owned()
-  let files = d.files.filter_map(fn(f) { f.done })
+  let words = with_link_words(d.text.trim(chars=" \n\t").to_owned(), d)
+  let files = up_files(d)
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   let taken_text = d.text
   let taken_files = d.files.copy()

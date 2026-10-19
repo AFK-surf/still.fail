@@ -1,0 +1,20 @@
+# A song sent in a chat by alice's other device (peer createfiles): opened from its card, the preview's small player in
+# the page's colours (AudioViewer): its name, play, where it is going on as it plays, read through the core a part at a
+# time (station.file.part). Back closes it.
+timeout 60000
+until 端到端测试
+log do: peer createfiles 一段录音 {T} post:收到录音 {T} -- e2e-tune.m4a
+timeout 180000
+until 一段录音 {T}
+timeout 60000
+wait 1000
+tap 一段录音 {T}
+until e2e-tune.m4a
+wait 1000
+tap e2e-tune.m4a
+until / 0:
+until 0:02 /
+shot 1-playing
+back
+wait 1500
+shot 2-chat

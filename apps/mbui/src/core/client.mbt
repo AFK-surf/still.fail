@@ -24,6 +24,8 @@ pub struct Client {
   priv subs : Map[Int, Sub]
   priv by_key : Map[String, Sub]
   priv calls : Map[Int, (Result[Json, Json]) -> Unit]
+  /// what calls that say how they go are told before their answer (`{id, value}`), by the call's id
+  priv progress : Map[Int, (Json, Bytes?) -> Unit]
   priv mut next_id : Int
   /// the bytes beside the message being taken, if any
   priv mut beside : Bytes?
@@ -46,6 +48,7 @@ pub fn Client::new(
     subs: {},
     by_key: {},
     calls: {},
+    progress: {},
     next_id: 1,
     beside: None,
     version: 0,
@@ -113,7 +116,8 @@ pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
 
 ///|
 /// Calls `name` with `params`; `on_done` gets its answer (`ok`) or the core's error (`{code, message, status?}`).
-/// Returns the call's id. A value the call sends before its answer (how far it has got) is not passed on yet.
+/// Returns the call's id. A value the call sends before its answer (how far it has got) is passed on only to a
+/// `stream`'s `on_value`.
 /// `bytes` go beside the call (a file's part: `station.upload.part`).
 pub fn Client::call(
   self : Client,
@@ -152,6 +156,37 @@ pub fn Client::call_bytes(
       Err(e) => on_done(Err(e))
     }
   })
+}
+
+///|
+/// Calls `name` like `call`, for a call that says how it goes before its answer (`station.preview` with `stream`: an
+/// answer's head, then each piece of its body with the bytes beside it): `on_value` gets each such value and the bytes
+/// beside it, then `on_done` the answer. Returns the call's id (`cancel` stops it).
+pub fn Client::stream(
+  self : Client,
+  name : String,
+  params? : Json = Json::object({}),
+  bytes? : Bytes? = None,
+  on_value~ : (Json, Bytes?) -> Unit,
+  on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
+) -> Int {
+  let id = self.next_id
+  self.progress[id] = on_value
+  self.call(name, params~, bytes~, on_done=fn(r) {
+    self.progress.remove(id)
+    on_done(r)
+  })
+}
+
+///|
+/// A call that says how it goes (`stream`) stopped in the core: nothing more of it comes, its answer included.
+pub fn Client::cancel(self : Client, id : Int) -> Unit {
+  if self.progress.contains(id) {
+    self.progress.remove(id)
+    self.calls.remove(id)
+    let m : Map[String, Json] = { "id": Json::number(id.to_double()), "cancel": Json::boolean(true) }
+    (self.send)(Json::object(m).stringify())
+  }
 }
 
 ///|
@@ -227,10 +262,18 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       self.version += 1
     }
     None =>
-      // A call's answer; a value before it (progress) is not taken yet.
-      match (m.get("ok"), m.get("error")) {
-        (Some(ok), _) => self.answer(id, Ok(ok))
-        (None, Some(e)) => self.answer(id, Err(e))
+      // A call's answer; a value before it says how it goes (to a `stream`'s `on_value`)
+      match (m.get("ok"), m.get("error"), m.get("value")) {
+        (Some(ok), _, _) => self.answer(id, Ok(ok))
+        (None, Some(e), _) => self.answer(id, Err(e))
+        (None, None, Some(v)) =>
+          match self.progress.get(id) {
+            Some(f) => {
+              self.version += 1
+              f(v, self.beside)
+            }
+            None => ()
+          }
         _ => ()
       }
   }

@@ -723,14 +723,16 @@ fn drive_go_back_to(station : String, root : String, path : String) -> Unit {
 }
 
 ///|
-/// An entry opened as its kind wants (DriveScreen.kt open): a folder goes in, text and Markdown are read, anything else
-/// goes to the preview (pictures there step to the folder's others).
+/// An entry opened as its kind wants (DriveScreen.kt open): a folder goes in, text and Markdown are read, videos and songs
+/// played, anything else goes to the preview (pictures there step to the folder's others).
 fn drive_open(c : @ui.Ctx, src : Source, at : DriveAt, root : String, e : DvEntry, shown : Array[DvEntry]) -> Unit {
   let path = dv_join(at.path, e.name)
   match e.kind {
     "folder" => app.nav.push(Drive({ station: at.station, root: Some(root), path }))
     "text" | "markdown" =>
       app.nav.push(DriveRead({ station: at.station, root: Some(root), path }))
+    "video" | "audio" =>
+      app.nav.push(DrivePlay({ station: at.station, root: Some(root), path }))
     _ => {
       let near = if e.kind == "image" {
         shown.filter(fn(x) { x.kind == "image" }).map(fn(x) { dv_file(at.station, root, at.path, x) })

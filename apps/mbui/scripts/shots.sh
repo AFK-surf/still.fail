@@ -24,6 +24,9 @@ mkdir -p out/shots goldens
 PLATFORMS=${*:-kit home chat composer drive decide glass newchat preview settings web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-settings}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
+PLAYER_MODES="video audio ended opening"
+SERVICE_MODES="service service-sized service-restart service-stopped"
+SHARE_MODES="share-in share-in-stations"
 SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security vault stations station profiles profile connects memory memory-doc usage archive}
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
@@ -147,7 +150,7 @@ for p in $PLATFORMS; do
       APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
       rm -rf out/shot-preview; mkdir -p out/shot-preview
       names=
-      for m in image pdf video html code md csv none; do
+      for m in image pdf video audio html code md csv none; do
         at=60; [ $m = html ] && at=150
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-preview-$m MBUI_SCRIPT=shot MBUI_SHOT_AT=$at MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-preview ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-preview/$m.png out/shots/mac-preview-$m.png
@@ -156,9 +159,62 @@ for p in $PLATFORMS; do
     web-preview)
       APP=sffix bash scripts/web.sh build >/dev/null
       names=
-      for m in image pdf video html code md csv none; do
+      for m in image pdf video audio html code md csv none; do
         QUERY=MBUI_FIXTURE=chat-preview-$m NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/web-shot.mjs" out/shots/web-preview-$m.png
         names="$names web-preview-$m"
+      done ;;
+    player)
+      # the drive's player over made-up films (src/sfapp/play_fixture.mbt): an episode paused with its subtitle, a song,
+      # an episode at its end with the next offered, one still opening (its reads never answered)
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-player; mkdir -p out/shot-player
+      names=
+      for m in $PLAYER_MODES; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=player-$m MBUI_SCRIPT=shot MBUI_SHOT_AT=60 MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-player ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        cp out/shot-player/$m.png out/shots/mac-player-$m.png
+        names="$names mac-player-$m"
+      done ;;
+    web-player)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in $PLAYER_MODES; do
+        QUERY=MBUI_FIXTURE=player-$m NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/web-shot.mjs" out/shots/web-player-$m.png
+        names="$names web-player-$m"
+      done ;;
+    service)
+      # a web service's page over made-up answers of its station (src/sfapp/service_fixture.mbt): fitted, a phone's
+      # size on the canvas, being started again, stopped (the page a web view: a while to load)
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-service; mkdir -p out/shot-service
+      names=
+      for m in $SERVICE_MODES; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_AT=150 MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-service ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        cp out/shot-service/$m.png out/shots/mac-$m.png
+        names="$names mac-$m"
+      done ;;
+    web-service)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in $SERVICE_MODES; do
+        QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/web-shot.mjs" out/shots/web-$m.png
+        names="$names web-$m"
+      done ;;
+    share)
+      # what another app shares in: the sheet of chats over Home, its stations' choice opened
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-share; mkdir -p out/shot-share
+      names=
+      for m in $SHARE_MODES; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_AT=60 MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-share ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        cp out/shot-share/$m.png out/shots/mac-$m.png
+        names="$names mac-$m"
+      done ;;
+    web-share)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=
+      for m in $SHARE_MODES; do
+        QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/web-shot.mjs" out/shots/web-$m.png
+        names="$names web-$m"
       done ;;
     settings)
       APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
@@ -182,6 +238,21 @@ for p in $PLATFORMS; do
       for m in compose attach quote sending failed; do
         QUERY=MBUI_FIXTURE=chat-$m NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/web-shot.mjs" out/shots/web-composer-$m.png
         names="$names web-composer-$m"
+      done ;;
+    notify)
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-notify; mkdir -p out/shot-notify
+      for m in chat-flash chat-flash-mine settings-notify-off; do
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-notify ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        cp out/shot-notify/$m.png out/shots/mac-notify-${m#chat-}.png
+      done
+      names="mac-notify-flash mac-notify-flash-mine mac-notify-settings-notify-off" ;;
+    web-notify)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      names=""
+      for m in chat-flash chat-flash-mine settings-notify-off; do
+        QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/web-shot.mjs" out/shots/web-notify-${m#chat-}.png
+        names="$names web-notify-${m#chat-}"
       done ;;
     web-chat)
       APP=sffix bash scripts/web.sh build >/dev/null

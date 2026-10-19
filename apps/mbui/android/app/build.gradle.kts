@@ -25,11 +25,13 @@ android {
         versionName = "0.1.$build"
         ndk { abiFilters += "arm64-v8a" }
         manifestPlaceholders["appLabel"] = "still.fail mbui"
+        manifestPlaceholders["mbuiEnv"] = ""
     }
-    // mbui's host (its Java), and the core's parts scripts/android.sh puts in out/android/apk (the engine's and the
-    // shell's .so files, the core's bytecode).
+    // mbui's host (its Java and the resources it uses), and the core's parts scripts/android.sh puts in
+    // out/android/apk (the engine's and the shell's .so files, the core's bytecode).
     sourceSets.getByName("main") {
         java.srcDir("../../mbui/android/app/src/main/java")
+        res.srcDir("../../mbui/android/app/src/main/res")
         jniLibs.srcDir("../../out/android/apk/jniLibs")
         assets.srcDir("../../out/android/apk/assets")
     }
@@ -45,6 +47,8 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
+            // its updates: android/mbui/latest.json through still.fail cloud (the core's app.update; src/sfapp/updates.mbt)
+            manifestPlaceholders["mbuiEnv"] = "MBUI_UPDATE_FEED=android/mbui"
         }
     }
     compileOptions {

@@ -5,6 +5,10 @@
     <!-- LoginService: the app held up while a loopback listener waits for the browser (BrowserLogin, the core's listen.*) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- the system's notifications (mbui's Notices: a chat's notices, as still.fail's Android app shows them) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- mbui's Updates: a newer build of the app handed to the system's installer (the person agrees) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- BrowserLogin asks whether there is a browser to open a login page in -->
     <queries>
         <intent>
@@ -23,6 +27,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- What another app shares (a link, some text: the system's share sheet), into a chat (mbui's Shares.java) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
             <!-- A browser login's page, once the browser has come back, links here: <package>://back (the build's own package) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -31,6 +41,12 @@
                 <data android:scheme="${applicationId}" android:host="back" />
             </intent-filter>
         </activity>
+        <!-- mbui's Shares: a file handed to another app, read only (the cache's shared/) -->
+        <provider android:name=".Shares$Files" android:authorities="${applicationId}.shared" android:exported="false" android:grantUriPermissions="true" />
+        <!-- mbui's Updates: what the installer says of a newer build handed to it -->
+        <receiver android:name=".Updates$InstallResult" android:exported="false" />
+        <!-- the app's environment's defaults (mbui's MainActivity): the release's update feed (build.gradle.kts) -->
+        <meta-data android:name="dev.mbui.env" android:value="${mbuiEnv}" />
         <service android:name=".LoginService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a local loopback listener alive for a few minutes while the user signs in in their browser, so the browser's OAuth redirect to 127.0.0.1 reaches the app." />
         </service>

@@ -277,7 +277,7 @@ DriveScreen.kt, Reader.kt, TextModel.kt, Novel.kt, ReaderMarkdown.kt; chat/scree
   made-up drive that takes renames, deletes, new folders and uploads while it runs): `scripts/shots.sh drive
   web-drive` compares them with goldens/mac-<mode>.png and web-<mode>.png.
 
-Not yet, against the current app: the player (the rest of slice 12), downloading a file to the device, sharing it
+Not yet, against the current app: downloading a file to the device, sharing it
 to another app, a folder as a zip (each says so in a toast: no host API to keep a file yet), GB18030 text (no
 table here: such a file opens as UTF-8 with replacement characters), the serif face (the reader draws its sans
 face either way), 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light one),
@@ -285,6 +285,44 @@ the system bars' icons following the paper, the frosted glass of the bars and sh
 system's back closing a sheet or ending a choice (it goes back a page), dragging sheets by the grabber, the
 long-press ripple, a station file sent as a file (`drive.stage`, the card's sheet, 此对话默认发送文件) and station
 files kept with the draft on the device, the station page's way into a drive (slice 13).
+
+The rest of slice 12, the player (branch player-share, 2026-10-19; ember apps/android drive/Player.kt, Playlist.kt,
+chat/screens/VideoViewer.kt AudioViewer): a video or a song of a drive, or a song of a chat, played as it streams through
+the core.
+
+- src/player, a package of its own that the media app can take as it is (it knows nothing of still.fail's core: a
+  `Track` is a name, a media type and a `read(offset, length, answer)`): `Player` over a page (Player.kt PlayerScreen) and
+  `audio_strip` (AudioViewer), the folder's order (`playlist_of`, numbers as numbers), `next_in`, `pick_subtitle`
+  (E01.srt for E01.mp4, a tag between, SubRip first), `clock`, `speed_label`, and subtitles read here (`parse_subtitles`:
+  SubRip, WebVTT, ASS/SSA's dialogue; their tags and overrides dropped) and drawn by the player, so every host shows them
+  alike (the Android app hands them to media3).
+- The player (Page `DrivePlay(DriveAt)`, src/sfapp/play.mbt; a folder's video or song row pushes it): black whatever the
+  theme, the system's player in a native view (slice 11's: ExoPlayer, AVPlayer), its bytes read through the core a part at a
+  time (`drive.read`), the picture fitted in the page; the bar at the top (back, the name, which of the folder's it is:
+  2 / 3), at the foot the time over the timeline (what is buffered lighter on it: the hosts now tell it, and whether it
+  played to its end; tapped or dragged along, the time follows the finger and the player goes there once let go), the
+  one before, 15 s back, play, 15 s on, the one after, the speed (1× 1.25× 1.5× 2× 0.5× 0.75×), the subtitle's key, fit or
+  fill (sideways), sideways (`@host.set_sideways`: Android asks for landscape and puts the system bars away; back turns it
+  upright first). Left alone while it plays, the controls fade (200 ms) after 2.5 s; a tap brings them back or sends them
+  away (waiting out a double tap's 300 ms); a double tap on the left or right third jumps 15 s (快退 / 快进 15 秒 said a
+  moment), in the middle it pauses or plays (已暂停 / 继续播放). 正在打开 and 正在缓冲 as a pill in the middle, 播放失败 with
+  重试, at its end 播放结束 with 下一个：<name>; the next or the one before take the page's place. A song: its mark and name
+  in the middle, the controls staying, no sideways. The system bars' icons are light over it (the host told the page is
+  dark). Where it is goes to the core (`drive.place` with its time and length in ms, every 5 s while it is open and as
+  the page goes; the drivePlace topic), and it opens there next time unless it was left within 5 s of its end.
+- A chat's song in the preview (FilePreview.kt's Audio, AudioViewer): its name and the capsule in the page's colours (play
+  on the ink, the timeline in the accent, `m:ss / m:ss` in the code face, 播放失败), read through the core a part at a time
+  (`station.file.part`); the preview's bar over it as over any file.
+- `APP=sffix MBUI_FIXTURE=player-video|player-audio|player-ended|player-opening` (src/sfapp/play_fixture.mbt: a folder
+  no listing shows, its films' reads never answered, how the player stands pinned for the shot) and `chat-preview-audio`:
+  `scripts/shots.sh player web-player` and `preview web-preview` compare them with goldens/mac-player-*.png,
+  web-player-*.png, mac-preview-audio.png and web-preview-audio.png.
+
+Not yet, against the current app: the frosted glass of the player's bars (a native view under them cannot be blurred: a
+deeper solid tint, as the preview's), the subtitle's shadow (a dark ground under its words only), the bytes played kept on
+the device to play again without the station (DriveCache's played: each play reads through the core again), why it
+failed in words (the host logs the player's error; the page says 播放失败), turning sideways on iOS (no host there turns
+yet), the tabular figures of the time (the UI face's own).
 
 Slice 8, decisions, history, tool steps, a chat's sheets, jobs (branch decisions, 2026-10-19): what a chat asks is
 answered from it, and an agent's work can be looked into (src/sfapp/decide.mbt, sheets.mbt, history.mbt,
@@ -331,12 +369,96 @@ OpenJobs.kt, History.kt, ui/ToolStep.kt, ui/Sheet.kt):
 
 Not yet, against the current app: code highlighting in tool steps (code is drawn in the code face, in the ink) and a
 capped block's own scroll (it is cut at its height); the run settings page (RunSettings: its rows are shown, not
-opened); the station's card from an agent's; a service's page (Preview.kt) from its row; sharing the chat with other
+opened); the station's card from an agent's; sharing the chat with other
 workspaces and making it public (their rows are shown); a watched chat's question before archiving; opening a login's
 page in the browser (there is no URL hand-off on the hosts yet: its pill copies the link or the code and says so); the
 reply on the 奏 page takes words only (no files, quotes or its own draft kept by the core) and its card neither tilts
 nor shrinks as it goes (boxes have no rotation or scale yet); a sheet dragged by its grabber; the segmented control's
 sliding thumb; a history opened at an entry; a Slack user's 这是我.
+
+Slice 14's web previews, a service's page (branch player-share, 2026-10-19; ember apps/android chat/screens/Preview.kt,
+PreviewWeb.kt, PreviewLoad.kt): a web service an agent started (a dev server, a report it serves) opened over its chat
+(src/sfapp/service.mbt, Page `Service(station, job)`), from its row in the chat's jobs sheet (a service up or being
+started again; one that did not start, or is over, opens its sheet as before) or Home's services left up a long while
+(its chat, then its page over it).
+
+- Found by its job (the `job` topic), known by its name, never its port: the compact bar (对话 back, its name, its
+  station under it); 找不到此服务 / 正在读取 / 「名字」已停止 in its place while it cannot be shown.
+- The page is a site view (src/ui/native.mbt `NativeView::site`, host_native.mbt `view_site_*`): a web view of a host of
+  its own whose every request is said to the app and answered by it, head then body a piece at a time, let go when the
+  page lets go. Android: a WebView whose requests of https://preview.stillfail.invalid are intercepted
+  (shouldInterceptRequest; its thread waits for the head a minute at most, then reads the body as it comes:
+  NativeViews.Site); scripts and DOM storage on; a link elsewhere is said, not followed. macOS and iOS: a WKWebView with a
+  URL scheme of its own (stillfail-preview://svc, WKURLSchemeHandler), the requests' bodies handed over. The browser
+  and Windows open none. The app answers each from the station through the core (`station.preview` with `stream`: the
+  core client now hears a call's values before its answer, `@core.stream`, and stops one, `@core.cancel`; Source.stream
+  and cancel), the service's redirects followed here (to the service only, 5 at most, a 303 or a POST's 301/302 as GET),
+  its cookies kept here by name and sent along, a request with no answer said to the page in words (502, 508).
+- The page's bar: back and forward in its own history, reload, how far its resources came (the `previewLoad` topic's
+  ring, red with one failed; tapped, a sheet of each: its path, its status or 失败, how long), where it is (the 🌐, its
+  name, its path; tapped, typed, Enter goes there). The stage: all of the room, or the page laid out at a size of its
+  own (手机 390 × 844, 平板, 笔记本, 桌面) fitted on the canvas's grey, centred, 16 round it, its screen's corners
+  (the host lays it out at its rect over the scale and draws it scaled: view_control 8). The toolbar under it: 自适应, the
+  sizes, 自定义 (a sheet of them), turned; held half a second it folds away and the bar's size button opens it. A service
+  being started again is said over the page (its dot, 名字正在重启, 第 n 次 · 恢复后自动刷新), which loads anew once back.
+- `APP=sffix MBUI_FIXTURE=service|service-sized|service-restart|service-stopped` (src/sfapp/service_fixture.mbt: the first
+  row's chat's service, its station's answers made up): `scripts/shots.sh service web-service`.
+
+Not yet, against the current app: marking the page for the chat's agent (the edit key, the marks and their shots, into
+the draft), its page script (assets/preview/page.js: WebSockets, request bodies on Android, marks) and so a service's
+sockets (a dev server's hot reload), the sized page moved and pinched on its canvas, typing a size of one's own (自定义
+lists the sizes), the size and the toolbar's folding kept on the device (kept while the app runs), a visualization's
+page (PreviewFileScreen), a link elsewhere opened in the browser (no URL hand-off on the hosts: it is copied and said
+so), document.cookie (the cookies are the app's, not the web view's), the opening and closing motion of the page's own,
+the sized page's screen corners (a native view is clipped to a rectangle: its shadow and square corners on the canvas).
+
+Slice 14's updates (branch player-share, 2026-10-19; ember apps/android app/Updates.kt, shared/Install.kt, Home.kt's
+update button, SettingsHome.kt Version): the app keeping itself current (src/sfapp/updates.mbt, Updates.java).
+
+- Where a build comes from is an `UpdateSource` the app is given (`set_update_source`): `check(version, now)` answers
+  the newest build when newer (an AppRelease: versionCode, versionName, file, sha256, size, news), `url(file)` where its
+  file is. `cloud_updates(feed)` is still.fail cloud's, as the Android app has it (the core's `app.update`, at most
+  hourly unless asked now: /releases/<feed>/latest.json, the file under /releases/ or a whole URL). The mbui build ships
+  apart from still.fail's (its own package and key, a release of its own), so src/stillfail gives no source by default:
+  MBUI_UPDATE_FEED=<feed> gives the cloud's (the local cloud's in e2e). A release published elsewhere meets it with a
+  latest.json of the same AppRelease shape beside its APK (and a source that reads it).
+- Asked once the app is signed in. Home's top bar offers a build that brings something (its `news`): the download key
+  with its accent dot, how far while it downloads (40%); the settings' version row any build (更新到 0.1.1, in the accent;
+  检查更新 asks now: 正在检查, then 已是最新 or why it failed). Tapped: asked again now, then the host downloads it
+  (@host.update_install; Android's Updates.java: into the cache, a cut connection picked up by a range, six tries with
+  growing pauses, 网络中断，正在继续下载 meanwhile; checked against its sha256: 下载的文件不完整 when not), and hands it
+  to the system's installer (PackageInstaller, as this app's own newer build; the confirmation the installer asks for
+  opened by InstallResult); without leave to install apps the system's page for it opens (允许 still.fail 安装应用后，
+  再点一次更新). What failed is said in a toast (无法更新：…). Hosts with no version code (all but Android) never ask.
+
+Not yet, against the current app: checking again as the app comes back to the front (only at its start), an APK of a
+chat installed from the file preview (安装), a source for the mbui build's own release (it is to publish a latest.json
+in the AppRelease shape beside its APK; no host here reads a JSON from a URL of its own yet).
+
+Slice 14's share sheet (branch player-share, 2026-10-19; ember apps/android app/share/ShareActivity.kt, ShareSheet.kt,
+drive/DriveScreen.kt hand; docs/share-in.md): src/sfapp/share.mbt, Shares.java.
+
+- In: another app's share sheet hands still.fail a link or some text (Android's ACTION_SEND of text/plain, taken by
+  MainActivity: @host.shared_in; MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs). One sheet (72%, draggable): what
+  is shared (a link's mark or text's, its title bold: the app's subject or its first line, its first line under a
+  subject), 发到 the chats it can go to (the core's `shareIn` view: the one a thing from the same site went to last first,
+  saying so; 搜索 from six chats, its field 找 chat), 新 chat last (在 Studio 上开; with several stations up, which one). A
+  tap: `shareIn.open` puts it in that chat's composer (a link as a card among its files: its title, its site; the words
+  around it after what is written) and the chat opens (a new chat rises on that station), where it is added to and sent:
+  the composer reads the draft anew, keeps the links with it (the core's DraftView `links`) and sends them as words
+  after what is written (its title on a line, then the link), as the core's composer does. 没能打开：… in red when it
+  fails.
+- Out: a file of a drive (its sheet's 分享) read whole through the core (`drive.read`), then handed to the system's share
+  sheet (@host.share: Android's chooser, the file in the cache's shared/ read through a provider of the app's own,
+  Shares.Files, that lets another app read only what was handed to it; macOS's sharing picker over the window); 本机没有
+  可打开此文件的应用 when none takes it. Words can go the same way (`share(text, …)`).
+- `APP=sffix MBUI_FIXTURE=share-in|share-in-stations` (src/sfapp/share_fixture.mbt): `scripts/shots.sh share web-share`.
+
+Not yet, against the current app: the sheet over the app it came from (Android's ShareActivity is an activity of its own,
+translucent over that app; here still.fail comes to the front and shows it over itself), signing in first from the sheet
+(signed out, the app's sign-in page shows and the share waits), a file shared in (only text and links, as the Android
+app takes), how far a drive's file has come while it is read for sharing (its row's progress), downloading a drive's
+file to the device, sharing on iOS, Windows and the web (no share sheet there yet).
 
 Glass (branch glass, 2026-10-19): frosted glass and liquid glass, a pass of every renderer (Metal on macOS and iOS,
 GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
@@ -356,6 +478,13 @@ GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
   24px blur: Home's, 文件's (a place's) and the chat's top bars, the hairline the bar's own), `glass_floating` (`raised` at 72% over a
   20px blur: the composer's capsule, the way to the newest), `glass_bottom_bar`, `glass_bar_ball`, `glass_action`
   (Bar.kt's, rims lit) and `glass_sheet` (the surface at 80% over 28px) for the bar and sheets to take.
+- A notch cut into a box's top (`c.box(notch_y=, notch_r=, notch_fillet=)`: a circle about its top's middle, met by
+  the edge through fillets, Bar.kt's outline): slots 21-23 of a rectangle's or frosted glass's instance, the renderers'
+  shape the rounded intersection of the box and what is outside the circle (its ground, border, glass and lit rim
+  alike, and its solid ground where glass is drawn solid). `Glass::sharing` (`shares_capture`): frosted glass that
+  frosts what the glass before it frosts (its capture, at its blur), whatever has been drawn since and over that glass
+  too: the bar's ball and its action frost the page under the bar, not the bar (Bar.kt: Haze's one source is the
+  pages); a renderer copies what is under every instance of a capture when it reaches the first.
 - Liquid glass (the demo's MBUI_SCREEN=glass, not on still.fail's pages): each shape's rounded-box distance, the
   shapes of a `glass_group=true` box drawn first as one capture and merged by a smooth minimum (`merge`); what is
   under it bent along a bezel (`bezel` wide, by up to `refraction`, a circle's profile), the colours split by
@@ -397,14 +526,26 @@ src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, S
   and the bar's room at its foot); the other places are their top bar over nothing yet (PlacePage.kt; their pages are
   later slices'). The sheets of a chat (slice 8's, decide.mbt's frame) are not on this sheet host yet: they neither
   drag nor snap.
-- The bar and its sheets with nothing blurred yet: `bar_ground` (bar.mbt) is the bar's colour where the Android app
-  has no blur (Glass.kt floating: --raised at 72% over the paper; the ball that and white at 42%; 令 the accent at
-  86%), the one place it is chosen, and `sheet_ground` (sheet.mbt) the sheet's (the paper, the scrim's black, the
-  surface at 80%). The glass (above) has `glass_bottom_bar`, `glass_bar_ball`, `glass_action` and `glass_sheet` for
-  them, but the notch is cut out of the bar as Bar.kt's outline has it (the circle and its two fillets), drawn from
-  rounded rectangles and a ring in clips so the page shows through it, and a ring is not a shape the glass pass
-  takes: the bar goes on glass with that. A new chat's choices over the composer are on the composer's glass
-  (`glass_floating`). The rim is a hairline here; the shadow is cast below and to the sides only.
+- The bar and its sheets on frosted glass (branch glass-bars): the bar is `glass_bottom_bar` with the notch cut into it
+  (a box's `notch_*`, above: Bar.kt's outline, the circle and its two fillets, its lit rim along the notch too) and the
+  notch's own edge lit (1 wide, white at 70%, 22% dark); 令 (or 文件's ＋) is `glass_action`, the ball
+  `glass_bar_ball`, both `sharing` the bar's capture, so the three frost the page under them and not each other, one
+  copy a frame as on the phone. Every sheet (the sheet host's, slice 8's chat sheets, the drive's, the settings', ＋'s
+  in the composer) is `glass_sheet` over the page and its scrim (sheet.mbt `sheet_glass`: drawn solid, the paper, the
+  scrim's black and the surface at 80%). A new chat's choices over the composer are on the composer's glass
+  (`glass_floating`). The shadow is cast below and to the sides only.
+- What moves in the bar is only drawn (src/motion's rule, branch glass-bars): the bar laid out where it rests, drawn
+  going down out of the way (300 ms) and coming back (380 ms), only drawn as it goes (a tap meanwhile is what is under
+  it's: the page pushed); the action laid out whole in the notch and drawn growing out of it and shrinking (as the
+  notch opens and closes, about its middle, which comes up to the edge); its icon swapping between 令 and a page's ＋
+  while the notch stays open (Bar.kt showIcon: 300 ms, the one going out by 120 ms on CSS's ease to half its size,
+  drawn only, the one coming in from 60 ms, faded in over 180, grown from half over 240 on Arrive; closed, at once);
+  a bar chosen in the panel sliding down into the bar's place as the panel closes (Bar.kt Swap: the stack of bars
+  inside the closing glass, the chosen bar's places laid out where they end and drawn coming from their row, from the
+  rows' fade and offset and each place as lit as it was to the bar's look; the others and the bar left drawn only,
+  cut by the glass's top; the ball riding the place tapped; a finger drawn on the bar meanwhile takes neither the
+  ball nor the panel until it has landed (Bar.kt), but a place tapped on it is that place's at once, where it is laid
+  out).
 - Sheets (Sheet.kt SheetHost): one at a time over a scrim (black at 28%, 300 ms), rising on SheetSpring (critically
   damped, stiffness (2π / 1.2·0.32)²); its top 64 drags it: a draggable one between 55% and 94% (or closed under 30%),
   any other only down (closed past 80, else back), let go at the finger's speed; a tap on a draggable one's grabber
@@ -433,9 +574,7 @@ src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, S
   web-decide-home-jobs) changed on purpose: the bar on Home, the workspaces' sheet in the new sheet.
 - MBUI_DRIVE has `drag X Y DX DY [MS]` and `dragon DX DY MS TEXT` (a finger moved a frame at a time, then lifted).
 
-Not yet, against the current app: the bar's and the sheets' frosted glass (see above), the bar chosen in the panel sliding
-down into the bar's place (here the panel closes and the bar is the chosen one at once), the notch's icon swapping
-between 令 and a page's ＋ with its short scale and fade (here it changes at once), the stations' place's glyph of their states (the
+Not yet, against the current app: the stations' place's glyph of their states (the
 server's mark here), the bar going away while the keyboard is up (no page with the bar has a field yet), the words
 flying from the composer into their bubble (the list comes up with them; the words leave the field at once), the
 machine's own sessions to go on with (MachineSessions), borrowing another station's model (the note only), a wide
@@ -494,7 +633,7 @@ FileData; Zoom.kt):
   its hole), so here they are a deeper solid tint (0x121214 at 85%) whatever is under them (the page's white at 92%
   over a document). In the renderers a hole is a run of its own inside the glass's runs: glass painted after a hole
   sees the hole, not the view.
-- `APP=sffix MBUI_FIXTURE=chat-preview-image|pdf|video|html|code|md|csv|none` opens a made-up file
+- `APP=sffix MBUI_FIXTURE=chat-preview-image|pdf|video|audio|html|code|md|csv|none` opens a made-up file
   (src/sfapp/preview_fixture.mbt: a picture, a PDF of two pages, a video whose reads are never answered, a page with a
   script, code, Markdown, a table, a file of no kind): `scripts/shots.sh preview web-preview` compares them with
   goldens/mac-preview-*.png and web-preview-*.png.
@@ -503,7 +642,7 @@ Not yet, against the current app: the flight from the chat's thumbnail and back 
 the frame it was left at), stepping through the chat's images (`imageNear`) and swiping between them, pinching on iOS (its host
 tells no second finger yet), marking an image (ImageMarks.kt), a video's
 frame-exact steps (the file's frames' times, MediaExtractor; here steps of a 60th of a second), saving a frame,
-landscape, audio's own small player (audio plays in the video's), code highlighting and a code file's sideways scroll,
+landscape, code highlighting and a code file's sideways scroll,
 installing an APK, an SVG drawn by a page when it is not a bitmap, the progress of a whole file coming (`progress`), a
 big file read to the disk, a web view's own scrolling under the canvas on macOS while something is painted over it,
 the frosted glass over a picture or a document (where nothing native is under it: `@sf` glass could take it).
@@ -562,8 +701,57 @@ Not yet, against the current app (each drawn as there and not opened, or left ou
 connect (and signing a subscription in), a station's mark picker, its screens, adb lending, drive, updates and macOS
 grants; a profile's "…", its sharing and workspaces; a connect's sheets and Slack app page; a vault item's page, its
 editor, setting the vault up and its recovery words; the automatic decisions, the bottom bars' settings, kept files and
-the changelog (their rows only); notifications switched (slice 10); the prices page; adding people to the workspace and
+the changelog (their rows only); the prices page; adding people to the workspace and
 its mark; the language changing the app's own words (they are the Chinese catalog's); the sheets' drag.
+
+Slice 10, notifications and pushes (branch notify, 2026-10-19; ember apps/android app/Notices.kt, Push.kt, App.kt,
+MainActivity.kt, screens/SettingsHome.kt Notify; docs/notifications.md → Clients): src/sfapp/notices.mbt over the host's
+notifications (src/host/notify.mbt).
+
+- While the app is shown it follows the core's `notify {workspace}` (client/core-ts attend.ts decides: none while
+  off, none for the chat looked at, only the workspace in view), takes each notice (`notice.claim`) and has the system
+  show the ones it took: one channel (消息, IMPORTANCE_HIGH), one notification per chat (its `tag`, the same id: a newer
+  one replaces the older), still.fail's mark as the small icon in the accent, the chat's title, its one line
+  (BigTextStyle), CATEGORY_MESSAGE, gone once tapped. Hidden, the topic is left (Notices.kt's flow ends with onStop).
+- A tap brings MainActivity back (singleTask, the notification's PendingIntent) with its link: the core reads it
+  (`link.parse`), its workspace is switched to, Home is the root and the chat is pushed over it (Back: Home), and the
+  chat goes to the message it is about once its list is in place (Screen.Chat.at, ChatHost.kt goTo: the pages before
+  brought in until it is there), which flashes (ChatMotion.kt flash: the accent's ground round someone's message, 10
+  past it each side and 8 above and below, corners of 14, in over 160 ms on Ease.Out, held to 900, gone by 1700 on the
+  standard curve; your bubble takes it instead; with motion reduced held as long, then gone). The flash is only drawn
+  (under the list's rows: @ui.on_list_underlay, Ctx::paint_rect), never laid out.
+- A chat on top takes its notification off (App.kt), however it was opened.
+- What the system lets the app show is told to the core as the app starts and each time it is shown again
+  (`notify.permission`: granted, denied, or default while Android 13+ was never asked); the system is asked once, the
+  first time signed in with notifications on (`notify.set {asked}`, POST_NOTIFICATIONS), and again as they are turned
+  on in settings, where a refusal says 在系统设置里允许 still.fail 发通知.
+- Settings → 通知 switches them (`notify.set {on}`): at once, a spinner while the core has not answered (its `doing`),
+  back with 无法开启/关闭通知：… when it fails; the push registration then follows what the core answered (Push.sync:
+  `push.unregister` while off, `push.register {kind: fcm, token}` with the host's token while on), as it does at
+  every start.
+- A push delivered while the app runs is shown unless the core says not (`notice.pushed`: off, a page in view, another
+  workspace's, its kind off), and what it is about is brought onto the device (`notice.bring`).
+- `APP=sffix MBUI_FIXTURE=chat-flash|chat-flash-mine` (a message gone to, its flash held at its peak) and
+  `settings-notify-off`: `scripts/shots.sh notify web-notify` (mac-notify-*, web-notify-* goldens).
+
+Hosts (@host.notice_show, notice_cancel, notice_permission, notice_ask, notice_answer, notice_opened, push_token,
+push_next): Android is the system's (android/…/Notices.java, POST_NOTIFICATIONS in the manifest, the activity's
+permission answer and the tap's intent). macOS keeps what would be shown and says it on the log (`NOTICE <tag>\t<title>\t
+<body>`, `NOTICE CANCEL`, `NOTICE TAP`): the app there is a bare executable, which UNUserNotificationCenter does not
+take (it wants a bundle); what it allows is unknown. iOS and Windows show none yet (UNUserNotificationCenter and APNs,
+toast notifications and WNS: a later slice's), nor the web page (it logs). A scripted run looks for and taps a
+notification by its words on Android (the app's own active notifications; the tap its PendingIntent sent) and on
+macOS (the kept ones): drive.mbt `noticed`, `nonotice`, `notice`.
+
+Not yet, against the current app: Firebase Cloud Messaging. The Android app sets Firebase up by hand from its build's
+FCM_* settings and shows pushes from its FirebaseMessagingService (PushService) while it is not in front, starting its
+core headless to ask `notice.pushed` and `notice.bring`. Here no push service is linked: this app (dev.mbui.demo, later
+fail.still.mbui) would need its own app in still.fail's Firebase project, and its core runs only inside the activity's
+process (no headless start for a service yet). `push_token` says none and `push_next` delivers nothing, so the app
+registers no device (and takes it off the accounts while off, as the Android app does); the app's own side of a
+delivered push (notice.pushed, the notification, notice.bring) is there and tested (src/sfapp/notices_wbtest.mbt). Also
+not: the client.wake before notice.bring (the app is awake when a push reaches it here), the notification's language
+when the app is not running (KeptLang: the app's words are the Chinese catalog's).
 
 ## Checked end to end, against a still.fail of its own (branch e2e-local, 2026-10-19)
 
@@ -675,6 +863,21 @@ while the card moved the list):
 | 37 workspace-members | settings → Workspace: its people, alice among them | the cloud's workspace has alice as a member |
 | 38 preview | the other device makes a chat with a picture, a PDF, a video and a page (`peer createfiles`: put up in parts, then the chat made with them, so the test chat's end stays as the other flows know it); opened from Home, each file opened in the preview, shot, closed | the station's entry has the four files; the app's log: the picture and the page read through the core, the PDF's 2 pages drawn, the player's reads through the core (`station.file.part`) and its first frame, the page loaded in the web view; each shot shows something in its place (e2e/pngstat.py) |
 | 39 send-flying | two messages sent back to back, the second while the first's words still fly to their bubble | both at the station, once each, in order; the flight in the motion log |
+| 40 notice-wait | on Home, the other device asks the agent for a card: the system shows the test chat's notice (待你决定 · …); tapped, the chat opens over Home at the card, which flashes; the notification gone; back, Home | the agent's card at the station; the core said to show it and the app took it (notice.claim); the notice was the test chat's (its tag); the chat opened at the card's seq and went to it; the station marks alice read to its end |
+| 41 notice-failed | on Home, the other device says something the fake agent does not answer: the station's ⚠ makes a notice that something went wrong (出错 · …); tapped, the chat opens at it | the station's ⚠ entry after the words; the notice was the test chat's; the chat opened at the ⚠ entry's seq |
+| 42 notice-looking | the test chat open while the other device asks for a card in it: no notice, the card comes in the chat | the card at the station; no NOTICE for it; the app told the core it shows the chat (client.focus) |
+| 43 notify-off | settings → 通知 off (不接收通知); a card asked meanwhile shows no notice; on again | notify.set answered on false, then on true; push.unregister called; no NOTICE for the card; the card at the station; the core's store on the device keeps notifications on |
+| 44 notice-cancel | a notice shown on Home; the chat then opened from its row: its notification goes | the test chat's NOTICE, then its NOTICE CANCEL |
+| 45 drive-play | 影音 put in the lent folder (drive-media: two episodes with a subtitle, a song); the first episode played (2 / 3, its subtitle's words), left at 3 s, opened again; 15 s on to its end, 下一个 tapped; the song | drive.read a part at a time; the first frame and the subtitle; drive.place about 3 s of 8 kept on the device and played on from there; kept as seen at its end; the next and the song read and ready |
+| 46 chat-audio | a song sent in a chat by the other device; its card opened: the preview's small player, its time going on | the station's entry has the song; station.file.part reads; the player ready |
+| 47 service-page | the agent starts a web service (e2e/fake: serve:); the chat's jobs sheet → its row: the page; /b.html typed in the bar; back in its history; 手机 | the station's job has the port; station.preview for the page, its stylesheet and what its script fetched; the site view loaded each page |
+| 48 share | a link shared in (MBUI_SHARE_TEXT): the sheet, the test chat tapped, the link a card in its composer, sent; a drive's file 分享 | shareIn.open; alice's entry has the title and the link; the file handed to the system's share sheet; on Android an ACTION_SEND intent taken in |
+| 49 update | (Android only: `#only`) settings' row says 更新到 0.1.1 (release-seed: the APK as built in the local cloud's releases); tapped | app.update found it; downloaded with the feed's sha256; handed to the installer, whose confirmation shows |
+| 50 bar-glass | the bar of glass: 文件 and back (the notch's icon swapping between 令 and ＋), the panel drawn up and let go on 奏 (that bar sliding down into the bar's place), 用量 tapped on it as it lands (its page at once), the chats again from the panel | the swap and the landing in the motion log; 用量's page; the bar chosen kept on the device (`prefs.set {barsBy}`) |
+| 51 sheets-sinking | the workspaces' sheet let go of, the bar's 文件 tapped under it as it sinks; the chat's own sheet let go of, the composer tapped through it as it goes down, words typed and sent | 文件 opened; the words at the station, once, alice's; no pin of alice's at the station |
+| 52 drive-sheet-closing | a file held, ⋯ → its sheet, the scrim tapped, the sheet's rows tapped where they are drawn as it closes | no rename asked; the station keeps the file, its name and words |
+| 53 settings-sheet-sinking | settings → Station → the test station → … → 重命名, a name typed, the scrim tapped, 保存 tapped where it is drawn as the sheet goes down | the station's page as it was; still.fail cloud has the old name |
+| 54 bar-going-down | the test chat opened from Home, the composer tapped under the bar still going down, words sent | the words at the station, once, alice's; the bar going down in the motion log |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once

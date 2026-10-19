@@ -286,10 +286,15 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         // the bottom bar's places, what is kept on this device, the changelog: later slices' pages, their rows
         go_row(c, "go-bars", tr("android-misc.bar.title")) |> ignore
         go_row(c, "go-files", tr("android-settings.files.title")) |> ignore
-        // notifications on this device (the core's `notify`): said as they stand; switched by a later slice's
+        // notifications on this device, local notices and pushes alike (SettingsHome.kt Notify): as the core's
+        // `notify` says, or as switched while `notify.set` is out (a spinner, not switched again meanwhile)
         let notify = (core.topic)("notify", Map::new()).value
-        let on = notify is None || flag(notify, "on")
-        list_row(c, fn() {
+        let pending = is_doing(core, ["notify.set"], []) || notify_switched.val is Some(_)
+        let on = match notify_switched.val {
+          Some(v) => v
+          None => notify is None || flag(notify, "on")
+        }
+        if list_row(c, key=if pending { "" } else { "notify" }, fn() {
           c.box(w=Fill(1.0), fn() {
             c.text(tr("android-settings.notify.title"), size=15.0, color=t.p.text, line=21.0) |> ignore
             c.text(
@@ -305,22 +310,70 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             |> ignore
           })
           |> ignore
+          if pending {
+            spinner(c)
+          }
           switch(c, on)
-        })
-        |> ignore
-        // this build (Version): its name and version, and the way to a newer one
-        list_row(c, fn() {
-          c.text("still.fail " + build_version, size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0)
-          |> ignore
-          c.text(tr("android-settings.version.check"), size=15.0, color=t.p.muted, wrap=false, line=21.0)
-          |> ignore
-        })
-        |> ignore
+        }) {
+          use_notify(core, !on)
+        }
+        // this build (Version): its name and version, and the way to a newer one (tapped: installed, or asked now)
+        let (words, newer) = (core.version_words)()
+        if list_row(c, key="version", fn() {
+            c.text("still.fail " + build_version, size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0)
+            |> ignore
+            c.text(words, size=15.0, color=if newer { t.p.accent } else { t.p.muted }, wrap=false, line=21.0)
+            |> ignore
+          }) {
+          (core.version_tap)()
+        }
         go_row(c, "go-changelog", tr("android-settings.changelog.title")) |> ignore
       })
     },
     fn() { gap(c, 30.0) },
   ])
+}
+
+///|
+/// Notifications as switched here, until the core has answered (AppState.useNotify's `notify` meanwhile).
+let notify_switched : Ref[Bool?] = Ref(None)
+
+///|
+/// Notifications turned on or off on this device (SettingsHome.kt Notify, AppState.useNotify): turned on, the system
+/// asked to allow them too; the core keeps it (`notify.set`), taking this device's pushes off the accounts when off,
+/// and the push registration follows what it answers (Push.sync). Not done: said in a toast, the switch back.
+fn use_notify(core : Core, on : Bool) -> Unit {
+  if on {
+    (core.notify_ask)()
+  }
+  notify_switched.val = Some(on)
+  (core.call)("notify.set", obj([("on", Json::boolean(on))]), fn(r) {
+    notify_switched.val = None
+    wake()
+    match r {
+      Ok(v) =>
+        (core.push_sync)(
+          match field(Some(v), "push") {
+            Some(True) => Some(true)
+            Some(False) => Some(false)
+            _ => None
+          },
+        )
+      Err(e) => {
+        (core.say)(
+          fill(
+            if on {
+              "android-misc.notify.onFailed"
+            } else {
+              "android-misc.notify.offFailed"
+            },
+            [("error", error_text(e))],
+          ),
+        )
+        (core.push_sync)(None)
+      }
+    }
+  })
 }
 
 ///|

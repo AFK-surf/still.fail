@@ -9,6 +9,7 @@
 #     the files to attach are not put in it and the core's store is not read back: flows that need them fail)
 #
 # A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed);
+# `#only PLATFORM…` runs it on those platforms only;
 # its `#env K=V` lines are given to the app (as MBUI_OPEN_PAGE=decisions: a page opened at the start), its `#before
 # WORDS` lines run as `scripts/e2e-local.sh WORDS` before the app starts.
 # The flows run in order on one sign-in (a fresh core data directory per run); later ones lean on earlier ones' chat.
@@ -47,6 +48,9 @@ mkdir -p $FILES
 [ -f $FILES/e2e-doc.pdf ] || python3 $MBUI_DIR/test/apple_views/make_pdf.py $FILES/e2e-doc.pdf
 [ -f $FILES/e2e-clip.mp4 ] || ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=640x360:rate=30 -t 4 \
   -c:v libx264 -profile:v baseline -pix_fmt yuv420p -movflags +faststart $FILES/e2e-clip.mp4
+# a song for the chat's player (46-chat-audio): 20 s of AAC, its index first
+[ -f $FILES/e2e-tune.m4a ] || ffmpeg -loglevel error -y -f lavfi -i sine=frequency=440:sample_rate=44100 -t 20 \
+  -c:a aac -movflags +faststart $FILES/e2e-tune.m4a
 [ -f $FILES/e2e-page.html ] || cat > $FILES/e2e-page.html <<'HTML'
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{margin:0;padding:20px;font-family:system-ui,sans-serif;background:#fff;color:#24272b}
@@ -117,6 +121,9 @@ if [ $PLATFORM = android ]; then
   scripts/android.sh emu >$OUT/emu.log 2>&1 || { tail $OUT/emu.log; exit 1; }
   $ADB install -r ${E2E_APK:-android/app/build/outputs/apk/debug/app-debug.apk} >/dev/null || exit 1
   $ADB shell pm clear $E2E_PKG >/dev/null
+  # notifications allowed, as a person who said yes once has them (else the first sign-in's ask is a system dialog over
+  # the flows; 40-44 look at what is shown)
+  $ADB shell pm grant $E2E_PKG android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
   $ADB reverse tcp:$E2E_PORT tcp:$E2E_PORT >/dev/null
   $ADB reverse tcp:$E2E_RELAY tcp:$E2E_RELAY >/dev/null
   if [ -z "${E2E_APK:-}" ]; then
@@ -169,6 +176,8 @@ TABLE=$OUT/../$PLATFORM.txt
 total=0; passed=0
 for f in $flows; do
   name=$(basename $f .drive)
+  # a flow for some platforms only (`#only android`): the others pass it by
+  if grep -q '^#only ' $f && ! grep '^#only ' $f | grep -qw $PLATFORM; then echo "== $name (not on $PLATFORM)"; continue; fi
   total=$((total + 1))
   echo "== $name"
   FAILS=""
@@ -185,4 +194,6 @@ for f in $flows; do
   fi
 done
 echo "$passed of $total flows passed ($PLATFORM)" | tee -a $TABLE
+# this run's drive folder goes with it (one per run would push the newest out of the drive's picker)
+rm -rf "${DRIVE:?}"
 [ $passed = $total ]

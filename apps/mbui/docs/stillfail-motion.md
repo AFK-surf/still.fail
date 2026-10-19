@@ -72,7 +72,7 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 | The list glides after them | something new at the end while followed (from half a second after it is put in place) | scroll | 1 − e^(−dt/100) per frame | ui/Follow.kt | yes: `Ctx::list(glide_on_growth=true)` keeps where it was and glides (before, a list stuck to its end jumped); the jump button's glide was there before |
 | A sent message keeps its row | the outbox entry becomes the chat's message | its key stays `o:<outbox id>` (no row leaving, none coming) | — | chat/Chat.kt:351-354, 485-489 | yes (`Reading.sent`; the model reads `outgoing`, the outbox's `seq`) |
 | What leaves the chat fades | an outbox row dropped, an activity gone | alpha 1 → 0 (a copy) | tween(200) | chat/Chat.kt:838-844 | outbox rows yes (`keyed(exit=…)`), activities by their own fade |
-| An activity comes in | an agent starting while the chat shows | its room opens (height 0 → its own), alpha 0 → 1, scale .5 → 1 from its avatar (9 dp, middle) | tween(220, Ease.Out) | chat/Chat.kt:1529-1556 | yes (`reveal` + look) |
+| An activity comes in | an agent starting while the chat shows | its room opens (height 0 → its own), alpha 0 → 1, scale .5 → 1 from its avatar (9 dp, middle) | tween(220, Ease.Out) | chat/Chat.kt:1529-1556 | yes (`reveal` + look; the room is laid out, as the app's, see below) |
 | An activity stays, then goes | its agent stops | stays 600 ms (HOLD_MS), then alpha → 0 over 220 (FADE_MS), its ring out over 160 | tween(220), tween(160) | chat/Chat.kt:396-398, 437-462, 1537, 1603 | yes (`with_lingering`) |
 | An activity pushed down glides | something said above it | placement | spring(1, 300, 1 px) (web useActivityGlide) | chat/Chat.kt:393-394, 844 | yes (`layout` in content places; not while words fly, nor as the page before comes in) |
 | The floor | an activity folded away | the room it leaves kept so nothing above drops | — | chat/Chat.kt:465-479 | not yet |
@@ -114,9 +114,9 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 |---|---|---|---|---|---|
 | A sheet opens | asked | from below (offset → 0) | SheetSpring | ui/Sheet.kt:138-153 | the newchat-bar agent's sheet (src/sfapp/sheet.mbt) is built on it; `@ui.sheet_spring` and `Anim` are its exact form |
 | Another sheet in its place | asked while one shows | height → the new one's | SheetSpring | ui/Sheet.kt:147-148 | same |
-| A sheet closes | scrim, back, dragged down | offset → its height | SheetSpring | ui/Sheet.kt:150-152 | same |
+| A sheet closes | scrim, back, dragged down | offset → its height | SheetSpring | ui/Sheet.kt:150-152 | same; drawn only as it goes (every sheet: the host's, the chat's, the drive's, the settings' (now on SheetSpring both ways), ＋'s) |
 | Let go | the grabber's drag ends | height to 55% / 94% / closed (under 30%), from the finger's speed | SheetSpring with velocity | ui/Sheet.kt:158-182 | same |
-| The scrim | a sheet asked or gone | black 28% | tween(300, Css) | ui/Sheet.kt:130, 187 | same |
+| The scrim | a sheet asked or gone | black 28% | tween(300, Css) | ui/Sheet.kt:130, 187 | same; fading out, drawn only (a tap is what is under it's) |
 | The menu opens | a long press, the filter | alpha in 160 Ease.Out; scale .9 → 1 from its corner by the anchor | MenuSpring | ui/Sheet.kt:276-283 | the filter's menu (src/sfapp/pages.mbt, `presence`) |
 | The menu closes | a tap outside, back, an item | alpha out 120 CssOut; scale → .9 | MenuSpring | ui/Sheet.kt:282 | the filter's menu, drawn until it has gone |
 | The menu's scrim | | black 28% | tween(200) | ui/Sheet.kt:261 | the filter's menu |
@@ -169,8 +169,13 @@ Springs as react-spring's (tension, friction, mass 1) stepped a frame at a time 
 the panel 260/17, the notch 300/30, the held ball 420/16; the ball's spring as stiff as its way is short (300 × 90 /
 distance, 90 to 700), stretched by its speed (up to 36 dp); the bar in and out 380 / 300 Arrive; the ball's alpha 200
 Css and scale .6 → 1 250 Css; an action's icon swapped (out 120 Css to .5, in after 60: 180 Css, scale .5 → 1 240
-Arrive); a place's tint 300 Css (ui/Bar.kt:296-400, 700-780, 950-970, 1110-1150). mbui: not yet (the bar is
-another slice).
+Arrive); a place's tint 300 Css; a bar chosen in the panel sliding down into the bar's place as the panel closes
+(200/28 from where it was) (ui/Bar.kt:296-400, 460-520, 700-780, 950-970, 1110-1150). mbui (src/sfapp/bar.mbt, the
+newchat-bar and glass-bars branches): all of it, the springs stepped as Bar.kt steps them (4 ms at most a step); the
+bar going and coming, the action growing and shrinking, its icon swapping and the chosen bar coming down are looks
+over where they are laid out (`Ctx::look`), what leaves only drawn (`leaving`: the bar going down, the icon going
+out, the bars not chosen and the bar left); the icon's swap is an `Anim` (300 ms linear); `log_frame` puts
+`bar/vis`, `bar/panel` and `bar/icon-swap` in the motion log.
 
 ## What the Android tests pin down (app/src/androidTest/…/motion)
 
@@ -232,3 +237,16 @@ through ui's accessors (`node_rect`, `list_above`, `list_scrolled`, …): ui doe
   while it grows, the parts' places drawn carried. (Laid out at the morph's height and cut there, it had left send and
   a quote's line outside the capsule while it grew: a tap on them was lost, the words stayed in the field.)
 - At rest nothing of it paints: every screenshot is as before (0 px on every golden).
+- The rule on main's own scrims and sheets (branch glass-bars): the chat's sheets (decide.mbt `sheet_frame`), the
+  drive's (`dv_sheet_frame`), the settings' and the sheet host's are built under `leaving` as they go down, their
+  scrims too (`scrim(open=)`), so a tap meanwhile is what is under them's (src/sfapp/motion_wbtest.mbt,
+  settings_wbtest.mbt; e2e 51–53); the settings' sheet, which went at once, goes down on SheetSpring and lets go of
+  its field's keyboard as it goes.
+- `reveal` stays the one helper that lays out, on purpose: the Android app opens an activity's room by its layout
+  (Chat.kt Activity: `layout { … height * open }`), so in a chat that follows its end what moves is everything above
+  it, carried up as the room opens while the list glides after its end (Follow.kt). Drawn only (laid out whole at once,
+  its ground drawn growing), the list's end would jump by the whole row and the rows above would go up on the glide
+  alone (1 − e^(−t/100 ms) of the row) instead of on the opening's Ease.Out under that glide, a different motion of
+  every row in view; and nothing in the room is tapped out of place meanwhile (it is the last row, nothing is laid
+  out under it, the row's own tap is where it is drawn but for its scale). The composer's morph is different: there
+  what is laid out at the morph's height (send, a quote's line) was outside where it was drawn and lost its taps.

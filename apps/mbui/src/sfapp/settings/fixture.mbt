@@ -30,6 +30,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
+    "settings-notify-off" => "home"
     "settings-station" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
@@ -406,7 +407,6 @@ fn fx_memory() -> Json {
 ///|
 /// A made-up settings topic, None for one these do not make.
 pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -> Json? {
-  ignore(mode)
   let me : Json = obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner"))])
   match name {
     "workspace" =>
@@ -636,7 +636,11 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         obj([("id", str("l1")), ("name", str("Pixel 9 · still.fail")), ("current", Json::boolean(true)), ("time", obj([("created_at", stamp_of("3 天前")), ("expires_at", stamp_of("", until="27 天后"))]))]),
         obj([("id", str("l2")), ("name", str("Chrome · macOS")), ("current", Json::boolean(false)), ("time", obj([("created_at", stamp_of("2 周前")), ("expires_at", stamp_of("", until="16 天后"))]))]),
       ])
-    "notify" => Some(obj([("on", Json::boolean(true)), ("asked", Json::boolean(true)), ("push", Json::boolean(false)), ("show", [])]))
+    "notify" => {
+      // notifications off (slice 10's settings-notify-off)
+      let on = !mode.has_prefix("settings-notify-off")
+      Some(obj([("on", Json::boolean(on)), ("asked", Json::boolean(true)), ("push", Json::boolean(false)), ("show", [])]))
+    }
     "doing" => Some(obj([("doing", [])]))
     "lockDraft" =>
       Some(

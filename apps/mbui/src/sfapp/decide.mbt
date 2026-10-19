@@ -527,10 +527,9 @@ fn close_sheet(c : @ui.Ctx) -> Unit {
 ///|
 /// A sheet from the bottom (Sheet.kt SheetHost): the scrim (black at 28%) closing it when tapped; the sheet `tall`
 /// high (its share of the screen, or as tall as what it shows, at most 90%), its top corners 26 round, frosted over
-/// the page (the surface at 80% over the scrim's shade, as there is no blur yet); it comes up in 300 ms and goes down
-/// the same way.
+/// the page and the scrim (sheet.mbt `sheet_glass`); it comes up in 300 ms and goes down the same way, drawn only as
+/// it goes (a tap meanwhile is what is under it's).
 fn sheet_frame(c : @ui.Ctx, key : String, tall : Double, body : () -> Unit) -> Unit {
-  let t = @sf.theme()
   let leaving = dui.sheet is None
   let p = if leaving {
     1.0 - opening(c, dui.leave_at, 260.0)
@@ -542,16 +541,15 @@ fn sheet_frame(c : @ui.Ctx, key : String, tall : Double, body : () -> Unit) -> U
     return
   }
   let h = dmin(tall, c.height * 0.9)
-  scrim(c, key + "/scrim", p, fn() { close_sheet(c) })
-  let glass = @sf.over(@sf.over(t.p.bg, @sf.alpha(0x000000FFL, 0.28 * p)), @sf.alpha(t.p.card, 0.8))
-  c.layer(fn() {
+  scrim(c, key + "/scrim", p, open=!leaving, fn() { close_sheet(c) })
+  let sheet = c.layer(fn() {
     c.spacer()
     c.box(
       w=Fill(1.0),
       h=Px(h + 26.0),
       ty=26.0 + (1.0 - p) * (h + 26.0),
       radius=26.0,
-      bg=glass,
+      glass=sheet_glass(p),
       shadow=24.0,
       clip=true,
       id=c.id(key + "/sheet"),
@@ -565,7 +563,7 @@ fn sheet_frame(c : @ui.Ctx, key : String, tall : Double, body : () -> Unit) -> U
     )
     |> ignore
   })
-  |> ignore
+  @motion.leaving(c, sheet, !leaving)
 }
 
 ///|

@@ -306,6 +306,8 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
         "appearance": Json::string(f.appearance),
       })
     }
+    "job" | "previewLoad" => fixture_service_topic(f, name, params)
+    "shareIn" => fixture_share_topic(params)
     "chats" => fixture_chats(f, params)
     "workspaceMarks" =>
       Some({
@@ -423,6 +425,7 @@ pub fn fixture(mode : String) -> Source {
         _ =>
           match fixture_new_call(f, name, params) {
             Some(r) => done(r)
+            None if name == "shareIn.open" => done(fixture_share_call(name, params).unwrap())
             None =>
               match fixture_chat_call(f, name, params) {
                 Some(r) => done(r)
@@ -441,11 +444,17 @@ pub fn fixture(mode : String) -> Source {
         fixture_fetch(name, params, done)
         return
       }
+      // the player's made-up films (play_fixture.mbt)
+      if name == "drive.read" && fixture_play_read(params, done) {
+        return
+      }
       match fixture_drive_read(name, params) {
         Some(r) => done(r)
         None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
       }
     },
+    stream: fn(name, params, _bytes, on_value, done) { fixture_stream(name, params, on_value, done) },
+    cancel: fn(_) {  },
     call_bytes: fn(name, params, _bytes, done) {
       match fixture_chat_call(f, name, params) {
         Some(r) => done(r)

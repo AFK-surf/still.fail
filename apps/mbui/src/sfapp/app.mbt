@@ -19,6 +19,10 @@ pub(all) enum Page {
   Drive(DriveAt)
   /// a text of a drive, read (drive_reader.mbt)
   DriveRead(DriveAt)
+  /// a video or a song of a drive, played (play.mbt)
+  DrivePlay(DriveAt)
+  /// a web service an agent started, its page (service.mbt): its station, its job
+  Service(String, String)
   /// the decisions waiting for the viewer, one at a time (奏: decisions.mbt); the bar's 奏 place
   Decisions
   /// an agent's execution history (history.mbt): its chat, its session
@@ -152,6 +156,18 @@ fn reset() -> Unit {
   read_chats.clear()
   readings.clear()
   left_pages.clear()
+  playing.clear()
+  play_srcs.clear()
+  service_pages.clear()
+  svc_viewports.clear()
+  share_in.shared = None
+  share_in.raised = false
+  share_in.env_taken = true
+  update.available = None
+  update.asked = false
+  update.source = None
+  update_version.val = 0
+  svc_folded.val = false
   splash_first.val = -1.0
   drafts.clear()
   cui.attach = false
@@ -172,6 +188,9 @@ fn reset() -> Unit {
   decide_reset()
   close_now()
   @settings.reset()
+  go_tos.clear()
+  flash_held.val = false
+  notices_reset()
 }
 
 ///|
@@ -198,6 +217,8 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
     match p {
       Chat(r) => chat_left(src, r)
       DriveRead(at) => reader_left(at)
+      DrivePlay(at) => play_left(at)
+      Service(station, job) => service_left(src, station, job)
       History(r, key) => history_left(src, r, key)
       _ => ()
     }
@@ -249,6 +270,12 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
   match current {
     Some(w) => {
       attend(src, w.id)
+      // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off
+      notices_frame(src, w)
+      // a newer build of the app asked for once (updates.mbt)
+      update_first(src)
+      // what another app shared in (share.mbt)
+      share_in_frame(c)
       c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
       |> ignore
       // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
@@ -256,6 +283,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       if app.nav.depth() == 1 && root != Home && !app.menu && !sheet_open() {
         c.on_back(fn() { go_place(c, "chats", [], -1) })
       }
+      // the player sideways: back turns it upright first
+      play_back(c)
       // the bottom bar: on a place's top page with nothing over it
       bottom_bar(c, src, w, place_of(root), app.nav.depth() == 1 && place_of(root) is Some(_))
       // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
@@ -266,6 +295,9 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
           Workspaces => workspaces_sheet(c, src, w, all)
           PickStation(scope) => pick_station_sheet(c, src, scope)
           RunPicker(station) => run_picker_sheet(c, src, station)
+          LoadOf(station, port) => load_sheet(c, src, station, port)
+          PageSizes(key) => page_sizes_sheet(c, key)
+          ShareSheet => share_in_sheet(c, src, w)
           NoSheet => ()
         }
       })
@@ -338,6 +370,8 @@ fn page_view(
         Files => files_page(c, src, w, place=app.nav.depth() == 1)
         Drive(at) => drive_page(c, src, w, at)
         DriveRead(at) => reader_page(c, src, at)
+        DrivePlay(at) => play_page(c, src, at)
+        Service(station, job) => service_page(c, src, station, job)
         Archived => setting_page(c, src, w, @settings.Route::Archive)
         Settings => setting_page(c, src, w, @settings.Route::Home)
         Setting(r) => setting_page(c, src, w, r)
@@ -436,6 +470,8 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       app.toast_at = -1.0
     },
     picture: fn(url) { (src.picture)(url) },
+    notify_ask: fn() { ask_from_switch() },
+    push_sync: fn(wanted) { if !src.read_only { push_sync(src, wanted) } },
     under: fn() {
       let pages = app.nav.pages()
       if pages.length() < 2 {
@@ -447,6 +483,8 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
         _ => ""
       }
     },
+    version_words: fn() { update_row_words() },
+    version_tap: fn() { update_row_tapped(src) },
   }
 }
 
@@ -460,11 +498,19 @@ fn appearance(src : Source) -> Unit {
   // (the host told once the prefs are read: not the system's first, then the one chosen)
   if prefs is Some(_) && told_dark.val != Some(dark) {
     told_dark.val = Some(dark)
-    @host.set_dark(dark)
     // (said on the log for scripted runs: e2e/flows checks the theme was taken)
     @host.log(if dark { "theme: dark" } else { "theme: light" })
   }
+  // the system bars follow the page under them: the player's is dark whatever the theme
+  let bars = dark || dark_page()
+  if prefs is Some(_) && told_bars.val != Some(bars) {
+    told_bars.val = Some(bars)
+    @host.set_dark(bars)
+  }
 }
+
+///|
+let told_bars : Ref[Bool?] = Ref(None)
 
 ///|
 let told_dark : Ref[Bool?] = Ref(None)
@@ -793,6 +839,7 @@ fn attend(src : Source, workspace : String) -> Unit {
         Some(s) => attend(s, attention.workspace)
         None => ()
       }
+      notices_app_change(@ui.app_visible())
     })
   }
   attention.src = Some(src)

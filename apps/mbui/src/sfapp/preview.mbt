@@ -452,6 +452,8 @@ priv struct Viewer {
   mut rate : Double
   /// a read of the video's file, logged the first times
   mut reads : Int
+  /// how a song's player stands, pinned for a fixture's shot
+  mut pinned : @player.Status?
 }
 
 ///|
@@ -503,6 +505,7 @@ fn open_preview(station : String, key : String, a : Attachment, drive? : DriveFi
     pinched: false,
     rate: 1.0,
     reads: 0,
+    pinned: None,
   })
 }
 
@@ -888,7 +891,7 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
     |> ignore
     c.layer(fn() { v.bar(c, src, shown) }) |> ignore
     match kind {
-      Some(KVideo) | Some(KAudio) =>
+      Some(KVideo) =>
         c.layer(fn() {
           c.spacer()
           v.video_controls(c, shown)
@@ -950,7 +953,8 @@ fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Uni
   let kind = v.shown_kind()
   match kind {
     Some(KImage) if v.file.size <= big_file => v.image_stage(c, src, stage)
-    Some(KVideo) | Some(KAudio) => v.video_stage(c, stage)
+    Some(KVideo) => v.video_stage(c, stage)
+    Some(KAudio) => v.audio_stage(c, stage)
     _ =>
       if v.told_of() {
         v.note(c, fn() { v.facts(c) })
@@ -1274,6 +1278,19 @@ fn Viewer::video_stage(self : Viewer, c : @ui.Ctx, stage : Int) -> Unit {
       }
     }
     None => tap_stage(c, v, stage)
+  }
+}
+
+///|
+/// A song (VideoViewer.kt AudioViewer, in the page's colours): its name and the capsule that plays it
+/// (src/player's audio_strip), in the middle; its player has no picture to place.
+fn Viewer::audio_stage(self : Viewer, c : @ui.Ctx, stage : Int) -> Unit {
+  let v = self
+  tap_stage(c, v, stage)
+  match v.video {
+    Some(n) =>
+      v.note(c, fn() { @player.audio_strip(c, "preview/audio", n, v.file.name, pinned=v.pinned) })
+    None => ()
   }
 }
 

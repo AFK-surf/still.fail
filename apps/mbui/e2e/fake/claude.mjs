@@ -7,6 +7,9 @@
 //   text-card:<question>|<placeholder>          the same with a text card
 //   steps:<words>                               a turn with tool calls in its transcript (a command and its output, an
 //                                               edit), then chat_post <words> ending it all_done
+//   serve:<name>|<port>|<words>                 job_start a web service <name> on <port> (a page of two, served by
+//                                               python's http.server from the session's workspace), then chat_post
+//                                               <words> all_done
 // What it writes of a turn goes to its transcript as the real claude's does (<config>/projects/<dir>/<session>.jsonl),
 // which is what the station reads an agent's execution history from.
 import fs from "node:fs";
@@ -55,7 +58,7 @@ function message(text) {
   say({ type: "assistant", message: { id, role: "assistant", content: [{ type: "text", text }] }, session_id: sessionId });
 }
 
-async function post(to, args) {
+async function tool(name, args) {
   const server = JSON.parse(flag("--mcp-config")).mcpServers.stillfail;
   const call = (id, method, params) =>
     fetch(server.url, {
@@ -64,9 +67,20 @@ async function post(to, args) {
       body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
     }).then((r) => r.json());
   await call(1, "initialize", { protocolVersion: "2025-06-18" });
-  const answer = await call(2, "tools/call", { name: "chat_post", arguments: { to, ...args } });
+  const answer = await call(2, "tools/call", { name, arguments: args });
   return answer.result?.content?.[0]?.text ?? JSON.stringify(answer.error ?? answer);
 }
+
+const post = (to, args) => tool("chat_post", { to, ...args });
+
+// the service's two pages, written where it runs (every word made up)
+const PAGE_A = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>端到端测试服务</title><link rel="stylesheet" href="style.css"></head><body><h1>端到端测试服务</h1>
+<p id="n">脚本还没有运行</p><p><a href="b.html">去第二页</a></p>
+<script>fetch('data.json').then(r=>r.json()).then(d=>{document.getElementById('n').textContent='脚本已运行：'+d.n})</script></body></html>`;
+const PAGE_B = `<!doctype html><html><head><meta charset="utf-8"><title>第二页</title><link rel="stylesheet" href="style.css"></head>
+<body><h1>这是第二页</h1></body></html>`;
+const STYLE = "body{margin:0;padding:24px;font-family:system-ui,sans-serif;background:#fbe6dc;color:#24272b}h1{color:#b9471f}";
 
 async function turn(text) {
   say({ type: "system", subtype: "init", session_id: sessionId, model: flag("--model") || "default", tools: [], mcp_servers: [] });
@@ -86,6 +100,17 @@ async function turn(text) {
       return o;
     });
     said = await post(to, { text: question, kind: "need_human", need: question, card: { type: "options", options } });
+  } else if (text.includes("serve:")) {
+    const [name, port, words] = line("serve:").split("|");
+    const dir = path.join(process.cwd(), `e2e-site-${port}`);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "index.html"), PAGE_A);
+    fs.writeFileSync(path.join(dir, "b.html"), PAGE_B);
+    fs.writeFileSync(path.join(dir, "style.css"), STYLE);
+    fs.writeFileSync(path.join(dir, "data.json"), JSON.stringify({ n: 42 }));
+    const started = await tool("job_start", { name, port: Number(port), command: `cd '${dir}' && exec python3 -m http.server ${port} --bind 127.0.0.1` });
+    record("assistant", [{ type: "text", text: started }]);
+    said = await post(to, { text: words ?? name, kind: "all_done", done: "started the service that was asked for" });
   } else {
     // steps: a command and what it printed, an edit, then the answer
     const words = line("steps:");
@@ -102,7 +127,7 @@ async function turn(text) {
   say({ type: "result", subtype: "success", is_error: false, duration_ms: 1, num_turns: 1, session_id: sessionId, result: said });
 }
 
-const ours = (text) => /(^|\s)(card:|text-card:|steps:)/.test(text);
+const ours = (text) => /(^|\s)(card:|text-card:|steps:|serve:)/.test(text);
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
   let msg = null;
   try {

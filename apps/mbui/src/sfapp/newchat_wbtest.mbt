@@ -157,3 +157,88 @@ test "a new chat: its station picked in the sheet, its model in the run picker" 
   t.settle() |> ignore
   assert_eq(app.nav.depth(), 1)
 }
+
+///|
+test "the bar is glass of one capture: the bar with its notch, 令 and the ball frosting the page under them" {
+  let t = tester("home")
+  t.settle() |> ignore
+  let gs = t.drawn_glass().filter(fn(g) { g.1 > 844.0 - 22.0 - 56.0 - 40.0 })
+  assert_true(gs.length() >= 3)
+  let (_, _, _, _, _, run) = gs[0]
+  assert_true(gs.iter().all(fn(g) { g.5 == run }))
+  // the notch cut into the bar's glass: 令's 28 and 6 round it, 4 over the edge
+  assert_true(t.drawn_notches().iter().any(fn(n) { n.0 == 5 && n.2 == -4.0 && n.3 == 34.0 && n.4 == 8.0 }))
+}
+
+///|
+test "the notch's icon swaps with a short scale and fade while it stays open; closed, at once" {
+  bar_reset()
+  let face = Ref::new("ling")
+  let out = Ref::new(true)
+  let p = Ref::new(1.0)
+  // as the bar has it: stepped by what it was told before this frame, then told
+  let t = @ui.Tester::new(
+    fn(c) {
+      bar.step(c.frame_dt() / 1000.0)
+      p.val = show_icon(c, face.val, out.val)
+    },
+    w=390.0,
+    h=844.0,
+  )
+  t.settle() |> ignore
+  assert_eq(m_face.val, "ling")
+  face.val = "plus"
+  t.frame()
+  t.frame()
+  t.frame()
+  assert_eq(m_face.val, "plus")
+  assert_eq(bar.icon_was, "ling")
+  assert_true(p.val > 0.0 && p.val < 1.0, msg="\{p.val}")
+  t.settle() |> ignore
+  assert_eq(bar.icon_was, "")
+  assert_true(p.val == 1.0)
+  // the notch closed: nothing to see, at once
+  out.val = false
+  face.val = "ling"
+  t.frame()
+  assert_eq(m_face.val, "ling")
+  assert_eq(bar.icon_was, "")
+}
+
+///|
+test "the bar chosen in the panel slides down into the bar's place, its places laid out there from the first" {
+  let t = tester("home")
+  t.settle() |> ignore
+  let (xs, y) = bar_places_at()
+  t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
+  // let go over the rows before the panel was all the way open, it stays open: its row tapped
+  if bar.swap is None {
+    t.settle() |> ignore
+    t.tap_once(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
+  }
+  // chosen: the bar in view at once, the stack sliding down
+  assert_true(app.nav.top() == Decisions)
+  let mut seen = false
+  let mut last = -1.0
+  for _ in 0..<40 {
+    t.frame()
+    match bar.swap {
+      Some(s) => {
+        let k = s.t(bar.o.x)
+        assert_true(k >= last)
+        last = k
+        if k > 0.05 && k < 0.95 {
+          seen = true
+        }
+      }
+      None => ()
+    }
+  }
+  assert_true(seen)
+  t.settle() |> ignore
+  assert_true(bar.swap is None)
+  match bars_picked.val {
+    Some((_, cur)) => assert_eq(cur, 1)
+    None => fail("no bar picked")
+  }
+}

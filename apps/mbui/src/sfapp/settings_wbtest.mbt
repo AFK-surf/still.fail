@@ -72,6 +72,38 @@ test "a station renamed from its page's …: the new name is the station's" {
 }
 
 ///|
+test "a settings sheet goes down on the sheet's spring, only drawn: its 保存 tapped meanwhile renames nothing" {
+  let t = settings_tester("stations")
+  t.settle() |> ignore
+  // the station as the tests before left it
+  let name = if t.find("Studio") is Some(_) { "Studio" } else { "工作室" }
+  t.tap_text(name)
+  t.settle() |> ignore
+  t.tap(357.0, 22.0)
+  t.settle() |> ignore
+  t.tap_text("重命名")
+  t.settle() |> ignore
+  for _ in 0..<name.length() {
+    t.backspace()
+  }
+  t.type_text("没改成的名字")
+  t.settle() |> ignore
+  assert_true(t.find("保存") is Some(_))
+  // the scrim, tapped: it goes down, drawn as it goes, the keyboard let go of
+  t.tap_once(195.0, 60.0)
+  t.frame()
+  t.frame()
+  let (sx, sy) = t.find("保存").unwrap()
+  let (active, _, _, _) = t.ime()
+  assert_true(!active)
+  t.tap_once(sx, sy)
+  t.settle() |> ignore
+  assert_true(t.find("保存") is None)
+  assert_true(t.find("没改成的名字") is None)
+  assert_true(t.find(name) is Some(_))
+}
+
+///|
 test "the archive: its chats by day; one restored leaves it" {
   let t = settings_tester("archive")
   t.settle() |> ignore

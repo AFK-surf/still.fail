@@ -1,0 +1,16 @@
+# The app keeping itself current (Updates.kt): a newer build in the local cloud's releases (release-seed: this APK as
+# version 0.1.1), found by the core's app.update at the start; settings' version row says 更新到 0.1.1; tapped, it is
+# downloaded, checked against its sha256 and handed to the system's installer, which asks the person to confirm.
+#only android
+#env MBUI_UPDATE_FEED=android
+#before release-seed
+timeout 60000
+until 端到端测试
+tap icon:settings
+until 更新到 0.1.1
+drag 195 700 0 -500 400
+wait 1000
+shot 1-settings
+# (the last step: the download and the installer's confirmation go on after it, over the app; the check looks)
+tap 更新到 0.1.1
+linger 60000

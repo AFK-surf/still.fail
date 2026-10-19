@@ -98,6 +98,24 @@ pub fn call_bytes(
 }
 
 ///|
+/// Calls `name` and hears how it goes (see Client::stream); the call's id, for `cancel`.
+pub fn stream(
+  name : String,
+  params? : Json = Json::object({}),
+  bytes? : Bytes? = None,
+  on_value~ : (Json, Bytes?) -> Unit,
+  on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
+) -> Int {
+  client.stream(name, params~, bytes~, on_value~, on_done~)
+}
+
+///|
+/// A streamed call stopped (see Client::cancel).
+pub fn cancel(id : Int) -> Unit {
+  client.cancel(id)
+}
+
+///|
 /// The time of day, in milliseconds since 1970: when something was done, as
 /// the core and the stations compare it (a reading place's `at`).
 pub fn wall_ms() -> Double {

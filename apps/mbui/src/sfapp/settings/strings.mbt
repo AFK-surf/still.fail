@@ -25,6 +25,8 @@ let zh : Map[String, String] = {
   "android-misc.bar.title": "下方栏",
   "android-misc.connection.reconnect": "重新连接",
   "android-misc.failed": "失败",
+  "android-misc.notify.offFailed": "无法关闭通知：{error}",
+  "android-misc.notify.onFailed": "无法开启通知：{error}",
   "android-misc.memory.builtin": "station 内置",
   "android-misc.memory.empty": "（空）",
   "android-misc.memory.global": "全局记忆",

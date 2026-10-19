@@ -15,6 +15,12 @@ priv enum SheetKind {
   PickStation(String)
   /// what a new chat runs on (NewChat.kt openRunPicker): 66%; its accounts' list in place of it while `accounts`
   RunPicker(String)
+  /// how a service's page's resources came (PreviewLoad.kt): its station and port, 62%
+  LoadOf(String, Int)
+  /// a service's page's sizes (Preview.kt openViewportSheet), by the service's key: 62%
+  PageSizes(String)
+  /// what another app shares in, to a chat (ShareSheet.kt): 72%, draggable
+  ShareSheet
 } derive(Eq)
 
 ///|
@@ -24,6 +30,8 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
     Workspaces => (0.7, true)
     PickStation(_) => (0.5, false)
     RunPicker(_) => (0.66, false)
+    LoadOf(_, _) | PageSizes(_) => (0.62, false)
+    ShareSheet => (0.72, true)
     NoSheet => (0.5, false)
   }
 }
@@ -139,11 +147,15 @@ fn sheet_tall(kind : SheetKind, total : Double) -> Double {
 }
 
 ///|
-/// The sheet's own ground: frosted glass over the pages on the phone (Sheet.kt: the paper, the scrim's black, then the
-/// surface at 80%, blurred 28). Here its look with nothing blurred, the one place the glass is chosen for a sheet.
-fn sheet_ground(scrim : Double) -> Int64 {
+/// A sheet's glass (Sheet.kt: frosted over the pages, the scrim's black and the surface at 80% over a 28px blur; the
+/// scrim is drawn under it, so it is in what the glass frosts): `@sf.glass_sheet`, and where glass is drawn solid, what
+/// it is with nothing under it but the paper (the paper, the scrim's black as far as it shows, the surface at 80%).
+fn sheet_glass(scrim : Double) -> @ui.Glass {
   let t = @sf.theme()
-  @sf.over(@sf.over(t.p.bg, @sf.alpha(0x000000FFL, 0.28 * scrim)), @sf.alpha(t.p.card, 0.8))
+  {
+    ..@sf.glass_sheet(),
+    solid: @sf.over(@sf.over(t.p.bg, @sf.alpha(0x000000FFL, 0.28 * scrim)), @sf.alpha(t.p.card, 0.8)),
+  }
 }
 
 ///|
@@ -273,7 +285,7 @@ fn sheet_layer(c : @ui.Ctx, content : (SheetKind) -> Unit) -> Unit {
   let t = @sf.theme()
   let h = s.h.x
   let body_id = c.id("sheet/body")
-  c.layer(fn() {
+  let sheet = c.layer(fn() {
     c.spacer()
     // 26 more under the screen's foot: its rounded corners are only the top's
     c.drag_area(body_id, axis=Hold, w=Fill(1.0), h=Px(h + 26.0), ty=s.off.x + 26.0, fn() {
@@ -281,7 +293,7 @@ fn sheet_layer(c : @ui.Ctx, content : (SheetKind) -> Unit) -> Unit {
         w=Fill(1.0),
         h=Fill(1.0),
         radius=26.0,
-        bg=sheet_ground(s.scrim),
+        glass=sheet_glass(s.scrim),
         shadow=24.0,
         clip=true,
         pb=26.0,
@@ -298,7 +310,8 @@ fn sheet_layer(c : @ui.Ctx, content : (SheetKind) -> Unit) -> Unit {
     })
     |> ignore
   })
-  |> ignore
+  // closed and sinking away, only drawn: a tap meanwhile is what is under it's
+  @motion.leaving(c, sheet, live)
   ignore(t)
   // what it shows may have closed it or asked another (a row tapped): drawn again at once
   if s.kind != s.shown || s.fresh || s.off.x != s.off.to || s.h.x != s.h.to {

@@ -1,16 +1,19 @@
 // The settings' sheets (Sheet.kt SheetHost, one at a time): over the page from its foot, a share of the screen tall,
-// its top corners round, the grabber at its top, the page under it darkened; a tap there closes it. What asks for a
+// its top corners round, frosted over the page, the grabber at its top, the page under it darkened; a tap there
+// closes it. It comes up and goes down on the sheet's spring, the scrim in and out over 300 ms, and is only drawn as
+// it goes (a tap meanwhile is what is under it's). What asks for a
 // line (PageParts.kt ask: a station's new name), whether to go on (confirm), a station's actions, a device to confirm
 // into security mode, a member's role are drawn in it.
 
 ///|
 priv struct SheetHost {
-  /// what it shows, or None when there is none
+  /// what it shows, or None when there is none; what it showed, drawn as it goes down
   mut draw : ((@ui.Ctx, Core) -> Unit)?
+  mut last : ((@ui.Ctx, Core) -> Unit)?
+  /// up last frame (gone down since: what was typed in it lets go of the keyboard)
+  mut was_up : Bool
   /// how tall, as a share of the screen
   mut height : Double
-  /// when it was put up
-  mut at : Double
   /// what to run when it closes by hand (the scrim, back)
   mut on_close : () -> Unit
   /// a count of sheets put up: each one's fields are its own
@@ -20,8 +23,9 @@ priv struct SheetHost {
 ///|
 let sheet : SheetHost = {
   draw: None,
+  last: None,
+  was_up: false,
   height: 0.5,
-  at: -1.0,
   on_close: fn() {  },
   serial: 0,
 }
@@ -31,7 +35,6 @@ let sheet : SheetHost = {
 fn open_sheet(height : Double, draw : (@ui.Ctx, Core) -> Unit, on_close? : () -> Unit = fn() {  }) -> Unit {
   sheet.draw = Some(draw)
   sheet.height = height
-  sheet.at = -1.0
   sheet.on_close = on_close
   sheet.serial += 1
   wake()
@@ -65,46 +68,54 @@ pub fn close() -> Unit {
 pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
   frame_ctx.val = Some(c)
   menu_overlay(c)
-  let draw = match sheet.draw {
+  let up = sheet.draw is Some(_)
+  if up {
+    sheet.last = sheet.draw
+  } else if sheet.was_up {
+    // let go of: a field in it is no longer typed into as it goes down
+    c.blur()
+  }
+  sheet.was_up = up
+  let draw = match sheet.last {
     Some(d) => d
     None => return
   }
-  let t = @sf.theme()
-  if sheet.at < 0.0 {
-    sheet.at = c.now()
-  }
-  let shown = if c.stable() {
-    1.0
-  } else {
-    let p = (c.now() - sheet.at) / 300.0
-    if p >= 1.0 {
-      1.0
-    } else {
-      c.request_frame()
-      let q = 1.0 - dmax(p, 0.0)
-      1.0 - q * q * q
-    }
+  let h = c.height * sheet.height
+  // up from below and back down on the sheet's spring (Motion.kt SheetSpring), the scrim in and out (300 ms, CSS's
+  // ease): Sheet.kt SheetHost
+  let off = @motion.animate(
+    c,
+    "settings-sheet/offset",
+    if up { 0.0 } else { h + 26.0 },
+    spec=@motion.sheet_spring,
+    from=h + 26.0,
+  )
+  let shown = @motion.animate(c, "settings-sheet/scrim", if up { 1.0 } else { 0.0 }, spec=@motion.tween(300.0, ease=Css))
+  if !up && off >= h + 26.0 - 0.5 && shown <= 0.0 {
+    sheet.last = None
+    return
   }
   // the page under it, darkened: a tap there closes it
   let scrim = c.id("settings-sheet-scrim")
-  if hit(c, scrim) {
+  if up && hit(c, scrim) {
     close()
-    return
   }
-  c.layer(fn() {
+  let dim = c.layer(fn() {
     c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(0x000000FFL, 0.28 * shown), id=scrim, fn() {  })
     |> ignore
   })
-  |> ignore
-  let h = c.height * sheet.height
-  c.layer(fn() {
+  let t = @sf.theme()
+  let body = c.layer(fn() {
     c.spacer()
     c.box(
       w=Fill(1.0),
       h=Px(h + 26.0),
-      ty=26.0 + (1.0 - shown) * (h + 26.0),
+      ty=26.0 + off,
       radius=26.0,
-      bg=t.p.card,
+      glass={
+        ..@sf.glass_sheet(),
+        solid: @sf.over(@sf.over(t.p.bg, @sf.alpha(0x000000FFL, 0.28 * shown)), @sf.alpha(t.p.card, 0.8)),
+      },
       shadow=24.0,
       clip=true,
       id=c.id("settings-sheet"),
@@ -117,7 +128,9 @@ pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
     )
     |> ignore
   })
-  |> ignore
+  // gone down, only drawn
+  @motion.leaving(c, dim, up)
+  @motion.leaving(c, body, up)
 }
 
 ///|

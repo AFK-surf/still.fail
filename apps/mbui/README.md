@@ -8,9 +8,12 @@ mbui is the framework (layout, text, the UI tree, motion, Markdown, the platform
 in its own repository; what knows still.fail is here: its design system (`src/sf`), its pages (`src/sfapp`), the core
 client and its engine hosts (`src/core`, `src/sfcore`, `src/host/*_core.*`), the apps (`src/stillfail`, `src/sffix`
 over made-up data, `src/sfkit`, `src/coredemo`), the media screens (`src/gallery`, `src/shelf`, `src/videos`, with
-`src/photos` and `src/books` over made-up data), the core's bundling (`core/`, from this repository's
+`src/photos` and `src/books` over made-up data, and the player, `src/player`), the core's bundling (`core/`, from this repository's
 `client/core-ts`), the end-to-end flows against a local still.fail (`e2e/`), the goldens, and the Android project
 (`android/`: mbui's host Java with `CoreHost.java`).
+
+`src/player` (the full-screen player and the audio viewer) knows nothing of still.fail's core, but draws with its design
+system (`@sf` icons, theme, spinner): it could go back to mbui as framework once it takes those from its caller.
 
 ## mbui, pinned
 

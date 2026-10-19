@@ -185,6 +185,30 @@ let core_source : @sfapp.Source = {
       @host.request_frame()
     })
   },
+  stream: fn(name, params, bytes, on_value, done) {
+    // a read-only run reads a service's pages, never sends it anything to act on
+    if read_only && !(name == "station.preview" && @sfapp.text(Some(params), "method") == "GET") {
+      done(Err(refused(name)))
+      return 0
+    }
+    if call_log {
+      @host.log("CALL \{name} \{params.stringify()}")
+    }
+    @core.stream(name, params~, bytes~, on_value=fn(v, b) {
+      on_value(v, b)
+      @host.request_frame()
+    }, on_done=fn(r) {
+      if call_log {
+        match r {
+          Ok(_) => @host.log("ANSWER \{name} ok")
+          Err(e) => @host.log("ANSWER \{name} error \{e.stringify()}")
+        }
+      }
+      done(r)
+      @host.request_frame()
+    })
+  },
+  cancel: fn(id) { @core.cancel(id) },
   sign_in: fn() { @sfcore.sign_in() },
   signing_in: fn() { @sfcore.state.busy },
   picture,
@@ -223,6 +247,18 @@ fn main {
   // MBUI_OPEN_PAGE=decisions: the 奏 page over Home from the start (its way in is the bottom bar's)
   if @host.env("MBUI_OPEN_PAGE") == "decisions" {
     @sfapp.open_decisions()
+  }
+  // where newer builds of the app come from (src/sfapp/updates.mbt): still.fail cloud's feed MBUI_UPDATE_FEED (the
+  // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere)
+  match @host.env("MBUI_UPDATE_FEED") {
+    "" => ()
+    feed => {
+      let origin = match @host.env("MBUI_CLOUD") {
+        "" => "https://app.still.fail"
+        o => o
+      }
+      @sfapp.set_update_source(Some(@sfapp.cloud_updates(core_source, feed, origin)))
+    }
   }
   @ui.run("still.fail", fn(c) {
     @sfcore.frame(@core.subscribe("accounts"))

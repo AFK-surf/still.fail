@@ -206,6 +206,27 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       error: None,
     })
   }
+  // links shared in (share-in.ts): each a card among the files, kept and sent as words
+  for l in items(s, "links") {
+    let id = next_pending.val
+    next_pending.val += 1
+    let name = match text(Some(l), "title") {
+      "" => text(Some(l), "url")
+      t => t
+    }
+    d.files.push({
+      id,
+      name,
+      size: 0,
+      image: "",
+      width: 0,
+      height: 0,
+      pasted: None,
+      done: Some({ "link": l }),
+      sent: 0,
+      error: None,
+    })
+  }
 }
 
 ///|
@@ -229,13 +250,17 @@ fn quote_json(d : Draft, q : DraftQuote, trim : Bool) -> Json {
 ///|
 /// What is kept of it (DraftView): the words, the quotes with their comments, the files up.
 fn draft_view(d : Draft) -> Map[String, Json] {
-  {
+  let v : Map[String, Json] = {
     "text": Json::string(d.text),
     "quotes": Json::array(d.quotes.map(fn(q) { quote_json(d, q, false) })),
-    "files": Json::array(
-      d.files.filter_map(fn(f) { f.done }),
-    ),
+    "files": Json::array(up_files(d)),
   }
+  // the links shared in, kept beside the files (the core's DraftView `links`)
+  let links = d.files.filter_map(fn(f) { field(f.done, "link") })
+  if links.length() > 0 {
+    v["links"] = Json::array(links)
+  }
+  v
 }
 
 ///|
@@ -633,10 +658,10 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     return
   }
   // the station files named by their paths, a line each under the words
-  let words = with_ref_words(d.text.trim(chars=" \n\t").to_string(), d.key)
+  let words = with_link_words(with_ref_words(d.text.trim(chars=" \n\t").to_string(), d.key), d)
   let taken_refs = refs_of(d.key)
   draft_refs.remove(d.key)
-  let files = d.files.filter_map(fn(f) { f.done })
+  let files = up_files(d)
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   // what was taken, to put back
   let taken_text = d.text
@@ -1350,18 +1375,27 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Unit {
   let t = @sf.theme()
   let k = ink()
   let busy = f.done is None && f.error is None
+  // a link shared in (share-in.ts): its title and its site, drawn as a file is
+  let link = field(f.done, "link")
   c.box(dir=Row, w=Px(236.0), padx=10.0, pady=8.0, gap=10.0, radius=16.0, bg=k.neutral, align=ACenter, fn() {
     if busy {
       @sf.spinner(c) |> ignore
+    } else if link is Some(_) {
+      @sf.icon(c, "web", size=16.0, color=t.p.muted) |> ignore
     } else {
       @sf.icon(c, file_icon(f.name), size=16.0, color=t.p.muted) |> ignore
     }
     c.box(w=Fill(1.0), fn() {
       c.text(f.name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
       c.text(
-        match f.error {
-          Some(e) => e
-          None => if busy { uploading_text(f) } else { file_size(f.size.to_double()) }
+        match (f.error, link) {
+          (Some(e), _) => e
+          (None, Some(l)) =>
+            match text(Some(l), "site") {
+              "" => text(Some(l), "url")
+              site => site
+            }
+          (None, None) => if busy { uploading_text(f) } else { file_size(f.size.to_double()) }
         },
         size=11.0,
         color=if f.error is Some(_) { t.p.red } else { t.p.muted },
@@ -1374,6 +1408,30 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Unit {
     card_close(c, remove)
   })
   |> ignore
+}
+
+///|
+/// The files that go up with the message: those up, a link shared in left out (it goes as words).
+fn up_files(d : Draft) -> Array[Json] {
+  d.files.filter_map(fn(f) { f.done }).filter(fn(j) { field(Some(j), "link") is None })
+}
+
+///|
+/// The words with each link shared into the draft after them (share-in.ts: its title on a line, then the link), as the
+/// core's composer sends them (composer.ts linkWords).
+fn with_link_words(words : String, d : Draft) -> String {
+  let lines = if words == "" { [] } else { [words] }
+  for f in d.files {
+    match field(f.done, "link") {
+      Some(link) => {
+        let title = text(Some(link), "title")
+        let url = text(Some(link), "url")
+        lines.push(if title != "" { title + "\n" + url } else { url })
+      }
+      None => ()
+    }
+  }
+  lines.join("\n")
 }
 
 ///|
@@ -1464,7 +1522,7 @@ fn attach_sheet(
       h=Px(h + 26.0),
       ty=26.0 + offset,
       radius=26.0,
-      bg=t.p.card,
+      glass=sheet_glass(dim),
       shadow=24.0,
       clip=true,
       fn() {

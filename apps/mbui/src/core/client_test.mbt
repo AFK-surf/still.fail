@@ -226,3 +226,23 @@ test "a call whose answer has bytes beside it gets them, a plain call doesn't" {
   c.receive_json(@json.parse("{\"id\":2,\"ok\":{}}"))
   assert_eq(plain, [true])
 }
+
+///|
+test "a streamed call: each value before its answer, with the bytes beside it; cancelled, nothing more" {
+  let (c, sent) = recorder()
+  let heard : Array[String] = []
+  let done : Array[String] = []
+  let id = c.stream("station.preview", on_value=fn(v, b) {
+    heard.push(v.stringify() + " " + b.map(fn(x) { x.length() }).unwrap_or(-1).to_string())
+  }, on_done=fn(r) { done.push(if r is Ok(_) { "ok" } else { "err" }) })
+  c.receive_json({ "id": Json::number(id.to_double()), "value": { "head": { "status": 200 } } })
+  c.receive_json({ "id": Json::number(id.to_double()), "value": { "chunk": true } }, bytes=Some(b"abc"))
+  c.receive_json({ "id": Json::number(id.to_double()), "ok": Json::null() })
+  assert_eq(heard, ["{\"head\":{\"status\":200}} -1", "{\"chunk\":true} 3"])
+  assert_eq(done, ["ok"])
+  let id2 = c.stream("station.preview", on_value=fn(_, _) { heard.push("late") })
+  c.cancel(id2)
+  assert_eq(sent[sent.length() - 1].stringify(), "{\"id\":\{id2},\"cancel\":true}")
+  c.receive_json({ "id": Json::number(id2.to_double()), "value": { "chunk": true } })
+  assert_eq(heard.length(), 2)
+}

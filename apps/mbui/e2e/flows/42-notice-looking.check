@@ -1,0 +1,3 @@
+check "the station has the card" '[ -n "$(sql "select n from entries where author_kind = \"agent\" and text = \"这个不该通知 $TAG\"")" ]'
+check "no notice was shown for it" '! grep -qF "这个不该通知 $TAG" <(grep "^NOTICE" $OUT/$name.log)'
+check "the app told the core it shows the chat" 'grep -q "^CALL client.focus {\"chat\"" $OUT/$name.log'

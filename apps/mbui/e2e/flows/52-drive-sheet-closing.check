@@ -1,0 +1,2 @@
+check "nothing was asked as the sheet went down (no rename sheet came)" 'grep -q "DRIVE ok gone =保存" $OUT/$name.log && grep -q "DRIVE PASS" $OUT/$name.log'
+check "the station keeps the file under its name, the same words" '[ "$(cat "$DRIVE/说明.txt")" = "这是端到端测试用的说明文件。" ]'
