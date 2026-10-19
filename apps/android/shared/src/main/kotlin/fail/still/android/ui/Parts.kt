@@ -566,11 +566,13 @@ fun LargeTitle(small: String, big: String, lead: (@Composable () -> Unit)? = nul
 // ── lists and cards ────────────────────────────────────────────────────
 
 @Composable
-fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp) {
+fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp, action: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(start = start, end = 20.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom) {
         Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         Spacer(Modifier.weight(1f))
         if (trailing != null) Text(trailing, fontSize = 13.sp, color = C.muted)
+        // What can be done to the whole section (取消登录), at its end.
+        action?.invoke()
     }
 }
 

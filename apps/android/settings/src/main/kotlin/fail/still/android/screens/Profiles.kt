@@ -4,6 +4,8 @@
 // variables; renaming, checking and deleting under "…"), and a new one.
 package fail.still.android.screens
 
+import fail.still.android.ui.BUTTON_HEIGHT
+import fail.still.android.ui.concentric
 import fail.still.android.ui.pressText
 import fail.still.android.ui.Spinner
 import fail.still.android.shared.BuildConfig
@@ -488,10 +490,11 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             if (app.isDoing("profile.check", "station" to address, "id" to p.id)) WaitLine(t("android-settings.version.checking"))
                             else DoingMark(false, app.failedOf(setOf("profile.check", "profile.quota"), "station" to address, "id" to p.id), inline = true)
                         }
-                        Text(
-                            (p.check?.detail?.replace(Regex("^(可用[，,]|Works,)\\s*"), "") ?: t("android-settings.profile.notChecked")) + (p.check?.time?.get("checkedAt")?.let { t("android-settings.profile.checkedAt", "ago" to it.ago) } ?: ""),
-                            fontSize = 13.sp, color = C.muted,
-                        )
+                        // What the check said beyond its pill (需要登录 under 需要登录 said nothing more), and when.
+                        val detail = (p.check?.detail?.replace(Regex("^(可用[，,]|Works,)\\s*"), "") ?: t("android-settings.profile.notChecked")).takeIf { it != p.checkText }
+                        val checked = p.check?.time?.get("checkedAt")?.let { t("android-settings.profile.checkedAt", "ago" to it.ago) }
+                        val line = if (detail != null) detail + (checked ?: "") else checked?.removePrefix(" · ").orEmpty()
+                        if (line.isNotEmpty()) Text(line, fontSize = 13.sp, color = C.muted)
                     }
                 }
             }
@@ -833,39 +836,35 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
         if (job?.state == "done" && previous != null && previous != "done") app.toast = t("android-settings.login.done")
         previous = job?.state
     }
-    SectionHeader(if (active) t("android-settings.login.active", "provider" to provider) else if (needed) t("android-settings.login.needed", "provider" to provider) else t("android-settings.login.subscription", "provider" to provider), start = 24.dp)
-    // Its sign-in button last, in the corner, where there is no command to run by hand under it; a device code's box
-    // first, in its top corners: the card's corner taken from the box's.
-    val codeFirst = active && job?.state == "needs_approval" && job.url != null && job.userCode != null
-    // The command to run by hand shown last instead: its box in the bottom corners, the card's corner taken from it.
+    val cancelling = app.isDoing("profile.cancelLogin", "station" to station, "id" to p.id)
+    // Its title says what it is; where it stands is said once, in the card (and in the pill above).
+    SectionHeader(t("android-settings.login.subscription", "provider" to provider), start = 24.dp, action = if (!active) null else ({
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            DoingMark(cancelling, app.failedOf("profile.cancelLogin", "station" to station, "id" to p.id), inline = true)
+            Text(t("android-settings.login.cancel"), fontSize = 14.sp, color = C.muted, modifier = Modifier.pressText(enabled = !cancelling) { app.act(t("android-settings.login.cancelWhat")) { api.cancelLogin(p.id) } })
+        }
+    }))
+    // Its buttons at its foot, in its corners (a field beside one: rounded as they are); a command box last instead: the
+    // card's corner taken from it.
     val commandLast = !active && p.loginCommand.isNotEmpty() && manual
-    Card(foot = !active && p.loginCommand.isEmpty(), corner = if (codeFirst) concentricOut(CODE_BOX_CORNER, CARD_PAD) else if (commandLast) concentricOut(COMMAND_BOX_CORNER, CARD_PAD) else null) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (active) {
-                LoginSteps(job, provider) { code -> api.loginCode(p.id, code) }
-                // Not a step of its own: a quiet text button under them, in the middle.
-                val cancelling = app.isDoing("profile.cancelLogin", "station" to station, "id" to p.id)
-                Row(
-                    Modifier.align(Alignment.CenterHorizontally).height(38.dp).clip(Smooth(19.dp))
-                        .clickable(enabled = !cancelling) { app.act(t("android-settings.login.cancelWhat")) { api.cancelLogin(p.id) } }.padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    DoingMark(cancelling, app.failedOf("profile.cancelLogin", "station" to station, "id" to p.id), inline = true)
-                    Text(t("android-settings.login.cancel"), fontSize = 14.sp, color = C.muted)
+    val waits = active && (job?.state == "starting" || job?.state == "verifying" || job?.state == "done")
+    Card(foot = !commandLast && !waits, corner = if (commandLast) concentricOut(COMMAND_BOX_CORNER, CARD_PAD) else null) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (active) LoginSteps(job, provider) { code -> api.loginCode(p.id, code) }
+            else {
+                // Signed in: the pill above says so; only what was off, or how it is done, in words.
+                when {
+                    job?.state == "failed" -> Text(t("android-settings.login.failed", "error" to job.error), fontSize = 13.sp, color = C.red)
+                    needed -> Text(t("android-settings.login.note", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
                 }
-            } else {
-                Text(
-                    when (job?.state) { "failed" -> t("android-settings.login.failed", "error" to job.error); "done" -> t("android-settings.login.signedIn"); else -> t("android-settings.login.note", "app" to BuildConfig.APP_NAME) },
-                    fontSize = 13.sp, color = C.muted,
-                )
-                Button(if (job?.state == "done" || !needed) t("android-settings.login.again") else t("android-settings.login.signIn"), primary = true, busy = busy, modifier = Modifier.fillMaxWidth()) {
-                    scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = t("android-settings.signIn.beginFailed", "error" to errorText(e)) } }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Button(if (needed && job?.state != "done") t("android-settings.login.signIn") else t("android-settings.login.again"), primary = needed, busy = busy) {
+                        scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = t("android-settings.signIn.beginFailed", "error" to errorText(e)) } }
+                    }
+                    // OpenCode's has no command to run by hand.
+                    if (p.loginCommand.isNotEmpty()) Text(t("android-settings.login.manualShort"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { manual = !manual })
                 }
-                // OpenCode's has no command to run by hand.
-                if (p.loginCommand.isNotEmpty()) {
-                    Text(t("android-settings.login.manual"), fontSize = 13.sp, color = C.muted, modifier = Modifier.pressText { manual = !manual }.padding(vertical = 4.dp))
-                    if (manual) CommandBox(p.loginCommand)
-                }
+                if (manual && p.loginCommand.isNotEmpty()) CommandBox(p.loginCommand)
             }
         }
     }
@@ -892,8 +891,22 @@ private fun InstallStep(install: RuntimeInstall, station: String) {
     }
 }
 
-/** The device code's box (LoginSteps): a card it is first in takes its corner from this. */
-private val CODE_BOX_CORNER = 12.dp
+/**
+ * The device code's box and the code's field (LoginSteps): in the sign-in card, whose corner is its foot button's (CARD_PAD
+ * and the button's half), they reach its corners too: rounded concentric with it.
+ */
+private val CODE_BOX_CORNER = concentric(CARD_PAD + BUTTON_HEIGHT / 2, CARD_PAD)
+
+/** A step of a sign-in: its number in a small round, its words beside it. */
+@Composable
+private fun Step(n: Int, words: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.padding(top = 1.dp).size(20.dp).clip(CircleShape).background(C.chip), contentAlignment = Alignment.Center) {
+            Text("$n", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        }
+        Text(words, fontSize = 14.sp, lineHeight = 20.sp, color = C.ink, modifier = Modifier.weight(1f))
+    }
+}
 
 /**
  * What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude), or copy
@@ -917,30 +930,33 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
         job == null || job.state == "starting" -> waiting(t("android-settings.login.making", "provider" to provider))
         job.state == "verifying" -> waiting(t("android-settings.login.finishing"))
         job.state == "done" -> waiting(t("android-settings.login.adding"))
-        job.state == "needs_approval" && url != null && userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        job.state == "needs_approval" && url != null && userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.fillMaxWidth().clip(Smooth(CODE_BOX_CORNER)).background(C.chip).padding(horizontal = 14.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
                 Text(userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = CodeFont, color = C.ink)
             }
+            Text(when (provider) { "OpenCode" -> t("android-settings.login.opencodeNote"); "Grok" -> t("android-settings.login.grokNote"); else -> t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME) }, fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
             // OpenCode's page has the code in its address: only compared there, not copied.
             val filled = provider == "OpenCode"
-            Button(if (filled) t("android-settings.login.openPage") else if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true, modifier = Modifier.fillMaxWidth()) {
+            Button(if (filled) t("android-settings.login.openPage") else if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true) {
                 if (!filled) {
                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", userCode))
                     copied = true
                 }
                 open(url)
             }
-            Text(when (provider) { "OpenCode" -> t("android-settings.login.opencodeNote"); "Grok" -> t("android-settings.login.grokNote"); else -> t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME) }, fontSize = 13.sp, color = C.muted)
         }
-        job.state == "needs_code" && url != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // Each step's words, then what it is done with: its page's button, the field and its button.
-            Text("1. " + t("web-pages.profiles.step1", "name" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.ink)
-            Button(t("android-settings.login.openPage"), primary = true, modifier = Modifier.fillMaxWidth()) { open(url) }
-            Text(t("android-settings.login.step2"), fontSize = 13.sp, color = C.ink, modifier = Modifier.padding(top = 4.dp))
-            Field(code, { code = it }, t("android-settings.login.pasteCode"), mono = true)
+        // Two steps, each said once: what to do on the page (its button under it), then the code it gives, pasted beside
+        // what sends it.
+        job.state == "needs_code" && url != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Step(1, t("android-settings.login.step1Short", "app" to BuildConfig.APP_NAME))
+            Button(t("android-settings.login.openPage"), primary = code.isBlank(), modifier = Modifier.padding(start = 30.dp)) { open(url) }
+            Step(2, t("android-settings.login.step2Short"))
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
-            Button(t("android-settings.login.finish"), primary = true, busy = busy, enabled = code.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-                operation.run { send(code.trim()); code = "" }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Field(code, { code = it }, t("android-settings.login.pasteCode"), mono = true, modifier = Modifier.weight(1f), corner = CODE_BOX_CORNER)
+                Button(t("android-settings.login.finishShort"), primary = true, busy = busy, enabled = code.isNotBlank()) {
+                    operation.run { send(code.trim()); code = "" }
+                }
             }
         }
     }

@@ -80,7 +80,7 @@ class ProfileSignInTest {
     private fun claudeCode(dark: Boolean) {
         shot(profile("claude", "login", job("claude", "needs_code")), "claude-code", dark)
         rule.onAllNodesWithText("打开授权页面", substring = true)[0].assertIsDisplayed()
-        rule.onNodeWithText("完成登录").assertIsDisplayed()
+        rule.onNodeWithText("完成").assertIsDisplayed()
         rule.onNodeWithText("取消登录").assertIsDisplayed()
     }
 }
