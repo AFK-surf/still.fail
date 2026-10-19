@@ -234,19 +234,21 @@ object Crashes {
 
     /** The reasons the system ends a process for that the person sees as a crash when the app is in front of them
      *  (it vanishes to the home screen) and the app itself never gets to tell: out of memory, an OEM's resource manager. */
-    private val KILLED = mapOf(
-        ApplicationExitInfo.REASON_LOW_MEMORY to "low_memory",
-        ApplicationExitInfo.REASON_SIGNALED to "signaled",
-        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE to "excessive_resource_usage",
-        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE to "initialization_failure",
-        ApplicationExitInfo.REASON_DEPENDENCY_DIED to "dependency_died",
-        ApplicationExitInfo.REASON_OTHER to "other",
-    )
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun killed(reason: Int): String? = when (reason) {
+        ApplicationExitInfo.REASON_LOW_MEMORY -> "low_memory"
+        ApplicationExitInfo.REASON_SIGNALED -> "signaled"
+        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "excessive_resource_usage"
+        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "initialization_failure"
+        ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "dependency_died"
+        ApplicationExitInfo.REASON_OTHER -> "other"
+        else -> null
+    }
 
-    /** Killed for one of [KILLED] while on screen (killed in the background is how Android works, not a crash). */
+    /** Killed for one of [killed]'s reasons while on screen (killed in the background is how Android works, not a crash). */
     @RequiresApi(Build.VERSION_CODES.R)
     private fun killedInSight(exit: ApplicationExitInfo) =
-        exit.reason in KILLED && exit.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
+        killed(exit.reason) != null && exit.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
 
     @RequiresApi(Build.VERSION_CODES.R)
     private fun of(exit: ApplicationExitInfo, kept: File?): Report {
@@ -260,7 +262,7 @@ object Crashes {
                 ApplicationExitInfo.REASON_CRASH -> "crash"
                 ApplicationExitInfo.REASON_CRASH_NATIVE -> "crash_native"
                 ApplicationExitInfo.REASON_ANR -> "anr"
-                else -> "killed_" + KILLED[exit.reason]
+                else -> "killed_" + killed(exit.reason)
             })
             put("exit_status", exit.status)
             put("exit_description", exit.description)
@@ -288,7 +290,7 @@ object Crashes {
             }
             ApplicationExitInfo.REASON_ANR -> Report(exit.timestamp, exit.pid, one("ANR", description, "anr"), fingerprint("ANR", trace?.let(::mainFrames).orEmpty()), trace, facts, null)
             else -> {
-                val why = KILLED[exit.reason]
+                val why = killed(exit.reason)
                 val memory = "pss ${exit.pss / 1024} MB, rss ${exit.rss / 1024} MB"
                 Report(exit.timestamp, exit.pid, one("Killed", listOf(why, description, memory).filter { !it.isNullOrEmpty() }.joinToString(": "), "generic"), "android:killed:$why", trace, facts, null)
             }
