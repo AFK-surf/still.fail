@@ -1104,9 +1104,11 @@ export class StationsSync {
           }
           break;
       }
-      // Profile and connect edits answer the overview as it is now.
-      if (get(answer, "connects") !== undefined && get(answer, "profiles") !== undefined) {
-        this.#core.data.set({ topic: "overview", station: address }, answer);
+      // Profile and connect edits answer the overview as it is now (the Feishu routes beside what they made, as
+      // `overview`).
+      const told = get(answer, "connects") !== undefined && get(answer, "profiles") !== undefined ? answer : get(get(answer, "overview"), "connects") !== undefined && get(get(answer, "overview"), "profiles") !== undefined ? get(answer, "overview") : undefined;
+      if (told !== undefined) {
+        this.#core.data.set({ topic: "overview", station: address }, told);
         reads.splice(0, reads.length, ...reads.filter(([what]) => what !== "overview"));
       }
       yield* Effect.all(

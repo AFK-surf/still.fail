@@ -281,6 +281,45 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["connect"] = JsonPrimitive(connect)
         return call("connect.putSlackApp", JsonObject(values))
     }
+    class FeishuRegisterFields : OperationFields() {
+        var domain: String? by field<String>("domain") { JsonPrimitive(it) }
+        var name: String? by field<String>("name") { JsonPrimitive(it) }
+    }
+    suspend fun feishuRegister(fill: FeishuRegisterFields.() -> Unit = {}): JsonElement {
+        val values = FeishuRegisterFields().apply(fill).fields
+        return call("feishu.register", JsonObject(values))
+    }
+    suspend fun feishuCancelRegistration(id: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["id"] = JsonPrimitive(id)
+        return call("feishu.cancelRegistration", JsonObject(values))
+    }
+    class FeishuVerifyFields : OperationFields() {
+        var domain: String? by field<String>("domain") { JsonPrimitive(it) }
+    }
+    suspend fun feishuVerify(appId: String, appSecret: String, fill: FeishuVerifyFields.() -> Unit = {}): JsonElement {
+        val values = FeishuVerifyFields().apply(fill).fields
+        values["appId"] = JsonPrimitive(appId)
+        values["appSecret"] = JsonPrimitive(appSecret)
+        return call("feishu.verify", JsonObject(values))
+    }
+    class FeishuCreateConnectFields : OperationFields() {
+        var bind: JsonElement? by field<JsonElement>("bind") { it }
+        var mode: String? by field<String>("mode") { JsonPrimitive(it) }
+        var requireMention: Boolean? by field<Boolean>("requireMention") { JsonPrimitive(it) }
+        var owner: JsonElement? by field<JsonElement>("owner") { it }
+    }
+    suspend fun feishuCreateConnect(feishu: JsonElement, fill: FeishuCreateConnectFields.() -> Unit = {}): JsonElement {
+        val values = FeishuCreateConnectFields().apply(fill).fields
+        values["feishu"] = feishu
+        return call("feishu.createConnect", JsonObject(values))
+    }
+    suspend fun feishuPutSecret(id: String, appSecret: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["id"] = JsonPrimitive(id)
+        values["appSecret"] = JsonPrimitive(appSecret)
+        return call("feishu.putSecret", JsonObject(values))
+    }
     class SlackVerifyFields : OperationFields() {
         var connect: String? by field<String>("connect") { JsonPrimitive(it) }
         var install: String? by field<String>("install") { JsonPrimitive(it) }

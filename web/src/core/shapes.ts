@@ -800,7 +800,7 @@ export interface Creator {
 	id: string;
 	name: string;
 	email?: string;
-	/** local | cloud | slack */
+	/** local | cloud | slack | feishu */
 	via: string;
 	/** As the core names them. */
 	shown?: PersonShown;
@@ -935,6 +935,17 @@ export interface SlackTokens {
 	botToken: string;
 }
 
+/** A Feishu (or Lark) connect's app. */
+export interface FeishuApp {
+	appId: string;
+	/** Masked. */
+	appSecret: string;
+	/** feishu | lark */
+	domain: string;
+	/** The app's page in the developer console (core). */
+	console?: string;
+}
+
 export interface SlackIdentity {
 	team: string;
 	teamId: string;
@@ -980,7 +991,10 @@ export interface Connect {
 	mode: ConnectMode;
 	requireMention: boolean;
 	bind: Bind;
+	/** A Slack connect's tokens, masked (empty for another kind: a station sends them for clients from before). */
 	slack: SlackTokens;
+	/** A Feishu (Lark) connect's app (docs/feishu.md); absent for another kind. */
+	feishu?: FeishuApp;
 	connection: ConnectState;
 	createdBy?: Owner;
 	sessions: number;
@@ -1499,8 +1513,10 @@ export interface ChatItem {
 	stationIcon?: string;
 	/** block | run | failed */
 	state?: Badge;
-	/** Where it came from (Slack · workspace · #channel), for a Slack chat. */
+	/** Where it came from (Slack · workspace · #channel), for a Slack chat; a Feishu one's (飞书 · tenant · group). */
 	originText?: string;
+	/** slack | feishu: the kind of connect it came from (its mark). */
+	originKind?: string;
 	/** Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online. */
 	offline?: string;
 	/**
@@ -1670,10 +1686,10 @@ export interface MessageDecision {
 export interface Place {
 	/** A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
 	name: string;
-	/** ember | slack */
+	/** ember | slack | feishu */
 	surface: string;
 	session?: string;
-	/** A Slack thread's link in Slack, while a connect is signed in to its workspace. */
+	/** A Slack thread's link in Slack, while a connect is signed in to its workspace; a Feishu chat's in Feishu. */
 	url?: string;
 }
 
@@ -2026,6 +2042,8 @@ export interface ChatView {
 	/** Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in. */
 	place?: string;
 	slackUrl?: string;
+	/** A Feishu (Lark) chat's link in Feishu. */
+	feishuUrl?: string;
 	people: Person[];
 	agents: ChatAgent[];
 	messages: ChatMessage[];
@@ -2211,6 +2229,70 @@ export interface ConnectAppSettings {
 	groups: Record<string, boolean>;
 }
 
+export interface FeishuTenant {
+	key?: string;
+	name?: string;
+}
+
+export interface FeishuIdentity {
+	botName: string;
+	botImage?: string;
+	botOpenId?: string;
+	tenant?: FeishuTenant;
+}
+
+/** A Feishu bot being made by scanning (docs/feishu.md), as its station follows it: only its starter sees it. */
+export interface FeishuRegistration {
+	id: string;
+	/** The page that creates the app, opened on a phone signed in to Feishu (its QR code). */
+	url: string;
+	expiresAt: number;
+	/** waiting | done | denied | expired | failed */
+	state: string;
+	error?: string;
+	appId?: string;
+	/** feishu | lark: where the app was made (Lark once its tenant says so). */
+	domain?: string;
+}
+
+/** A text as a QR code (qr.ts). */
+export interface QrCode {
+	size: number;
+	/** Each row's modules: 1 dark, 0 light; no quiet zone (drawn with four modules' margin). */
+	rows: string[];
+}
+
+/** The Feishu path of the connect wizard. */
+export interface ConnectFeishuFlow {
+	/** scan | app: how the bot is to be had, made by scanning or an app of one's own. */
+	way: string;
+	appId: string;
+	appSecret: string;
+	/** Lark, the international version: its own domain. */
+	lark: boolean;
+	canVerify: boolean;
+	/** Verified as typed, with nothing wrong: the connect can be added. */
+	verified: boolean;
+	/** The bot the App ID and Secret were verified as; absent until they are, or once they change. */
+	identity?: FeishuIdentity;
+	/** What the verification found wrong. */
+	errors: string[];
+	/** The bot being made by scanning (as the overview has it, else as it was started). */
+	registration?: FeishuRegistration;
+	/** Its link as a QR code, while it waits. */
+	qr?: QrCode;
+	/** Where the scanning stands, in words. */
+	stateText?: string;
+	/** It ended without an app (denied, expired, failed): started again with `register`. */
+	failed: boolean;
+	/** The connect is being added (on its own once the app is made). */
+	creating: boolean;
+	/** Why adding it failed: tried again with `create`. */
+	error?: string;
+	/** The connect added: its page is opened. */
+	connect?: string;
+}
+
 export interface SlackTeam {
 	teamId: string;
 	name: string;
@@ -2269,6 +2351,11 @@ export interface ConnectFlowView {
 	chosen?: SlackTeam;
 	made?: MadeSlackApp;
 	pick?: PickView;
+	/** slack | feishu, once chosen. */
+	platform?: string;
+	/** What the station connects to (feishu only where it has the Feishu connect). */
+	platforms: string[];
+	feishu?: ConnectFeishuFlow;
 }
 
 export interface ConnectItem {
@@ -3671,6 +3758,11 @@ export interface Overview {
 	slackUsers: string[];
 	slackTeams: SlackTeam[];
 	slackApps?: MadeSlackApp[];
+	/**
+	 * The Feishu bots the viewer is making by scanning (docs/feishu.md). Absent from a station without the Feishu
+	 * connect, which is then not offered.
+	 */
+	feishuRegistrations?: FeishuRegistration[];
 	disk?: DiskRoom;
 	logins: PendingLogin[];
 	/** This machine's own logins (none from a station older than them). */

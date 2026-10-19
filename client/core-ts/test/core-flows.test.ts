@@ -1346,6 +1346,123 @@ test("connect_wizard_configuration_and_oauth_install_keep_one_draft", async () =
   core.close();
 });
 
+/// Its station with the Feishu connect: the overview says the bots being made (none at first).
+function withFeishu(core: Core, registrations: J[]): void {
+  const at = { topic: "overview", station: "ws/st" };
+  core.inner.data.set(at, { ...(structuredClone(core.inner.store.get(at)) as J), feishuRegistrations: registrations });
+}
+
+test("connect_wizard_offers_feishu_where_its_station_has_it_and_adds_a_scanned_bot_on_its_own", async () => {
+  const { host, core } = await choosing();
+  const waiting = { id: "r1", url: "https://accounts.feishu.cn/oauth/v1/app/verify?flow_id=abc&name=still.fail", expiresAt: 1_790_000_600_000, state: "waiting" };
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "POST" && path === "/feishu/registrations") return { ...waiting, overview: { ...(structuredClone(core.inner.store.get({ topic: "overview", station: "ws/st" })) as J), feishuRegistrations: [waiting] } };
+    if (req.method === "DELETE" && path.startsWith("/feishu/registrations/")) return {};
+    if (path === "/feishu/connects") return { id: "codex-bot" };
+    return undefined;
+  });
+  const ui = core.connect();
+  const topic = connectTopic("feishu");
+  const form = { station: "ws/st", form: "feishu" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  const flow = core.inner.forms.connects;
+  // A station from before the Feishu connect: Slack's steps at once.
+  assert.deepEqual([flow.value(topic).step, flow.value(topic).platforms], ["team", ["slack"]]);
+  withFeishu(core, []);
+  let view = flow.value(topic);
+  assert.deepEqual([view.step, view.platforms, view.back, view.number, view.total], ["platform", ["slack", "feishu"], "close", 1, 5]);
+  assert.throws(() => flow.go(topic, ui, "feishuWay"), "the platform comes first");
+  flow.go(topic, ui, "feishuBind");
+  view = flow.value(topic);
+  assert.deepEqual([view.step, view.platform, view.back, view.number, view.total], ["feishuBind", "feishu", "platform", 2, 4]);
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "connect-new:feishu", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "connect-new:feishu" });
+  flow.go(topic, ui, "feishuWay");
+  await ask(host, core, ui, 4, "connect.flow.register", form);
+  view = flow.value(topic);
+  assert.equal(view.step, "feishuScan");
+  assert.equal(view.feishu.registration.id, "r1");
+  assert.equal(typeof view.feishu.stateText, "string");
+  const code = view.feishu.qr;
+  assert.ok(code.size >= 21 && (code.size - 17) % 4 === 0, String(code.size));
+  assert.deepEqual([code.rows.length, code.rows.every((r: string) => r.length === code.size && /^[01]+$/.test(r))], [code.size, true]);
+  assert.equal(code.rows[0].slice(0, 7), "1111111", "a finder pattern in its corner");
+  const shaped = present.decorate(topic, structuredClone(view), { now: 0, offsetMin: 0 });
+  assert.ok("ok" in conform("ConnectFlowView", shaped), JSON.stringify(conform("ConnectFlowView", shaped)));
+  assert.equal(stationPosted(host, "/feishu/connects").length, 0, "nothing added before the bot is made");
+  // Made: the connect is added without being asked, once.
+  withFeishu(core, [{ ...waiting, state: "done", appId: "cli_1", domain: "feishu" }]);
+  await host.settle();
+  withFeishu(core, [{ ...waiting, state: "done", appId: "cli_1", domain: "feishu" }]);
+  await host.settle();
+  const sent = stationPosted(host, "/feishu/connects");
+  assert.equal(sent.length, 1);
+  assert.deepEqual([sent[0].feishu, sent[0].bind.model, sent[0].bind.runtime, sent[0].mode], [{ registration: "r1" }, "gpt-6-astra", "codex", "multi-session"]);
+  view = flow.value(topic);
+  assert.deepEqual([view.step, view.feishu.connect, view.feishu.creating], ["done", "codex-bot", false]);
+  assert.equal(host.requests.filter((r) => r.method === "DELETE").length, 0, "a bot made is not let go of");
+  core.close();
+});
+
+test("connect_wizard_checks_a_feishu_app_of_ones_own_and_lets_go_of_a_bot_not_made", async () => {
+  const { host, core } = await choosing();
+  let verified = 0;
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/feishu/verify") return ++verified === 1 ? { identity: null, errors: ["app_secret 无效"] } : { identity: { botName: "Codex 机器人", tenant: { key: "t", name: "某公司" } }, errors: [] };
+    if (req.method === "POST" && path === "/feishu/registrations") return { id: "r2", url: "https://accounts.feishu.cn/x", expiresAt: 1 };
+    if (req.method === "DELETE" && path.startsWith("/feishu/registrations/")) return {};
+    if (path === "/feishu/connects") return { id: "own-bot" };
+    return undefined;
+  });
+  withFeishu(core, []);
+  const ui = core.connect();
+  const flow = core.inner.forms.connects;
+  const topic = connectTopic("own");
+  const form = { station: "ws/st", form: "own" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  await ask(host, core, ui, 2, "connect.flow.go", { ...form, input: { to: "feishuBind" } });
+  await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect-new:own", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect-new:own" });
+  flow.go(topic, ui, "feishuWay");
+  assert.equal(flow.value(topic).feishu.way, "scan");
+  flow.edit(topic, ui, { feishu: { way: "app" } });
+  assert.equal(flow.value(topic).feishu.way, "app");
+  flow.go(topic, ui, "feishuApp");
+  assert.equal(flow.value(topic).feishu.canVerify, false);
+  assert.throws(() => flow.edit(topic, ui, { feishu: { lark: "yes" } }));
+  await ask(host, core, ui, 5, "connect.flow.edit", { ...form, input: { feishu: { appId: " cli_9 ", appSecret: "wrong", lark: true } } });
+  await ask(host, core, ui, 6, "connect.flow.verify", form);
+  let view = flow.value(topic);
+  assert.deepEqual([view.feishu.verified, view.feishu.errors], [false, ["app_secret 无效"]]);
+  await assert.rejects(ask(host, core, ui, 7, "connect.flow.create", form), "not verified");
+  await ask(host, core, ui, 8, "connect.flow.edit", { ...form, input: { feishu: { appSecret: "right" } } });
+  assert.deepEqual(flow.value(topic).feishu.errors, [], "what was found wrong goes once it is changed");
+  await ask(host, core, ui, 9, "connect.flow.verify", form);
+  view = flow.value(topic);
+  assert.deepEqual([view.feishu.verified, view.feishu.identity.botName], [true, "Codex 机器人"]);
+  assert.deepEqual(stationPosted(host, "/feishu/verify").at(-1), { appId: "cli_9", appSecret: "right", domain: "lark" });
+  const created = await ask(host, core, ui, 10, "connect.flow.create", form);
+  assert.equal(created.id, "own-bot");
+  assert.deepEqual(stationPosted(host, "/feishu/connects")[0].feishu, { appId: "cli_9", appSecret: "right", domain: "lark" });
+  assert.deepEqual([flow.value(topic).step, flow.value(topic).feishu.connect], ["done", "own-bot"]);
+  // A bot being made by scanning, the wizard closed: its station stops waiting for it.
+  const other = { station: "ws/st", form: "gone" };
+  withFeishu(core, []);
+  await ask(host, core, ui, 11, "connect.flow.open", other);
+  await ask(host, core, ui, 12, "connect.flow.go", { ...other, input: { to: "feishuBind" } });
+  await ask(host, core, ui, 13, "pick.set", { station: "ws/st", of: "connect-new:gone", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 14, "pick.save", { station: "ws/st", of: "connect-new:gone" });
+  await ask(host, core, ui, 15, "connect.flow.go", { ...other, input: { to: "feishuWay" } });
+  await ask(host, core, ui, 16, "connect.flow.register", other);
+  assert.equal(flow.value(connectTopic("gone")).feishu.registration.state, "waiting", "as it was started, before the overview says");
+  await ask(host, core, ui, 17, "connect.flow.drop", other);
+  await host.settle();
+  assert.deepEqual(host.requests.filter((r) => r.method === "DELETE").map((r) => r.url.replace("https://stillfail.test/admin/api", "")), ["/feishu/registrations/r2"]);
+  core.close();
+});
+
 test("an_agent_provided_close_option_never_posts_a_chat_message", async () => {
   const { host, core } = await started({ ...base(), "PUT /threads/7/closed-card": {} });
   const ui = core.connect();

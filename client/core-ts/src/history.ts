@@ -176,7 +176,8 @@ export function parsePrompt(text: string): [Sourced[], string] {
       ts: attr(attrs, "ts") ?? "",
       text: b[0],
       thread: attr(attrs, "thread"),
-      slack: attr(attrs, "via") === "slack",
+      // A person in a Feishu chat is told as one in Slack is (docs/feishu.md).
+      slack: attr(attrs, "via") === "slack" || attr(attrs, "via") === "feishu",
       station: ["ember", "stillfail"].includes(attr(attrs, "via") ?? ""),
     });
     rest += text.slice(at, open);

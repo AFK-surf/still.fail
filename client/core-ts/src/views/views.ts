@@ -130,8 +130,9 @@ export function chatTitle(thread: J): string {
     if (first !== undefined) return first;
   }
   const channel = text("channelName");
-  if (channel !== null) return `#${channel}`;
   const surface = get(thread, "surface");
+  // A Feishu chat is named as it is there (no #).
+  if (channel !== null) return typeof surface === "string" && surface.startsWith("feishu:") ? channel : `#${channel}`;
   if (!(surface === "ember" || surface === "stillfail") && text("channel")?.startsWith("D")) return t("core-views.direct_message");
   return t("core-views.new_chat");
 }
@@ -232,6 +233,11 @@ const brandName = () => brand.name();
 function slackWorkspaces(overview: J): Map<string, format.SlackWorkspace> {
   const workspaces = new Map<string, format.SlackWorkspace>();
   for (const c of arr(get(overview, "connects"))) {
+    if (get(c, "kind") === "feishu") {
+      const id = str(get(c, "id"));
+      if (id !== null) workspaces.set(`feishu:${id}`, { name: str(get(c, "team")) ?? "", url: format.feishuApplink(str(get(get(c, "feishu"), "domain"))) });
+      continue;
+    }
     const conn = get(c, "connection");
     const s = get(conn, "state");
     const seen = s === "connected" || s === "reconnecting" ? get(conn, "workspace") : undefined;
@@ -1102,8 +1108,11 @@ export class Views implements Owner {
       const o = row.origin ?? null;
       const text = (k: string) => (typeof get(o, k) === "string" && o[k] !== "" ? (o[k] as string) : null);
       const channelName = text("channelName");
-      const place = channelName !== null ? `#${channelName}` : text("channel")?.startsWith("D") ? t("core-views.direct_message") : null;
-      row.originText = ["Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
+      // A Feishu chat's: its group by name, no #.
+      const feishu = text("surface")?.startsWith("feishu:") === true || format.isFeishuChat(text("channel") ?? "");
+      const place = feishu ? channelName : channelName !== null ? `#${channelName}` : text("channel")?.startsWith("D") ? t("core-views.direct_message") : null;
+      row.originKind = feishu ? "feishu" : "slack";
+      row.originText = [feishu ? t("core-views.feishu") : "Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
     }
     if (isObject(row.last)) {
       const text = format.cleanText(format.plainText(str(row.last.text) ?? ""));
@@ -1334,9 +1343,13 @@ export class Views implements Owner {
     if (thread.creator !== undefined) thread.creator = present.person(thread.creator, viewer, members_);
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
     const surface = strOf(thread, "surface");
-    const slack = !(surface === "ember" || surface === "stillfail");
     const channel = strOf(thread, "channel");
-    const place = slack ? (channel.startsWith("D") ? t("core-views.direct_message") : `#${strOf(thread, "channelName") || channel}`) : null;
+    const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
+    const slack = !(surface === "ember" || surface === "stillfail") && !feishu;
+    const place = feishu ? strOf(thread, "channelName") || t("core-logic.format.thread.feishu") : slack ? (channel.startsWith("D") ? t("core-views.direct_message") : `#${strOf(thread, "channelName") || channel}`) : null;
+    // A Feishu chat opens in Feishu (Lark's own app for its connect's).
+    const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);
+    const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;
     let workspaceUrl: string | null = null;
     for (const a of agents) {
       const c = a.connect;
@@ -1364,6 +1377,7 @@ export class Views implements Owner {
       me: this.me(scope),
       place,
       slackUrl,
+      ...(feishuUrl !== null ? { feishuUrl } : {}),
       title,
       people,
       agents,
@@ -1441,7 +1455,10 @@ export class Views implements Owner {
         if (place === null && s.to !== "") {
           // A message of its own in a channel, before its ts is known.
           const named = threads.find((th) => get(th, "channel") === s.to && typeof get(th, "channelName") === "string");
-          place = { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
+          const channel = s.to.split("/")[0]!;
+          place = format.isFeishuChat(channel)
+            ? { name: named?.channelName ?? t("core-logic.format.thread.feishu"), surface: "feishu" }
+            : { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
         }
         const by = s.out ? structuredClone(agent) : { name: s.who || s.user || "Slack" };
         const text = s.out ? s.text : present.mentions(s.text, people.bots, people.members);

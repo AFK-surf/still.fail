@@ -12,6 +12,7 @@ import type { ClientId, Topic } from "./protocol.ts";
 import { topicKey } from "./protocol.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
+import { qr } from "./qr.ts";
 import type { Store, Value, Watch } from "./store.ts";
 import { equal, get as getU, isObject } from "./util.ts";
 import { ofAddress } from "./workspace.ts";
@@ -393,10 +394,26 @@ export class Tokens {
 export const pickOf = (station: string, form: string): Topic => ({ topic: "pick", station, of: `connect-new:${form}` });
 export const tokensOf = (station: string, form: string): Topic => ({ topic: "slackTokens", station, form });
 
+/// The Feishu path's own: an app of one's own (its App ID and Secret, Lark or not, as last verified) or one being made
+/// by scanning (`registration`, as it was started: the overview says how it goes), and the connect it became.
+const feishuBlank = (): J => ({
+  way: "scan", appId: "", appSecret: "", lark: false, identity: null, errors: [], checked: null,
+  registration: null, registered: null, tried: null, creating: false, error: null, connect: null,
+});
+
+/// What a verification was of: it holds while they stay the same.
+const feishuKey = (f: J) => JSON.stringify([str(f.appId).trim(), str(f.appSecret).trim(), f.lark === true]);
+
+const FEISHU_STEPS = ["feishuBind", "feishuWay", "feishuScan", "feishuApp"];
+
 function initial(input: J): J {
   const name = brand.name();
+  const resume = typeof get(input, "resume") === "string";
   return {
-    step: typeof get(input, "resume") === "string" ? "install" : "team",
+    // Where the station has the Feishu connect, the platform first (value: a station without it starts at Slack).
+    step: resume ? "install" : "platform",
+    platform: resume ? "slack" : null,
+    feishu: feishuBlank(),
     resume: get(input, "resume") ?? null,
     mobile: get(input, "mobile") === true,
     team: null,
@@ -420,6 +437,16 @@ function initial(input: J): J {
 
 type FlowDraft = { owner: ClientId; generation: number; pending: boolean; value: J; watches: Watch[] };
 
+/// What the wizard has done beside its own calls: a Feishu bot being made let go of (`cancel`, the station's
+/// registration), and the overview changed (`ready`: its bot made, the connect is added without being asked).
+export type FlowHooks = { cancel(station: string, registration: string): void; ready(topic: Topic): void };
+
+/// A registration's state as the station follows it (the overview), else as it was started.
+function registrationOf(overview: J, f: J): J {
+  if (typeof get(f, "registration") !== "string") return null;
+  return arr(get(overview, "feishuRegistrations")).find((r) => get(r, "id") === f.registration) ?? f.registered ?? null;
+}
+
 /// What the wizard reads besides its own: the model control of the connect being added (choose.ts).
 export type PickOf = (topic: Topic) => Value | undefined;
 
@@ -430,10 +457,13 @@ export class ConnectFlows {
   readonly #drafts = new Map<string, FlowDraft>();
   #next = 0;
 
-  constructor(store: Store, pick: PickOf, clearPick: (station: string, form: string) => void) {
+  readonly #hooks: FlowHooks;
+
+  constructor(store: Store, pick: PickOf, clearPick: (station: string, form: string) => void, hooks: FlowHooks = { cancel: () => {}, ready: () => {} }) {
     this.#store = store;
     this.#pick = pick;
     this.#clearPick = clearPick;
+    this.#hooks = hooks;
   }
 
   open(topic: Topic, owner: ClientId, input: J): void {
@@ -445,7 +475,12 @@ export class ConnectFlows {
     }
     const station = topic.station as string;
     const form = topic.form as string;
-    const watches = [{ topic: "overview", station } as Topic, pickOf(station, form), tokensOf(station, form)].map((s) => this.#store.watch(s, () => this.#store.invalidate(topic)));
+    const watches = [{ topic: "overview", station } as Topic, pickOf(station, form), tokensOf(station, form)].map((s) =>
+      this.#store.watch(s, () => {
+        this.#store.invalidate(topic);
+        if (s.topic === "overview") this.#hooks.ready(topic);
+      }),
+    );
     this.#drafts.set(key, { owner, generation: ++this.#next, pending: false, value: initial(input), watches });
     this.#store.invalidate(topic);
   }
@@ -454,6 +489,7 @@ export class ConnectFlows {
     const key = topicKey(topic);
     const d = this.#drafts.get(key);
     if (d && d.owner === owner) {
+      this.#letGo(topic, d);
       this.#drafts.delete(key);
       for (const w of d.watches) w.drop();
       this.#clearPick(topic.station as string, topic.form as string);
@@ -470,6 +506,19 @@ export class ConnectFlows {
       this.drop(topic, owner);
     }
     return gone;
+  }
+
+  /// Its Feishu bot still waiting to be made by scanning: the station stops waiting for it.
+  #letGo(topic: Topic, d: FlowDraft): void {
+    const station = topic.station as string;
+    let overview: J = null;
+    try {
+      overview = overviewOf(this.#store, station);
+    } catch {
+      // Not read: as it was started.
+    }
+    const r = registrationOf(overview, d.value.feishu);
+    if (r !== null && get(r, "state") === "waiting") this.#hooks.cancel(station, str(get(r, "id")));
   }
 
   #own(topic: Topic, owner: ClientId): FlowDraft {
@@ -492,7 +541,17 @@ export class ConnectFlows {
     if (get(patch, "config") !== undefined && typeof patch.config !== "string") throw CoreError.invalid(t("core-misc.connect.config_not_text"));
     for (const field of ["adding", "requireMention"]) if (get(patch, field) !== undefined && typeof patch[field] !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
     if (get(patch, "mode") !== undefined && patch.mode !== "single-session" && patch.mode !== "multi-session") throw CoreError.invalid(t("core-misc.connect.no_such_mode"));
-    for (const field of ["team", "adding", "settings", "icon", "iconError", "config", "mode", "requireMention"]) if (get(patch, field) !== undefined) d.value[field] = patch[field];
+    const platform = get(patch, "platform");
+    if (platform !== undefined && platform !== "slack" && platform !== "feishu") throw CoreError.invalid(t("core-misc.connect.not_ready"));
+    const feishu = get(patch, "feishu");
+    if (feishu !== undefined) {
+      if (!isObject(feishu)) throw CoreError.invalid(t("core-misc.params.not_text"));
+      for (const field of ["appId", "appSecret"]) if (get(feishu, field) !== undefined && typeof feishu[field] !== "string") throw CoreError.invalid(t("core-misc.params.not_text"));
+      if (get(feishu, "lark") !== undefined && typeof feishu.lark !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
+      if (get(feishu, "way") !== undefined && feishu.way !== "scan" && feishu.way !== "app") throw CoreError.invalid(t("core-misc.connect.not_ready"));
+      for (const field of ["way", "appId", "appSecret", "lark"]) if (get(feishu, field) !== undefined) d.value.feishu[field] = feishu[field];
+    }
+    for (const field of ["team", "adding", "settings", "icon", "iconError", "config", "mode", "requireMention", "platform"]) if (get(patch, field) !== undefined) d.value[field] = patch[field];
     if (typeof get(patch, "config") === "string") d.value.config = patch.config.trim();
     this.#store.invalidate(topic);
   }
@@ -504,6 +563,10 @@ export class ConnectFlows {
     const step = str(view.step, "team");
     const allowed =
       to === "back" ||
+      (step === "platform" && (target === "team" || (target === "feishuBind" && view.platforms.includes("feishu")))) ||
+      (step === "feishuBind" && target === "feishuWay" && view.canCreate === true) ||
+      (step === "feishuWay" && target === "feishuApp") ||
+      ((step === "feishuScan" || step === "feishuApp") && target === "feishuWay") ||
       (step === "team" && (target === "token" || target === "manual")) ||
       (step === "team" && target === "app" && view.chosen !== null) ||
       ((step === "app" || step === "manual") && target === "team") ||
@@ -511,6 +574,8 @@ export class ConnectFlows {
     if (!allowed) throw CoreError.invalid(t("core-misc.connect.not_ready"));
     const d = this.#own(topic, owner);
     if (d.pending) throw CoreError.invalid(t("core-misc.connect.busy"));
+    if (step === "feishuScan" && target !== "feishuScan") this.#letGo(topic, d);
+    if (step === "platform") d.value.platform = target === "team" ? "slack" : "feishu";
     d.value.step = target;
     this.#store.invalidate(topic);
     return {};
@@ -529,10 +594,18 @@ export class ConnectFlows {
     const p = this.#pick(pickOf(station, form));
     if (p !== undefined && "err" in p) throw p.err;
     const picked = p !== undefined ? p.ok : null;
-    const step = str(v.step, "team");
+    // A station without the Feishu connect (one from before it) says no `feishuRegistrations`: Slack's at once.
+    const feishuOffered = Array.isArray(get(overview, "feishuRegistrations"));
+    v.platforms = feishuOffered ? ["slack", "feishu"] : ["slack"];
+    let step = str(v.step, "team");
+    if (step === "platform" && !feishuOffered) step = "team";
+    v.step = step;
+    const feishu = v.platform === "feishu" && (FEISHU_STEPS.includes(step) || step === "done");
     const mobile = v.mobile === true;
-    const title =
-      step === "team" && !mobile && teams.length === 0
+    const title = step === "platform" ? "core-misc.connect.title.platform"
+      : step === "feishuBind" ? "core-misc.connect.title.bind"
+      : FEISHU_STEPS.includes(step) ? `core-misc.connect.title.${step}`
+      : step === "team" && !mobile && teams.length === 0
         ? "core-misc.connect.title.get_token"
         : step === "team" && !mobile && v.adding === true
           ? "core-misc.connect.title.add_token"
@@ -541,10 +614,17 @@ export class ConnectFlows {
             : ["token", "app", "install", "manual"].includes(step)
               ? `core-misc.connect.title.${step}`
               : "core-misc.connect.title.bind";
-    const order = step === "manual" || (step === "bind" && (v.madeId === null || v.madeId === undefined)) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
+    const slackOrder = step === "manual" || (step === "bind" && (v.madeId === null || v.madeId === undefined)) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
+    const order = feishu
+      ? ["platform", "feishuBind", "feishuWay", step === "feishuApp" ? "feishuApp" : "feishuScan"]
+      : feishuOffered && typeof v.resume !== "string" ? ["platform", ...slackOrder] : slackOrder;
     const back =
-      step === "team"
-        ? "close"
+      step === "platform" ? "close"
+        : step === "feishuBind" ? "platform"
+        : step === "feishuWay" ? "feishuBind"
+        : step === "feishuScan" || step === "feishuApp" ? "feishuWay"
+        : step === "team"
+        ? feishuOffered && typeof v.resume !== "string" ? "platform" : "close"
         : step === "token" || step === "app" || step === "manual"
           ? "team"
           : step === "install" && typeof v.resume === "string"
@@ -568,6 +648,7 @@ export class ConnectFlows {
     v.chosen = chosen;
     v.made = made;
     v.pick = picked;
+    v.feishu = feishuView(v.feishu, overview, d.pending);
     return v;
   }
 
@@ -581,35 +662,133 @@ export class ConnectFlows {
     if (action === "config" && (step === "token" || v.gettingToken === true) && v.configReady === true) [name, p] = ["slack.addConfigToken", { refreshToken: v.config }];
     else if (action === "make" && step === "app" && v.canMake === true) [name, p] = ["slack.makeApp", { team: get(v.chosen, "teamId") ?? null, settings: v.settings, icon: v.icon ?? null }];
     else if (action === "verify" && (step === "install" || step === "manual")) [name, p] = ["slack.verify", { ...tokenInput, install: get(v.made, "state") ?? null }];
+    else if (action === "register" && (step === "feishuWay" || (step === "feishuScan" && v.feishu.failed === true))) [name, p] = ["feishu.register", {}];
+    else if (action === "verify" && step === "feishuApp" && v.feishu.canVerify === true) [name, p] = ["feishu.verify", feishuApp(v.feishu)];
+    else if (action === "create" && v.canCreate === true && ((step === "feishuApp" && v.feishu.verified === true) || (step === "feishuScan" && get(v.feishu.registration, "state") === "done"))) {
+      const app = step === "feishuApp" ? feishuApp(v.feishu) : { registration: get(v.feishu.registration, "id") };
+      [name, p] = ["feishu.createConnect", { feishu: app, bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention }];
+    }
     else if (action === "create" && step === "bind" && v.canCreate === true && verified) {
       let slack: J = { ...tokenInput };
       if (typeof get(v.made, "state") === "string") slack = { appToken: tokenInput.appToken ?? null, install: v.made.state };
       else if (typeof get(v.made, "appId") === "string") slack.appId = v.made.appId;
-      const bind = structuredClone(get(v.pick, "value") ?? {});
-      for (const f of ["model", "effort"]) if (bind[f] === null || bind[f] === undefined) bind[f] = "";
-      [name, p] = ["connect.create", { input: { kind: "slack", mode: v.mode, requireMention: v.requireMention, bind, slack } }];
+      [name, p] = ["connect.create", { input: { kind: "slack", mode: v.mode, requireMention: v.requireMention, bind: bindOf(v.pick), slack } }];
     } else throw CoreError.invalid(t("core-misc.connect.not_ready"));
     p.station = station;
     const d = this.#own(topic, owner);
     if (d.pending) throw CoreError.invalid(t("core-misc.connect.working"));
     d.pending = true;
+    if (name === "feishu.createConnect") Object.assign(d.value.feishu, { creating: true, error: null });
+    if (name === "feishu.register") d.value.feishu.error = null;
+    this.#store.invalidate(topic);
     return [d.generation, name, p];
+  }
+
+  /// Whose form it is (one known).
+  ownerOf(topic: Topic): ClientId {
+    const d = this.#drafts.get(topicKey(topic));
+    if (!d) throw CoreError.invalid(t("core-misc.connect.closed"));
+    return d.owner;
+  }
+
+  /// Its bot made by scanning and nothing tried with it yet: the connect is to be added now (once for each bot made).
+  ready(topic: Topic): boolean {
+    const d = this.#drafts.get(topicKey(topic));
+    if (!d || d.pending || d.value.platform !== "feishu" || d.value.step !== "feishuScan") return false;
+    let v: J;
+    try {
+      v = this.value(topic);
+    } catch {
+      return false;
+    }
+    const r = v.feishu.registration;
+    if (get(r, "state") !== "done" || v.canCreate !== true || d.value.feishu.tried === get(r, "id")) return false;
+    d.value.feishu.tried = get(r, "id");
+    return true;
   }
 
   finish(topic: Topic, generation: number, action: string, result: { ok: J } | { err: CoreError }): boolean {
     const d = this.#drafts.get(topicKey(topic));
     if (!d || d.generation !== generation) return false;
     d.pending = false;
+    if (action === "create") d.value.feishu.creating = false;
+    if ("err" in result && d.value.platform === "feishu" && (action === "create" || action === "register")) d.value.feishu.error = result.err.message;
     if ("ok" in result) {
       const r = result.ok;
       if (action === "config") Object.assign(d.value, { team: get(r, "teamId") ?? null, config: "", adding: false, step: "app" });
       else if (action === "make") Object.assign(d.value, { madeId: get(r, "appId") ?? null, iconError: get(r, "iconError") ?? null, step: "install" });
+      else if (action === "register") {
+        const registered = { id: get(r, "id"), url: get(r, "url"), expiresAt: get(r, "expiresAt"), state: "waiting" };
+        Object.assign(d.value.feishu, { registration: get(r, "id") ?? null, registered, tried: null, error: null, connect: null });
+        d.value.step = "feishuScan";
+      }
+      else if (action === "create" && d.value.platform === "feishu" && FEISHU_STEPS.includes(d.value.step)) {
+        d.value.feishu.connect = get(r, "id") ?? null;
+        d.value.step = "done";
+      }
       else if (action === "create") d.value.step = "done";
+      else if (action === "verify" && d.value.step === "feishuApp") Object.assign(d.value.feishu, { identity: get(r, "identity") ?? null, errors: arr(get(r, "errors")).filter((e) => typeof e === "string"), checked: feishuKey(d.value.feishu) });
       else if (action === "verify" && get(r, "identity") !== undefined && r.identity !== null && Array.isArray(get(r, "errors")) && r.errors.length === 0) d.value.step = "bind";
     }
     this.#store.invalidate(topic);
     return true;
   }
+}
+
+/// What a connect being added runs on, from its model control.
+function bindOf(pick: J): J {
+  const bind = structuredClone(get(pick, "value") ?? {});
+  for (const f of ["model", "effort"]) if (bind[f] === null || bind[f] === undefined) bind[f] = "";
+  return bind;
+}
+
+/// The last link drawn as a QR code (the view is made again on every change; the link seldom is).
+let drawn: [string, ReturnType<typeof qr>] | null = null;
+function qrOf(url: string): ReturnType<typeof qr> {
+  if (drawn === null || drawn[0] !== url) drawn = [url, qr(url)];
+  return drawn[1];
+}
+
+/// An app of one's own as the station takes it.
+const feishuApp = (f: J): J => ({ appId: str(f.appId).trim(), appSecret: str(f.appSecret).trim(), domain: f.lark === true ? "lark" : "feishu" });
+
+/// The Feishu path as drawn: what is typed and whether it was verified as it is, the bot being made by scanning (its
+/// QR code while it waits, where it stands in words), the connect being added and why that failed.
+function feishuView(f: J, overview: J, pending: boolean): J {
+  const reg = registrationOf(overview, f);
+  const state = str(get(reg, "state"));
+  const url = str(get(reg, "url"));
+  const verified = f.checked === feishuKey(f);
+  const errors: string[] = verified ? f.errors : [];
+  const stateText =
+    reg === null ? null
+      : state === "waiting" ? t("core-misc.connect.feishu.waiting")
+      : state === "done" ? (f.error === null ? t("core-misc.connect.feishu.made") : t("core-misc.connect.feishu.made_failed"))
+      : state === "denied" ? t("core-misc.connect.feishu.denied")
+      : state === "expired" ? t("core-misc.connect.feishu.expired")
+      : str(get(reg, "error")) !== "" ? t("core-misc.connect.feishu.failed_because", { error: str(get(reg, "error")) })
+      : t("core-misc.connect.feishu.failed");
+  const out: J = {
+    way: f.way === "app" ? "app" : "scan",
+    appId: str(f.appId),
+    appSecret: str(f.appSecret),
+    lark: f.lark === true,
+    canVerify: !pending && str(f.appId).trim() !== "" && str(f.appSecret).trim() !== "",
+    verified: verified && f.identity !== null && errors.length === 0,
+    errors,
+    failed: state === "denied" || state === "expired" || state === "failed",
+    creating: f.creating === true,
+    error: f.error ?? null,
+    connect: f.connect ?? null,
+  };
+  if (verified && f.identity !== null) out.identity = f.identity;
+  if (reg !== null) out.registration = reg;
+  if (stateText !== null) out.stateText = stateText;
+  if (state === "waiting" && url !== "") {
+    const code = qrOf(url);
+    if (code !== null) out.qr = code;
+  }
+  return out;
 }
 
 // ── the add-profile pages (profile_flow.rs) ──

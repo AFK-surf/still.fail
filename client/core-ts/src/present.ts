@@ -598,7 +598,16 @@ export function connect(c: J): J {
     runtimeText: format.runtimeLabel(runtime),
     runText: `${format.runtimeLabel(runtime)} · ${label}`,
     modelName: bm ? model.name(bm) : null,
+    ...(isObject(o.feishu) ? { feishu: feishuApp(o.feishu) } : {}),
   };
+}
+
+/// A Feishu connect's app, with its page in the developer console (Lark's on its own domain).
+function feishuApp(f: J): J {
+  const id = str(get(f, "appId")) ?? "";
+  const domain = str(get(f, "domain")) === "lark" ? "lark" : "feishu";
+  const open = domain === "lark" ? "https://open.larksuite.com" : "https://open.feishu.cn";
+  return { appSecret: "", ...f, appId: id, domain, console: id !== "" ? `${open}/app/${encodeURIComponent(id)}` : null };
 }
 
 /// A profile with its last check in words, its models' makers and series, what it can do, and its trouble.

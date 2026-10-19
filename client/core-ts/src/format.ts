@@ -291,11 +291,13 @@ export function splitWhitespace(text: string): string[] {
 
 /// A thread named for people: where (its channel by name, 私信, or a still.fail chat's title) and when it began.
 export function threadName(threads: unknown[], channel: string, threadTs: string, offsetMin: number): [string, string] {
+  const thread = threads.find((t) => str(get(t, "channel")) === channel && str(get(t, "threadTs")) === threadTs);
   const parsed = Number(threadTs);
-  const started = (Number.isFinite(parsed) && threadTs.trim() !== "" ? parsed : 0) * 1000;
+  // A Feishu thread's ts is a message's id: it began when its thread was made.
+  const made = get(thread, "createdAt");
+  const started = Number.isFinite(parsed) && threadTs.trim() !== "" ? parsed * 1000 : typeof made === "number" ? made : 0;
   const [, month, day] = local(started, offsetMin);
   const when = tr(current(), "core-logic.format.date_time", { date: monthDay(current(), month, day), time: clock(started, offsetMin) });
-  const thread = threads.find((t) => str(get(t, "channel")) === channel && str(get(t, "threadTs")) === threadTs);
   const text = (k: string) => str(get(thread, k)) ?? "";
   let where: string;
   if (channel === "EMBER" || channel === "STILLFAIL") {
@@ -305,6 +307,10 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
       const first = cleanText(text("firstText"));
       where = first === "" ? tr(current(), "core-logic.format.thread.chat", { brand: brand.name() }) : first;
     }
+  } else if (isFeishuChat(channel) || str(get(thread, "surface"))?.startsWith("feishu:")) {
+    // A Feishu chat (群, 私聊) by its name, as its station read it.
+    const n = text("channelName");
+    where = n === "" ? tr(current(), "core-logic.format.thread.feishu") : n;
   } else if (channel.startsWith("D")) where = tr(current(), "core-logic.format.thread.dm");
   else {
     const n = text("channelName");
@@ -313,19 +319,30 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
   return [where, when];
 }
 
-/// "C0OPS/1727.0001" → its channel and thread.
+/// A Feishu chat's id (`oc_…`, docs/feishu.md).
+export const isFeishuChat = (channel: string) => /^oc_[A-Za-z0-9_-]+$/.test(channel);
+
+/// "C0OPS/1727.0001" → its channel and thread; a Feishu chat's "oc_…/om_…" (or a topic's "omt_…") too.
 export function splitThread(address: string): [string, string] | null {
   const slash = address.indexOf("/");
   if (slash < 0) return null;
   const channel = address.slice(0, slash);
   const ts = address.slice(slash + 1);
+  if (isFeishuChat(channel)) return /^[A-Za-z0-9_-]+$/.test(ts) ? [channel, ts] : null;
   const dot = ts.indexOf(".");
   const valid = /^[A-Z0-9]+$/.test(channel) && dot > 0 && dot < ts.length - 1 && /^[0-9]+$/.test(ts.slice(0, dot)) && /^[0-9]+$/.test(ts.slice(dot + 1));
   return valid ? [channel, ts] : null;
 }
 
-/// A Slack workspace as the station's connects know it.
+/// A Slack workspace as the station's connects know it; a Feishu connect (by `feishu:<id>`): its tenant and its
+/// AppLink's origin.
 export type SlackWorkspace = { name: string; url: string | null };
+
+/// Where Feishu's (or Lark's) links open its app.
+export const feishuApplink = (domain: string | null | undefined) => (domain === "lark" ? "https://applink.larksuite.com" : "https://applink.feishu.cn");
+
+/// A Feishu chat's link in Feishu, `applink`: its connect's (feishuApplink).
+export const feishuChatUrl = (applink: string, channel: string) => `${applink}/client/chat/open?openChatId=${encodeURIComponent(channel)}`;
 
 /// A thread a history entry came from or went to: its name, where it is, and the way there.
 export function place(threads: unknown[], address: string, offsetMin: number, workspaces: Map<string, SlackWorkspace>): unknown {
@@ -338,6 +355,10 @@ export function place(threads: unknown[], address: string, offsetMin: number, wo
   const session = str(get(first, "session")) ?? null;
   if (channel === "EMBER" || channel === "STILLFAIL") return { name: n, surface: "ember", session };
   const surface = str(get(thread, "surface"));
+  if (isFeishuChat(channel) || surface?.startsWith("feishu:")) {
+    const connect = surface?.startsWith("feishu:") ? workspaces.get(surface) : undefined;
+    return { name: n, surface: "feishu", session, url: feishuChatUrl(connect?.url ?? feishuApplink(null), channel) };
+  }
   const team = surface?.startsWith("slack:") ? workspaces.get(surface.slice(6)) : undefined;
   const teamName = team && team.name !== "" ? team.name : null;
   const named = teamName === null ? n : n.startsWith("#") ? `${teamName}${n}` : `${teamName} ${n}`;

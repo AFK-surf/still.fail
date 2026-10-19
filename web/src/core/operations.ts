@@ -40,6 +40,11 @@ export interface OperationParams {
   "connect.reconnect": { id: string };
   "connect.bindSession": { connect: string; session?: string | null | undefined; title?: string | null | undefined };
   "connect.putSlackApp": { connect: string; input?: unknown };
+  "feishu.register": { domain?: string | null | undefined; name?: string | null | undefined };
+  "feishu.cancelRegistration": { id: string };
+  "feishu.verify": { appId: string; appSecret: string; domain?: string | null | undefined };
+  "feishu.createConnect": { feishu: unknown; bind?: unknown; mode?: string | null | undefined; requireMention?: boolean | null | undefined; owner?: unknown };
+  "feishu.putSecret": { id: string; appSecret: string };
   "slack.verify": { connect?: string | null | undefined; install?: string | null | undefined; appToken?: string | null | undefined; botToken?: string | null | undefined };
   "slack.makeApp": { team?: string | null | undefined; settings?: unknown; icon?: string | null | undefined };
   "slack.dropApp": { appId: string };
@@ -165,6 +170,11 @@ export function bindStationOperations(call: Call) {
     connectReconnect: <T = unknown>(params: OperationParams["connect.reconnect"]) => call("connect.reconnect", params) as Promise<T>,
     connectBindSession: <T = unknown>(params: OperationParams["connect.bindSession"]) => call("connect.bindSession", params) as Promise<T>,
     connectPutSlackApp: <T = unknown>(params: OperationParams["connect.putSlackApp"]) => call("connect.putSlackApp", params) as Promise<T>,
+    feishuRegister: <T = unknown>(params: OperationParams["feishu.register"] = {}) => call("feishu.register", params) as Promise<T>,
+    feishuCancelRegistration: <T = unknown>(params: OperationParams["feishu.cancelRegistration"]) => call("feishu.cancelRegistration", params) as Promise<T>,
+    feishuVerify: <T = unknown>(params: OperationParams["feishu.verify"]) => call("feishu.verify", params) as Promise<T>,
+    feishuCreateConnect: <T = unknown>(params: OperationParams["feishu.createConnect"]) => call("feishu.createConnect", params) as Promise<T>,
+    feishuPutSecret: <T = unknown>(params: OperationParams["feishu.putSecret"]) => call("feishu.putSecret", params) as Promise<T>,
     slackVerify: <T = unknown>(params: OperationParams["slack.verify"] = {}) => call("slack.verify", params) as Promise<T>,
     slackMakeApp: <T = unknown>(params: OperationParams["slack.makeApp"] = {}) => call("slack.makeApp", params) as Promise<T>,
     slackDropApp: <T = unknown>(params: OperationParams["slack.dropApp"]) => call("slack.dropApp", params) as Promise<T>,

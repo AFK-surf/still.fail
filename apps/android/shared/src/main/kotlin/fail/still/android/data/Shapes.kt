@@ -819,7 +819,7 @@ data class Creator (
 	val id: String,
 	val name: String,
 	val email: String? = null,
-	/// local | cloud | slack
+	/// local | cloud | slack | feishu
 	val via: String,
 	/// As the core names them.
 	val shown: PersonShown? = null
@@ -945,6 +945,18 @@ data class SlackTokens (
 	val botToken: String
 )
 
+/// A Feishu (or Lark) connect's app.
+@Serializable
+data class FeishuApp (
+	val appId: String,
+	/// Masked.
+	val appSecret: String,
+	/// feishu | lark
+	val domain: String,
+	/// The app's page in the developer console (core).
+	val console: String? = null
+)
+
 @Serializable
 data class SlackIdentity (
 	val team: String,
@@ -992,7 +1004,10 @@ data class Connect (
 	val mode: ConnectMode,
 	val requireMention: Boolean,
 	val bind: Bind,
+	/// A Slack connect's tokens, masked (empty for another kind: a station sends them for clients from before).
 	val slack: SlackTokens,
+	/// A Feishu (Lark) connect's app (docs/feishu.md); absent for another kind.
+	val feishu: FeishuApp? = null,
 	val connection: ConnectState,
 	val createdBy: Owner? = null,
 	val sessions: Long,
@@ -1516,8 +1531,10 @@ data class ChatItem (
 	val stationIcon: String? = null,
 	/// block | run | failed
 	val state: Badge? = null,
-	/// Where it came from (Slack · workspace · #channel), for a Slack chat.
+	/// Where it came from (Slack · workspace · #channel), for a Slack chat; a Feishu one's (飞书 · tenant · group).
 	val originText: String? = null,
+	/// slack | feishu: the kind of connect it came from (its mark).
+	val originKind: String? = null,
 	/// Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online.
 	val offline: String? = null,
 	/// Its station's link coming back, or failing and retried, in words ("正在重连 Studio…"): the row is marked with a
@@ -1663,10 +1680,10 @@ data class MessageDecision (
 data class Place (
 	/// A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
 	val name: String,
-	/// ember | slack
+	/// ember | slack | feishu
 	val surface: String,
 	val session: String? = null,
-	/// A Slack thread's link in Slack, while a connect is signed in to its workspace.
+	/// A Slack thread's link in Slack, while a connect is signed in to its workspace; a Feishu chat's in Feishu.
 	val url: String? = null
 )
 
@@ -1998,6 +2015,8 @@ data class ChatView (
 	/// Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in.
 	val place: String? = null,
 	val slackUrl: String? = null,
+	/// A Feishu (Lark) chat's link in Feishu.
+	val feishuUrl: String? = null,
 	val people: List<Person>,
 	val agents: List<ChatAgent>,
 	val messages: List<ChatMessage>,
@@ -2166,6 +2185,75 @@ data class ConnectAppSettings (
 )
 
 @Serializable
+data class FeishuTenant (
+	val key: String? = null,
+	val name: String? = null
+)
+
+@Serializable
+data class FeishuIdentity (
+	val botName: String,
+	val botImage: String? = null,
+	val botOpenId: String? = null,
+	val tenant: FeishuTenant? = null
+)
+
+/// A Feishu bot being made by scanning (docs/feishu.md), as its station follows it: only its starter sees it.
+@Serializable
+data class FeishuRegistration (
+	val id: String,
+	/// The page that creates the app, opened on a phone signed in to Feishu (its QR code).
+	val url: String,
+	val expiresAt: Long,
+	/// waiting | done | denied | expired | failed
+	val state: String,
+	val error: String? = null,
+	val appId: String? = null,
+	/// feishu | lark: where the app was made (Lark once its tenant says so).
+	val domain: String? = null
+)
+
+/// A text as a QR code (qr.ts).
+@Serializable
+data class QrCode (
+	val size: UInt,
+	/// Each row's modules: 1 dark, 0 light; no quiet zone (drawn with four modules' margin).
+	val rows: List<String>
+)
+
+/// The Feishu path of the connect wizard.
+@Serializable
+data class ConnectFeishuFlow (
+	/// scan | app: how the bot is to be had, made by scanning or an app of one's own.
+	val way: String,
+	val appId: String,
+	val appSecret: String,
+	/// Lark, the international version: its own domain.
+	val lark: Boolean,
+	val canVerify: Boolean,
+	/// Verified as typed, with nothing wrong: the connect can be added.
+	val verified: Boolean,
+	/// The bot the App ID and Secret were verified as; absent until they are, or once they change.
+	val identity: FeishuIdentity? = null,
+	/// What the verification found wrong.
+	val errors: List<String>,
+	/// The bot being made by scanning (as the overview has it, else as it was started).
+	val registration: FeishuRegistration? = null,
+	/// Its link as a QR code, while it waits.
+	val qr: QrCode? = null,
+	/// Where the scanning stands, in words.
+	val stateText: String? = null,
+	/// It ended without an app (denied, expired, failed): started again with `register`.
+	val failed: Boolean,
+	/// The connect is being added (on its own once the app is made).
+	val creating: Boolean,
+	/// Why adding it failed: tried again with `create`.
+	val error: String? = null,
+	/// The connect added: its page is opened.
+	val connect: String? = null
+)
+
+@Serializable
 data class SlackTeam (
 	val teamId: String,
 	val name: String,
@@ -2226,7 +2314,12 @@ data class ConnectFlowView (
 	val teams: List<SlackTeam>,
 	val chosen: SlackTeam? = null,
 	val made: MadeSlackApp? = null,
-	val pick: PickView? = null
+	val pick: PickView? = null,
+	/// slack | feishu, once chosen.
+	val platform: String? = null,
+	/// What the station connects to (feishu only where it has the Feishu connect).
+	val platforms: List<String>,
+	val feishu: ConnectFeishuFlow? = null
 )
 
 @Serializable
@@ -3663,6 +3756,9 @@ data class Overview (
 	val slackUsers: List<String>,
 	val slackTeams: List<SlackTeam>,
 	val slackApps: List<MadeSlackApp>? = null,
+	/// The Feishu bots the viewer is making by scanning (docs/feishu.md). Absent from a station without the Feishu
+	/// connect, which is then not offered.
+	val feishuRegistrations: List<FeishuRegistration>? = null,
 	val disk: DiskRoom? = null,
 	val logins: List<PendingLogin>,
 	/// This machine's own logins (none from a station older than them).

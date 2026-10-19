@@ -243,8 +243,10 @@
   "web-main.core.workerFailed": "Worker error",
   "web-main.creator.created": "Created by {name}",
   "web-main.creator.created.slack": "Created by {name} (Slack)",
+  "web-main.creator.created.feishu": "Created by {name} (Feishu)",
   "web-main.creator.started": "Started by {name}",
   "web-main.creator.started.slack": "Started by {name} (Slack)",
+  "web-main.creator.started.feishu": "Started by {name} (Feishu)",
   "web-main.decisions.answerWhat": "reply \"{option}\"",
   "web-main.decisions.back": "Chats",
   "web-main.decisions.count": {

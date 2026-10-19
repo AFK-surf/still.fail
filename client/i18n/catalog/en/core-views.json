@@ -493,5 +493,6 @@
   "core-views.search.offline": "Offline",
   "core-views.search.offlineStations": "{names} offline, not searched",
   "core-views.search.older": "{names} must be updated to be searched",
-  "core-views.search.archived": "Archived"
+  "core-views.search.archived": "Archived",
+  "core-views.feishu": "Feishu"
 }

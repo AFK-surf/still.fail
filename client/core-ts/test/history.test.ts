@@ -38,6 +38,31 @@ test("a_slack_place_is_named_with_its_workspace_and_links_to_its_thread", () => 
   assert.deepEqual([unknown.name, unknown.url], ["#C9", null]);
 });
 
+test("a_feishu_place_is_named_by_its_chat_and_opens_in_feishu_or_lark", () => {
+  const threads = [
+    { surface: "feishu:codex-bot", channel: "oc_a1b2", threadTs: "om_x1", channelName: "产品群", createdAt: 1_790_000_000_000, sessions: [{ session: "s1" }] },
+    { surface: "feishu:lark-bot", channel: "oc_c3", threadTs: "omt_t9", sessions: [] },
+  ];
+  const workspaces = new Map([
+    ["T1", { name: "Acme", url: "https://acme.slack.com/" }],
+    ["feishu:lark-bot", { name: "Co", url: format.feishuApplink("lark") }],
+  ]);
+  assert.deepEqual(format.splitThread("oc_a1b2/om_x1"), ["oc_a1b2", "om_x1"]);
+  assert.deepEqual(format.splitThread("oc_a1b2/omt_t9"), ["oc_a1b2", "omt_t9"]);
+  assert.equal(format.splitThread("oc_a1b2/om x"), null);
+  const p = format.place(threads, "oc_a1b2/om_x1", 480, workspaces) as J;
+  assert.deepEqual([p.name, p.surface, p.session, p.url], ["产品群", "feishu", "s1", "https://applink.feishu.cn/client/chat/open?openChatId=oc_a1b2"]);
+  const lark = format.place(threads, "oc_c3/omt_t9", 480, workspaces) as J;
+  assert.deepEqual([lark.name, lark.surface, lark.url], ["飞书对话", "feishu", "https://applink.larksuite.com/client/chat/open?openChatId=oc_c3"]);
+  // Begun when its thread was made (its ts is a message's id, not a time).
+  assert.equal(format.threadName(threads, "oc_a1b2", "om_x1", 480)[1], format.threadName([{ channel: "C1", threadTs: "1790000000" }], "C1", "1790000000", 480)[1]);
+});
+
+test("a_feishu_person_is_heard_as_a_slack_one_is", () => {
+  const [said] = parsePrompt('<message via="feishu" connect="codex-bot" thread="oc_a1/om_1" from="Ada (slack:codex-bot:ou_1)" user="slack:codex-bot:ou_1" ts="om_2">\nhi\n</message>');
+  assert.deepEqual([said.length, said[0].slack, said[0].text], [1, true, "hi"]);
+});
+
 test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
   const [said] = parsePrompt('<message via="slack" connect="cl" you="ember (<@UBOT>)" thread="C1/1.0" from="Ada (U1)" ts="1.2">\nhi\n</message>');
   assert.deepEqual([said.length, said[0].user, said[0].ts, said[0].text], [1, "U1", "1.2", "hi"]);

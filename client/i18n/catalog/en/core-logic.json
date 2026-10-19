@@ -267,6 +267,7 @@
   "core-logic.format.status.unexpected": "Stopped unexpectedly",
   "core-logic.format.thread.chat": "{brand} chat",
   "core-logic.format.thread.dm": "DM",
+  "core-logic.format.thread.feishu": "Feishu chat",
   "core-logic.format.until.days": {
     "one": "in 1 day",
     "other": "in {n} days"

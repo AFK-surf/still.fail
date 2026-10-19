@@ -418,5 +418,6 @@
   "core-views.search.offline": "离线",
   "core-views.search.offlineStations": "{names} 离线，其上的内容未搜索",
   "core-views.search.older": "{names} 需要更新后才能搜索",
-  "core-views.search.archived": "已归档"
+  "core-views.search.archived": "已归档",
+  "core-views.feishu": "飞书"
 }

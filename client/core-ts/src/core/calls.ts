@@ -162,7 +162,7 @@ export function counts(call: Call, name: string): boolean {
     case "profileFlow":
       return call.action === "submit";
     case "connectFlow":
-      return ["config", "make", "verify", "create"].includes(call.action);
+      return ["config", "make", "verify", "register", "create"].includes(call.action);
     case "slackTokens":
       return call.action === "verify";
     case "profileModels":
@@ -258,7 +258,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     ["automaticDecisions.policy.", ["open", "edit", "save", "drop"], "policyForm", "policyForm"],
     ["agentEnv.form.", ["open", "edit", "save", "drop"], "agentEnvForm", "agentEnvForm"],
     ["profile.flow.", ["open", "edit", "submit", "drop"], "profileFlow", "profileFlow"],
-    ["connect.flow.", ["open", "edit", "go", "config", "make", "verify", "create", "drop"], "connectFlow", "connectFlow"],
+    ["connect.flow.", ["open", "edit", "go", "config", "make", "verify", "register", "create", "drop"], "connectFlow", "connectFlow"],
     ["slack.tokens.", ["edit", "verify", "drop"], "slackTokens", "slackTokens"],
   ];
   for (const [prefix, actions, kind, topicName] of flows) {
