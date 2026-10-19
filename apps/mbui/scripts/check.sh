@@ -1,5 +1,7 @@
 #!/bin/bash
 # Type-check every target of this module (and mbui with it); print errors only.
+# TODO(#741): every global of the app put back by its package's reset() (or `// kept across runs: why`) is detlint's
+# `globals` rule; nothing of it here.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"

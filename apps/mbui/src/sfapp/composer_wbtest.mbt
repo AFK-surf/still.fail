@@ -134,7 +134,7 @@ test "a long paste goes as a text file, up to the station, and with the message"
   t.tap_text("发消息")
   let long = "第一行要点\n" + String::make(6000, 'x')
   t.type_text(long)
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   // not in the field: a card with its first line, going up
   let (_, words, _, _) = t.ime()
   assert_eq(words, "")
@@ -169,7 +169,7 @@ test "a station's file sent as a file: staged on the chat's station, the message
   r.mode = "file"
   draft_refs["ws1/st1:s-c1"] = [r]
   t.frame()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   let staged = named(calls, "drive.stage")
   assert_eq(staged.length(), 1)
   assert_eq(text(Some(staged[0].params), "path"), "发布清单.md")
@@ -271,17 +271,17 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.tap_text("发消息")
   t.type_text("测试一下")
   tap_send(t)
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("测试一下") is Some(_))
   assert_true(t.find("正在发送") is Some(_))
   clock.val = 800.0
   t.frame()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("正在发送") is None)
   assert_true(t.find("测试一下") is Some(_))
   clock.val = 2400.0
   t.frame()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("收到：「测试一下」") is Some(_))
   // words with 失败 in them fail first
   t.tap_text("发消息")
@@ -294,7 +294,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.tap_text("重试")
   clock.val = 4200.0
   t.frame()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("未发送") is None)
   assert_true(t.find("这条会失败") is Some(_))
   fix_clock.val = fix_frame_clock

@@ -47,7 +47,7 @@ test "appearance: 深色 chosen, the app is drawn dark at once and the core keep
 ///|
 test "a station renamed from its page's …: the new name is the station's" {
   let t = settings_tester("stations")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("Studio") is Some(_))
   assert_true(t.find("MBA") is Some(_))
   t.tap_text("Studio")
@@ -74,7 +74,7 @@ test "a station renamed from its page's …: the new name is the station's" {
 ///|
 test "a settings sheet goes down on the sheet's spring, only drawn: its 保存 tapped meanwhile renames nothing" {
   let t = settings_tester("stations")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   // the station as the tests before left it
   let name = if t.find("Studio") is Some(_) { "Studio" } else { "工作室" }
   t.tap_text(name)

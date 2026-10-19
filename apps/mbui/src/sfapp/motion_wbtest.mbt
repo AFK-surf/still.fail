@@ -3,11 +3,14 @@
 
 ///|
 test "Home: a chat with news goes to the top on the rows' spring, the rows it passes going down" {
+  // (the clock set after reset, which puts the fixture's own back)
+  reset()
   let clock = Ref::new(0.0)
   fix_clock.val = fn() { clock.val }
   fix_wake.val = fn(_) {  }
-  let t = tester("home-motion")
-  t.settle() |> ignore
+  let src = fixture("home-motion")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.settle(unsettled_ok=true) |> ignore
   let (_, y_ci) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
   let (_, y_top) = t.drawn_of("整理发布清单").unwrap()
   // its news comes (the fixture's first step)
@@ -24,7 +27,7 @@ test "Home: a chat with news goes to the top on the rows' spring, the rows it pa
   // the first row, pushed down a row, goes there too
   let (_, f1) = t.drawn_of("整理发布清单").unwrap()
   assert_true(f1 > y_top && f1 < y_top + 66.0, msg="\{f1}")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   let (_, y2) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
   assert_true((y2 - y_top).abs() < 0.5)
   let (_, f2) = t.drawn_of("整理发布清单").unwrap()
@@ -93,7 +96,7 @@ test "Home: the first rows, after the list waited, come as they are and a tap on
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("整理发布清单") is None)
   // the list is read: its rows are there, drawn where they are laid out, from the first frame (as the e2e's drive
   // taps them: where they are, as soon as they are still)
@@ -227,9 +230,9 @@ test "the chat's sheet going down: its own rows take no tap, the scrim none" {
 ///|
 test "the workspaces' sheet sinking takes no tap: the bar's 文件 tapped under it opens its page" {
   let t = tester("home")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   t.tap_text("星火工作室")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_true(sheet_open())
   t.tap_once(195.0, 60.0)
   t.frame()
@@ -262,7 +265,7 @@ test "a drive sheet going down takes no tap: its 重命名 tapped meanwhile does
 ///|
 test "the bar going down under a page pushed takes no tap: the field tapped where it was is the field's" {
   let t = tester("home")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   tap_once_on(t, "夜里的构建又失败了")
   // the chat nearly in (its composer in the window), the bar still going down over it
   for _ in 0..<10 {

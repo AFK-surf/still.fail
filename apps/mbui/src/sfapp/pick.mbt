@@ -63,7 +63,19 @@ fn pick_clear() -> Unit {
 /// As at the start (tests): nothing picked, no press remembered.
 fn pick_reset() -> Unit {
   pick_clear()
+  pk.author = ""
+  pk.role = ""
+  pk.a = 0
+  pk.b = 0
+  pk.from_a = 0
+  pk.from_b = 0
+  pk.grab_x = 0.0
+  pk.grab_y = 0.0
   pk.picked_at = -1.0
+  link_menu.href = ""
+  link_menu.x = 0.0
+  link_menu.top = 0.0
+  link_menu.bottom = 0.0
   link_menu.at = -1.0
   link_menu.open = false
 }

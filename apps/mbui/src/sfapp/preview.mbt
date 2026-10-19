@@ -15,6 +15,7 @@
 
 ///|
 /// The words this page adds (client/i18n/catalog/zh android-chat.json, common.json).
+// kept across runs: a table, never written
 let pv_zh : Map[String, String] = {
   "android-chat.file.cantPreview": "此文件类型不支持预览",
   "android-chat.file.cut": "文件较大，仅显示前 {size}，完整内容请下载",
@@ -165,6 +166,7 @@ fn preview_kind(name : String) -> (PKind?, String, String) {
 }
 
 ///|
+// kept across runs: a table, never written
 let code_languages : Array[String] = [
   "ts", "tsx", "js", "jsx", "json", "jsonc", "json5", "py", "rs", "go", "java", "kt",
   "swift", "c", "cpp", "cs", "rb", "php", "bash", "fish", "ps1", "yaml", "toml", "xml",

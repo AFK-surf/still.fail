@@ -2,9 +2,9 @@
 // (trace_*.mbt's drive_*), run by the Tester (Tester::drive), the run's conversation with its core given as each frame
 // begins, where src/stillfail's frame takes what the core said (@core.pump).
 //
-// One flow a test process (a package of its own, as src/sfreplay/send_text): the app's pages keep what they were told
-// for as long as the process lives (that the core knows the app is in front, a chat's draft read), as the run's app,
-// a process of its own, did; a second flow in the same process would start where the first left them, and ask less.
+// A flow a package (as src/sfreplay/send_text), though a second in the same process starts where the first did: each
+// Tester starts the app's pages as the run's app, a process of its own, started them (sfapp's reset, as mbui's
+// on_reset runs it), and this package's pictures (source.mbt) asked again (src/sfreplay/send_text_twice).
 
 ///|
 /// `script` run over the app with `trace` as its core: `at_most` of what came given as each frame begins (-1: all
@@ -24,7 +24,8 @@ pub fn run_flow(
     r.deliver(at_most~) |> ignore
     app(c)
   })
-  let log = t.drive(without_shots(script))
+  // its steps as the host's that recorded it took them: waiting for nothing settling
+  let log = t.drive(without_shots(script), settles=false)
   (r, t, log)
 }
 

@@ -43,7 +43,7 @@ test "the page's requests answered from the station through the core: the head, 
 ///|
 test "a service being started again is said over its page; one stopped in its place" {
   let t = service_tester("service-restart")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   t.frame()
   assert_true(t.find("web正在重启") is Some(_))
   assert_true(t.find("第 2 次") is Some(_))

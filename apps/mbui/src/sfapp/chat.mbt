@@ -1391,6 +1391,7 @@ fn avatar(
 }
 
 ///|
+// kept across runs: a table, never written
 let shapes : Array[(Bool, Double, Double)] = [
   (false, 220.0, 40.0),
   (false, 160.0, 58.0),

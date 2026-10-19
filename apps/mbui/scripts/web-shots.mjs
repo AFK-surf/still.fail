@@ -18,7 +18,8 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(f).pipe(res);
 });
 await new Promise((r) => server.listen(0, r));
-const browser = await chromium.launch();
+// a player plays when the app says so, as on the other hosts (Chromium's own rule wants a press on the page first)
+const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 let next = 0, failed = 0;
 async function worker() {
   while (next < shots.length) {

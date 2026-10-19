@@ -33,6 +33,7 @@ pub fn page(c : @ui.Ctx, core : Core, here : Here, route : Route, root? : Bool =
 
 ///|
 /// The themes to choose (SettingsHome.kt themes): the system's, light, dark.
+// kept across runs: a table, never written
 let themes : Array[(String, String)] = [
   ("system", "android-settings.theme.system"),
   ("light", "android-settings.theme.light"),

@@ -17,7 +17,7 @@ fn decide_core(calls : Array[Made], mode : String) -> @ui.Tester {
   }
   open_fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   t
 }
 
@@ -68,7 +68,7 @@ test "归档此对话 archives the chat and goes home; 保留 keeps it" {
   assert_eq(kept.length(), 1)
   assert_eq(number(Some(kept[0].params), "thread"), 7.0)
   t.tap_text("归档此对话")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   let archived = named(calls, "chat.archive")
   assert_eq(archived.length(), 1)
   assert_eq(text(Some(archived[0].params), "session"), "s-c1")

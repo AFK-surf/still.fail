@@ -2,6 +2,7 @@
 // android-misc, web-pages, web-mobile, web-main, common): the keys these pages use, `{name}` put in by `fill`.
 
 ///|
+// kept across runs: a table, never written
 let zh : Map[String, String] = {
   "android-misc.drive.roots.count": "{n} 个文件夹",
   "android-misc.drive.row.none": "未开放",

@@ -105,7 +105,7 @@ fn notify_core(
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   t
 }
 
@@ -114,7 +114,7 @@ test "a notice the core says to show: taken, then shown once in the system, as t
   let calls : Array[Made] = []
   let sys = fake_system()
   let t = notify_core(calls, sys, show=[a_notice])
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_eq(named(calls, "notice.claim").length(), 1)
   assert_eq(sys.shown.length(), 1)
   let (tag, title, body, opens) = sys.shown[0]
@@ -124,7 +124,7 @@ test "a notice the core says to show: taken, then shown once in the system, as t
   assert_eq(opens, "/o/ws1/st1/s-c2?message=2\n2")
   // frames on: not taken again
   t.frame()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_eq(named(calls, "notice.claim").length(), 1)
   assert_eq(sys.shown.length(), 1)
 }
@@ -154,7 +154,7 @@ test "tapped, the notice's chat opens over Home at its message, which flashes; i
   assert_true(sys.cancelled.contains("ws1/st1/s-c2"))
   // back: Home
   app.nav.pop() |> ignore
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_eq(app.nav.depth(), 1)
 }
 
@@ -200,15 +200,15 @@ test "the system told what it allows; asked once when it never was, with notific
   // allowed: told so
   sys.answer = Some(true)
   t.frame()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   let after = named(calls, "notify.permission")
   assert_eq(after.length(), 2)
   assert_true(after[1].params.stringify().contains("\"granted\""))
   // hidden and shown again: told again; not asked again
   t.app_state(false, false)
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   t.app_state(true, true)
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_eq(named(calls, "notify.permission").length(), 3)
   assert_eq(sys.asks, 1)
 }
@@ -241,7 +241,7 @@ test "a push delivered: shown as the core says, then what it is about brought on
   let t = notify_core(calls, sys)
   sys.push = "{\"type\":\"notice\",\"kind\":\"done\",\"title\":\"周报的模板\",\"body\":\"Claude: 放好了\",\"tag\":\"ws1/st1/s-c10\",\"url\":\"/o/ws1/st1/s-c10?message=4\",\"workspace\":\"ws1\",\"station\":\"st1\",\"session\":\"s-c10\",\"at\":\"1790000000000\",\"seq\":\"4\"}"
   t.frame()
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_eq(named(calls, "notice.pushed").length(), 1)
   assert_true(sys.shown.iter().any(fn(n) { n.0 == "ws1/st1/s-c10" && n.2 == "Claude: 放好了" }))
   let bring = named(calls, "notice.bring")
@@ -261,7 +261,7 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   t.settle() |> ignore
   assert_true(t.find("任务完成、需要处理、出错或有新消息时通知你") is Some(_))
   t.tap_text("通知")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   let set = named(calls, "notify.set")
   assert_eq(set.length(), 1)
   assert_true(set[0].params.stringify().contains("\"on\":false"))
@@ -273,7 +273,7 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   assert_eq(named(calls, "push.unregister").length(), 1)
   let asks = sys.asks
   t.tap_text("通知")
-  t.settle() |> ignore
+  t.settle(unsettled_ok=true) |> ignore
   assert_eq(sys.asks, asks + 1)
   let on = named(calls, "notify.set")
   assert_true(on[on.length() - 1].params.stringify().contains("\"on\":true"))

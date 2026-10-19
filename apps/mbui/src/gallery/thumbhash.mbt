@@ -169,6 +169,16 @@ fn thumbhash_rgba(hash : Array[Int]) -> (Int, Int, FixedArray[Byte])? {
 let hashed : Map[String, Bool] = {}
 
 ///|
+/// Every Tester starts as the app does (mbui's on_reset): the pictures made here gone with its images, none open.
+fn init {
+  @ui.on_reset(fn() {
+    hashed.clear()
+    state.open = None
+    state.bars = true
+  })
+}
+
+///|
 /// The image key of a hash's picture (base64), made the first time.
 pub fn thumbhash_image(hash : String) -> String? {
   if hash == "" {
