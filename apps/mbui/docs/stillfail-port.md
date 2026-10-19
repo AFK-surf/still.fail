@@ -161,10 +161,8 @@ ChatFiles.kt, Decisions.kt, LoginCards.kt, Follow.kt):
   goldens/mac-chat*.png and web-chat.png.
 
 Not yet, against the current app:
-the file preview (slice 11) and opening links outside the app; tables and
-code highlighting in Markdown, a code block's sideways scroll; the messages'
-motion (rising in, coming out of an agent's avatar, the activity's glide and
-its floor); a new message followed from its top when it is taller than the
+the file preview (slice 11); the activity's floor (the room it leaves kept as it
+folds away), the crossfade of what it says and its stepping ring; a new message followed from its top when it is taller than the
 screen; the asks' bell; the chat's sheets ("…", the agent's card, jobs);
 images on Android (no decoding there yet: their boxes and likenesses only);
 the station's update control in the bar.
@@ -235,8 +233,7 @@ PastedText.kt; SendText.kt; MessagePick.kt):
   composer so: `scripts/shots.sh composer web-composer` compares them with
   goldens/mac-composer-*.png and web-composer-*.png.
 
-Not yet, against the current app: the words flying from the field into their
-bubble (and the capsule's morph as it changes height), `@` references to
+Not yet, against the current app: `@` references to
 other chats and pasted chat links as marks (chat.ref, chatSearch), sharing
 what they refer to before sending, the recent photos' strip, Station 文件 (slice 12's drive, below), a
 picture's preview from its tile, files pasted or sent by the keyboard (only
@@ -996,6 +993,29 @@ change of shape, the way to the newest, toasts, ＋'s sheet on the sheet's sprin
 the ripple's timing. MBUI_MOTION_LOG=1 logs every moving frame; scripts/record.sh records a motion on macOS frame by
 frame (MBUI_RECORD), `scripts/android.sh record` on the emulator, scripts/motionplot.py compares the frames with the
 Android app's curves. At rest nothing of it is drawn: every golden is unchanged.
+
+## A chat's messages in motion (branch mbui-chat-complete)
+
+The motion branch's rows rising in, the list gliding after them, the activity's glide and the words flying from the
+composer into their bubble (docs/stillfail-motion.md), and now an agent's answer coming out of its activity's avatar
+(src/sfapp/emit.mbt, ChatMotion.kt): an answer said while its agent's activity shows (the reader at the end, the app in
+front) waits out of the list; the activity's line folds to its avatar (170 ms), a copy of the avatar hops to where the
+answer goes (440 ms: up 34 over the higher end in 42% of the time, then falling ever faster, stretched), the answer
+comes out of it (380 ms: from 35% at its corner, unrolling from its top, the avatar flattened and springing back), and
+the avatar goes home (320 ms); the same agent's next answer waiting, it drops on to it (280 ms). Not watched, all of
+it at once. Each frame of the flight is in the motion log (`emit/<seq> pose=…`). The fixture's agent now works on
+what is sent (its activity shows) and answers while the chat shows, so sffix plays it.
+
+## Opening links outside the app (branch selection-links in mbui, mbui-chat-complete here)
+
+`@host.open_url` (and `Ctx::open_url`, `@ui.open_url`) hands a URL to the system: Android's ACTION_VIEW (a task of its
+own, the browser or the app that takes the link), macOS's NSWorkspace, iOS's UIApplication, Windows' ShellExecute
+(http, https and mailto only), the browser's window.open (noopener). A scripted macOS run (MBUI_SCRIPT, MBUI_DRIVE)
+only says it on the log (`open-url: …`). In use: a link tapped in a message (App.kt's UriHandler: a chat's own link
+opens it here, any other goes out; 无法打开此链接 when nothing takes it), a link's menu's 打开链接, a login card's pill
+(复制并打开 copies the device code and opens its page; 在浏览器里登录 opens the page, a loopback login once the core
+listens for its callback, `machineLogin.open`; LoginCards.kt), a service page's link elsewhere (PreviewWeb.kt leave).
+The Android app opens a login's page in a Custom Tab; here it is the browser (no Custom Tabs in the host yet).
 
 ## What the hosts need (platform)
 

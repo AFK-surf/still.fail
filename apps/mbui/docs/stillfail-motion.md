@@ -136,10 +136,10 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 
 | Motion | Trigger | Property | Spec | Where | mbui |
 |---|---|---|---|---|---|
-| Fold | an agent posts while its activity shows (watched: in front, at the end) | its line folds to its avatar: width → 0 (200, Ease.Out), alpha (160, Ease.Out) | Fold 170 ms | chat/ChatMotion.kt:58, 131-137; chat/Chat.kt:1524-1528 | not yet |
-| Float | after the fold | the avatar's copy hops: up to 34 dp over the higher end in 42% of the time ((1 − (1 − u)^2.5)), then drops ever faster (u^2.5), across ease-in-out cubic; stretched (7% up, 14% down) | 440 ms; on to the same agent's next: a drop only, 280 ms | chat/ChatMotion.kt:58, 198-236, 354-358 | not yet (`fly` takes such a path from the app) |
-| Spit | landed | the message comes out: scale .35 → 1 from 12 dp, unrolling from its top (Ease.Out), alpha by 35%; the avatar flattened (116% × 80%) springing back (stiffness 520, damping 14) with a 12% swell | 380 ms | chat/ChatMotion.kt:237-246, 360-393 | not yet |
-| Return | after | the copy goes home, cubic out | 320 ms | chat/ChatMotion.kt:247-250 | not yet |
+| Fold | an agent posts while its activity shows (watched: in front, at the end) | its line folds to its avatar: width → 0 (200, Ease.Out), alpha (160, Ease.Out) | Fold 170 ms | chat/ChatMotion.kt:58, 131-137; chat/Chat.kt:1524-1528 | yes (src/sfapp/emit.mbt; the line cut to its share of its width and faded in `activity`) |
+| Float | after the fold | the avatar's copy hops: up to 34 dp over the higher end in 42% of the time ((1 − (1 − u)^2.5)), then drops ever faster (u^2.5), across ease-in-out cubic; stretched (7% up, 14% down) | 440 ms; on to the same agent's next: a drop only, 280 ms | chat/ChatMotion.kt:58, 198-236, 354-358 | yes (`emit_flight`, `emit_flyer`: drawn only, over the list, from where the two ends were last laid out: `@motion.measured_rect`) |
+| Spit | landed | the message comes out: scale .35 → 1 from 12 dp, unrolling from its top (Ease.Out), alpha by 35%; the avatar flattened (116% × 80%) springing back (stiffness 520, damping 14) with a 12% swell | 380 ms | chat/ChatMotion.kt:237-246, 360-393 | yes (`emit_out`: a look and mbui's `Ctx::cut_to_top`; the message's own avatar hidden meanwhile) |
+| Return | after | the copy goes home, cubic out | 320 ms | chat/ChatMotion.kt:247-250 | yes; one turn after another (not in ListTurns' queue with what else changes the list's height) |
 
 ## Waiting and loops (ui/Waiting.kt, ui/Parts.kt, others)
 

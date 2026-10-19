@@ -442,6 +442,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
 priv struct FixChat {
   sent : Array[Json]
   outbox : Array[Json]
+  /// its agent at work on what was sent (its activity shows), since when (ms)
+  mut working : Double
 }
 
 ///|
@@ -456,7 +458,7 @@ fn fix_chat(session : String) -> FixChat {
   match fix_chats.get(session) {
     Some(f) => f
     None => {
-      let f = { sent: [], outbox: [] }
+      let f = { sent: [], outbox: [], working: -1.0 }
       fix_chats[session] = f
       f
     }
@@ -520,7 +522,7 @@ fn with_sent(base : Json, session : String) -> Json {
     _ => ()
   }
   match (fix_chats.get(session), base) {
-    (Some(fc), Object(m)) if fc.sent.length() > 0 || fc.outbox.length() > 0 => {
+    (Some(fc), Object(m)) if fc.sent.length() > 0 || fc.outbox.length() > 0 || fc.working >= 0.0 => {
       let o = m.copy()
       let all = match m.get("messages") {
         Some(Array(a)) => a.copy()
@@ -531,6 +533,22 @@ fn with_sent(base : Json, session : String) -> Json {
       }
       o["messages"] = Json::array(all)
       o["outbox"] = Json::array(fc.outbox.copy())
+      if fc.working >= 0.0 {
+        o["agents"] = Json::array(
+          items(Some(base), "agents").map(fn(a) {
+            match a {
+              Object(am) => {
+                let w = am.copy()
+                w["status"] = Json::string("running")
+                w["started"] = Json::boolean(true)
+                w["since"] = Json::number(fc.working)
+                Json::object(w)
+              }
+              _ => a
+            }
+          }),
+        )
+      }
       Json::object(o)
     }
     _ => base
@@ -584,8 +602,12 @@ fn fix_deliver(session : String, id : String) -> Unit {
       "quotes": Json::array(items(Some(params), "quotes")),
     }),
   )
+  // its agent sets to work at once (its activity comes in), answers a moment later (its answer said while the chat
+  // shows: out of the activity's avatar), and its turn ends a moment after that
+  fc.working = (fix_clock.val)()
   fix_later(1400.0, fn() {
     fix_serial.val += 1
+    fix_later(700.0, fn() { fix_chat(session).working = -1.0 })
     let first = paste_preview(words)
     let said = if first == "" {
       "收到文件了，我看一下。"
@@ -600,6 +622,7 @@ fn fix_deliver(session : String, id : String) -> Unit {
     fix_chat(session).sent.push(
       msg(100 + fix_serial.val, "agent", by_agent("anthropic", "claude", session), said, "刚刚", {
         "ts": Json::string("reply\{fix_serial.val}"),
+        "said": true,
       }),
     )
   })

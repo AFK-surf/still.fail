@@ -285,7 +285,33 @@ fn messages(
 ) -> Unit {
   let key = list_key(r)
   let rd = reading_of(r.station + "\u{1}" + r.session)
-  let list = with_lingering(c, rd, v, read)
+  // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
+  // wait out of the list (emit.mbt, ChatMotion.kt)
+  let ek = r.station + "\u{1}" + r.session
+  let em = emits_of(ek)
+  em.watched = rd.at_end && !v.newer && !c.stable() && app_in_front()
+  let showing : Map[String, Bool] = {}
+  for a in v.agents {
+    if a.status == "running" {
+      showing[a.key] = true
+    }
+  }
+  for k, _ in rd.linger {
+    showing[k] = true
+  }
+  emit_take(c, em, v, showing)
+  emit_step(c, em)
+  let read = if em.queue.length() > 0 || em.current is Some(_) {
+    read.filter(fn(e) {
+      match e {
+        Said(m) => !emit_held(em, m.seq)
+        _ => true
+      }
+    })
+  } else {
+    read
+  }
+  let list = with_lingering(c, rd, v, read, keeps=emit_keeps(em))
   let keys = row_keys(c, rd, v, list, key)
   let dkey = draft_key(r)
   flight_frame(c, dkey)
@@ -366,8 +392,9 @@ fn messages(
                 activity(c, src, here, a, leaving~)
               })
               @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(200.0)))
-              // pushed down by what comes in above it, it glides there (Chat.kt ACTIVITY_GLIDE: spring(1, 300))
-              if !older_came && flight is None {
+              // pushed down by what comes in above it, it glides there (Chat.kt ACTIVITY_GLIDE: spring(1, 300)), not
+              // while its avatar is away flying
+              if !older_came && flight is None && !emit_away(em, a.key) {
                 @motion.layout(c, ri, mk, spec=@motion.spring(stiffness=300.0, threshold=1.0), listed=false)
               }
               c.look(ri, @ui.look(alpha=p * fade, scale=0.5 + 0.5 * p, ox=(row_side(c) + 9.0) / c.width, oy=0.5))
@@ -421,9 +448,16 @@ fn messages(
             } else {
               @motion.keyed(c, ri, mk)
             }
+            // (one out of an avatar does not rise in as well)
+            let emitted = match e {
+              Said(m) => emit_goes(em, m.seq)
+              _ => false
+            }
             if rd.fresh.contains(keys[i]) {
               rd.fresh.remove(keys[i])
-              @motion.entering(c, ri, mk, @motion.trans(fade=0.0, dy=14.0, spec=@motion.tween(320.0)))
+              if !emitted {
+                @motion.entering(c, ri, mk, @motion.trans(fade=0.0, dy=14.0, spec=@motion.tween(320.0)))
+              }
             }
           }
         }
@@ -581,6 +615,8 @@ fn messages(
       None => false
     }
     jump_to_latest(c, src, r, v, rd, away || v.newer)
+    // the avatar flying out of an activity to its message and back, over the list
+    emit_flyer(c, ek, em, v)
     chat_bench(c, key, rd, v.more, n)
   })
   |> ignore
@@ -588,7 +624,13 @@ fn messages(
 
 ///|
 /// The list with the activities of agents whose turn just ended, kept a moment (Chat.kt: 600 ms, then fading 220).
-fn with_lingering(c : @ui.Ctx, rd : Reading, v : ChatView, list : Array[Entry]) -> Array[Entry] {
+fn with_lingering(
+  c : @ui.Ctx,
+  rd : Reading,
+  v : ChatView,
+  list : Array[Entry],
+  keeps? : Map[String, Bool] = {},
+) -> Array[Entry] {
   let now = c.now()
   let running : Map[String, Agent] = {}
   if !v.newer {
@@ -604,6 +646,12 @@ fn with_lingering(c : @ui.Ctx, rd : Reading, v : ChatView, list : Array[Entry]) 
     }
   }
   let over : Array[String] = []
+  // an agent whose messages are still coming out of its avatar stays (ChatMotion.keeps)
+  for k, l in rd.linger {
+    if keeps.contains(k) && !running.contains(k) {
+      rd.linger[k] = (l.0, now)
+    }
+  }
   for k, l in rd.linger {
     if running.contains(k) || now - l.1 >= 820.0 {
       over.push(k)

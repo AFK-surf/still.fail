@@ -218,8 +218,10 @@ fn said(
     |> ignore
     return
   }
+  let ek = here.station + "\u{1}" + here.session
+  let em = emits_of(ek)
   c.box(w=Fill(1.0), fn() {
-    c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
+    let col = c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
       c.box(dir=Row, w=Fill(1.0), pl=25.0, min_h=24.0, gap=6.0, align=ACenter, fn() {
         // an agent of the chat's name opens its card (AgentSheet.kt)
         let mine = m.by.agent != "" && here.view.agents.iter().any(fn(a) { a.key == m.by.agent })
@@ -268,10 +270,21 @@ fn said(
       // under its agent's latest 做完了 while nothing is left in the chat: keeping or archiving it, right there
       archive_under_post(c, src, here, m)
     })
-    |> ignore
-    // the picture over the name's start
+    // coming out of its agent's avatar (emit.mbt): from 35% at its corner, unrolling from its top
+    if emit_goes(em, m.seq) {
+      @motion.measure(c, col, "emit-col/" + seq_s(m.seq))
+      emit_out(c, col, em, m.seq)
+    }
+    // the picture over the name's start (where a message out of an avatar lands: hidden while the flying one is
+    // over it)
     c.layer(fn() {
-      c.box(pt=3.0, fn() { message_avatar(c, src, m) }) |> ignore
+      let av = c.box(pt=3.0, fn() { message_avatar(c, src, m) })
+      if emit_goes(em, m.seq) {
+        @motion.measure(c, av, "emit-landing/" + ek + "/" + seq_s(m.seq))
+        if emit_emitting(em, m.seq) {
+          c.look(av, @ui.look(alpha=0.0))
+        }
+      }
     })
     |> ignore
   })
@@ -1500,7 +1513,15 @@ fn activity(
   here : Here,
   a : Agent,
   leaving? : Bool = false,
+  first? : Bool = false,
 ) -> Unit {
+  let ek = here.station + "\u{1}" + here.session
+  let em = emits_of(ek)
+  // a message coming out of its avatar: the line folds to its avatar (200 ms Ease.Out; faded by 160), and the avatar
+  // is away while its copy flies (emit.mbt, ChatMotion.kt)
+  let folded = emit_folded(em, a.key)
+  let tail = @motion.animate(c, "tail/" + a.key, if folded { 0.0 } else { 1.0 }, spec=@motion.tween(200.0, ease=Out))
+  let tail_fade = @motion.animate(c, "tail-fade/" + a.key, if folded { 0.0 } else { 1.0 }, spec=@motion.tween(160.0, ease=Out))
   let t = @sf.theme()
   let k = ink()
   let live = (src.topic)("live", { "station": Json::string(here.station), "key": Json::string(a.key) })
@@ -1550,8 +1571,12 @@ fn activity(
     bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.1) } else { 0L },
     id~,
     fn() {
-    c.box(w=Px(24.0), h=Px(24.0), tx=-3.0, align=ACenter, justify=JCenter, fn() {
-      agent_avatar(c, a.maker, a.runtime)
+    let face = c.box(w=Px(24.0), h=Px(24.0), tx=-3.0, align=ACenter, justify=JCenter, fn() {
+      let av = c.box(fn() { agent_avatar(c, a.maker, a.runtime) })
+      @motion.measure(c, av, "emit-avatar/" + ek + "/" + a.key)
+      if em.copied == a.key {
+        c.look(av, @ui.look(alpha=0.0))
+      }
       // its turn over, the ring goes first (Chat.kt WorkRing: 160 ms)
       let ring = @motion.animate(c, "ring/" + here.station + "/" + a.key, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(160.0))
       let rl = c.layer(fn() {
@@ -1564,15 +1589,32 @@ fn activity(
       })
       c.look(rl, @ui.look(alpha=ring))
     })
-    |> ignore
-    c.box(fn() { c.text(now_words, size=15.0, color=k.muted, wrap=false) |> ignore }) |> ignore
-    if clock != "" {
-      c.box(pl=3.0, fn() { c.text(clock, size=15.0, color=k.subtle, wrap=false) |> ignore })
-      |> ignore
+    ignore(face)
+    // what it does now and how long: folded away to its width's share, cut there, faded
+    let natural = match @motion.measured_rect(c, "emit-tail/" + ek + "/" + a.key) {
+      Some(r) => r.2
+      None => 0.0
+    }
+    let cut = tail < 1.0 && natural > 0.0
+    let tb = c.box(dir=Row, max_w=if cut { natural * tail } else { 1.0e9 }, clip=cut, fn() {
+      let inner = c.box(dir=Row, fn() {
+        c.box(fn() { c.text(now_words, size=15.0, color=k.muted, wrap=false) |> ignore }) |> ignore
+        if clock != "" {
+          c.box(pl=3.0, fn() { c.text(clock, size=15.0, color=k.subtle, wrap=false) |> ignore })
+          |> ignore
+        }
+      })
+      if !cut {
+        @motion.measure(c, inner, "emit-tail/" + ek + "/" + a.key)
+      }
+    })
+    if tail_fade < 1.0 {
+      c.look(tb, @ui.look(alpha=tail_fade))
     }
     },
   )
   |> ignore
+  ignore(first)
 }
 
 ///|

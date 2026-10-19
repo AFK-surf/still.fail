@@ -183,6 +183,7 @@ fn reset() -> Unit {
   fix_timers.clear()
   fix_drafts.clear()
   fix_decided.clear()
+  emits.clear()
   fix_kept.val = false
   dv_reset()
   decide_reset()
