@@ -28,10 +28,34 @@ let engine : Engine = {
 }
 
 ///|
+/// The engine's way in: a message, and the bytes beside it if any.
+fn engine_send(s : String, b : Bytes?) -> Unit {
+  match b {
+    Some(b) => ffi_send_bytes(s, b)
+    None => ffi_send(s)
+  }
+}
+
+///|
+/// Where the app's messages go: the engine, or a kept conversation given again (replay.mbt).
+let transport : Ref[(String, Bytes?) -> Unit] = { val: engine_send }
+
+///|
+/// The wall clock a kept conversation had (replay.mbt), in place of this machine's.
+let wall_override : Ref[(() -> Double)?] = { val: None }
+
+///|
 /// The app's client of its core.
-pub let client : Client = Client::new(fn(s) { ffi_send(s) }, send_bytes=fn(s, b) {
-  ffi_send_bytes(s, b)
-})
+pub let client : Client = Client::new(
+  fn(s) {
+    trace_out(s)
+    (transport.val)(s, None)
+  },
+  send_bytes=fn(s, b) {
+    trace_out(s)
+    (transport.val)(s, Some(b))
+  },
+)
 
 ///|
 /// Starts the core: its files in `data_dir` (empty: the platform's place for the app's data, or $MBUI_CORE_DATA),
@@ -119,7 +143,10 @@ pub fn cancel(id : Int) -> Unit {
 /// The time of day, in milliseconds since 1970: when something was done, as
 /// the core and the stations compare it (a reading place's `at`).
 pub fn wall_ms() -> Double {
-  ffi_wall_ms()
+  match wall_override.val {
+    Some(f) => f()
+    None => ffi_wall_ms()
+  }
 }
 
 ///|
@@ -150,12 +177,10 @@ pub fn pump() -> Unit {
     match msg {
       Object(m) if m.contains("mbui_auth") => web_auth_done(m)
       _ => {
-        let bytes = ffi_next_bytes()
-        client.receive_json(msg, bytes=if bytes.length() > 0 {
-          Some(bytes)
-        } else {
-          None
-        })
+        let b = ffi_next_bytes()
+        let bytes = if b.length() > 0 { Some(b) } else { None }
+        trace_in(msg, bytes, ffi_wall_ms())
+        client.receive_json(msg, bytes~)
         if client.fatal is Some(_) {
           restart()
         }

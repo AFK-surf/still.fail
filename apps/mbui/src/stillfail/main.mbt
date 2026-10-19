@@ -221,6 +221,14 @@ let core_source : @sfapp.Source = {
 
 ///|
 fn main {
+  // MBUI_CORE_TRACE=1: the app's conversation with its core kept on the log (CORETRACE …), for a Tester to give
+  // again (src/core/replay.mbt). Only on a local cloud (MBUI_CLOUD on this machine: its made-up account): what a real
+  // account's core says (its tokens, a vault's values) is never put on a log.
+  let cloud = @host.env("MBUI_CLOUD")
+  if @host.env("MBUI_CORE_TRACE") == "1" &&
+    (cloud.has_prefix("http://127.0.0.1") || cloud.has_prefix("http://localhost")) {
+    @core.trace_to(fn(line) { @host.log("CORETRACE " + line) })
+  }
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.desktop_window()
     @ui.run("still.fail", fn(c) {

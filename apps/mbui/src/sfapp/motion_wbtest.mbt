@@ -29,8 +29,8 @@ test "Home: a chat with news goes to the top on the rows' spring, the rows it pa
   assert_true((y2 - y_top).abs() < 0.5)
   let (_, f2) = t.drawn_of("整理发布清单").unwrap()
   assert_true((f2 - y_top - 66.0).abs() < 0.5)
-  fix_clock.val = fn() { @host.now() }
-  fix_wake.val = fn(ms) { @host.wake_after(ms) }
+  fix_clock.val = fix_frame_clock
+  fix_wake.val = fix_frame_wake
 }
 
 ///|
@@ -73,8 +73,8 @@ test "words sent fly from the field into their bubble" {
     }
   }
   assert_true(moved && landed, msg="\{moved} \{landed}")
-  fix_clock.val = fn() { @host.now() }
-  fix_wake.val = fn(ms) { @host.wake_after(ms) }
+  fix_clock.val = fix_frame_clock
+  fix_wake.val = fix_frame_wake
 }
 
 ///|
