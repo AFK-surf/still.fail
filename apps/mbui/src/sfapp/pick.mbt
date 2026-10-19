@@ -255,17 +255,18 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       }
     }
   }
-  // a tap that nothing of the pick took lets go of it (not the lifting of the press that picked it)
-  if cui.released &&
-    !cui.moved &&
-    pk.picked_at != cui.down_at &&
-    pk.handle == 0 &&
-    !in_rect(bar, cui.down_x, cui.down_y) &&
-    !in_rect(ends[0], cui.down_x, cui.down_y) &&
-    !in_rect(ends[1], cui.down_x, cui.down_y) {
-    pick_clear()
-    c.request_frame()
-    return
+  // a tap anywhere but on the pick's bar and handles lets go of it (not the lifting of the press that picked it: that
+  // press was taken)
+  match c.tapped_anywhere() {
+    Some((tx, ty)) if pk.handle == 0 &&
+      !in_rect(bar, tx, ty) &&
+      !in_rect(ends[0], tx, ty) &&
+      !in_rect(ends[1], tx, ty) => {
+      pick_clear()
+      c.request_frame()
+      return
+    }
+    _ => ()
   }
   // the two ends, each a handle: a line down its side with a knob (over the start's line, under the end's), the
   // finger's room 36 wide round them
