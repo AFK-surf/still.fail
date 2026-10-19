@@ -323,7 +323,9 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// A box laying out its children in a row or a column, flexbox style.
+/// A box laying out its children in a row or a column, flexbox style. `notch_r` > 0 cuts a notch into its top edge
+/// (its ground, border and glass alike): a circle of that radius about the middle of its top, `notch_y` below the edge
+/// (above it when negative), met by the edge through fillets of `notch_fillet` (Bar.kt's notch).
 pub fn Ctx::box(
   self : Ctx,
   dir? : Dir = Column,
@@ -356,6 +358,9 @@ pub fn Ctx::box(
   opacity? : Double = 1.0,
   glass? : Glass,
   glass_group? : Bool = false,
+  notch_y? : Double = 0.0,
+  notch_r? : Double = 0.0,
+  notch_fillet? : Double = 0.0,
   id? : Int = 0,
   body : () -> Unit,
 ) -> Int {
@@ -391,6 +396,9 @@ pub fn Ctx::box(
   n.opacity = opacity
   n.glass = glass
   n.glass_group = glass_group
+  n.notch_y = notch_y
+  n.notch_r = notch_r
+  n.notch_f = notch_fillet
   if id != 0 {
     n.id = id
     n.hit = true

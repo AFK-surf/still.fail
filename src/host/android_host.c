@@ -223,6 +223,15 @@ static const char *FS =
     "  vec2 q = abs(p - r.xy - hs) - hs + rr;\n"
     "  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
     "}\n"
+    "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
+    "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
+    "float notch_cut(float d, vec2 p, vec4 r, vec4 pad) {\n"
+    "  if (pad.z <= 0.0) return d;\n"
+    "  float b = pad.z - length(p - vec2(r.x + r.z * 0.5, r.y + pad.y));\n"
+    "  float f = max(pad.w, 0.0);\n"
+    "  vec2 u = max(vec2(f + d, f + b), 0.0);\n"
+    "  return min(-f, max(d, b)) + length(u);\n"
+    "}\n"
     "float smin_k(float a, float b, float k) {\n"
     "  if (k <= 0.0) return min(a, b);\n"
     "  float h = max(k - abs(a - b), 0.0) / k;\n"
@@ -295,6 +304,7 @@ static const char *FS =
     "  float r = min(v_p.x, min(hs.x, hs.y));\n"
     "  vec2 q = abs(p - c) - hs + r;\n"
     "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n"
+    "  if (kind == 0 || kind == 5) d = notch_cut(d, p, v_rect, v_pad);\n"
     "  if (kind == 4) {\n"
     "    vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;\n"
     "    o = texture(u_img, uv) * (col.a * clamp(0.5 - d * u_scale, 0.0, 1.0));\n"
@@ -321,8 +331,8 @@ static const char *FS =
     "    g3 = g3 * (1.0 - col.a) + col.rgb * col.a;\n"
     "    if (v_c2.x + v_c2.y + v_c2.z > 0.0) {\n"
     "      float edge = clamp(0.5 + (d + 0.5) * u_scale, 0.0, 1.0);\n"
-    "      float lit = clamp(0.5 + sd_rr(p - 0.5, v_rect, v_p.x) * u_scale, 0.0, 1.0);\n"
-    "      float back = clamp(0.5 + sd_rr(p + 0.5, v_rect, v_p.x) * u_scale, 0.0, 1.0);\n"
+    "      float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, v_rect, v_p.x), p - 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);\n"
+    "      float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, v_rect, v_p.x), p + 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);\n"
     "      g3 = mix(g3, vec3(1.0), v_c2.x * edge);\n"
     "      g3 = mix(g3, vec3(1.0), v_c2.y * lit);\n"
     "      g3 = mix(g3, vec3(1.0), v_c2.z * back);\n"
@@ -522,12 +532,13 @@ static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int 
   glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
-// what the run [start, end) of glass sees; 0 when none of it shows
-static int capture(const float *f, int32_t start, int32_t end) {
+// what the run [start, end) of glass sees, frosted glass of the same capture further on (glass.mbt shares_capture)
+// too; 0 when none of it shows
+static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
   const float *a = f + start * 24;
   float blur = a[7];
   int kind = (int)(a[5] + 0.5f);
-  float margin = 3.0f * blur + a[21] * (1.0f + a[22]) + a[23] + 2.0f;
+  float margin = 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
   float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
   gn = 0;
   for (int32_t i = start; i < end; i++) {
@@ -542,6 +553,16 @@ static int capture(const float *f, int32_t start, int32_t end) {
         gn++;
       }
     }
+    if (bx0 < x0) x0 = bx0;
+    if (by0 < y0) y0 = by0;
+    if (bx1 > x1) x1 = bx1;
+    if (by1 > y1) y1 = by1;
+  }
+  for (int32_t i = end; kind == 5 && i < count; i++) {
+    const float *b = f + i * 24;
+    if (b[20] != a[20]) continue;
+    float bx0 = b[0] > b[16] ? b[0] : b[16], by0 = b[1] > b[17] ? b[1] : b[17];
+    float bx1 = b[0] + b[2] < b[18] ? b[0] + b[2] : b[18], by1 = b[1] + b[3] < b[19] ? b[1] + b[3] : b[19];
     if (bx0 < x0) x0 = bx0;
     if (by0 < y0) y0 = by0;
     if (bx1 > x1) x1 = bx1;
@@ -658,7 +679,7 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
     while (end < count && (int)fbuf[end * 24 + 20] == tid && ((int)(fbuf[end * 24 + 5] + 0.5f) == 9) == hole) end++;
     if (tid < 0) {
       if (tid != bound) {
-        shows = capture(fbuf, start, end);
+        shows = capture(fbuf, start, end, count);
         bound = tid;
         main_state();
       }

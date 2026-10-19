@@ -84,6 +84,20 @@ def spring(stiffness, ratio=1.0, threshold=1.0, delay=0.0):
     return left
 
 
+def rspring(tension, friction):
+    """What is left of the way of the bar's own springs (Bar.kt BarSpring: react-spring's tension and friction, mass 1,
+    from rest), stepped as the bar steps them: 4 ms at most a step, each frame's time."""
+    def left(t, d0):
+        x, v, done = 1.0, 0.0, 0.0
+        while done < t:
+            h = min(0.004 * 1000, t - done) / 1000.0
+            v += (-tension * x - friction * v) * h
+            x += v * h
+            done += h * 1000
+        return x
+    return left
+
+
 def flight(t, d0=0.0):
     """What is left of the words' way up (ChatHost.kt: Ease.Flight, 12% late, over 80% of 600 ms)."""
     p = min(math.floor(t) / 600.0, 1.0)
@@ -106,6 +120,14 @@ SPECS = [
     (r"^attach/scrim", "value", "＋'s scrim (Sheet.kt: 300 ms, CSS's ease)", [tween(300, "css")], 1, "to"),
     (r"^toast", "alpha", "a toast (Sheet.kt ToastHost: 200 ms, CSS's ease)", [tween(200, "css")], 1, None),
     (r"^fly$", "dy", "words sent, up (ChatHost.kt Flight: Ease.Flight, 12% late, over 80% of 600 ms)", [flight], 1, "fly"),
+    (r"^bar/icon-swap", "value", "the notch's icon swapping (Bar.kt showIcon: 300 ms on the bar's clock, linear)",
+     [tween(300, "linear")], 1, "to"),
+    (r"^bar/vis", "value", "the bar going down and coming back (Bar.kt: out 300 ms, in 380, Ease.Arrive)",
+     [tween(300, "arrive"), tween(380, "arrive")], 1, "to"),
+    (r"^bar/panel", "value", "the panel (Bar.kt BarSpring: open 260/17, closed 320/26, a bar chosen landing 200/28)",
+     [rspring(260.0, 17.0), rspring(320.0, 26.0), rspring(200.0, 28.0)], 1, "to"),
+    (r"^settings-sheet/offset", "value", "a settings sheet (Sheet.kt: SheetSpring)", [spring((2 * math.pi / (1.2 * 0.32)) ** 2, threshold=0.5)], 1, "to"),
+    (r"^settings-sheet/scrim", "value", "a settings sheet's scrim (Sheet.kt: 300 ms, CSS's ease)", [tween(300, "css")], 1, "to"),
 ]
 
 

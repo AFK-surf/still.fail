@@ -712,6 +712,23 @@ pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Doub
 }
 
 ///|
+/// The notches cut into the last frame's rectangles and frosted glass (Ctx::box `notch_r`): (kind (0 a rectangle, 5
+/// glass), its top, its circle's middle below the top, its radius, its fillets').
+pub fn Tester::drawn_notches(self : Tester) -> Array[(Int, Double, Double, Double, Double)] {
+  ignore(self)
+  let c = g
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    let kind = c.inst[b + 5].to_int()
+    if (kind == 0 || kind == 5) && c.inst[b + 22] > 0.0 {
+      out.push((kind, c.inst[b + 1], c.inst[b + 21], c.inst[b + 22], c.inst[b + 23]))
+    }
+  }
+  out
+}
+
+///|
 /// How many glyphs of the last frame are inked by the glass under them.
 pub fn Tester::adaptive_glyphs(self : Tester) -> Int {
   ignore(self)

@@ -7,7 +7,9 @@
 //   7 blur (the Gaussian's deviation, logical px: CSS blur()'s)
 //   8-11 tint rgba (over the frost) · 16-19 clip
 //   frosted: 12-14 the rim's hairline, its lit top-left, its back (white's
-//            alpha, Bar.kt rim) · 15 opacity
+//            alpha, Bar.kt rim) · 15 opacity · 21-23 a notch in its top
+//            edge (its box's notch_*: the circle's middle below the top,
+//            its radius, its fillets'; scene.mbt)
 //   liquid:  12 the rim's light · 13 the bezel's width · 14 unused
 //            15 opacity · 21 how far the bezel bends what is under it
 //            (px) · 22 the colours' split (0-1) · 23 the smooth-min radius
@@ -16,7 +18,12 @@
 //      of its own for the renderers' image runs): glass one after another
 //      with nothing drawn between, the same blur and kind, not over each
 //      other, shares one copy of what is under it; up to 8 liquid shapes of
-//      one capture are one merged shape.
+//      one capture are one merged shape. Frosted glass made `shares_capture`
+//      takes the last capture whatever is drawn between and wherever it is
+//      (over that glass too, at its blur): it frosts what that glass frosts,
+//      not the glass (Bar.kt: the ball and the action frost the pages, not
+//      the bar). A renderer copies what is under every instance of a
+//      capture when it reaches the first.
 // Text in liquid glass that is `adaptive` is drawn as kind 7: a glyph whose
 // ink the renderer picks from how light what is under its glass is (21-23:
 // the glass's centre and half its size, where to look).
@@ -44,6 +51,9 @@ pub(all) struct Glass {
   chroma : Double
   merge : Double
   adaptive : Bool
+  // frosted: frosts what the glass before it frosts (its capture), not what
+  // has been drawn since
+  shares_capture : Bool
 }
 
 ///|
@@ -56,6 +66,7 @@ pub fn Glass::frosted(
   rim_edge? : Double = 0.0,
   rim_lit? : Double = 0.0,
   rim_back? : Double = 0.0,
+  shares_capture? : Bool = false,
 ) -> Glass {
   {
     blur,
@@ -72,7 +83,15 @@ pub fn Glass::frosted(
     chroma: 0.0,
     merge: 0.0,
     adaptive: false,
+    shares_capture,
   }
+}
+
+///|
+/// The same glass frosting what the glass painted before it in this frame frosts (its capture, at that glass's
+/// blur), whatever has been drawn since, over that glass too: a ball over a bar, both of the page under them.
+pub fn Glass::sharing(self : Glass) -> Glass {
+  { ..self, shares_capture: true }
 }
 
 ///|
@@ -108,6 +127,7 @@ pub fn Glass::liquid(
     chroma,
     merge,
     adaptive,
+    shares_capture: false,
   }
 }
 
@@ -230,6 +250,11 @@ fn Ctx::emit_glass(self : Ctx, n : Node, gl : Glass, alpha : Double) -> Unit {
   a[b + 21] = gl.refraction
   a[b + 22] = gl.chroma
   a[b + 23] = gl.merge
+  if gl.shares_capture && !gl.liquid && glass_paint.run != 0 {
+    // the last capture's, the run as it was
+    a[b + 20] = -glass_paint.run.to_double()
+    return
+  }
   // one capture with the glass just before it: right after it, as it is,
   // the same blur, not over it, and (liquid) a group of fewer than 8
   let prev = glass_paint.run_start + glass_paint.run_len
@@ -285,10 +310,14 @@ fn Ctx::paint_glass(self : Ctx, n : Node, gl : Glass, alpha : Double) -> Unit {
       self.paint_shadow(n, alpha, false)
     }
     self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, gl.solid, 0.0, 0L, alpha)
+    self.notch_last(n)
     return
   }
   if !gl.liquid || glass_paint.in_group == 0 {
     self.emit_glass(n, gl, alpha)
+    if !gl.liquid {
+      self.notch_last(n)
+    }
   }
   if n.shadow > 0.0 && !gl.liquid {
     self.paint_shadow(n, alpha, true)

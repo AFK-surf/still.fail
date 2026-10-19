@@ -1464,7 +1464,7 @@ fn attach_sheet(
       h=Px(h + 26.0),
       ty=26.0 + offset,
       radius=26.0,
-      bg=t.p.card,
+      glass=sheet_glass(dim),
       shadow=24.0,
       clip=true,
       fn() {

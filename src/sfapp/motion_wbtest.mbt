@@ -177,3 +177,100 @@ test "a quote's line for a comment, tapped while the capsule grows round it, tak
     _ => fail("no quote went")
   }
 }
+
+// What leaves is only drawn (docs/stillfail-motion.md, the rule): a sheet going down and its scrim fading, the bar
+// going down under a page pushed. A tap meanwhile is what is under them's.
+
+///|
+/// A tap on `s` where it is drawn, and the frame after it, nothing settled.
+fn tap_once_on(t : @ui.Tester, s : String) -> Unit {
+  let (x, y) = t.find(s).unwrap()
+  t.tap_once(x, y)
+}
+
+///|
+test "the chat's sheet going down takes no tap: the field tapped through it is the field's" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  assert_true(t.find("复制会话链接") is Some(_))
+  // the scrim, tapped: let go of
+  t.tap_once(195.0, 60.0)
+  t.frame()
+  assert_true(dui.sheet is None)
+  // still going down, drawn over the field
+  assert_true(dui.leaving is Some(_))
+  assert_true(t.find("复制会话链接") is Some(_))
+  let (x, y, w, h) = t.rect_of("发消息").unwrap()
+  t.tap_once(x + w / 2.0, y + h / 2.0)
+  let (active, _, _, _) = t.ime()
+  assert_true(active)
+  t.settle() |> ignore
+  // nothing of the sheet was tapped on the way
+  assert_eq(named(calls, "chat.pin").length(), 0)
+}
+
+///|
+test "the chat's sheet going down: its own rows take no tap, the scrim none" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  t.tap_once(195.0, 60.0)
+  t.frame()
+  tap_once_on(t, "固定到列表顶部")
+  t.tap_once(195.0, 60.0)
+  t.settle() |> ignore
+  assert_eq(named(calls, "chat.pin").length(), 0)
+  assert_true(dui.sheet is None && dui.leaving is None)
+}
+
+///|
+test "the workspaces' sheet sinking takes no tap: the bar's 文件 tapped under it opens its page" {
+  let t = tester("home")
+  t.settle() |> ignore
+  t.tap_text("星火工作室")
+  t.settle() |> ignore
+  assert_true(sheet_open())
+  t.tap_once(195.0, 60.0)
+  t.frame()
+  assert_true(!sheet_open())
+  // sinking, drawn over the bar
+  assert_true(sheet_host.shown != NoSheet)
+  let (xs, y) = bar_places_at()
+  t.tap_once(xs[1], y)
+  t.settle() |> ignore
+  assert_true(app.nav.top() == Files)
+}
+
+///|
+test "a drive sheet going down takes no tap: its 重命名 tapped meanwhile does nothing" {
+  let t = drive_tester("drive")
+  t.settle() |> ignore
+  hold(t, "季度数据.csv")
+  let log = t.drive("tap icon:more\nuntil 重命名\n")
+  assert_true(log.contains("EXIT 0"))
+  t.settle() |> ignore
+  t.tap_once(195.0, 60.0)
+  t.frame()
+  assert_true(t.find("重命名") is Some(_))
+  tap_once_on(t, "重命名")
+  t.settle() |> ignore
+  // no rename sheet came
+  assert_true(t.find("保存") is None)
+}
+
+///|
+test "the bar going down under a page pushed takes no tap: the field tapped where it was is the field's" {
+  let t = tester("home")
+  t.settle() |> ignore
+  tap_once_on(t, "夜里的构建又失败了")
+  // the chat nearly in (its composer in the window), the bar still going down over it
+  for _ in 0..<10 {
+    t.frame()
+  }
+  assert_true(bar.vis.value > 0.01 && bar.vis.value < 0.5, msg="\{bar.vis.value}")
+  let (x, y, w, h) = t.rect_of("发消息").unwrap()
+  assert_true(y + h > 844.0 - 22.0 - 56.0)
+  t.tap_once(x + w / 2.0, y + h / 2.0)
+  t.settle() |> ignore
+  let (active, _, _, _) = t.ime()
+  assert_true(active)
+}

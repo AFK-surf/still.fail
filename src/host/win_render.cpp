@@ -88,6 +88,15 @@ static const char *shader_src =
     "  float2 q = abs(p - r.xy - hs) - hs + rr;\n"
     "  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
     "}\n"
+    "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
+    "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
+    "float notch_cut(float d, float2 p, float4 r, float4 pad) {\n"
+    "  if (pad.z <= 0.0) return d;\n"
+    "  float b = pad.z - length(p - float2(r.x + r.z * 0.5, r.y + pad.y));\n"
+    "  float f = max(pad.w, 0.0);\n"
+    "  float2 u = max(float2(f + d, f + b), 0.0);\n"
+    "  return min(-f, max(d, b)) + length(u);\n"
+    "}\n"
     "float smin_k(float a, float b, float k) {\n"
     "  if (k <= 0.0) return min(a, b);\n"
     "  float h = max(k - abs(a - b), 0.0) / k;\n"
@@ -159,6 +168,7 @@ static const char *shader_src =
     "  float r = min(I.prm.x, min(hs.x, hs.y));\n"
     "  float2 q = abs(p - c) - hs + r;\n"
     "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n"
+    "  if (kind == 0 || kind == 5) d = notch_cut(d, p, I.rect, I.pd);\n"
     "  if (kind == 4) {\n"
     "    float2 uv = I.c2.xy + saturate((p - I.rect.xy) / I.rect.zw) * I.c2.zw;\n"
     "    return img.SampleLevel(samp, uv, 0) * (col.a * saturate(0.5 - d * scale));\n"
@@ -184,8 +194,8 @@ static const char *shader_src =
     "    g3 = g3 * (1.0 - col.a) + col.rgb * col.a;\n"
     "    if (I.c2.x + I.c2.y + I.c2.z > 0.0) {\n"
     "      float edge = saturate(0.5 + (d + 0.5) * scale);\n"
-    "      float lit = saturate(0.5 + sd_rr(p - 0.5, I.rect, I.prm.x) * scale);\n"
-    "      float back = saturate(0.5 + sd_rr(p + 0.5, I.rect, I.prm.x) * scale);\n"
+    "      float lit = saturate(0.5 + notch_cut(sd_rr(p - 0.5, I.rect, I.prm.x), p - 0.5, I.rect, I.pd) * scale);\n"
+    "      float back = saturate(0.5 + notch_cut(sd_rr(p + 0.5, I.rect, I.prm.x), p + 0.5, I.rect, I.pd) * scale);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.x * edge);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.y * lit);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.z * back);\n"
@@ -418,12 +428,14 @@ static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int 
   ctx->Draw(3, 0);
 }
 
-// what the run [start, end) of glass sees, from target (pw × ph) into gsrv and gu; 0 when none of it shows
-static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *f, int32_t start, int32_t end) {
+// what the run [start, end) of glass sees, from target (pw × ph) into gsrv and gu, frosted glass of the same capture
+// further on (glass.mbt shares_capture) too; 0 when none of it shows
+static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *f, int32_t start, int32_t end,
+                   int32_t count) {
   const float *a = f + start * 24;
   float blur = a[7];
   int kind = (int)(a[5] + 0.5f);
-  float margin = 3.0f * blur + a[21] * (1.0f + a[22]) + a[23] + 2.0f;
+  float margin = 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
   float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
   int n = 0;
   for (int32_t i = start; i < end; i++) {
@@ -438,6 +450,16 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
         n++;
       }
     }
+    if (bx0 < x0) x0 = bx0;
+    if (by0 < y0) y0 = by0;
+    if (bx1 > x1) x1 = bx1;
+    if (by1 > y1) y1 = by1;
+  }
+  for (int32_t i = end; kind == 5 && i < count; i++) {
+    const float *b = f + i * 24;
+    if (b[20] != a[20]) continue;
+    float bx0 = b[0] > b[16] ? b[0] : b[16], by0 = b[1] > b[17] ? b[1] : b[17];
+    float bx1 = b[0] + b[2] < b[18] ? b[0] + b[2] : b[18], by1 = b[1] + b[3] < b[19] ? b[1] + b[3] : b[19];
     if (bx0 < x0) x0 = bx0;
     if (by0 < y0) y0 = by0;
     if (bx1 > x1) x1 = bx1;
@@ -535,7 +557,7 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
     while (end < count && (int)f[end * 24 + 20] == tid) end++;
     if (tid < 0) {
       if (tid != bound) {
-        shows = capture(target, pw, ph, f, start, end);
+        shows = capture(target, pw, ph, f, start, end, count);
         bound = tid;
         main_state(target, pw, ph);
       }

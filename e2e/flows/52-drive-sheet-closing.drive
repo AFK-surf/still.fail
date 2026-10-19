@@ -1,0 +1,24 @@
+# A drive sheet let go of: a row held, ⋯ → its sheet, the scrim tapped; 重命名 tapped where it is drawn as the sheet
+# goes down is nothing (no rename asked); the file keeps its name at the station.
+#env MBUI_OPEN_PAGE=files
+timeout 90000
+until =e2e-{T}
+tap =e2e-{T}
+until 说明.txt
+wait 500
+hold 900 说明.txt
+until 已选 1 项
+tap icon:more
+until 重命名
+wait 800
+shot 1-sheet
+tapxy 195 100
+wait 40
+shot 2-closing
+tapxy 60 -150
+tapxy 60 -100
+tapxy 60 -60
+wait 1200
+gone =保存
+gone 重命名
+shot 3-closed

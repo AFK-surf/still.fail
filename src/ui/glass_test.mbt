@@ -91,3 +91,57 @@ test "liquid glass of a group is drawn first, as one capture, its words inked by
   // "0", "1", "2" inked by the glass; "plain" as it was asked
   assert_eq(t.adaptive_glyphs(), 3)
 }
+
+///|
+/// A bar with a notch cut into its top (Bar.kt's), a line drawn over it, then a ball and a disc of glass over it that
+/// frost what the bar frosts.
+fn notched_scene(c : @ui.Ctx) -> Unit {
+  let frost = @ui.Glass::frosted(blur=20.0, tint=0xFFFFFFB8L, solid=0xFDFCFBFFL)
+  c.box(w=Fill(1.0), h=Fill(1.0), bg=0x1559C4FFL, fn() {
+    c.layer(fn() {
+      c.spacer()
+      c.box(w=Px(346.0), h=Px(56.0), radius=28.0, glass=frost, notch_y=-4.0, notch_r=34.0, notch_fillet=8.0, fn() {
+        c.box(w=Fill(1.0), h=Px(1.0), bg=0xFFFFFFB3L, fn() {  }) |> ignore
+        c.box(w=Px(68.0), h=Px(68.0), radius=34.0, glass=frost.sharing(), shadow=4.0, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    c.layer(fn() {
+      c.box(w=Px(56.0), h=Px(56.0), radius=28.0, glass=frost.sharing(), fn() {  }) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+test "a notch is cut into a box's glass, and into its ground where glass is solid" {
+  let t = @ui.Tester::new(notched_scene)
+  let ns = t.drawn_notches()
+  assert_eq(ns.length(), 1)
+  let (kind, _, cy, r, f) = ns[0]
+  assert_eq((kind, cy, r, f), (5, -4.0, 34.0, 8.0))
+  t.set_reduce_transparency(true)
+  t.frame()
+  let ns = t.drawn_notches()
+  assert_eq(ns.length(), 1)
+  let (kind, _, cy, r, f) = ns[0]
+  assert_eq((kind, cy, r, f), (0, -4.0, 34.0, 8.0))
+  t.set_reduce_transparency(false)
+  t.frame()
+}
+
+///|
+test "glass made to share a capture frosts what the glass before it frosts, over it and after what is drawn between" {
+  let t = @ui.Tester::new(notched_scene)
+  let gs = t.drawn_glass()
+  assert_eq(gs.length(), 3)
+  let (_, _, _, _, _, bar) = gs[0]
+  let (_, _, _, _, _, ball) = gs[1]
+  let (_, _, _, _, _, disc) = gs[2]
+  assert_eq(ball, bar)
+  assert_eq(disc, bar)
+  // the shared glass has no notch of its own
+  assert_eq(t.drawn_notches().length(), 1)
+}

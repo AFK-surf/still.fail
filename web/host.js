@@ -85,6 +85,15 @@
     vec2 q = abs(p - r.xy - hs) - hs + rr;
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
   }
+  // a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its
+  // radius), met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle
+  float notch_cut(float d, vec2 p, vec4 r, vec4 pad) {
+    if (pad.z <= 0.0) return d;
+    float b = pad.z - length(p - vec2(r.x + r.z * 0.5, r.y + pad.y));
+    float f = max(pad.w, 0.0);
+    vec2 u = max(vec2(f + d, f + b), 0.0);
+    return min(-f, max(d, b)) + length(u);
+  }
   float smin_k(float a, float b, float k) {
     if (k <= 0.0) return min(a, b);
     float h = max(k - abs(a - b), 0.0) / k;
@@ -157,6 +166,7 @@
     float r = min(v_p.x, min(hs.x, hs.y));
     vec2 q = abs(p - c) - hs + r;
     float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+    if (kind == 0 || kind == 5) d = notch_cut(d, p, v_rect, v_pad);
     if (kind == 4) {
       vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;
       o = texture(u_img, uv) * (col.a * clamp(0.5 - d * u_scale, 0.0, 1.0));
@@ -183,8 +193,8 @@
       g3 = g3 * (1.0 - col.a) + col.rgb * col.a;
       if (v_c2.x + v_c2.y + v_c2.z > 0.0) {
         float edge = clamp(0.5 + (d + 0.5) * u_scale, 0.0, 1.0);
-        float lit = clamp(0.5 + sd_rr(p - 0.5, v_rect, v_p.x) * u_scale, 0.0, 1.0);
-        float back = clamp(0.5 + sd_rr(p + 0.5, v_rect, v_p.x) * u_scale, 0.0, 1.0);
+        float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, v_rect, v_p.x), p - 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);
+        float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, v_rect, v_p.x), p + 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);
         g3 = mix(g3, vec3(1.0), v_c2.x * edge);
         g3 = mix(g3, vec3(1.0), v_c2.y * lit);
         g3 = mix(g3, vec3(1.0), v_c2.z * back);
@@ -331,10 +341,12 @@
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
   // what the run [start, end) of glass sees; false when none of it shows
-  function capture(start, end) {
+  // what the run [start, end) of glass sees, frosted glass of the same capture further on (glass.mbt
+  // shares_capture) too; false when none of it shows
+  function capture(start, end, count) {
     const a = start * 24;
     const blur = f32[a + 7], kind = Math.round(f32[a + 5]);
-    const margin = 3 * blur + f32[a + 21] * (1 + f32[a + 22]) + f32[a + 23] + 2;
+    const margin = 3 * blur + (kind === 6 ? f32[a + 21] * (1 + f32[a + 22]) + f32[a + 23] : 0) + 2;
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     gn = 0;
     for (let i = start; i < end; i++) {
@@ -351,6 +363,12 @@
         }
       }
       x0 = Math.min(x0, bx0); y0 = Math.min(y0, by0); x1 = Math.max(x1, bx1); y1 = Math.max(y1, by1);
+    }
+    for (let i = end; kind === 5 && i < count; i++) {
+      const b = i * 24;
+      if (f32[b + 20] !== f32[a + 20]) continue;
+      x0 = Math.min(x0, Math.max(f32[b], f32[b + 16])); y0 = Math.min(y0, Math.max(f32[b + 1], f32[b + 17]));
+      x1 = Math.max(x1, Math.min(f32[b] + f32[b + 2], f32[b + 18])); y1 = Math.max(y1, Math.min(f32[b + 1] + f32[b + 3], f32[b + 19]));
     }
     ggb[0] = x0 - 2; ggb[1] = y0 - 2; ggb[2] = x1 + 2; ggb[3] = y1 + 2;
     const W = canvas.width, Hh = canvas.height, sc = dpr;
@@ -441,7 +459,7 @@
       while (end < n && (f32[end * 24 + 20] | 0) === tid && hole(end) === h) end++;
       if (tid < 0) {
         if (tid !== bound) {
-          shows = capture(start, end);
+          shows = capture(start, end, n);
           bound = tid;
           mainState();
         }

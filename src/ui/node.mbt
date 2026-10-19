@@ -100,6 +100,12 @@ struct Node {
   // glass inside it is one group (drawn first, merging)
   mut glass : Glass?
   mut glass_group : Bool
+  // a notch cut into its top edge (its ground, border and glass): a circle
+  // of radius notch_r about its top's middle, notch_y below the edge (above
+  // it when negative), met by the edge through fillets of notch_f
+  mut notch_y : Double
+  mut notch_r : Double
+  mut notch_f : Double
   // text
   mut text : String
   mut font_size : Double
@@ -204,6 +210,9 @@ fn Node::new() -> Node {
     opacity: 1.0,
     glass: None,
     glass_group: false,
+    notch_y: 0.0,
+    notch_r: 0.0,
+    notch_f: 0.0,
     text: "",
     font_size: 14.0,
     weight: 400,
@@ -301,6 +310,7 @@ fn Node::reset_look(self : Node) -> Unit {
   self.opacity = 1.0
   self.glass = None
   self.glass_group = false
+  self.notch_r = 0.0
 }
 
 ///|

@@ -573,6 +573,12 @@ fn Ctx::transform_insts(
         a[b + 6] = a[b + 6] * sm
         a[b + 7] = a[b + 7] * sm
       }
+      // a rect's or frosted glass's notch (scene.mbt)
+      if a[b + 5] == 0.0 || a[b + 5] == 5.0 {
+        a[b + 21] = a[b + 21] * sm
+        a[b + 22] = a[b + 22] * sm
+        a[b + 23] = a[b + 23] * sm
+      }
     }
     if a[b + 16] != c0 || a[b + 17] != c1 || a[b + 18] != c2 || a[b + 19] != c3 {
       a[b + 16] = dmax(ox + (a[b + 16] - ox) * sx + dx, c0)

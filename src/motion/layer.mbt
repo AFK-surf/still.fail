@@ -262,6 +262,15 @@ fn logging() -> Bool {
 }
 
 ///|
+/// A frame of a motion the app steps itself (a number on a spring of its own) into the motion log, as this package's
+/// are: `MOTION <ms> <key> <fields>` (`name=value` …), when MBUI_MOTION_LOG=1.
+pub fn log_frame(c : @ui.Ctx, key : String, fields : String) -> Unit {
+  if logging() {
+    @ui.log("MOTION \{c.now()} \{key} \{fields}")
+  }
+}
+
+///|
 let motion_log : Ref[Int] = { val: -1 }
 
 ///|

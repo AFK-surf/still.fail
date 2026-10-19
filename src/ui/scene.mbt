@@ -2,7 +2,9 @@
 // each) that every renderer draws with one shader:
 //   0-3 rect x y w h · 4 radius · 5 kind · 6 border width · 7 blur
 //   8-11 color rgba · 12-15 border color, or the glyph's atlas rect
-//   16-19 clip x0 y0 x1 y1 · 20 image id · 21-23 unused
+//   16-19 clip x0 y0 x1 y1 · 20 image id · 21-23 a notch in its top edge
+//   (kinds 0 and 5: its circle's middle below the top, its radius, its
+//   fillets'; 0 none: Ctx::box notch_r)
 // kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow (12 > 0: only
 // outside its box, which is 13 above it), 3 color glyph, 4 image (12-15 its
 // uv rect, 0-1), 5 frosted glass, 6 liquid glass, 7 a glyph in liquid glass
@@ -68,7 +70,24 @@ fn Ctx::push_inst(
   a[b + 18] = clip_stack[k + 2]
   a[b + 19] = clip_stack[k + 3]
   a[b + 20] = 0.0 // the image it shows, if any
+  // a rect's or frosted glass's notch (none); liquid glass and glyphs in it set theirs after
+  a[b + 21] = 0.0
+  a[b + 22] = 0.0
+  a[b + 23] = 0.0
   self.ninst = self.ninst + 1
+}
+
+///|
+/// The notch of node `n` (Ctx::box `notch_r`) on the instance just emitted for it (its ground or its glass): where
+/// its circle's middle is below the top (21), its radius (22), its fillets' (23).
+fn Ctx::notch_last(self : Ctx, n : Node) -> Unit {
+  if n.notch_r <= 0.0 {
+    return
+  }
+  let b = (self.ninst - 1) * inst_size
+  self.inst[b + 21] = n.notch_y
+  self.inst[b + 22] = n.notch_r
+  self.inst[b + 23] = n.notch_f
 }
 
 ///|
@@ -222,6 +241,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       n.border_c,
       alpha,
     )
+    self.notch_last(n)
   }
   if n.hit && n.id != 0 {
     self.next_hit_ids.push(n.id)

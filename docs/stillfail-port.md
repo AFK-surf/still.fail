@@ -356,6 +356,13 @@ GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
   24px blur: Home's, 文件's (a place's) and the chat's top bars, the hairline the bar's own), `glass_floating` (`raised` at 72% over a
   20px blur: the composer's capsule, the way to the newest), `glass_bottom_bar`, `glass_bar_ball`, `glass_action`
   (Bar.kt's, rims lit) and `glass_sheet` (the surface at 80% over 28px) for the bar and sheets to take.
+- A notch cut into a box's top (`c.box(notch_y=, notch_r=, notch_fillet=)`: a circle about its top's middle, met by
+  the edge through fillets, Bar.kt's outline): slots 21-23 of a rectangle's or frosted glass's instance, the renderers'
+  shape the rounded intersection of the box and what is outside the circle (its ground, border, glass and lit rim
+  alike, and its solid ground where glass is drawn solid). `Glass::sharing` (`shares_capture`): frosted glass that
+  frosts what the glass before it frosts (its capture, at its blur), whatever has been drawn since and over that glass
+  too: the bar's ball and its action frost the page under the bar, not the bar (Bar.kt: Haze's one source is the
+  pages); a renderer copies what is under every instance of a capture when it reaches the first.
 - Liquid glass (the demo's MBUI_SCREEN=glass, not on still.fail's pages): each shape's rounded-box distance, the
   shapes of a `glass_group=true` box drawn first as one capture and merged by a smooth minimum (`merge`); what is
   under it bent along a bezel (`bezel` wide, by up to `refraction`, a circle's profile), the colours split by
@@ -397,14 +404,25 @@ src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, S
   and the bar's room at its foot); the other places are their top bar over nothing yet (PlacePage.kt; their pages are
   later slices'). The sheets of a chat (slice 8's, decide.mbt's frame) are not on this sheet host yet: they neither
   drag nor snap.
-- The bar and its sheets with nothing blurred yet: `bar_ground` (bar.mbt) is the bar's colour where the Android app
-  has no blur (Glass.kt floating: --raised at 72% over the paper; the ball that and white at 42%; 令 the accent at
-  86%), the one place it is chosen, and `sheet_ground` (sheet.mbt) the sheet's (the paper, the scrim's black, the
-  surface at 80%). The glass (above) has `glass_bottom_bar`, `glass_bar_ball`, `glass_action` and `glass_sheet` for
-  them, but the notch is cut out of the bar as Bar.kt's outline has it (the circle and its two fillets), drawn from
-  rounded rectangles and a ring in clips so the page shows through it, and a ring is not a shape the glass pass
-  takes: the bar goes on glass with that. A new chat's choices over the composer are on the composer's glass
-  (`glass_floating`). The rim is a hairline here; the shadow is cast below and to the sides only.
+- The bar and its sheets on frosted glass (branch glass-bars): the bar is `glass_bottom_bar` with the notch cut into it
+  (a box's `notch_*`, above: Bar.kt's outline, the circle and its two fillets, its lit rim along the notch too) and the
+  notch's own edge lit (1 wide, white at 70%, 22% dark); 令 (or 文件's ＋) is `glass_action`, the ball
+  `glass_bar_ball`, both `sharing` the bar's capture, so the three frost the page under them and not each other, one
+  copy a frame as on the phone. Every sheet (the sheet host's, slice 8's chat sheets, the drive's, the settings', ＋'s
+  in the composer) is `glass_sheet` over the page and its scrim (sheet.mbt `sheet_glass`: drawn solid, the paper, the
+  scrim's black and the surface at 80%). A new chat's choices over the composer are on the composer's glass
+  (`glass_floating`). The shadow is cast below and to the sides only.
+- What moves in the bar is only drawn (src/motion's rule, branch glass-bars): the bar laid out where it rests, drawn
+  going down out of the way (300 ms) and coming back (380 ms), only drawn as it goes (a tap meanwhile is what is under
+  it's: the page pushed); the action laid out whole in the notch and drawn growing out of it and shrinking (as the
+  notch opens and closes, about its middle, which comes up to the edge); its icon swapping between 令 and a page's ＋
+  while the notch stays open (Bar.kt showIcon: 300 ms, the one going out by 120 ms on CSS's ease to half its size,
+  drawn only, the one coming in from 60 ms, faded in over 180, grown from half over 240 on Arrive; closed, at once);
+  a bar chosen in the panel sliding down into the bar's place as the panel closes (Bar.kt Swap: the stack of bars
+  inside the closing glass, the chosen bar's places laid out where they end and drawn coming from their row, from the
+  rows' fade and offset and each place as lit as it was to the bar's look; the others and the bar left drawn only,
+  cut by the glass's top; the ball riding the place tapped; a finger down meanwhile is the bar's only once it has
+  landed).
 - Sheets (Sheet.kt SheetHost): one at a time over a scrim (black at 28%, 300 ms), rising on SheetSpring (critically
   damped, stiffness (2π / 1.2·0.32)²); its top 64 drags it: a draggable one between 55% and 94% (or closed under 30%),
   any other only down (closed past 80, else back), let go at the finger's speed; a tap on a draggable one's grabber
@@ -433,9 +451,7 @@ src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, S
   web-decide-home-jobs) changed on purpose: the bar on Home, the workspaces' sheet in the new sheet.
 - MBUI_DRIVE has `drag X Y DX DY [MS]` and `dragon DX DY MS TEXT` (a finger moved a frame at a time, then lifted).
 
-Not yet, against the current app: the bar's and the sheets' frosted glass (see above), the bar chosen in the panel sliding
-down into the bar's place (here the panel closes and the bar is the chosen one at once), the notch's icon swapping
-between 令 and a page's ＋ with its short scale and fade (here it changes at once), the stations' place's glyph of their states (the
+Not yet, against the current app: the stations' place's glyph of their states (the
 server's mark here), the bar going away while the keyboard is up (no page with the bar has a field yet), the words
 flying from the composer into their bubble (the list comes up with them; the words leave the field at once), the
 machine's own sessions to go on with (MachineSessions), borrowing another station's model (the note only), a wide
@@ -729,6 +745,11 @@ while the card moved the list):
 | 42 notice-looking | the test chat open while the other device asks for a card in it: no notice, the card comes in the chat | the card at the station; no NOTICE for it; the app told the core it shows the chat (client.focus) |
 | 43 notify-off | settings → 通知 off (不接收通知); a card asked meanwhile shows no notice; on again | notify.set answered on false, then on true; push.unregister called; no NOTICE for the card; the card at the station; the core's store on the device keeps notifications on |
 | 44 notice-cancel | a notice shown on Home; the chat then opened from its row: its notification goes | the test chat's NOTICE, then its NOTICE CANCEL |
+| 50 bar-glass | the bar of glass: 文件 and back (the notch's icon swapping between 令 and ＋), the panel drawn up and let go on 奏 (that bar sliding down into the bar's place), the bar tapped as it lands (nothing), the chats again from the panel | the swap and the panel closing in the motion log; 奏's page, not 用量's; the bar chosen kept on the device (`prefs.set {barsBy}`) |
+| 51 sheets-sinking | the workspaces' sheet let go of, the bar's 文件 tapped under it as it sinks; the chat's own sheet let go of, the composer tapped through it as it goes down, words typed and sent | 文件 opened; the words at the station, once, alice's; no pin of alice's at the station |
+| 52 drive-sheet-closing | a file held, ⋯ → its sheet, the scrim tapped, the sheet's rows tapped where they are drawn as it closes | no rename asked; the station keeps the file, its name and words |
+| 53 settings-sheet-sinking | settings → Station → the test station → … → 重命名, a name typed, the scrim tapped, 保存 tapped where it is drawn as the sheet goes down | the station's page as it was; still.fail cloud has the old name |
+| 54 bar-going-down | the test chat opened from Home, the composer tapped under the bar still going down, words sent | the words at the station, once, alice's; the bar going down in the motion log |
 
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once
