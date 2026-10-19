@@ -12,6 +12,16 @@ import androidx.activity.compose.BackHandler
 import fail.still.android.ui.Smooth
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import fail.still.android.ui.STROKE_MS
+import fail.still.android.ui.STROKE_GAP_MS
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -283,7 +293,7 @@ private fun ItemRow(item: SearchItem, several: Boolean, onClick: () -> Unit) {
                 val meta = listOfNotNull(item.stationName.takeIf { several && item.kind != "station" && it.isNotEmpty() }, item.time?.get("createdAt")?.ago).joinToString(" · ")
                 if (meta.isNotEmpty()) Text(meta, fontSize = 12.sp, color = C.muted, maxLines = 1)
             }
-            if (item.text.isNotEmpty()) Text(line, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(20.dp))
+            if (item.text.isNotEmpty()) StrokedLine(line, item.marks, 14.sp, 20.sp, C.muted, Modifier.height(20.dp))
         }
     }
 }
@@ -344,6 +354,43 @@ private fun marked(text: String, marks: List<TextMark>, ink: Color): AnnotatedSt
     append(text.substring(at))
 }
 
+/**
+ * A found line, one line cut at its end, with a hand-drawn stroke in the accent under each of its words (as a message a
+ * search opened marks them, ui/TextMark.kt), drawn in from the left one after another.
+ */
+@Composable
+private fun StrokedLine(line: AnnotatedString, marks: List<TextMark>, size: TextUnit, height: TextUnit, color: Color, modifier: Modifier) {
+    val accent = C.accent
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val drawn = remember(line) { Animatable(0f) }
+    LaunchedEffect(line) { drawn.animateTo(STROKE_MS + STROKE_GAP_MS * marks.size, tween((STROKE_MS + STROKE_GAP_MS * marks.size).toInt(), easing = LinearEasing)) }
+    Text(
+        line, fontSize = size, lineHeight = height, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, onTextLayout = { layout = it },
+        modifier = modifier.drawBehind {
+            val l = layout ?: return@drawBehind
+            val end = l.getLineEnd(0, visibleEnd = true)
+            marks.forEachIndexed { i, m ->
+                val from = m.from.toInt()
+                val to = minOf(m.to.toInt(), end)
+                if (from >= to) return@forEachIndexed
+                val p = Ease.Standard.transform(((drawn.value - i * STROKE_GAP_MS) / STROKE_MS).coerceIn(0f, 1f))
+                if (p <= 0f) return@forEachIndexed
+                val left = l.getHorizontalPosition(from, true) - 2.dp.toPx()
+                val right = l.getHorizontalPosition(to, true) + 2.dp.toPx()
+                val y = l.getLineBaseline(0) + 3.dp.toPx()
+                val w = right - left
+                val stroke = Path().apply {
+                    moveTo(left, y)
+                    cubicTo(left + w * 0.25f, y - 2.dp.toPx(), left + w * 0.55f, y + 1.5.dp.toPx(), right, y - 1.5.dp.toPx())
+                }
+                val part = Path()
+                PathMeasure().apply { setPath(stroke, false); getSegment(0f, length * p, part, true) }
+                drawPath(part, accent, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+            }
+        },
+    )
+}
+
 @Composable
 private fun SearchNote(text: String) {
     Text(text, fontSize = 14.sp, color = C.muted, modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp))
@@ -376,7 +423,7 @@ private fun HitRow(text: String, marks: List<TextMark>, meta: String, under: Str
         Modifier.fillMaxWidth().height(66.dp).clickable(onClick = onClick).padding(start = 22.dp, end = 16.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(line, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(22.dp))
+        StrokedLine(line, marks, 15.sp, 22.sp, C.ink, Modifier.height(22.dp))
         Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(under, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (meta.isNotEmpty()) Text(meta, fontSize = 12.sp, color = C.muted, maxLines = 1)
