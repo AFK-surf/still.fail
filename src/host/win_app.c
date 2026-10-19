@@ -995,3 +995,8 @@ moonbit_string_t mb_host_charset_decode(moonbit_bytes_t data, moonbit_string_t c
   MultiByteToWideChar(p, 0, (const char *)data, len, (wchar_t *)s, n);
   return s;
 }
+
+// Marks drawn onto an image (marks.mbt): none on this host yet.
+int32_t mb_host_marks_start(moonbit_bytes_t image, moonbit_string_t marks) { (void)image; (void)marks; return 0; }
+int32_t mb_host_marks_state(int32_t id) { (void)id; return -1; }
+moonbit_bytes_t mb_host_marks_png(int32_t id) { (void)id; return moonbit_make_bytes(0, 0); }

@@ -536,6 +536,23 @@ fn cs_decode(data : Bytes, charset : String) -> String {
   js_cs_decode(data, charset)
 }
 
+// Marks drawn onto an image (marks.mbt): not by a page.
+
+///|
+fn mk_start(_image : Bytes, _marks : String) -> Int {
+  0
+}
+
+///|
+fn mk_state(_id : Int) -> Int {
+  -1
+}
+
+///|
+fn mk_png(_id : Int) -> Bytes {
+  b""
+}
+
 // Notifications (notify.mbt): not shown by a page yet; what would be is said on the log.
 
 ///|

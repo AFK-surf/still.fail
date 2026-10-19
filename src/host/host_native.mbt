@@ -592,6 +592,18 @@ extern "C" fn cs_known(charset : String) -> Int = "mb_host_charset_known"
 #borrow(data, charset)
 extern "C" fn cs_decode(data : Bytes, charset : String) -> String = "mb_host_charset_decode"
 
+// Marks drawn onto an image (marks.mbt): Marks.java on Android, apple_views.m on macOS and iOS.
+
+///|
+#borrow(image, marks)
+extern "C" fn mk_start(image : Bytes, marks : String) -> Int = "mb_host_marks_start"
+
+///|
+extern "C" fn mk_state(id : Int) -> Int = "mb_host_marks_state"
+
+///|
+extern "C" fn mk_png(id : Int) -> Bytes = "mb_host_marks_png"
+
 // Notifications (notify.mbt): dev.mbui.Notices on Android (android_host.c), kept and said on the log elsewhere.
 
 ///|

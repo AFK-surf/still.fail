@@ -1149,6 +1149,223 @@ void mb_views_draw_under(CGContextRef ctx, double scale) {
 // the app's Documents (MBUI_DOWNLOADS_DIR instead, for tests); a name taken
 // gets " (2)", " (3)"… before its extension.
 
+// Marks drawn onto an image (marks.mbt), as still.fail's Android app's ImageMarks.kt draws them: decoded by ImageIO,
+// drawn in a bitmap context of its size (flipped: the marks' y down), round-capped strokes, a box's rounded corners,
+// an arrow's barbs, a hand-drawn line through its midpoints, words edged in their halo (Core Text), the numbered
+// marks' pins; PNG out. On a queue of its own; each job's state 0 drawing, 1 made, -1 failed.
+
+@interface MBMarksJob : NSObject
+@property(nonatomic) int state;
+@property(nonatomic, strong) NSData *png;
+@end
+@implementation MBMarksJob
+@end
+
+static NSMutableDictionary<NSNumber *, MBMarksJob *> *mark_jobs;
+static int32_t next_mark_job = 1;
+
+static CGColorRef mk_color(NSDictionary *m, NSString *k) {
+  NSNumber *n = m[k];
+  uint32_t c = n ? (uint32_t)n.unsignedLongLongValue : 0xE5704AFF;
+  CGFloat comps[4] = {((c >> 24) & 0xFF) / 255.0, ((c >> 16) & 0xFF) / 255.0, ((c >> 8) & 0xFF) / 255.0, (c & 0xFF) / 255.0};
+  CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+  CGColorRef out = CGColorCreate(cs, comps);
+  CGColorSpaceRelease(cs);
+  return out;
+}
+
+static void mk_text(CGContextRef ctx, NSString *text, double size, double weight, CGColorRef color, double x, double base,
+                    double stroke, BOOL centred) {
+  CTFontRef font = mb_platform_font(size, (int)weight, 0);
+  NSDictionary *attrs = @{
+    (__bridge NSString *)kCTFontAttributeName : (__bridge id)font,
+    (__bridge NSString *)kCTForegroundColorAttributeName : (__bridge id)color,
+    (__bridge NSString *)kCTStrokeColorAttributeName : (__bridge id)color,
+    (__bridge NSString *)kCTStrokeWidthAttributeName : @(stroke > 0 ? stroke / size * 100.0 : 0),
+  };
+  NSAttributedString *a = [[NSAttributedString alloc] initWithString:text attributes:attrs];
+  CTLineRef line = CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)a);
+  double w = CTLineGetTypographicBounds(line, NULL, NULL, NULL);
+  CGContextSaveGState(ctx);
+  // (Core Text draws with y up: undo the context's flip about the baseline)
+  CGContextSetTextMatrix(ctx, CGAffineTransformIdentity);
+  CGContextTranslateCTM(ctx, centred ? x - w / 2 : x, base);
+  CGContextScaleCTM(ctx, 1, -1);
+  CGContextSetLineJoin(ctx, kCGLineJoinRound);
+  CGContextSetTextPosition(ctx, 0, 0);
+  CTLineDraw(line, ctx);
+  CGContextRestoreGState(ctx);
+  CFRelease(line);
+  CFRelease(font);
+}
+
+static void mk_pin_path(CGContextRef ctx, double x, double y, double size, double inset, double r, double point) {
+  double l = x + inset, t = y + inset, rr = x + size - inset, b = y + size - inset;
+  CGContextBeginPath(ctx);
+  CGContextMoveToPoint(ctx, l + r, t);
+  CGContextAddArcToPoint(ctx, rr, t, rr, b, r);
+  CGContextAddArcToPoint(ctx, rr, b, l, b, r);
+  CGContextAddArcToPoint(ctx, l, b, l, t, point);
+  CGContextAddArcToPoint(ctx, l, t, rr, t, r);
+  CGContextClosePath(ctx);
+}
+
+static NSData *mk_draw(NSData *image, NSDictionary *v) {
+  CGImageSourceRef src = CGImageSourceCreateWithData((__bridge CFDataRef)image, NULL);
+  if (!src) return nil;
+  NSDictionary *opts = @{(__bridge NSString *)kCGImageSourceCreateThumbnailWithTransform : @YES,
+                         (__bridge NSString *)kCGImageSourceCreateThumbnailFromImageAlways : @YES,
+                         (__bridge NSString *)kCGImageSourceThumbnailMaxPixelSize : @(1 << 15)};
+  CGImageRef img = CGImageSourceCreateThumbnailAtIndex(src, 0, (__bridge CFDictionaryRef)opts);
+  CFRelease(src);
+  if (!img) return nil;
+  size_t W = CGImageGetWidth(img), H = CGImageGetHeight(img);
+  CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+  CGContextRef ctx = CGBitmapContextCreate(NULL, W, H, 8, 0, cs, kCGImageAlphaPremultipliedLast);
+  CGColorSpaceRelease(cs);
+  if (!ctx) {
+    CGImageRelease(img);
+    return nil;
+  }
+  CGContextDrawImage(ctx, CGRectMake(0, 0, W, H), img);
+  CGImageRelease(img);
+  // y down, in the marks' own size
+  double nw = [v[@"w"] doubleValue] ?: W, nh = [v[@"h"] doubleValue] ?: H;
+  CGContextTranslateCTM(ctx, 0, H);
+  CGContextScaleCTM(ctx, W / nw, -(H / nh));
+  CGContextSetLineCap(ctx, kCGLineCapRound);
+  CGContextSetLineJoin(ctx, kCGLineJoinRound);
+  NSArray *marks = v[@"marks"];
+  for (NSDictionary *m in marks) {
+    NSString *kind = m[@"kind"];
+    double w = [m[@"w"] doubleValue];
+    NSArray<NSNumber *> *p = m[@"pts"];
+    CGColorRef color = mk_color(m, @"color"), halo = mk_color(m, @"halo");
+    if ([kind isEqualToString:@"words"] && p.count >= 2) {
+      NSString *text = m[@"text"] ?: @"";
+      double base = p[1].doubleValue + w * 0.98;
+      mk_text(ctx, text, w, 600, halo, p[0].doubleValue, base, w * 0.22, NO);
+      mk_text(ctx, text, w, 600, color, p[0].doubleValue, base, 0, NO);
+    } else if (p.count >= 2) {
+      CGContextSetStrokeColorWithColor(ctx, color);
+      CGContextSetLineWidth(ctx, w);
+      CGContextBeginPath(ctx);
+      if ([kind isEqualToString:@"box"] && p.count >= 4) {
+        double ax = p[0].doubleValue, ay = p[1].doubleValue, bx = p[2].doubleValue, by = p[3].doubleValue;
+        CGRect r = CGRectMake(MIN(ax, bx), MIN(ay, by), fabs(bx - ax), fabs(by - ay));
+        double rad = MIN(w * 1.5, MIN(r.size.width / 2, r.size.height / 2));
+        CGPathRef path = CGPathCreateWithRoundedRect(r, rad, rad, NULL);
+        CGContextAddPath(ctx, path);
+        CGPathRelease(path);
+      } else if ([kind isEqualToString:@"arrow"] && p.count >= 4) {
+        double ax = p[0].doubleValue, ay = p[1].doubleValue, bx = p[2].doubleValue, by = p[3].doubleValue;
+        double dx = bx - ax, dy = by - ay, len = hypot(dx, dy);
+        if (len <= 0) len = 1;
+        double ux = dx / len, uy = dy / len, size = MIN(w * 5, len * 0.6), spread = 0.5;
+        double backX = bx - ux * size, backY = by - uy * size;
+        CGContextMoveToPoint(ctx, ax, ay);
+        CGContextAddLineToPoint(ctx, bx, by);
+        CGContextMoveToPoint(ctx, backX - uy * size * spread, backY + ux * size * spread);
+        CGContextAddLineToPoint(ctx, bx, by);
+        CGContextAddLineToPoint(ctx, backX + uy * size * spread, backY - ux * size * spread);
+      } else {
+        NSUInteger n = p.count / 2;
+        CGContextMoveToPoint(ctx, p[0].doubleValue, p[1].doubleValue);
+        if (n < 3) {
+          for (NSUInteger k = 1; k < n; k++) CGContextAddLineToPoint(ctx, p[2 * k].doubleValue, p[2 * k + 1].doubleValue);
+        } else {
+          for (NSUInteger k = 1; k < n - 1; k++) {
+            double x = p[2 * k].doubleValue, y = p[2 * k + 1].doubleValue;
+            double nx = p[2 * k + 2].doubleValue, ny = p[2 * k + 3].doubleValue;
+            CGContextAddQuadCurveToPoint(ctx, x, y, (x + nx) / 2, (y + ny) / 2);
+          }
+          CGContextAddLineToPoint(ctx, p[2 * n - 2].doubleValue, p[2 * n - 1].doubleValue);
+        }
+      }
+      CGContextStrokePath(ctx);
+    }
+    CGColorRelease(color);
+    CGColorRelease(halo);
+  }
+  // the numbered marks' pins, over them all
+  for (NSDictionary *m in marks) {
+    int n = [m[@"n"] intValue];
+    NSArray<NSNumber *> *p = m[@"pts"];
+    if (n <= 0 || p.count < 2) continue;
+    double k = [m[@"w"] doubleValue] / 3.0;
+    double px = p[0].doubleValue, py = p[1].doubleValue;
+    if ([m[@"kind"] isEqualToString:@"box"] && p.count >= 4) {
+      px = MIN(px, p[2].doubleValue);
+      py = MIN(py, p[3].doubleValue);
+    }
+    px = MAX(2 * k, MIN(MAX(2 * k, nw - 22 * k), px));
+    py = MAX(22 * k, MIN(MAX(22 * k, nh - 2 * k), py));
+    double x = px - 2 * k, y = py - 22 * k, size = 24 * k;
+    CGColorRef color = mk_color(m, @"color"), halo = mk_color(m, @"halo");
+    CGContextSaveGState(ctx);
+    CGColorRef shadow = mk_color(@{@"c" : @(0x00000038)}, @"c");
+    CGContextSetShadowWithColor(ctx, CGSizeMake(0, -2 * k), 3 * k, shadow);
+    CGColorRelease(shadow);
+    CGContextSetFillColorWithColor(ctx, halo);
+    mk_pin_path(ctx, x, y, size, 0, 12 * k, 3 * k);
+    CGContextFillPath(ctx);
+    CGContextRestoreGState(ctx);
+    CGContextSetFillColorWithColor(ctx, color);
+    mk_pin_path(ctx, x, y, size, 2 * k, 10 * k, 1.5 * k);
+    CGContextFillPath(ctx);
+    mk_text(ctx, [NSString stringWithFormat:@"%d", n], 11 * k, 650, halo, x + size / 2, y + size / 2 + 11 * k * 0.36, 0, YES);
+    CGColorRelease(color);
+    CGColorRelease(halo);
+  }
+  CGImageRef out = CGBitmapContextCreateImage(ctx);
+  CGContextRelease(ctx);
+  if (!out) return nil;
+  NSMutableData *png = [NSMutableData new];
+  CGImageDestinationRef dst = CGImageDestinationCreateWithData((__bridge CFMutableDataRef)png, CFSTR("public.png"), 1, NULL);
+  BOOL ok = NO;
+  if (dst) {
+    CGImageDestinationAddImage(dst, out, NULL);
+    ok = CGImageDestinationFinalize(dst);
+    CFRelease(dst);
+  }
+  CGImageRelease(out);
+  return ok ? png : nil;
+}
+
+int32_t mb_host_marks_start(moonbit_bytes_t image, moonbit_string_t marks) {
+  if (!mark_jobs) mark_jobs = [NSMutableDictionary new];
+  int32_t jid = next_mark_job++;
+  MBMarksJob *j = [MBMarksJob new];
+  mark_jobs[@(jid)] = j;
+  NSData *img = [NSData dataWithBytes:image length:Moonbit_array_length(image)];
+  NSData *json = [mb_ns_from_string(marks) dataUsingEncoding:NSUTF8StringEncoding];
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSDictionary *v = json ? [NSJSONSerialization JSONObjectWithData:json options:0 error:nil] : nil;
+    NSData *png = [v isKindOfClass:NSDictionary.class] ? mk_draw(img, v) : nil;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      vlog(@"marks: %@", png ? [NSString stringWithFormat:@"drawn (%lu bytes)", (unsigned long)png.length] : @"not drawn");
+      j.png = png;
+      j.state = png ? 1 : -1;
+      mb_host_request_frame();
+    });
+  });
+  return jid;
+}
+
+int32_t mb_host_marks_state(int32_t jid) {
+  MBMarksJob *j = mark_jobs[@(jid)];
+  return j ? j.state : -1;
+}
+
+moonbit_bytes_t mb_host_marks_png(int32_t jid) {
+  MBMarksJob *j = mark_jobs[@(jid)];
+  NSData *d = j.png ?: [NSData data];
+  moonbit_bytes_t out = moonbit_make_bytes((int32_t)d.length, 0);
+  memcpy(out, d.bytes, d.length);
+  [mark_jobs removeObjectForKey:@(jid)];
+  return out;
+}
+
 // Text in a legacy encoding (charset.mbt): the encoding CoreFoundation names by IANA's name, its bytes decoded (a
 // byte with no mapping: U+FFFD, through a lossy conversion where the strict one refuses).
 static CFStringEncoding cs_of(moonbit_string_t charset) {

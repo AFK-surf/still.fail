@@ -40,7 +40,8 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways;
 static jclass updates_cls, shares_cls, keeps_cls;
-static jclass gallery_cls;
+static jclass gallery_cls, marks_cls;
+static jmethodID m_mk_start, m_mk_state, m_mk_png;
 static jmethodID m_cs_known, m_cs_decode;
 static jmethodID m_v_text, m_v_still;
 static jmethodID m_ga_access, m_ga_ask, m_ga_answers, m_ga_read, m_ga_state, m_ga_rows, m_ga_end, m_pk_photo;
@@ -123,6 +124,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_kp_state = (*env)->GetStaticMethodID(env, keeps_cls, "state", "(I)I");
   m_kp_where = (*env)->GetStaticMethodID(env, keeps_cls, "where", "(I)Ljava/lang/String;");
   m_kp_end = (*env)->GetStaticMethodID(env, keeps_cls, "end", "(I)V");
+  marks_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Marks"));
+  m_mk_start = (*env)->GetStaticMethodID(env, marks_cls, "start", "([BLjava/lang/String;)I");
+  m_mk_state = (*env)->GetStaticMethodID(env, marks_cls, "state", "(I)I");
+  m_mk_png = (*env)->GetStaticMethodID(env, marks_cls, "png", "(I)[B");
   gallery_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Gallery"));
   m_ga_access = (*env)->GetStaticMethodID(env, gallery_cls, "access", "()I");
   m_ga_ask = (*env)->GetStaticMethodID(env, gallery_cls, "ask", "()V");
@@ -1388,6 +1393,33 @@ int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) {
   (*env)->DeleteLocalRef(env, n);
   (*env)->DeleteLocalRef(env, b);
   return ok ? 1 : 0;
+}
+
+// Marks drawn onto an image (marks.mbt): dev.mbui.Marks.
+
+int32_t mb_host_marks_start(moonbit_bytes_t image, moonbit_string_t marks) {
+  JNIEnv *env = env_();
+  jbyteArray b = jbytes(env, image);
+  jstring m = jstr(env, marks);
+  jint id = (*env)->CallStaticIntMethod(env, marks_cls, m_mk_start, b, m);
+  (*env)->DeleteLocalRef(env, b);
+  (*env)->DeleteLocalRef(env, m);
+  return id;
+}
+
+int32_t mb_host_marks_state(int32_t id) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, marks_cls, m_mk_state, id);
+}
+
+moonbit_bytes_t mb_host_marks_png(int32_t id) {
+  JNIEnv *env = env_();
+  jbyteArray a = (jbyteArray)(*env)->CallStaticObjectMethod(env, marks_cls, m_mk_png, id);
+  jsize n = a ? (*env)->GetArrayLength(env, a) : 0;
+  moonbit_bytes_t out = moonbit_make_bytes(n, 0);
+  if (n) (*env)->GetByteArrayRegion(env, a, 0, n, (jbyte *)out);
+  if (a) (*env)->DeleteLocalRef(env, a);
+  return out;
 }
 
 // The gallery (gallery.mbt): dev.mbui.Gallery; a photo of it picked by its address (Picks.photo).
