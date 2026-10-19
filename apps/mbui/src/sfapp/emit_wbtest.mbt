@@ -65,3 +65,33 @@ test "with the reader scrolled up (not watched), an answer just appears" {
   assert_false(emit_held(em, 102.0))
   emit_restore()
 }
+
+///|
+test "the answer coming in does not end its own motion: float, spit and return each played whole, the avatar drawn" {
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock)
+  let em = emits_of("ws1/st1\u{1}s-c1")
+  clock.val = 2300.0
+  t.frame()
+  let frames : Map[String, Int] = {}
+  for _ in 0..<120 {
+    t.frame()
+    match em.current {
+      Some(turn) => {
+        let k = turn.pose.to_string()
+        frames[k] = frames.get(k).unwrap_or(0) + 1
+        // the flying copy is drawn in every pose after the fold (emit_flyer)
+        if turn.pose != Fold {
+          assert_true(emit_flight(t.ctx(), "ws1/st1\u{1}s-c1", em, [turn.agent]) is Some(_))
+        }
+      }
+      None => ()
+    }
+  }
+  // 16 ms frames: Float 440 ms, Spit 380, Return 320 (ChatMotion.kt), each to its end
+  assert_true(frames.get("Float").unwrap_or(0) >= 26)
+  assert_true(frames.get("Spit").unwrap_or(0) >= 22)
+  assert_true(frames.get("Return").unwrap_or(0) >= 18)
+  assert_true(em.current is None)
+  emit_restore()
+}

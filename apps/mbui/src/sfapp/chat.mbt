@@ -289,7 +289,10 @@ fn messages(
   // wait out of the list (emit.mbt, ChatMotion.kt)
   let ek = r.station + "\u{1}" + r.session
   let em = emits_of(ek)
-  em.watched = rd.at_end && !v.newer && !c.stable() && app_in_front()
+  // (once under way, it goes on while the end is near: the answer coming in grows the list under the reader, who is
+  // a moment short of its end until the list follows; only scrolled away, as the way to the newest shows, it ends)
+  let playing = em.current is Some(_) || em.queue.length() > 0
+  em.watched = (rd.at_end || (playing && !rd.jump)) && !v.newer && !c.stable() && app_in_front()
   let showing : Map[String, Bool] = {}
   for a in v.agents {
     if a.status == "running" {
