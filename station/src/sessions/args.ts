@@ -215,13 +215,16 @@ export function cardArg(card: Json, options: Json): Json | null {
   return kept;
 }
 
-/// What chat_post says of the answers it offered.
+/// What chat_post says of the answers it offered, in the order and with the numbers the card shows them (the recommended
+/// one last, as the clients' optionsShown puts it).
 export function optionsSaid(options: Json): string {
-  const labels = (Array.isArray(options) ? options : []).map((o: Json) => {
-    const label = typeof o?.label === "string" ? o.label : "";
+  const all: Json[] = Array.isArray(options) ? options : [];
+  const shown = [...all.filter((o) => o?.recommended === undefined), ...all.filter((o) => o?.recommended !== undefined)];
+  const labels = shown.map((o: Json, i) => {
+    const label = `${i + 1}. ${typeof o?.label === "string" ? o.label : ""}`;
     return o?.recommended !== undefined ? `${label} (recommended)` : label;
   });
-  return ` People can pick: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently), and anything they write instead is their answer too.`;
+  return ` People can pick, numbered as the card shows them: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently), and anything they write instead is their answer too.`;
 }
 
 /// What chat_post says of the card it posted.
