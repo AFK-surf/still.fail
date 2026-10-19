@@ -64,14 +64,14 @@ export function feishuFlowDemo(step: FeishuStep, mobile = false): DemoExtension 
 function feishuConnect(failing: boolean): Connect {
   return {
     id: "codex-bot", name: "Codex 机器人", team: "Acme 中国", enabled: true, kind: "feishu", mode: "multi-session", requireMention: true,
-    bind: { runtime: "codex", model: "gpt-6-astra", effort: "medium" },
+    bind: { runtime: "claude", model: "claude-opus-5-5", effort: "medium", profile: "machine-claude" },
     slack: { appToken: "", botToken: "" },
     feishu: { appId: "cli_a7f3c2a91d4e8", appSecret: "a7f3••••••••c2e1", domain: "feishu", console: "https://open.feishu.cn/app/cli_a7f3c2a91d4e8" },
     connection: failing
       ? { state: "error", error: "无法建立长连接：应用未开启长连接接收事件（code 1000040345）" }
       : { state: "connected", botUserId: "ou_7d8a6e6df7621556ce0d21922b676706", workspace: { team: "Acme 中国", teamId: "t1", url: "", botUserId: "ou_7d8a6e6df7621556ce0d21922b676706", botName: "Codex 机器人" } },
     createdBy: { id: "lin@acme.dev", name: "林晓", shown: { name: "林晓", display: "林晓", mine: false } }, sessions: 3,
-    statusText: failing ? "出错" : "在线", presence: failing ? "error" : "online", modeText: "多会话", modeShort: "多会话", runtimeText: "Codex", runText: "Codex · GPT-6 Astra · medium", modelName: "GPT-6 Astra",
+    statusText: failing ? "出错" : "在线", presence: failing ? "error" : "online", modeText: "多会话", modeShort: "多会话", runtimeText: "Claude Code", runText: "Claude Code · Opus 5.5 · medium", modelName: "Opus 5.5",
   };
 }
 
