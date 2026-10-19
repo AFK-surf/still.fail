@@ -44,6 +44,7 @@ import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
 import { platform } from "./platform/index.ts";
+import { keepRunnerIn } from "./platform/processes.ts";
 
 // Run by the desktop app on its own Electron as Node (apps/desktop/src/station.ts): what this starts (agents, jobs,
 // their tools, the next station at a handover through the launcher, which keeps its own) is not told to be Node too.
@@ -118,6 +119,8 @@ function run() {
   const app = flag(args, "--app");
   if (!app) usage();
   const control = launcher(args);
+  // Runners (agents', jobs') from copies under the data directory on Windows, out of reach of the app's installer.
+  keepRunnerIn(join(data, "run", "bin"));
   // Error lines to still.fail's error tracking, while config.json says so (telemetry.errors) and the build has a key.
   const settings = new ConfigFile(data);
   const reports = new ErrorReports({
