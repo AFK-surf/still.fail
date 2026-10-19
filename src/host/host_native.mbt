@@ -374,3 +374,166 @@ extern "C" fn pk_bytes(id : Int, i : Int) -> Bytes = "mb_host_pick_bytes"
 
 ///|
 extern "C" fn pk_end(id : Int) -> Unit = "mb_host_pick_end"
+
+// Native views over the canvas (src/ui/native.mbt): a system view (a video player, a web page) the host keeps in the
+// window under the app's surface, shown through a hole the app paints in it (instances of kind 9: transparent,
+// written without blending), so what the app paints after the hole draws over the view (a bar, a video's controls)
+// and what it paints over its edges clips it. Ids are the host's own, from 1; 0 where the host has none of that kind.
+
+///|
+#borrow(arg)
+extern "C" fn ffi_view_open(kind : Int, arg : String) -> Int = "mb_host_view_open"
+
+///|
+extern "C" fn ffi_view_place(
+  id : Int,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  cx0 : Double,
+  cy0 : Double,
+  cx1 : Double,
+  cy1 : Double,
+  shown : Int,
+) -> Unit = "mb_host_view_place"
+
+///|
+extern "C" fn ffi_view_close(id : Int) -> Unit = "mb_host_view_close"
+
+///|
+extern "C" fn ffi_view_control(id : Int, op : Int, value : Double) -> Unit = "mb_host_view_control"
+
+///|
+#borrow(out)
+extern "C" fn ffi_view_info(id : Int, out : FixedArray[Double]) -> Int = "mb_host_view_info"
+
+///|
+#borrow(out)
+extern "C" fn ffi_view_read_next(id : Int, out : FixedArray[Double]) -> Int = "mb_host_view_read_next"
+
+///|
+#borrow(data)
+extern "C" fn ffi_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit = "mb_host_view_read_answer"
+
+///|
+/// A native view of `kind`: 1 a video (and audio) player, its bytes read through the app (`view_read_next`), `arg`
+/// its MIME type ("video/mp4"); 2 a web page of `arg`'s HTML, its scripts on, nothing of the device's files or the
+/// app's reachable, its links not followed. Hidden until placed. 0 when this host has no such view.
+pub fn view_open(kind : Int, arg : String) -> Int {
+  ffi_view_open(kind, arg)
+}
+
+///|
+/// Where the view shows, in the app's coordinates (logical pixels from the window's top left): its content in (x, y,
+/// w, h) (a video's picture is stretched to it), seen only within the clip (cx0, cy0)-(cx1, cy1); hidden when not
+/// `shown`. Told again whenever it moves (each frame it does).
+pub fn view_place(
+  id : Int,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  cx0 : Double,
+  cy0 : Double,
+  cx1 : Double,
+  cy1 : Double,
+  shown : Bool,
+) -> Unit {
+  ffi_view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, if shown { 1 } else { 0 })
+}
+
+///|
+/// The view gone (its player stopped, its page closed).
+pub fn view_close(id : Int) -> Unit {
+  ffi_view_close(id)
+}
+
+///|
+/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed.
+pub fn view_control(id : Int, op : Int, value : Double) -> Unit {
+  ffi_view_control(id, op, value)
+}
+
+///|
+/// How the view stands: -1 failed (a file the player cannot play, a page that cannot load), 0 opening, 1 ready.
+/// `out` (8): its length in ms (-1 not known), where it is (ms), playing (1), the picture's own width and height
+/// (pixels), the bytes it has been given, whether a frame has been drawn (a page: loaded), buffering (1).
+pub fn view_info(id : Int, out : FixedArray[Double]) -> Int {
+  ffi_view_info(id, out)
+}
+
+///|
+/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants. Each is
+/// answered once (`view_read_answer`); the host asks for a frame when one comes.
+pub fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
+  ffi_view_read_next(id, out)
+}
+
+///|
+/// Read `req`'s answer: the bytes from its offset (at most as many as it wanted; fewer is fine, none only at the
+/// file's end), `total` the file's whole size (-1 not known: Apple's player needs it, so give it); -2: it could not be
+/// read (the player fails).
+pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
+  ffi_view_read_answer(id, req, data, total)
+}
+
+// PDFs drawn by the system (Android's PdfRenderer, Core Graphics' CGPDF), page by page into images.
+
+///|
+#borrow(data)
+extern "C" fn ffi_pdf_open(data : Bytes) -> Int = "mb_host_pdf_open"
+
+///|
+extern "C" fn ffi_pdf_pages(doc : Int) -> Int = "mb_host_pdf_pages"
+
+///|
+#borrow(out)
+extern "C" fn ffi_pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit = "mb_host_pdf_page_size"
+
+///|
+extern "C" fn ffi_pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int = "mb_host_pdf_page_load"
+
+///|
+extern "C" fn ffi_pdf_close(doc : Int) -> Unit = "mb_host_pdf_close"
+
+///|
+/// A PDF opened from its bytes: its id, or 0 where the host draws none.
+pub fn pdf_open(data : Bytes) -> Int {
+  ffi_pdf_open(data)
+}
+
+///|
+/// How many pages it has; -1 when it could not be opened.
+pub fn pdf_pages(doc : Int) -> Int {
+  ffi_pdf_pages(doc)
+}
+
+///|
+/// A page's size in points (`out` [0] width, [1] height).
+pub fn pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
+  ffi_pdf_page_size(doc, page, out)
+}
+
+///|
+/// A page drawn (on white, off the app's thread) at most `max_px` on its longer side: an image's id, as image_load's
+/// (image_info, image_free).
+pub fn pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
+  ffi_pdf_page_load(doc, page, max_px)
+}
+
+///|
+pub fn pdf_close(doc : Int) -> Unit {
+  ffi_pdf_close(doc)
+}
+
+///|
+#borrow(name, data)
+extern "C" fn ffi_save_file(name : String, data : Bytes) -> Int = "mb_host_save_file"
+
+///|
+/// A file put where the system keeps downloads (Android: Downloads, through MediaStore; macOS: ~/Downloads): true
+/// once it is there.
+pub fn save_file(name : String, data : Bytes) -> Bool {
+  ffi_save_file(name, data) != 0
+}

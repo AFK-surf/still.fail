@@ -30,11 +30,13 @@ static struct {
 } cb;
 
 static JavaVM *vm;
-static jclass host_cls, text_cls, images_cls, login_cls, picks_cls;
+static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, pdfs_cls;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
-    m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key;
+    m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
+    m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
+    m_save;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -93,6 +95,21 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_pk_name = (*env)->GetStaticMethodID(env, picks_cls, "name", "(II)Ljava/lang/String;");
   m_pk_bytes = (*env)->GetStaticMethodID(env, picks_cls, "bytes", "(II)[B");
   m_pk_end = (*env)->GetStaticMethodID(env, picks_cls, "end", "(I)V");
+  views_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/NativeViews"));
+  m_v_open = (*env)->GetStaticMethodID(env, views_cls, "open", "(ILjava/lang/String;)I");
+  m_v_place = (*env)->GetStaticMethodID(env, views_cls, "place", "(IFFFFFFFFZ)V");
+  m_v_close = (*env)->GetStaticMethodID(env, views_cls, "close", "(I)V");
+  m_v_control = (*env)->GetStaticMethodID(env, views_cls, "control", "(IID)V");
+  m_v_info = (*env)->GetStaticMethodID(env, views_cls, "info", "(I[D)I");
+  m_v_read_next = (*env)->GetStaticMethodID(env, views_cls, "readNext", "(I[D)I");
+  m_v_read_answer = (*env)->GetStaticMethodID(env, views_cls, "readAnswer", "(II[BD)V");
+  m_save = (*env)->GetStaticMethodID(env, views_cls, "save", "(Ljava/lang/String;[B)Z");
+  pdfs_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Pdfs"));
+  m_pdf_open = (*env)->GetStaticMethodID(env, pdfs_cls, "open", "([B)I");
+  m_pdf_pages = (*env)->GetStaticMethodID(env, pdfs_cls, "pages", "(I)I");
+  m_pdf_size = (*env)->GetStaticMethodID(env, pdfs_cls, "pageSize", "(II[D)V");
+  m_pdf_load = (*env)->GetStaticMethodID(env, pdfs_cls, "pageLoad", "(IIII)V");
+  m_pdf_close = (*env)->GetStaticMethodID(env, pdfs_cls, "close", "(I)V");
   shape_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 4 * 8192));
   small_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 16));
   return JNI_VERSION_1_6;
@@ -217,6 +234,7 @@ static const char *FS =
     "  vec2 p = v_pos;\n"
     "  if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;\n"
     "  int kind = int(v_p.y + 0.5);\n"
+    "  if (kind == 9) { o = vec4(0.0); return; }\n"
     "  vec4 col = v_color;\n"
     "  if (kind == 1 || kind == 3 || kind == 7) {\n"
     "    vec2 uv = (v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw) / 2048.0;\n"
@@ -620,12 +638,14 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   main_state();
   // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in), or sharing one
   // capture of glass (negative); GLES has no base instance, so the attributes start at the run instead
+  // (and per run of holes, kind 9: where a native view shows, written transparent with no blending, NativeViews.java)
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {
     int tid = (int)fbuf[start * 24 + 20];
+    int hole = (int)(fbuf[start * 24 + 5] + 0.5f) == 9;
     int32_t end = start + 1;
-    while (end < count && (int)fbuf[end * 24 + 20] == tid) end++;
+    while (end < count && (int)fbuf[end * 24 + 20] == tid && ((int)(fbuf[end * 24 + 5] + 0.5f) == 9) == hole) end++;
     if (tid < 0) {
       if (tid != bound) {
         shows = capture(fbuf, start, end);
@@ -647,7 +667,9 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
       glBindTexture(GL_TEXTURE_2D, t);
       for (int i = 0; i < 6; i++)
         glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 96, (void *)(intptr_t)(start * 96 + i * 16));
+      if (hole) glDisable(GL_BLEND);
       glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);
+      if (hole) glEnable(GL_BLEND);
     }
     start = end;
   }
@@ -1038,4 +1060,107 @@ moonbit_bytes_t mb_host_pick_bytes(int32_t id, int32_t i) {
 void mb_host_pick_end(int32_t id) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, picks_cls, m_pk_end, id);
+}
+
+// ---------------------------------------------------------------------------
+// Native views over the canvas (host_native.mbt `view_*`): dev.mbui.NativeViews keeps them in a layer under the GL
+// surface (which is on top and translucent: they show through the holes the app paints, kind 9), a video player
+// (Media3's ExoPlayer, its bytes read through the app) or a WebView. Called on the GL thread; NativeViews moves to the
+// main thread what must run there.
+
+static jbyteArray jbytes(JNIEnv *env, moonbit_bytes_t data) {
+  jsize n = Moonbit_array_length(data);
+  jbyteArray b = (*env)->NewByteArray(env, n);
+  if (n) (*env)->SetByteArrayRegion(env, b, 0, n, (const jbyte *)data);
+  return b;
+}
+
+int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
+  JNIEnv *env = env_();
+  jstring a = jstr(env, arg);
+  jint id = (*env)->CallStaticIntMethod(env, views_cls, m_v_open, kind, a);
+  (*env)->DeleteLocalRef(env, a);
+  return id;
+}
+
+void mb_host_view_place(int32_t id, double x, double y, double w, double h, double cx0, double cy0, double cx1,
+                        double cy1, int32_t shown) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_place, id, (jfloat)x, (jfloat)y, (jfloat)w, (jfloat)h,
+                               (jfloat)cx0, (jfloat)cy0, (jfloat)cx1, (jfloat)cy1, shown ? JNI_TRUE : JNI_FALSE);
+}
+
+void mb_host_view_close(int32_t id) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_close, id);
+}
+
+void mb_host_view_control(int32_t id, int32_t op, double value) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_control, id, op, value);
+}
+
+int32_t mb_host_view_info(int32_t id, double *out) {
+  JNIEnv *env = env_();
+  jint st = (*env)->CallStaticIntMethod(env, views_cls, m_v_info, id, small_buf);
+  (*env)->GetDoubleArrayRegion(env, small_buf, 0, 8, out);
+  return st;
+}
+
+int32_t mb_host_view_read_next(int32_t id, double *out) {
+  JNIEnv *env = env_();
+  jint req = (*env)->CallStaticIntMethod(env, views_cls, m_v_read_next, id, small_buf);
+  if (req > 0) (*env)->GetDoubleArrayRegion(env, small_buf, 0, 2, out);
+  return req;
+}
+
+void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total) {
+  JNIEnv *env = env_();
+  jbyteArray b = jbytes(env, data);
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_read_answer, id, req, b, total);
+  (*env)->DeleteLocalRef(env, b);
+}
+
+int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) {
+  JNIEnv *env = env_();
+  jstring n = jstr(env, name);
+  jbyteArray b = jbytes(env, data);
+  jboolean ok = (*env)->CallStaticBooleanMethod(env, views_cls, m_save, n, b);
+  (*env)->DeleteLocalRef(env, n);
+  (*env)->DeleteLocalRef(env, b);
+  return ok ? 1 : 0;
+}
+
+// PDFs (host_native.mbt `pdf_*`): dev.mbui.Pdfs over the system's PdfRenderer; a page drawn is an image of the table
+// above, uploaded as a decoded image is (Images.upload).
+
+int32_t mb_host_pdf_open(moonbit_bytes_t data) {
+  JNIEnv *env = env_();
+  jbyteArray b = jbytes(env, data);
+  jint doc = (*env)->CallStaticIntMethod(env, pdfs_cls, m_pdf_open, b);
+  (*env)->DeleteLocalRef(env, b);
+  return doc;
+}
+
+int32_t mb_host_pdf_pages(int32_t doc) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, pdfs_cls, m_pdf_pages, doc);
+}
+
+void mb_host_pdf_page_size(int32_t doc, int32_t page, double *out) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, pdfs_cls, m_pdf_size, doc, page, small_buf);
+  (*env)->GetDoubleArrayRegion(env, small_buf, 0, 2, out);
+}
+
+int32_t mb_host_pdf_page_load(int32_t doc, int32_t page, int32_t max_px) {
+  JNIEnv *env = env_();
+  int id = image_new();
+  (*env)->CallStaticVoidMethod(env, pdfs_cls, m_pdf_load, doc, page, max_px, id);
+  return id;
+}
+
+void mb_host_pdf_close(int32_t doc) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, pdfs_cls, m_pdf_close, doc);
 }

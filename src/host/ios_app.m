@@ -1,6 +1,7 @@
 // iOS host: a UIView whose layer is a CAMetalLayer, frames from a display
 // link, touches as pointer events, and the system keyboard and input
-// methods through UITextInput. Built by scripts/ios.sh, not by moon.
+// methods through UITextInput. Built by scripts/ios.sh, not by moon. Under
+// it, as big, the native views' view (apple_views.m).
 #import <UIKit/UIKit.h>
 #import <mach/mach.h>
 #import "apple.h"
@@ -95,6 +96,12 @@ static void run_script_step(int step);
 - (void)layoutSubviews {
   [super layoutSubviews];
   [self requestFrame];
+}
+
+// a touch on a web view shown under the canvas goes to it
+- (UIView *)hitTest:(CGPoint)p withEvent:(UIEvent *)e {
+  if (mb_views_pass_through(p.x, p.y)) return nil;
+  return [super hitTest:p withEvent:e];
 }
 
 - (void)tick:(CADisplayLink *)l {
@@ -299,6 +306,10 @@ static void touch(int kind, UITouch *t, UIView *v) {
   self.view = root;
   the_view = [[MBView alloc] initWithFrame:CGRectZero];
   the_view.translatesAutoresizingMaskIntoConstraints = NO;
+  the_view.opaque = NO;  // the native views under it show through its holes
+  UIView *under = mb_views_root(CGRectZero);
+  under.translatesAutoresizingMaskIntoConstraints = NO;
+  [root addSubview:under];
   [root addSubview:the_view];
   UILayoutGuide *g = root.safeAreaLayoutGuide;
   // the view ends above the keyboard
@@ -308,6 +319,10 @@ static void touch(int kind, UITouch *t, UIView *v) {
     [the_view.leadingAnchor constraintEqualToAnchor:g.leadingAnchor],
     [the_view.trailingAnchor constraintEqualToAnchor:g.trailingAnchor],
     self.bottom,
+    [under.topAnchor constraintEqualToAnchor:the_view.topAnchor],
+    [under.bottomAnchor constraintEqualToAnchor:the_view.bottomAnchor],
+    [under.leadingAnchor constraintEqualToAnchor:the_view.leadingAnchor],
+    [under.trailingAnchor constraintEqualToAnchor:the_view.trailingAnchor],
   ]];
 }
 @end

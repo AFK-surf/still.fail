@@ -9,6 +9,8 @@ static id<MTLDevice> dev;
 static id<MTLCommandQueue> queue;
 static id<MTLRenderPipelineState> mpipe;
 static id<MTLRenderPipelineState> rpipe_off;
+// holes for native views (kind 9): written, not blended
+static id<MTLRenderPipelineState> hpipe;
 static id<MTLTexture> atlas;
 static CAMetalLayer *mlayer;
 static id<MTLBuffer> bufs[3];
@@ -137,6 +139,7 @@ static NSString *shader_src = @
 "  float r = min(I.p.x, min(hs.x, hs.y));\n"
 "  float2 q = abs(p - c) - hs + r;\n"
 "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n"
+"  if (kind == 9) { if (d > 0.0) discard_fragment(); return float4(0.0); }\n"
 "  if (kind == 4) {\n"
 "    constexpr sampler si(filter::linear, address::clamp_to_edge);\n"
 "    float2 uv = I.c2.xy + clamp((p - I.rect.xy) / I.rect.zw, 0.0, 1.0) * I.c2.zw;\n"
@@ -217,12 +220,12 @@ static NSString *shader_src = @
 "  return o / wsum;\n"
 "}\n";
 
-static id<MTLRenderPipelineState> make_pipe(id<MTLLibrary> lib, MTLPixelFormat fmt) {
+static id<MTLRenderPipelineState> make_pipe(id<MTLLibrary> lib, MTLPixelFormat fmt, BOOL blend) {
   MTLRenderPipelineDescriptor *d = [MTLRenderPipelineDescriptor new];
   d.vertexFunction = [lib newFunctionWithName:@"vmain"];
   d.fragmentFunction = [lib newFunctionWithName:@"fmain"];
   d.colorAttachments[0].pixelFormat = fmt;
-  d.colorAttachments[0].blendingEnabled = YES;
+  d.colorAttachments[0].blendingEnabled = blend;
   d.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
   d.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
   d.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
@@ -241,10 +244,13 @@ void mb_render_init(CAMetalLayer *layer) {
   layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
   // glass copies what is drawn so far out of the drawable
   layer.framebufferOnly = NO;
+  // native views show under it through holes (mb_views_*); a frame clears opaque
+  layer.opaque = NO;
   NSError *err = nil;
   id<MTLLibrary> lib = [dev newLibraryWithSource:shader_src options:nil error:&err];
   if (!lib) NSLog(@"shader: %@", err);
-  mpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm);
+  mpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, YES);
+  hpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, NO);
   rpipe_off = mpipe;
   MTLRenderPipelineDescriptor *pd = [MTLRenderPipelineDescriptor new];
   pd.vertexFunction = [lib newFunctionWithName:@"vpost"];
@@ -417,14 +423,17 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
   memset(&gu, 0, sizeof gu);
   id<MTLRenderCommandEncoder> enc = begin_pass(cb, target, p, buf, 1, r, g, b);
   // one draw per run of instances showing the same image (slot 20; 0:
-  // none, the atlas stands in), or sharing one capture of glass (negative)
+  // none, the atlas stands in), or sharing one capture of glass (negative),
+  // and holes for native views (kind 9) apart, unblended. Glass over a hole
+  // sees the hole (the canvas only, not the view under it).
   const float *f = (const float *)buf.contents;
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {
     int tid = (int)f[start * 24 + 20];
+    int hole = (int)(f[start * 24 + 5] + 0.5f) == 9;
     int32_t end = start + 1;
-    while (end < count && (int)f[end * 24 + 20] == tid) end++;
+    while (end < count && (int)f[end * 24 + 20] == tid && ((int)(f[end * 24 + 5] + 0.5f) == 9) == hole) end++;
     if (tid < 0) {
       if (tid != bound) {
         [enc endEncoding];
@@ -432,6 +441,7 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
         bound = tid;
         enc = begin_pass(cb, target, p, buf, 0, r, g, b);
       }
+      [enc setRenderPipelineState:p];
       // liquid: the group as one shape, drawn once
       if (shows) {
         int liquid = (int)(f[start * 24 + 5] + 0.5f) == 6;
@@ -441,6 +451,7 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
       start = end;
       continue;
     }
+    [enc setRenderPipelineState:(hole ? hpipe : p)];
     id<MTLTexture> t = tid ? mb_image_texture(tid) : nil;
     [enc setFragmentTexture:(t ?: atlas) atIndex:1];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
@@ -517,6 +528,16 @@ int mb_render_snapshot(const char *path) {
   CGContextRef ctx = CGBitmapContextCreate(px, w, h, 8, bpr, cs,
       kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
   CGImageRef img = CGBitmapContextCreateImage(ctx);
+  if (mb_views_count() > 0) {
+    // the native views' content under the canvas, seen through its holes
+    CGContextRef under = CGBitmapContextCreate(NULL, w, h, 8, bpr, cs,
+        kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
+    mb_views_draw_under(under, vscale);
+    CGContextDrawImage(under, CGRectMake(0, 0, w, h), img);
+    CGImageRelease(img);
+    img = CGBitmapContextCreateImage(under);
+    CGContextRelease(under);
+  }
   CFURLRef url = CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8 *)path, strlen(path), false);
   CGImageDestinationRef dst = CGImageDestinationCreateWithURL(url, CFSTR("public.png"), 1, NULL);
   int ok = 0;

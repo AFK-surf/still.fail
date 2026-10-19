@@ -369,3 +369,131 @@ fn pk_bytes(_id : Int, _i : Int) -> Bytes {
 fn pk_end(_id : Int) -> Unit {
 
 }
+
+// Native views over the canvas (see host_native.mbt): DOM elements under the canvas (web/host.js), shown through its
+// holes; PDFs: none drawn here.
+
+///|
+extern "js" fn js_view_open(kind : Int, arg : String) -> Int =
+  #|(k, a) => { const H = globalThis.__mbhost; return H && H.viewOpen ? H.viewOpen(k, a) : 0 }
+
+///|
+extern "js" fn js_view_place(
+  id : Int,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  cx0 : Double,
+  cy0 : Double,
+  cx1 : Double,
+  cy1 : Double,
+  shown : Bool,
+) -> Unit =
+  #|(i, x, y, w, h, a, b, c, d, s) => { const H = globalThis.__mbhost; if (H && H.viewPlace) H.viewPlace(i, x, y, w, h, a, b, c, d, s) }
+
+///|
+extern "js" fn js_view_close(id : Int) -> Unit =
+  #|(i) => { const H = globalThis.__mbhost; if (H && H.viewClose) H.viewClose(i) }
+
+///|
+extern "js" fn js_view_control(id : Int, op : Int, value : Double) -> Unit =
+  #|(i, o, v) => { const H = globalThis.__mbhost; if (H && H.viewControl) H.viewControl(i, o, v) }
+
+///|
+extern "js" fn js_view_info(id : Int, out : FixedArray[Double]) -> Int =
+  #|(i, o) => { const H = globalThis.__mbhost; return H && H.viewInfo ? H.viewInfo(i, o) : -1 }
+
+///|
+extern "js" fn js_view_read_next(id : Int, out : FixedArray[Double]) -> Int =
+  #|(i, o) => { const H = globalThis.__mbhost; return H && H.viewReadNext ? H.viewReadNext(i, o) : 0 }
+
+///|
+extern "js" fn js_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit =
+  #|(i, r, d, t) => { const H = globalThis.__mbhost; if (H && H.viewReadAnswer) H.viewReadAnswer(i, r, d, t) }
+
+///|
+pub fn view_open(kind : Int, arg : String) -> Int {
+  js_view_open(kind, arg)
+}
+
+///|
+pub fn view_place(
+  id : Int,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  cx0 : Double,
+  cy0 : Double,
+  cx1 : Double,
+  cy1 : Double,
+  shown : Bool,
+) -> Unit {
+  js_view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, shown)
+}
+
+///|
+pub fn view_close(id : Int) -> Unit {
+  js_view_close(id)
+}
+
+///|
+pub fn view_control(id : Int, op : Int, value : Double) -> Unit {
+  js_view_control(id, op, value)
+}
+
+///|
+pub fn view_info(id : Int, out : FixedArray[Double]) -> Int {
+  js_view_info(id, out)
+}
+
+///|
+pub fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
+  js_view_read_next(id, out)
+}
+
+///|
+pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
+  js_view_read_answer(id, req, data, total)
+}
+
+///|
+pub fn pdf_open(data : Bytes) -> Int {
+  ignore(data)
+  0
+}
+
+///|
+pub fn pdf_pages(doc : Int) -> Int {
+  ignore(doc)
+  -1
+}
+
+///|
+pub fn pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
+  ignore(doc)
+  ignore(page)
+  out[0] = 0.0
+  out[1] = 0.0
+}
+
+///|
+pub fn pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
+  ignore(doc)
+  ignore(page)
+  ignore(max_px)
+  0
+}
+
+///|
+pub fn pdf_close(doc : Int) -> Unit {
+  ignore(doc)
+}
+
+///|
+pub fn save_file(name : String, data : Bytes) -> Bool {
+  ignore(name)
+  ignore(data)
+  false
+}

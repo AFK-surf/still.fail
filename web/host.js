@@ -106,6 +106,7 @@
     vec2 p = v_pos;
     if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;
     int kind = int(v_p.y + 0.5);
+    if (kind == 9) { o = vec4(0.0); return; }
     vec4 col = v_color;
     if (kind == 1 || kind == 3 || kind == 7) {
       vec2 uv = (v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw) / ${ATLAS}.0;
@@ -252,7 +253,8 @@
   }
 
   function setupGL() {
-    gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: false, alpha: false });
+    // with alpha: native views (below) show through the holes the app paints (kind 9); every frame is opaque elsewhere
+    gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: false, alpha: true });
     prog = gl.createProgram();
     gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
     gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
@@ -429,11 +431,14 @@
     mainState();
     // one draw per run of instances showing the same image (slot 20), or sharing one capture of glass (negative);
     // WebGL has no base instance, so the attributes start at the run instead
+    // (and per run of holes, kind 9: written transparent with no blending, where a native view shows)
+    const hole = (i) => Math.round(f32[i * 24 + 5]) === 9;
     let start = 0, bound = 0, shows = false;
     while (start < n) {
       const tid = f32[start * 24 + 20] | 0;
+      const h = hole(start);
       let end = start + 1;
-      while (end < n && (f32[end * 24 + 20] | 0) === tid) end++;
+      while (end < n && (f32[end * 24 + 20] | 0) === tid && hole(end) === h) end++;
       if (tid < 0) {
         if (tid !== bound) {
           shows = capture(start, end);
@@ -452,9 +457,120 @@
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
       for (let i = 0; i < 6; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 96, start * 96 + i * 16);
+      if (h) gl.disable(gl.BLEND);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - start);
+      if (h) gl.enable(gl.BLEND);
       start = end;
     }
+  };
+
+  // ---- native views over the canvas (src/ui/native.mbt) ----
+  // DOM elements in a layer under the canvas, shown through its holes: a <video> whose bytes come through the app
+  // (read in parts, then played from a Blob), a sandboxed <iframe> (scripts only) for a page of HTML.
+  const views = new Map();
+  let nextView = 0, viewLayer = null;
+  function layer() {
+    if (!viewLayer) {
+      viewLayer = document.createElement('div');
+      // over the page's own ground, under the canvas (both positioned: the body's ground would cover a layer below 0)
+      viewLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:0';
+      document.body.insertBefore(viewLayer, document.body.firstChild);
+      canvas.style.zIndex = '1';
+    }
+    return viewLayer;
+  }
+  const info = (v) => v.info || (v.info = [-1, 0, 0, 0, 0, 0, 0, 0]);
+  H.viewOpen = (kind, arg) => {
+    if (kind !== 1 && kind !== 2) return 0;
+    const id = ++nextView;
+    const clip = document.createElement('div');
+    clip.style.cssText = 'position:absolute;overflow:hidden;display:none;background:' + (kind === 1 ? '#000' : '#fff');
+    const v = { kind, clip, state: 0, reads: [], waiting: new Map(), nextRead: 0, parts: [], have: 0, total: -1 };
+    info(v);
+    if (kind === 1) {
+      const el = document.createElement('video');
+      el.playsInline = true;
+      el.style.cssText = 'position:absolute;object-fit:fill';
+      el.addEventListener('loadedmetadata', () => {
+        v.state = 1;
+        v.info[0] = el.duration * 1000;
+        v.info[3] = el.videoWidth;
+        v.info[4] = el.videoHeight;
+        H.requestFrame();
+      });
+      el.addEventListener('loadeddata', () => { v.info[6] = 1; H.requestFrame(); });
+      el.addEventListener('error', () => { v.state = -1; H.requestFrame(); });
+      v.el = el;
+      v.type = arg;
+      // the whole file read through the app, a part at a time, then played
+      v.ask = (offset) => { const r = { id: ++v.nextRead, offset, length: 4 << 20 }; v.reads.push(r); v.waiting.set(r.id, r); H.requestFrame(); };
+      v.ask(0);
+    } else {
+      const el = document.createElement('iframe');
+      el.setAttribute('sandbox', 'allow-scripts');
+      el.style.cssText = 'position:absolute;border:0;background:#fff';
+      el.addEventListener('load', () => { v.state = 1; v.info[6] = 1; H.requestFrame(); });
+      el.srcdoc = arg;
+      v.info[5] = new TextEncoder().encode(arg).length;
+      v.el = el;
+    }
+    clip.appendChild(v.el);
+    layer().appendChild(clip);
+    views.set(id, v);
+    return id;
+  };
+  H.viewPlace = (id, x, y, w, h, cx0, cy0, cx1, cy1, shown) => {
+    const v = views.get(id);
+    if (!v) return;
+    Object.assign(v.clip.style, { left: cx0 + 'px', top: cy0 + 'px', width: Math.max(0, cx1 - cx0) + 'px',
+      height: Math.max(0, cy1 - cy0) + 'px', display: shown ? 'block' : 'none' });
+    Object.assign(v.el.style, { left: x - cx0 + 'px', top: y - cy0 + 'px', width: w + 'px', height: h + 'px' });
+  };
+  H.viewClose = (id) => {
+    const v = views.get(id);
+    if (!v) return;
+    views.delete(id);
+    if (v.kind === 1) { v.el.pause(); if (v.url) URL.revokeObjectURL(v.url); }
+    v.clip.remove();
+  };
+  H.viewControl = (id, op, value) => {
+    const v = views.get(id);
+    if (!v || v.kind !== 1) return;
+    if (op === 1) v.el.play().catch(() => {});
+    else if (op === 2) v.el.pause();
+    else if (op === 3) v.el.currentTime = value / 1000;
+    else if (op === 4) v.el.playbackRate = value;
+  };
+  H.viewInfo = (id, out) => {
+    const v = views.get(id);
+    if (!v) return -1;
+    if (v.kind === 1) {
+      v.info[1] = v.el.currentTime * 1000;
+      v.info[2] = v.el.paused || v.el.ended ? 0 : 1;
+    }
+    for (let i = 0; i < 8; i++) out[i] = v.info[i];
+    return v.state;
+  };
+  H.viewReadNext = (id, out) => {
+    const v = views.get(id);
+    const r = v && v.reads.shift();
+    if (!r) return 0;
+    out[0] = r.offset;
+    out[1] = r.length;
+    return r.id;
+  };
+  H.viewReadAnswer = (id, req, data, total) => {
+    const v = views.get(id);
+    if (!v || !v.waiting.delete(req)) return;
+    if (total === -2) { v.state = -1; return; }
+    const part = new Uint8Array(data);
+    v.parts.push(part);
+    v.have += part.length;
+    v.info[5] = v.have;
+    if (total >= 0) v.total = total;
+    if (part.length > 0 && (v.total < 0 || v.have < v.total)) return v.ask(v.have);
+    v.url = URL.createObjectURL(new Blob(v.parts, { type: v.type }));
+    v.el.src = v.url;
   };
 
   // ---- images ----

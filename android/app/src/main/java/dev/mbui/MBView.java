@@ -33,6 +33,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         density = c.getResources().getDisplayMetrics().density;
         setEGLContextClientVersion(3);
         setEGLConfigChooser(8, 8, 8, 8, 0, 0);
+        // On top of the window, translucent: native views (NativeViews: a player, a page) sit under it and show
+        // through the holes the app paints (transparent, kind 9); everywhere else each frame is opaque.
+        getHolder().setFormat(android.graphics.PixelFormat.TRANSLUCENT);
+        setZOrderOnTop(true);
         setPreserveEGLContextOnPause(true);
         setRenderer(this);
         setRenderMode(RENDERMODE_WHEN_DIRTY);
@@ -108,6 +112,20 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             case MotionEvent.ACTION_MOVE: kind = 1; break;
             case MotionEvent.ACTION_UP: kind = 2; break;
             case MotionEvent.ACTION_CANCEL: kind = 3; break;
+            case MotionEvent.ACTION_POINTER_DOWN:
+            case MotionEvent.ACTION_POINTER_UP: {
+                // a second finger (a pinch): 4 down, 6 up, at its own place; a finger beyond the second is not told
+                int i = e.getActionIndex();
+                if (i > 1) return true;
+                boolean down = e.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN;
+                // the first lifted: the one left becomes the first (its moves come as the first's), the pinch ends
+                int at = down ? i : (i == 0 ? 0 : 1);
+                final float sx = e.getX(at) / density, sy = e.getY(at) / density;
+                final double st = e.getEventTime();
+                final int sk = down ? 4 : 6;
+                toGL(() -> Native.pointer(sk, sx, sy, st));
+                return true;
+            }
             default: return true;
         }
         // the samples batched into a move (MotionEvent's history) and the event itself, each at its own time
@@ -125,8 +143,12 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         ts[n] = e.getEventTime();
         final int k = kind;
         if (kind == 0) requestFocus();
+        // the second finger's place too, while there is one (a pinch)
+        final boolean two = kind == 1 && e.getPointerCount() > 1;
+        final float x2 = two ? e.getX(1) / density : 0, y2 = two ? e.getY(1) / density : 0;
         toGL(() -> {
             for (int i = 0; i <= n; i++) Native.pointer(i < n ? 1 : k, xs[i], ys[i], ts[i]);
+            if (two) Native.pointer(5, x2, y2, ts[n]);
         });
         return true;
     }

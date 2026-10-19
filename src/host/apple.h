@@ -45,3 +45,16 @@ NSString *mb_ns_from_string(moonbit_string_t s);
 
 // shared helpers (per platform)
 double mb_now_ms(void);
+
+// native views (apple_views.m), kept under the canvas's view and seen through
+// its holes (kind 9 instances)
+// the view they go in, made once, as big as the canvas's view and placed just
+// under it (flipped on macOS: coordinates from the top left, as the app's)
+id mb_views_root(CGRect frame);
+// whether the pointer at (x, y) (the app's points) goes to a web view under
+// the canvas (the canvas's view lets it through)
+int mb_views_pass_through(double x, double y);
+// how many views are open; their current content drawn into ctx (a bitmap of
+// the canvas's size in pixels, scale pixels per point), for snapshots
+int mb_views_count(void);
+void mb_views_draw_under(CGContextRef ctx, double scale);

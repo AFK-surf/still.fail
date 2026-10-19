@@ -28,3 +28,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+// Native views over the canvas (NativeViews.java): the video player is Media3's ExoPlayer, as still.fail's Android
+// app's (its version there, apps/android/gradle/libs.versions.toml).
+dependencies {
+    implementation("androidx.media3:media3-exoplayer:1.8.0")
+    implementation("androidx.media3:media3-datasource:1.8.0")
+}

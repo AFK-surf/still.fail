@@ -36,11 +36,18 @@ final class Images {
         final String src;
         final byte[] data;
         final int maxPx;
+        /** How to make it again if not by decoding (a PDF's page, Pdfs.java). */
+        final Runnable redo;
 
         Req(String src, byte[] data, int maxPx) {
+            this(src, data, maxPx, null);
+        }
+
+        Req(String src, byte[] data, int maxPx, Runnable redo) {
             this.src = src;
             this.data = data;
             this.maxPx = maxPx;
+            this.redo = redo;
         }
     }
 
@@ -62,7 +69,8 @@ final class Images {
         for (Map.Entry<Integer, Req> e : live.entrySet()) {
             int id = e.getKey();
             Req r = e.getValue();
-            pool.execute(() -> decode(id, r));
+            if (r.redo != null) r.redo.run();
+            else pool.execute(() -> decode(id, r));
         }
     }
 

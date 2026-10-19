@@ -1,6 +1,7 @@
 // macOS host: an NSWindow whose view is a CAMetalLayer, frames from the
 // view's display link, input from AppKit, and the system input method
-// through NSTextInputClient.
+// through NSTextInputClient. The window's content is a plain view holding
+// the native views' (apple_views.m) and, over them, the canvas's.
 #import <Cocoa/Cocoa.h>
 #import <mach/mach.h>
 #import "apple.h"
@@ -65,6 +66,13 @@ static void run_script_step(int step);
 
 - (BOOL)isFlipped { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
+
+// the pointer over a web view shown under the canvas goes to it
+- (NSView *)hitTest:(NSPoint)p {
+  NSPoint q = [self convertPoint:p fromView:self.superview];
+  if (mb_views_pass_through(q.x, q.y)) return nil;
+  return [super hitTest:p];
+}
 - (BOOL)wantsUpdateLayer { return YES; }
 
 - (void)viewDidMoveToWindow {
@@ -463,8 +471,17 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
                     backing:NSBackingStoreBuffered
                       defer:NO];
     w.title = mb_ns_from_string(title);
-    the_view = [[MBView alloc] initWithFrame:r];
-    w.contentView = the_view;
+    // the content: the native views' view, the canvas's over it, both its size
+    NSView *box = [[NSView alloc] initWithFrame:r];
+    box.wantsLayer = YES;
+    NSRect inside = NSMakeRect(0, 0, ww, wh);
+    NSView *under = mb_views_root(NSRectToCGRect(inside));
+    under.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [box addSubview:under];
+    the_view = [[MBView alloc] initWithFrame:inside];
+    the_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [box addSubview:the_view];
+    w.contentView = box;
     [w makeKeyAndOrderFront:nil];
     [w makeFirstResponder:the_view];
     [NSApp activateIgnoringOtherApps:YES];

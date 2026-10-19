@@ -568,3 +568,28 @@ int32_t mb_host_pick_count(int32_t pid) { return 0; }
 moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
 moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) { return moonbit_make_bytes(0, 0); }
 void mb_host_pick_end(int32_t pid) {}
+
+// Native views over the canvas, PDFs, saving a file (host_native.mbt): not on Windows yet. No view opens (0), no PDF
+// is drawn (pages -1), nothing is saved; the app says it cannot show those here.
+int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) { (void)kind; (void)arg; return 0; }
+void mb_host_view_place(int32_t id, double x, double y, double w, double h, double cx0, double cy0, double cx1,
+                        double cy1, int32_t shown) {
+  (void)id; (void)x; (void)y; (void)w; (void)h; (void)cx0; (void)cy0; (void)cx1; (void)cy1; (void)shown;
+}
+void mb_host_view_close(int32_t id) { (void)id; }
+void mb_host_view_control(int32_t id, int32_t op, double value) { (void)id; (void)op; (void)value; }
+int32_t mb_host_view_info(int32_t id, double *out) {
+  (void)id;
+  for (int i = 0; i < 8; i++) out[i] = 0;
+  return -1;
+}
+int32_t mb_host_view_read_next(int32_t id, double *out) { (void)id; (void)out; return 0; }
+void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total) {
+  (void)id; (void)req; (void)data; (void)total;
+}
+int32_t mb_host_pdf_open(moonbit_bytes_t data) { (void)data; return 0; }
+int32_t mb_host_pdf_pages(int32_t doc) { (void)doc; return -1; }
+void mb_host_pdf_page_size(int32_t doc, int32_t page, double *out) { (void)doc; (void)page; out[0] = out[1] = 0; }
+int32_t mb_host_pdf_page_load(int32_t doc, int32_t page, int32_t max_px) { (void)doc; (void)page; (void)max_px; return 0; }
+void mb_host_pdf_close(int32_t doc) { (void)doc; }
+int32_t mb_host_save_file(moonbit_string_t name, moonbit_bytes_t data) { (void)name; (void)data; return 0; }

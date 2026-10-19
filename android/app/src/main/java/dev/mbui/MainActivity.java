@@ -57,6 +57,11 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
         root.addView(view, lp);
+        // native views (NativeViews): over the MBView in the tree, so a page there takes its touches, under its
+        // surface on the screen; laid out as the MBView is
+        NativeViews.layer = new FrameLayout(this);
+        root.addView(NativeViews.layer, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         // The view inside the system bars; the soft keyboard over its foot is told to it as it moves (Host.imeBottom:
         // the app lays out above it, its composer riding on the keyboard as Compose's imePadding does), the surface
         // itself not resized.
@@ -68,6 +73,9 @@ public class MainActivity extends Activity {
                     || p.rightMargin != bars.right || p.bottomMargin != bars.bottom) {
                 p.setMargins(bars.left, bars.top, bars.right, bars.bottom);
                 view.setLayoutParams(p);
+                FrameLayout.LayoutParams q = (FrameLayout.LayoutParams) NativeViews.layer.getLayoutParams();
+                q.setMargins(bars.left, bars.top, bars.right, bars.bottom);
+                NativeViews.layer.setLayoutParams(q);
             }
             if (!imeMoving) keyboardAt(insets);
             return WindowInsets.CONSUMED;

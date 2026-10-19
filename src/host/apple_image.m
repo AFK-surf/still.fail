@@ -41,6 +41,31 @@ static void finish(int iid, int state, int w, int h, int ow, int oh, id<MTLTextu
   });
 }
 
+// A premultiplied RGBA bitmap (sRGB) of w by h to draw an image into; its
+// pixels in *px, for finish_rgba.
+static CGContextRef rgba_context(int w, int h, void **px) {
+  size_t bpr = (size_t)w * 4;
+  *px = calloc(bpr, h);
+  CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+  CGContextRef ctx = CGBitmapContextCreate(*px, w, h, 8, bpr, cs,
+      kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+  CGColorSpaceRelease(cs);
+  return ctx;
+}
+
+// The bitmap drawn (rgba_context's pixels, freed here) as the image's
+// texture: the image ready.
+static void finish_rgba(int iid, void *px, int w, int h, int ow, int oh) {
+  size_t bpr = (size_t)w * 4;
+  MTLTextureDescriptor *td = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm width:w height:h mipmapped:NO];
+  td.usage = MTLTextureUsageShaderRead;
+  id<MTLTexture> tex = [mb_render_device() newTextureWithDescriptor:td];
+  [tex replaceRegion:MTLRegionMake2D(0, 0, w, h) mipmapLevel:0 withBytes:px bytesPerRow:bpr];
+  free(px);
+  finish(iid, 1, w, h, ow, oh, tex);
+}
+
 static void decode(int iid, CGImageSourceRef src, int max_px) {
   if (!src) {
     finish(iid, -1, 0, 0, 0, 0, nil);
@@ -70,22 +95,12 @@ static void decode(int iid, CGImageSourceRef src, int max_px) {
   }
   int w = (int)CGImageGetWidth(img), h = (int)CGImageGetHeight(img);
   if (ow == 0) { ow = w; oh = h; }
-  size_t bpr = (size_t)w * 4;
-  void *px = calloc(bpr, h);
-  CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-  CGContextRef ctx = CGBitmapContextCreate(px, w, h, 8, bpr, cs,
-      kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+  void *px;
+  CGContextRef ctx = rgba_context(w, h, &px);
   CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), img);
   CGContextRelease(ctx);
-  CGColorSpaceRelease(cs);
   CGImageRelease(img);
-  MTLTextureDescriptor *td = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm width:w height:h mipmapped:NO];
-  td.usage = MTLTextureUsageShaderRead;
-  id<MTLTexture> tex = [mb_render_device() newTextureWithDescriptor:td];
-  [tex replaceRegion:MTLRegionMake2D(0, 0, w, h) mipmapLevel:0 withBytes:px bytesPerRow:bpr];
-  free(px);
-  finish(iid, 1, w, h, ow, oh, tex);
+  finish_rgba(iid, px, w, h, ow, oh);
 }
 
 static int start(void (^load)(int iid)) {
@@ -148,3 +163,111 @@ id<MTLTexture> mb_image_texture(int iid) {
   MBImage *im = images[@(iid)];
   return im.state == 1 ? im.tex : nil;
 }
+
+// ---------------------------------------------------------------------------
+// PDFs (host_native.mbt's pdf_*): Core Graphics' CGPDF, a page drawn on white
+// off the main thread into an image of the table above (image_info,
+// image_free and the renderer's textures take it as any other).
+
+@interface MBPdf : NSObject
+@property(nonatomic) CGPDFDocumentRef doc; // NULL: the bytes were no PDF it could open
+@end
+@implementation MBPdf
+- (void)dealloc {
+  if (_doc) CGPDFDocumentRelease(_doc);
+}
+@end
+
+static NSMutableDictionary<NSNumber *, MBPdf *> *pdfs;
+static int next_pdf;
+
+int32_t mb_host_pdf_open(moonbit_bytes_t data) {
+  if (!pdfs) pdfs = [NSMutableDictionary new];
+  NSData *d = [NSData dataWithBytes:data length:Moonbit_array_length(data)];
+  CGDataProviderRef prov = CGDataProviderCreateWithCFData((__bridge CFDataRef)d);
+  MBPdf *p = [MBPdf new];
+  p.doc = prov ? CGPDFDocumentCreateWithProvider(prov) : NULL;
+  if (prov) CGDataProviderRelease(prov);
+  // encrypted with an empty password (only printing, copying forbidden): opened
+  if (p.doc && CGPDFDocumentIsEncrypted(p.doc) && !CGPDFDocumentIsUnlocked(p.doc))
+    CGPDFDocumentUnlockWithPassword(p.doc, "");
+  if (p.doc && !CGPDFDocumentIsUnlocked(p.doc)) {
+    CGPDFDocumentRelease(p.doc);
+    p.doc = NULL;
+  }
+  int32_t id = ++next_pdf;
+  pdfs[@(id)] = p;
+  return id;
+}
+
+int32_t mb_host_pdf_pages(int32_t doc) {
+  MBPdf *p = pdfs[@(doc)];
+  return p.doc ? (int32_t)CGPDFDocumentGetNumberOfPages(p.doc) : -1;
+}
+
+// the page's crop box and its rotation (0, 90, 180, 270: clockwise); NULL past the pages
+static CGPDFPageRef pdf_page(MBPdf *p, int page, CGRect *box, int *rot) {
+  if (!p.doc || page < 0 || page >= (int)CGPDFDocumentGetNumberOfPages(p.doc)) return NULL;
+  CGPDFPageRef pg = CGPDFDocumentGetPage(p.doc, page + 1);
+  if (!pg) return NULL;
+  *box = CGPDFPageGetBoxRect(pg, kCGPDFCropBox);
+  *rot = ((CGPDFPageGetRotationAngle(pg) % 360) + 360) % 360;
+  return pg;
+}
+
+void mb_host_pdf_page_size(int32_t doc, int32_t page, double *out) {
+  out[0] = 0;
+  out[1] = 0;
+  MBPdf *p = pdfs[@(doc)];
+  CGRect box;
+  int rot;
+  @synchronized(p) {
+    if (!pdf_page(p, page, &box, &rot)) return;
+  }
+  BOOL turned = rot == 90 || rot == 270;
+  out[0] = turned ? box.size.height : box.size.width;
+  out[1] = turned ? box.size.width : box.size.height;
+}
+
+int32_t mb_host_pdf_page_load(int32_t doc, int32_t page, int32_t max_px) {
+  MBPdf *p = pdfs[@(doc)];
+  int lim = max_px > 0 ? (max_px < 8192 ? max_px : 8192) : 1024;
+  return start(^(int iid) {
+    // one page at a time of a document (CGPDF is not drawn from two threads at once)
+    @synchronized(p) {
+      CGRect box;
+      int rot;
+      CGPDFPageRef pg = pdf_page(p, page, &box, &rot);
+      if (!pg || box.size.width <= 0 || box.size.height <= 0) {
+        finish(iid, -1, 0, 0, 0, 0, nil);
+        return;
+      }
+      BOOL turned = rot == 90 || rot == 270;
+      double pw = turned ? box.size.height : box.size.width;
+      double ph = turned ? box.size.width : box.size.height;
+      double scale = lim / fmax(pw, ph);
+      int w = (int)fmax(1, round(pw * scale)), h = (int)fmax(1, round(ph * scale));
+      void *px;
+      CGContextRef ctx = rgba_context(w, h, &px);
+      CGContextSetRGBFillColor(ctx, 1, 1, 1, 1);
+      CGContextFillRect(ctx, CGRectMake(0, 0, w, h));
+      CGContextScaleCTM(ctx, (double)w / pw, (double)h / ph);
+      // the box turned as the page is shown (y up): (u, v) from its corner
+      double bw = box.size.width, bh = box.size.height;
+      CGAffineTransform t = rot == 90    ? CGAffineTransformMake(0, -1, 1, 0, 0, bw)
+                            : rot == 180 ? CGAffineTransformMake(-1, 0, 0, -1, bw, bh)
+                            : rot == 270 ? CGAffineTransformMake(0, 1, -1, 0, bh, 0)
+                                         : CGAffineTransformIdentity;
+      CGContextConcatCTM(ctx, t);
+      CGContextTranslateCTM(ctx, -box.origin.x, -box.origin.y);
+      CGContextClipToRect(ctx, box);
+      CGContextSetInterpolationQuality(ctx, kCGInterpolationHigh);
+      CGContextSetRenderingIntent(ctx, kCGRenderingIntentDefault);
+      CGContextDrawPDFPage(ctx, pg);
+      CGContextRelease(ctx);
+      finish_rgba(iid, px, w, h, (int)round(pw), (int)round(ph));
+    }
+  });
+}
+
+void mb_host_pdf_close(int32_t doc) { [pdfs removeObjectForKey:@(doc)]; }
