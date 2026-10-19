@@ -197,6 +197,10 @@ fn dv_nav_back(c : @ui.Ctx, key : String, label : String) -> Bool {
 /// line under it. True on the frame after back was tapped.
 fn dv_nav_bar(c : @ui.Ctx, back : String, title : String, trailing : () -> Unit) -> Bool {
   let t = @sf.theme()
+  // the wide frame's page bar (wide_chat.mbt)
+  if wide_on.val {
+    return page_bar_wide(c, title, app.nav.depth() > 1, trailing)
+  }
   let mut went = false
   c.box(w=Fill(1.0), bg=t.p.bg, pl=10.0, pr=16.0, pt=6.0, pb=10.0, fn() {
     c.box(dir=Row, w=Fill(1.0), h=Px(32.0), align=ACenter, fn() {

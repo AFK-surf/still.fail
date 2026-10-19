@@ -1,0 +1,17 @@
+#env MBUI_WIN=1280x800
+# The wide frame (a desktop's window, src/sfapp/wide.mbt): the test chat pressed in the sidebar's list opens beside
+# it; words typed in its composer, sent; the bubble, then sent.
+timeout 60000
+until 新建对话
+until 端到端测试
+tap 端到端测试
+until 发消息
+wait 800
+shot 1-open
+tap 发消息
+type 宽屏里发出的消息 {T}
+shot 2-typed
+tap icon:arrow-up
+until 宽屏里发出的消息 {T}
+gone 正在发送
+shot 3-sent

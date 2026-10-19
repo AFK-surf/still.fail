@@ -1,0 +1,18 @@
+#env MBUI_WIN=1280x800
+# 新建对话: a new chat beside the list (新建对话 lit); its first words sent make the chat on the station and the
+# page becomes it; its agent answers there; its row comes into the list.
+timeout 90000
+until 新建对话
+tap 新建对话
+until 想让 agent 做什么？
+wait 800
+shot 1-new-chat
+tap 做任何事
+type 宽屏新对话 {T} post:宽屏新对话的回答 {T}
+tap icon:arrow-up
+until 宽屏新对话 {T}
+gone 想让 agent 做什么？
+shot 2-became-chat
+timeout 120000
+untiln 2 宽屏新对话的回答 {T}
+shot 3-answered

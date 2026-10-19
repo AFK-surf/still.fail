@@ -99,6 +99,11 @@ fn fill_words(key : String, error : String) -> String {
 /// The page's bar (Parts.kt NavBar): 取消 back, 新对话 in the middle.
 fn new_chat_bar(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
+  // the wide frame's new chat has no bar (the sidebar's 新建对话 is lit): the page's top row only
+  if wide_on.val {
+    c.box(w=Fill(1.0), h=Px(45.0), fn() {  }) |> ignore
+    return
+  }
   c.box(w=Fill(1.0), pl=10.0, pr=16.0, pt=6.0, pb=10.0, bg=t.p.bg, fn() {
     c.box(dir=Row, w=Fill(1.0), h=Px(32.0), align=ACenter, fn() {
       let back = c.id("new/cancel")
@@ -426,10 +431,12 @@ fn new_chat_on(
       |> ignore
       if !leaving {
         let r : ChatRef = { station: address, session: "", title: "", station_name: name }
-        composer(c, src, r, None, fresh=Some({
-          key: "new:" + address,
-          send: fn(d) { send_first(c, src, w, v, address, name, d) },
-        }))
+        wide_center(c, fn() {
+          composer(c, src, r, None, fresh=Some({
+            key: "new:" + address,
+            send: fn(d) { send_first(c, src, w, v, address, name, d) },
+          }))
+        })
       } else {
         c.box(h=Px(composer_room_of(c)), fn() {  }) |> ignore
       }

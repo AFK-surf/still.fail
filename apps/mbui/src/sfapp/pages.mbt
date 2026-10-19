@@ -6,6 +6,13 @@
 /// A page's compact bar (Parts.kt NavBar): back to the chats, in the accent; its title in the middle.
 fn nav_bar(c : @ui.Ctx, title : String) -> Unit {
   let t = @sf.theme()
+  // the wide frame's page bar (wide_chat.mbt)
+  if wide_on.val {
+    if page_bar_wide(c, title, app.nav.depth() > 1, fn() {  }) {
+      app.nav.pop() |> ignore
+    }
+    return
+  }
   c.box(w=Fill(1.0), pl=10.0, pr=16.0, pt=6.0, pb=10.0, fn() {
     c.box(dir=Row, w=Fill(1.0), h=Px(32.0), align=ACenter, fn() {
       let back = c.id("nav-back")

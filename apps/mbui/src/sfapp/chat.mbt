@@ -359,7 +359,7 @@ fn messages(
             let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(220.0))
             let p = open.get()
             @motion.reveal(c, mk, p, fn() {
-              let ri = c.box(w=Fill(1.0), pl=14.0, pr=14.0, pt=top, fn() {
+              let ri = c.box(w=Fill(1.0), pl=row_side(c), pr=row_side(c), pt=top, fn() {
                 activity(c, src, here, a, leaving~)
               })
               @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(200.0)))
@@ -367,7 +367,7 @@ fn messages(
               if !older_came && flight is None {
                 @motion.layout(c, ri, mk, spec=@motion.spring(stiffness=300.0, threshold=1.0), listed=false)
               }
-              c.look(ri, @ui.look(alpha=p * fade, scale=0.5 + 0.5 * p, ox=(14.0 + 9.0) / c.width, oy=0.5))
+              c.look(ri, @ui.look(alpha=p * fade, scale=0.5 + 0.5 * p, ox=(row_side(c) + 9.0) / c.width, oy=0.5))
             })
           }
           _ => {
@@ -383,7 +383,7 @@ fn messages(
               Some(f) if flies => flight_placed(c, f)
               _ => ()
             }
-            let ri = c.box(w=Fill(1.0), pl=14.0, pr=14.0, pt=top, fn() {
+            let ri = c.box(w=Fill(1.0), pl=row_side(c), pr=row_side(c), pt=top, fn() {
               entry_view(c, src, here, e, list)
             })
             flying.val = None
@@ -860,7 +860,8 @@ fn jump_to_latest(
   }
   c.layer(align=AEnd, fn() {
     c.spacer()
-    c.box(pr=18.0, pb=composer_room_of(c) + 2.0, fn() {
+    // (in the wide frame right over the send button, the composer's column in the pane's middle: Chat.css.ts)
+    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=composer_room_of(c) + 2.0, fn() {
       let pill = c.box(
         dir=Row,
         h=Px(36.0),

@@ -1,0 +1,22 @@
+#env MBUI_WIN=1280x800
+# The rail's places: 文件 (the sidebar the stations' folders), the chats again, settings (the sidebar its list, 外观
+# its first page): 深色 there turns the app dark at once, 跟随系统 back.
+timeout 60000
+until 新建对话
+tap icon:folder
+until 主目录
+shot 1-files
+tap icon:chats
+until 新建对话
+tap icon:settings
+until 返回会话
+until 跟随系统
+shot 2-settings
+tap =深色
+wait 1500
+shot 3-dark
+tap1 =跟随系统
+wait 1500
+tap 返回会话
+until 新建对话
+shot 4-back

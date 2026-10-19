@@ -215,6 +215,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.begin(c)
   // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages
   wide_on.val = is_wide(c)
+  @settings.wide.val = wide_on.val
   track_press(c)
   for p in left_pages {
     match p {
@@ -280,8 +281,9 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // what another app shared in (share.mbt)
       share_in_frame(c)
       if wide_on.val {
-        // the rail, the sidebar and the page beside it (wide.mbt)
+        // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them
         wide_frame(c, src, w, all, invited)
+        wide_overlays(c, src, w)
         preview(c, src)
       } else {
         c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
@@ -437,6 +439,9 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
 /// A page of the settings (src/sfapp/settings), over the workspace in view.
 fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -> Unit {
   let core = settings_core(src, w)
+  // in the wide frame, a page under another of them shows back (the sidebar is the way to the others)
+  let pages = app.nav.pages()
+  @settings.wide_deep.val = pages.length() >= 2 && pages[pages.length() - 2] is Setting(_)
   @settings.page(c, core, @settings.here_of(core, w.id, w.name), r)
 }
 

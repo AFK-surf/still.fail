@@ -151,8 +151,9 @@ run_flow() {
     "$ROOT/scripts/e2e-local.sh" $words < /dev/null >> $log 2>&1
   done
   if [ $PLATFORM = mac ]; then
-    env $extra MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
-      MBUI_WIN=390x844 MBUI_SHOT_DIR=$OUT/$name MBUI_DRIVE_B64=$(base64 < $script | tr -d '\n') \
+    # (a phone's window unless the flow's #env says otherwise: the wide flows' MBUI_WIN=1280x800)
+    env MBUI_WIN=390x844 $extra MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
+      MBUI_SHOT_DIR=$OUT/$name MBUI_DRIVE_B64=$(base64 < $script | tr -d '\n') \
       MBUI_PICK_FILES="$FILES/e2e-photo.jpg|$FILES/e2e-data.bin" MBUI_CALL_LOG=1 MBUI_MOTION_LOG=1 \
       timeout ${E2E_FLOW_TIMEOUT:-300} $EXE 2>&1 | while IFS= read -r line; do
         echo "$line" >> $log

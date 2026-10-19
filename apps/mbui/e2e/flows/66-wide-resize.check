@@ -1,0 +1,2 @@
+check "the window was resized twice" '[ "$(grep -c "^RESIZED" $OUT/$name.log)" = 2 ]'
+check "the station has the message sent after, once, in the test chat" '[ "$(sql "select count(*) from entries e join entries f on e.thread = f.thread where e.author=\"alice@example.test\" and e.text = \"窗口变窄后发出 $TAG\" and f.text like \"端到端测试的对话%\"")" = 1 ]'

@@ -8,10 +8,79 @@
 let warn : Int64 = 0xD9962BFFL
 
 ///|
+/// Drawn in the wide frame's pane (a desktop's width, src/sfapp/wide.mbt): the pages as the web's settings pages
+/// stand (pages.css.ts page: their head's title 22 in 600, no back where the sidebar is the way back, a column 760 wide
+/// at most in the middle, 40 from the sides at least); `wide_deep`: a page under another of them (back shown).
+pub let wide : Ref[Bool] = Ref(false)
+
+///|
+pub let wide_deep : Ref[Bool] = Ref(false)
+
+///|
+/// What a page's blocks stand in from the pane's sides in the wide frame (their own 16 inside it).
+fn wide_side(c : @ui.Ctx) -> Double {
+  dmax(24.0, (c.width - 792.0) / 2.0)
+}
+
+///|
 /// A page of the settings: what it shows, a block at a time (each laid out only when it comes into view), scrolling
 /// under what stays at its top. `key` keeps its place while it is on the stack.
 fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
+  if wide.val {
+    let side = wide_side(c)
+    c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) {
+      if i == blocks.length() {
+        gap(c, 80.0)
+      } else {
+        c.box(w=Fill(1.0), pl=side, pr=side, fn() { (blocks[i])() }) |> ignore
+      }
+    })
+    |> ignore
+    return
+  }
   c.list("settings/" + key, blocks.length(), 80.0, fn(i) { (blocks[i])() }) |> ignore
+}
+
+///|
+/// A page's head in the wide frame (pages.css.ts pageHead): back above it only on a page under another, the title,
+/// what it does at its end.
+fn wide_head(
+  c : @ui.Ctx,
+  core : Core,
+  back : String,
+  title : String,
+  trailing? : () -> Unit,
+  inside? : Bool = false,
+) -> Unit {
+  let t = @sf.theme()
+  // (inside a block of the page, which stands in already)
+  let side = if inside { 16.0 } else { wide_side(c) + 16.0 }
+  c.box(w=Fill(1.0), pl=side, pr=side, pt=if wide_deep.val { 20.0 } else { 40.0 }, pb=12.0, bg=t.p.bg, fn() {
+    if wide_deep.val {
+      let id = c.id("settings-back")
+      c.cursor(id, Hand)
+      c.box(dir=Row, pb=8.0, gap=4.0, align=ACenter, id~, fn() {
+        @sf.icon(c, "chevron-left", size=14.0, color=t.p.muted) |> ignore
+        c.text(back, size=13.0, color=if c.hovered(id) { t.p.text } else { t.p.muted }, wrap=false) |> ignore
+      })
+      |> ignore
+      if hit(c, id) {
+        (core.pop)()
+      }
+    }
+    c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
+      c.box(w=Fill(1.0), fn() {
+        c.text(title, size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
+      })
+      |> ignore
+      match trailing {
+        Some(f) => f()
+        None => ()
+      }
+    })
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|
@@ -46,6 +115,12 @@ fn nav_back(c : @ui.Ctx, label : String) -> Bool {
 ///|
 /// Back at the top of a large-title page (Stations.kt TopBack); `trailing` at its other end (a ＋).
 fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit) -> Unit {
+  if wide.val {
+    // (the large title under it is the head's: large_title)
+    top_trailing.val = trailing
+    top_label.val = label
+    return
+  }
   c.box(dir=Row, w=Fill(1.0), pl=10.0, pr=10.0, pt=6.0, pb=4.0, align=ACenter, justify=JBetween, fn() {
     if nav_back(c, label) {
       (core.pop)()
@@ -59,6 +134,17 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit) ->
 }
 
 ///|
+/// What a large-title page's top had (top_back), for its head in the wide frame (large_title).
+let top_trailing : Ref[(() -> Unit)?] = Ref(None)
+
+///|
+let top_label : Ref[String] = Ref("")
+
+///|
+/// The core of the page being drawn (its head's back, in the wide frame).
+let frame_core : Ref[Core?] = Ref(None)
+
+///|
 /// A page's compact bar (Parts.kt NavBar): back, a centred title (and a line under it, `sub`), an action at its end.
 fn nav_bar(
   c : @ui.Ctx,
@@ -69,6 +155,14 @@ fn nav_bar(
   trailing? : () -> Unit,
 ) -> Unit {
   let t = @sf.theme()
+  if wide.val {
+    ignore(sub)
+    match trailing {
+      Some(f) => wide_head(c, core, back, title, trailing=f)
+      None => wide_head(c, core, back, title)
+    }
+    return
+  }
   c.box(w=Fill(1.0), pl=10.0, pr=16.0, pt=6.0, pb=10.0, bg=t.p.bg, fn() {
     c.box(dir=Row, w=Fill(1.0), h=Px(32.0), align=ACenter, justify=JBetween, fn() {
       if nav_back(c, back) {
@@ -148,6 +242,19 @@ fn place_page(
 /// A page's large title (Parts.kt LargeTitle): the big word, after `lead` when there is one (a workspace's mark).
 fn large_title(c : @ui.Ctx, big : String, lead? : () -> Unit) -> Unit {
   let t = @sf.theme()
+  if wide.val {
+    ignore(lead)
+    match frame_core.val {
+      Some(core) =>
+        match top_trailing.val {
+          Some(f) => wide_head(c, core, top_label.val, big, trailing=f, inside=true)
+          None => wide_head(c, core, top_label.val, big, inside=true)
+        }
+      None => ()
+    }
+    top_trailing.val = None
+    return
+  }
   c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pb=6.0, gap=10.0, align=ACenter, fn() {
     match lead {
       Some(f) => f()
@@ -379,6 +486,11 @@ fn seg(
   radius? : Double = 10.0,
 ) -> Int {
   let t = @sf.theme()
+  // in the wide frame the web's (controls.css.ts seg): a pill of options as wide as their words, 105 at least, 36 high
+  let pill = wide.val
+  let fill = fill && !pill
+  let height = if pill { 36.0 } else { height }
+  let radius = if pill { 18.0 } else { radius }
   let base = c.id(key)
   let mut picked = selected
   for i, _ in options {
@@ -425,6 +537,7 @@ fn seg(
         c.box(
           w=if fill { Fill(1.0) } else { Auto },
           h=Fill(1.0),
+          min_w=if pill { 101.0 } else { 0.0 },
           padx=if fill { 12.0 } else { 10.0 },
           align=ACenter,
           justify=JCenter,

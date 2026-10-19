@@ -101,6 +101,9 @@ pub(all) struct ChatItem {
   agents : Array[RowAgent]
   people : Array[Person]
   creator : String
+  /// pinned to the list's top (None: a station from before pins), kept from the archive
+  pinned : Bool?
+  kept : Bool
 }
 
 ///|
@@ -181,6 +184,12 @@ pub fn chat_item(v : Json) -> ChatItem {
     }),
     people: items(s, "people").map(person_of),
     creator: text(field(s, "creator"), "id"),
+    pinned: match field(s, "pinned") {
+      Some(True) => Some(true)
+      Some(False) => Some(false)
+      _ => None
+    },
+    kept: flag(s, "kept"),
   }
 }
 

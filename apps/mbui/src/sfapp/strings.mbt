@@ -148,7 +148,11 @@ pub fn tr(key : String) -> String {
     None =>
       match drive_zh.get(key) {
         Some(s) => s
-        None => zh_decide.get(key).unwrap_or(key)
+        None =>
+          match zh_decide.get(key) {
+            Some(s) => s
+            None => zh_wide.get(key).unwrap_or(key)
+          }
       }
   }
 }

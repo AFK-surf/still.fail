@@ -35,6 +35,20 @@ priv struct Wide {
   mut edge_x : Double
   mut edge_w : Double
   mut edge_moved : Bool
+  /// a chat's row's menu open (its right click): its row's key, the item, where
+  mut menu : (String, ChatItem, Double, Double)?
+  /// a row being renamed in place: its key
+  mut renaming : String
+  /// the lists' filter menu open, 待处理's panel open
+  mut filter_open : Bool
+  mut attention_open : Bool
+  /// ⌘K's panel open, what is typed in it, the row chosen
+  mut switcher : Bool
+  mut chosen : Int
+  /// 快捷键一览 (⌘/) open
+  mut keys_open : Bool
+  /// the chat last opened here by the frame (the core's last chat taken once per workspace)
+  mut landed : String
 }
 
 ///|
@@ -44,6 +58,14 @@ let wide : Wide = {
   edge_x: -1.0,
   edge_w: 0.0,
   edge_moved: false,
+  menu: None,
+  renaming: "",
+  filter_open: false,
+  attention_open: false,
+  switcher: false,
+  chosen: 0,
+  keys_open: false,
+  landed: "",
 }
 
 ///|
@@ -62,6 +84,14 @@ fn wide_reset() -> Unit {
   wide.side_w = 240.0
   wide.folded = false
   wide.edge_x = -1.0
+  wide.menu = None
+  wide.renaming = ""
+  wide.filter_open = false
+  wide.attention_open = false
+  wide.switcher = false
+  wide.chosen = 0
+  wide.keys_open = false
+  wide.landed = ""
   wide_on.val = false
 }
 
@@ -90,30 +120,19 @@ fn wide_frame(
   c.mouse_drags_lists(false)
   let side = side_now()
   let main_w = dmax(0.0, c.width - rail_w - side)
+  // the core's chat last open, else a new chat: there is always a page beside the list (workspace.tsx WorkspaceHome)
+  land(src, w)
   c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     c.box(dir=Row, w=Px(rail_w + side), h=Fill(1.0), bg=t.p.sidebar, clip=true, fn() {
       rail(c, src, w, all)
       if side > 0.0 {
-        // the chats' list: the phone's Home in it, for now
-        c.box(w=Px(side + 8.0), h=Fill(1.0), fn() {
-          c.sized(side + 8.0, c.height, fn() { home_page(c, src, w, all, invited) })
-        })
-        |> ignore
+        c.box(w=Px(side + 8.0), h=Fill(1.0), fn() { sidebar(c, src, w, side + 8.0) }) |> ignore
       }
     })
     |> ignore
     c.box(w=Px(main_w), h=Fill(1.0), clip=true, fn() {
       c.sized(main_w, c.height, fn() {
-        // the stack's top page (Home is the sidebar's)
-        c.nav_flat(
-          app.nav,
-          fn(page) {
-            if page != Home {
-              page_view(c, src, w, all, invited, page)
-            }
-          },
-          bg=t.p.bg,
-        )
+        c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
         |> ignore
       })
     })
@@ -124,6 +143,56 @@ fn wide_frame(
   // back (⌘[, a mouse's back button) a page of the stack, where there is one
   if app.nav.depth() > 1 && !app.menu && !sheet_open() {
     c.take_back(fn() { app.nav.pop() |> ignore })
+  }
+}
+
+///|
+/// The chats' place with nothing open: the chat the core says was open last in this workspace, else a new chat
+/// (workspace.tsx WorkspaceHome; once per workspace, so closing the chat goes back to the list on a phone).
+fn land(src : Source, w : Workspace) -> Unit {
+  if app.nav.depth() != 1 || app.nav.top() != Home {
+    return
+  }
+  // come back to the chats (a chat closed, settings left): a new chat, as the web's empty place is
+  if wide.landed == w.id {
+    app.nav.push(NewChat)
+    return
+  }
+  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
+  guard marks.value is Some(_) else { return }
+  wide.landed = w.id
+  let chat = field(field(field(marks.value, "workspaces"), w.id), "chat")
+  let station = text(chat, "station")
+  let key = text(chat, "key")
+  if station != "" && key != "" {
+    app.nav.push(Chat({ station, session: key, title: "", station_name: "" }))
+  } else {
+    app.nav.push(NewChat)
+  }
+}
+
+///|
+/// The page in the wide frame's pane: the chat (wide_chat.mbt), else the phone's page of the same (its own bar at its
+/// top), the stack's top as it is.
+fn main_page(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  all : Array[Workspace],
+  invited : Bool,
+  page : Page,
+) -> Unit {
+  match page {
+    Chat(r) => wide_chat_page(c, src, w, r)
+    // the chats' list is the sidebar's: nothing open (yet), the page's ground
+    Home => ()
+    // settings' own home is its first page (the web goes to 外观)
+    Settings => setting_page(c, src, w, @settings.Route::Appearance)
+    // a place of the rail's other than the chats': its page, under its title
+    Place(p) => wide_place(c, src, w, p)
+    // 文件: the stations' folders, under its bar (the phone's place has the bottom bar's room)
+    Files => files_page(c, src, w)
+    _ => page_view(c, src, w, all, invited, page)
   }
 }
 
@@ -294,8 +363,18 @@ fn rail_place(c : @ui.Ctx, src : Source, w : Workspace, place : String, on : Boo
   c.cursor(id, Hand)
   if c.clicked(id) {
     match place {
-      "attention" => ()
-      "chats" => go_place(c, "chats", [], -1)
+      "attention" => {
+        wide.attention_open = !wide.attention_open
+        wide.menu = None
+      }
+      "chats" =>
+        // the chats again: the chat last open stays open beside the list
+        if app.nav.pages()[0] == Home && lit_place() == "chats" {
+          ()
+        } else {
+          go_place(c, "chats", [], -1)
+          wide.landed = ""
+        }
       p => go_place(c, p, [], -1)
     }
   }
@@ -306,7 +385,7 @@ fn rail_place(c : @ui.Ctx, src : Source, w : Workspace, place : String, on : Boo
     _ => false
   }
   c.box(fn() {
-    rail_ground(c, id, on, fn(color) {
+    rail_ground(c, id, on || (place == "attention" && wide.attention_open), fn(color) {
       if place == "decisions" {
         c.text("奏", size=16.0, weight=600, color~, wrap=false, line=20.0) |> ignore
       } else {
@@ -412,6 +491,88 @@ fn sidebar_edge(c : @ui.Ctx, side : Double) -> Unit {
         |> ignore
       })
       |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A new chat (新建对话, ⌘N): its page beside the list.
+fn new_chat_wide() -> Unit {
+  match app.nav.top() {
+    NewChat => ()
+    _ => {
+      lower_sheet()
+      while app.nav.depth() > 1 {
+        if !app.nav.pop() {
+          break
+        }
+      }
+      if app.nav.top() != Home {
+        app.nav.replace(Home)
+      }
+      app.nav.push(NewChat)
+    }
+  }
+}
+
+///|
+/// A chat's row pressed: its chat the page beside the list (in place of what was open), the list's place kept.
+fn open_row(item : ChatItem) -> Unit {
+  let r : ChatRef = {
+    station: item.station,
+    session: item.session,
+    title: item.title,
+    station_name: item.station_name,
+  }
+  match app.nav.top() {
+    Chat(open) if open.station == r.station && open.session == r.session => return
+    _ => ()
+  }
+  lower_sheet()
+  wide.menu = None
+  // the chats' place under it: settings or another place left for the chat
+  if lit_place() != "chats" {
+    while app.nav.depth() > 1 {
+      if !app.nav.pop() {
+        break
+      }
+    }
+    app.nav.replace(Home)
+    app.nav.push(Chat(r))
+    return
+  }
+  if app.nav.depth() > 1 {
+    app.nav.replace(Chat(r))
+  } else {
+    app.nav.push(Chat(r))
+  }
+}
+
+///|
+/// A place of the rail's (Station, Profile, 连接, 用量) in the pane: its title as a page's head (pages.css.ts), what
+/// the settings' page of it shows under it.
+fn wide_place(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
+  let t = @sf.theme()
+  let side = dmax(24.0, (c.width - 792.0) / 2.0) + 16.0
+  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+    let head = c.id("place-head")
+    if @host.window_inset() {
+      c.window_drag(head)
+    }
+    c.box(w=Fill(1.0), pl=side, pr=side, pt=40.0, pb=12.0, id=head, fn() {
+      c.text(place_label(place), size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
+    })
+    |> ignore
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      match @settings.route_of(place) {
+        Some(r) => {
+          let core = settings_core(src, w)
+          @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
+        }
+        None => ()
+      }
     })
     |> ignore
   })

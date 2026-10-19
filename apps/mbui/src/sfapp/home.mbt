@@ -953,7 +953,7 @@ fn lead_of(s : String, words : Array[String], after : Array[String], end : Bool)
 /// Where the chat stands, in its last message's place (Home.kt StateLine): a lead said as an icon (要你帮忙 a bell,
 /// in ink; 在等 the wait mark, 监控中 the watch before its words, 做完了 a check) where the title's mark is; 奏 · …
 /// (a card waiting for the viewer) in ink with its 奏 bold; anything else in the secondary colour.
-fn state_line(c : @ui.Ctx, state : String) -> Unit {
+fn state_line(c : @ui.Ctx, state : String, size? : Double = 14.0, line? : Double = 20.0) -> Unit {
   let t = @sf.theme()
   let need = lead_of(state, ["要你帮忙", "需要你处理", "Needs you"], ["：", ":"], true)
   let done = if need is None {
@@ -1002,7 +1002,7 @@ fn state_line(c : @ui.Ctx, state : String) -> Unit {
       |> ignore
       if rest != "" {
         c.box(w=Fill(1.0), fn() {
-          c.text(rest, size=14.0, color=tint, wrap=false, line=20.0) |> ignore
+          c.text(rest, size~, color=tint, wrap=false, line~) |> ignore
         })
         |> ignore
       }
@@ -1020,15 +1020,15 @@ fn state_line(c : @ui.Ctx, state : String) -> Unit {
   }
   if lead != "" {
     c.box(dir=Row, w=Fill(1.0), align=ACenter, fn() {
-      c.text(lead, size=14.0, weight=700, color=t.p.text, wrap=false, line=20.0)
+      c.text(lead, size~, weight=700, color=t.p.text, wrap=false, line~)
       |> ignore
       c.box(w=Fill(1.0), fn() {
         c.text(
           state.view(start_offset=lead.length()).to_owned(),
-          size=14.0,
+          size~,
           color=t.p.text,
           wrap=false,
-          line=20.0,
+          line~,
         )
         |> ignore
       })
@@ -1037,13 +1037,13 @@ fn state_line(c : @ui.Ctx, state : String) -> Unit {
     |> ignore
     return
   }
-  c.text(state, size=14.0, color=t.p.muted, wrap=false, line=20.0) |> ignore
+  c.text(state, size~, color=t.p.muted, wrap=false, line~) |> ignore
 }
 
 ///|
 /// Who is in a chat, small at its second line's end (RowPicture.kt RowAside): its agents (a mark per maker) and its
 /// people, those that lead first; the people only when they lead or someone other than the viewer is in it.
-fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String) -> Unit {
+fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_size? : Double = 18.0) -> Unit {
   let t = @sf.theme()
   // those that look the same (one maker's models) drawn once
   let groups : Array[RowAgent] = []
@@ -1078,7 +1078,7 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String) -> Unit 
     c.box(dir=Row, align=ACenter, fn() {
       for i, p in shown {
         let starter = people.length() > 1 && p.id == item.creator
-        face(c, src, p, 18.0, starter, -3.0 * i.to_double())
+        face(c, src, p, face_size, starter, -3.0 * i.to_double())
       }
       if people.length() > shown.length() {
         c.box(tx=-3.0 * (shown.length() - 1).to_double() + 3.0, fn() {

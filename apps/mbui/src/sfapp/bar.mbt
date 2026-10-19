@@ -1437,6 +1437,11 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 /// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): settings, the place's name, a hairline under.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let t = @sf.theme()
+  // the wide frame's page bar (wide_chat.mbt): the rail is the way to the others
+  if wide_on.val {
+    page_bar_wide(c, place_label(place), false, fn() {  }) |> ignore
+    return
+  }
   c.box(w=Fill(1.0), bg=@sf.alpha(t.p.bg, 0.94), fn() {
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="place-settings") {

@@ -8,6 +8,7 @@
 /// bar's at the stack's root (PlacePage.kt), under the app's own top bar, so without its compact one.
 pub fn page(c : @ui.Ctx, core : Core, here : Here, route : Route, root? : Bool = false) -> Unit {
   frame_ctx.val = Some(c)
+  frame_core.val = Some(core)
   at_root.val = root
   match route {
     Home => settings_home(c, core, here)

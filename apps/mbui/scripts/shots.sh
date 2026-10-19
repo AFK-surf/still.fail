@@ -16,17 +16,19 @@
 # `decide` and `web-decide` src/sfapp/decide_fixture.mbt's modes; `settings` and `web-settings` the settings' pages
 # (src/sfapp/settings/fixture.mbt); `glass` and `web-glass` frosted and liquid glass over bands of colour (APP=sfkit
 # MBUI_SCREEN=glass), light and dark; `newchat` and `web-newchat` a new chat, its sheets, the bottom bar's panel and a
-# place (src/sfapp/newchat_fixture.mbt); `preview` and `web-preview` a file of a chat open in the preview.
+# place (src/sfapp/newchat_fixture.mbt); `preview` and `web-preview` a file of a chat open in the preview; `wide` the
+# wide frame of a desktop's window (WIDE_WIN, 1280x800) over sffix's modes (WIDE_MODES), light and dark.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
 mkdir -p out/shots goldens
-PLATFORMS=${*:-kit home chat composer drive decide glass newchat preview settings web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-settings}
+PLATFORMS=${*:-kit home chat composer drive decide glass newchat preview settings wide web-kit web-home web-chat web-composer web-drive web-decide web-glass web-newchat web-preview web-settings}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
 PLAYER_MODES="video audio ended opening"
 SERVICE_MODES="service service-sized service-restart service-stopped"
 SHARE_MODES="share-in share-in-stations"
+WIDE_MODES=${WIDE_MODES:-home chat settings-appearance files decisions}
 SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security vault stations station profiles profile connects memory memory-doc usage archive}
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
@@ -215,6 +217,19 @@ for p in $PLATFORMS; do
       for m in $SHARE_MODES; do
         QUERY=MBUI_FIXTURE=$m NODE_PATH=$PWD/out/node/node_modules node "$MBUI_DIR/scripts/web-shot.mjs" out/shots/web-$m.png
         names="$names web-$m"
+      done ;;
+    wide)
+      # the wide frame (src/sfapp/wide.mbt) at a desktop's size, light and dark: mac-wide-<mode>[-dark]
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-wide; mkdir -p out/shot-wide
+      names=
+      for m in $WIDE_MODES; do
+        for d in 0 1; do
+          n=mac-wide-$m$([ $d = 1 ] && echo -dark)
+          MBUI_BENCH=-1 MBUI_WIN=${WIDE_WIN:-1280x800} MBUI_DARK=$d MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_AT=40 MBUI_SHOT_NAME=$n MBUI_SHOT_DIR=$PWD/out/shot-wide ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+          cp out/shot-wide/$n.png out/shots/$n.png
+          names="$names $n"
+        done
       done ;;
     settings)
       APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
