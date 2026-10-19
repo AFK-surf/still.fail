@@ -419,35 +419,37 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
 }
 
 ///|
-/// A row archived from the list (its 归档, its menu's): the chat beside the list goes to the one after it.
+/// A row archived from the list (its 归档, its menu's): the chat beside the list goes to the one after it. One keeping
+/// watch only once asked, in the core's words (its watch runs on in the archive).
 fn archive_row(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
-  match item.watch_ask {
-    // one keeping watch asks first (its watch runs on in the archive): said, not done from here
-    Some(ask) => say(c, ask)
-    None => {
-      match app.nav.top() {
-        Chat(r) if r.station == item.station && (r.session == item.session || r.session == item.id) => {
-          app.nav.pop() |> ignore
-          wide.landed = ""
-        }
-        _ => ()
+  let run = fn() {
+    match app.nav.top() {
+      Chat(r) if r.station == item.station && (r.session == item.session || r.session == item.id) => {
+        app.nav.pop() |> ignore
+        wide.landed = ""
       }
-      let params : Map[String, Json] = {
-        "station": Json::string(item.station),
-        "session": Json::string(item.session),
-        "archived": Json::boolean(true),
-      }
-      match item.thread {
-        Some(th) => params["thread"] = Json::number(th)
-        None => ()
-      }
-      (src.call)("chat.archive", Json::object(params), fn(r) {
-        match r {
-          Ok(_) => say(c, tr("web-main.chat.archived"))
-          Err(e) => say(c, fill("web-main.chat.archiveFailed", [("error", text(Some(e), "message"))]))
-        }
-      })
+      _ => ()
     }
+    let params : Map[String, Json] = {
+      "station": Json::string(item.station),
+      "session": Json::string(item.session),
+      "archived": Json::boolean(true),
+    }
+    match item.thread {
+      Some(th) => params["thread"] = Json::number(th)
+      None => ()
+    }
+    (src.call)("chat.archive", Json::object(params), fn(r) {
+      match r {
+        Ok(_) => say(c, tr("web-main.chat.archived"))
+        Err(e) => say(c, fill("web-main.chat.archiveFailed", [("error", text(Some(e), "message"))]))
+      }
+    })
+  }
+  match item.watch_ask {
+    Some(ask) =>
+      @settings.confirm(fill("android-chat.archive.ask", [("title", item.title)]), ask, tr("android-chat.archive"), run)
+    None => run()
   }
 }
 

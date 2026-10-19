@@ -208,8 +208,9 @@ fn ask(
 
 ///|
 /// Asks before something that cannot be undone (PageParts.kt confirm, with `what`): its title, what it does, 取消 and
-/// `action` (red when `danger`); the sheet closes at once and `run` goes on.
-fn confirm(title : String, words : String, action : String, run : () -> Unit, danger? : Bool = false) -> Unit {
+/// `action` (red when `danger`); the sheet closes at once and `run` goes on. The app's pages ask so too (a chat archived
+/// while it keeps watch).
+pub fn confirm(title : String, words : String, action : String, run : () -> Unit, danger? : Bool = false) -> Unit {
   open_sheet(0.36, fn(c, _core) {
     let t = @sf.theme()
     sheet_head(c, title)
