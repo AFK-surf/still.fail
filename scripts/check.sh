@@ -291,6 +291,7 @@ if part ts; then
     prep core deps client/core-ts
     step "desktop: its shell's files" after root after desktop after core node scripts/desktop-web.ts check
     step "desktop: what it keeps sealed" node --test apps/desktop/test/secure.test.ts
+    step "desktop: its station's PATH" node --test apps/desktop/test/station-path.test.ts
     step "desktop: its executables' own UUIDs" node --test apps/desktop/test/after-pack.test.ts; fi
   # The TypeScript core (docs/core-ts.md): its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
