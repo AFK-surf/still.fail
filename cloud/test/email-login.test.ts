@@ -7,10 +7,9 @@ type H = Awaited<ReturnType<typeof harness>>;
 type Answer = Awaited<ReturnType<H["fetch"]>>;
 
 /** A browser signing in on the cloud's page: from an address of its own (the login rate limit is per address), with the attempt's cookie. */
-async function browser(h: H, address: string) {
+async function browser(h: H, address: string, callback = "http://127.0.0.1:32145/oauth/callback") {
   const verifier = randomSecret(),
     state = randomSecret();
-  const callback = "http://127.0.0.1:32145/oauth/callback";
   const query = new URLSearchParams({ state, redirect_uri: callback, code_challenge: await digest(verifier), code_challenge_method: "S256", name: "Pixel" });
   const start = await h.fetch("/v1/auth/google/start?" + query, { redirect: "manual", headers: { "cf-connecting-ip": address } });
   assert.equal(start.status, 200, "the page that asks how");
@@ -30,7 +29,7 @@ async function browser(h: H, address: string) {
   const exchange = async (finished: Answer) => {
     assert.equal(finished.status, 302);
     const location = new URL(finished.headers.get("location")!);
-    assert.equal(location.origin + location.pathname, callback);
+    assert.equal(finished.headers.get("location")!.split("?")[0], callback);
     assert.equal(location.searchParams.get("state"), state);
     const answer = await h.fetch("/v1/auth/token", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: location.searchParams.get("code"), code_verifier: verifier, redirect_uri: callback }) });
     assert.equal(answer.status, 200);
@@ -77,6 +76,7 @@ test("an email signs up with a code sent to it, and signs in to the same account
     const sent = await b.post({ via: "email", email: " New.Person@Example.TEST " });
     assert.equal(sent.status, 200);
     assert.match(await sent.text(), /new\.person@example\.test/, "the code page says where it went");
+    assert.match(sent.headers.get("content-security-policy")!, /form-action [^;]* http:\/\/127\.0\.0\.1:32145(;| )/, "its form may send the browser back to the client");
     assert.equal(h.mails.length, 1);
     assert.equal(h.mails[0]!.to, "new.person@example.test");
     assert.doesNotMatch(h.mails[0]!.subject, /\d{6}/, "the code is not in the subject: lock screens show it");
@@ -91,6 +91,21 @@ test("an email signs up with a code sent to it, and signs in to the same account
     assert.equal(me.status, 200, "an account like any other");
     const again = await emailLogin(h, "10.1.0.2", "new.person@example.test");
     assert.equal(again.subject, tokens.subject);
+  } finally {
+    await h.close();
+  }
+});
+
+test("an app signs in with an email's code: the code page lets its form send the browser back to the app", { timeout: 30000 }, async () => {
+  const h = await harness({ mail: true });
+  try {
+    const b = await browser(h, "10.7.0.1", "stillfail://auth/callback");
+    const sent = await b.post({ via: "email", email: "app@example.test" });
+    assert.equal(sent.status, 200);
+    // Browsers hold a form's redirect to form-action: without the app's scheme, the right code goes nowhere.
+    assert.match(sent.headers.get("content-security-policy")!, /form-action 'self' https:\/\/accounts\.google\.com stillfail:;/);
+    const tokens = await b.exchange(await b.post({ via: "code", code: codeFor(h, "app@example.test") }));
+    assert.equal(tokens.email, "app@example.test");
   } finally {
     await h.close();
   }

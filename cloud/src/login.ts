@@ -61,6 +61,16 @@ function cookieOf(request: Request, origin: string, id: string): string {
       ?.split("=")[1] ?? ""
   );
 }
+/** What a page's form-action lists for a login's return (auth.ts validRedirect): an app's scheme, else the origin. */
+export function returnSource(redirect: string): string | undefined {
+  try {
+    const url = new URL(redirect);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.origin : url.protocol;
+  } catch {
+    return undefined;
+  }
+}
+
 function redirect(location: string, cookies: string): Response {
   return new Response(null, {
     status: 302,
@@ -302,6 +312,8 @@ export class LoginAttempt extends DurableObject<Env> {
         `<p class="links"><button form="resend" class="link">${tr(lang, "cloud.login.code.resend")}</button><button form="back" class="link">${tr(lang, "cloud.login.code.other")}</button></p>` +
         `<form id="resend" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="resend"></form><form id="back" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="back"></form>`,
       cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+      // The right code sends the browser back where the attempt returns (choose's redirect): a device's ends here.
+      attempt.device ? undefined : returnSource(attempt.redirect),
     );
   }
 
