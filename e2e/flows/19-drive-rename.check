@@ -1,2 +1,0 @@
-check "the station has the file under its new name, the same bytes" 'cmp -s "$DRIVE/照片-$TAG.jpg" $FILES/e2e-photo.jpg'
-check "the old name is gone from the station's folder" '[ ! -e "$DRIVE/e2e-photo.jpg" ]'

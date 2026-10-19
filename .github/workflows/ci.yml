@@ -23,10 +23,8 @@ jobs:
           echo "$MOON_HOME/bin" >> $GITHUB_PATH
       - name: Check
         run: moon version --all && moon check --target js --output-json 2>&1 | python3 scripts/errs.py
-      - name: ui, gallery and core tests
-        run: |
-          moon test --target js -p mbui/ui -p mbui/gallery -p mbui/md -p mbui/sf -p mbui/sfapp 2>&1 | tail -3
-          moon test --target js -p mbui/core 2>&1 | tail -3
+      - name: ui, motion and Markdown tests
+        run: moon test --target js -p mbui/ui -p mbui/motion -p mbui/md 2>&1 | tail -3
       - name: "Unicode text (UAX #29, #14, #9 against Unicode's own tests)"
         run: |
           set -o pipefail
@@ -46,12 +44,12 @@ jobs:
           echo "$MOON_HOME/bin" >> $GITHUB_PATH
       - name: macOS apps
         run: |
-          for app in demo books photos sffix; do
+          for app in demo textdiff; do
             /usr/bin/time -p env APP=$app scripts/mac.sh build 2>&1 | tail -4
           done
       - name: Screenshot against the golden
         continue-on-error: true
-        run: scripts/shots.sh mac kit home chat composer drive
+        run: scripts/shots.sh mac
       - name: "Text against Core Text's own (scripts/textdiff.sh mac; Studio's run is the one that gates)"
         continue-on-error: true
         run: |

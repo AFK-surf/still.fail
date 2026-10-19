@@ -1,7 +1,6 @@
 import {
   "mbui/host",
   "mbui/ui",
-  "mbui/sf",
 }
 
 options(

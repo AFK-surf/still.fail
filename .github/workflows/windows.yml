@@ -1,7 +1,7 @@
 # The demo on Windows: build with MoonBit and MSVC, take the scripted
 # screenshot (Direct3D falls back to WARP on the GPU-less runner), and compare
-# it with goldens/windows.png when there is one; then the photos app over
-# test/images and a big JPEG made here, with its decode times.
+# it with goldens/windows.png when there is one; then the text against
+# DirectWrite's own.
 name: windows
 on:
   push:
@@ -35,12 +35,6 @@ jobs:
           ls -la out/shot-win
       - name: IME script
         run: scripts/win.sh script ime
-      - name: The kit screen (rich text, Markdown, pages) in a phone's window
-        run: |
-          mkdir -p out/shot-kit
-          MBUI_BENCH=-1 MBUI_SCREEN=kit MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_NAME=kit \
-            MBUI_SHOT_DIR="$(cygpath -w "$PWD/out/shot-kit")" out/win/mod/_build/native/release/build/demo/demo.exe
-          ls -la out/shot-kit
       - name: Compare with the golden
         run: |
           mkdir -p out/shots
@@ -51,29 +45,6 @@ jobs:
           else
             echo "no goldens/windows.png yet"
           fi
-      - name: A big JPEG for the photos app
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force test\images | Out-Null
-          Add-Type -AssemblyName System.Drawing
-          $b = New-Object System.Drawing.Bitmap 6000, 4000
-          $g = [System.Drawing.Graphics]::FromImage($b)
-          $r = New-Object System.Drawing.Rectangle 0, 0, 6000, 4000
-          $g.FillRectangle((New-Object System.Drawing.Drawing2D.LinearGradientBrush $r, ([System.Drawing.Color]::SteelBlue), ([System.Drawing.Color]::DarkOrange), 45.0), $r)
-          for ($i = 0; $i -lt 40; $i++) {
-            $c = [System.Drawing.Color]::FromArgb(140, ($i * 37) % 256, ($i * 71) % 256, ($i * 13) % 256)
-            $g.FillEllipse((New-Object System.Drawing.SolidBrush $c), ($i * 137) % 5600, ($i * 251) % 3600, 400 + $i * 10, 400 + $i * 10)
-          }
-          $g.Dispose()
-          $b.Save("$PWD\test\images\big.jpg", [System.Drawing.Imaging.ImageFormat]::Jpeg)
-          "big.jpg: $((Get-Item test\images\big.jpg).Length) bytes"
-      - name: Photos
-        run: |
-          # one picture comes over http (src/photos/pictures/windows.mbt)
-          python -m http.server 5590 --bind 127.0.0.1 -d test/images >/dev/null 2>&1 &
-          APP=photos scripts/win.sh build
-          MBUI_BENCH=-1 APP=photos scripts/win.sh script photos
-          ls -la out/photos
       - name: Text against DirectWrite's own (scripts/textdiff.sh windows; the report is in the artifact)
         run: |
           mkdir -p out/node && (cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i pngjs >/dev/null)

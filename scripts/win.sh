@@ -27,9 +27,7 @@ sync() {
   for p in src/*/moon.pkg; do
     grep -q '"is-main"' $p && sed -e '/"cc-link-flags"/d' $p > $M/$p
   done
-  cp -p src/photos/pictures/windows.mbt $M/src/photos/pictures_native.mbt
-  # the core (pthreads, dispatch, JavaScriptCore) isn't built for Windows yet
-  rm -rf $M/src/coredemo $M/src/stillfail
+  [ ! -f src/photos/pictures/windows.mbt ] || cp -p src/photos/pictures/windows.mbt $M/src/photos/pictures_native.mbt
   if ! grep -q win_app.c $M/src/host/moon.pkg || grep -q -e -framework -e '\.m"' $M/src/*/moon.pkg; then
     echo "win.sh: src/host/moon.pkg or an app's moon.pkg no longer has the expected shape" >&2
     exit 1

@@ -1,1 +1,0 @@
-check "the station lends the folder (its config's drive.roots)" 'drive_roots | grep -qx "$DRIVE"'

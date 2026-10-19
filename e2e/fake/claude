@@ -1,3 +1,0 @@
-#!/bin/sh
-# The test station's claude (scripts/e2e-local.sh puts this directory first on its PATH): claude.mjs beside it.
-exec node "$(dirname "$0")/claude.mjs" "$@"

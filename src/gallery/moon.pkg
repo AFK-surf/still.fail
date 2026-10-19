@@ -1,5 +1,0 @@
-import {
-  "mbui/ui",
-  "mbui/sf",
-  "moonbitlang/core/math",
-}

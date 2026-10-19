@@ -1,1 +1,0 @@
-check "the core holds alice's sign-in" 'core_has alice@example.test'

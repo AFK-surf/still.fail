@@ -1,18 +1,18 @@
 #!/bin/bash
 # Android: build libmbui.so from the C that moon generates (split and compiled in parallel: scripts/mbc.py) plus the
 # runtime and src/host/android_host.c, package it with Gradle, and run it on an
-# emulator of our own (AVD mbui-avd, port 5580). APP=demo|photos|coredemo|stillfail|sffix picks the app (coredemo and
-# stillfail with the still.fail core in them);
+# emulator of our own (AVD mbui-avd, port 5580). APP=demo|textdiff picks the app (still.fail's apps: its
+# apps/mbui/scripts/android.sh, these scripts on its module);
 # ENV="K=V;K2=V2" gives `run` the app's environment variables (MainActivity sets them before the app starts).
 #   scripts/android.sh build | emu | run [script] | shot NAME | record NAME SECONDS [drive] | log | stop | delete
 # moon.pkg cannot choose files per OS, so the build runs on a copy of the
-# module in out/android/mod, where photos shows src/photos/pictures/android.mbt.
+# module in out/android/mod, where an app's src/photos/pictures/android.mbt takes pictures_native.mbt's place.
 #
 # An app of a module outside this repository (one whose moon.work names mbui as a member, its moon.mod importing it):
 #   MBUI_APP_MOD       that module's directory (APP is its src/<APP>; out/ and _build/ are its own); default this repo
 #   MBUI_ANDROID       the Gradle project that packs it (default android/ here: dev.mbui.demo); MBUI_APP_ID its package
-#   MBUI_ANDROID_HOOK  a script sourced here that adds to the build (the still.fail core's: scripts/android-core.sh,
-#     which coredemo and stillfail get by default): APP_EXTRA (more C for libmbui.so: --extra=FILE ...), APP_LINK (its
+#   MBUI_ANDROID_HOOK  a script sourced here that adds to the build (the still.fail core's: still.fail's
+#     apps/mbui/scripts/android-core.sh): APP_EXTRA (more C for libmbui.so: --extra=FILE ...), APP_LINK (its
 #     link flags), APP_KIND (what the app packs: a change builds Gradle's outputs anew), and the functions app_libs
 #     (alongside the compile: .so files into $jni, before the link), app_assets (alongside: into $apk/assets, before
 #     Gradle) and app_cmd (commands of its own)
@@ -79,14 +79,12 @@ photos() {
   fi
 }
 
-# What an app adds (MBUI_ANDROID_HOOK; the still.fail core's for coredemo and stillfail), into out/android/apk, which
+# What an app adds (MBUI_ANDROID_HOOK: still.fail's the core's), into out/android/apk, which
 # Gradle packs (its project's sourceSets): .so files in apk/jniLibs/arm64-v8a ($jni), assets in apk/assets.
 APP_EXTRA= APP_LINK= APP_KIND=plain
 apk=$OUT/apk
 jni=$OUT/apk/jniLibs/arm64-v8a
-HOOK=${MBUI_ANDROID_HOOK:-}
-if [ -z "$HOOK" ] && { [ $PKG = coredemo ] || [ $PKG = stillfail ]; }; then HOOK=$D/android-core.sh; fi
-[ -z "$HOOK" ] || . "$HOOK"
+[ -z "${MBUI_ANDROID_HOOK:-}" ] || . "$MBUI_ANDROID_HOOK"
 
 now() { python3 -c 'import time;print(time.time())'; }
 secs() { python3 -c "print(f'{$2-$1:.1f}')"; }
@@ -171,7 +169,7 @@ case "${1:-build}" in
     fi
     ;;
   fling-test)
-    # Flings the app's first list (the app built already; APP=sffix ENV=MBUI_FIXTURE=long shows a long Home) and
+    # Flings the app's first list (the app built already; still.fail's APP=sffix ENV=MBUI_FIXTURE=long shows a long Home) and
     # records it: out/android/fling/fling.mp4, the app's log of touches and positions frame by frame (MBUI_SCROLL_LOG),
     # and scripts/scrollplot.py's comparison with Compose's fling at the same velocities (fling.txt, fling.png when
     # matplotlib is there: out/venv).

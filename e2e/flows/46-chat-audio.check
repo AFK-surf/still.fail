@@ -1,3 +1,0 @@
-check "the station has the chat made with the song" 'entry_attachments "一段录音 $TAG post:收到录音 $TAG" | grep -q e2e-tune.m4a'
-check "the player read the song through the core (station.file.part), a part at a time" 'grep -q "preview: .*e2e-tune.m4a @0 [0-9]* bytes through the core (station.file.part" $OUT/$name.log && grep -q "view [0-9]*: read" $OUT/$name.log'
-check "the system's player took it and played on (ready; 2 s in)" 'grep -q "view [0-9]*: ready" $OUT/$name.log && python3 $D/pngstat.py $OUT/$name/1-playing.png 0.1 0.45 0.9 0.55 3'

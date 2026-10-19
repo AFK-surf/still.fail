@@ -1,9 +1,0 @@
-CHAT=$(python3 -c "import json; c=json.load(open('$WORK/peer/chat.json')); print(c['station'] + '/' + c['session'])")
-THREAD=$(python3 -c "import json; print(json.load(open('$WORK/peer/chat.json'))['thread'])")
-CARD=$(sql "select n from entries where thread = $THREAD and author_kind = 'agent' and text = '要不要发通知 $TAG'")
-check "the station has the agent's card for alice" 'sql "select card from entries where author_kind=\"agent\" and text=\"要不要发通知 $TAG\"" | grep -q "\"label\":\"不发 $TAG\""'
-check "the core said to show it, and the app took it" 'grep -q "^ANSWER notice.claim ok {\"show\":true}" $OUT/$name.log'
-check "the system showed it as the test chat's, a card waiting" 'grep -F "NOTICE $CHAT	" $OUT/$name.log | grep -qF "待你决定 · 要不要发通知 $TAG"'
-check "tapped, it opened the test chat at the card" '[ -n "$CARD" ] && grep -qF "notice opens ${CHAT%/*}|${CHAT##*/} at $CARD" $OUT/$name.log'
-check "the chat went to the card" 'grep -qF "chat: gone to message $CARD" $OUT/$name.log'
-check "the station marks it read to its end" 'grep "^READS" $OUT/$name.log | tail -1 | grep -q " read"'

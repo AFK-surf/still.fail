@@ -219,16 +219,5 @@ fn fmt_ms(x : Double) -> String {
 
 ///|
 fn main {
-  // MBUI_DARK=1: the dark theme
-  if @host.env("MBUI_DARK") == "1" {
-    @sf.set_dark(Some(true))
-  }
-  // MBUI_SCREEN=kit: the parts for still.fail's pages (kit.mbt); glass: frosted and liquid glass (glass.mbt)
-  if @host.env("MBUI_SCREEN") == "kit" {
-    @ui.run("MoonBit UI 组件", kit_view)
-  } else if @host.env("MBUI_SCREEN") == "glass" {
-    @ui.run("MoonBit UI 玻璃", glass_view)
-  } else {
-    @ui.run("MoonBit UI 原型", view)
-  }
+  @ui.run("MoonBit UI 原型", view)
 }

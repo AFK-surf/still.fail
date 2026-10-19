@@ -5,9 +5,11 @@ builds, lays out and paints a tree every frame and draws everything itself on
 the GPU, and thin hosts that put it on the screen and feed it input — macOS
 and iOS (Metal), Windows (Direct3D 11), Android (OpenGL ES), and a WebGL2
 host for tests and previews. Its flexbox passes Yoga's tests and its text
-segmentation Unicode's own. It is where [still.fail](https://still.fail)'s
-native clients are being rebuilt (`src/stillfail`, `src/sfapp`, `src/sf`).
-It is experimental: APIs change without notice.
+segmentation Unicode's own. It is what [still.fail](https://still.fail)'s
+native clients are being rebuilt in: that app, its design system and pages,
+live in still.fail's repository (`apps/mbui`, built by these scripts with
+`MBUI_APP_MOD`); so does the player (`src/player`) for now, as it draws with still.fail's design system (it can come
+back as framework once it takes its icons and theme from its caller). It is experimental: APIs change without notice.
 
 Open source under the MIT licence (`LICENSE`); what it includes or is
 derived from others' work is listed, with their licences, in
@@ -30,9 +32,7 @@ src/ui      the framework (MoonBit, target independent)
   widgets.mbt button, segmented control with a spring indicator
   scene.mbt   paint: one flat array of 24-float instances
   app.mbt     frame loop, input dispatch, bench mode
-src/md      a small Markdown parser (blocks, inlines; still.fail's subset)
-src/sf      still.fail's design system: tokens, parts, Markdown as its
-            messages show it
+src/md      a small Markdown parser (blocks, inlines)
 src/text    Unicode text segmentation (target independent, no host calls)
   grapheme.mbt   extended grapheme clusters, UAX #29 (caret, backspace)
   linebreak.mbt  line break opportunities, UAX #14 (wrapping)
@@ -52,8 +52,7 @@ src/host    the platform boundary
   win_text.cpp    DirectWrite shaping, Direct2D glyphs into the same atlas
   win_app.c       Win32 window, per-monitor DPI, IMM32 input method
 web/        browser host: WebGL2, canvas-2D text, hidden textarea for IME
-src/demo    the demo: a chat screen with 10,000 messages; MBUI_SCREEN=kit
-            (?MBUI_SCREEN=kit in a browser) its kit: rich text, Markdown, pages
+src/demo    the demo: a chat screen with 10,000 messages
 src/bench   a headless benchmark after nanoui's hill-climb (bench/README.md)
 src/textdiff  the corpus drawn by mbui and by the platform's own text
             drawing, side by side (scripts/textdiff.sh)

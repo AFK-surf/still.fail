@@ -1,2 +1,0 @@
-check "the composer tapped under the bar going down took the words: at the station, once, alice's" '[ "$(sql "select count(*) from entries where author_kind=\"person\" and author=\"alice@example.test\" and text=\"栏下去时点的 $TAG\"")" = 1 ]'
-check "the bar was still going down when the composer was tapped (the motion log)" 'grep -q "MOTION .* bar/vis .* to=0" $OUT/$name.log'

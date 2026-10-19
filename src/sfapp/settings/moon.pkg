@@ -1,6 +1,0 @@
-import {
-  "mbui/ui",
-  "mbui/motion",
-  "mbui/sf",
-  "mbui/host",
-}

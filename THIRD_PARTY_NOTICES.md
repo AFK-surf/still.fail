@@ -55,13 +55,6 @@ the one in `LICENSE`, with the copyright line given here.
 - Licence: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
   Copyright The Android Open Source Project.
 
-## ThumbHash
-
-- What: the ThumbHash decoder in `src/gallery/thumbhash.mbt`, ported from the
-  reference implementation (as still.fail's `web/src/thumbhash.ts` has it).
-- From: https://github.com/evanw/thumbhash
-- Licence: MIT. Copyright (c) 2023 Evan Wallace.
-
 ## nanoui's hill-climb benchmark
 
 - What: the scenes of `src/bench` (`scenes.mbt`) and of the Flutter
@@ -78,28 +71,6 @@ the one in `LICENSE`, with the copyright line given here.
 - From: https://github.com/egoist/mygo
 - Licence: MIT. Copyright (c) 2026 MyGo contributors.
 
-## still.fail
-
-- What: the design system in `src/sf` (tokens, parts, icons in
-  `icon_data.mbt` made by `scripts/icons.py` from its `design/icons`, Android
-  drawables by `scripts/drawables.py`), the Chinese strings and screens of
-  `src/sfapp`, `src/stillfail` and `src/sfcore` reproduced from still.fail's
-  apps, `src/effectport` (ported from its `client/core-ts`), and `core/`'s
-  entry points into its client core.
-- From: https://github.com/AFK-surf/still.fail
-- Licence: MIT. Copyright (c) 2026 still.fail contributors.
-
-## Lobe Icons
-
-- What: the model makers' and services' logos among the vector drawables in
-  `src/sf/drawable_data.mbt` (`maker_*`, `slack`): Lobe Icons' paths, as
-  still.fail's Android app has them, converted by `scripts/drawables.py`.
-- From: https://github.com/lobehub/lobe-icons
-- Licence: MIT. Copyright (c) 2023 LobeHub.
-- The logos are trademarks of their owners (Anthropic, OpenAI, Google, and
-  the others); they are shown only to name each one's models or service, and
-  no endorsement is implied.
-
 ## Gradle wrapper
 
 - What: `android/gradlew` and `android/gradle/wrapper/gradle-wrapper.jar`.
@@ -115,10 +86,9 @@ the one in `LICENSE`, with the copyright line given here.
 
 ## Downloaded at build time, not included
 
-The Android build fetches Hermes, JSI and fbjni (MIT, Meta Platforms) and
-AndroidX Media3 (Apache-2.0) from Maven Central; `scripts/core.sh` builds
-still.fail's client core from a still.fail checkout; the web tests install
-Playwright, pngjs and pixelmatch from npm. Their licences apply to those downloads.
+The Android build fetches AndroidX Media3 (Apache-2.0) from Maven Central;
+the web tests install Playwright, pngjs and pixelmatch from npm. Their
+licences apply to those downloads.
 
 ## Pictures and screenshots
 

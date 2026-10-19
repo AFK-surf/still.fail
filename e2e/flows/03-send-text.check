@@ -1,1 +1,0 @@
-check "the station has the message, once, as alice's" '[ "$(sql "select count(*) from entries where author_kind=\"person\" and author=\"alice@example.test\" and text=\"第一条来自 mbui 的消息 $TAG\"")" = 1 ]'

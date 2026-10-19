@@ -1,6 +1,0 @@
-# Signed in with the local cloud's mock account (MBUI_CORE_ACCOUNT, the core's migrate): Home lists the test chat,
-# the agent's first answer as where it stands.
-timeout 90000
-until 端到端测试
-until 你好，我是测试用的 agent
-shot 1-home
