@@ -1,0 +1,241 @@
+// Animated values kept from frame to frame (Compose's Animatable and animateFloatAsState; Motion's MotionValue and
+// animate): a number going to a target by a spec, from where it is and how fast it moves when told anew. As Compose's,
+// a motion asked for in one frame starts at the next (its first frame drawn at its start), and its time goes by the
+// frames' clock in whole milliseconds. Reduced motion (the host's setting, or MBUI_REDUCE_MOTION=1) and screenshots
+// (Ctx::stable) put every motion at its end at once (Motion.kt: one clock for all of it).
+
+///|
+/// A number that animates (Compose's Animatable).
+pub struct Anim {
+  mut value : Double
+  /// per second
+  mut velocity : Double
+  mut target : Double
+  mut spec : Spec
+  mut from : Double
+  mut v0 : Double
+  /// when it started (ms); -1: it starts at the first frame after `asked`
+  mut start : Double
+  mut asked : Int
+  mut dur : Double
+  mut running : Bool
+  /// the frame it was last stepped in, and last used in
+  mut stepped : Int
+  mut used : Int
+}
+
+///|
+/// A number at `v`, still.
+pub fn Anim::new(v : Double) -> Anim {
+  {
+    value: v,
+    velocity: 0.0,
+    target: v,
+    spec: Snap(0.0),
+    from: v,
+    v0: 0.0,
+    start: -1.0,
+    asked: -1,
+    dur: 0.0,
+    running: false,
+    stepped: -1,
+    used: -1,
+  }
+}
+
+///|
+/// Steps it to this frame (once a frame).
+fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
+  let frame = c.frame_number()
+  if self.stepped == frame {
+    return
+  }
+  self.stepped = frame
+  if !self.running {
+    return
+  }
+  if c.still() {
+    self.finish()
+    return
+  }
+  if self.start < 0.0 {
+    if frame <= self.asked {
+      c.request_frame()
+      return
+    }
+    self.start = c.now()
+  }
+  let ms = c.now() - self.start
+  let (x, v) = self.spec.value_at(ms, self.dur, self.from, self.target, self.v0)
+  self.value = x
+  self.velocity = v
+  if ms.floor() >= self.dur {
+    self.finish()
+  } else {
+    c.request_frame()
+  }
+}
+
+///|
+fn Anim::finish(self : Anim) -> Unit {
+  self.value = self.target
+  self.velocity = 0.0
+  self.running = false
+}
+
+///|
+/// Where it is this frame.
+pub fn Anim::get(self : Anim) -> Double {
+  self.step(@ui.current())
+  self.value
+}
+
+///|
+/// Whether it is on its way.
+pub fn Anim::moving(self : Anim) -> Bool {
+  self.step(@ui.current())
+  self.running
+}
+
+///|
+/// Where it is going.
+pub fn Anim::target(self : Anim) -> Double {
+  self.target
+}
+
+///|
+/// Off to `target` by `spec`, from where it is now and as fast as it moves (or `velocity`, per second), from the next
+/// frame on (Animatable.animateTo).
+pub fn Anim::animate(self : Anim, target : Double, spec : Spec, velocity? : Double) -> Unit {
+  let c = @ui.current()
+  self.step(c)
+  self.from = self.value
+  self.v0 = match velocity {
+    Some(v) => v
+    None => self.velocity
+  }
+  self.target = target
+  self.spec = spec
+  self.dur = spec.duration(self.from, target, self.v0)
+  self.start = -1.0
+  self.asked = c.frame_number()
+  self.stepped = c.frame_number()
+  if c.still() || (self.dur <= 0.0 && self.from == target) {
+    self.finish()
+  } else {
+    self.running = true
+    c.request_frame()
+  }
+}
+
+///|
+/// Off to `target`, unless it goes there already or is there (Motion.kt Follower.to; animate*AsState): told again
+/// mid-way it goes on from where it is, as fast as it goes.
+pub fn Anim::follow(self : Anim, target : Double, spec : Spec) -> Unit {
+  self.step(@ui.current())
+  if target == self.target {
+    return
+  }
+  self.animate(target, spec)
+}
+
+///|
+/// There at once, still (Animatable.snapTo).
+pub fn Anim::snap(self : Anim, v : Double) -> Unit {
+  self.value = v
+  self.target = v
+  self.velocity = 0.0
+  self.running = false
+  self.stepped = @ui.current().frame_number()
+}
+
+///|
+/// What animates, kept from frame to frame by its key (in the scope it was asked in), forgotten once neither used nor
+/// moving for a while.
+let anims : Map[Int, Anim] = {}
+
+///|
+/// A number kept from frame to frame by `key`, starting at `init`; it goes as it is told (Anim::animate, follow,
+/// snap). `global`: the same wherever it is asked (a list's row, at any index), else by the scope it is asked in.
+pub fn anim(c : @ui.Ctx, key : String, init : Double, global? : Bool = false) -> Anim {
+  install()
+  let id = if global { motion_key(key) } else { c.id(key) }
+  let a = match anims.get(id) {
+    Some(a) => a
+    None => {
+      let a = Anim::new(init)
+      anims[id] = a
+      a
+    }
+  }
+  a.used = c.frame_number()
+  a.step(c)
+  a
+}
+
+///|
+/// A number that follows `target` by `spec` (Compose's animateFloatAsState): at `from` (or at the target) the first
+/// time, then on to each new target from where it is, as fast as it goes. Its value this frame.
+pub fn animate(
+  c : @ui.Ctx,
+  key : String,
+  target : Double,
+  spec? : Spec = spring(),
+  from? : Double,
+) -> Double {
+  let first = !anims.contains(c.id(key))
+  let a = anim(c, key, match from {
+    Some(f) => f
+    None => target
+  })
+  if first && a.value != target {
+    a.animate(target, spec)
+  } else {
+    a.follow(target, spec)
+  }
+  if a.running && logging() {
+    @ui.log("MOTION \{c.now()} \{key} value=\{a.value} to=\{a.target}")
+  }
+  a.value
+}
+
+///|
+/// Forgets what has not been used for a while and does not move (a page gone, a row scrolled away: made anew at rest
+/// when it comes back).
+fn sweep_anims(c : @ui.Ctx) -> Unit {
+  let frame = c.frame_number()
+  if frame % 60 != 0 || anims.is_empty() {
+    return
+  }
+  let old : Array[Int] = []
+  anims.each(fn(id, a) { if frame - a.used > 120 && !a.running { old.push(id) } })
+  for id in old {
+    anims.remove(id)
+  }
+}
+
+///|
+/// How much the pressed look of the thing with `id` shows (0 … 1): in over 75 ms as a finger goes down, out over 150
+/// once it lifts, a press however short shown whole first (the timing of Android's ripple, RippleDrawable, as the
+/// app's `clickable`s have it). Only a look: the tap is the thing's own, at once.
+pub fn pressing(c : @ui.Ctx, id : Int) -> Double {
+  let down = c.pressed(id)
+  let key = "\u{1}press/\{id}"
+  let a = match anims.get(motion_key(key)) {
+    Some(a) => a
+    None => {
+      if !down {
+        return 0.0
+      }
+      anim(c, key, 0.0, global=true)
+    }
+  }
+  a.used = c.frame_number()
+  a.step(c)
+  if down {
+    a.follow(1.0, tween(75.0, ease=Linear))
+  } else if !(a.running && a.target == 1.0) {
+    a.follow(0.0, tween(150.0, ease=Linear))
+  }
+  a.get()
+}

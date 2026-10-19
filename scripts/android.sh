@@ -4,7 +4,7 @@
 # emulator of our own (AVD mbui-avd, port 5580). APP=demo|photos|coredemo|stillfail|sffix picks the app (coredemo and
 # stillfail with the still.fail core in them);
 # ENV="K=V;K2=V2" gives `run` the app's environment variables (MainActivity sets them before the app starts).
-#   scripts/android.sh build | emu | run [script] | shot NAME | log | listen-test | stop | delete
+#   scripts/android.sh build | emu | run [script] | shot NAME | record NAME SECONDS [drive] | log | listen-test | stop | delete
 # moon.pkg cannot choose files per OS, so the build runs on a copy of the
 # module in out/android/mod, where photos shows src/photos/pictures/android.mbt.
 set -e
@@ -230,6 +230,29 @@ case "${1:-build}" in
     [ -x out/venv/bin/python3 ] && PY=out/venv/bin/python3
     $PY "$D/scrollplot.py" $F/log.txt $F/fling.png | tee $F/fling.txt
     ls -la $F
+    ;;
+  record)
+    # A motion recorded on the emulator (the app built already): `record NAME SECONDS [drive script]` starts the app
+    # with ENV and MBUI_MOTION_LOG=1 (and scripts/motion/<drive script>.drive as MBUI_DRIVE_B64), records the screen
+    # meanwhile: out/android/rec/NAME.mp4, NAME.log (the app's log: `MOTION …` lines for scripts/motionplot.py).
+    R=$OUT/rec
+    mkdir -p $R
+    NAME=${2:-motion}
+    SECS=${3:-10}
+    DRV=""
+    [ -n "${4:-}" ] && DRV="MBUI_DRIVE_B64=$(base64 < scripts/motion/$4.drive | tr -d '\n');"
+    # storage takes a while after boot
+    for i in $(seq 1 60); do $ADB -s $SERIAL shell touch /sdcard/.rec 2>/dev/null && break; sleep 1; done
+    $ADB -s $SERIAL logcat -c
+    $ADB -s $SERIAL shell screenrecord --time-limit $SECS /sdcard/$NAME.mp4 &
+    REC=$!
+    sleep 1
+    ENV="${DRV}MBUI_MOTION_LOG=1${ENV:+;$ENV}" "$0" run
+    wait $REC || true
+    sleep 1
+    $ADB -s $SERIAL pull /sdcard/$NAME.mp4 $R/$NAME.mp4 >/dev/null
+    $ADB -s $SERIAL logcat -d -s mbui:I > $R/$NAME.log
+    echo "RECORDED $R/$NAME.mp4 ($(grep -c MOTION $R/$NAME.log) moving frames logged)"
     ;;
   shot)
     mkdir -p $OUT/shots
