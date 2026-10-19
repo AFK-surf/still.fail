@@ -466,6 +466,9 @@ FileData; Zoom.kt):
   a file over 2 MB cut with the warning's line). Anything else (or bigger than 16 MB) is told of: its kind's mark, its
   name, its size and extension, why it is not shown, 下载 (fetched, then put in the system's downloads: MediaStore's
   Downloads on Android, ~/Downloads on macOS, MBUI_DOWNLOADS_DIR there for runs).
+- A file of a station's drive opens here too (the drive's `open_file`, src/sfapp/open_file.mbt): the same viewer, its
+  bytes read by `drive.read` (4 MB a part, the whole for what is shown whole, ranges for the player); stepping
+  through the folder's pictures is not done yet.
 - Native views over the canvas (src/ui/native.mbt, host_native.mbt `view_*`): a system view the host keeps under the
   app's surface, shown through a hole the app paints where it is (instances of kind 9: transparent, written without
   blending); what is painted after the hole draws over the view (the bar, the video's controls), what is painted
