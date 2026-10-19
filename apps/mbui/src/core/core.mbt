@@ -72,7 +72,8 @@ pub fn start(
   engine.data_dir = data_dir
   engine.cloud = cloud
   engine.beta = beta
-  ffi_set_wake(fn() { pump() })
+  // what the core says is taken as a frame begins (`pump`, the app's frame), never between two: wakes ask for a frame
+  ffi_set_wake(fn() { (engine.on_change)() })
   engine.started = ffi_start(data_dir, cloud, if beta { 1 } else { 0 }) != 0
   engine.started
 }
@@ -162,8 +163,10 @@ pub fn fatal() -> String? {
 }
 
 ///|
-/// Takes what the core said since last time; `on_change` once if any of it changed something. On Apple's systems the
-/// main queue calls this; elsewhere the host calls it each frame.
+/// Takes what the core said since last time, in its order; `on_change` once if any of it changed something. The app
+/// calls it as each frame begins, before it reads anything (src/stillfail): what came is seen whole at a frame's
+/// boundary, never part-way through one or between two, so how much of it a frame sees depends on frames, not on when
+/// the core's thread happened to answer (the queue's wake only asks for a frame).
 pub fn pump() -> Unit {
   let v0 = client.version
   let mut n = 0
