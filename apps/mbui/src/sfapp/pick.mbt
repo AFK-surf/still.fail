@@ -142,7 +142,9 @@ fn pickable(
   // sliding on: widened by words from the word first held
   if pk.ts == ts && pk.widening {
     if !down {
+      // lifted: the bar comes back (a frame for it: this is the rows' layout, after the bar was built)
       pk.widening = false
+      c.request_frame()
     } else {
       match c.words_of(key) {
         Some(w) => {
@@ -246,6 +248,7 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   if pk.handle != 0 {
     if !down {
       pk.handle = 0
+      c.request_frame()
     } else {
       let at = words.offset_at(px + pk.grab_x, py + pk.grab_y)
       if pk.handle == 1 {
