@@ -235,17 +235,24 @@ pins() {
   local s=$(python3 -c "import json; print(json.load(open('$WORK/peer/chat.json'))['session'])")
   echo "PINS $(sql "select count(*) from pins where viewer = 'alice@example.test' and session = '$s'")"
 }
-freeze() { local p=$(station_node); [ -n "$p" ] || die "no station to freeze"; kill -STOP $p; say "station frozen ($p)"; }
-# thawed, the frozen Node is ended and the launcher starts it anew: what the system's sockets kept for it while it was
-# stopped (a message sent "offline") goes with it, as it would have with the network gone; let go on (CONT), it would
-# still read it and take the message after all. A station not frozen is left as it is.
+# the station's Node and all it started (its mesh, its runners): frozen together, or a part left running (the mesh)
+# would still take a message in
+station_tree() { local p=$1 c; echo $p; for c in $(pgrep -P $p); do station_tree $c; done; }
+freeze() {
+  local p=$(station_node); [ -n "$p" ] || die "no station to freeze"
+  kill -STOP $(station_tree $p)
+  say "station frozen ($(station_tree $p | tr '\n' ' '))"
+}
+# thawed, the frozen Node and its own are ended and the launcher starts them anew: what the system's sockets kept for
+# them while they were stopped (a message sent "offline") goes with them, as it would have with the network gone; let
+# go on (CONT), they would still read it and take the message after all. A station not frozen is left as it is.
 thaw() {
   local p=$(station_node); [ -n "$p" ] || die "no station to thaw"
   case "$(ps -o state= -p $p 2>/dev/null)" in
     T*) ;;
     *) return 0 ;;
   esac
-  kill -KILL $p
+  kill -KILL $(station_tree $p)
   wait_for "[ -n \"\$(station_node)\" ] && [ \"\$(station_node)\" != $p ]" 60 || die "the station did not start again ($RUN/station.log)"
   say "station thawed: started anew ($(station_node))"
 }
