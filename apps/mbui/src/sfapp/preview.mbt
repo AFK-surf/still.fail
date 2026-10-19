@@ -1510,7 +1510,7 @@ fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> Unit
     tap_stage(c, v, stage)
     v.note(c, fn() {
       c.text(
-        pv_fill("android-chat.file.pdf.failed", [("error", if @host.platform() == 3 || @host.platform() == 4 { "此平台不能显示 PDF" } else { "" })]),
+        pv_fill("android-chat.file.pdf.failed", [("error", if @ui.platform() == 3 || @ui.platform() == 4 { "此平台不能显示 PDF" } else { "" })]),
         size=15.0,
         color=t.p.muted,
         center=true,

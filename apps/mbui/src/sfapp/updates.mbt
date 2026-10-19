@@ -113,7 +113,7 @@ pub fn cloud_updates(src : Source, feed : String, origin : String) -> UpdateSour
 /// Asks the source for a newer build; `done` gets what to say when it was asked now (none newer, or why it failed),
 /// "" otherwise.
 fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {  }) -> Unit {
-  let version = if update_version.val > 0 { update_version.val } else { @host.app_version() }
+  let version = if update_version.val > 0 { update_version.val } else { @ui.app_version() }
   let source = match update.source {
     Some(s) => s
     None => return

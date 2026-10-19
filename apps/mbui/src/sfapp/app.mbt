@@ -210,6 +210,7 @@ fn home() -> Unit {
 ///|
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
+  fix_ctx.val = Some(c)
   appearance(src)
   let t = @sf.begin(c)
   // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages
@@ -519,11 +520,11 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
 }
 
 ///|
-/// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@host.system_dark)
+/// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@ui.system_dark)
 /// when it follows it; the host told when it changes (its bars follow).
 fn appearance(src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
-  let dark = @settings.dark(prefs, @host.system_dark())
+  let dark = @settings.dark(prefs, @ui.system_dark())
   @sf.set_dark(Some(dark))
   // (the host told once the prefs are read: not the system's first, then the one chosen)
   if prefs is Some(_) && told_dark.val != Some(dark) {

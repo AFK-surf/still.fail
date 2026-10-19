@@ -82,9 +82,9 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       got = Some((text(v, "text"), if title == "" { None } else { Some(title) }))
     } else if !share_in.env_taken {
       share_in.env_taken = true
-      let words = @host.env("MBUI_SHARE_TEXT")
+      let words = @ui.env("MBUI_SHARE_TEXT")
       if words != "" {
-        let title = @host.env("MBUI_SHARE_TITLE")
+        let title = @ui.env("MBUI_SHARE_TITLE")
         got = Some((words, if title == "" { None } else { Some(title) }))
       }
     }

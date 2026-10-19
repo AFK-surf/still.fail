@@ -309,7 +309,7 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
 ///|
 /// The cloud's address, for a chat's link (the app's MBUI_CLOUD, else still.fail's own).
 fn cloud_origin() -> String {
-  match @host.env("MBUI_CLOUD") {
+  match @ui.env("MBUI_CLOUD") {
     "" => "https://app.still.fail"
     o => o
   }

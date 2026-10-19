@@ -468,11 +468,34 @@ fn fix_chat(session : String) -> FixChat {
 let fix_timers : Array[(Double, () -> Unit)] = []
 
 ///|
-/// The fixture's clock and how it asks for a frame later (a test sets its own).
-let fix_clock : Ref[() -> Double] = { val: fn() { @host.now() } }
+/// The window's context of the frame being built (`view` sets it): the fixture's clock is its frames' clock, the
+/// same one under a Tester and in a settled scripted run, never the wall's.
+let fix_ctx : Ref[@ui.Ctx?] = { val: None }
 
 ///|
-let fix_wake : Ref[(Double) -> Unit] = { val: fn(ms) { @host.wake_after(ms) } }
+/// The frames' clock (what the fixture's times are on, unless a test sets its own).
+fn fix_frame_clock() -> Double {
+  match fix_ctx.val {
+    Some(c) => c.now()
+    None => 0.0
+  }
+}
+
+///|
+/// A frame again `ms` from now on the frames' clock.
+fn fix_frame_wake(ms : Double) -> Unit {
+  match fix_ctx.val {
+    Some(c) => c.wake_in(ms)
+    None => ()
+  }
+}
+
+///|
+/// The fixture's clock and how it asks for a frame later (a test sets its own).
+let fix_clock : Ref[() -> Double] = { val: fix_frame_clock }
+
+///|
+let fix_wake : Ref[(Double) -> Unit] = { val: fix_frame_wake }
 
 ///|
 let fix_drafts : Map[String, Json] = {}

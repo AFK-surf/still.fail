@@ -480,7 +480,7 @@ fn wake() -> Unit {
     Some(c) => c.request_frame()
     None => ()
   }
-  @host.request_frame()
+  @ui.request_frame()
 }
 
 ///|

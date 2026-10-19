@@ -746,7 +746,7 @@ let at_end_env : Ref[Int] = { val: -1 }
 ///|
 fn at_end_asked() -> Bool {
   if at_end_env.val < 0 {
-    at_end_env.val = if @host.env("MBUI_CHAT_AT_END") == "1" { 1 } else { 0 }
+    at_end_env.val = if @ui.env("MBUI_CHAT_AT_END") == "1" { 1 } else { 0 }
   }
   at_end_env.val == 1
 }
@@ -1373,7 +1373,7 @@ let bench_on : Ref[Int] = { val: -1 }
 ///|
 fn chat_bench(c : @ui.Ctx, key : String, rd : Reading, more : Bool, rows : Int) -> Unit {
   if bench_on.val < 0 {
-    bench_on.val = if @host.env("MBUI_CHAT_BENCH") != "" { 1 } else { 0 }
+    bench_on.val = if @ui.env("MBUI_CHAT_BENCH") != "" { 1 } else { 0 }
   }
   if bench_on.val == 0 || !rd.placed {
     return

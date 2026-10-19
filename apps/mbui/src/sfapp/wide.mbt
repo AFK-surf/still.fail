@@ -273,10 +273,10 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Uni
   // its places centred on its 56; the sidebar reaches 8 into it (Sidebar.css.ts), so its own box is 48
   c.box(w=Px(rail_w - 8.0), h=Fill(1.0), pl=9.0, pb=9.0, gap=6.0, align=AStart, fn() {
     let top = c.id("rail/top")
-    if @host.window_inset() {
+    if @ui.window_inset() {
       c.window_drag(top)
     }
-    c.box(w=Px(38.0), h=Px(if @host.window_inset() { 41.0 } else { 5.0 }), id=top, fn() {  }) |> ignore
+    c.box(w=Px(38.0), h=Px(if @ui.window_inset() { 41.0 } else { 5.0 }), id=top, fn() {  }) |> ignore
     for place in rail_items(src, w.id) {
       rail_place(c, src, w, place, lit == place)
     }
@@ -569,7 +569,7 @@ fn wide_place(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
   let side = dmax(24.0, (c.width - 792.0) / 2.0) + 16.0
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     let head = c.id("place-head")
-    if @host.window_inset() {
+    if @ui.window_inset() {
       c.window_drag(head)
     }
     c.box(w=Fill(1.0), pl=side, pr=side, pt=40.0, pb=12.0, id=head, fn() {

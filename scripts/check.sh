@@ -221,6 +221,11 @@ if part ts; then
     k=apps/android/app/src/main/kotlin/fail/still/android
     step "phone packages one way" sh -c "! git grep -n 'fail\\.still\\.android\\.drive\\.' -- $k/remote $k/share && ! git grep -n 'fail\\.still\\.android\\.screens\\.' -- $k/remote"
   fi
+  # The mbui app reads where it runs (its clock, the system, dark, the window, the environment) through mbui's @ui,
+  # which a Tester answers: apps/mbui/scripts/check.sh.
+  if touches '^apps/mbui/(src/sfapp/|scripts/check\.sh$)'; then
+    step "mbui app reads its host through @ui" bash apps/mbui/scripts/check.sh reads
+  fi
   if touches '^(web/src|web/ui|apps/desktop/src|apps/android)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/android'
   fi

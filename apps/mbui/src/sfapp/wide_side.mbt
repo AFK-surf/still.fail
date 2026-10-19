@@ -36,10 +36,10 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
 /// app's top row, their row (44), which drags the window.
 fn side_top(c : @ui.Ctx) -> Unit {
   let id = c.id("side/top")
-  if @host.window_inset() {
+  if @ui.window_inset() {
     c.window_drag(id)
   }
-  c.box(w=Fill(1.0), h=Px(if @host.window_inset() { 44.0 } else { 8.0 }), id~, fn() {  }) |> ignore
+  c.box(w=Fill(1.0), h=Px(if @ui.window_inset() { 44.0 } else { 8.0 }), id~, fn() {  }) |> ignore
 }
 
 ///|
@@ -178,7 +178,7 @@ fn chats_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             |> ignore
           Breathing => side_breathing(c)
           // the band: its top row, 新建对话's (6 + 32 + 2), and 4
-          Top => c.box(h=Px((if @host.window_inset() { 44.0 } else { 8.0 }) + 40.0 + 4.0), fn() {  }) |> ignore
+          Top => c.box(h=Px((if @ui.window_inset() { 44.0 } else { 8.0 }) + 40.0 + 4.0), fn() {  }) |> ignore
           Foot => c.box(h=Px(12.0), fn() {  }) |> ignore
         }
       })
