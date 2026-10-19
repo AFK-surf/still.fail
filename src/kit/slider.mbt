@@ -41,7 +41,7 @@ pub fn slider(
   min? : Double = 0.0,
   max? : Double = 100.0,
   step? : Double = 1.0,
-  w? : Double = 240.0,
+  w? : @ui.Size = Px(240.0),
   label? : String = "",
   disabled? : Bool = false,
   look? : (@ui.Ctx, SliderState) -> Unit = slider_look,
@@ -55,8 +55,9 @@ pub fn slider(
     match c.drag_of(id) {
       Some(d) if d.down => {
         let (x, _, rw, _) = r.rect
-        if rw > 0.0 {
-          let along = (d.x - x) / rw
+        // the thumb's middle runs from half a thumb in to half a thumb from the end
+        if rw > thumb_room {
+          let along = dclamp((d.x - x - thumb_room / 2.0) / (rw - thumb_room), 0.0, 1.0)
           let k = if c.rtl() { 1.0 - along } else { along }
           now = snap(min + k * span, min, max, step)
         }
@@ -107,9 +108,17 @@ pub fn slider(
     focus_shown: r.focus_shown,
     disabled,
     // as wide as it is made (known before it is first laid out, and while disabled, when nothing tracks it)
-    rect: (r.rect.0, r.rect.1, w, r.rect.3),
+    rect: (
+      r.rect.0,
+      r.rect.1,
+      match w {
+        Px(x) => x
+        _ => r.rect.2
+      },
+      r.rect.3,
+    ),
   }
-  let i = c.drag_area(if disabled { 0 } else { id }, axis=Horizontal, w=Px(w), fn() { look(c, st) })
+  let i = c.drag_area(if disabled { 0 } else { id }, axis=Horizontal, w~, fn() { look(c, st) })
   let shown = if step >= 1.0 && step.floor() == step {
     now.to_int().to_string()
   } else {
@@ -122,44 +131,51 @@ pub fn slider(
 }
 
 ///|
-/// A slider's look by its sizes (still.fail's): a hairline track `track_h` high in `track` (16% of the words' colour),
-/// filled up to the thumb in `fill` (the theme's accent); a round thumb `thumb_d` across in the fill with a ring of
-/// `ring` (the page's ground) round it, a size up while held.
+/// How much of a slider's width its thumb's middle does not run along (a thumb's: half at each end).
+let thumb_room : Double = 22.0
+
+///|
+/// A slider's look by its sizes (still.fail's, Reader.css.ts slider): a hairline track `track_h` high on `track` (16%
+/// of `ink`, the words' colour), the part up to the thumb in `fill` (the accent); a round thumb `thumb_d` across in the
+/// fill with a ring of `ring` (the page's ground) round it, 4 more while held; 28 high.
 pub fn slider_look_of(
   track_h? : Double = 2.0,
   thumb_d? : Double = 22.0,
+  ink? : Int64,
   track? : Int64,
   fill? : Int64,
   ring? : Int64,
 ) -> (@ui.Ctx, SliderState) -> Unit {
   fn(c, s) {
     let t = c.theme()
-    let (_, _, w, _) = s.rect
-    let travel = if w > thumb_d { w - thumb_d } else { 0.0 }
-    let k = if c.rtl() { 1.0 - s.t } else { s.t }
-    let ink = fill.unwrap_or(t.accent)
-    let d = if s.pressed { thumb_d + 4.0 } else { thumb_d }
+    let f = dclamp(s.t, 0.0, 1.0)
+    let accent = fill.unwrap_or(t.accent)
+    let rest = track.unwrap_or(@ui.alpha(ink.unwrap_or(t.fg), 0.16))
     c.box(w=Fill(1.0), h=Px(thumb_d + 6.0), justify=JCenter, opacity=if s.disabled { 0.45 } else { 1.0 }, fn() {
-      c.box(
-        w=Fill(1.0),
-        h=Px(track_h),
-        padx=thumb_d / 2.0,
-        dir=Row,
-        justify=if c.rtl() { JEnd } else { JStart },
-        fn() {
-          c.box(w=Px(travel * s.t), h=Fill(1.0), bg=ink, fn() {  }) |> ignore
-          c.box(w=Fill(1.0), h=Fill(1.0), bg=track.unwrap_or(@ui.alpha(t.fg, 0.16)), fn() {  }) |> ignore
-        },
-      )
+      c.box(dir=Row, padx=thumb_d / 2.0, h=Px(track_h), fn() {
+        if f > 0.0 {
+          c.box(w=Fill(f), h=Px(track_h), bg=accent, fn() {  }) |> ignore
+        }
+        if f < 1.0 {
+          c.box(w=Fill(1.0 - f), h=Px(track_h), bg=rest, fn() {  }) |> ignore
+        }
+      })
       |> ignore
       c.layer(fn() {
-        c.box(h=Fill(1.0), justify=JCenter, fn() {
-          c.box(w=Px(thumb_d), h=Px(thumb_d), tx=travel * k, align=ACenter, justify=JCenter, fn() {
-            c.box(w=Px(d), h=Px(d), radius=d / 2.0, bg=ink, border=3.0, border_color=ring.unwrap_or(t.bg), fn() {  })
+        c.box(dir=Row, h=Fill(1.0), align=ACenter, fn() {
+          if f > 0.0 {
+            c.box(w=Fill(f), fn() {  }) |> ignore
+          }
+          let k = if s.pressed { thumb_d + 4.0 } else { thumb_d }
+          c.box(w=Px(thumb_d), h=Px(thumb_d), align=ACenter, justify=JCenter, fn() {
+            c.box(w=Px(k), h=Px(k), bg=accent, radius=k / 2.0, border=3.0, border_color=ring.unwrap_or(t.bg), fn() {  })
             |> ignore
             focus_ring(c, s.focus_shown, (0.0, 0.0, thumb_d, thumb_d), thumb_d / 2.0)
           })
           |> ignore
+          if f < 1.0 {
+            c.box(w=Fill(1.0 - f), fn() {  }) |> ignore
+          }
         })
         |> ignore
       })

@@ -50,8 +50,12 @@ pub fn progress_look_of(
       match s.t {
         Some(k) => {
           // grown in proportion: the filled part `k` of the track, the rest after it
-          c.box(w=Fill(k + 0.0001), h=Fill(1.0), radius=h / 2.0, bg=ink, fn() {  }) |> ignore
-          c.box(w=Fill(1.0 - k + 0.0001), h=Fill(1.0), fn() {  }) |> ignore
+          if k > 0.0 {
+            c.box(w=Fill(k), h=Px(h), bg=ink, radius=h / 2.0, fn() {  }) |> ignore
+          }
+          if k < 1.0 {
+            c.box(w=Fill(1.0 - k), fn() {  }) |> ignore
+          }
         }
         None => {
           // where the sweep is (still: 0.3 of the way), eased in and out; the piece from -40% to all the way across
@@ -66,7 +70,7 @@ pub fn progress_look_of(
             c.box(w=Fill(start), fn() {  }) |> ignore
           }
           let shown = if start < 0.0 { 0.4 + start } else { 0.4 }
-          c.box(w=Fill(shown + 0.0001), h=Fill(1.0), radius=h / 2.0, bg=ink, fn() {  }) |> ignore
+          c.box(w=Fill(shown), h=Px(h), bg=ink, radius=h / 2.0, fn() {  }) |> ignore
           let rest = 1.0 - dmax(start, 0.0) - shown
           if rest > 0.0 {
             c.box(w=Fill(rest), fn() {  }) |> ignore

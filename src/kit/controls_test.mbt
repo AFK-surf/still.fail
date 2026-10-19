@@ -114,7 +114,7 @@ test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment
 test "slider: dragged along its track, it follows the pointer to the nearest step; right to left, mirrored" {
   let v = Ref(0.0)
   let t = @ui.Tester::new(fn(c) {
-    v.val = slider(c, "s", v.val, min=0.0, max=10.0, step=1.0, w=200.0, label="S").value
+    v.val = slider(c, "s", v.val, min=0.0, max=10.0, step=1.0, w=Px(200.0), label="S").value
   })
   let (x, y, w, h) = t.get(@ui.Slider, label="S").rect
   t.drag(x + 1.0, y + h / 2.0, x + w * 0.7, y + h / 2.0)

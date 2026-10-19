@@ -102,8 +102,8 @@ fn controls(c : @ui.Ctx) -> Unit {
   })
   section(c, "Slider", fn() {
     line(c, fn() {
-      level.val = @kit.slider(c, "level", level.val, w=180.0, label="Volume").value
-      @kit.slider(c, "level-dis", 70.0, w=120.0, label="Disabled", disabled=true) |> ignore
+      level.val = @kit.slider(c, "level", level.val, w=Px(180.0), label="Volume").value
+      @kit.slider(c, "level-dis", 70.0, w=Px(120.0), label="Disabled", disabled=true) |> ignore
       c.text("\{level.val.to_int()}", size=t.font_sm, color=t.muted, wrap=false) |> ignore
     })
   })
