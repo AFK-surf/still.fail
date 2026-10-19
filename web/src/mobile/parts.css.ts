@@ -173,7 +173,8 @@ export const mButton = style({
   fontSize: `${vars.textUi} !important`, fontWeight: "600", whiteSpace: "nowrap", cursor: "pointer",
   selectors: {
     "&[data-primary]": { background: "var(--m-ink)", color: "var(--m-bg) !important" },
-    [`&[data-primary]:disabled:not(:has(${spinner}))`]: { background: "var(--m-line)" },
+    // Not to be pressed yet: a quiet ground, its words grey (white on it is hardly read).
+    [`&[data-primary]:disabled:not(:has(${spinner}))`]: { background: "var(--m-line)", color: "var(--m-muted) !important" },
     [`${mSteps} > &`]: { alignSelf: "flex-end" },
   },
 });

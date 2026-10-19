@@ -114,11 +114,11 @@ fun BarSettingsScreen() {
             Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(t("android-misc.bar.set", "n" to i + 1), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                 if (made && i == cur) Text(
-                    t("android-misc.bar.current"), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = C.accent,
+                    t("android-misc.bar.current"), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = C.link,
                     modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(50)).background(C.accentBg).padding(horizontal = 7.dp, vertical = 1.dp),
                 )
                 Spacer(Modifier.weight(1f))
-                if (made && i != cur) Text(t("android-misc.bar.use"), fontSize = 13.sp, color = C.accent, modifier = Modifier.clip(Smooth(6.dp)).clickable { save(app, bars.sets, i) }.padding(4.dp))
+                if (made && i != cur) Text(t("android-misc.bar.use"), fontSize = 13.sp, color = C.link, modifier = Modifier.clip(Smooth(6.dp)).clickable { save(app, bars.sets, i) }.padding(4.dp))
                 if (sets.size > 1) Text(
                     t("android-misc.bar.delete"), fontSize = 13.sp, color = C.red,
                     modifier = Modifier.padding(start = 10.dp).clip(Smooth(6.dp)).clickable {
@@ -137,7 +137,7 @@ fun BarSettingsScreen() {
         ListCard(Modifier.padding(top = 14.dp)) {
             ListRow(onClick = { adding = true; pickFor(bars.sets.size) }) {
                 IconIn(Icons.Plus, 20.dp, C.accent)
-                Text(t("android-misc.bar.new"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+                Text(t("android-misc.bar.new"), fontSize = 15.sp, color = C.link, modifier = Modifier.weight(1f))
             }
         }
         PageNote(if (bars.sets.size > 1) t("android-misc.bar.foot.many") else t("android-misc.bar.foot.one"))

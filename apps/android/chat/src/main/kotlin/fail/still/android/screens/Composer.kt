@@ -558,8 +558,8 @@ private fun askToShare(app: AppState, draft: Draft, station: String, chats: List
                 Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            buildAnnotatedString { withStyle(SpanStyle(color = C.accent.copy(alpha = C.accent.alpha * 0.7f))) { append("@") }; append(c.title) },
-                            fontSize = 15.sp, lineHeight = 22.sp, color = C.accent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                            buildAnnotatedString { withStyle(SpanStyle(color = C.link.copy(alpha = C.link.alpha * 0.7f))) { append("@") }; append(c.title) },
+                            fontSize = 15.sp, lineHeight = 22.sp, color = C.link, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
                         )
                         StationTag(t("web-main.outside.from", "name" to c.workspaceName), null, null)
                     }
@@ -806,7 +806,7 @@ private fun PastedCard(f: Pending, pasted: PastedText, onRemove: () -> Unit, onR
                 fontSize = 11.sp, lineHeight = 16.sp, color = if (f.error != null) C.red else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             val action = if (onRetry != null) t("web-main.composer.retryPaste") to onRetry else onRestore?.let { t("web-main.composer.expandPaste") to it }
-            if (action != null) Text(action.first, fontSize = 13.sp, lineHeight = 18.sp, color = C.accent, modifier = Modifier.padding(top = 2.dp).clickable(onClick = action.second))
+            if (action != null) Text(action.first, fontSize = 13.sp, lineHeight = 18.sp, color = C.link, modifier = Modifier.padding(top = 2.dp).clickable(onClick = action.second))
         }
         Box(
             Modifier.size(22.dp).clip(CircleShape).background(C.ink.copy(alpha = 0.06f)).clickable(onClick = onRemove)

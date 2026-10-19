@@ -96,8 +96,7 @@ internal fun StationPermissionsSection(address: String, name: String, p: Station
             }
         }
     }
-    // What is unavailable now for want of a grant.
-    p.note?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 10.dp)) }
+    // What is unavailable for want of a grant (p.note) is not said again under it: each such row says it, 申请 at its end.
 }
 
 /** A row's state at its end, in words. */
@@ -119,6 +118,6 @@ private fun RowAction(label: String, description: String? = null, busy: Boolean 
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (busy || failed != null) DoingMark(busy, failed, inline = true)
-        Text(label, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = if (busy) C.muted else C.accent, maxLines = 1)
+        Text(label, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = if (busy) C.muted else C.link, maxLines = 1)
     }
 }

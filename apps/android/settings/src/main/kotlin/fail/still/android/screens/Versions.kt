@@ -124,7 +124,7 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
     val action = @Composable { label: String ->
         if (manager && v.updatable) {
             if (busy) Spinner(inline = true)
-            else Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accent, modifier = Modifier.pressText(onClick = onUpdate))
+            else Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.link, modifier = Modifier.pressText(onClick = onUpdate))
         }
     }
     ListRow {

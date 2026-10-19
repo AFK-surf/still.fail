@@ -196,15 +196,15 @@ fun openJobs(app: AppState, station: String, of: ChatOf) {
             if (jobs.isNotEmpty() && shown.isEmpty()) Text(t("android-misc.jobs.noneNow"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 2.dp, vertical = 8.dp))
             JobGroups(app, station, of, view, shown, notes = true)
             if (jobs.size > view.current) SheetLink({ all = !all }) {
-                if (all) Text(t("android-misc.jobs.onlyNow"), fontSize = 14.sp, color = C.accent)
+                if (all) Text(t("android-misc.jobs.onlyNow"), fontSize = 14.sp, color = C.link)
                 else {
-                    Text(view.allText, fontSize = 14.sp, color = C.accent)
+                    Text(view.allText, fontSize = 14.sp, color = C.link)
                     Text(view.hiddenText, fontSize = 12.sp, color = C.muted)
                 }
             }
             if (view.ended > 0) SheetLink({ app.clearEnded(station, view.clear) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(view.clearText, fontSize = 14.sp, color = C.accent)
+                    Text(view.clearText, fontSize = 14.sp, color = C.link)
                     DoingMark(app.clearing(station), app.clearFailed(station), inline = true)
                 }
             }

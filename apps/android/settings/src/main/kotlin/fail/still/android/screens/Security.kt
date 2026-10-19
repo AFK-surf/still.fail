@@ -221,8 +221,8 @@ private fun On(current: WorkspaceEntry, lock: LockView) {
                 when {
                     s.protected -> Text(t("web-pages.security.protected"), fontSize = 13.sp, color = C.subtle)
                     joining -> Spinner()
-                    join -> Text(t("web-pages.security.join"), fontSize = 14.sp, color = C.accent)
-                    else -> Text(t("web-pages.security.unprotected"), fontSize = 13.sp, color = C.warn)
+                    join -> Text(t("web-pages.security.join"), fontSize = 14.sp, color = C.link)
+                    else -> Text(t("web-pages.security.unprotected"), fontSize = 13.sp, color = C.warnInk)
                 }
             }
         }
@@ -256,9 +256,9 @@ private fun DeviceRow(ws: String, d: LockDevice, canRenew: Boolean) {
     ListRow(onClick = if (renew && !renewing) ({ app.lockCall(ws, "renew", t("web-pages.security.renew"), t("web-pages.security.renewed"), "device" to d.id) }) else null) {
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
             Text(deviceName(d.kind, d.label, d.older), fontSize = 15.sp, color = C.ink)
-            Text(meta, fontSize = 13.sp, color = if (d.renewSoon) C.warn else C.muted)
+            Text(meta, fontSize = 13.sp, color = if (d.renewSoon) C.warnInk else C.muted)
         }
-        if (renewing) Spinner() else if (renew) Text(t("web-pages.security.renew"), fontSize = 14.sp, color = C.accent)
+        if (renewing) Spinner() else if (renew) Text(t("web-pages.security.renew"), fontSize = 14.sp, color = C.link)
     }
 }
 

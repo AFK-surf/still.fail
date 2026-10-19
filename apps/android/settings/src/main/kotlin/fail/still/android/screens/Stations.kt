@@ -397,7 +397,7 @@ private fun StationScreens(address: String) {
                 Column(Modifier.weight(1f)) {
                     Text(screen.title, fontSize = 15.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // A grant missing (its line says which): the one thing on the row in colour.
-                    Text(screen.line, fontSize = 13.sp, lineHeight = 18.sp, color = if (screen.access != null) C.warn else C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(screen.line, fontSize = 13.sp, lineHeight = 18.sp, color = if (screen.access != null) C.warnInk else C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 IconIn(Icons.ChevronRight, 14.dp, C.subtle)
             }
@@ -451,7 +451,7 @@ private fun StationAgentEnv(address: String, env: List<EnvVar>, manager: Boolean
         }
         if (manager) {
             ListRow(onClick = { app.sheet = SheetSpec(0.85f, draggable = true) { AgentEnvSheet(address) } }) {
-                Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+                Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.link, modifier = Modifier.weight(1f))
                 // Saved (the sheet gone): a spinner until the station has them.
                 DoingMark(app.isDoing("agentEnv.form.save", "station" to address), app.failedOf("agentEnv.form.save", "station" to address))
             }

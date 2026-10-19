@@ -84,7 +84,7 @@ fun SignInScreen() {
         Text(t("android-settings.signIn.many"), color = C.muted, fontSize = 12.sp)
         if (BuildConfig.DEBUG && DEV_CLOUD.matches(app.cloudOrigin)) {
             Row {
-                for (user in listOf("alice", "bob")) Text(if (dev == user) t("android-settings.signIn.signingIn") else t("android-settings.signIn.dev", "user" to user), color = C.accent, fontSize = 14.sp,
+                for (user in listOf("alice", "bob")) Text(if (dev == user) t("android-settings.signIn.signingIn") else t("android-settings.signIn.dev", "user" to user), color = C.link, fontSize = 14.sp,
                     modifier = Modifier.pressText(enabled = dev == null) { dev = user; scope.launch { try { devSignIn(app, user) } finally { dev = null } } }.padding(8.dp))
             }
         }

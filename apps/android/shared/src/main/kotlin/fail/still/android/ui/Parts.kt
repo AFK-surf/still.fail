@@ -487,7 +487,7 @@ fun NavBack(label: String, onClick: () -> Unit) {
     Layout(
         content = {
             IconIn(Icons.ChevronLeft, 22.dp, C.accent)
-            Text(label, fontSize = 17.sp, color = C.accent, maxLines = 1, softWrap = false)
+            Text(label, fontSize = 17.sp, color = C.link, maxLines = 1, softWrap = false)
         },
         modifier = Modifier.clip(Smooth(8.dp)).clickable(onClick = onClick).padding(end = 6.dp, top = 4.dp, bottom = 4.dp),
     ) { (chevron, word), constraints ->
@@ -566,11 +566,13 @@ fun LargeTitle(small: String, big: String, lead: (@Composable () -> Unit)? = nul
 // ── lists and cards ────────────────────────────────────────────────────
 
 @Composable
-fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp) {
+fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp, action: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(start = start, end = 20.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom) {
         Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         Spacer(Modifier.weight(1f))
         if (trailing != null) Text(trailing, fontSize = 13.sp, color = C.muted)
+        // What can be done to the whole section (取消登录), at its end.
+        action?.invoke()
     }
 }
 

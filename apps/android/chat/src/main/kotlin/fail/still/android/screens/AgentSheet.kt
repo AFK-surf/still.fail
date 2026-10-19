@@ -233,6 +233,6 @@ internal fun AgentNotes(card: AgentCardView?, modifier: Modifier = Modifier.padd
     val notes = card?.attention.orEmpty()
     if (notes.isEmpty()) return
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        notes.forEach { a -> Text(a.text, fontSize = 13.sp, lineHeight = 18.sp, color = if (a.level == "amber") C.warn else C.red) }
+        notes.forEach { a -> Text(a.text, fontSize = 13.sp, lineHeight = 18.sp, color = if (a.level == "amber") C.warnInk else C.red) }
     }
 }

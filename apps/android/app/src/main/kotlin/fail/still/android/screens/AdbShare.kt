@@ -152,7 +152,7 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                     if (!phone.wireless && AdbShare.switchOn(context)) phone = phone.copy(wireless = true) else AdbShare.openWireless(context)
                 }) {
                     Text(t("android-misc.adb.wireless"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                    Text(if (phone.wireless) t("android-misc.adb.on") else if (phone.canSwitch) t("android-misc.adb.wireless.turnOn") else t("android-misc.adb.wireless.settings"), fontSize = 14.sp, color = if (phone.wireless) C.muted else C.accent)
+                    Text(if (phone.wireless) t("android-misc.adb.on") else if (phone.canSwitch) t("android-misc.adb.wireless.turnOn") else t("android-misc.adb.wireless.settings"), fontSize = 14.sp, color = if (phone.wireless) C.muted else C.link)
                 }
             }
             if (here && view!!.adb == "unpaired") Pairing(view)
@@ -215,14 +215,14 @@ private fun Pairing(view: AdbShareView) {
                 Text(t("android-misc.adb.reader.title"), fontSize = 15.sp, color = C.ink)
                 Text(t("android-misc.adb.reader.note"), fontSize = 13.sp, color = C.muted)
             }
-            Text(if (reads) t("android-misc.adb.on") else t("android-misc.adb.reader.turnOn"), fontSize = 14.sp, color = if (reads) C.muted else C.accent)
+            Text(if (reads) t("android-misc.adb.on") else t("android-misc.adb.reader.turnOn"), fontSize = 14.sp, color = if (reads) C.muted else C.link)
         }
         ListRow(onClick = { AdbShare.openWireless(context, beside = true) }) {
             Column(Modifier.weight(1f)) {
                 Text(t("android-misc.adb.pair.open"), fontSize = 15.sp, color = C.ink)
                 Text(if (reads) t("android-misc.adb.pair.open.auto") else t("android-misc.adb.pair.open.note"), fontSize = 13.sp, color = C.muted)
             }
-            Text(t("android-misc.adb.pair.go"), fontSize = 14.sp, color = C.accent)
+            Text(t("android-misc.adb.pair.go"), fontSize = 14.sp, color = C.link)
         }
         // Split screen: the code typed here instead (in full screen, coming back here closes the dialog).
         ListRow(onClick = if (view.pairPort == null || busy) null else ({

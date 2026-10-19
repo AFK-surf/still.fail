@@ -14,7 +14,6 @@ export const mState = style({
   selectors: { "&[data-end=missing]": { color: "var(--m-warn)", fontWeight: "500" } },
 });
 /** What is unavailable now, under the card. */
-export const mNote = style({ margin: "0", padding: "0 24px 10px", fontSize: vars.textMeta, color: "var(--m-muted)" });
 /** A grant's line, whole (how one asked for is given at the Mac is not cut short): the ink while its window is up. */
 export const mLine = style({
   fontSize: vars.textMeta, color: "var(--m-muted)",
