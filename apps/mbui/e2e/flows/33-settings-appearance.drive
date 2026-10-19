@@ -16,5 +16,3 @@ shot 4-dark
 back
 until Workspace
 shot 5-settings-dark
-# (the core keeps the appearance on the device behind: 34 starts from it)
-wait 1500

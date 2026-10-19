@@ -26,5 +26,3 @@ until =通知
 tap =通知
 until 任务完成、需要处理
 shot 3-on
-# (the core's answer to notify.set logged before the run ends: the check reads it)
-wait 2000

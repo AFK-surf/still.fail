@@ -25,7 +25,5 @@ tap =studio
 until 选择运行的 station
 tap1 =studio
 gone 选择运行的 station
-# (the core's answer to the pick, newChat.pick, logged before the run ends: the check reads it)
-wait 1500
 tap =取消
 until 端到端测试

@@ -18,5 +18,3 @@ shot 3-usage
 dragon 0 -64 1000 icon:zou
 until 端到端测试
 shot 4-chats
-# (the core writes the prefs to the device behind the app's change: not to be cut off by the app ending)
-wait 2000

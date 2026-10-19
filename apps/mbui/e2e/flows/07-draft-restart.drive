@@ -9,5 +9,3 @@ tap 发消息
 clear
 empty
 shot 2-emptied
-# (the core keeps the emptied draft on the device behind the app's draft.put: not to be cut off by the app ending)
-wait 1500
