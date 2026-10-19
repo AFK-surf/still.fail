@@ -833,10 +833,16 @@ fn drive_frame(c : Ctx) -> Unit {
 
 ///|
 /// Runs `script` (as MBUI_DRIVE would) over the tester's view, a frame each 16 ms, until it ends (or `max` frames):
-/// what it logged.
-pub fn Tester::drive(self : Tester, script : String, max? : Int = 3000) -> Array[String] {
+/// what it logged. `settles` false: its steps wait for nothing settling, as a host's do (MBUI_DRIVE_SETTLED unset): a
+/// run seen again as it was recorded there.
+pub fn Tester::drive(
+  self : Tester,
+  script : String,
+  max? : Int = 3000,
+  settles? : Bool = true,
+) -> Array[String] {
   self.fake.logs.clear()
-  drive_start(script, "")
+  drive_start(script, "", settles~)
   let mut n = 0
   while driver.val is Some(_) && n < max {
     self.frame()

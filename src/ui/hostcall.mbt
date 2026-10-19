@@ -421,7 +421,12 @@ fn h_image_load(src : String, max_px : Int) -> Int {
     Some(f) => {
       f.image_loads.push((src, max_px))
       let (w, h) = f.image_sizes.get(src).unwrap_or((0, 0))
-      fake_image(f, w, h, max_px)
+      let id = fake_image(f, w, h, max_px)
+      // one it does not know failed at once: nothing of it is left to wait for
+      if w <= 0 {
+        return id
+      }
+      id
     }
     None => @host.image_load(src, max_px)
   }
