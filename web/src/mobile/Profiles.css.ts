@@ -29,9 +29,25 @@ export const mSignIn = style({});
 export const mFlowCard = style({ width: "100%", margin: "0" });
 globalStyle(`${mSignIn} > ${mButton}`, { justifyContent: "center" });
 globalStyle(`${mSignIn} > ${mDeviceCode}`, { alignSelf: "stretch", textAlign: "center" });
+/** Its top: where the account stands, and while signing in, cancelling it at that line's end (grey words, not a button as loud). */
+export const mSignInHead = style({ display: "flex", alignItems: "flex-start", gap: "8px" });
+globalStyle(`${mSignInHead} > :first-child`, { flex: "1", minWidth: "0" });
 export const mSignInCancel = style({
-  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", alignSelf: "center", minHeight: "32px",
-  padding: "0 12px", border: "0", background: "none", color: "var(--m-muted) !important", fontSize: `${vars.textUi} !important`,
+  display: "inline-flex", alignItems: "center", gap: "6px", flex: "none", minHeight: "24px",
+  padding: "0", border: "0", background: "none", color: "var(--m-muted) !important", fontSize: `${vars.textUi} !important`,
   cursor: "pointer",
   selectors: { "&:disabled": { cursor: "default" } },
 });
+/** Signed in or not: its button, and signing in by hand beside it. */
+export const mSignInActions = style({ display: "flex", alignItems: "center", gap: "16px" });
+/** A step of a sign-in: its number in a small round, its words beside it; what it has (a button) under its words. */
+export const mStep = style({ display: "flex", gap: "10px", margin: "0", fontSize: vars.textUi, lineHeight: "20px" });
+export const mStepN = style({
+  display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", width: "20px", height: "20px", marginTop: "0",
+  borderRadius: "50%", background: "var(--m-chip)", fontSize: vars.textCaption, fontWeight: "600",
+});
+export const mStepBody = style({ paddingLeft: "30px" });
+/** The code's field and what sends it, on one line. */
+export const mCodeRow = style({ display: "flex", alignItems: "center", gap: "8px" });
+/** A key's profile: where it stands, atop its key's rows on one card. */
+export const mHeadRow = style({ padding: "14px 16px" });

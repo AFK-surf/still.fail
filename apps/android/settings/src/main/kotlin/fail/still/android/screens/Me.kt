@@ -35,7 +35,6 @@ import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.rememberTopic
 import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
-import fail.still.android.ui.Card
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
@@ -53,28 +52,30 @@ fun MeScreen(current: WorkspaceEntry) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
         TopBack(t("android-settings.title"), app::pop)
         LargeTitle("", t("android-settings.me.title"))
-        Card {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Avatar(me.email, me.name.ifEmpty { me.email }, 46.dp, picture = me.picture)
-                Column {
-                    Text(me.name.ifEmpty { me.email }, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink)
-                    Text("${me.email} · Google", fontSize = 13.sp, color = C.muted)
-                }
-            }
-        }
         val list = accounts.value.orEmpty()
-        // Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added.
-        SectionHeader(t("android-settings.me.accounts"), start = 24.dp)
+        // The accounts on this device, on one card: the one in view first, with who it is, then the others; each signed
+        // out of by itself, as on the web (with one account it is just 退出登录), and another can be added.
+        val signOut = @Composable { a: Account ->
+            // Signing out: home at once, the sign-out going on by itself (a toast if it could not); not asked twice meanwhile.
+            if (app.isDoing("auth.signOut", "account" to a.sub)) Spinner(inline = true)
+            else Text(if (list.size > 1) t("android-settings.me.signOut") else t("android-settings.me.signOutOnly"), fontSize = 15.sp, color = C.red, modifier = Modifier.pressText {
+                app.home()
+                app.act(t("android-settings.me.signOutWhat"), if (list.size > 1) t("android-settings.me.signedOut", "email" to a.email) else null) { Auth.signOut(app.core, a.sub) }
+            })
+        }
         ListCard {
-            list.forEach { a ->
+            ListRow {
+                Avatar(me.email, me.name.ifEmpty { me.email }, 46.dp, picture = me.picture)
+                Column(Modifier.weight(1f)) {
+                    Text(me.name.ifEmpty { me.email }, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${me.email} · Google", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                list.find { it.sub == me.sub }?.let { signOut(it) }
+            }
+            list.filter { it.sub != me.sub }.forEach { a ->
                 ListRow {
                     Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    // Signing out: home at once, the sign-out going on by itself (a toast if it could not); not asked twice meanwhile.
-                    if (app.isDoing("auth.signOut", "account" to a.sub)) Spinner(inline = true)
-                    else Text(if (list.size > 1) t("android-settings.me.signOut") else t("android-settings.me.signOutOnly"), fontSize = 15.sp, color = C.red, modifier = Modifier.pressText {
-                        app.home()
-                        app.act(t("android-settings.me.signOutWhat"), if (list.size > 1) t("android-settings.me.signedOut", "email" to a.email) else null) { Auth.signOut(app.core, a.sub) }
-                    })
+                    signOut(a)
                 }
             }
             val opening = app.isDoing("auth.begin")

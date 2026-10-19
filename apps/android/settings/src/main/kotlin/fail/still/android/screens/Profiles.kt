@@ -101,6 +101,7 @@ import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.CARD_PAD
+import fail.still.android.ui.LIST_PAD
 import fail.still.android.ui.concentricOut
 import fail.still.android.ui.RowsCard
 import fail.still.android.data.t
@@ -502,7 +503,48 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             }
             val signs = !copy && (kind == "subscription" || (kind == "opencode-go" && p.access.login == true)) && p.machine != true
             if (signs) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN, head = status)
-            else Card { status() }
+            else if (!copy && p.machine == true) {
+                // On the machine's own login: whose it is is changed on that machine, not here.
+                val runtime = MACHINE_RUNTIME[p.runtime] ?: p.runtime
+                Card {
+                    status()
+                    Text(t("android-settings.profile.machineLogin", "station" to s.name, "runtime" to runtime), fontSize = 15.sp, color = C.ink, modifier = Modifier.padding(top = 14.dp))
+                    Text(t("android-settings.profile.machineNote", "runtime" to runtime), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
+                }
+            } else if (!copy && kind in KEYED && p.access.login != true) {
+                // Its key (and its address) under where it stands, on the one card of the account.
+                val name = if (kind == "opencode-go") "OpenCode Go key" else p.providerName?.let { "$it key" } ?: "API key"
+                ListCard {
+                    Box(Modifier.padding(horizontal = CARD_PAD - LIST_PAD, vertical = 12.dp)) { status() }
+                    ListRow(onClick = {
+                        ask(app, if (kind == "opencode-go") t("android-settings.profile.newGoKey") else t("android-settings.profile.newApiKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHint"), what = t("android-settings.profile.keyWhat")) { key ->
+                            api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("key", key) } }); app.toast = t("android-settings.profile.savedChecking")
+                        }
+                    }) {
+                        Column(Modifier.weight(1f)) {
+                            Text(name, fontSize = 15.sp, color = C.ink)
+                            Text(p.access.key.ifEmpty { t("android-settings.profile.notSaved") }, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
+                        }
+                        // A key saved (the sheet that asked gone): a spinner until the station has it.
+                        DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
+                        Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.link)
+                    }
+                    // Where a provider is at an address of the person's own, that can be changed too.
+                    p.access.endpoint?.let { endpoint ->
+                        ListRow(onClick = {
+                            ask(app, t("common.provider.endpoint"), endpoint, "https://", t("common.save")) { value ->
+                                api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("endpoint", value.trim()) } }); app.toast = t("android-settings.profile.savedChecking")
+                            }
+                        }) {
+                            Column(Modifier.weight(1f)) {
+                                Text(t("common.provider.endpoint"), fontSize = 15.sp, color = C.ink)
+                                Text(endpoint, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
+                            }
+                            Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.link)
+                        }
+                    }
+                }
+            } else Card { status() }
             if (p.trouble != null) ProfileRecovery(s, p)
             if (p.trouble?.action != "quota") QuotaSection(address, p)
             if (s.overview?.sharing == true) ShareSection(current, s, p)
@@ -553,48 +595,6 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                         SlackMark(15.dp)
                         Text(c.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(c.modelName ?: p.model?.let { p.names[it] ?: it } ?: t("android-settings.profile.defaultModel"), fontSize = 13.sp, color = C.muted)
-                    }
-                }
-            }
-            if (copy) Unit
-            else if (p.machine == true) {
-                // On the machine's own login: whose it is is changed on that machine, not here.
-                val runtime = MACHINE_RUNTIME[p.runtime] ?: p.runtime
-                SectionHeader(t("android-settings.run.account"), start = 24.dp)
-                Card {
-                    Text(t("android-settings.profile.machineLogin", "station" to s.name, "runtime" to runtime), fontSize = 15.sp, color = C.ink)
-                    Text(t("android-settings.profile.machineNote", "runtime" to runtime), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
-                }
-            } else if (kind in KEYED && p.access.login != true) {
-                val name = if (kind == "opencode-go") "OpenCode Go key" else p.providerName?.let { "$it key" } ?: "API key"
-                SectionHeader(t("android-settings.run.account"), start = 24.dp)
-                ListCard {
-                    ListRow(onClick = {
-                        ask(app, if (kind == "opencode-go") t("android-settings.profile.newGoKey") else t("android-settings.profile.newApiKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHint"), what = t("android-settings.profile.keyWhat")) { key ->
-                            api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("key", key) } }); app.toast = t("android-settings.profile.savedChecking")
-                        }
-                    }) {
-                        Column(Modifier.weight(1f)) {
-                            Text(name, fontSize = 15.sp, color = C.ink)
-                            Text(p.access.key.ifEmpty { t("android-settings.profile.notSaved") }, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
-                        }
-                        // A key saved (the sheet that asked gone): a spinner until the station has it.
-                        DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
-                        Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.link)
-                    }
-                    // Where a provider is at an address of the person's own, that can be changed too.
-                    p.access.endpoint?.let { endpoint ->
-                        ListRow(onClick = {
-                            ask(app, t("common.provider.endpoint"), endpoint, "https://", t("common.save")) { value ->
-                                api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("endpoint", value.trim()) } }); app.toast = t("android-settings.profile.savedChecking")
-                            }
-                        }) {
-                            Column(Modifier.weight(1f)) {
-                                Text(t("common.provider.endpoint"), fontSize = 15.sp, color = C.ink)
-                                Text(endpoint, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont)
-                            }
-                            Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.link)
-                        }
                     }
                 }
             }

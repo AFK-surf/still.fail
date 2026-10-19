@@ -108,7 +108,8 @@ fun UsageScreen(current: WorkspaceEntry) {
                 }
             }
             Column(Modifier.padding(horizontal = 24.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                (view.notes + view.basis).forEach { Text(it, fontSize = 12.sp, color = C.subtle) }
+                // How it is counted, under what was counted (nothing counted: the empty place says it already).
+                (if (view.empty) view.notes else view.notes + view.basis).forEach { Text(it, fontSize = 12.sp, color = C.subtle) }
             }
         }
         Spacer(Modifier.height(30.dp))

@@ -2,7 +2,7 @@
 // station's in one list, a profile's
 // page (whether it works, signing a subscription in, its allowance, which of its models may be used, who uses it, its
 // key or variables; renaming, checking and deleting under "…"), and a new one.
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAction, useMemberships, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
 import type { MachineLogin, ProfileFlowView, RuntimeInstall, WorkspaceProfile } from "../core/shapes.ts";
@@ -386,24 +386,38 @@ function ProfilePage({ p }: { p: Profile }) {
   const keyed = KEYED.has(p.access.kind) && !p.access.login;
   // A copy of another station's: shown, used, changed only there.
   const copy = p.share?.role === "user";
+  const signs = !copy && (p.access.kind === "subscription" || (p.access.kind === "opencode-go" && !!p.access.login)) && !p.machine;
+  const detail = p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked");
+  const checked = p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : "";
+  const line = detail !== p.checkText ? detail + checked : checked.replace(/^ · /, "");
+  const head = (
+    <>
+      <ProviderMark runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={26} />
+      <span className={partsCss.mGrow}>
+        <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
+        {/* What the check said beyond its pill (需要登录 under 需要登录 says nothing more), and when. */}
+        {line && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{line}</span>}
+        {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner inline />{checking ? t("web-mobile.versions.checking") : t("web-mobile.profiles.refreshingQuota")}</span>}
+        {!checking && checkFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={checkFailed} size={12} />{t("web-mobile.profiles.checkFailed", { error: checkFailed })}</span>}
+        {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />{t("web-mobile.profiles.quotaFailed", { error: quotaFailed })}</span>}
+      </span>
+    </>
+  );
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back={station.name || "Station"} onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{accessLabel(p)}</span>}
         trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
-        <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
-          <ProviderMark runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={26} />
-          <span className={partsCss.mGrow}>
-            <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
-            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked")}{p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : ""}</span>
-            {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner inline />{checking ? t("web-mobile.versions.checking") : t("web-mobile.profiles.refreshingQuota")}</span>}
-            {!checking && checkFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={checkFailed} size={12} />{t("web-mobile.profiles.checkFailed", { error: checkFailed })}</span>}
-            {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />{t("web-mobile.profiles.quotaFailed", { error: quotaFailed })}</span>}
-          </span>
-        </div>
+        {/* Where it stands, on the account's one card: a subscription's heads its sign-in, a key's its key. */}
+        {signs ? <SignIn p={p} needed={p.check?.state === "login" || signingIn} head={head} />
+          : keyed && !copy ? (
+            <ListCard>
+              <div className={`${settingsCss.mProfileHead} ${css.mHeadRow}`}>{head}</div>
+              <KeyRows p={p} />
+            </ListCard>
+          )
+          : <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>{head}</div>}
         {p.trouble && <ProfileRecovery p={p} />}
-        {/* A subscription, or an OpenCode Go profile on an OpenCode account: signed in (again) here. */}
-        {!copy && (p.access.kind === "subscription" || (p.access.kind === "opencode-go" && !!p.access.login)) && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         {p.trouble?.action !== "quota" && <Quota p={p} />}
         {overview?.sharing && <ShareRows p={p} />}
         {!copy && <WorkspaceRows p={p} />}
@@ -427,25 +441,6 @@ function ProfilePage({ p }: { p: Profile }) {
             </ListRow>
           ))}
         </ListCard>
-        {keyed && !copy && (
-          <>
-            <SectionHeader title={t("web-mobile.history.account")} start={24} />
-            <ListCard>
-              <ListRow onClick={() => ask(app, { title: p.access.kind === "opencode-go" ? t("web-mobile.profiles.newOpencodeKey") : t("web-mobile.profiles.newApiKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true, atOnce: "web-mobile.profiles.saveFailed",
-                hint: t("web-mobile.profiles.recheckHintFull"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.access.kind === "opencode-go" ? "OpenCode Go key" : p.providerName ? `${p.providerName} key` : "API key"}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.key || t("web-mobile.profiles.notSaved")}</span></span>
-                <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
-              </ListRow>
-              {p.access.endpoint !== undefined && (
-                <ListRow onClick={() => ask(app, { title: t("common.provider.endpoint"), value: p.access.endpoint ?? "", placeholder: "https://", action: t("common.save"),
-                  run: (endpoint) => api.putProfile(p.id, { access: { kind: p.access.kind, endpoint: endpoint.trim() } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
-                  <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("common.provider.endpoint")}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.endpoint}</span></span>
-                  <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
-                </ListRow>
-              )}
-            </ListCard>
-          </>
-        )}
         {p.access.kind === "env" && !copy && (
           <>
             <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
@@ -458,6 +453,28 @@ function ProfilePage({ p }: { p: Profile }) {
         <div style={{ height: 30 }} />
       </div>
     </div>
+  );
+}
+
+/** A key's profile: its key, and its address where it has one of the person's own, each changed from its row. */
+function KeyRows({ p }: { p: Profile }) {
+  const app = useApp();
+  const api = useApi();
+  return (
+    <>
+    <ListRow onClick={() => ask(app, { title: p.access.kind === "opencode-go" ? t("web-mobile.profiles.newOpencodeKey") : t("web-mobile.profiles.newApiKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true, atOnce: "web-mobile.profiles.saveFailed",
+      hint: t("web-mobile.profiles.recheckHintFull"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
+      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.access.kind === "opencode-go" ? "OpenCode Go key" : p.providerName ? `${p.providerName} key` : "API key"}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.key || t("web-mobile.profiles.notSaved")}</span></span>
+      <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
+    </ListRow>
+    {p.access.endpoint !== undefined && (
+      <ListRow onClick={() => ask(app, { title: t("common.provider.endpoint"), value: p.access.endpoint ?? "", placeholder: "https://", action: t("common.save"),
+        run: (endpoint) => api.putProfile(p.id, { access: { kind: p.access.kind, endpoint: endpoint.trim() } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
+        <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("common.provider.endpoint")}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.endpoint}</span></span>
+        <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
+      </ListRow>
+    )}
+    </>
   );
 }
 
@@ -743,7 +760,7 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
 }
 
 /** A subscription's sign-in: run on the station's machine, the browser steps relayed here. */
-function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
+function SignIn({ p, needed, head }: { p: Profile; needed: boolean; head: ReactNode }) {
   const app = useApp();
   const api = useApi();
   const job = p.login;
@@ -751,34 +768,40 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
   const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.runtime === "claude" ? "Claude" : p.runtime === "grok" ? "Grok" : "ChatGPT";
   const busy = useDoing("profile.login", { station: useStation().address, id: p.id });
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
+  const [manual, setManual] = useState(false);
   const previous = useRef(job?.state);
   useEffect(() => {
     if (job?.state === "done" && previous.current && previous.current !== "done") app.toast(t("web-mobile.profiles.signedIn"));
     previous.current = job?.state;
   }, [job?.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  // One card for the account: where it stands at its top (no title over it saying it again), while signing in a way out
+  // at that line's end, then what to do.
   return (
-    <>
-      <SectionHeader title={active ? t("web-mobile.profiles.loginActive", { provider }) : needed ? t("web-mobile.profiles.loginNeeded", { provider }) : t("web-mobile.profiles.subscription", { provider })} start={24} />
-      <div className={`${listsCss.mCard} ${settingsCss.mFormGroup} ${css.mSignIn}`}>
-        {active ? (
-          <>
-            <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} />
-            <button type="button" className={css.mSignInCancel} disabled={cancelling} aria-busy={cancelling || undefined}
-              onClick={() => { api.cancelLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.cancelLoginFailed", { error: e.message }))); }}>
-              {cancelling && <Spinner inline />}{t("web-mobile.profiles.cancelLogin")}
-            </button>
-          </>
-        ) : (
-          <>
-            <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? t("web-mobile.profiles.loginFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-mobile.profiles.loginDone") : t("web-mobile.profiles.loginWhere", { name: NAME })}</p>
-            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary busy={busy}
-              onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); }} />
-            {/* OpenCode's has no command to run by hand. */}
-            {p.loginCommand && <details className={css.mDetails}><summary>{t("web-mobile.profiles.manualLogin")}</summary><CommandBox text={p.loginCommand} /></details>}
-          </>
+    <div className={`${listsCss.mCard} ${settingsCss.mFormGroup} ${css.mSignIn}`}>
+      <div className={css.mSignInHead}>
+        <div className={settingsCss.mProfileHead}>{head}</div>
+        {active && (
+          <button type="button" className={css.mSignInCancel} disabled={cancelling} aria-busy={cancelling || undefined}
+            onClick={() => { api.cancelLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.cancelLoginFailed", { error: e.message }))); }}>
+            {cancelling && <Spinner inline />}{t("web-mobile.profiles.cancelLogin")}
+          </button>
         )}
       </div>
-    </>
+      {active ? <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} /> : (
+        <>
+          {/* Signed in: the pill above says so; only what was off, or how it is done, in words. */}
+          {job?.state === "failed" ? <p className={`${partsCss.mError} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginFailed", { error: job.error ?? "" })}</p>
+            : needed ? <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginWhere", { name: NAME })}</p> : null}
+          <div className={css.mSignInActions}>
+            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary={needed && job?.state !== "done"} busy={busy}
+              onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); }} />
+            {/* OpenCode's has no command to run by hand. */}
+            {p.loginCommand && <LinkButton label={t("web-mobile.profiles.manualShort")} onClick={() => setManual(!manual)} />}
+          </div>
+          {manual && p.loginCommand && <CommandBox text={p.loginCommand} />}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -816,23 +839,26 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
     return (
       <>
         <span className={css.mDeviceCode}>{job.userCode}</span>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : provider === "Grok" ? t("web-mobile.profiles.grokNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
         {/* OpenCode's page has the code in its address: only compared there, not copied. */}
         <Button label={provider === "OpenCode" ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
           onClick={() => { if (provider === "OpenCode") return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : provider === "Grok" ? t("web-mobile.profiles.grokNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
       </>
     );
   }
+  // Two steps, each said once: what to do on the page (its button under it), then the code it gives, pasted beside
+  // what sends it.
   if (job.state === "needs_code" && job.url) {
     return (
       <>
-        <p className={partsCss.mSmall}>{tNodes("web-mobile.profiles.claudeStep1", { link: t("web-mobile.profiles.openAuth") }, { name: NAME })}</p>
-        <Button label={t("web-mobile.profiles.openAuth")} primary onClick={() => void window.open(job.url!, "_blank", "noopener")} />
-        <p className={partsCss.mSmall}>{t("web-mobile.profiles.claudeStep2")}</p>
-        <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder={t("web-mobile.profiles.pasteCode")} onChange={(e) => setCode(e.target.value)} />
+        <p className={css.mStep}><span className={css.mStepN}>1</span>{t("web-mobile.profiles.step1Short", { name: NAME })}</p>
+        <span className={css.mStepBody}><Button label={t("web-mobile.profiles.openAuth")} primary={!code.trim()} onClick={() => void window.open(job.url!, "_blank", "noopener")} /></span>
+        <p className={css.mStep}><span className={css.mStepN}>2</span>{t("web-mobile.profiles.step2Short")}</p>
         {error && <p className={partsCss.mError}>{error}</p>}
-        <Button label={t("web-mobile.profiles.finishLogin")} primary busy={busy} enabled={!!code.trim()}
-          onClick={() => { void operation.run(code.trim()); }} />
+        <div className={css.mCodeRow}>
+          <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder={t("web-mobile.profiles.pasteCode")} onChange={(e) => setCode(e.target.value)} />
+          <Button label={t("web-mobile.profiles.finishShort")} primary busy={busy} enabled={!!code.trim()} onClick={() => { void operation.run(code.trim()); }} />
+        </div>
       </>
     );
   }

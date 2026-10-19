@@ -96,8 +96,7 @@ internal fun StationPermissionsSection(address: String, name: String, p: Station
             }
         }
     }
-    // What is unavailable now for want of a grant.
-    p.note?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 10.dp)) }
+    // What is unavailable for want of a grant (p.note) is not said again under it: each such row says it, 申请 at its end.
 }
 
 /** A row's state at its end, in words. */
