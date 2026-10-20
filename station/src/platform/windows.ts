@@ -99,10 +99,49 @@ function gitShell(env: NodeJS.ProcessEnv): string | null {
   return candidates.find((p) => existsSync(p)) ?? null;
 }
 
-/// What a `.cmd` shim runs when its arguments can go around cmd (as the runner's `unshim`, native/runner): npm's
-/// (`"%_prog%" "%dp0%\…\cli.js" %*`) as Node and the script; one that only hands on to another `.cmd` (Vite+'s) as
-/// what that one runs. Null for anything else.
-export function unshim(path: string, env: NodeJS.ProcessEnv = process.env): { node: string; script: string } | null {
+/// A path as a shim names it: in the shim's own directory (`%dp0%\…`, `%~dp0\…`), or as written.
+export type Named = { beside: string } | { at: string };
+
+/// The lines around what an npm or pnpm shim runs (cmd-shim's), case aside, an `@` before them aside.
+const FRAME = ["echo off", "goto start", ":find_dp0", "set dp0=%~dp0", ":start", "setlocal", "call :find_dp0"];
+
+/// What a shim's text runs with the arguments it is given (`%*`, last), as the runner's `shim::read` (native/runner):
+/// npm's and pnpm's for a script, with Node; theirs for a binary (Claude Code's npm package's is `claude.exe`), and one
+/// that only hands on to another `.cmd` (Vite+'s), as that program. Null for anything else, which cmd has to run.
+export function readShim(text: string): { node: Named } | { program: Named } | null {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l !== "");
+  for (const line of lines) {
+    const q = lastQuoted(line);
+    if (q === null) continue;
+    const before = q.before.trimEnd();
+    if (before.endsWith('"%_prog%"') || before.endsWith('node.exe"') || before.endsWith(" node") || before === "node") return { node: named(q.path) };
+  }
+  const rest = lines
+    .map((l) => (l.startsWith("@") ? l.slice(1) : l))
+    .filter((l) => !FRAME.includes(l.toLowerCase()) && !l.toLowerCase().startsWith("exit /b"));
+  const q = rest.length === 1 ? lastQuoted(rest[0]!) : null;
+  return q !== null && q.before === "" ? { program: named(q.path) } : null;
+}
+
+/// A line ending `"<path>" %*`: what comes before the quoted path, and the path, when nothing in it is left for cmd
+/// to expand (`%USERPROFILE%\…`) but the shim's directory.
+function lastQuoted(line: string): { before: string; path: string } | null {
+  const m = line.match(/^(.*)"([^"]*)"\s*%\*$/);
+  if (m === null || m[2]!.replace(/^(%dp0%|%~dp0)/, "").includes("%")) return null;
+  return { before: m[1]!, path: m[2]! };
+}
+
+function named(path: string): Named {
+  const prefix = ["%dp0%\\", "%~dp0\\", "%dp0%", "%~dp0"].find((p) => path.startsWith(p));
+  return prefix === undefined ? { at: path } : { beside: path.slice(prefix.length) };
+}
+
+/// What a `.cmd` shim runs when its arguments can go around cmd (as the runner's `unshim`, native/runner), as
+/// `readShim` tells, a shim that hands on followed. Null for anything else.
+export function unshim(path: string, env: NodeJS.ProcessEnv = process.env): { file: string; args: string[] } | null {
   for (let i = 0; i < 4; i++) {
     if (!/\.cmd$/i.test(path)) return null;
     let text: string;
@@ -114,19 +153,16 @@ export function unshim(path: string, env: NodeJS.ProcessEnv = process.env): { no
       return null;
     }
     const dir = dirname(path);
-    const npm = text.match(/"%_prog%"\s+"%dp0%\\([^"]+)"\s+%\*/);
-    if (npm) {
+    const at = (n: Named) => ("beside" in n ? join(dir, n.beside) : n.at);
+    const shim = readShim(text);
+    if (shim === null) return null;
+    if ("node" in shim) {
       const beside = join(dir, "node.exe");
       const node = existsSync(beside) ? beside : (findCommand("node", env)?.onPath ?? "node");
-      return { node, script: join(dir, npm[1]!) };
+      return { file: node, args: [at(shim.node)] };
     }
-    const lines = text
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l !== "" && l.toLowerCase() !== "@echo off" && !l.toLowerCase().startsWith("exit /b"));
-    const on = lines.length === 1 ? lines[0]!.match(/^"([^"]+)"\s+%\*$/) : null;
-    if (!on) return null;
-    path = on[1]!;
+    path = at(shim.program);
+    if (/\.exe$/i.test(path)) return { file: path, args: [] };
   }
   return null;
 }
@@ -310,7 +346,7 @@ export const windows: Platform = {
     const file = /[\\/]/.test(command) ? command : (findCommand(command, env)?.onPath ?? command);
     if (!/\.(cmd|bat)$/i.test(file)) return { file, args };
     const shim = unshim(file, env);
-    if (shim !== null) return { file: shim.node, args: [shim.script, ...args] };
+    if (shim !== null) return { file: shim.file, args: [...shim.args, ...args] };
     for (const a of [file, ...args]) if (/["%\r\n]/.test(a)) throw new Error(`cannot pass ${JSON.stringify(a)} through cmd`);
     const line = [file, ...args].map((a) => `"${a}"`).join(" ");
     return { file: env.ComSpec ?? process.env.ComSpec ?? "cmd.exe", args: ["/d", "/s", "/c", `"${line}"`], windowsVerbatimArguments: true };
