@@ -109,7 +109,7 @@ fn gap(c : @ui.Ctx, h : Double) -> Unit {
 }
 
 ///|
-/// Back, in the accent colour, with where it goes back to (Parts.kt NavBack). True on the frame after a tap.
+/// Back, a chevron in the accent and where it goes back to in a link's ink (Parts.kt NavBack). True on the frame after a tap.
 fn nav_back(c : @ui.Ctx, label : String) -> Bool {
   @sf.nav_back(c, "settings-back", label)
 }
@@ -1128,13 +1128,13 @@ fn row_action(c : @ui.Ctx, key : String, label : String, busy : Bool, failed : S
 let press_fade : @ui.Style = @ui.style(pressed=@ui.patch(opacity=O60))
 
 ///|
-/// Words that do something when tapped (a link's look). True on the frame after a tap.
+/// Words that do something when tapped (a link's look: Theme.kt link). True on the frame after a tap.
 fn tap_text(c : @ui.Ctx, key : String, label : String, color? : Int64, size? : Double = 15.0) -> Bool {
   let id = c.id(key)
   c.box(style=press_fade, id~, fn() {
     // Settings.kt:447 (15sp), Profiles.kt:794, Vault.kt:365 (14sp): the theme's line, 1.4 its size (its size the
     // caller's)
-    c.text(label, style=@sf.accent.then(@sf.one_line), size~, line=size * 1.4, color?) |> ignore
+    c.text(label, style=@sf.link.then(@sf.one_line), size~, line=size * 1.4, color?) |> ignore
   })
   |> ignore
   hit(c, id)
