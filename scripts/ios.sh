@@ -1,5 +1,5 @@
 #!/bin/bash
-# The iOS simulator app: built from the C that `moon build --target native` generates (split and compiled in parallel:
+# The iOS app (the simulator's; a device's with MBUI_IOS_SDK=iphoneos): built from the C that `moon build --target native` generates (split and compiled in parallel:
 # scripts/mbc.py), plus the MoonBit runtime and the Objective-C host, then installed and launched on a simulator of our
 # own. APP=demo picks the app (src/<APP>).
 #   scripts/ios.sh build | run [SCRIPT] | log [N] | stop | shot NAME | device | pid | delete
@@ -11,6 +11,9 @@
 #   MBUI_IOS_ID      the app's bundle id (default dev.mbui.demo); MBUI_IOS_PLIST its Info.plist (default ios/Info.plist)
 #   MBUI_IOS_DEVICE  the simulator's name (default ios-mbui-sf, Mini1's: Studio's simulators open no app): one of our
 #     own, made when missing (the newest iOS runtime, an iPhone Pro); never another's
+#   MBUI_IOS_SDK     iphonesimulator (the default: the simulator's app, ad hoc signed) or iphoneos: a device's app, in
+#     out/ios-device, its Info.plist saying iPhoneOS, left unsigned (a device's signature is the packer's: its identity,
+#     its profile, its entitlements); `build` only
 #   MBUI_IOS_HOOK    a script sourced here that adds to the build (still.fail's core: its apps/mbui/scripts/ios-core.sh):
 #     APP_EXTRA (more C or Objective-C for the app: --extra=FILE ...), APP_LINK (its link flags), APP_ENTITLEMENTS (a
 #     plist the app is signed with), and the functions app_libs (before the link: what APP_LINK names made),
@@ -22,14 +25,19 @@ D="$(cd "$(dirname "$0")" && pwd)"
 ROOT=$(cd "$D/.." && pwd)
 MOD=$(cd "${MBUI_APP_MOD:-$ROOT}" && pwd)
 cd "$MOD"
-OUT=out/ios
+IOS_SDK=${MBUI_IOS_SDK:-iphonesimulator}
+case $IOS_SDK in
+  iphonesimulator) OUT=out/ios; MIN=-mios-simulator-version-min=17.0 ;;
+  iphoneos) OUT=out/ios-device; MIN=-miphoneos-version-min=17.0 ;;
+  *) echo "ios.sh: MBUI_IOS_SDK $IOS_SDK: iphonesimulator or iphoneos" >&2; exit 1 ;;
+esac
 APPDIR=$OUT/MBUI.app
 BID=${MBUI_IOS_ID:-dev.mbui.demo}
 DEV_NAME=${MBUI_IOS_DEVICE:-ios-mbui-sf}
 PKG=${APP:-demo}
 LOG=${MBUI_IOS_LOG:-$PWD/$OUT/app.log}
-SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
-CC="xcrun --sdk iphonesimulator clang -arch arm64 -mios-simulator-version-min=17.0 -isysroot $SDK"
+SDK=$(xcrun --sdk $IOS_SDK --show-sdk-path)
+CC="xcrun --sdk $IOS_SDK clang -arch arm64 $MIN -isysroot $SDK"
 CFLAGS="-I$MOON_HOME/include -I$ROOT/src/host -I$ROOT/ios/shim -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM"
 
 APP_EXTRA= APP_LINK= APP_ENTITLEMENTS=
@@ -85,6 +93,7 @@ app_pid() {
   xcrun simctl spawn "$1" launchctl list 2>/dev/null | awk -v b="UIKitApplication:$BID[" 'index($3, b) == 1 && $1 != "-" { print $1; exit }'
 }
 
+[ $IOS_SDK = iphonesimulator ] || [ "${1:-build}" = build ] || { echo "ios.sh: $1 is the simulator's (MBUI_IOS_SDK=$IOS_SDK)" >&2; exit 1; }
 case "${1:-build}" in
   build)
     T0=$(python3 -c 'import time;print(time.time())')
@@ -116,10 +125,17 @@ case "${1:-build}" in
       -framework UniformTypeIdentifiers -lm $APP_LINK
     cp ${MBUI_IOS_PLIST:-$ROOT/ios/Info.plist} $APPDIR/Info.plist
     plutil -replace CFBundleIdentifier -string $BID $APPDIR/Info.plist
+    if [ $IOS_SDK = iphoneos ]; then
+      plutil -replace CFBundleSupportedPlatforms -json '["iPhoneOS"]' $APPDIR/Info.plist
+      plutil -replace DTPlatformName -string iphoneos $APPDIR/Info.plist
+      plutil -replace DTSDKName -string "iphoneos$(xcrun --sdk iphoneos --show-sdk-version)" $APPDIR/Info.plist
+    fi
     if type app_bundle >/dev/null 2>&1; then app_bundle || exit 1; fi
-    # what the app carries signed first, then the app (ad hoc: the simulator asks no more)
-    for f in $APPDIR/Frameworks/*; do [ -e "$f" ] && codesign -s - --force "$f" >/dev/null 2>&1; done
-    codesign -s - --force ${APP_ENTITLEMENTS:+--entitlements $APP_ENTITLEMENTS} $APPDIR >/dev/null 2>&1
+    # what the app carries signed first, then the app (ad hoc: the simulator asks no more; a device's: the packer's)
+    if [ $IOS_SDK = iphonesimulator ]; then
+      for f in $APPDIR/Frameworks/*; do [ -e "$f" ] && codesign -s - --force "$f" >/dev/null 2>&1; done
+      codesign -s - --force ${APP_ENTITLEMENTS:+--entitlements $APP_ENTITLEMENTS} $APPDIR >/dev/null 2>&1
+    fi
     T1=$(python3 -c 'import time;print(time.time())')
     echo "built $APPDIR ($BID) in $(python3 -c "print(round($T1-$T0,2))") s; binary $(stat -f %z $APPDIR/mbui) bytes"
     ;;
