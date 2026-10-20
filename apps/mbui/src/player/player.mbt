@@ -882,8 +882,9 @@ let keys_row : @ui.Style = @ui.style(row=true, w=Full, align=ACenter)
 let filled_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, align=ACenter)
 
 ///|
-/// The controls' bar: its corner, its sides' and its foot's room; a key's size, the speed's height.
-let bar_radius : Double = 20.0
+/// The controls' bar (Player.kt:401, 403): its corner (Smooth(26)), its sides' and its foot's room; a key's size, the
+/// speed's height.
+let bar_radius : Double = 26.0
 
 ///|
 let bar_side : Double = 6.0
