@@ -125,10 +125,10 @@ fn screen(mode : String, opening : Double, unlike_mac? : String = "") -> @ui.Tes
       Some(Number(d, ..)) => d
       _ => continue
     }
-    t.frame(ms=at - t.time())
+    t.frame_at(at)
   }
-  t.draw()
-  t.assert_idle()
+  // (compared at the Mac's last frame, nothing drawn after it: that nothing goes on asking for frames is checked once
+  // it is compared, screen_check)
   let missing = t.text_missing()
   if missing.length() > 0 && unlike_mac == "" {
     fail(
@@ -178,6 +178,7 @@ fn screen_check(it : @test.Test, t : @ui.Tester, mode : String, unlike_mac? : St
   }
   it.write(t.drawlist(bytes=true))
   it.snapshot(filename=mode + ".dl")
+  t.assert_idle()
 }
 
 ///|
