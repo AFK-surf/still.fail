@@ -101,6 +101,10 @@ priv struct Draft {
   mut warmed : Double
   /// the quote whose comment line takes the focus next frame (0 none); -1: the words' field (ids count from 1)
   mut focus : Int
+  /// where the chat stood as last drawn, as the core has it: its latest message and what waits in its outbox
+  /// (draft_after): what the message this draft becomes comes after, so files put in it are another upload than the
+  /// same files in the message before ("" for a chat not made yet)
+  mut after : String
 }
 
 ///|
@@ -152,6 +156,7 @@ fn draft_by(src : Source, key : String) -> Draft {
         changed_at: 0.0,
         warmed: -1.0e12,
         focus: 0,
+        after: "",
       }
       drafts[key] = d
       (src.call)("draft.get", { "key": Json::string(key) }, fn(res) {
@@ -362,14 +367,11 @@ fn draft_quote(d : Draft, author : String, words : String, ts : String, role : S
 // ── files ──────────────────────────────────────────────────────────────
 
 ///|
-/// An upload's id: 32 hex digits, new each time (the Android app's UUID without its dashes): from the source's time
-/// of day and a count, so a fixture or a test (whose time stands) gets the same ids each run.
-let upload_serial : Ref[Int] = { val: 0 }
-
-///|
-fn upload_id(src : Source) -> String {
-  upload_serial.val += 1
-  let seed = "\{(src.now)()}/\{upload_serial.val}"
+/// An upload's id: 32 hex digits (the Android app's UUID without its dashes), from what goes up and where, never
+/// from a clock: `what` (where it goes, its name, its bytes' hash) and `n` (its place among what goes up there: a
+/// draft's files, a folder's uploads). The same upload made over any run, recorded or replayed, has the same id.
+fn upload_id(what : String, n : Int) -> String {
+  let seed = "\{what}/\{n}"
   let hex = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
   ]
@@ -477,7 +479,41 @@ fn add_file(src : Source, d : Draft, station : String, name : String, bytes : By
     p.error = Some(read_only_words)
     return
   }
-  upload_part(src, d, station, p, bytes, upload_id(src), 0)
+  upload_part(
+    src,
+    d,
+    station,
+    p,
+    bytes,
+    upload_id(d.key + "\u{1}" + d.after + "\u{1}" + file_seed(station, name, bytes), d.files.length() - 1),
+    0,
+  )
+}
+
+///|
+/// What a file going up is known by for its id (upload_id): the station, its name, its size and its bytes' hash.
+fn file_seed(station : String, name : String, bytes : Bytes) -> String {
+  "\{station}\u{1}\{name}\u{1}\{bytes.length()}\u{1}\{bytes.hash()}"
+}
+
+///|
+/// Where a chat stands for the draft written to it (Draft::after), as the core has it: its latest message's seq and
+/// what waits in its outbox. Each message sent moves it on, so the same file in the next message is another upload
+/// (the station gives back an upload it finished within the hour by its id: hub.ts savePart).
+fn draft_after(v : ChatView?) -> String {
+  match v {
+    Some(view) => {
+      let mut last = -1.0
+      for m in view.messages {
+        if m.seq > last {
+          last = m.seq
+        }
+      }
+      let out = view.outbox.map(fn(o) { o.id }).join(",")
+      "\{view.key}\u{1}\{last}\u{1}\{out}"
+    }
+    None => ""
+  }
 }
 
 ///|
@@ -561,10 +597,17 @@ fn uploading_text(f : Pending) -> String {
 }
 
 ///|
-/// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it).
+/// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it; paste_name).
 fn paste_as_file(src : Source, d : Draft, station : String, words : String) -> Unit {
-  let name = "pasted-text-" + uuid(upload_id(src)) + ".txt"
+  let name = paste_name(d.key + "\u{1}" + d.after, words, d.files.length())
   add_file(src, d, station, name, utf8_bytes(words), Some(words))
+}
+
+///|
+/// The name a long paste goes up as: from the draft it is in and where its chat stands (`draft`: Draft::key and
+/// after), its words and its place among the draft's files (`n`), never a clock.
+fn paste_name(draft : String, words : String, n : Int) -> String {
+  "pasted-text-" + uuid(upload_id("paste\u{1}" + draft + "\u{1}" + words, n)) + ".txt"
 }
 
 ///|
@@ -743,6 +786,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     Some(f) => draft_by(src, f.key)
     None => draft_of(src, r)
   }
+  d.after = draft_after(v)
   let offline = match v {
     Some(v) => v.offline
     None => false

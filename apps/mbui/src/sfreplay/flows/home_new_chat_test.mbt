@@ -8,6 +8,8 @@ test "02-home-new-chat" {
     f.see("端到端测试")
     f.see("另一台设备新建的对话 082947")
     f.see("=新对话里的回复 082947")
-    f.end(unsettled_ok="a motion said is not at rest：首页新行进来的动画（约 350 ms），没有可 run_to 的 rest（等 app 迁移）")
+    // its row grown in, the rows under it moved down: to the end of their motions, as each set out
+    f.run_to(@sfapp.home_rest())
+    f.end()
   })
 }

@@ -18,6 +18,6 @@ test "64-wide-new-chat" {
     // its agent's answer in the chat
     f.see("=宽屏新对话的回答 085912")
     // the agent's avatar lingering after its messages: a wake at the linger's end, its look on a motion meanwhile
-    f.end(unsettled_ok="sfapp/chat.mbt:685 agent 头像在消息后停留，靠定时唤醒和动画收尾（等 app 迁移）")
+    f.end()
   })
 }

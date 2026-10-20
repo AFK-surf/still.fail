@@ -17,10 +17,11 @@ test "33-settings-appearance" {
     assert_true(!@sf.theme().dark)
     f.tap("=深色")
     assert_true(@sf.theme().dark)
+    // its thumb slides there (Ctx::cover), from this tap to the end of its slide
+    f.run_for(@ui.cover_slide_ms)
     f.back()
     f.run_for(@ui.nav_push_ms)
     f.see("Workspace")
-    // the appearance page's segmented choices: their thumbs chase last frame's layout on a spring
-    f.end(unsettled_ok="sfapp/settings/parts.mbt:508 外观页分段选择的滑块用 c.spring 追上一帧的布局、自己要帧（等 app 迁移）")
+    f.end()
   })
 }

@@ -969,7 +969,7 @@ while the card moved the list):
 | 06 draft | words left in the field, the chat left and opened again: they are back | the draft in the core's store on the device, nothing of it at the station · Tester 重放（src/sfreplay/flows/draft_test.mbt） |
 | 07 draft-restart | the app started again: the draft is back; emptied | the core keeps no draft of it any more · Tester 重放（src/sfreplay/flows/draft_restart_test.mbt） |
 | 08 paste-short | a short paste (Cmd+V, KEYCODE_PASTE) goes into the field, sent | the entry's words are the pasted ones · Tester 重放（src/sfreplay/flows/paste_short_test.mbt） |
-| 09 paste-long | 6000 characters pasted become a text file's card (6000 字符), put up at once, sent with words | the entry's attachment, a .txt; the station keeps it whole (18000 bytes) · 仍走 e2e：app 按时钟生成文本文件的 id 和文件名，重放时参数对不上（等 app 迁移） |
+| 09 paste-long | 6000 characters pasted become a text file's card (6000 字符), put up at once, sent with words | the entry's attachment, a .txt; the station keeps it whole (18000 bytes) · 仍走 e2e，待转严格重放：文本文件的 id 和文件名已只由文字和它在草稿里的位置算出（#770），要先重录 trace |
 | 10 attachments | ＋ → 文件: a photo and a 9 MB file, each put up at once in 4 MB parts (three for the file), sent | the entry's two attachments; both files at the station, byte for byte |
 | 11 quote | the agent's words held still: 引用, a comment on the quote, sent | the entry's quote: the agent's words, its role, the comment · Tester 重放（src/sfreplay/flows/quote_test.mbt） |
 | 12 offline-retry | the station frozen (SIGSTOP) as a message goes: 未发送 after some 30 s; thawed, 重试 | the station has the message, once · Tester 重放（src/sfreplay/flows/offline_retry_test.mbt） |

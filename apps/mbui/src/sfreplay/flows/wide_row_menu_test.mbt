@@ -18,7 +18,6 @@ test "62-wide-row-menu" {
     f.see("=取消固定")
     f.tap("=取消固定")
     f.gone("已固定")
-    // the row hovered: its ground on a spring (sf/parts.mbt ease_to)
-    f.end(unsettled_ok="sf/parts.mbt:9 悬停底色用 c.spring 渐变、自己要帧（等 app 迁移）")
+    f.end()
   })
 }

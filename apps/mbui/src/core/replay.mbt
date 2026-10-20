@@ -30,7 +30,8 @@ pub struct Replay {
   priv mut client : Client?
   priv diverged : Array[String]
   priv fuzzy : Array[String]
-  /// the wall clock as the last message given came
+  /// the wall clock as far as the run had come by what was given: the latest of the given messages' (so the same
+  /// whatever order what may come at once was given in)
   priv mut wall : Double
   /// the wall clock of each message handed to the app's queue (`deliver`'s `to`) and not received yet, oldest first
   priv walls : Array[Double]
@@ -125,7 +126,10 @@ pub fn Replay::attach(self : Replay) -> Unit {
   // what `deliver` handed to the app's queue is received at a frame's start (`receive`): the wall clock is its own then
   receive_hook.val = Some(fn() {
     if self.walls.length() > 0 {
-      self.wall = self.walls.remove(0)
+      let w = self.walls.remove(0)
+      if w > self.wall {
+        self.wall = w
+      }
     }
   })
   self.client = Some(client)
@@ -165,7 +169,9 @@ pub fn Replay::deliver(
             post(msg.stringify(), e.bytes)
           }
           None => {
-            self.wall = e.wall
+            if e.wall > self.wall {
+              self.wall = e.wall
+            }
             match self.client {
               Some(c) => c.receive_json(msg, bytes=e.bytes)
               None => ()

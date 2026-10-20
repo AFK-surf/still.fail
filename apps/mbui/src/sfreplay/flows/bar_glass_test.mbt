@@ -25,9 +25,8 @@ test "50-bar-glass" {
     f.drag("icon:zou", 0.0, -64.0, steps=bar_draw_steps)
     f.run_for(@sfapp.switch_fade_ms)
     f.see("端到端测试")
-    // the bottom bar's springs and tweens to their declared end; a motion of the place switched to is still said after
-    // it, its end not one the app tells
+    // the bottom bar's springs and tweens to their declared end (the ball's ride on the bar chosen included)
     f.run_to(@sfapp.bar_rest())
-    f.end(unsettled_ok="换地方后还有登记的动画没到终点，app 没给出它的终点（sfapp/app.mbt:546 换地方的淡入 Anim 等，等 app 迁移）")
+    f.end()
   })
 }

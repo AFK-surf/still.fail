@@ -458,7 +458,7 @@ fn messages(
             // on the standard curve); what leaves the chat from the outbox fades (200 ms)
             let mk = key + "\u{1}" + keys[i]
             if e is Out(_) {
-              @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(200.0)))
+              @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(out_leave_ms)))
             } else {
               @motion.keyed(c, ri, mk)
             }
@@ -623,9 +623,10 @@ fn messages(
       _ => -1.0
     }
     tell_focus(src, r, v, rd, seen)
-    // the way to the newest: away from the end by more than a corner of the screen, or short of the chat's end
+    // the way to the newest: away from the end by more than a corner of the screen, or short of the chat's end (not
+    // before the list is first laid out: until then nothing is in view, and the end is not far, only not known)
     let away = match info {
-      Some(i) => i.below > 120.0 && !i.gliding
+      Some(i) => i.first >= 0 && i.below > 120.0 && !i.gliding
       None => false
     }
     jump_to_latest(c, src, r, v, rd, away || v.newer)
@@ -637,6 +638,10 @@ fn messages(
   })
   |> ignore
 }
+
+///|
+/// How long what leaves the chat from the outbox (sent, or deleted) takes to fade.
+pub let out_leave_ms : Double = 200.0
 
 ///|
 /// An activity whose agent's turn ended stays this long, then fades (`linger_out_ms`), then is gone.

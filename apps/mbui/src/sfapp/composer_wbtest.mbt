@@ -17,6 +17,9 @@ fn fake_core(
   calls : Array[Made],
   kept? : Json = Json::null(),
   read_only? : Bool = false,
+  now? : Double = 0.0,
+  over? : (String, Topic) -> Topic = fn(_, t) { t },
+  made? : Ref[Source?] = Ref(None),
 ) -> @ui.Tester {
   reset()
   let base = fixture("chat")
@@ -31,8 +34,11 @@ fn fake_core(
       }
     },
     call_bytes: fn(name, params, bytes, done) { calls.push({ name, params, bytes: Some(bytes), done }) },
+    topic: fn(name, params) { over(name, (base.topic)(name, params)) },
+    now: fn() { now },
     read_only,
   }
+  made.val = Some(src)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   // the chat pushed in over Home
@@ -137,6 +143,137 @@ test "a kept quote's comment comes back into its line and goes with the message"
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
   t.run_for(flight_wait_ms + composer_morph_ms)
   t.assert_idle()
+}
+
+///|
+test "a long paste goes up by the same id and name whatever the clocks say: from its words and its place alone" {
+  let long = "第一行要点\n" + String::make(6000, 'x')
+  // two runs: other times of day, the frames' clock further on in the second
+  let ids = []
+  for run in [(0.0, 0.0), (1792462301917.0, 4321.0)] {
+    let calls : Array[Made] = []
+    let t = fake_core(calls, now=run.0)
+    t.run_for(run.1)
+    t.tap_text("发消息")
+    t.type_text(long)
+    t.draw()
+    let parts = named(calls, "station.upload.part")
+    assert_eq(parts.length(), 1)
+    let p = Some(parts[0].params)
+    ids.push((text(p, "id"), text(p, "name")))
+  }
+  assert_eq(ids[0], ids[1])
+  // as the station takes an upload's id (hub.ts savePart: [A-Za-z0-9_-], 8 to 64 long): 32 hex digits, whatever goes
+  for id in [ids[0].0, upload_id("", 0), upload_id("drive\u{1}/\u{1}a.txt", 12345)] {
+    assert_eq(id.length(), 32)
+    assert_true(id.iter().all(fn(ch) { (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') }))
+  }
+  // another paste, or the same one second in its draft, is another file
+  assert_true(paste_name("d", long + "y", 0) != paste_name("d", long, 0))
+  assert_true(paste_name("d", long, 1) != paste_name("d", long, 0))
+}
+
+///|
+test "the same paste in the next message is another upload: the chat moved on by the message before" {
+  let long = "第一行要点\n" + String::make(6000, 'x')
+  let calls : Array[Made] = []
+  // the core's chat once the first message is in it: one more message, after the last
+  let sent = Ref(false)
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" || !sent.val {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) =>
+        match o.get("messages") {
+          Some(Array(ms)) if ms.length() > 0 =>
+            match ms[ms.length() - 1] {
+              Object(m) => {
+                let seq = match m.get("seq") {
+                  Some(Number(n, ..)) => n
+                  _ => 0.0
+                }
+                let next = m.copy()
+                next["seq"] = Json::number(seq + 1.0)
+                next["text"] = Json::string("这条带着粘贴的文字发出去了")
+                let o2 = o.copy()
+                o2["messages"] = Json::array(ms + [Json::object(next)])
+                { ..tp, value: Some(Json::object(o2)), version: tp.version + 1 }
+              }
+              _ => tp
+            }
+          _ => tp
+        }
+      _ => tp
+    }
+  })
+  let up = fn() {
+    t.tap_text("发消息")
+    t.type_text(long)
+    t.draw()
+    let parts = named(calls, "station.upload.part")
+    let p = Some(parts[parts.length() - 1].params)
+    (parts[parts.length() - 1].done)(
+      Ok({ "file": { "name": Json::string(text(p, "name")), "path": "uploads/u/p.txt", "size": 6016 } }),
+    )
+    t.draw()
+    (text(p, "id"), text(p, "name"))
+  }
+  let first = up()
+  tap_send(t)
+  assert_eq(named(calls, "chat.send").length(), 1)
+  sent.val = true
+  t.draw()
+  let second = up()
+  assert_true(first.0 != second.0)
+  assert_true(first.1 != second.1)
+}
+
+///|
+test "a file going up keeps the id it was given as it went in, whatever comes to the chat meanwhile" {
+  let calls : Array[Made] = []
+  // a message comes to the chat between the file's two parts
+  let came = Ref(false)
+  let made : Ref[Source?] = Ref(None)
+  let t = fake_core(calls, made~, over=fn(name, tp) {
+    if name != "chat" || !came.val {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) =>
+        match o.get("messages") {
+          Some(Array(ms)) if ms.length() > 0 =>
+            match ms[ms.length() - 1] {
+              Object(m) => {
+                let next = m.copy()
+                next["seq"] = Json::number(9999.0)
+                let o2 = o.copy()
+                o2["messages"] = Json::array(ms + [Json::object(next)])
+                { ..tp, value: Some(Json::object(o2)), version: tp.version + 1 }
+              }
+              _ => tp
+            }
+          _ => tp
+        }
+      _ => tp
+    }
+  })
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let d = drafts.get(draft_key(r)).unwrap()
+  let before = d.after
+  // two parts' worth
+  let bytes = Bytes::make(part_size + 10, b'x')
+  add_file(made.val.unwrap(), d, r.station, "big.bin", bytes, None)
+  let first = named(calls, "station.upload.part")
+  assert_eq(first.length(), 1)
+  came.val = true
+  t.draw()
+  assert_true(d.after != before)
+  (first[0].done)(Ok({ "have": Json::number(part_size.to_double()) }))
+  let parts = named(calls, "station.upload.part")
+  assert_eq(parts.length(), 2)
+  assert_eq(text(Some(parts[1].params), "id"), text(Some(parts[0].params), "id"))
+  assert_eq(text(Some(parts[1].params), "name"), text(Some(parts[0].params), "name"))
 }
 
 ///|

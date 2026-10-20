@@ -17,9 +17,10 @@ test "65-wide-places" {
     f.tap("=深色")
     assert_true(@sf.theme().dark)
     f.tap("=跟随系统", top=true)
+    // its thumb slides there (Ctx::cover), from this tap to the end of its slide
+    f.run_for(@ui.cover_slide_ms)
     f.tap("返回会话")
     f.see("新建对话")
-    // 外观's segmented choices: their thumbs chase last frame's layout on a spring
-    f.end(unsettled_ok="sfapp/settings/parts.mbt:508 外观页分段选择的滑块用 c.spring 追上一帧的布局、自己要帧（等 app 迁移）")
+    f.end()
   })
 }

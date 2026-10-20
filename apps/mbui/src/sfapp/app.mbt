@@ -133,30 +133,9 @@ fn init {
   @ui.on_reset(fn() {
     if !reset_by_hand.val {
       reset()
-    } else {
-      renew_nav()
     }
     reset_by_hand.val = false
   })
-}
-
-///|
-/// The stack as the test set it up by hand before its Tester, made anew on the Tester's own Ctx: a Nav says it moves
-/// by an id its Ctx gave it as it was made (Ctx::mover_id), and a Tester starts a new Ctx counting from 0, so the one
-/// made before would share an id with the first thing that moves in the new one, and whichever says so last is the
-/// only one asked (a page pushed before the Tester stopped mid-slide, no frame asked for the rest of it). The pages
-/// pushed again as they were (the top risen if it rose).
-fn renew_nav() -> Unit {
-  let pages = app.nav.pages()
-  let risen = pages.length() > 1 && app.nav.risen()
-  app.nav = new_nav()
-  for i in 1..<pages.length() {
-    if i == pages.length() - 1 && risen {
-      app.nav.rise(pages[i])
-    } else {
-      app.nav.push(pages[i])
-    }
-  }
 }
 
 ///|
@@ -170,6 +149,7 @@ fn reset() -> Unit {
   attention.workspace = ""
   attention.src = None
   app.nav = new_nav()
+  home_rows.val = []
   app.picked = ""
   app.filters.clear()
   sheet_host.kind = NoSheet
@@ -287,7 +267,6 @@ fn reset() -> Unit {
   // the composer: its ids counted from the start, what waits for it
   next_pending.val = 1
   quote_seeded.clear()
-  upload_serial.val = 0
   marked_into.clear()
   shared_into.clear()
   share_files_made.val = 0
