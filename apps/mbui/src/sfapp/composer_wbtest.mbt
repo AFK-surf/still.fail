@@ -550,3 +550,34 @@ test "the app tells the core it is shown and in front, in which workspace, and w
   assert_true(back[2].params.stringify().contains("\"focused\":true"))
   t.assert_idle()
 }
+
+///|
+test "the list keeps clear the room the composer takes in the very frame it grows, each frame of its morph" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  t.type_text("第一行")
+  let foot = fn() {
+    let rows = t.rows()
+    rows[rows.length() - 1].2
+  }
+  let before = composer_room_of(t.ctx())
+  // lines enough that it outgrows the least room the list keeps (composer_room): each taken by a frame of its own,
+  // in which the list's foot is already the room the composer takes then (not the one it took a frame before)
+  for line in ["第二行", "第三行", "第四行", "第五行", "第六行"] {
+    let at = t.next_frame_time()
+    t.enter()
+    t.type_text(line)
+    assert_true(t.time() >= at)
+    assert_eq(foot(), composer_room_of(t.ctx()) + 10.0)
+  }
+  // and each frame of its morph, as the display draws them, to its end
+  let end = t.time() + composer_morph_ms
+  while t.time() < end {
+    t.frame()
+    assert_eq(foot(), composer_room_of(t.ctx()) + 10.0)
+  }
+  assert_true(composer_room_of(t.ctx()) > before)
+  t.run_for(draft_keep_ms)
+  t.assert_idle()
+}

@@ -107,3 +107,16 @@ test "a tap anywhere else lets go of it, as back does" {
   // the chat is still the page shown (back let go of the pick only)
   assert_eq(app.nav.depth(), 2)
 }
+
+///|
+test "its words no longer laid out: what was picked goes in that very frame, not frames later" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  assert_true(pk.ts != "")
+  // (as if its message scrolled far off: no box laid out holds its words now)
+  pk.key = "gone"
+  t.frame()
+  assert_eq(pk.ts, "")
+  t.assert_idle()
+}

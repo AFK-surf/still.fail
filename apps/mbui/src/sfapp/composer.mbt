@@ -96,12 +96,24 @@ let files_cornered : Ref[Bool] = Ref::new(false)
 /// its left (Composer.kt: the button reaches past the row there, Compose's horizontalScroll cutting only sideways;
 /// here the row cuts all round, so its room for the button comes off the capsule's).
 fn capsule_top(v : ChatView?, d : Draft) -> Double {
+  files_cornered.val = files_in_corner(v, d)
+  capsule_top_of(v, d)
+}
+
+///|
+/// Whether the files go in the capsule's corner (no notice over them, no quote): its top as it has them.
+fn files_in_corner(v : ChatView?, d : Draft) -> Bool {
   let notices = match v {
     Some(v) => v.archived || v.offline
     None => false
   }
-  files_cornered.val = !notices && d.quotes.length() == 0 && (refs_of(d.key).length() > 0 || d.files.length() > 0)
-  if files_cornered.val {
+  !notices && d.quotes.length() == 0 && (refs_of(d.key).length() > 0 || d.files.length() > 0)
+}
+
+///|
+/// The capsule's top inset (capsule_top), nothing kept.
+fn capsule_top_of(v : ChatView?, d : Draft) -> Double {
+  if files_in_corner(v, d) {
     composer_inset - picture_remove_out
   } else {
     composer_inset
@@ -746,8 +758,13 @@ priv struct ComposerUi {
   mut down_frame : Int
   mut moved : Bool
   mut outside : Bool
-  /// the composer's height with its margins, as last drawn (ids are the page's: the list's rows ask this)
-  mut room : Double
+  /// the draft the page's composer was last built for and the chat it was in (whose room the page's other parts ask:
+  /// composer_room_of)
+  mut room_for : (String, ChatView?)
+  /// the ids of its capsule and the capsule's content where the composer is built (ids are by the scope they are
+  /// asked in: the list's rows ask for the composer's room from scopes of their own)
+  mut cap_id : Int
+  mut content_id : Int
   /// the outbox's entries being sent again or dropped (their buttons spin meanwhile)
   doing : Map[String, Bool]
 }
@@ -765,7 +782,9 @@ let cui : ComposerUi = {
   down_frame: 0,
   moved: false,
   outside: false,
-  room: 0.0,
+  room_for: ("", None),
+  cap_id: 0,
+  content_id: 0,
   doing: {},
 }
 
@@ -780,11 +799,75 @@ fn capsule_id(c : @ui.Ctx) -> Int {
 }
 
 ///|
-/// How much of the page's foot the composer takes, with its margins (the list keeps that clear; ChatHost.kt
-/// roomForList: never less than an opened composer with one line).
+/// The id of the capsule's content (what it is as tall as, laid out at once: the morph draws from it).
+fn composer_content_id(c : @ui.Ctx) -> Int {
+  c.id("composer/content")
+}
+
+///|
+/// How tall the capsule's content is as this frame lays it out (read back: grown this frame, built again from it).
+fn composer_natural(c : @ui.Ctx) -> Double? {
+  match c.laid_rect(cui.content_id) {
+    Some((_, _, _, h)) => Some(h)
+    None => None
+  }
+}
+
+///|
+/// The capsule's height as drawn (Composer.kt Morph): from the height it was to the one its content now takes (260
+/// ms, Ease.Out); words just sent held as tall as when they went until a quarter of the way (ChatHost.kt hold), then
+/// down to its own on the morph's curve (composer_hold). None before its content is laid out.
+fn composer_morph(c : @ui.Ctx, chat : String, natural : Double?) -> Double? {
+  match natural {
+    Some(h) => {
+      // (one motion wherever it is asked from: the list's rows ask in scopes of their own)
+      let a = @motion.anim(c, "composer/morph", h, global=true)
+      a.follow(h, @motion.tween(composer_morph_ms, ease=Out))
+      let m = a.get()
+      let (room, share) = composer_held(c, chat)
+      Some(if room > m && share > 0.0 { m + (room - m) * share } else { m })
+    }
+    None => None
+  }
+}
+
+///|
+/// How much of the page's foot the composer of chat `r` takes, with its margins (the list keeps that clear; ChatHost.kt
+/// roomForList: never less than an opened composer with one line): worked out from what this frame lays out and how
+/// the capsule moves, by the list and the composer alike, as either is built (nothing kept between them, so neither is
+/// a frame behind the other).
+fn composer_room_for(c : @ui.Ctx, key : String, v : ChatView?) -> Double {
+  let room = match drafts.get(key) {
+    Some(d) => composer_room_with(c, d, v)
+    // (no draft yet: the composer not built; the room it leaves at least)
+    None => 0.0
+  }
+  dmax(composer_room, room)
+}
+
+///|
+/// The room of the page's composer (composer_room_for the draft it was last built for).
 fn composer_room_of(c : @ui.Ctx) -> Double {
-  ignore(c)
-  dmax(composer_room, cui.room)
+  composer_room_for(c, cui.room_for.0, cui.room_for.1)
+}
+
+///|
+/// The composer's room for draft `d` (composer_room_for).
+fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
+  let natural = composer_natural(c)
+  let top = capsule_top_of(v, d)
+  match (flight_of(d.key), natural, composer_morph(c, d.key, natural)) {
+    // while words fly to their row, the list keeps the room the composer will have, so their place is where they
+    // land (ChatHost.kt roomForList)
+    (Some(_), Some(h), _) => h + top + composer_inset + 8.0 + 10.0
+    // otherwise the room the capsule is drawn with (the list's rows going with it)
+    (None, _, Some(h)) => h + top + composer_inset + 8.0 + 10.0
+    _ =>
+      match c.laid_rect(cui.cap_id) {
+        Some((_, _, _, h)) => h + 8.0 + 10.0
+        None => 0.0
+      }
+  }
 }
 
 // ── sending ─────────────────────────────────────────────────────────────
@@ -962,17 +1045,10 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   // parts drawn carried from where they were to their places on the same timeline. Only drawn: laid out as tall as its
   // content at once, all of it (＋, the field, send, a quote's line) tapped where it is from the first frame. At rest
   // as tall as its content
-  let natural = @motion.measured(c, "composer/content")
-  let morph = match natural {
-    Some(h) => {
-      let m = @motion.animate(c, "composer/morph", h, spec=@motion.tween(composer_morph_ms, ease=Out))
-      // words just sent: as tall as when they went, until they are a quarter of the way (ChatHost.kt hold), then
-      // down to its own on the morph's curve (composer_hold)
-      let (room, share) = composer_held(c, d.key)
-      Some(if room > m && share > 0.0 { m + (room - m) * share } else { m })
-    }
-    None => None
-  }
+  cui.room_for = (d.key, v)
+  cui.cap_id = cap
+  cui.content_id = composer_content_id(c)
+  let morph = composer_morph(c, d.key, composer_natural(c))
   let mut content = -1
   let top = capsule_top(v, d)
   c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=8.0, pb=10.0, fn() {
@@ -998,7 +1074,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
         |> ignore
       })
       c.draw_only(ground)
-      content = c.box(w=Fill(1.0), gap=8.0, fn() {
+      content = c.box(w=Fill(1.0), gap=8.0, id=composer_content_id(c), fn() {
         match v {
           Some(v) => composer_notices(c, src, r, v)
           None => ()
@@ -1022,22 +1098,6 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     // growing: what is above the ground is not drawn yet
     Some(h) => c.cut_to_bottom(content, h + composer_inset)
     None => ()
-  }
-  let room = match (flight_of(d.key), natural, morph) {
-    // while words fly to their row, the list keeps the room the composer will have, so their place is where they
-    // land (ChatHost.kt roomForList)
-    (Some(_), Some(h), _) => h + top + composer_inset + 8.0 + 10.0
-    // otherwise the room the capsule is drawn with (the list's rows going with it)
-    (None, _, Some(h)) => h + top + composer_inset + 8.0 + 10.0
-    _ =>
-      match c.rect_of(cap) {
-        Some((_, _, _, h)) => h + 8.0 + 10.0
-        None => 0.0
-      }
-  }
-  if room != cui.room {
-    cui.room = room
-    c.request_frame()
   }
   keep_draft_soon(c, src, d)
   // a finger down outside the composer lets go of the keyboard once lifted or moved on (reading on)

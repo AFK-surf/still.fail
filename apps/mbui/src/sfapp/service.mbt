@@ -718,7 +718,8 @@ fn service_stage(
   let ground = @sf.mix(t.p.chip, 0.55, t.p.card)
   let stage = c.id("service/stage")
   c.box(w=Fill(1.0), h=Fill(1.0), bg=if p.viewport is Some(_) { ground } else { t.p.card }, clip=true, id=stage, fn() {
-    match (p.viewport, c.rect_of(stage)) {
+    // (the stage's size as this frame lays it out: read back, built again once it is)
+    match (p.viewport, c.laid_rect(stage)) {
       (Some(v), Some((_, _, sw, sh))) => {
         let room_w = sw - 32.0
         let room_h = sh - 32.0
@@ -755,7 +756,7 @@ fn service_stage(
         })
         |> ignore
       }
-      (Some(_), None) => c.request_frame()
+      (Some(_), None) => ()
       (None, _) => {
         c.after_build("scale", fn() { site.set_scale(1.0) })
         c.native(site) |> ignore
