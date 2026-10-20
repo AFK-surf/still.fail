@@ -304,8 +304,10 @@ pub fn Tester::shared_out(self : Tester) -> Array[(String, String, String, Bytes
 /// fake host from now on: how it stands (`{"info":{"view":N,"state":S,"at":[…]}}`: what view_info answers until it is
 /// said again, over the fake host's own player), a video's frames' times or a grab's state (`{"view":{"view":N,"what":W,"text":T}}`: what
 /// view_text answers until it is said again), or a frame grabbed (`{"still":{"view":N},"b":HEX}`: its grab ready, the
-/// bytes what the next view_still gives). What is not said is not known (NativeView::frames None, no frame grabbed).
-/// False for a line that is neither.
+/// bytes what the next view_still gives); of a site view, what its page asked of its host (`{"site":{"view":N,"event":E}}`:
+/// taken on the next frame, as Tester::site_says), the body of a request it made (`{"sitebody":{"view":N,"req":R},"b":HEX}`)
+/// and where its page is (`{"sitestate":{"view":N,"state":S}}`: what view_site_state answers until it is said again).
+/// What is not said is not known (NativeView::frames None, no frame grabbed). False for a line that is none of these.
 pub fn Tester::view_said(self : Tester, line : String) -> Bool {
   fake_view_said(self.fake, line)
 }
@@ -320,6 +322,40 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
     }
   }
   match j {
+    Object(m) if m.get("site") is Some(Object(v)) =>
+      match (num(v, "view"), v.get("event")) {
+        (Some(_), Some(e)) => {
+          f.site.push(
+            match e {
+              String(s) => s
+              _ => e.stringify()
+            },
+          )
+          f.wants = true
+          true
+        }
+        _ => false
+      }
+    Object(m) if m.get("sitebody") is Some(Object(v)) =>
+      match (num(v, "view"), num(v, "req"), m.get("b")) {
+        (Some(id), Some(req), Some(String(hex))) => {
+          f.site_bodies[(id, req)] = bytes_of_hex(hex)
+          true
+        }
+        _ => false
+      }
+    Object(m) if m.get("sitestate") is Some(Object(v)) =>
+      match (num(v, "view"), v.get("state")) {
+        (Some(id), Some(st)) => {
+          f.site_states[id] = match st {
+            String(s) => s
+            _ => st.stringify()
+          }
+          f.wants = true
+          true
+        }
+        _ => false
+      }
     Object(m) if m.get("info") is Some(Object(v)) =>
       match (num(v, "view"), num(v, "state"), v.get("at")) {
         (Some(id), Some(state), Some(Array(xs))) if xs.length() == 10 => {

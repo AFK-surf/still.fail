@@ -94,6 +94,10 @@ struct FakeHost {
   view_stills : Map[Int, Array[Bytes]]
   /// how each view stood as the run recorded the host's saying it (view_info: its state and ten numbers)
   view_infos : Map[Int, (Int, FixedArray[Double])]
+  /// a site view's page as the run recorded the host's saying it (view_site_state's JSON), by view; and the bodies of
+  /// the requests its page made, by (view, request) (view_site_body)
+  site_states : Map[Int, String]
+  site_bodies : Map[(Int, Int), Bytes]
 }
 
 ///|
@@ -787,15 +791,152 @@ fn h_view_site_next(id : Int) -> String {
         ""
       }
     }
-    None => @host.view_site_next(id)
+    None => {
+      let e = @host.view_site_next(id)
+      // (what the page asked of its host, on a run's record: Tester::view_said gives it again)
+      if e != "" {
+        site_told(id, e)
+      }
+      e
+    }
   }
 }
 
 ///|
+/// A site view's page's event (a request, one let go, a link left by: view_site_next's JSON), told to the app's
+/// tracer and the tape as `{"site":{"view":N,"event":E}}`.
+fn site_told(id : Int, event : String) -> Unit {
+  guard views_tracer.val is Some(_) || taping() else { return }
+  view_say({ "site": Json::object({ "view": Json::number(id.to_double()), "event": site_event_kept(event) }) })
+}
+
+///|
+/// What a record keeps of a site's page's event: all but what would carry who it is (a record is committed with the
+/// tests): a credential's header (Authorization, Cookie, Set-Cookie, one whose name says token, key, secret, auth or
+/// session) and such a field of the path's query, each kept as "-", what a Tester's host then gives in its place.
+fn site_event_kept(event : String) -> Json {
+  match (try Some(@json.parse(event)) catch { _ => None }) {
+    Some(Object(m)) => {
+      let out = m.copy()
+      match m.get("headers") {
+        Some(Array(hs)) =>
+          out["headers"] = Json::array(
+            hs.map(fn(h) {
+              match h {
+                Array([String(k), String(_)]) if secret_name(k) => Json::array([Json::string(k), Json::string("-")])
+                _ => h
+              }
+            }),
+          )
+        _ => ()
+      }
+      match m.get("path") {
+        Some(String(p)) => out["path"] = Json::string(query_kept(p))
+        _ => ()
+      }
+      Json::object(out)
+    }
+    _ => Json::string("-")
+  }
+}
+
+///|
+/// What a record keeps of a site's request's body: a JSON object's or a form's credential fields "-" (as
+/// site_event_kept's); other words that name one, "-" whole; else as it was.
+fn site_body_kept(b : Bytes) -> Bytes {
+  // (its bytes a char each: the JSON's or the form's names are ASCII, what else is in it kept byte for byte)
+  let s = String::from_array(Array::makei(b.length(), fn(i) { b[i].to_int().unsafe_to_char() }))
+  let bytes_of = fn(t : String) -> Bytes {
+    Bytes::makei(t.length(), fn(i) { t.unsafe_charcode_at(i).to_byte() })
+  }
+  match (try Some(@json.parse(s)) catch { _ => None }) {
+    Some(Object(_) as j) => {
+      let kept = json_kept(j)
+      if kept == j {
+        b
+      } else {
+        bytes_of(kept.stringify())
+      }
+    }
+    _ =>
+      if s.contains("=") && !s.contains(" ") && !s.contains("\n") {
+        let kept = query_kept("?" + s)
+        let kept = kept.unsafe_substring(start=1, end=kept.length())
+        if kept == s {
+          b
+        } else {
+          bytes_of(kept)
+        }
+      } else if secret_name(s) {
+        b"-"
+      } else {
+        b
+      }
+  }
+}
+
+///|
+/// A JSON value with its objects' credential fields "-".
+fn json_kept(j : Json) -> Json {
+  match j {
+    Object(m) => {
+      let out : Map[String, Json] = {}
+      for k, v in m {
+        out[k] = if secret_name(k) { Json::string("-") } else { json_kept(v) }
+      }
+      Json::object(out)
+    }
+    Array(xs) => Json::array(xs.map(json_kept))
+    _ => j
+  }
+}
+
+///|
+/// Whether a header's or a query field's name says it carries a credential.
+fn secret_name(name : String) -> Bool {
+  let n = name.to_lower()
+  n == "cookie" ||
+  n == "set-cookie" ||
+  ["auth", "token", "key", "secret", "session", "password", "sig"].iter().any(fn(w) { n.contains(w) })
+}
+
+///|
+/// A path with its query's credential fields' values "-".
+fn query_kept(path : String) -> String {
+  match path.find("?") {
+    None => path
+    Some(q) => {
+      let fields = path.unsafe_substring(start=q + 1, end=path.length()).split("&").map(fn(f) {
+        let f = f.to_string()
+        match f.find("=") {
+          Some(i) if secret_name(f.unsafe_substring(start=0, end=i)) => f.unsafe_substring(start=0, end=i) + "=-"
+          _ => f
+        }
+      })
+      path.unsafe_substring(start=0, end=q) + "?" + fields.collect().join("&")
+    }
+  }
+}
+
+///|
+/// What was last told of each site view's page (view_site_state's JSON), so that it is told as it changes.
+let sites_told_state : Map[Int, String] = {}
+
+///|
 fn h_view_site_body(id : Int, req : Int) -> Bytes {
   match fake.val {
-    Some(_) => Bytes::new(0)
-    None => @host.view_site_body(id, req)
+    // as the run recorded it (Tester::view_said); else none
+    Some(f) => f.site_bodies.get((id, req)).unwrap_or(Bytes::new(0))
+    None => {
+      let b = @host.view_site_body(id, req)
+      if views_tracer.val is Some(_) || taping() {
+        view_say({
+          "sitebody": Json::object({ "view": Json::number(id.to_double()), "req": Json::number(req.to_double()) }),
+          "b": Json::string(hex_of(site_body_kept(b))),
+        })
+      }
+      b
+    }
   }
 }
 
@@ -827,8 +968,20 @@ fn h_view_site_end(id : Int, req : Int, error : String) -> Unit {
 ///|
 fn h_view_site_state(id : Int) -> String {
   match fake.val {
-    Some(_) => "{\"path\":\"/\",\"back\":false,\"forward\":false,\"loading\":false,\"title\":\"\"}"
-    None => @host.view_site_state(id)
+    // as the run recorded the host's saying it (Tester::view_said); not said: at its start, loaded, untitled
+    Some(f) =>
+      f.site_states.get(id).unwrap_or(
+        "{\"path\":\"/\",\"back\":false,\"forward\":false,\"loading\":false,\"title\":\"\"}",
+      )
+    None => {
+      let st = @host.view_site_state(id)
+      if st != "" && (views_tracer.val is Some(_) || taping()) && sites_told_state.get(id) != Some(st) {
+        sites_told_state[id] = st
+        let j : Json = @json.parse(st) catch { _ => Json::string(st) }
+        view_say({ "sitestate": Json::object({ "view": Json::number(id.to_double()), "state": j }) })
+      }
+      st
+    }
   }
 }
 
@@ -888,7 +1041,9 @@ let views_told_text : Map[(Int, Int), String] = {}
 ///|
 /// What a real host says of its native views from now on given to `line`, a JSON object a time, as it changes: how a
 /// view stands (`{"info":{"view":N,"state":S,"at":[view_info's ten numbers]}}`), a video's frames' times and a grab's
-/// state (`{"view":{"view":N,"what":W,"text":T}}`) and a frame grabbed, its bytes in hex (`{"still":{"view":N},"b":HEX}`): what a run keeps beside its other messages (its own clock added), for a
+/// state (`{"view":{"view":N,"what":W,"text":T}}`) and a frame grabbed, its bytes in hex (`{"still":{"view":N},"b":HEX}`);
+/// a site view's page's events (`{"site":…}`), its requests' bodies (`{"sitebody":…}`) and where it is
+/// (`{"sitestate":…}`): what a run keeps beside its other messages (its own clock added), for a
 /// Tester to be told again (Tester::view_said). Under a Tester, nothing.
 pub fn trace_views(line : (Map[String, Json]) -> Unit) -> Unit {
   views_tracer.val = Some(line)

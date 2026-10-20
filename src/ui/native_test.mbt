@@ -379,3 +379,35 @@ test "panic a second frame grab of a view before the first is taken" {
   v.grab_frame(40.0)
   v.grab_frame(80.0)
 }
+
+///|
+test "what a site's page asked of its host, as a run recorded it, is asked again: its request, its body, where it is" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let asked : Array[(String, String, Array[(String, String)], Bool, Bytes)] = []
+  let t = @ui.Tester::new(fn(c) {
+    let v = once(cell, fn() {
+      @ui.NativeView::site("/", fn(req, reply) {
+        asked.push((req.verb, req.path, req.headers, req.page, req.body))
+        reply.end()
+      })
+    })
+    c.native(v, h=Px(300.0)) |> ignore
+  })
+  let v = cell.val.unwrap()
+  let id = v.id()
+  // (the lines a run's record has: @ui.trace_views', in the order the host said them)
+  assert_true(
+    t.view_said(
+      "{\"sitestate\":{\"view\":\{id},\"state\":{\"path\":\"/svc\",\"back\":true,\"forward\":false,\"loading\":false,\"title\":\"Service\"}}}",
+    ),
+  )
+  assert_true(t.view_said("{\"sitebody\":{\"view\":\{id},\"req\":7},\"b\":\"6869\"}"))
+  assert_true(
+    t.view_said(
+      "{\"site\":{\"view\":\{id},\"event\":{\"req\":7,\"method\":\"POST\",\"path\":\"/api\",\"page\":false,\"headers\":[[\"User-Agent\",\"WebKit\"]]}}}",
+    ),
+  )
+  t.draw()
+  assert_eq(asked, [("POST", "/api", [("User-Agent", "WebKit")], false, b"hi")])
+  assert_eq(v.page_at(), ("/svc", true, false, false, "Service"))
+}

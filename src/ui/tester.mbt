@@ -50,6 +50,7 @@ fn reset_globals() -> Unit {
   image_cache.clear()
   views_told_text.clear()
   views_told_info.clear()
+  sites_told_state.clear()
   outside_tickets.clear()
   views_told.clear()
   pagers.clear()
@@ -217,6 +218,8 @@ pub fn Tester::new(
     view_texts: {},
     view_stills: {},
     view_infos: {},
+    site_states: {},
+    site_bodies: {},
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
