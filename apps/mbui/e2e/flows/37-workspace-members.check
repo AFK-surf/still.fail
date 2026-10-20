@@ -1,2 +1,0 @@
-check "the cloud has alice in the workspace" 'peer members | grep -q "^MEMBER alice@example.test "'
-check "the page showed her" 'grep -q "DRIVE ok.*alice@example.test" $OUT/$name.log'

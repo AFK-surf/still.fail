@@ -633,10 +633,10 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
 
 ///|
 /// How long a place switched to on the bar takes to come in: fading in from no side, from the side the ball goes to.
-let switch_fade_ms : Double = 180.0
+pub let switch_fade_ms : Double = 180.0
 
 ///|
-let switch_side_ms : Double = 220.0
+pub let switch_side_ms : Double = 220.0
 
 ///|
 /// How far a place switched to on the bar has come in (0 … 1).

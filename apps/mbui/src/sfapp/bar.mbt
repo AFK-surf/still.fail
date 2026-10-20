@@ -169,7 +169,7 @@ fn bar_now() -> Double {
 
 ///|
 /// How long the bar takes to come back (a page it shows on), and to go (a page pushed over it).
-let bar_show_ms : Double = 380.0
+pub let bar_show_ms : Double = 380.0
 
 ///|
 let bar_hide_ms : Double = 300.0
@@ -183,7 +183,7 @@ let ball_grow_ms : Double = 250.0
 
 ///|
 /// How long the notch's icon takes to swap for another.
-let icon_swap_ms : Double = 300.0
+pub let icon_swap_ms : Double = 300.0
 
 ///|
 /// One number on a spring (react-spring's tension and friction, mass 1; Bar.kt BarSpring), its way solved

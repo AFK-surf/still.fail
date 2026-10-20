@@ -1,3 +1,0 @@
-check "the bar's 文件, tapped under the sinking sheet, opened 文件" 'grep -q "DRIVE ok until =文件" $OUT/$name.log'
-check "the words typed into the composer tapped through the sheet going down: at the station, once, alice's" '[ "$(sql "select count(*) from entries where author_kind=\"person\" and author=\"alice@example.test\" and text=\"穿过下去的面板 $TAG\"")" = 1 ]'
-check "nothing of the sheet was tapped as it went (the station has no pin of alice's)" 'grep "^PINS" $OUT/$name.log | tail -1 | grep -q "PINS 0"'

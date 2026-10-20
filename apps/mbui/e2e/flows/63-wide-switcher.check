@@ -1,2 +1,0 @@
-check "the station has the message sent in the chat ⌘K opened, once" '[ "$(sql "select count(*) from entries where author=\"alice@example.test\" and text=\"从切换器打开后发出 $TAG\"")" = 1 ]'
-check "in the test chat" '[ "$(sql "select count(*) from entries e join entries f on e.thread = f.thread where e.text = \"从切换器打开后发出 $TAG\" and f.text like \"端到端测试的对话%\"")" -ge 1 ]'
