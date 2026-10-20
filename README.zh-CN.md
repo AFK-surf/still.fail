@@ -18,13 +18,6 @@
 <img alt="Clients: web, macOS, Windows, Android" src="https://img.shields.io/badge/clients-web%20·%20macOS%20·%20Windows%20·%20Android-555">
 </p>
 
-<p align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/app-dark.png">
-  <img alt="still.fail 桌面版：左侧是 workspace 的对话列表，右侧是与 agent 的对话" src="docs/images/app-light.png" width="860">
-</picture>
-</p>
-
 still.fail 把 Slack thread、飞书群聊或它自己 app 里的对话，变成一个持久的 coding agent 会话。agent 运行在 **station** 上：一台由你选定的机器，使用那台机器上已登录的 runtime（Claude Code、Codex、DeepSeek Harness 或 Grok Build）。消息之间，agent 的工作目录、历史和后台任务都会保留；需要有人做决定时，问题会进入那个人的「奏」列表。
 
 ## 功能
@@ -39,23 +32,10 @@ still.fail 把 Slack thread、飞书群聊或它自己 app 里的对话，变成
 
 ## 工作原理
 
-```mermaid
-flowchart LR
-  subgraph people [人]
-    chat["Slack · 飞书"]
-    apps["网页版 · 桌面版 · 安卓"]
-  end
-  subgraph machines [你的机器]
-    a["Station A<br/>Claude Code · Codex · …"]
-    b["Station B"]
-  end
-  cloud[("still.fail cloud<br/>账号 · workspace · 中继")]
-  chat -->|机器人| a
-  apps <-->|"iroh 点对点"| a
-  a <-->|"任务、Profile、skill"| b
-  apps -.->|登录| cloud
-  a -.->|成员关系| cloud
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-zh-dark.svg">
+  <img alt="still.fail 的结构：Slack、飞书和 app 连到你机器上的 station；station 之间互相协作；cloud 只管账号、workspace 和中继" src="docs/images/architecture-zh-light.svg" width="920">
+</picture>
 
 - **station**（`station/`，运行在 Node 上的 TypeScript，带少量预编译的原生组件）运行在你选定的机器上。它启动并保持 agent 会话，连接 Slack 和飞书，把对话存在本地 SQLite 里。
 - **workspace** 把人和 station 组织在一起。cloud 服务（`cloud/`，Cloudflare Workers）负责账号、workspace 和成员凭证，并运行中继。对话内容不经过它的数据库。
