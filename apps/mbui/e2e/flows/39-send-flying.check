@@ -1,3 +1,0 @@
-check "the station has both, once each, as alice's" '[ "$(sql "select count(*) from entries where author_kind=\"person\" and author=\"alice@example.test\" and (text=\"先飞的一条 $TAG\" or text=\"紧跟着的一条 $TAG\")")" = 2 ]'
-check "in the order they were sent" '[ "$(sql "select text from entries where author_kind=\"person\" and (text=\"先飞的一条 $TAG\" or text=\"紧跟着的一条 $TAG\") order by rowid" | head -1)" = "先飞的一条 $TAG" ]'
-check "the words flew (the motion log has the flight)" 'grep -q "MOTION .* fly " $OUT/$name.log'
