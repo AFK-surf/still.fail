@@ -148,6 +148,7 @@
       "src/webdemo/main.mbt": 12
     },
     "style-exact": {},
+    "build-effect": {},
     "unsettled-ok": {}
   },
   "excused": {
@@ -172,6 +173,7 @@
     "style-literal": {},
     "box-loose": {},
     "style-exact": {},
+    "build-effect": {},
     "unsettled-ok": {}
   }
 }

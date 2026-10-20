@@ -44,6 +44,14 @@ The rules (see RULES below for each one's words):
                    not through @ui, which a Tester answers
     globals        a mutable global (a top-level let of a Ref, Map, Array or struct) that its package's reset (reset,
                    reset_globals, or what on_reset is given) does not put back, nor says `// kept across runs: why`
+    build-effect   a view (a function given the Ctx: what a frame's build runs) tells outside of it while it builds: a
+                   call to its core ((src.call)(…), what detlint.json's build_effect.fields names), a host's effect
+                   (@host.share, @ui.keep… : build_effect.calls), a native view's own (its reload, set_scale, seek,
+                   close…: build_effect.methods, by name), or a function of the app's that does one, other than
+                   in Ctx::after_build, in a callback (fn(…) { … }: an answer, an event's handler) or under an input
+                   the frame takes (a click, a tap, a key, a drag let go, a menu's choice: taken by the frame's first
+                   build only). A frame is built again while what it read changes, and what a build let go of told
+                   outside is told all the same
 
 An exception is written on the line itself or on the line above it, with its reason:
 
@@ -545,6 +553,9 @@ RULES = {
                      "the token files: name it with a token (docs/style.md)",
     "box-loose": "a box or words said by their loose look (pad=, bg=, size=…): say it as a named style (style=)",
     "style-exact": "a value off the theme's scale (Exact(…)), in a token file too: only goes down",
+    "build-effect": "a view tells outside while it builds (a core's call, a host's effect): a frame is built again "
+                    "while what it read changes, and a build let go of tells all the same; say it in Ctx::after_build "
+                    "(once the frame's builds are over, as the last says it), or in the event's own handler",
     "unsettled-ok": "a test leaves out its end's idle check (unsettled_ok=…: what still moves or asks, until it says "
                     "its end): counted so the ones left only go",
 }
@@ -574,6 +585,29 @@ RANDOM_IDS = {"uuid", "uuid4", "uuid_v4", "new_uuid", "random_uuid", "random_id"
               "random_string", "random_bytes"}
 PLAIN_TYPES = {"Int", "Int64", "UInt", "UInt64", "Int16", "UInt16", "Double", "Float", "String", "Bool", "Char", "Byte",
                "Bytes", "Json", "Unit"}
+
+# what a host does that is seen outside the app (a sheet opened, a file kept, the system's state set), as the app calls
+# it: @pkg.name
+BUILD_EFFECT_CALLS = ["@host.share", "@host.open_url", "@host.notice_show", "@host.set_sideways", "@host.set_dark",
+                      "@host.update_install", "@host.push_token", "@host.gallery_ask", "@host.exit", "@host.keep",
+                      "@host.save_file", "@host.clipboard_set", "@ui.share", "@ui.open_url", "@ui.notice_show",
+                      "@ui.notice_ask", "@ui.keep", "@ui.keep_bytes", "@ui.clipboard_set", "@ui.save_file",
+                      "@ui.pick", "@ui.set_sideways", "@ui.exit"]
+# a native view's (a page, a site, a video), a PDF's and a keep's own that tell its host (NativeView::reload, …):
+# by their names, whatever they are called on but the Ctx (an app's own of the same name, a player's seek, tells it on)
+BUILD_EFFECT_METHODS = ["go_back", "go_forward", "reload", "load", "set_scale", "close", "play", "pause", "seek",
+                        "rate", "grab_frame"]
+# what a frame takes once, at its first build (frame_body clears them after it): under one of these an effect is the
+# input's
+# a closure given to one of these runs later than the build: a fiber, a timer, a host's answer, a page's leaving
+LATER_CALLS = {"fork", "effect", "spawn", "after", "later", "video", "site", "subscribe", "each_later", "watch",
+               "take_back"}
+LATER_LABELS = {"done", "answer", "then", "leave", "serve", "read", "back", "cancel", "fail", "ok"}
+# called with the Ctx in a condition, not a widget's use: a time, a hold, a layout's read
+NOT_INPUT_CALLS = {"after", "held", "within", "mark", "list_info", "rect_of", "words_of", "is_wide", "presence",
+                   "animate", "theme", "window_size", "list_place"}
+INPUT_WORDS = {"clicked", "tapped", "take_end", "take_tap", "take_key", "key_pressed", "chosen", "dismissed", "acted",
+               "submitted", "right_clicked", "shortcut", "take_move", "pasted", "took"}
 
 EXC = re.compile(r"det-ok\(([a-z-]+(?:\s*,\s*[a-z-]+)*)\)\s*:?\s*(.*)")
 
@@ -609,6 +643,11 @@ class Config:
         self.counts = d.get("counts", {})
         # the token files: where a style's numbers are said (style-literal does not count them there)
         self.style_tokens = d.get("style", {}).get("tokens", [])
+        # what tells outside of a frame: field calls ((src.call)(…): their field's name) and package functions
+        be = d.get("build_effect", {})
+        self.effect_fields = set(be.get("fields", ["call", "subscribe"]))
+        self.effect_calls = set(be.get("calls", BUILD_EFFECT_CALLS))
+        self.effect_methods = set(be.get("methods", BUILD_EFFECT_METHODS))
 
 
 def lint_mbt(f, cfg, out, returns, readers):
@@ -1040,8 +1079,182 @@ def collect(root, cfg):
         lint_mbt(f, cfg, findings, returns, readers)
         lint_style(f, cfg, findings)
     lint_globals(mbts, cfg, findings)
+    lint_build_effects(mbts, cfg, findings)
     excuse(findings, texts)
     return findings
+
+
+def lint_build_effects(files, cfg, out):
+    """build-effect: what a view tells outside while it builds (RULES): the effects (a field call (x.call)(…), a
+    package's effect, a native view's own: its reload, its seek) and the app's functions that do one (found to a fixed
+    point), called in a function given the Ctx, other than in Ctx::after_build, a callback (fn(…) { … }) or under an
+    input the frame takes."""
+    app = [f for f in files if not f.test_file and not under(f.rel, cfg.framework)]
+
+    def header(f, it):
+        toks, k = f.toks, it.start
+        while k <= it.end and not (toks[k].kind == "op" and toks[k].text == "{"):
+            if toks[k].kind == "op" and toks[k].text in "([" and toks[k].end is not None:
+                k = toks[k].end
+            k += 1
+        return k
+
+    def is_view(f, it):
+        if it.kind != "fn":
+            return False
+        b = header(f, it)
+        return any(f.toks[k].kind == "ident" and f.toks[k].text == "Ctx" for k in range(it.start, min(b, it.end)))
+
+    def later(f, o):
+        """Whether the closure whose body opens at o runs later than the build (a callback: what an effect is answered
+        with, an event's handler, a fiber's body), not as it builds (a box's children: c.box(fn() { … }))."""
+        toks = f.toks
+        # the call it is an argument of, and its label
+        lab = None
+        b = o - 1
+        while b >= 0 and not (toks[b].kind == "op" and toks[b].text in ("(", ",")):
+            if toks[b].kind == "op" and toks[b].text in ")]}":
+                ob = f._open_of(b)
+                b = (ob if ob is not None else b) - 1
+                continue
+            if toks[b].kind == "op" and toks[b].text in ("=", "~") and b > 0 and toks[b - 1].kind == "ident":
+                lab = toks[b - 1].text
+            b -= 1
+        if lab is not None and (lab.startswith("on_") or lab in LATER_LABELS):
+            return True
+        # not given to a call (a field's value, a let's): what it is called by is not the build
+        if b < 0 or toks[b].text not in ("(", ","):
+            return True
+        # back to the call's opening bracket
+        p = b
+        while p >= 0:
+            t = toks[p]
+            if t.kind == "op" and t.text == "(" and t.end is not None and t.end > o:
+                break
+            if t.kind == "op" and t.text in "[{" and t.end is not None and t.end > o:
+                return True  # in an array or a struct: a value, not run as it builds
+            p -= 1
+        if p < 1:
+            return False
+        callee = toks[p - 1]
+        # (src.call)(…, fn(res) { … }): an effect's answer
+        if callee.kind == "op" and callee.text == ")" and p >= 4 and toks[p - 2].kind == "ident" and \
+                toks[p - 2].text in cfg.effect_fields:
+            return True
+        return callee.kind == "ident" and callee.text in LATER_CALLS
+
+    def built_by_ctx(f, o):
+        """Whether the closure at o (its `fn`) is given to one of the Ctx's own (c.list(…, fn(i) { … }): its rows,
+        built as the frame builds)."""
+        toks = f.toks
+        p = o - 1
+        while p >= 0:
+            t = toks[p]
+            if t.kind == "op" and t.text == "(" and t.end is not None and t.end > o:
+                break
+            p -= 1
+        return p >= 3 and toks[p - 1].kind == "ident" and toks[p - 2].text == "." and toks[p - 3].kind == "ident" and \
+            toks[p - 3].text == "c"
+
+    def exempt(f, k):
+        toks = f.toks
+        for o in range(k - 1, -1, -1):
+            t = toks[o]
+            if t.kind != "op" or t.text not in "({" or t.end is None or t.end < k:
+                continue
+            if t.text == "(" and o > 0 and toks[o - 1].kind == "ident" and toks[o - 1].text == "after_build":
+                return True
+            if t.text == "{":
+                # a callback's body: fn(…) { … } or fn(…) -> T { … }
+                j = o - 1
+                if j >= 0 and toks[j].kind == "ident" and j > 0 and toks[j - 1].text == "->":
+                    j -= 2
+                    while j >= 0 and toks[j].kind == "op" and toks[j].text in (">", "]"):
+                        j -= 1
+                if j >= 0 and toks[j].kind == "op" and toks[j].text == ")":
+                    ob = f._open_of(j)
+                    if ob is not None and ob > 0 and toks[ob - 1].kind == "ident" and toks[ob - 1].text == "fn":
+                        # given what happened (fn(d) { … }: a stepper's change, an answer): a handler; fn() { … }: a
+                        # box's children, the build, unless what it is given to runs it later
+                        if (ob > 1 and toks[ob - 2].text == "async") or later(f, ob - 1):
+                            return True
+                        if j > ob + 1 and not built_by_ctx(f, ob - 1):
+                            return True
+        for cond in f.enclosing_conditions(k):
+            if any(toks[i].kind == "ident" and toks[i].text in INPUT_WORDS for i in cond):
+                return True
+            # a widget asked whether it was used (button(c, …), row(c, …): given the Ctx first), not a time or a
+            # layout read (after(c, …), held(c, …))
+            for i in cond:
+                t = toks[i]
+                if t.kind == "ident" and i + 2 < len(toks) and toks[i + 1].text == "(" and \
+                        toks[i + 2].kind == "ident" and toks[i + 2].text == "c" and i + 3 < len(toks) and \
+                        toks[i + 3].text in (",", ")") and t.text not in NOT_INPUT_CALLS:
+                    return True
+        return False
+
+    def sites(f, it, helpers):
+        """The effects in item it not exempt: (token index, what)."""
+        toks, got = f.toks, []
+        for k in range(it.start, it.end + 1):
+            t = toks[k]
+            # (x.call)(…)
+            if t.kind == "ident" and t.text in cfg.effect_fields and k >= 3 and toks[k - 1].text == "." and \
+                    toks[k - 3].kind == "op" and toks[k - 3].text == "(" and k + 2 < len(toks) and \
+                    toks[k + 1].text == ")" and toks[k + 2].text == "(":
+                if not exempt(f, k):
+                    got.append((k, f"({toks[k - 2].text}.{t.text})"))
+        for c in f.calls:
+            if c.is_def or c.at < it.start or c.at > it.end:
+                continue
+            name = None
+            if c.kind == "pkg" and f"{c.qual}.{c.name}" in cfg.effect_calls:
+                name = f"{c.qual}.{c.name}"
+            elif c.kind == "bare" and (os.path.dirname(f.rel), c.name) in helpers:
+                name = c.name
+            elif c.kind == "method" and c.name in cfg.effect_methods and c.at >= 2 and \
+                    not (f.toks[c.at - 2].kind == "ident" and f.toks[c.at - 2].text == "c"):
+                name = "." + c.name
+            if name and not exempt(f, c.at):
+                got.append((c.at, name))
+        return got
+
+    fns = [(f, it) for f in app for it in f.items if it.kind == "fn" and it.name]
+    # what is done only on an input, an answer, after the build: a function every call of which is (an action: a
+    # send, a pick's ask), its effects are the input's
+    callers = {}
+    for f in app:
+        pkg = os.path.dirname(f.rel)
+        for c in f.calls:
+            if c.kind == "bare" and not c.is_def and c.item is not None and c.item.kind == "fn":
+                callers.setdefault((pkg, c.name), []).append((f, c.item, c.at))
+    actions = set()
+    while True:
+        grew = False
+        for f, it in fns:
+            key = (os.path.dirname(f.rel), it.name)
+            if key in actions or key not in callers:
+                continue
+            if all(exempt(cf, k) or (os.path.dirname(cf.rel), ci.name) in actions for cf, ci, k in callers[key]):
+                actions.add(key)
+                grew = True
+        if not grew:
+            break
+    views = {(f.rel, it.start) for f, it in fns if is_view(f, it) and (os.path.dirname(f.rel), it.name) not in actions}
+    helpers = set()
+    while True:
+        # (a bare call is to its package's own function: by its directory and name)
+        more = {(os.path.dirname(f.rel), it.name) for f, it in fns if (f.rel, it.start) not in views and
+                "::" not in it.name and (os.path.dirname(f.rel), it.name) not in actions and sites(f, it, helpers)}
+        if more <= helpers:
+            break
+        helpers |= more
+    for f, it in fns:
+        if (f.rel, it.start) not in views:
+            continue
+        for k, what in sites(f, it, helpers):
+            out.append(Finding("build-effect", f.rel, f.toks[k].line, f"{f.lines[f.toks[k].line - 1].strip()}   "
+                                                                     f"({what}, in {it.name})"))
 
 
 def tally(findings, excused):

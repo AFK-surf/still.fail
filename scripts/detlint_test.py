@@ -385,6 +385,45 @@ class Rules(unittest.TestCase):
         found(self, good, "globals", 0)
 
 
+class BuildEffect(unittest.TestCase):
+    def test_build_effect(self):
+        files = {
+            "src/app/view.mbt": """
+                fn keep(src : Source, n : Int) -> Unit {
+                  (src.call)("keep", Json::number(n.to_double()), fn(_) {  })
+                }
+                fn send(src : Source) -> Unit {
+                  (src.call)("send", Json::null(), fn(_) {  })
+                }
+                fn view(c : @ui.Ctx, src : Source, n : @ui.NativeView) -> Unit {
+                  (src.call)("seen", Json::null(), fn(_) {  })
+                  keep(src, 1)
+                  n.reload()
+                  @host.set_dark(true)
+                  c.after_build("seen", fn() { (src.call)("seen", Json::null(), fn(_) {  }); n.seek(1.0) })
+                  if c.clicked(7) {
+                    send(src)
+                    n.play()
+                  }
+                  if button(c, "go") {
+                    keep(src, 2)
+                  }
+                  c.take_back(fn() { n.close() })
+                  c.box(fn() { keep(src, 3) }) |> ignore
+                  c.box(on_tap=fn() { keep(src, 4) }, fn() {  }) |> ignore
+                  (src.call)("ask", Json::null(), fn(r) { keep(src, 5) })
+                  c.close()
+                }
+                """,
+        }
+        got = sorted(found(self, files, "build-effect", 6), key=lambda f: f.line)
+        # the core's calls (the ask itself, not its answer), a helper doing one, the native view's reload, the host's
+        # effect, and the box's children's (built as the frame builds): not what after_build, an input, a handler or
+        # an answer does, nor the Ctx's own
+        self.assertEqual([f.line for f in got], [9, 10, 11, 12, 22, 24], "\n".join(f.what for f in got))
+        self.assertIn(".reload", got[2].what)
+
+
 class Exceptions(unittest.TestCase):
     def test_reason_on_the_line_or_over_it(self):
         t = Tree({"src/app/view.mbt": """
