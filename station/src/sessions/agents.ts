@@ -13,6 +13,7 @@ import { ClaudeDriver } from "../agents/claude.ts";
 import { CodexDriver } from "../agents/codex.ts";
 import { DshDriver } from "../agents/dsh.ts";
 import { GrokDriver } from "../agents/grok.ts";
+import { CursorDriver } from "../agents/cursor.ts";
 import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
@@ -195,6 +196,7 @@ export const AgentsLive = (control: Control) =>
           codex,
           new DshDriver({ data }),
           new GrokDriver({ data }),
+          new CursorDriver({ data }),
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),

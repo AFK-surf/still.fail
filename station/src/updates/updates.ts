@@ -9,6 +9,7 @@
 //   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the clone). With `autoUpdate: true` it does so by itself once the
 //   station has been quiet a while (never back from the beta, and a version it already went for, not again).
 // - Claude Code and Codex: `--version`, and the latest their npm packages say; updated the way each was installed.
+//   Cursor is no command: its SDK's package, in the station's own npm prefix (agents/cursor.ts), its version the package's.
 //   Running agents go on with what they started with; the next process starts the new one.
 // - Software wired in after (`add`): the packages of the modules the station installs itself (modules/packages.ts),
 //   read when the rest is, a line each after the others'.
@@ -45,6 +46,7 @@ import { log } from "../ops/log.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 import { platform as machine } from "../platform/index.ts";
 import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
+import { SDK_PACKAGE, sdkPrefix, sdkVersion } from "../agents/cursor.ts";
 import {
   type Env, type How, type Kind, KINDS, NotFinished, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, isNpmInstall, kindCommand,
   kindName, kindPackage, linkBesideNpm, pinNpmVersion, run, runLines,
@@ -207,7 +209,7 @@ export class Updates {
   private trusted: Map<string, string> | undefined;
   /// The channel the running release came from: as it says (CHANNEL), else the channel it started on.
   readonly installed: Channel;
-  private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty(), dsh: empty(), grok: empty() };
+  private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty(), dsh: empty(), grok: empty(), cursor: empty() };
   private checkedAt: number | null = null;
   private checking: Promise<void> | null = null;
   private listeners = new Set<() => void>();
@@ -471,6 +473,7 @@ export class Updates {
   }
 
   private async readRuntime(kind: Kind): Promise<Item> {
+    if (kind === "cursor") return this.readCursor();
     const found = findCommand(kindCommand(kind), this.env);
     let version: string | null = null;
     if (found) {
@@ -495,6 +498,22 @@ export class Updates {
       how: how instanceof Unable ? null : how,
       note: how instanceof Unable ? { key: how.key, args: how.args } : null,
     };
+  }
+
+  /// Cursor's SDK, a package npm keeps in the station's own prefix (agents/cursor.ts): installed and updated by the same
+  /// npm install there.
+  private async readCursor(): Promise<Item> {
+    const version = sdkVersion(this.data);
+    let latest: string | null = null;
+    try {
+      const said = await fetchJson(`${this.registry}/${kindPackage("cursor")}/latest`);
+      latest = typeof said?.version === "string" ? said.version : null;
+    } catch (e) {
+      log.warn("updates", "the runtime's latest version not read", { runtime: "cursor", error: (e as Error).message });
+    }
+    const npm = findCommand("npm", this.env);
+    const how: How | Unable = npm ? { program: npm.onPath, args: ["install", "-g", "--prefix", sdkPrefix(this.data), `${SDK_PACKAGE}@latest`] } : new Unable("station.updates.noNpm", { name: kindName("cursor") });
+    return { ...empty(), installed: version !== null, version, latest, how: how instanceof Unable ? null : how, note: how instanceof Unable ? { key: how.key, args: how.args } : null };
   }
 
   /// Turns updating by itself on or off (as someone asked, from a page): kept in its config; turned on, what is out is

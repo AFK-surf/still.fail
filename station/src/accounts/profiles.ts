@@ -14,6 +14,7 @@ import type { Capability } from "../sessions/decision.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeToken as tokenOf } from "./oauth.ts";
 import { CONSOLE } from "./console.ts";
+import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./cursor.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 
@@ -60,6 +61,8 @@ export type Urls = {
   claudeToken: string;
   /// The OpenCode Console (an OpenCode Go profile signed in to it: console.ts).
   console: string;
+  /// Cursor (a Cursor profile signed in to it: cursor.ts); its real one when not given.
+  cursor?: CursorUrls;
 };
 
 export const URLS: Urls = {
@@ -77,6 +80,8 @@ export function accessKinds(runtime: Runtime): AccessKind[] {
   if (runtime === "dsh") return ["opencode-go", "anthropic-api", "api-provider", "env"];
   // Grok Build: SuperGrok signed in to, an xAI key, or its own variables.
   if (runtime === "grok") return ["subscription", "api-provider", "env"];
+  // Cursor: a Cursor account signed in to (it takes no provider's key), or its own variables (CURSOR_API_KEY).
+  if (runtime === "cursor") return ["subscription", "env"];
   return ["subscription", "opencode-go", "api-provider", "env"];
 }
 
@@ -235,8 +240,21 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     const email = grokEmail(o.home);
     return check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), models.length > 0 ? models : null);
   }
+  if (o.kind === "subscription" && o.runtime === "cursor") {
+    // The key the sign-in minted (cursor.ts), asked of Cursor's API: whose it is, and the models it may run.
+    const login = readCursor(o.home);
+    if (login === null) return check("login", t("station.profile.signedOut"), null);
+    const cursor = urls.cursor ?? CURSOR;
+    const me = await cursorMe(cursor, login.apiKey);
+    if (me === null) return check("login", t("station.profile.cursorKeyRevoked"), null);
+    const models = await cursorModels(cursor, login.apiKey);
+    return check("ok", [t("station.profile.signedIn"), me.email ?? login.email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), models);
+  }
   return check("unknown", t("station.profile.envUnchecked"), null);
 }
+
+/// Whose Cursor account a profile signed in to, as its sign-in kept it (accounts/cursor.ts).
+export const cursorEmail = (home: string): string | null => readCursor(home)?.email ?? null;
 
 /// The models `grok models` lists: a line each, `* id (default)` or `- id`.
 export function grokModels(text: string): string[] {

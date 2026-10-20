@@ -451,3 +451,130 @@ export class LiveFromAcp {
     return out;
   }
 }
+
+export type CursorLiveState = { open: [string, Step][]; said: string | null; n: number; phase: Phase | null };
+
+/// A call of Cursor's as the station names it: the station's tools (and any MCP server's) as Claude Code names an MCP
+/// tool, mcp__<server>__<tool>, with the tool's own input; the others by Cursor's name (shell, read, edit…).
+export function cursorCall(name: string, args: Json): [string, Json] {
+  if (name === "mcp" && typeof args?.providerIdentifier === "string" && typeof args?.toolName === "string") return [`mcp__${args.providerIdentifier}__${args.toolName}`, args.args ?? {}];
+  return [name, args ?? {}];
+}
+
+/// What a call of Cursor's gave back, as text: a command's output, an MCP tool's content, else as it is.
+export function cursorOutput(result: unknown): string {
+  let r: Json = result;
+  if (typeof r === "string") {
+    try {
+      r = JSON.parse(r);
+    } catch {
+      return r as string;
+    }
+  }
+  const v = r?.value ?? r;
+  if (typeof v?.stdout === "string" || typeof v?.stderr === "string") return [str(v.stdout) ?? "", str(v.stderr) ?? ""].filter((t) => t !== "").join("\n");
+  if (Array.isArray(v?.content)) return v.content.map((c: Json) => str(c?.text?.text) ?? str(c?.text) ?? "").filter((t: string) => t !== "").join("\n");
+  if (typeof r?.error === "string") return r.error;
+  return r === null || r === undefined ? "" : typeof r === "string" ? r : JSON.stringify(r);
+}
+
+/// Cursor's SDK messages (as agents/cursor-bridge.mjs sends them) as live steps: the model's text and thoughts come in
+/// pieces with no id of their own (a step lasts until something else comes), a call starts running and comes back done.
+export class LiveFromCursor {
+  private open = new Map<string, Step>();
+  /// The text or thoughts step under way.
+  private said: string | null = null;
+  private n = 0;
+  private phase: Phase | null = null;
+
+  constructor(state?: CursorLiveState) {
+    if (state) {
+      this.open = new Map(state.open);
+      this.said = state.said;
+      this.n = state.n;
+      this.phase = state.phase;
+    }
+  }
+
+  state(): CursorLiveState {
+    return { open: [...this.open.entries()], said: this.said, n: this.n, phase: this.phase };
+  }
+
+  private to(next: Phase, out: LiveEvent[]) {
+    if (this.phase !== next) {
+      this.phase = next;
+      out.push({ kind: "phase", phase: next });
+    }
+  }
+
+  private end(id: string, out: LiveEvent[]) {
+    if (this.open.delete(id)) out.push({ kind: "end", id });
+  }
+
+  /// The text or thoughts under way ends: something else came.
+  private stopSaying(out: LiveEvent[]) {
+    if (this.said !== null) this.end(this.said, out);
+    this.said = null;
+  }
+
+  /// A prompt was given: the turn is with the model.
+  prompted(): LiveEvent[] {
+    const out: LiveEvent[] = [];
+    this.to("requesting", out);
+    return out;
+  }
+
+  feed(message: Json): LiveEvent[] {
+    const out: LiveEvent[] = [];
+    const type = str(message?.type) ?? "";
+    if (type === "status" && message.status === "RUNNING") this.to("requesting", out);
+    else if (type === "thinking" || type === "assistant") {
+      const step: Step = type === "thinking" ? "thinking" : "text";
+      const text = type === "thinking" ? (str(message.text) ?? "") : (Array.isArray(message.message?.content) ? message.message.content : []).map((c: Json) => (c?.type === "text" ? (str(c.text) ?? "") : "")).join("");
+      if (this.said === null || this.open.get(this.said) !== step) {
+        if (text === "") return out;
+        this.stopSaying(out);
+        this.said = `${str(message.run_id) ?? "cursor"}:${this.n++}`;
+        this.open.set(this.said, step);
+        out.push(start(this.said, step));
+      }
+      if (step === "text") this.to("responding", out);
+      if (text !== "") out.push({ kind: "delta", id: this.said, field: "text", text });
+    } else if (type === "tool_call") {
+      const id = nonEmpty(message.call_id);
+      if (id === undefined) return out;
+      this.stopSaying(out);
+      if (message.status === "running") {
+        if (this.open.has(id)) return out;
+        const [name, input] = cursorCall(str(message.name) ?? "tool", message.args);
+        this.open.set(id, "tool");
+        this.to("working", out);
+        out.push(start(id, "tool", name, chars(pretty(input), INPUT_MOST)));
+        return out;
+      }
+      if (!this.open.has(id)) {
+        // One done that this station did not see start (taken up after it started): started with its input whole.
+        const [name, input] = cursorCall(str(message.name) ?? "tool", message.args);
+        this.open.set(id, "tool");
+        out.push(start(id, "tool", name, chars(pretty(input), INPUT_MOST)));
+      }
+      const output = cursorOutput(message.result);
+      if (output !== "") out.push({ kind: "delta", id, field: "output", text: chars(output, INPUT_MOST) });
+      this.end(id, out);
+      if (![...this.open.values()].includes("tool")) this.to("requesting", out);
+    } else if (type === "user") {
+      // A message put in the turn: what the model says next is a step of its own.
+      this.stopSaying(out);
+    }
+    return out;
+  }
+
+  /// The turn ended: whatever is still open ends with it.
+  ended(): LiveEvent[] {
+    const out: LiveEvent[] = [...this.open.keys()].map((id) => ({ kind: "end", id }) as LiveEvent);
+    this.open.clear();
+    this.said = null;
+    this.phase = null;
+    return out;
+  }
+}

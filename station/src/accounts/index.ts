@@ -18,6 +18,7 @@ import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
 import { linkCodexAuth } from "../agents/machine-logins.ts";
@@ -39,11 +40,12 @@ import { currentPolicy, LEGACY_OPTIONS, savePolicy } from "../sessions/archive-p
 import { Fibers, wall } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
 import { readConsole, RenewRefused, renewToken, writeConsole } from "./console.ts";
+import { CURSOR } from "./cursor.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexClaims, type MachineLogin, MachineLogins } from "./machine.ts";
 import { adopted, OUTDATED, uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
-import { accessKinds, checkProfile, grokEmail, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
+import { accessKinds, checkProfile, cursorEmail, grokEmail, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, machineUsage } from "./quota.ts";
 
 export { checkConfig } from "./check.ts";
@@ -173,7 +175,8 @@ export class Accounts {
     this.deps = deps;
     this.background = new Fibers("accounts", deps.clock);
     this.urls = deps.urls ?? URLS;
-    this.logins = new LoginManager(deps.data, deps.loginCommands, undefined, deps.clock, this.urls.console);
+    // A Cursor sign-in's key is named for this machine in the person's Cursor dashboard (accounts/cursor.ts).
+    this.logins = new LoginManager(deps.data, deps.loginCommands, undefined, deps.clock, this.urls.console, this.urls.cursor ?? CURSOR, () => `still.fail · ${hostname()}`);
     this.machine =
       deps.machine !== undefined ? deps.machine : new MachineLogins(this.env, (runtime, env) => machineUsage(runtime, env, this.urls), undefined, deps.clock);
     this.checkFn =
@@ -540,6 +543,7 @@ export class Accounts {
     log.info("accounts", "login started from the admin page", { profile: id, by: viewer.email });
     // An OpenCode Go one signs in to the OpenCode Console (its key replaced by the token once it is done).
     if (kind === "opencode-go") return this.logins.startConsole({ id, home: profile.home }, lang);
+    if (profile.runtime === "cursor") return this.logins.startCursor({ id, home: profile.home }, lang);
     return this.logins.start({ id, runtime: profile.runtime, home: profile.home }, lang);
   }
 
@@ -557,7 +561,7 @@ export class Accounts {
     if (!runtime) throw new Refusal(400, `unknown runtime ${text(input.runtime)}`);
     this.pending.set(id, { runtime, home, by: viewer, created: null, error: null });
     log.info("accounts", "sign-in for a new profile started", { login: id, runtime, by: viewer.email });
-    const job = await this.logins.start({ id, runtime, home }, lang);
+    const job = runtime === "cursor" ? await this.logins.startCursor({ id, home }, lang) : await this.logins.start({ id, runtime, home }, lang);
     return { id, job };
   }
 
@@ -599,7 +603,7 @@ export class Accounts {
       log.warn("accounts", "could not move a new profile's home", { login: id, error: (e as Error).message });
       return this.pendingFailed(id, tr(lang, "station.login.homeFailed", { error: (e as Error).message }));
     }
-    const name = signedIn ? (email ?? "OpenCode Go") : (email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : p.runtime === "grok" ? "station.profile.grokSubscription" : "station.profile.chatgptSubscription"));
+    const name = signedIn ? (email ?? "OpenCode Go") : (email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : p.runtime === "grok" ? "station.profile.grokSubscription" : p.runtime === "cursor" ? "station.profile.cursorSubscription" : "station.profile.chatgptSubscription"));
     try {
       this.save(p.by, `profile ${profileId} from a sign-in`, (raw) => {
         // An OpenCode Go one runs every runtime its key does (it has none of its own).
@@ -1180,6 +1184,7 @@ function lastOfRuntime(raw: Json, runtime: Runtime, id: string, lang: Lang) {
 /// The account a subscription home is signed in as, when its files say: Codex's id token, Claude's account record.
 export function accountEmail(runtime: Runtime, home: string): string | null {
   if (runtime === "grok") return grokEmail(home);
+  if (runtime === "cursor") return cursorEmail(home);
   if (runtime === "codex") {
     const claims = codexClaims(home);
     const email = claims?.email ?? claims?.["https://api.openai.com/profile"]?.email;

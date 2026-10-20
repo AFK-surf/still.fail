@@ -9,6 +9,8 @@
 //   profile's grok/ (agents/grok.ts).
 // - OpenCode Go (`startConsole`): no command; the station asks the OpenCode Console for a code itself (console.ts) and
 //   keeps asking until it is approved, then leaves the tokens in the profile's home. The page shows it as Codex's.
+// - Cursor (`startCursor`): no command either; the station makes the login's page itself (accounts/cursor.ts), with no
+//   code to enter: the person confirms it there, the station mints the profile's key and keeps it in its home.
 // A stand-in `open` on PATH keeps the commands from opening a browser on the server. Who follows hears each change of a
 // job (`changes`): pushed, not asked again.
 import type { Clock } from "effect";
@@ -17,6 +19,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileCredentials } from "../agents/no-keychain.ts";
 import { CONSOLE, type ConsoleLogin, deviceToken, startDevice, whoIs, writeConsole } from "./console.ts";
+import { CURSOR, type CursorUrls, cursorHandshake, mintCursorKey, pollCursor, writeCursor } from "./cursor.ts";
 import { cleanEnv } from "../agents/runtime.ts";
 import type { Runtime } from "../agents/profiles.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
@@ -65,9 +68,14 @@ export class LoginManager {
 
   /// The OpenCode Console signed in to (console.ts CONSOLE; a test's stand-in).
   private console: string;
+  /// Cursor signed in to (cursor.ts CURSOR; a test's stand-in), and the name its key is given (the station's).
+  private cursor: CursorUrls;
+  private keyName: () => string;
 
-  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock, console = CONSOLE) {
+  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock, console = CONSOLE, cursor: CursorUrls = CURSOR, keyName: () => string = () => "still.fail") {
     this.console = console;
+    this.cursor = cursor;
+    this.keyName = keyName;
     this.background = new Fibers("login", clock);
     this.noBrowserDir = join(data, "run", "no-browser");
     this.commands = commands;
@@ -215,6 +223,62 @@ export class LoginManager {
     };
     running.stop = this.background.after(interval, ask);
     log.info("login", "OpenCode sign-in started", { profile: id });
+    this.emit(id);
+    return { ...job };
+  }
+
+  /// Starts signing a Cursor profile in to the person's Cursor account, replacing any running sign-in: a page to confirm
+  /// the login on (no code), asked about until it is confirmed or runs out; then the key minted for the station.
+  async startCursor(profile: { id: string; home: string }, lang: Lang = stationLang()): Promise<LoginJob> {
+    this.cancel(profile.id);
+    this.finished.delete(profile.id);
+    mkdirSync(profile.home, { recursive: true });
+    const id = profile.id;
+    const now = this.background.now();
+    const handshake = cursorHandshake(this.cursor);
+    const job: LoginJob = { profile: id, runtime: "cursor", state: "needs_approval", url: handshake.url, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
+    const run = ++this.runs;
+    const running: Running = { run, job, child: null, output: "", exited: true, lang, cancelTimer: () => {} };
+    this.jobs.set(id, running);
+    running.cancelTimer = this.background.after(TIMEOUT_MS, () => this.failRun(id, run, tr(lang, "station.login.timedOut")));
+    const current = () => this.jobs.get(id)?.run === run;
+    // Asked often at first (the person is on the page), less as it goes on.
+    let interval = 1_000;
+    const ask = async () => {
+      if (!current()) return;
+      let answer;
+      try {
+        answer = await pollCursor(this.cursor, handshake);
+      } catch (e) {
+        // The network, for once: asked again at the next interval.
+        log.warn("login", "could not ask Cursor about a sign-in", { profile: id, error: (e as Error).message });
+        answer = { pending: true as const };
+      }
+      if (!current()) return;
+      if ("pending" in answer) {
+        interval = Math.min(Math.round(interval * 1.2), 5_000);
+        running.stop = this.background.after(interval, ask);
+        return;
+      }
+      job.state = "verifying";
+      this.emit(id);
+      let minted;
+      try {
+        minted = await mintCursorKey(this.cursor, answer.accessToken, this.keyName());
+      } catch (e) {
+        if (current()) this.finish(id, "failed", tr(lang, "station.login.cursorKeyFailed", { error: (e as Error).message }));
+        return;
+      }
+      if (!current()) return;
+      try {
+        writeCursor(profile.home, { apiKey: minted.apiKey, email: minted.email, keyName: this.keyName(), createdAt: wall.now() });
+      } catch (e) {
+        return this.finish(id, "failed", tr(lang, "station.login.homeFailed", { error: (e as Error).message }));
+      }
+      this.finish(id, "done", null);
+    };
+    running.stop = this.background.after(interval, ask);
+    log.info("login", "Cursor sign-in started", { profile: id });
     this.emit(id);
     return { ...job };
   }
