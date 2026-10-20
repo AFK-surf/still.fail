@@ -82,6 +82,9 @@ priv struct DriveUi {
   mut picker_error : String
   mut picker_denied : Bool
   mut picker_serial : Int
+  /// the folder picker's last ask (`picker_serial`) on its way, not answered yet: what is shown is coming, not asked
+  /// again
+  mut picker_asking : Bool
 }
 
 ///|
@@ -110,6 +113,7 @@ let dv : DriveUi = {
   picker_error: "",
   picker_denied: false,
   picker_serial: 0,
+  picker_asking: false,
 }
 
 ///|
@@ -139,6 +143,7 @@ fn dv_reset() -> Unit {
   dv.picker_error = ""
   dv.picker_denied = false
   dv.picker_serial = 0
+  dv.picker_asking = false
   reader_ui.clear()
   reader_set.clear()
   dv_reads.clear()
