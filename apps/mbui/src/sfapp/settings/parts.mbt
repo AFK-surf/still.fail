@@ -661,19 +661,17 @@ fn doing_mark(c : @ui.Ctx, running : Bool, failed : String?, inline? : Bool = fa
 ///|
 /// A wait said in a line of its own (Waiting.kt WaitLine): a spinner before it; what is wrong in red.
 fn wait_line(c : @ui.Ctx, words : String, error? : Bool = false, pad? : Bool = false) -> Unit {
-  c.box(style=if pad { wait_line_padded } else { @sf.beside }, fn() {
+  // (in loose numbers, not @sf's styles, until a list's rows are built in the theme where the list is: the pages are
+  // lists, their rows built as they are laid out, outside the page's with_theme)
+  let t = @sf.theme()
+  c.box(dir=Row, padx=if pad { 20.0 } else { 0.0 }, pady=if pad { 8.0 } else { 0.0 }, gap=8.0, align=ACenter, fn() {
     if !error {
       spinner(c, inline=true)
     }
-    c.text(words, style=if error { @sf.meta.then(@sf.bad) } else { @sf.meta }) |> ignore
+    c.text(words, size=13.0, color=if error { t.p.red } else { t.p.muted }, line=18.0) |> ignore
   })
   |> ignore
 }
-
-///|
-/// A wait's line in a page's flow: in from its sides as a card's words.
-// kept across runs: a value (no field of it changes)
-let wait_line_padded : @ui.Style = @sf.beside.then(@ui.style(px=S5, py=S2))
 
 ///|
 /// The shapes of a settings page's cards to come (Waiting.kt Waiting, WaitShape.Cards), breathing; what could not be
