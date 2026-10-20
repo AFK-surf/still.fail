@@ -735,9 +735,14 @@ export function JoinStationDialog({ view, joinable, onKind, onClose }: { view: W
 
 /**
  * 「添加这台 Mac」, in the desktop app: the station it carries joined to this workspace at a click, while it is in none
- * (never joined, or removed from its workspace: the app joins a removed one again only when asked). Nothing in a
- * browser, or in an app from before it. Once joined, the station shows in the list by itself, as one added by command.
+ * (never joined, or removed from its workspace: the app joins a removed one again only when asked), or in another one,
+ * which it stays in (docs/multi-workspace.md; an app that says which it joined). Nothing in a browser, or in an app
+ * from before it. Once joined, the station shows in the list by itself, as one added by command.
  */
+/** Whether a station in a workspace joins `workspace` beside it: not one it is in, and the app says which it joined. */
+const joinsMore = (here: CarriedStation, workspace: string) =>
+  here.joined !== undefined && here.workspace !== workspace && !here.joined.includes(workspace);
+
 export function JoinThisMac({ account, workspace, className }: { account: Account; workspace: string; className?: string }) {
   const desktop = typeof window !== "undefined" ? window.stillfailDesktop?.station : undefined;
   // The desktop app on Windows: a PC, not a Mac.
@@ -759,7 +764,7 @@ export function JoinThisMac({ account, workspace, className }: { account: Accoun
     if ("error" in done) throw new Error(done.error);
     return done.station;
   }, (s) => { setHere(s); toast(t(pc ? "web-pages.settings.thisPc.joined" : "web-pages.settings.thisMac.joined")); });
-  if (!desktop || !here?.carried || here.state === "running") return null;
+  if (!desktop || !here?.carried || (here.state === "running" && !joinsMore(here, workspace))) return null;
   return <Button icon={Monitor} className={className} busy={join.busy} onClick={() => join.run()}>{t(pc ? "web-pages.settings.thisPc.add" : "web-pages.settings.thisMac.add")}</Button>;
 }
 
