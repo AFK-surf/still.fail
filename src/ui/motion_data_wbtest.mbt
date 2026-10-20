@@ -39,3 +39,23 @@ test "a spring's frames are drawn until its end, then none; retargeted, it goes 
   assert_true((seen.val - 50.0).abs() < 0.001)
   t.assert_idle()
 }
+
+///|
+test "a spring sent on the frame's own clock: go_at and value_at are go and value at that frame's time" {
+  let p = SpringPath::new(0.0, k=420.0, c=32.0)
+  let q = SpringPath::new(0.0, k=420.0, c=32.0)
+  let seen = Ref(0.0)
+  let t = Tester::new(fn(c) {
+    if p.target() == 0.0 {
+      p.go_at(c, 100.0)
+      q.go(c.now(), 100.0)
+    }
+    seen.val = p.value_at(c)
+  })
+  t.draw()
+  // a moment mid-way
+  let mid_way = 40.0
+  t.run_for(mid_way)
+  assert_eq(seen.val, q.value(t.time()))
+  assert_eq(p.end(), q.end())
+}

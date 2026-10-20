@@ -144,6 +144,22 @@ pub impl Moving for SpringPath with rest_at(self, now, frame) {
 }
 
 ///|
+/// Sent to `to` at this frame's time (`c`'s clock: no clock read by its caller), from where it is then, as fast as it
+/// goes then (or at `v` a second).
+pub fn SpringPath::go_at(self : SpringPath, c : Ctx, to : Double, v? : Double) -> Unit {
+  match v {
+    Some(v) => self.go(c.now, to, v~)
+    None => self.go(c.now, to)
+  }
+}
+
+///|
+/// Where it is at this frame's time (`c`'s clock).
+pub fn SpringPath::value_at(self : SpringPath, c : Ctx) -> Double {
+  self.value(c.now)
+}
+
+///|
 /// At `x` at once, at rest (held by a finger, placed).
 pub fn SpringPath::put(self : SpringPath, x : Double) -> Unit {
   self.x0 = x

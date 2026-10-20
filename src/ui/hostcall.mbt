@@ -412,6 +412,13 @@ fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
   if kind == 2 && state != 0 {
     views_told[id] = true
   }
+  // a picture decoded: its sizes recorded now (hostrec.mbt), drawn or not (one never drawn is still asked of a Tester)
+  if kind == 1 && state == 1 && fake.val is None && text_recording() {
+    let out = FixedArray::make(4, 0.0)
+    if @host.image_info(id, out) == 1 {
+      rec_image_ready(id, out)
+    }
+  }
   outside_end(kind, id)
 }
 

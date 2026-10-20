@@ -17,8 +17,9 @@ priv struct Dl {
   mut clear : (Double, Double, Double)
   /// glyphs, by their number: what they are (font, cluster, words)
   glyphs : Map[Int, (Double, Int, Int, Int, String)]
-  /// images, by their number: px, source, bytes (-1: none)
+  /// images, by their number: px, source, bytes (-1: none); the bytes the list carries, by their number
   images : Map[Int, (Int, String, Int)]
+  carried : Map[Int, String]
   inst : Array[Array[String]]
 }
 
@@ -47,6 +48,40 @@ fn quoted(line : String) -> String {
 }
 
 ///|
+/// Bytes from base64 (standard, padded).
+fn from_base64(s : String) -> Bytes {
+  let out : Array[Byte] = []
+  let mut acc = 0
+  let mut bits = 0
+  for ch in s {
+    let c = ch.to_int()
+    let v = if c >= 65 && c <= 90 {
+      c - 65
+    } else if c >= 97 && c <= 122 {
+      c - 97 + 26
+    } else if c >= 48 && c <= 57 {
+      c - 48 + 52
+    } else if c == 43 {
+      62
+    } else if c == 47 {
+      63
+    } else {
+      -1
+    }
+    if v < 0 {
+      continue
+    }
+    acc = ((acc << 6) | v) & 0xFFFFFF
+    bits = bits + 6
+    if bits >= 8 {
+      bits = bits - 8
+      out.push(((acc >> bits) & 0xFF).to_byte())
+    }
+  }
+  Bytes::from_array(out)
+}
+
+///|
 fn parse(text : String) -> Dl {
   let dl = {
     w: 0.0,
@@ -55,6 +90,7 @@ fn parse(text : String) -> Dl {
     clear: (1.0, 1.0, 1.0),
     glyphs: Map([]),
     images: Map([]),
+    carried: Map([]),
     inst: [],
   }
   for v in text.split("\n") {
@@ -89,6 +125,7 @@ fn parse(text : String) -> Dl {
         }
         dl.images[num(t[1]).to_int()] = (num(t[2]).to_int(), src, bytes)
       }
+      "bytes" if t.length() >= 3 => dl.carried[num(t[1]).to_int()] = t[2]
       "i" if t.length() == 25 => dl.inst.push(t)
       _ => ()
     }
@@ -144,7 +181,11 @@ fn main {
   dl.images.each(fn(no, im) {
     let (px, src, bytes) = im
     let mine = if bytes >= 0 {
-      @host.image_load_bytes(read_bytes(path + ".img\{no}"), px)
+      let data = match dl.carried.get(no) {
+        Some(b64) => from_base64(b64)
+        None => read_bytes(path + ".img\{no}")
+      }
+      @host.image_load_bytes(data, px)
     } else {
       @host.image_load(src, px)
     }

@@ -20,14 +20,36 @@
 //   image N PX "SOURCE" [BYTES]   image N (from 0, in the order the instances first draw them): its source and the long
 //                                 side it was asked at; BYTES when the app handed it over as bytes, how many
 //                                 (Tester::drawlist_images)
+//   bytes N BASE64                those bytes, when the list is to carry them (Tester::drawlist(bytes=true)): a list a
+//                                 renderer draws by itself, with no files beside it
 //   i N0 … N23                    an instance (scene.mbt: its 24 numbers), in drawing order, but a glyph's 12 its
 //                                 glyph's N (13 0) and an image's 20 its image's N
 
 ///|
-/// What the last frame drew, as a draw list (the file's head).
-pub fn Tester::drawlist(self : Tester) -> String {
+/// What the last frame drew, as a draw list (the file's head); `bytes`: with the pictures handed over as bytes in it.
+pub fn Tester::drawlist(self : Tester, bytes? : Bool = false) -> String {
   ignore(self)
-  drawlist_of(g())
+  drawlist_of(g(), bytes~)
+}
+
+///|
+/// `data` in base64 (standard, padded).
+fn to_base64(data : Bytes) -> String {
+  let abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  let sb = StringBuilder()
+  let n = data.length()
+  let mut i = 0
+  while i < n {
+    let b0 = data[i].to_int()
+    let b1 = if i + 1 < n { data[i + 1].to_int() } else { 0 }
+    let b2 = if i + 2 < n { data[i + 2].to_int() } else { 0 }
+    sb.write_char(abc[b0 >> 2].unsafe_to_char())
+    sb.write_char(abc[((b0 & 3) << 4) | (b1 >> 4)].unsafe_to_char())
+    sb.write_char(if i + 1 < n { abc[((b1 & 15) << 2) | (b2 >> 6)].unsafe_to_char() } else { '=' })
+    sb.write_char(if i + 2 < n { abc[b2 & 63].unsafe_to_char() } else { '=' })
+    i = i + 3
+  }
+  sb.to_string()
 }
 
 ///|
@@ -152,7 +174,7 @@ fn glyph_names() -> Map[Int, ((Double, Int, Int), Int, String)] {
 }
 
 ///|
-fn drawlist_of(c : Ctx) -> String {
+fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
   let sb = StringBuilder()
   sb.write_string("mbui-dl 2\n")
   sb.write_string("window")
@@ -210,7 +232,12 @@ fn drawlist_of(c : Ctx) -> String {
     image_no[e.0] = n
     sb.write_string("image \{n} \{e.2} " + Json::string(e.1).stringify())
     match image_data.get(e.1) {
-      Some(bytes) => sb.write_string(" \{bytes.length()}")
+      Some(data) => {
+        sb.write_string(" \{data.length()}")
+        if bytes {
+          sb.write_string("\nbytes \{n} " + to_base64(data))
+        }
+      }
       None => ()
     }
     sb.write_char('\n')

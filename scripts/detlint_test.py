@@ -175,7 +175,11 @@ class Rules(unittest.TestCase):
     def test_stable_mode(self):
         found(self, {"src/app/view.mbt": "fn v(c : @ui.Ctx) -> Unit {\n  let p = if c.stable() { 1.0 } else { 0.5 }\n}\n"},
               "stable-mode", 1)
+        # the framework's own code too: a screenshot's run draws and moves as any run
         found(self, {"src/ui/draw.mbt": "pub fn Ctx::still(self : Ctx) -> Bool {\n  self.stable()\n}\n"},
+              "stable-mode", 1)
+        # reduced motion is the person's: not stable-mode
+        found(self, {"src/app/view.mbt": "fn v(c : @ui.Ctx) -> Unit {\n  let p = if c.still() { 1.0 } else { 0.5 }\n}\n"},
               "stable-mode", 0)
 
     def test_app_clock(self):

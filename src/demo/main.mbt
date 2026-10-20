@@ -165,9 +165,9 @@ fn view(c : @ui.Ctx) -> Unit {
           item_w=if narrow { 58.0 } else { 76.0 },
         )
         c.spacer()
-        if !narrow && !c.stable() {
+        if !narrow {
           c.text(
-          "\{app.msgs.length()} 条 · 帧 \{fmt_ms(c.frame_ms())} ms",
+          "\{app.msgs.length()} 条",
           size=12.0,
           color=0x8E8E93FFL,
           wrap=false,
@@ -211,12 +211,6 @@ fn view(c : @ui.Ctx) -> Unit {
     |> ignore
   })
   |> ignore
-}
-
-///|
-fn fmt_ms(x : Double) -> String {
-  let v = (x * 100.0).round() / 100.0
-  v.to_string()
 }
 
 ///|

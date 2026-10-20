@@ -620,7 +620,7 @@ def lint_mbt(f, cfg, out, returns, readers):
             if not own and (ty is None or ty in SETTLE_TYPES or c.kind == "pkg"):
                 add("settle", c.at, line_text + ("   (receiver's type not known: counted)" if ty is None else ""))
         # the app as it is screenshotted is not the app
-        if c.name == "stable" and c.kind == "method" and app and not test and not c.args and f.recv_type(
+        if c.name == "stable" and c.kind == "method" and not test and not c.args and f.recv_type(
                 c.at, returns) in ("Ctx", None):
             add("stable-mode", c.at, line_text)
         # 4. a bare number as a time

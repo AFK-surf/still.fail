@@ -774,9 +774,17 @@ pub fn reduced_motion() -> Bool {
 let reduce_env : Ref[Int] = { val: -1 }
 
 ///|
-/// No motion this frame: screenshots, or motion reduced.
+/// Motion reduced (the person's setting, or MBUI_REDUCE_MOTION=1): what moves is where it goes at once.
+pub fn Ctx::reduced_motion(self : Ctx) -> Bool {
+  ignore(self)
+  reduced_motion()
+}
+
+///|
+/// Motion reduced (Ctx::reduced_motion), under its old name. A run whose output is to be the same every time (a
+/// screenshot's, MBUI_BENCH=-1) draws and moves as any run does: its picture is taken at a moment its motions declare.
 pub fn Ctx::still(self : Ctx) -> Bool {
-  self.stable() || reduced_motion()
+  self.reduced_motion()
 }
 
 ///|

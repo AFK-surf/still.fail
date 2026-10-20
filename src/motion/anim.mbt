@@ -1,8 +1,8 @@
 // Animated values kept from frame to frame (Compose's Animatable and animateFloatAsState; Motion's MotionValue and
 // animate): a number going to a target by a spec, from where it is and how fast it moves when told anew. As Compose's,
 // a motion asked for in one frame starts at the next (its first frame drawn at its start), and its time goes by the
-// frames' clock in whole milliseconds. Reduced motion (the host's setting, or MBUI_REDUCE_MOTION=1) and screenshots
-// (Ctx::stable) put every motion at its end at once (Motion.kt: one clock for all of it).
+// frames' clock in whole milliseconds. Reduced motion (the host's setting, or MBUI_REDUCE_MOTION=1) puts every
+// motion at its end at once (Motion.kt: one clock for all of it); a screenshot's run moves as any run.
 
 ///|
 /// A number that animates (Compose's Animatable).

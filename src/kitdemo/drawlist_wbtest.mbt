@@ -70,3 +70,20 @@ test "the same screen reached by other steps is the same draw list: glyphs and p
   assert_eq(b.drawlist(), a.drawlist())
   assert_true(a.drawlist().contains("image 0 "))
 }
+
+///|
+test "a draw list can carry the pictures handed over as bytes: a list a renderer draws by itself" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.image_bytes("mem:dot", b"\x89PNG three")
+      c.image("mem:dot", w=Px(20.0), h=Px(20.0)) |> ignore
+    },
+    w=100.0,
+    h=100.0,
+  )
+  t.draw()
+  t.draw()
+  let carried = t.drawlist(bytes=true)
+  assert_true(carried.contains("\nbytes 0 iVBORyB0aHJlZQ==\n"))
+  assert_false(t.drawlist().contains("\nbytes "))
+}

@@ -135,9 +135,7 @@
       "src/ui/scroll_wbtest.mbt": 12,
       "src/ui/words_test.mbt": 1
     },
-    "stable-mode": {
-      "src/demo/main.mbt": 1
-    },
+    "stable-mode": {},
     "retired-api": {},
     "app-clock": {
       "src/effectdemo/demo.mbt": 1,

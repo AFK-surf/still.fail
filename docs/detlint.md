@@ -76,6 +76,8 @@ What it does not see:
 - `app-clock` counts reads of the clock, not what is done with them: `(now - sent) / 60000.0` for "3 分钟前" and
   `(now - at) / 180.0` for an animation are the same expression. Decided: it counts them all, and a read that shows a
   time is marked, once, as the migration reaches it (an exception in place of a finding, so the bar only goes down).
-- `Ctx::still()` (stable or reduced motion) is not `stable-mode`: reduced motion is the person's.
+- `Ctx::still()` is motion reduced alone (the person's setting: `Ctx::reduced_motion`), not `stable-mode`. Reading
+  whether a run is stable (`Ctx::stable`, gone from mbui; an app's own flag for it) is `stable-mode` anywhere, the
+  framework's code too: a screenshot's run draws and moves as any run.
 - Hosts (Objective-C, C, Java, JS outside MoonBit externs) are not read.
 - `script-wait` reads lines: a `sleep` in a heredoc counts, one in a comment line does not.

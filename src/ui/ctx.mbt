@@ -741,14 +741,6 @@ fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false) -> Unit {
 }
 
 ///|
-/// True when the host wants output that is the same on every run (screenshot
-/// comparisons): views leave out clocks and timings.
-pub fn Ctx::stable(self : Ctx) -> Bool {
-  ignore(self)
-  bench.mode < 0
-}
-
-///|
 /// Where the thing with `id` was drawn last frame (x, y, w, h), as far as it
 /// showed: for parts that follow the pointer across them (a slider).
 pub fn Ctx::rect_of(self : Ctx, id : Int) -> (Double, Double, Double, Double)? {
