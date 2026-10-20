@@ -98,3 +98,110 @@ test "a PDF's pages are images the host draws at the size they are shown" {
   assert_eq(@ui.image_state(pdf.page_src(1)), 1)
   assert_eq(@ui.image_natural(pdf.page_src(1)), Some((1224.0, 1584.0)))
 }
+
+///|
+test "a player's reads of the app's bytes come at the next frame, as the test says; what the app gave is told" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let file = Bytes::makei(5000, fn(i) { (i % 251).to_byte() })
+  let asked : Array[(Double, Int)] = []
+  let t = @ui.Tester::new(fn(c) {
+    let v = once(cell, fn() {
+      @ui.NativeView::video("video/mp4", fn(offset, length, answer) {
+        asked.push((offset, length))
+        let from = offset.to_int()
+        let n = if from + length > file.length() { file.length() - from } else { length }
+        answer(Bytes::makei(n, fn(i) { file[from + i] }), file.length().to_double())
+      })
+    })
+    c.native(v, h=Px(220.0)) |> ignore
+  })
+  let v = cell.val.unwrap()
+  let first = t.view_reads(v.id(), 0.0, 4096)
+  let second = t.view_reads(v.id(), 4096.0, 4096)
+  assert_eq(asked, [])
+  t.draw()
+  assert_eq(asked, [(0.0, 4096), (4096.0, 4096)])
+  assert_eq(t.view_answers(v.id()), [(first, 4096, 5000.0), (second, 904, 5000.0)])
+}
+
+///|
+test "a player stands as the test sets it: ready, its first frame shown, two seconds in, playing" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let t = @ui.Tester::new(fn(c) {
+    let v = once(cell, fn() { @ui.NativeView::video("video/mp4", fn(_o, _l, answer) { answer(b"", -1.0) }) })
+    c.native(v, h=Px(220.0)) |> ignore
+    c.text("\{(v.position() / 1000.0).to_int()} s of \{(v.duration() / 1000.0).to_int()} s", wrap=false) |> ignore
+  })
+  let v = cell.val.unwrap()
+  assert_eq(v.state(), 1)
+  t.set_player(v.id(), shown=false)
+  t.draw()
+  assert_eq(v.shown(), false)
+  t.set_player(v.id(), duration=60000.0, position=2000.0, playing=true, shown=true)
+  t.draw()
+  assert_true(v.playing() && v.shown())
+  assert_true(t.find("2 s of 60 s") is Some(_))
+  t.set_player(v.id(), playing=false, position=60000.0, ended=true)
+  t.draw()
+  assert_true(v.ended() && !v.playing())
+}
+
+///|
+test "what another app shares in is said at the next frame, once; its files taken once" {
+  let said : Array[String] = []
+  let t = @ui.Tester::new(fn(c) {
+    let s = @ui.shared_in()
+    if s != "" {
+      said.push(s)
+    }
+    c.text("share", wrap=false) |> ignore
+  })
+  t.share_in("look at these", title="from Photos", files=[("a.png", b"\x89PNG"), ("notes.txt", b"hello")])
+  assert_eq(said, [])
+  t.draw()
+  assert_eq(said.length(), 1)
+  let j = @json.parse(said[0]) catch { _ => Json::null() }
+  assert_eq(
+    j,
+    {
+      "text": "look at these",
+      "title": "from Photos",
+      "files": [
+        { "name": "a.png", "type": "image/png", "size": 4 },
+        { "name": "notes.txt", "type": "text/plain", "size": 5 },
+      ],
+    },
+  )
+  assert_eq(@ui.shared_in_file(1), b"hello")
+  assert_eq(@ui.shared_in_file(1), b"")
+  t.draw()
+  assert_eq(said.length(), 1)
+}
+
+///|
+test "marks drawn onto an image are kept for the test, a PNG made by the next frame" {
+  let made : Ref[Bytes?] = { val: None }
+  let marking : Ref[@ui.MarkedImage?] = { val: None }
+  let marks = "{\"w\":100,\"h\":80,\"marks\":[{\"kind\":\"box\",\"color\":4278190335,\"halo\":4294967295,\"w\":3,\"pts\":[10,10,50,40],\"text\":\"\",\"n\":1}]}"
+  let t = @ui.Tester::new(fn(c) {
+    match marking.val {
+      Some(m) =>
+        match m.made() {
+          Some(png) => made.val = Some(png)
+          None => ()
+        }
+      None => ()
+    }
+    c.text("marks", wrap=false) |> ignore
+  })
+  marking.val = @ui.draw_marks(b"\x89PNG not decoded here", marks)
+  assert_eq(t.marks_drawn(), [marks])
+  t.draw()
+  match made.val {
+    Some(png) => {
+      assert_true(png.length() > 8)
+      assert_eq(png[0:8].to_bytes(), b"\x89PNG\r\n\x1A\n")
+    }
+    None => fail("no PNG made")
+  }
+}

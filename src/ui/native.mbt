@@ -342,6 +342,13 @@ pub fn NativeView::state(self : NativeView) -> Int {
 }
 
 ///|
+/// Its host's number for it (what a Tester's view_reads and set_player take, and its views() lines say); 0 before the
+/// host opened it.
+pub fn NativeView::id(self : NativeView) -> Int {
+  self.id
+}
+
+///|
 /// Its length in ms (-1 not known yet).
 pub fn NativeView::duration(self : NativeView) -> Double {
   self.info[0]

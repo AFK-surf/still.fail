@@ -70,6 +70,17 @@ struct FakeHost {
   picks : Array[@host.Picked]
   pick_asks : Array[FakePick]
   keeps : Array[FakeKeep]
+  /// what its players ask of the app's bytes, not taken yet (Tester::view_reads), and what the app gave (hostmedia.mbt)
+  reads : Array[FakeRead]
+  mut read_ids : Int
+  read_answers : Array[(Int, Int, Int, Double)]
+  /// a player's state as the test set it (Tester::set_player): view_info's ten numbers
+  players : Map[Int, FixedArray[Double]]
+  /// what another app shares in (Tester::share_in), from the frame after it was told; its files' bytes
+  mut share : (String, Int)?
+  share_files : Array[Bytes]
+  /// the marks drawn onto images (draw_marks' JSON), oldest first, and the frame each was asked in
+  marks : Array[(String, Int)]
 }
 
 ///|
@@ -645,6 +656,12 @@ fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
       }
       f.view_ready.get(id).unwrap_or(0)
     }
+    Some(f) if f.players.get(id) is Some(p) => {
+      for i in 0..<10 {
+        out[i] = p[i]
+      }
+      1
+    }
     Some(_) => {
       out[0] = 10000.0
       out[1] = 0.0
@@ -747,7 +764,7 @@ fn h_view_site_load(id : Int, path : String) -> Unit {
 ///|
 fn h_view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   match fake.val {
-    Some(_) => 0
+    Some(f) => fake_read_next(f, id, out)
     None => @host.view_read_next(id, out)
   }
 }
@@ -756,7 +773,7 @@ fn h_view_read_next(id : Int, out : FixedArray[Double]) -> Int {
 fn h_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
   outside_answered(id)
   match fake.val {
-    Some(_) => ()
+    Some(f) => f.read_answers.push((id, req, data.length(), total))
     None => @host.view_read_answer(id, req, data, total)
   }
 }

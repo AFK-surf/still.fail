@@ -172,6 +172,13 @@ pub fn Tester::new(
     picks: [],
     pick_asks: [],
     keeps: [],
+    reads: [],
+    read_ids: 0,
+    read_answers: [],
+    players: {},
+    share: None,
+    share_files: [],
+    marks: [],
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
