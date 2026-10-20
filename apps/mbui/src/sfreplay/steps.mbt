@@ -282,3 +282,57 @@ pub fn Flow::open_page(self : Flow, page : @sfapp.Page) -> Unit {
   self.core()
   self.run_to(@ui.nav_rest())
 }
+
+// ── batch C's steps (appended): a desktop's pointer, the window, a drag ─────────────────────────────
+
+///|
+/// The lowest `what` (`top`: the highest) on screen, or the test fails.
+fn Flow::spot(self : Flow, what : String, top? : Bool = false) -> (Double, Double)? {
+  let at = self.spots(what)
+  if at.length() == 0 {
+    self.fail("not on screen: " + what)
+    return None
+  }
+  Some(if top { at[at.length() - 1] } else { at[0] })
+}
+
+///|
+/// The pointer over the lowest `what`, no button down (a flow's `hover`).
+pub fn Flow::hover(self : Flow, what : String) -> Unit {
+  guard self.spot(what) is Some((x, y)) else { return }
+  self.t.move(x, y)
+  self.t.draw()
+  self.core()
+}
+
+///|
+/// A secondary click on the lowest `what` (a flow's `rightclick`: a row's menu).
+pub fn Flow::right_click(self : Flow, what : String) -> Unit {
+  guard self.spot(what) is Some((x, y)) else { return }
+  self.t.right_click(x, y)
+  self.core()
+}
+
+///|
+/// The window made w × h (a flow's `resize`: a desktop's window across the wide frame's breakpoint).
+pub fn Flow::resize(self : Flow, w : Double, h : Double) -> Unit {
+  self.t.resize(w, h)
+  self.core()
+}
+
+///|
+/// The wheel turned by `dy` over the window's middle (a flow's `wheel`).
+pub fn Flow::wheel(self : Flow, dy : Double) -> Unit {
+  let (w, h) = self.t.size()
+  self.t.wheel(w / 2.0, h / 2.0, dy)
+  self.core()
+}
+
+///|
+/// The lowest `what` dragged by (dx, dy) in `steps` moves, a frame apart, then let go (a flow's `dragon`).
+pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? : Int = 10) -> Unit {
+  guard self.spot(what) is Some((x, y)) else { return }
+  self.t.drag(x, y, x + dx, y + dy, steps~)
+  self.t.draw()
+  self.core()
+}
