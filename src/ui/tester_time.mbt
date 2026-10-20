@@ -108,6 +108,11 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
     }
     return
   }
+  // what the last frame left owed (a tell answered at once, a host's answer posted, an input's frame after) drawn at
+  // its moment first, as a host draws it at its next frame: not at the end of the run
+  if end > self.fake.time + 1.0e-9 {
+    self.draw_owed(1)
+  }
   while self.fake.time < end - 1.0e-9 {
     // the next of: what is due (a wake the view asked for, a motion's end), the end, and with frames between
     // (MBUI_TEST_FPS) the display's next frame; each drawn at its own moment: what happens at a time happens at it,

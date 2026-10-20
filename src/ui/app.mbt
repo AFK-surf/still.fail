@@ -248,6 +248,11 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   for t in told {
     (t.1)()
   }
+  // (what is told may answer at once (a cache, a test's core): what the answer changes is shown by the frame after,
+  // owed now, at this moment, not by whatever frame comes next)
+  if !told.is_empty() {
+    c.owe_next()
+  }
   if scroll_logging() {
     c.log_scroll()
   }

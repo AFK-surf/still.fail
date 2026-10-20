@@ -82,3 +82,24 @@ test "a tell outside a build is told at once" {
   assert_eq(told.val, 1)
   t.assert_idle()
 }
+
+///|
+test "what a tell is answered at once is shown by the frame after it, owed at its moment" {
+  let answer = Ref::new("")
+  let t = @ui.Tester::new(
+    fn(c) {
+      if c.button("ask") {
+        // a core that answers as it is asked (a cache, a test's own)
+        c.tell("ask", fn() { answer.val = "answered" })
+      }
+      c.text(if answer.val == "" { "waiting" } else { answer.val }, wrap=false) |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  let at = t.time()
+  t.tap_text("ask")
+  assert_true(t.find("answered") is Some(_))
+  assert_eq(t.time(), at)
+  t.assert_idle()
+}
