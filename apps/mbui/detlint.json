@@ -40,13 +40,8 @@
   ],
   "counts": {
     "frame-request": {
-      "src/coredemo/photos.mbt": 2,
-      "src/coredemo/shelf.mbt": 2,
-      "src/coredemo/videos.mbt": 1,
-      "src/player/audio.mbt": 1,
-      "src/player/player.mbt": 2,
       "src/sf/icons.mbt": 1,
-      "src/sf/parts.mbt": 3,
+      "src/sf/parts.mbt": 1,
       "src/sfapp/app.mbt": 3,
       "src/sfapp/bar.mbt": 2,
       "src/sfapp/chat.mbt": 2,
@@ -71,11 +66,9 @@
       "src/sfapp/sheets.mbt": 4,
       "src/sfapp/station_files.mbt": 4,
       "src/sfapp/updates.mbt": 1,
-      "src/sfcore/signin.mbt": 5,
-      "src/stillfail/main.mbt": 7
+      "src/sfcore/signin.mbt": 1
     },
     "settle": {
-      "src/player/player_wbtest.mbt": 7,
       "src/sfapp/cards_wbtest.mbt": 8,
       "src/sfapp/chat_wbtest.mbt": 11,
       "src/sfapp/composer_wbtest.mbt": 17,
@@ -94,7 +87,6 @@
       "src/sfapp/share_wbtest.mbt": 10,
       "src/sfapp/updates_wbtest.mbt": 1,
       "src/sfreplay/agent_reply/agent_reply_test.mbt": 1,
-      "src/sfreplay/replay_wbtest.mbt": 1,
       "src/sfreplay/send_text/send_text_test.mbt": 1,
       "src/sfreplay/send_text_frames/send_text_frames_test.mbt": 1
     },
@@ -196,7 +188,6 @@
       "src/sfapp/notices_wbtest.mbt": 1
     },
     "literal-time": {
-      "src/player/player_wbtest.mbt": 2,
       "src/sfapp/cards_wbtest.mbt": 4,
       "src/sfapp/composer_wbtest.mbt": 5,
       "src/sfapp/decide_wbtest.mbt": 2,
@@ -235,10 +226,8 @@
     },
     "retired-api": {},
     "app-clock": {
-      "src/player/player.mbt": 2,
       "src/sf/icons.mbt": 1,
-      "src/sf/markdown.mbt": 3,
-      "src/sf/parts.mbt": 3,
+      "src/sf/parts.mbt": 1,
       "src/sfapp/app.mbt": 9,
       "src/sfapp/chat.mbt": 7,
       "src/sfapp/chat_fixture.mbt": 1,
@@ -266,8 +255,6 @@
       "src/stillfail/main.mbt": 1
     },
     "poll": {
-      "src/player/audio.mbt": 1,
-      "src/player/player.mbt": 1,
       "src/sfapp/composer.mbt": 1,
       "src/sfapp/drive_reader.mbt": 1,
       "src/sfapp/keep.mbt": 1,
@@ -280,11 +267,7 @@
       "src/sfapp/chat.mbt": 2,
       "src/sfapp/preview.mbt": 3,
       "src/sfapp/share.mbt": 2,
-      "src/sfapp/sheets.mbt": 1,
-      "src/sfcore/signin.mbt": 7,
-      "src/sffix/main.mbt": 2,
-      "src/sfkit/main.mbt": 2,
-      "src/stillfail/main.mbt": 11
+      "src/sfapp/sheets.mbt": 1
     },
     "globals": {}
   },

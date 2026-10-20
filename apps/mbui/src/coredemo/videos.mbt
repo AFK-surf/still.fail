@@ -175,7 +175,6 @@ fn video_poster(t : @videos.Title) -> String {
           match r {
             Ok((_, Some(bytes))) => {
               @ui.add_image(key, bytes)
-              @host.request_frame()
             }
             _ => ()
           }

@@ -51,10 +51,10 @@ pub let state : SignIn = {
 /// Starts the core, its changes drawn in the next frame, and reads what the environment asks of signing in. False
 /// when this build has no core linked in (the web's, a fixture's).
 pub fn start() -> Bool {
-  @core.on_change(fn() { @host.request_frame() })
+  @core.on_change(fn() { @host.request_frame() }) // the core's queue: an event from outside the frames
   // a screen is settled only once what it asked of the core is in (mbui's effect.mb outside)
   @core.track(what => @ui.runtime().outside_start(what), t => @ui.runtime().outside_end(t))
-  let cloud = @host.env("MBUI_CLOUD")
+  let cloud = @ui.env("MBUI_CLOUD")
   let started = if cloud != "" {
     @host.log("still.fail cloud at " + cloud)
     state.account = @host.env_text("MBUI_CORE_ACCOUNT")
@@ -65,12 +65,12 @@ pub fn start() -> Bool {
   if started {
     tell_device()
   }
-  state.auto = @host.env("MBUI_CORE_SIGNIN") == "1"
-  state.login = @host.env("MBUI_AUTH_LOGIN") == "1"
-  state.by_hand = if @host.env("MBUI_AUTH_BEGIN") == "1" {
+  state.auto = @ui.env("MBUI_CORE_SIGNIN") == "1"
+  state.login = @ui.env("MBUI_AUTH_LOGIN") == "1"
+  state.by_hand = if @ui.env("MBUI_AUTH_BEGIN") == "1" {
     "begin"
   } else {
-    @host.env("MBUI_AUTH_COMPLETE")
+    @ui.env("MBUI_AUTH_COMPLETE")
   }
   started
 }
@@ -81,10 +81,10 @@ pub fn start() -> Bool {
 /// mbui Android · <maker model>" (the model CoreHost.java puts in MBUI_DEVICE_MODEL), "still.fail mbui 桌面版 · macOS".
 fn tell_device() -> Unit {
   let facts : Map[String, Json] = { "client": Json::string("still.fail mbui") }
-  match @host.platform() {
+  match @ui.platform() {
     2 => {
       facts["app"] = Json::string("android")
-      facts["model"] = Json::string(@host.env("MBUI_DEVICE_MODEL"))
+      facts["model"] = Json::string(@ui.env("MBUI_DEVICE_MODEL"))
     }
     0 => {
       facts["app"] = Json::string("desktop")
@@ -97,7 +97,7 @@ fn tell_device() -> Unit {
     // (iOS and the browser: no kind of the core's for them yet)
     _ => return
   }
-  let version = @host.app_version()
+  let version = @ui.app_version()
   if version > 0 {
     facts["build"] = Json::string("0.1." + version.to_string())
   }
@@ -148,7 +148,6 @@ fn take_account(account : String) -> Unit {
       Ok(_) => @host.log("SIGN_IN taken in: " + str(Some(parsed), "email"))
       Err(e) => @host.log("SIGN_IN migrate failed: " + e.stringify())
     }
-    @host.request_frame()
   })
 }
 
@@ -194,7 +193,6 @@ fn by_hand(step : String) -> Unit {
         Ok(_) => @host.log("AUTH_DONE")
         Err(e) => @host.log("AUTH_FAILED " + e.stringify())
       }
-      @host.request_frame()
     })
   }
 }
@@ -302,7 +300,6 @@ pub fn sign_in() -> Unit {
         Err(why) => "没有登录：\{why}"
       }
       @host.log("SIGN_IN " + state.status)
-      @host.request_frame()
     })
     return
   }
@@ -318,6 +315,5 @@ pub fn sign_in() -> Unit {
       Ok(_) => "已登录"
       Err(e) => str(Some(e), "message")
     }
-    @host.request_frame()
   })
 }

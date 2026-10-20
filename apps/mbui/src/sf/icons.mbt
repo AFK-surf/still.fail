@@ -12,7 +12,6 @@ fn init {
   @ui.on_reset(fn() {
     made.clear()
     copied_at.clear()
-    first_seen.clear()
     dark_set.val = None
     current.val = { dark: false, narrow: false, p: wide_light, t: wide_type }
   })

@@ -430,25 +430,16 @@ pub fn card_text(c : @ui.Ctx, title : String, line? : String = "") -> Unit {
 pub let later_ms : Double = 400.0
 
 ///|
-let first_seen : Map[Int, Double] = {}
-
-///|
-/// Since when `key` has been waited on (the first frame that asked).
-fn waited(c : @ui.Ctx, key : String) -> Double {
-  let id = c.id("sf-wait/" + key)
-  match first_seen.get(id) {
-    Some(t) => c.now() - t
-    None => {
-      first_seen[id] = c.now()
-      0.0
-    }
-  }
+/// Whether `key` has been waited on for later_ms, since the first frame that asked (@kit.after's clock: a frame comes
+/// when it has).
+fn waited_long(c : @ui.Ctx, key : String) -> Bool {
+  @kit.after(c, "sf-wait/" + key, true, later_ms)
 }
 
 ///|
 /// Forgets a wait, so the next one on `key` waits its 400ms again.
 pub fn done_waiting(c : @ui.Ctx, key : String) -> Unit {
-  first_seen.remove(c.id("sf-wait/" + key))
+  @kit.after(c, "sf-wait/" + key, false, later_ms) |> ignore
 }
 
 ///|
@@ -494,8 +485,7 @@ pub fn bar(
 /// failed; the others only after later_ms.
 pub fn wait_pill(c : @ui.Ctx, text : String, key? : String = "", error? : Bool = false) -> Unit {
   let t = theme()
-  if !error && waited(c, "pill/" + key + text) < later_ms {
-    c.request_frame()
+  if !error && !waited_long(c, "pill/" + key + text) {
     return
   }
   c.box(dir=Row, padx=12.0, pady=6.0, gap=8.0, bg=t.p.neutral_bg, radius=15.0, fn() {
@@ -515,8 +505,7 @@ pub fn wait_pill(c : @ui.Ctx, text : String, key? : String = "", error? : Bool =
 /// after later_ms; red words and no spinner when it failed.
 pub fn wait_line(c : @ui.Ctx, text : String, key? : String = "", error? : Bool = false) -> Unit {
   let t = theme()
-  if !error && waited(c, "line/" + key + text) < later_ms {
-    c.request_frame()
+  if !error && !waited_long(c, "line/" + key + text) {
     c.box(h=Px(18.0), fn() {  }) |> ignore
     return
   }

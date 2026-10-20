@@ -1,9 +1,9 @@
 // 03-send-text (src/sfreplay/send_text) seen again twice in one process, back to back: the second run makes every ask
-// the first made, takes every step as long, and draws the same frames once settled (a Tester's inputs its own alone:
+// the first made, takes every step as long, and draws the same frames from its end on (a Tester's inputs its own alone:
 // sfapp's reset as each starts, flow.mbt).
 
 ///|
-/// One run of the flow: its drive's log, what it left of the trace, its frames once settled.
+/// One run of the flow: its drive's log, what it left of the trace, its frames from where the flow ended.
 fn send_text_once() -> (Array[String], String, Array[Int64]) {
   let (r, t, log) = @sfreplay.run_flow(@sfreplay.trace_send_text, @sfreplay.drive_send_text, skip=["client.device"])
   t.draw()
