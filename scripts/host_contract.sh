@@ -138,13 +138,22 @@ run() {
     web)
       node scripts/host-web.mjs "bench=-1&$(echo "$1" | tr ' ' '&' | sed 's/+/%2B/g; s|/|%2F|g')" "$2" 960 720 ;;
     android)
-      $ADB logcat -c
+      # (the app's last run ended and its log file gone before every buffer is cleared, the system's events too: what
+      # scripts/android_end.py reads, the events and the file, is this run's alone, not the last one's end)
+      $ADB shell am force-stop dev.mbui.demo
+      $ADB shell run-as dev.mbui.demo rm -f files/run.log || true
+      $ADB logcat -b all -c
       EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 ENV="$(echo "$1" | tr ' ' ';');MBUI_LOG_FILE=run.log" \
         bash scripts/android.sh run
-      # the app's own named end (or its crash, its own: not another app's on the emulator) as logcat has it; its whole
-      # log is the file it wrote (Host.log)
-      $ADB logcat -v brief -m 1 --uid=$(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) -e "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
-      $ADB exec-out run-as dev.mbui.demo cat files/run.log > "$2" ;;
+      # the app's own named end (or its crash, its own: not another app's on the emulator), or the system's word that
+      # its process died, stopped answering or was sent behind before it (a run that would never end: said, failed);
+      # its whole log is the file it wrote (Host.log)
+      local r=0
+      "$PY" scripts/android_end.py --adb "$ADB" --app dev.mbui.demo --file run.log \
+        --uid $(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) \
+        --end "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done|FATAL EXCEPTION|Fatal signal" || r=1
+      $ADB exec-out run-as dev.mbui.demo cat files/run.log > "$2"
+      return $r ;;
     ios)
       # (the app's stderr is its log, line by line: scripts/ios.sh run, which leaves the app running)
       # (its pid as ios.sh says it: "<bundle id>: <pid>"; the app may have ended already)
@@ -353,11 +362,14 @@ PYEOF
     # corners, just inside its rect but outside its round, the canvas's ground (the view cut there, and its hole as
     # round: no square corner of the page, nothing of what is under the canvas); a little further in, the page
     if [ "$H" = android ]; then
-      $ADB logcat -c
+      $ADB shell am force-stop dev.mbui.demo
+      $ADB shell run-as dev.mbui.demo rm -f files/round.log || true
+      $ADB logcat -b all -c
       EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 ENV="MBUI_DRAW_LOG=1;MBUI_VIEWCHECK=hold;MBUI_LOG_FILE=round.log" \
         bash scripts/android.sh run
-      $ADB logcat -v brief -m 1 --uid=$(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) \
-        -e "VIEWCHECK placed|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
+      "$PY" scripts/android_end.py --adb "$ADB" --app dev.mbui.demo --file round.log \
+        --uid $(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) \
+        --end "VIEWCHECK placed|FATAL EXCEPTION|Fatal signal"
       EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh shown && $ADB exec-out screencap -p > $O/views-round.png
       $ADB exec-out run-as dev.mbui.demo cat files/round.log > $O/views-round.log
       $ADB shell am force-stop dev.mbui.demo
