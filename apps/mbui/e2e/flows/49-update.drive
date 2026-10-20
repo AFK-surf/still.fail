@@ -12,12 +12,13 @@ until 此设备
 drag 195 700 0 -500 400
 until 更新到 0.1.1
 shot 1-settings
-tap 更新到 0.1.1
-# downloaded and checked (正在安装), then held until the host says it has handed the build to the system's installer
-# (its update ends: the app at rest), and the run kept until the installer's page is in front (the app's process
-# asked it: a run ended before would leave the page unopened, an app out of the foreground may not open one); the
-# runner keeps its page and declines it, the app in front again
-until 正在安装
-rest
+# the runner asked first to wait for the system's installer in front (the activity manager's top activity), keep its
+# page and decline it: once the update is handed over, the installer's page covers the app, which draws no frame till
+# it is back in front, so no step of the app's waits through that time
 log do: android-installer
+tap 更新到 0.1.1
+# downloaded and checked (正在安装, before the build is handed over); then the runner's word that the installer came in
+# front and was declined (the app in front again), and the app at rest: its update ended (handed to the installer)
+until 正在安装
 done 1-android-installer
+rest
