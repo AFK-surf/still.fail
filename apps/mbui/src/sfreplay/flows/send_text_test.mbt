@@ -15,6 +15,7 @@ test "03-send-text" {
     // the words flown to their bubble
     f.run_for(@sfapp.flight_ms)
     f.see("第一条来自 mbui 的消息 053246")
+    f.see("这一句不在屏幕上（CI 演示，马上撤回）")
     f.gone("正在发送")
     // after the station's two rows came (the message, the agent's turn) the run's app told the core the chat was off
     // its end (client.focus end: false): its list had not followed them yet, this one's has
