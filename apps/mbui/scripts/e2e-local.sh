@@ -7,6 +7,8 @@
 # has its own ports and directories under $E2E_WORK, the station its own HOME. See docs/stillfail-port.md, "Checked
 # end to end".
 #
+#   scripts/e2e-local.sh install    what `up` installs first, alone: ember's packages, the station built, the natives
+#                                   (fetched or built): ios-smoke.sh's, while the app builds
 #   scripts/e2e-local.sh up         the cloud, relay, station, the chat (prints what the app needs: e2e-env.sh)
 #   scripts/e2e-local.sh mac        the mac flows (e2e/flows/*.drive) against what `up` started, pass/fail per flow
 #   scripts/e2e-local.sh android    the same on an emulator of our own (AVD, EMU_PORT), with a screen recording
@@ -443,6 +445,7 @@ thaw() {
 }
 
 case "${1:-all}" in
+  install) ember; for n in iroh-relay mesh runner launcher; do native $n > /dev/null; done ;;
   up) up ;;
   snapshot) shift; snapshot "$@" ;;
   restore) shift; restore "$@" ;;

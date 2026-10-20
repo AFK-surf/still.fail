@@ -1,6 +1,6 @@
 #!/bin/bash
 # still.fail mbui's iOS smoke flows (e2e/run.sh ios: 01-signin, 03-send-text, 05-agent-reply), as
-# .github/workflows/mbui-ios.yml runs them on a GitHub macOS runner (take, boot, build, run, done), or by hand on Mini1
+# .github/workflows/mbui-ios.yml runs them on a GitHub macOS runner (take, boot, prepare, build, run, done), or by hand on Mini1
 # (gate, build, take, run, done):
 #   scripts/ios-smoke.sh gate   until Mini1 can take it: the load low enough (IOS_LOAD_MAX, the 5 minutes' average:
 #                               under 20, twice Mini1's 10 cores; the simulator's SimLaunchHost crashed above it on
@@ -16,6 +16,10 @@
 #                               put the app in the background and shut the simulator down under it (2026-10-20).
 #   scripts/ios-smoke.sh boot   the simulator made and booted in the background, while the app builds (a fresh
 #                               runner's first boot takes a minute or more); `run` waits for it
+#   scripts/ios-smoke.sh prepare  that still.fail's packages installed and its natives fetched (e2e-local.sh install), in
+#                               the background while the app builds and the simulator's own processes are held back:
+#                               on a 3-core runner beside them it took 3 minutes, a run's whole margin (2026-10-21);
+#                               `run` waits for it
 #   scripts/ios-smoke.sh run    a local still.fail of its own (scripts/e2e-local.sh up: its directory kept, so its
 #                               packages stay installed), the flows, then that still.fail down
 #   scripts/ios-smoke.sh done   the simulator shut down when `take` found it so (another's booted one left as it was),
@@ -32,6 +36,9 @@ LOCK=${MBUI_IOS_LOCK:-$HOME/.mbui-ios-sim.lock}
 ME="still.fail mbui-ios ${GITHUB_RUN_ID:-run by hand}"
 mkdir -p "$STATE"
 cd "$A"
+
+# the local still.fail's places, its own beside another's on the same machine
+e2e_env() { export E2E_WORK=$C/e2e-ios E2E_STATION=/tmp/mbui-e2e-ios E2E_PORT=19500 E2E_RELAY=19040 E2E_NOBUILD=1 EMBER=$REPO; }
 
 device() {  # the simulator's id and state, "" when there is none of that name
   xcrun simctl list devices -j | python3 -c "
@@ -130,15 +137,27 @@ case "${1:-}" in
     bash "$D/ios.sh" device > "$STATE/boot.log" 2>&1 &
     echo $! > "$STATE/boot.pid"
     echo "ios-smoke: $MBUI_IOS_DEVICE booting ($STATE/boot.log)" ;;
+  prepare)
+    rm -f "$STATE/prepare.ok"
+    e2e_env
+    (bash "$D/e2e-local.sh" install && touch "$STATE/prepare.ok") > "$STATE/prepare.log" 2>&1 &
+    echo $! > "$STATE/prepare.pid"
+    echo "ios-smoke: the local still.fail installing ($STATE/prepare.log)" ;;
   run)
-    # (the boot `boot` started, ended first: e2e/run.sh would make a second simulator of that name beside one not
-    # made yet)
+    # (what `prepare` started, ended first; the boot `boot` started too: e2e/run.sh would make a second simulator of
+    # that name beside one not made yet)
+    if [ -f "$STATE/prepare.pid" ]; then
+      python3 "$A/mbui/scripts/logwait.py" --pid "$(cat "$STATE/prepare.pid")" --deadline 600 >/dev/null || true
+      rm -f "$STATE/prepare.pid"
+      cat "$STATE/prepare.log"
+      [ -f "$STATE/prepare.ok" ] || { echo "ios-smoke: installing the local still.fail failed"; exit 1; }
+    fi
     if [ -f "$STATE/boot.pid" ]; then
       python3 "$A/mbui/scripts/logwait.py" --pid "$(cat "$STATE/boot.pid")" --deadline 600 >/dev/null || true
       rm -f "$STATE/boot.pid"
       cat "$STATE/boot.log"
     fi
-    export E2E_WORK=$C/e2e-ios E2E_STATION=/tmp/mbui-e2e-ios E2E_PORT=19500 E2E_RELAY=19040 E2E_NOBUILD=1 EMBER=$REPO
+    e2e_env
     bash "$D/e2e-local.sh" up || { tail -30 "$E2E_WORK/run/"*.log 2>/dev/null; bash "$D/e2e-local.sh" down; exit 1; }
     bash e2e/run.sh ios; r=$?
     bash "$D/e2e-local.sh" down > /dev/null 2>&1
@@ -152,5 +171,5 @@ case "${1:-}" in
     rm -f "$STATE/booted-here"
     [ "$(head -1 "$LOCK/owner" 2>/dev/null)" = "$ME" ] && rm -rf "$LOCK" && echo "ios-smoke: the simulator's lock given back"
     true ;;
-  *) sed -n '2,22p' "$0"; exit 1 ;;
+  *) sed -n '2,26p' "$0"; exit 1 ;;
 esac
