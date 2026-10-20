@@ -1,5 +1,6 @@
 # The renderer's pixel references (docs/determinism.md): made and checked on Mini1 (mbui's runner mini1-mbui), on
 # this macOS and this GPU only. Another (Mini1 updated): every reference made again in one PR (the render
-# workflow's artifact), said there.
-system 26.5 25F71
+# workflow's artifact), said there. Made again on macOS 27.0.1 (2026-10-21, render run 39475789327's artifact): only
+# glyphs' edges differ from 26.5's, Core Text's rasterizing; every shape the same to the byte.
+system 27.0.1 26A434
 gpu Apple M4

@@ -22,9 +22,10 @@ render_against() {
     return 1
   fi
   for k in $keys; do
+    # (a key may have several lines: each a machine the references were checked on, the same to the byte there)
     want=$(sed -n "s/^$k //p" "$ref")
     have=$(sed -n "s/^$k //p" out/render/machine.txt)
-    if [ "$want" != "$have" ]; then
+    if ! printf '%s\n' "$want" | grep -Fxq -- "$have"; then
       echo "$k: this run's is \"$have\", the references were made on \"$want\": make them all again in one PR (this run's artifact), saying so"
       bad=1
     fi

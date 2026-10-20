@@ -1,7 +1,8 @@
 # The marks' reference on macOS (docs/determinism.md, the marks' contract; scripts/host_contract.sh mac marks): made on
 # Mini1 (mbui's runner, host-mac's artifact). Checked: system (Core Graphics, Core Text, ImageIO draw it) and fonts (the
 # system font's bytes); the rest is said. Either another: made again from the workflow's artifact, said in the PR.
-png 4fc1b8549c7a1625a3d4a1afcbe1cbb3
-system 26.5 25F71
-fonts 365979cc7a689f6738e6c99b68b9b149
+# Made again on macOS 27.0.1 (2026-10-21, host-mac run 39467832835's artifact): the picture looked at beside 26.5's.
+png aa137b2948047b3ae21abc86e69b92ee
+system 27.0.1 26A434
+fonts 0f1922d512eaa67519604dc36e8a486e
 cpu Apple M4

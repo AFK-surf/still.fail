@@ -1,9 +1,12 @@
 # The renderer's pixel references on Windows (docs/determinism.md): made and checked on GitHub's windows-2025 runner,
 # Direct3D 11 on WARP, offscreen. Checked: the system, WARP's and DirectWrite's versions and the fonts' bytes; the rest
-# is said. Any new: every reference made again in one PR (the render-windows workflow's artifact), said there.
+# is said. Any new: every reference made again in one PR (the render-windows workflow's artifact), said there; or,
+# where the new one draws every reference the same to the byte, a line of it beside the old (WARP 33648 on image
+# 20261018.275.1: run 39473079125's controls.png the reference's to the byte).
 image win25-vs2026 20261007.264.1
 system Microsoft Windows NT 10.0.26100.0
 warp 10.0.26100.33438 (WinBuild.160101.0800)
+warp 10.0.26100.33648 (WinBuild.160101.0800)
 dwrite 10.0.26100.1 (WinBuild.160101.0800)
 fonts dd6d10eafb0a4cadca02b22ab335d816
 cpu AMD EPYC 7763 64-Core Processor
