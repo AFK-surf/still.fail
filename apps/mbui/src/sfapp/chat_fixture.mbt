@@ -234,6 +234,8 @@ fn rich_chat(older : Int) -> Json {
     "offline": false,
     "archivable": true,
     "archiveOffered": true,
+    // what waits to be decided: the two cards not answered (with_cards takes those answered here off)
+    "asks": [{ "seq": 8 }, { "seq": 10 }],
   }
 }
 
@@ -834,6 +836,12 @@ fn with_cards(f : Fixture, v : Json, session : String) -> Json {
         }
       }
       o["messages"] = Json::array(all)
+      // what waits to be decided: the cards still not answered
+      o["asks"] = Json::array(
+        all
+        .filter(fn(x) { field(field(Some(x), "decision"), "resolved") is Some(False) })
+        .map(fn(x) { { "seq": Json::number(number(Some(x), "seq")) } }),
+      )
       if fix_kept.val {
         o["archiveOffered"] = Json::boolean(false)
       }
