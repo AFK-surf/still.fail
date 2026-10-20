@@ -828,14 +828,19 @@ fn Ctx::text_patch(self : Ctx, style : TextStyle?) -> TextPatch {
 }
 
 ///|
-/// The size and the line a style's words have, in the theme in force.
+/// The size and the line a style's words have, in the theme in force: the line its `leading` when it says one, else
+/// its size's. (A node's line_h 0 is the font's own: `Font`.)
 fn Ctx::text_sizes(self : Ctx, st : TextPatch) -> (Double?, Double?) {
-  match st.size {
+  let (size, line) = match st.size {
     Some(z) => {
       let (size, line) = self.theme.text_size(z)
       (Some(size), Some(line))
     }
     None => (None, None)
+  }
+  match st.leading {
+    Some(l) => (size, Some(self.theme.leading(l).unwrap_or(0.0)))
+    None => (size, line)
   }
 }
 

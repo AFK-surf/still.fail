@@ -84,8 +84,10 @@ pub(all) struct Theme {
   selected : Int64
   /// links
   link : Int64
-  /// the sizes of words with their lines' heights (style.mbt's TextSize), and the corners (Radius)
+  /// the sizes of words with their lines' heights (style.mbt's TextSize), the lines' heights said on their own
+  /// (Leading), and the corners (Radius)
   text : TextScale
+  leading : LeadingScale
   radii : RadiusScale
 }
 
@@ -115,6 +117,25 @@ pub fn TextScale::tailwind() -> TextScale {
     xl3: (30.0, 36.0),
     xl4: (36.0, 40.0),
   }
+}
+
+///|
+/// The heights of lines said on their own (Leading's L3 … L10), in pixels.
+pub(all) struct LeadingScale {
+  l3 : Double
+  l4 : Double
+  l5 : Double
+  l6 : Double
+  l7 : Double
+  l8 : Double
+  l9 : Double
+  l10 : Double
+}
+
+///|
+/// Tailwind's (v3.4: leading-3 … leading-10, 0.75rem … 2.5rem).
+pub fn LeadingScale::tailwind() -> LeadingScale {
+  { l3: 12.0, l4: 16.0, l5: 20.0, l6: 24.0, l7: 28.0, l8: 32.0, l9: 36.0, l10: 40.0 }
 }
 
 ///|
@@ -180,6 +201,7 @@ pub fn Theme::light() -> Theme {
     selected: 0xEBE7E1FFL,
     link: 0x1559C4FFL,
     text: TextScale::tailwind(),
+    leading: LeadingScale::tailwind(),
     radii: RadiusScale::tailwind(),
   }
 }
@@ -318,6 +340,7 @@ pub fn Theme::ios_light() -> Theme {
     selected: 0xD1D1D6FFL,
     link: 0x0A84FFFFL,
     text: TextScale::tailwind(),
+    leading: LeadingScale::tailwind(),
     radii: RadiusScale::tailwind(),
   }
 }
@@ -458,6 +481,23 @@ pub fn Theme::text_size(self : Theme, s : TextSize) -> (Double, Double) {
     Xl3 => self.text.xl3
     Xl4 => self.text.xl4
     Exact(size, line) => (exact_ok(size, "TextSize"), exact_ok(line, "TextSize"))
+  }
+}
+
+///|
+/// A line's height in this theme; None for `Font`, the font's own (no height to say: not a 0 to be taken for one).
+pub fn Theme::leading(self : Theme, l : Leading) -> Double? {
+  match l {
+    Font => None
+    L3 => Some(self.leading.l3)
+    L4 => Some(self.leading.l4)
+    L5 => Some(self.leading.l5)
+    L6 => Some(self.leading.l6)
+    L7 => Some(self.leading.l7)
+    L8 => Some(self.leading.l8)
+    L9 => Some(self.leading.l9)
+    L10 => Some(self.leading.l10)
+    Exact(v) => Some(exact_ok(v, "Leading"))
   }
 }
 

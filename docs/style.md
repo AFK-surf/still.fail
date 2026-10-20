@@ -23,6 +23,7 @@ node is built, so one style is a constant and right in light and dark, wide and 
 | `Len` (sizes) | `Hug` (what it holds), `Full`, `Grow(k)`, `Fixed(v)`, and every `Space` name | |
 | `Radius` | `Sharp` `Sm` `Base` `Md` `Lg` `Xl` `Xl2` `Xl3` `Full` (a pill) `Inner` | `Theme.radii` (Tailwind's by default) |
 | `TextSize` (size and line) | `Xs` `Sm` `Base` `Lg` `Xl` `Xl2` `Xl3` `Xl4` | `Theme.text` (Tailwind's by default) |
+| `Leading` (a line's height said apart from the size's) | `L3` … `L10`, `Font` (the font's own) | `Theme.leading` (Tailwind's leading-3 … leading-10 by default: 12, 16 … 40 px) |
 | `Weight` | `Normal` `Medium` `Semibold` `Bold` | 400 … 700 |
 | `Tracking` (letter spacing) | `Tighter` `Tight` `Normal` `Wide` `Wider` `Widest` | Tailwind's, in ems of the words' size; `Exact(px)` in pixels |
 | `Color` | `Bg` `Surface` `Raised` `Card` `Fg` `Muted` `Subtle` `Faint` `Line` `Border` `Accent` `AccentText` `AccentBg` `OnAccent` `Primary` `OnPrimary` `Positive` `Danger` `DangerBg` `OnDanger` `Neutral` `Hover` `Selected` `Focus` `Scrim` `Link` `ShadowC` `Clear`; `A(c, o)` at an opacity, `Over(under, top)` | the theme's fields |
@@ -46,7 +47,8 @@ another under part of a view.
 
 A box: `row`, `w` `h` `min_w` `max_w` `min_h` `max_h`, `p` `px` `py` `pl` `pr` `pt` `pb`, `gap`, `align`, `justify`,
 `bg`, `radius`, `border`, `border_color`, `shadow`, `clip`, `opacity`. Words: `size` (with its line), `weight`, `color`,
-`w`, `center`, `wrap` (false: one line, cut with an ellipsis), `tracking`, `max_lines` (wrapped words cut after that
+`leading` (the line's height in place of the size's own; `line=` in the call over it), `w`, `center`, `wrap` (false: one
+line, cut with an ellipsis), `tracking`, `max_lines` (wrapped words cut after that
 many lines, the last ending in an ellipsis: what follows of its paragraph up to what fits with it, as Android's
 `maxLines`; a count, so no style-literal). Letter spacing is Android's: each cluster's advance has it, its piece drawn
 half of it in; words with it are shaped with no ligatures (`@host.style_no_ligatures`), each cluster spaced on its own.

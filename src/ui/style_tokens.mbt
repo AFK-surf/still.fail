@@ -234,6 +234,22 @@ pub(all) enum TextSize {
 } derive(Eq, Show, Debug)
 
 ///|
+/// A line's height said apart from the words' size (which has one of its own, TextSize): the theme's scale
+/// (Tailwind's leading-3 … leading-10 by default: 12, 16 … 40), `Font` the font's own, or `Exact(px)`.
+pub(all) enum Leading {
+  Font
+  L3
+  L4
+  L5
+  L6
+  L7
+  L8
+  L9
+  L10
+  Exact(Double)
+} derive(Eq, Show, Debug)
+
+///|
 /// Letter spacing (Tailwind's tracking, in ems of the words' size), or `Exact(px)` in pixels: added to each
 /// cluster's advance, half before it and half after (Android's letterSpacing).
 pub(all) enum Tracking {

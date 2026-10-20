@@ -64,6 +64,34 @@ test "style: words' size comes with its line, from the theme's scale; Exact as s
 }
 
 ///|
+test "style: leading says the line apart from the size, from the theme's scale; Font the font's own; line= over it" {
+  // the size's own line (Sm: 14/20) given up for L4's 16
+  let n = style_node(fn(c) { c.text("a", style=text_style(size=Sm, leading=L4)) |> ignore })
+  assert_eq((n.font_size, n.line_h), (14.0, 16.0))
+  let n = style_node(fn(c) { c.text("a", style=text_style(size=Sm, leading=Font)) |> ignore })
+  assert_eq((n.font_size, n.line_h), (14.0, 0.0))
+  let n = style_node(fn(c) { c.text("a", style=text_style(size=Sm, leading=Exact(24.75))) |> ignore })
+  assert_eq(n.line_h, 24.75)
+  // an app's scale in its theme
+  let n = style_node(fn(c) {
+    c.with_theme({ ..Theme::light(), leading: { ..LeadingScale::tailwind(), l5: 18.0 } }, fn() {
+      c.text("a", style=text_style(size=Sm, leading=L5)) |> ignore
+    })
+  })
+  assert_eq(n.line_h, 18.0)
+  // what the call says wins over the style's, as every property's
+  let n = style_node(fn(c) { c.text("a", style=text_style(size=Sm, leading=L4), line=30.0) |> ignore })
+  assert_eq(n.line_h, 30.0)
+  // `then`: the later's leading over the earlier's; a later size keeps the earlier's leading (each property its own)
+  let a = text_style(size=Sm, leading=L4)
+  let n = style_node(fn(c) { c.text("a", style=a.then(text_style(leading=L6))) |> ignore })
+  assert_eq(n.line_h, 24.0)
+  let n = style_node(fn(c) { c.text("a", style=a.then(text_style(size=Lg))) |> ignore })
+  assert_eq((n.font_size, n.line_h), (18.0, 16.0))
+  assert_eq(Theme::light().leading(Font), None)
+}
+
+///|
 test "style: what the call says wins over the style's same property; coarser padding over the style's finer" {
   let s = style(pl=S2, pr=S2, pt=S1, pb=S1, bg=Card, radius=Xl)
   let n = style_node(fn(c) { c.box(style=s, pad=10.0, bg=0x112233FFL, fn() {  }) |> ignore })
