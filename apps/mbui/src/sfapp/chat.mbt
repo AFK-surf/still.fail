@@ -619,6 +619,8 @@ fn messages(
       _ => ()
     }
     // the core told the chat shows, and whether its end does (what is read follows): not on a read-only run
+    // (its end in view: not while it glides to rows that came, as Android's Chat.kt has it (endInView, lastLaidOut):
+    // rows not in view yet are not read)
     let seen = match info {
       Some(i) => !v.newer && i.at_end
       None => false

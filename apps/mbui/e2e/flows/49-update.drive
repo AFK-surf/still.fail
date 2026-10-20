@@ -7,10 +7,17 @@
 timeout 60000
 until 端到端测试
 tap icon:settings
-until 更新到 0.1.1
+# settings' home in place, then scrolled to its version row (under the fold)
+until 此设备
 drag 195 700 0 -500 400
-wait 1000
+until 更新到 0.1.1
 shot 1-settings
-# (the last step: the download and the installer's confirmation go on after it, over the app; the check looks)
 tap 更新到 0.1.1
-linger 60000
+# downloaded and checked (正在安装), then held until the host says it has handed the build to the system's installer
+# (its update ends: the app at rest), and the run kept until the installer's page is in front (the app's process
+# asked it: a run ended before would leave the page unopened, an app out of the foreground may not open one); the
+# runner keeps its page and declines it, the app in front again
+until 正在安装
+rest
+log do: android-installer
+done 1-android-installer

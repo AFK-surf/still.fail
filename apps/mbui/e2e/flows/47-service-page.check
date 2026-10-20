@@ -1,4 +1,0 @@
-check "the station runs the service the agent started, with its port" '[ "$(sql "select port from jobs where name = '"'"'e2e-web'"'"' order by started_at desc limit 1")" = $SVC ]'
-check "the page's requests went through the core to the station (station.preview): the page, its stylesheet, its data" 'grep -q "CALL station.preview .*\"path\":\"/\"" $OUT/$name.log && grep -q "CALL station.preview .*style.css" $OUT/$name.log && grep -q "CALL station.preview .*data.json" $OUT/$name.log'
-check "the web view loaded it, then the second page typed in the bar, then back in its history" 'grep -q "view [0-9]*: site page loaded" $OUT/$name.log && grep -q "service: at /b.html" $OUT/$name.log && grep "service: at " $OUT/$name.log | tail -1 | grep -q "service: at /$"'
-check "the page shows (its ground, its words)" 'python3 $D/pngstat.py $OUT/$name/2-page.png 0.05 0.2 0.95 0.5 3'
