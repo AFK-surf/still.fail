@@ -9,34 +9,34 @@ log do: peer createfiles 预览四个文件 {T} post:收到四个文件 {T} -- e
 timeout 180000
 until 预览四个文件 {T}
 timeout 60000
-wait 1000
 tap 预览四个文件 {T}
 until =studio
 timeout 120000
-until img:e2e-photo.jpg
+decoded e2e-photo.jpg
 timeout 60000
-wait 1000
 tap img:e2e-photo.jpg
 until %
-wait 1500
+decoded e2e-photo.jpg
 shot 1-image
 back
-wait 1500
+gone %
 tap e2e-doc.pdf
-wait 5000
+ready pdf
 shot 2-pdf
 back
-wait 1500
+gone icon:close
 tap e2e-clip.mp4
 until 帧
 shot 3a-video-controls
-wait 2500
+ready video
+# (played to its end: its frames shown)
+until 120 / 120 帧
 shot 3-video
 back
-wait 1500
+gone 帧
 tap e2e-page.html
 until 源码
-wait 5000
+ready web
 shot 4-page
 back
-wait 1500
+gone 源码
