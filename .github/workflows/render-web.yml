@@ -27,8 +27,6 @@ on:
     paths: *paths
   workflow_dispatch:
 
-env:
-  MOON_HOME: ${{ github.workspace }}/../.moon
 
 jobs:
   offscreen:
@@ -40,10 +38,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/moonbit
       - name: Drawn offscreen, twice (scripts/render_web.sh)
         run: scripts/render_web.sh
       - uses: actions/upload-artifact@v4

@@ -30,8 +30,6 @@ on:
     paths: *paths
   workflow_dispatch:
 
-env:
-  MOON_HOME: ${{ github.workspace }}/../.moon
 
 jobs:
   offscreen:
@@ -46,10 +44,7 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       - uses: gradle/actions/setup-gradle@v4
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/moonbit
       - name: The draw list and the APK (scripts/render_android.sh build)
         run: scripts/render_android.sh build
       - name: KVM for the emulator

@@ -28,8 +28,6 @@ on:
     paths: *paths
   workflow_dispatch:
 
-env:
-  MOON_HOME: ${{ github.workspace }}/../.moon
 
 jobs:
   contracts:
@@ -37,10 +35,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/moonbit
       - name: kitdemo for the browser, and Chromium
         run: scripts/host_contract.sh web build
       - name: "The host's contract: a run's tape = a Tester's frames"

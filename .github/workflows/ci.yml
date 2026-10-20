@@ -10,8 +10,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  MOON_HOME: ${{ github.workspace }}/../.moon
 
 jobs:
   test:
@@ -26,10 +24,7 @@ jobs:
         run: python3 scripts/corner_sl.py --check
       - name: "The kept runs: textrec_runs.mbt is what textrec_runs.txt makes, and lists every run git keeps (scripts/textrec_test.py --check)"
         run: python3 scripts/textrec_test.py --check
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/moonbit
       - name: Check
         run: moon version --all && moon check --target js --output-json 2>&1 | python3 scripts/errs.py
       - name: ui, motion, the components and Markdown tests; the hosts' kept runs replayed (src/kitdemo/textrec_*)
@@ -59,12 +54,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Install MoonBit (the latest)
-        run: |
-          export MOON_HOME=$RUNNER_TEMP/moon
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "MOON_HOME=$MOON_HOME" >> $GITHUB_ENV
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/moonbit
       - name: ui, motion, the components, Markdown, kitdemo and effect.mb's tests on native (scripts/test_native.sh)
         run: scripts/test_native.sh
 
@@ -72,10 +62,7 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/moonbit
       - name: macOS apps
         run: |
           for app in demo textdiff kitdemo; do
@@ -110,10 +97,7 @@ jobs:
       # Gradle's own distribution, the dependencies and its build cache from main's last run: cold, the first build's
       # Gradle was ~90 s of the job's ~150 (written on main only, read on branches)
       - uses: gradle/actions/setup-gradle@v4
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/moonbit
       - name: "The differential text test's APK (APP=textdiff; it runs on an emulator, scripts/textdiff.sh android)"
         run: APP=textdiff scripts/android.sh build
       - name: APK (libmbui.so from the generated C, then Gradle)

@@ -45,12 +45,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        # (the merge commit and its base: what changed is told by them, scripts/ci_paths.py)
+        with: { fetch-depth: 2 }
       - name: What changed (a pull request runs the contracts its files touch)
         id: f
         if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
+        env:
+          FILTERS: |
             host:
               - "src/ui/native.mbt"
               - "src/kitdemo/viewcheck.mbt"
@@ -85,14 +86,10 @@ jobs:
               - "scripts/host_contract.sh"
               - ".github/workflows/host-ios.yml"
               - "src/host/moon.pkg"
+        run: python3 scripts/ci_paths.py
       - name: The simulator free (no other run's app on it)
         run: scripts/host_contract.sh ios free
-      - name: Install MoonBit (the latest, as the other jobs)
-        run: |
-          export MOON_HOME=$RUNNER_TEMP/moon
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "MOON_HOME=$MOON_HOME" >> $GITHUB_ENV
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/moonbit
       - name: kitdemo for the simulator
         run: scripts/host_contract.sh ios build
       - name: "The host's contract: a run's tape = a Tester's frames"

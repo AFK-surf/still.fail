@@ -47,12 +47,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Install MoonBit (the latest, as the other jobs)
-        run: |
-          export MOON_HOME=$RUNNER_TEMP/moon
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "MOON_HOME=$MOON_HOME" >> $GITHUB_ENV
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/moonbit
       - name: A Tester's draw list drawn offscreen (scripts/render_offscreen.sh)
         run: scripts/render_offscreen.sh
       - uses: actions/upload-artifact@v4

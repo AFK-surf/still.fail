@@ -39,28 +39,7 @@ jobs:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
-      - name: MoonBit's latest release
-        id: moon
-        run: |
-          tag=$( { curl -sfI --max-time 10 https://cli.moonbitlang.com/binaries/latest/moonbit-windows-x86_64.zip || true
-                   curl -sfI --max-time 10 https://cli.moonbitlang.com/cores/core-latest.zip || true; } \
-            | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
-          if [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c)" = 4 ]; then
-            echo "key=moon-windows-$(printf '%s' "$tag" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.moon.outputs.key != ''
-        uses: actions/cache@v4
-        id: moon-cache
-        with:
-          path: ~/.moon
-          key: ${{ steps.moon.outputs.key }}
-      - name: Install MoonBit
-        shell: pwsh
-        run: |
-          if ("${{ steps.moon-cache.outputs.cache-hit }}" -ne "true" -or -not (Test-Path "$env:USERPROFILE\.moon\bin\moon.exe")) {
-            irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
-          }
-          "$env:USERPROFILE\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - uses: ./.github/actions/moonbit
       - name: kitdemo
         run: scripts/host_contract.sh windows build
       - name: "The host's contract: a run's tape = a Tester's frames"

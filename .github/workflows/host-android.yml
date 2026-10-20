@@ -34,8 +34,6 @@ on:
     paths: *paths
   workflow_dispatch:
 
-env:
-  MOON_HOME: ${{ github.workspace }}/../.moon
 
 jobs:
   contracts:
@@ -43,12 +41,13 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        # (the merge commit and its base: what changed is told by them, scripts/ci_paths.py)
+        with: { fetch-depth: 2 }
       - name: What changed (a pull request runs the contracts its files touch)
         id: f
         if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
+        env:
+          FILTERS: |
             host:
               - "src/ui/native.mbt"
               - "src/kitdemo/viewcheck.mbt"
@@ -85,13 +84,11 @@ jobs:
               - "scripts/host_contract.sh"
               - ".github/workflows/host-android.yml"
               - "src/host/moon.pkg"
+        run: python3 scripts/ci_paths.py
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       - uses: gradle/actions/setup-gradle@v4
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - uses: ./.github/actions/moonbit
       - name: kitdemo's APK for an x86_64 emulator
         run: ABI=x86_64 scripts/host_contract.sh android build
       - name: KVM for the emulator
