@@ -47,6 +47,8 @@ export type Topic =
   | { topic: "adminList"; account: string; list: "users" | "workspaces" | "invite-codes" | "feedback"; query: string; filter?: string; sort?: string; limit?: number; messages?: number }
   | { topic: "adminItem"; account: string; list: "users" | "workspaces" | "feedback"; id: string }
   | { topic: "adminOverview"; account: string }
+  // still.fail's relays and the load on each over the last day or week (a cloud from before has none: a 404).
+  | { topic: "adminRelays"; account: string; range?: "day" | "week" }
   // Views: put together by the core from the topics above.
   | { topic: "chats"; scope: string; mine: boolean; watching?: boolean }
   | { topic: "stations"; scope: string }

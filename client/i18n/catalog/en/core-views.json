@@ -496,5 +496,20 @@
   "core-views.search.archived": "Archived",
   "core-views.feishu": "Feishu",
   "core-views.admin.enterprise": "Enterprise",
-  "core-views.admin.added.line": "{role} · Joins on first sign-in"
+  "core-views.admin.added.line": "{role} · Joins on first sign-in",
+  "core-views.admin.relay.never": "No data yet",
+  "core-views.admin.relay.seen": "Updated {when}",
+  "core-views.admin.relay.sent": "Sent",
+  "core-views.admin.relay.recv": "Received",
+  "core-views.admin.relay.open": "Connections",
+  "core-views.admin.relay.dropped": "Dropped",
+  "core-views.admin.relay.card": "Network",
+  "core-views.admin.relay.card_value": "Out {out} · In {in}",
+  "core-views.admin.relay.load": "Load",
+  "core-views.admin.relay.today": "Used today",
+  "core-views.admin.relay.today_value": "{used} / {limit} · {percent}%",
+  "core-views.admin.relay.chart_rate": "Throughput",
+  "core-views.admin.relay.peak": "Peak {value}",
+  "core-views.admin.relay.range.day": "24 hours",
+  "core-views.admin.relay.range.week": "7 days"
 }

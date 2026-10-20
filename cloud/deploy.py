@@ -141,8 +141,14 @@ def grant_jwk() -> dict:
 
 def keys() -> dict:
     if KEYS.exists():
-        return json.loads(KEYS.read_text())
-    value = {"AUTH_SIGNING_KEY": secrets.token_urlsafe(32), "ADMIN_TOKEN": secrets.token_urlsafe(32), "GRANT_SIGNING_JWK": json.dumps(grant_jwk())}
+        value = json.loads(KEYS.read_text())
+        # What the relays on machines of their own send their counters with (relay-load.sh), made once when missing.
+        if "RELAY_LOAD_TOKEN" not in value:
+            value["RELAY_LOAD_TOKEN"] = secrets.token_urlsafe(32)
+            write_private(KEYS, value)
+            print(f"added RELAY_LOAD_TOKEN to {KEYS}")
+        return value
+    value = {"AUTH_SIGNING_KEY": secrets.token_urlsafe(32), "ADMIN_TOKEN": secrets.token_urlsafe(32), "RELAY_LOAD_TOKEN": secrets.token_urlsafe(32), "GRANT_SIGNING_JWK": json.dumps(grant_jwk())}
     write_private(KEYS, value)
     print(f"created {KEYS}")
     return value

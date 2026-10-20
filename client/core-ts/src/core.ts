@@ -38,6 +38,7 @@ import { ViewCalls } from "./views/calls.ts";
 import { Attend } from "./attend.ts";
 import { Attention } from "./attention.ts";
 import { Pills } from "./pill.ts";
+import { AdminRelays } from "./sync/admin-relays.ts";
 import type { Choose } from "./choose.ts";
 import { installChoose } from "./choose-calls.ts";
 import { install as installShareIn } from "./share-in.ts";
@@ -236,6 +237,7 @@ export class Core {
       inner.router.owners.push(inner.changelog);
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
       hooks.device = (_inner, facts) => inner.changelog.device(facts);
+      inner.router.owners.push(new AdminRelays(inner));
       inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
       inner.moduleCalls = installModules(inner, options.modules ?? []);
       inner.moduleNames = (options.modules ?? []).map((m) => m.name);

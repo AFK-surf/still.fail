@@ -421,5 +421,20 @@
   "core-views.search.archived": "已归档",
   "core-views.feishu": "飞书",
   "core-views.admin.enterprise": "企业版",
-  "core-views.admin.added.line": "{role} · 首次登录后加入"
+  "core-views.admin.added.line": "{role} · 首次登录后加入",
+  "core-views.admin.relay.never": "暂无数据",
+  "core-views.admin.relay.seen": "{when}更新",
+  "core-views.admin.relay.sent": "发送",
+  "core-views.admin.relay.recv": "接收",
+  "core-views.admin.relay.open": "在线连接",
+  "core-views.admin.relay.dropped": "丢包率",
+  "core-views.admin.relay.card": "网卡",
+  "core-views.admin.relay.card_value": "出 {out} · 入 {in}",
+  "core-views.admin.relay.load": "负载",
+  "core-views.admin.relay.today": "今日用量",
+  "core-views.admin.relay.today_value": "{used} / {limit} · {percent}%",
+  "core-views.admin.relay.chart_rate": "转发速率",
+  "core-views.admin.relay.peak": "峰值 {value}",
+  "core-views.admin.relay.range.day": "24 小时",
+  "core-views.admin.relay.range.week": "7 天"
 }

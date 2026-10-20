@@ -40,6 +40,9 @@ import { permissionsDemo } from "./permissions.ts";
 import { agentEnvDemo } from "./agent-env.ts";
 import { lockDemo } from "./lock.ts";
 import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
+import { relaysDemo } from "./relays.ts";
+import { Console } from "../src/admin/console.tsx";
+import { ACCOUNT } from "../src/demo/station.ts";
 import { ModelTriple } from "../src/ModelTriple.tsx";
 import { ModelList } from "../src/mobile/History.tsx";
 import type { Picking } from "../src/pick.ts";
@@ -352,6 +355,10 @@ const usageWaiting: DemoExtension = {
   then: (t, value) => (t.topic !== "usage" || !value ? undefined : { ...(value as object), empty: true, wait: { reading: true, text: "正在从 Studio 读取用量", failing: [], empty: false } }),
 };
 
+/** The admin console as the demo's account, the admin. */
+const adminConsole = () => stage(<Console account={ACCOUNT} />);
+/** To its 中继 (on the phone, from the sidebar its "/" is). */
+const toRelays: Step[] = [{ click: 'a[href="/relays"]' }];
 /** A part drawn alone on the app's ground, the whole window its room. */
 const stage = (node: ReactNode) => <div style={{ position: "relative", width: "100%", height: "100vh", overflow: "hidden", background: vars.canvas, color: vars.text }}>{node}</div>;
 /** A model control on ccvm with the workspace's models (docs/station-share.md 借用): its own, one borrowed from Studio,
@@ -955,4 +962,9 @@ export const stories: Story[] = [
   { id: "phone-station-add-existing-done", group: "手机", title: "添加 station · 已加入", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },
   { id: "phone-station-add-existing-error", group: "手机", title: "添加 station · 加入失败", app: true, phone: true, demo: joining("error"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },
   { id: "phone-station-workspaces", group: "手机", title: "station · 在几个 workspace 里", app: true, phone: true, demo: memberships(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },
+  // The admin console (admin.still.fail), its sidebar beside the page: from the overview to 中继.
+  { id: "admin-relays", group: "管理后台", title: "中继 · 24 小时", render: adminConsole, demo: relaysDemo("normal"), steps: toRelays },
+  { id: "admin-relays-week", group: "管理后台", title: "中继 · 7 天", render: adminConsole, demo: relaysDemo("normal"), steps: [...toRelays, { text: "7 天" }] },
+  { id: "admin-relays-old", group: "管理后台", title: "中继 · 旧 cloud 没有数据（404）", render: adminConsole, demo: relaysDemo("old"), steps: toRelays },
+  { id: "phone-admin-relays", group: "手机", title: "管理后台 · 中继", render: adminConsole, phone: true, demo: relaysDemo("normal"), steps: toRelays },
 ];
