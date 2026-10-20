@@ -301,22 +301,14 @@ jobs:
 
   # The mbui app's check and tests (apps/mbui/scripts/check.sh, test.sh: still.fail's design system and pages over the fixtures, the media
   # screens, the core client, and the end-to-end flows seen again over their recorded cores, src/sfreplay), on the
-  # JavaScript and native targets against mbui's fake host: no window, no station. A merge's evidence and main's, apart from the
+  # JavaScript target against mbui's fake host: no window, no station; the native target type-checked. A merge's evidence and main's, apart from the
   # app's beta (mbui.yml), which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit, as mbui's own
   # CI has it; the mbui apps/mbui/mbui.rev pins, cloned by apps/mbui/scripts/mbui.sh.
   check-mbui:
     needs: plan
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.mbui == 'true' }}
-    # js on Linux (with the check); native on GitHub's macOS, as its host's C stubs are Apple's (mbui/host: Objective-C)
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: ubuntu-24.04, targets: js, check: true }
-          - { os: macos-15, targets: native, check: false }
-    name: check-mbui (${{ matrix.targets }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     env:
       MOON_HOME: ${{ github.workspace }}/../.moon
     steps:
@@ -327,11 +319,12 @@ jobs:
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
           echo "$MOON_HOME/bin" >> $GITHUB_PATH
-      - name: The mbui app's check (detlint, then every target type-checked)
-        if: matrix.check
+      - name: The mbui app's check (detlint, then js and native type-checked)
         run: moon version && bash apps/mbui/scripts/check.sh
-      - name: The mbui app's tests and the flows seen again (${{ matrix.targets }})
-        run: moon version && TARGETS="${{ matrix.targets }}" LINES_OUT=40 bash apps/mbui/scripts/test.sh
+      # (native too once its tests link: a test's binary is not given the Apple frameworks mbui's host needs, as only
+      # an app's main package is; on GitHub's macOS they fail to link)
+      - name: The mbui app's tests and the flows seen again (js)
+        run: LINES_OUT=40 bash apps/mbui/scripts/test.sh
 
   # The web in Chrome (scripts/check.sh's browser part: its stories measured, the message list's motion watched), shared
   # out between five of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
