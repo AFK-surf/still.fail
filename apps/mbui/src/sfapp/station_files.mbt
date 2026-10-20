@@ -516,8 +516,8 @@ fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
           None => tr("common.uploading")
         }
       }
-      // its remove button over its corner, as a picture's in the composer
-      with_remove(c, remove, file_card_w, fn() {
+      // (as far down as a picture's tile in the files' row; as wide as it is, never squeezed)
+      c.box(w=Px(file_card_w), pt=picture_remove_out, fn() {
       c.box(
         dir=Row,
         w=Px(file_card_w),
@@ -543,10 +543,12 @@ fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
             |> ignore
           })
           |> ignore
+          card_close(c, remove)
         },
       )
       |> ignore
       })
+      |> ignore
     }
   })
   |> ignore

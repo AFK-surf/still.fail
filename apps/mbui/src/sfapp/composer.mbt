@@ -1370,13 +1370,15 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
         if picture != "" || (kind_of(f.name) == "image" && f.pasted is None && f.done is Some(_)) {
           draft_picture(c, f, picture, remove)
         } else {
-          // (its remove button over its corner as a picture's: their tops in line)
-          with_remove(c, remove, if f.pasted is Some(_) { pasted_card_w } else { file_card_w }, fn() {
+          // (as far down as a picture's tile, under its remove button's room: their tops in line; as wide as it is,
+          // never squeezed by a row too narrow for all of them)
+          c.box(w=Px(if f.pasted is Some(_) { pasted_card_w } else { file_card_w }), pt=picture_remove_out, fn() {
             match f.pasted {
               Some(words) => pasted_card(c, src, r, d, f, words, remove, locked)
               None => file_tile(c, f, remove)
             }
           })
+          |> ignore
         }
       }
       },
@@ -1421,7 +1423,17 @@ fn draft_picture(c : @ui.Ctx, f : Pending, picture : String, remove : Int) -> Un
 }
 
 ///|
-/// What waits to go with the message (a picture's tile, a file's card), its remove button over its top right corner,
+/// The round × of a file's card in the composer, at its trailing end (ChatFiles.kt FileCard).
+fn card_close(c : @ui.Ctx, remove : Int) -> Unit {
+  let t = @sf.theme()
+  c.box(w=Px(22.0), h=Px(22.0), radius=11.0, bg=@sf.alpha(t.p.text, 0.06), align=ACenter, justify=JCenter, id=remove, fn() {
+    @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A picture's tile waiting to go with the message, its remove button over its top right corner,
 /// reaching `picture_remove_out` beyond it (Composer.kt: a picture's; a file's card the same here, so both read alike).
 fn with_remove(c : @ui.Ctx, remove : Int, w : Double, body : () -> Unit) -> Unit {
   let t = @sf.theme()
@@ -1530,7 +1542,7 @@ fn pasted_card(
         }
       })
       |> ignore
-      ignore(remove)
+      card_close(c, remove)
     },
   )
   |> ignore
@@ -1583,7 +1595,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Unit {
       |> ignore
     })
     |> ignore
-    ignore(remove)
+    card_close(c, remove)
     },
   )
   |> ignore
