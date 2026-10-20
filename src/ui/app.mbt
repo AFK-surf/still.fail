@@ -39,7 +39,7 @@ struct Bench {
   mut speed : Double
   // build, layout and paint time summed over the measured frames
   phases : Array[Double]
-  // the host's bench mode as the window opened (MBUI_BENCH), kept after its own bench is over (mode 0 again)
+  // the host's bench mode as the window opened (MBUI_BENCH), kept as it was (`mode` the framework's own bench's)
   mut host : Int
   // a bench of the app's own asked this frame to draw the next one (Ctx::bench_frames)
   mut held : Bool
@@ -49,8 +49,9 @@ struct Bench {
 /// Opens the window and runs `view` for every frame until it closes.
 pub fn run(title : String, view : (Ctx) -> Unit) -> Unit {
   g_view.val = view
-  bench.mode = @host.bench_mode()
-  bench.host = bench.mode
+  bench.host = @host.bench_mode()
+  // (the app's own bench, bench_app: the framework's does not run beside it)
+  bench.mode = if bench.host == bench_app { 0 } else { bench.host }
   drive_init()
   @host.set_back(fn(k, x, p, e) { on_back(k, x, p, e) })
   @host.set_app_state(fn(s) { on_app_state(s) })
@@ -929,12 +930,18 @@ pub fn on_app_change(f : (Bool, Bool) -> Unit) -> Unit {
 }
 
 ///|
+/// MBUI_BENCH's value for a bench of the app's own: the framework's bench (its list scrolled, its 630 frames timed)
+/// does not run, and the app's draws every frame it asks for (Ctx::bench_frames).
+pub let bench_app : Int = 3
+
+///|
 /// A bench of the app's own (a page's, as still.fail's chat bench scrolls its list) draws every frame while it asks
-/// (`on`, asked each frame): only where the host was opened in its bench mode (MBUI_BENCH not 0), with the app as it
-/// ships, no other path. Anywhere else (a run of the app, a Tester) it does nothing: no frame is asked for by it.
+/// (`on`, asked each frame): only where the host was opened for it (MBUI_BENCH=3, bench_app), with the app as it
+/// ships, no other path. Anywhere else (a run of the app, the framework's own bench, a scripted run's stable output,
+/// a Tester) it does nothing: no frame is asked for by it.
 pub fn Ctx::bench_frames(self : Ctx, on : Bool) -> Unit {
   ignore(self)
-  if on && bench.host != 0 && fake.val is None {
+  if on && bench.host == bench_app && fake.val is None {
     bench.held = true
   }
 }
