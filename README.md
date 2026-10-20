@@ -18,13 +18,6 @@
 <img alt="Clients: web, macOS, Windows, Android" src="https://img.shields.io/badge/clients-web%20·%20macOS%20·%20Windows%20·%20Android-555">
 </p>
 
-<p align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/app-dark.png">
-  <img alt="The still.fail desktop app: the workspace's chats on the left, a chat with an agent on the right" src="docs/images/app-light.png" width="860">
-</picture>
-</p>
-
 still.fail turns a Slack thread, a Feishu chat or a chat in its own app into a persistent coding-agent session. The agent runs on a **station**, a machine you choose, with a runtime already signed in there: Claude Code, Codex, DeepSeek Harness or Grok Build. It keeps its workspace, history and background jobs between messages, and when it needs someone to decide something, the question goes to that person's list of decisions.
 
 ## Features
@@ -39,23 +32,10 @@ still.fail turns a Slack thread, a Feishu chat or a chat in its own app into a p
 
 ## How it works
 
-```mermaid
-flowchart LR
-  subgraph people [People]
-    chat["Slack · Feishu"]
-    apps["Web · desktop · Android"]
-  end
-  subgraph machines [Your machines]
-    a["Station A<br/>Claude Code · Codex · …"]
-    b["Station B"]
-  end
-  cloud[("still.fail cloud<br/>accounts · workspaces · relays")]
-  chat -->|bot| a
-  apps <-->|"iroh, peer-to-peer"| a
-  a <-->|"tasks, profiles, skills"| b
-  apps -.->|sign-in| cloud
-  a -.->|membership| cloud
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
+  <img alt="How still.fail connects: Slack, Feishu and the apps reach stations on your machines; stations work with each other; the cloud keeps accounts, workspaces and relays" src="docs/images/architecture-light.svg" width="920">
+</picture>
 
 - A **station** (`station/`, TypeScript on Node, with a few prebuilt native parts) runs on a machine you choose. It starts and keeps the agent sessions, connects to Slack and Feishu, and stores conversations locally in SQLite.
 - A **workspace** groups people and stations. The cloud service (`cloud/`, Cloudflare Workers) handles accounts, workspaces and member credentials, and runs the relays. Conversation content does not pass through its database.
