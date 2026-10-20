@@ -1,6 +1,7 @@
 // still.fail's corner rule, measured (its docs/ui-panels.md, "所有带圆角的东西"): what has a ground of its own (a
 // button, a row, a field, a block) and lies in the corner of a rounded container stands as far from the two edges of
-// that corner, and its corner is the container's less that distance (concentric). A test asks the frame it drew
+// that corner, and its corner is the container's less that distance (concentric); a circle or a capsule there is as
+// far from both, and the container's corner that distance more than its own (the container's fault when not). A test asks the frame it drew
 // (Tester::corner_faults); the gallery's components keep to it.
 
 ///|
@@ -57,12 +58,20 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
       // (flush in the corner of what cuts it is still a fault: a cut is a rectangle, the container's corner does not
       // round what lies in it; it is let be once the cut follows the corner, mbui#42)
       let even = (dx - dy).abs() <= 0.5
+      // a whole circle or a capsule (its corner half its shorter side: an avatar, a switch's knob, a dot) is round by
+      // what it is: it is the container whose corner follows it (ui-panels.md: 外圆角 = 距离 + 半高), the fault the
+      // container's when it does not
+      let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
       let concentric = (rb - (ra - dmax(dx, dy))).abs() <= 0.5
       if !(even && concentric) {
         let corner = ["top left", "top right", "bottom left", "bottom right"][k]
         out.push(
-          "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} and \{dy} from its edges" +
-          (if concentric { "" } else { ", wants corner \{ra - dmax(dx, dy)}" }),
+          if round && even {
+            "\{c.named(p)} (corner \{ra}): wants corner \{dmax(dx, dy) + rb}, for \{c.named(i)} (round, corner \{rb}) in its \{corner}, \{dx} from both edges"
+          } else {
+            "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} and \{dy} from its edges" +
+            (if concentric || round { "" } else { ", wants corner \{ra - dmax(dx, dy)}" })
+          },
         )
       }
     }
