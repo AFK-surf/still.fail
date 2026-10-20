@@ -358,27 +358,32 @@ jobs:
   # through mbui's scripts/cc_apple.sh (MOON_CC; a test package is given no cc-link-flags). Only where native can differ
   # from js (plan's mbui_native): the hosts, the FFI, the link options, the pinned mbui; on main, any change to the app.
   # On GitHub's macos-15 (free for a public repository): it needs nothing of Mini1's, whose mbui runner (mini1-6) is
-  # main's beta's. ~3.7 min there (its tests on three cores), against 134-145 s on Mini1 but up to 3 minutes waiting
-  # behind the rest (2026-10-20); done waits for neither. 10 minutes at most.
+  # main's beta's. Its two parts (scripts/test.sh's PARTS) on a runner each: on one, ~3.7 min, of which building them
+  # 28 s and running them 71 s (app) and 108 s (replay) on its three cores (2026-10-20). done waits for neither.
+  # 10 minutes at most.
   check-mbui-native:
     needs: plan
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.mbui_native == 'true' }}
     runs-on: macos-15
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [app, replay]
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
       - name: Tools (MoonBit, mbui)
         run: bash apps/mbui/scripts/beta.sh tools
-      - name: The mbui app's tests and the flows seen again (native)
+      - name: The mbui app's tests and the flows seen again (native, ${{ matrix.part }})
         run: |
           set -o pipefail
-          TARGETS=native LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-native.log"
+          TARGETS=native PARTS=${{ matrix.part }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-native.log"
       - name: What failed
         if: failure()
         run: |
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-native.log" | sed 's/^\[stillfail\] test //; s/ failed.*//' | sort -u)
-          echo "::error title=check-mbui-native failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
+          echo "::error title=check-mbui-native (${{ matrix.part }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
 
   # The web in Chrome (scripts/check.sh's browser part: its stories measured, the message list's motion watched), shared
   # out between five of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
