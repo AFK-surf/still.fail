@@ -47,6 +47,8 @@ pub fn Flow::start(
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
   @ui.on_message("core", @core.receive)
   let t = @ui.Tester::new(app, w~, h~, env~)
+  // what the run's host said of its views (a player's state, a video's frames) said to the Tester's in its place
+  r.host(fn(line) { ignore(t.view_said(line)) })
   // the run's core answering as soon as asked: what may come is posted as each frame ends, taken by the next
   t.between_frames(fn() { r.deliver(to=fn(json, bytes) { t.post("core", json, bytes?) }) |> ignore })
   // what the system lets the app show as the run's host said it (its app's notify.permission): a Tester's own lets it

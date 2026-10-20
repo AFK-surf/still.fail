@@ -31,7 +31,8 @@ for line in open(src, encoding="utf-8", errors="replace"):
     if i < 0:
         continue
     ev = scrub(json.loads(line[i + 10:]))
-    if len(ev.get("b", "")) > MAX_BYTES * 2:
+    # (a frame the host kept, whole: what the app uploads of it is compared with it)
+    if "still" not in ev and len(ev.get("b", "")) > MAX_BYTES * 2:
         # (how many there were kept: a part read comes as that many, so what reads on asks for the next)
         ev["bn"] = len(ev.pop("b")) // 2
     lines.append(json.dumps(ev, ensure_ascii=False, separators=(",", ":")))

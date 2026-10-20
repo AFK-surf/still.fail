@@ -15,6 +15,9 @@ priv struct Ev {
   bytes : Bytes?
   wall : Double
   mut done : Bool
+  /// what the run's host said of its views (`{"view":…}`, `{"still":…}`, `{"info":…}`: mbui's trace_views), the line
+  /// whole: given in its place like a message in, to the Tester's host (Replay::host)
+  host : Bool
 }
 
 ///|
@@ -39,6 +42,8 @@ pub struct Replay {
   priv mut seed : UInt
   /// the calls made again since the last take_asked that the run answered, by name, in the order made
   priv asked : Array[String]
+  /// where what the run's host said of its views goes (Replay::host)
+  priv mut host_said : ((String) -> Unit)?
 }
 
 ///|
@@ -62,7 +67,7 @@ pub fn Replay::parse(log : String) -> Replay {
           Some(String(h)) => Some(unhex(h))
           _ => None
         }
-        evs.push({ out: true, msg: o, bytes, wall: 0.0, done: false })
+        evs.push({ out: true, msg: o, bytes, wall: 0.0, done: false, host: false })
       }
       (_, Some(i)) => {
         let wall = match m.get("w") {
@@ -75,9 +80,16 @@ pub fn Replay::parse(log : String) -> Replay {
           (_, Some(Number(n, ..))) => Some(Bytes::new(n.to_int()))
           _ => None
         }
-        evs.push({ out: false, msg: i, bytes, wall, done: false })
+        evs.push({ out: false, msg: i, bytes, wall, done: false, host: false })
       }
-      _ => ()
+      _ =>
+        if m.contains("view") || m.contains("still") || m.contains("info") {
+          let wall = match m.get("w") {
+            Some(Number(d, ..)) => d
+            _ => 0.0
+          }
+          evs.push({ out: false, msg: j, bytes: None, wall, done: false, host: true })
+        }
     }
   }
   let r = {
@@ -93,6 +105,7 @@ pub fn Replay::parse(log : String) -> Replay {
     walls: [],
     seed: 0,
     asked: [],
+    host_said: None,
   }
   r.advance()
   r
@@ -199,6 +212,14 @@ pub fn Replay::deliver(
     }
     let e = self.evs[i]
     e.done = true
+    if e.host {
+      match self.host_said {
+        Some(said) => said(e.msg.stringify())
+        None => ()
+      }
+      self.advance()
+      continue
+    }
     match self.live(e.msg) {
       Some(msg) => {
         match to {
@@ -223,6 +244,14 @@ pub fn Replay::deliver(
     self.advance()
   }
   n
+}
+
+///|
+/// What the run's host said of its views (a player's state, a video's frame times, a frame kept: a trace's `view`,
+/// `still` and `info` lines), each line handed to `said` in its place, once what the app asked before it has been
+/// asked again (a Tester's `view_said`).
+pub fn Replay::host(self : Replay, said : (String) -> Unit) -> Unit {
+  self.host_said = Some(said)
 }
 
 ///|
