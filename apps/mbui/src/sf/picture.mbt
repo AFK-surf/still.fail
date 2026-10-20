@@ -384,8 +384,14 @@ pub fn slack_mark(c : @ui.Ctx, size : Double) -> Int {
 }
 
 ///|
+/// Feishu's mark (a Feishu connect, SlackMark's "feishu").
+pub fn feishu_mark(c : @ui.Ctx, size : Double) -> Int {
+  drawable(c, "feishu", size)
+}
+
+///|
 /// The station glyphs' colours a station may give its glyph (glyph:<name>:<colour>), light and dark.
-fn glyph_color(name : String, dark : Bool) -> Int64? {
+pub fn glyph_color(name : String, dark : Bool) -> Int64? {
   let light = match name {
     "red" => 0xBC4945FFL
     "orange" => 0xB75400FFL

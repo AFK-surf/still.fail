@@ -23,6 +23,13 @@
 //                                          device showing its code, PAIRING <code>\t<person>\t<its label> (then until
 //                                          that device is done with it: its prompt gone)
 //   node e2e/peer.ts lock-off              safe mode turned off again: LOCK OFF
+//   node e2e/peer.ts added [WORDS|!WORDS]  those added who have not signed in yet: ADDED <email> <role>; with WORDS
+//                                          once a line has them (!: none has)
+//   node e2e/peer.ts connect-put ID        a connect made on the test station (connect.put), with no Slack tokens
+//   node e2e/peer.ts connects              the test station's connects: CONNECT <id> enabled=<on> mode=<mode>
+//   node e2e/peer.ts vault-items [WORDS|!WORDS]  the workspace's library: ITEM <name> <kind> listed=<listed>; WORDS as added
+//   node e2e/peer.ts stations [WORDS|!WORDS]  the workspace's stations as the cloud has them: STATION <id> <name>
+//                                          emoji=<emoji> icon=<icon>; with WORDS once a line has them (!: none has)
 //
 // E2E_EMBER (the ember checkout), E2E_ORIGIN (the dev cloud), E2E_PEER_DATA (this core's own data directory).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -163,6 +170,13 @@ async function make(workspace: string, station: string, text: string, attachment
 
 const chatFile = join(dir, "chat.json");
 const [cmd, ...rest] = process.argv.slice(2);
+// whether lines `l` are what WORDS want: one has WORDS (`!WORDS`: none has); no WORDS, any lines are
+function wanted(want: string, l: string[]): boolean {
+  if (!want) return true;
+  const has = l.some((x) => x.includes(want.replace(/^!/, "")));
+  return want.startsWith("!") ? !has : has;
+}
+
 try {
   const { workspace, station } = await signIn();
   if (cmd === "setup") {
@@ -247,6 +261,55 @@ try {
   } else if (cmd === "lock-off") {
     await call("lock.disable", { workspace });
     console.log("LOCK OFF");
+  } else if (cmd === "stations") {
+    // the workspace's stations as still.fail cloud has them, a line each: their id, name and mark; with WORDS, once a
+    // line has them (or, `!WORDS`, once none has)
+    const want = rest.join(" ");
+    const lines = (v: J) => (v?.stations ?? []).map((s: J) => `STATION ${s.id} ${s.name} emoji=${s.emoji ?? ""} icon=${s.icon ?? ""}`);
+    let got: string[] = [];
+    try {
+      got = await until({ topic: "workspace", workspace }, (v) => {
+        const l = lines(v);
+        if (!v?.stations) return undefined;
+        if (!want) return l;
+        const has = l.some((x: string) => x.includes(want.replace(/^!/, "")));
+        return (want.startsWith("!") ? !has : has) ? l : undefined;
+      }, want ? 60_000 : 20_000);
+    } catch (e) {
+      console.error(String(e));
+    }
+    for (const l of got) console.log(l);
+  } else if (cmd === "connect-put") {
+    // a connect made (or changed) on the test station as the app's "…" would (connect.put), no Slack tokens: its page
+    // says it is not in Slack yet
+    const [id] = rest;
+    console.log(JSON.stringify(await call("connect.put", { station, id, input: { mode: "multi-session", requireMention: true, enabled: true, bind: { runtime: "claude", model: "claude-sonnet-5-5" } } })));
+    console.log(`CONNECT ${id} made`);
+  } else if (cmd === "connects") {
+    // the test station's connects as its overview has them: CONNECT <id> enabled=<on> mode=<mode>
+    const v = await until({ topic: "stations", scope: workspace }, (v) => {
+      const s = (v ?? []).find((x: J) => x.station === station);
+      return s?.overview ? s : undefined;
+    });
+    for (const c of v.overview.connects ?? []) console.log(`CONNECT ${c.id} enabled=${c.enabled} mode=${c.mode}`);
+  } else if (cmd === "vault-items") {
+    // the workspace's library as this device reads it: ITEM <name> <kind> listed=<listed>, a line each; with WORDS,
+    // once a line has them (`!WORDS`: once none has), this device's copy caught up
+    // (each vault's items as the topic says them, once they are as WORDS want: `!WORDS` in every vault, WORDS in one)
+    const want = rest.join(" ");
+    const v = await until({ topic: "vaults", workspace }, (v) => v);
+    const lines = (x: J) => (x.items as J[]).map((it: J) => `ITEM ${it.name ?? "?"} ${it.kind ?? "?"} listed=${it.listed}`);
+    const each = (v.vaults ?? []).map((vault: J) => until({ topic: "vaultItems", workspace, vault: vault.id },
+      (x) => x?.items && wanted(want, lines(x)) && lines(x)));
+    const got: string[][] = want && !want.startsWith("!") ? [await Promise.any(each)] : await Promise.all(each);
+    for (const l of got.flat()) console.log(l);
+  } else if (cmd === "added") {
+    // those added to the workspace who have not signed in yet: ADDED <email> <role>; with WORDS as vault-items
+    // (the workspace's topic, once its added are as WORDS want)
+    const want = rest.join(" ");
+    const lines = (v: J) => (v.added ?? []).map((a: J) => `ADDED ${a.email} ${a.role}`);
+    const v = await until({ topic: "workspace", workspace }, (v) => v?.members && wanted(want, lines(v)) ? v : undefined);
+    for (const l of lines(v)) console.log(l);
   } else if (cmd === "members") {
     const v = await until({ topic: "workspace", workspace }, (v) => (v?.members ?? []).length > 0 ? v : undefined);
     for (const m of v.members) console.log(`MEMBER ${m.email} ${m.role}`);

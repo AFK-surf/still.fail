@@ -30,6 +30,8 @@ test "47-service-page" {
     f.answered("station.preview", 3)
     // a second page typed in the bar, then back in the page's own history: the bar says where it is
     f.tap("icon:web")
+    // (the address taking the typing once the tap has put it there: Ctx::focus_editor, told as the frame's builds end)
+    f.field("/")
     f.clear()
     f.type_text("/b.html")
     f.enter()

@@ -18,7 +18,7 @@ test "75-open-link" {
     f.answered("link.parse", 1)
     assert_true(f.t.opened().iter().any(fn(u) { u.has_prefix("https://example.com/e2e/") }))
     // the agent's turn over: the bar offering to archive the chat comes in, to the end it sets out
-    f.see("归档此对话")
+    f.see("icon:archive")
     let rest = f.t.rest_of("bar-archive/")
     if rest > f.t.time() {
       f.run_to(rest)

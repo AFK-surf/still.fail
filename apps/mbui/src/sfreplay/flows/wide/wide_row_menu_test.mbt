@@ -14,6 +14,8 @@ test "62-wide-row-menu" {
     f.tap("=固定")
     f.gone("=重命名")
     f.see("已固定")
+    // (pointed at again where it is now, under 已固定, before the menu is asked for there)
+    f.hover("端到端测试")
     f.right_click("端到端测试")
     f.see("=取消固定")
     f.tap("=取消固定")
@@ -21,3 +23,4 @@ test "62-wide-row-menu" {
     f.end()
   })
 }
+

@@ -883,7 +883,11 @@ fn place_label(place : String) -> String {
 }
 
 ///|
-/// A place's icon (Places.kt placeIcon; the stations' glyph of their state is the server's mark here).
+/// The stations' glyph's counts as the bar last read them (Station's icon), None before.
+let bar_glyph : Ref[@sf.GlyphCounts?] = Ref(None)
+
+///|
+/// A place's icon (Places.kt placeIcon; Station's is the stations' glyph of their state once read, bar_glyph).
 fn place_icon(place : String) -> String {
   match place {
     "chats" => "chats"
@@ -1050,13 +1054,19 @@ fn bar_shadow(c : @ui.Ctx, w : Double, top : Double, bottom : Double) -> Unit {
 /// rather than one more of each colour on its way between them), its dot at the icon's top right.
 fn place_face(c : @ui.Ctx, place : String, idle : Int64, lit : Int64, v : Double, dot : Int64) -> Unit {
   let name = place_icon(place)
+  let icon = fn(color : Int64) {
+    match bar_glyph.val {
+      Some(g) if place == "stations" => @sf.station_glyph(c, g, 28.0, color, @sf.theme().p.red) |> ignore
+      _ => @sf.icon(c, name, size=28.0, color~) |> ignore
+    }
+  }
   if v < 0.999 {
-    @sf.icon(c, name, size=28.0, color=idle) |> ignore
+    icon(idle)
   }
   if v > 0.001 {
     c.layer(align=ACenter, fn() {
       c.box(h=Fill(1.0), justify=JCenter, opacity=v, fn() {
-        @sf.icon(c, name, size=28.0, color=lit) |> ignore
+        icon(lit)
       })
       |> ignore
     })
@@ -1116,9 +1126,15 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   let slot = (w - 2.0 * c0) / 3.0
   // the page's primary action in the notch (Places.kt PlaceBar): 令 on the chats' pages, 文件's ＋ while it can lend
   // a folder (Files.kt), none on the others yet
+  // (Station's ＋ adds a station, Profile's a profile, 连接's a connect: what the settings' page of the place says)
+  let place_add = match active {
+    Some(a) => @settings.place_action(settings_core(src, ws), @settings.here_of(settings_core(src, ws), ws.id, ws.name), a)
+    None => None
+  }
   let action = match active {
     Some(a) if chat_family.contains(a) => "ling"
     Some("files") if files_can_lend(src, ws) => "plus"
+    _ if place_add is Some(_) => "plus"
     _ => ""
   }
   let notched = action != ""
@@ -1134,6 +1150,17 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     Some(Object(_)) => dots["stations"] = t.p.red
     _ => ()
   }
+  // the stations at a glance in Station's place (Places.kt PlaceIcon: StationGlyph), asleep while the core reaches
+  // nothing at all
+  let g = field(chats.value, "glyph")
+  bar_glyph.val = Some({
+    online: count(g, "online"),
+    dim: count(g, "dim"),
+    failing: count(g, "failing"),
+    working: count(g, "working"),
+    connecting: count(g, "connecting"),
+    asleep: text((src.topic)("status", { "workspace": Json::string(ws.id) }).value, "state") == "trouble",
+  })
   let m = bar
   // the frame's motion, by what the bar was told before this frame (Bar.kt: told as it is composed, it moves from
   // there; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
@@ -1294,7 +1321,11 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   if c.clicked(action_id) && shown && k_now > 0.9 {
     match action {
       "ling" => new_chat(c)
-      "plus" => files_lend(c, src, ws)
+      "plus" =>
+        match place_add {
+          Some(run) => run()
+          None => files_lend(c, src, ws)
+        }
       _ => ()
     }
   }

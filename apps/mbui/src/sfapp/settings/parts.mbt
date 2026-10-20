@@ -39,6 +39,7 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
     return
   }
   c.list("settings/" + key, blocks.length(), 80.0, fn(i) { (blocks[i])() }) |> ignore
+  fixture_scroll(c, "settings/" + key)
 }
 
 ///|
@@ -207,17 +208,30 @@ fn place_page(
   body : () -> Unit,
   back? : String = tr("android-settings.title"),
   actions? : () -> Unit,
+  primary? : (String, () -> Unit),
 ) -> Unit {
   c.box(style=page_fill, fn() {
-    match actions {
-      // (at the root its actions at the end of a row of their own, over what it shows)
-      Some(a) if at_root.val => c.box(style=root_actions, fn() { a() }) |> ignore
-      None if at_root.val => ()
-      Some(a) =>
+    match (actions, primary) {
+      // (at the root its actions at the end of a row of their own, over what it shows; its primary one is the bar's
+      // notch's)
+      (Some(a), _) if at_root.val => c.box(style=root_actions, fn() { a() }) |> ignore
+      (None, _) if at_root.val => ()
+      (None, None) => nav_bar(c, core, under_label(core, back), title)
+      _ =>
         nav_bar(c, core, under_label(core, back), title, trailing=fn() {
-          c.box(style=bar_actions, fn() { a() }) |> ignore
+          c.box(style=bar_actions, fn() {
+            match actions {
+              Some(a) => a()
+              None => ()
+            }
+            // its ＋, named as what it adds (PlusButton)
+            match primary {
+              Some((key, run)) => if nav_button(c, key, "plus", size=20.0) { run() }
+              None => ()
+            }
+          })
+          |> ignore
         })
-      None => nav_bar(c, core, under_label(core, back), title)
     }
     c.box(style=place_body, fn() { body() }) |> ignore
   })
@@ -286,10 +300,26 @@ let large_title_box : @ui.Style = @ui.style(w=Full, px=S4, pb=S1_5)
 ///|
 /// A section's heading (Parts.kt SectionHeader): its title, what it holds at its end; `start` its room at its start
 /// (20; the settings pages' say 24, S6, as their SectionHeaders do).
-fn section_header(c : @ui.Ctx, title : String, trailing? : String = "", start? : @ui.Space = S5) -> Unit {
+fn section_header(
+  c : @ui.Ctx,
+  title : String,
+  trailing? : String = "",
+  start? : @ui.Space = S5,
+  mark? : (() -> Unit)? = None,
+) -> Unit {
   c.box(style=section_line.then(@ui.style(pl=start)), fn() {
-    // Parts.kt:585 (15sp; in lines where it is long)
-    c.text(title, style=@sf.body.then(@sf.strong)) |> ignore
+    match mark {
+      // a mark before the title, on the middle of its words (SectionHeader's mark)
+      Some(m) =>
+        c.box(style=section_marked, fn() {
+          m()
+          // Parts.kt:585 (15sp; in lines where it is long)
+          c.text(title, style=@sf.body.then(@sf.strong)) |> ignore
+        })
+        |> ignore
+      // Parts.kt:585 (15sp; in lines where it is long)
+      None => c.text(title, style=@sf.body.then(@sf.strong)) |> ignore
+    }
     c.spacer()
     if trailing != "" {
       // Parts.kt:591 (13sp)
@@ -304,6 +334,11 @@ fn section_header(c : @ui.Ctx, title : String, trailing? : String = "", start? :
 /// words on the line's foot.
 // kept across runs: a value (no field of it changes)
 let section_line : @ui.Style = @ui.style(row=true, w=Full, pl=S5, pr=S5, pt=S3_5, pb=S1_5, align=AEnd, gap=S2)
+
+///|
+/// A marked SectionHeader's mark and title, 6 apart, on the middle of its words.
+// kept across runs: a value (no field of it changes)
+let section_marked : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
 
 ///|
 /// A page's note under its title, in a line or two (SettingParts.kt PageNote).

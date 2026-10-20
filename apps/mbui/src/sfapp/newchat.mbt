@@ -313,8 +313,13 @@ fn new_chat_on(
           })
           |> ignore
           if @sf.button(c, tr("android-chat.new.profile.add"), key="new/profile", tone=Primary) {
-            app.nav.push(Place("profiles"))
+            app.nav.push(Setting(@settings.Route::NewProfile(address)))
           }
+        }
+        // the machine's own sessions to go on with, where it kept any (NewChat.kt MachineSessionsOffer)
+        let blocked = text(v, "blocked")
+        if field(station, "overview") is Some(Object(_)) && blocked != "profile" && blocked != "shared" && !src.read_only {
+          @settings.machine_sessions_offer(c, settings_core(src, w), address, name)
         }
       },
     )
@@ -1092,6 +1097,28 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
       },
     )
     |> ignore
+    // the model picked is another station's: the foot borrows it (asked again) rather than confirming
+    match field(v, "borrow") {
+      Some(Object(_)) as b => {
+        let allowed = flag(b, "allowed")
+        // (the calls the settings make here are the station's own: its workspace is the one in view)
+        let ws_id = match station.find("/") {
+          Some(i) => station.unsafe_substring(start=0, end=i)
+          None => station
+        }
+        let core = settings_core(src, { id: ws_id, name: "", emoji: "", icon: "", email: "" })
+        let bid = c.id("pick/borrow")
+        if c.clicked(bid) && allowed {
+          @settings.confirm_borrow(core, station, "new", b)
+        }
+        c.box(dir=Row, padx=22.0, pady=9.0, gap=6.0, radius=19.0, align=ACenter, bg=if allowed { t.p.text } else { t.p.chip }, id=bid, fn() {
+          c.text(text(b, "action"), size=15.0, weight=600, color=if allowed { t.p.bg } else { t.p.muted }, wrap=false) |> ignore
+        })
+        |> ignore
+        return
+      }
+      _ => ()
+    }
     let changed = flag(v, "changed")
     let ok = c.id("pick/save")
     if c.clicked(ok) && text(v, "option") != "" && !run_picker_saving.val {

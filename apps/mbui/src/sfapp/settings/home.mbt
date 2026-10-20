@@ -9,6 +9,8 @@
 pub fn page(c : @ui.Ctx, core : Core, here : Here, route : Route, root? : Bool = false) -> Unit {
   frame_core.val = Some(core)
   at_root.val = root
+  left_core.val = Some(core)
+  fixture_sheet(core, here)
   route_page(c, core, here, route)
 }
 
@@ -26,13 +28,30 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Profiles(only) => profiles_page(c, core, here, only)
     Profile(a, id) => profile_page(c, core, here, a, id)
     Connects(only) => connects_page(c, core, here, only)
-    Connect(a, id) => connect_page(c, core, a, id)
+    Connect(a, id) => connect_page(c, core, here, a, id)
     Memories => memories_page(c, core, here)
     Memory(a) => memory_page(c, core, here, a)
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, a, skill, at)
     Usage => usage_page(c, core, here)
     Archive => archive_page(c, core, here)
+    AdbShare(a) => adb_page(c, core, here, a)
+    NewProfile(a) => new_profile_page(c, core, here, a)
+    ProfileAccount(k) => profile_account_page(c, core, here, k)
+    NewConnect(a) => new_connect_page(c, core, here, a)
+    ConnectRun(a, id) => connect_run_page(c, core, a, id)
+    SlackApp(a, id) => slack_app_page(c, core, a, id)
+    VaultItem(v, item) => vault_item_page(c, core, here, v, item)
+    AutoDecisions => decisions_page(c, core)
+    AutoCompletion => completion_page(c, core, here)
+    AutoPolicy(s) => policy_page(c, core, here, s)
+    BarSettings => bars_page(c, core)
+    KeptFiles => kept_page(c, core)
+    KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
+    Changelog => changelog_page(c, core)
+    UsagePrices(days) => prices_page(c, core, here, days)
+    RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
+  clear_copied(c)
 }
 
 ///|
@@ -266,8 +285,9 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         if go_row(c, "go-profiles", "Profile", value=pr_value, bad=short > 0) {
           (core.push)(Profiles(""))
         }
-        // (the automatic decisions' page is a later slice's: its row, not opened yet)
-        go_row(c, "go-decisions", tr("web-pages.automaticDecisions.title")) |> ignore
+        if go_row(c, "go-decisions", tr("web-pages.automaticDecisions.title")) {
+          (core.push)(AutoDecisions)
+        }
         if go_row(c, "go-memory", tr("android-settings.memory")) {
           (core.push)(Memories)
         }
@@ -289,9 +309,12 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         if go_row(c, "go-appearance", tr("android-settings.appearance.title"), value=said) {
           (core.push)(Appearance)
         }
-        // the bottom bar's places, what is kept on this device, the changelog: later slices' pages, their rows
-        go_row(c, "go-bars", tr("android-misc.bar.title")) |> ignore
-        go_row(c, "go-files", tr("android-settings.files.title")) |> ignore
+        if go_row(c, "go-bars", tr("android-misc.bar.title"), value=bars_value(core)) {
+          (core.push)(BarSettings)
+        }
+        if go_row(c, "go-files", tr("android-settings.files.title")) {
+          (core.push)(KeptFiles)
+        }
         // notifications on this device, local notices and pushes alike (SettingsHome.kt Notify): as the core's
         // `notify` says, or as switched while `notify.set` is out (a spinner, not switched again meanwhile)
         let notify = (core.topic)("notify", Map::new()).value
@@ -348,7 +371,9 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           }) {
           (core.version_tap)()
         }
-        go_row(c, "go-changelog", tr("android-settings.changelog.title")) |> ignore
+        if go_row(c, "go-changelog", tr("android-settings.changelog.title")) {
+          (core.push)(Changelog)
+        }
       })
     },
     fn() { gap(c, 30.0) },

@@ -69,10 +69,28 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
     Some(o) => text(Some(o), "name")
     None => tr("android-settings.title")
   }
-  place_page(c, core, tr("android-misc.bar.place.profiles"), back~, fn() {
+  let add = match place_action(core, here, "profiles") {
+    Some(run) => Some(("add-profile", run))
+    None => None
+  }
+  place_page(c, core, tr("android-misc.bar.place.profiles"), back~, primary?=add, fn() {
     let blocks : Array[() -> Unit] = []
+    let offers = fn(sv : Json?) {
+      if flag(sv, "online") {
+        let station = text(sv, "station")
+        blocks.append(machine_login_offers(c, core, station, field(sv, "overview"), fn(_) { (core.push)(NewProfile(station)) }))
+      }
+    }
     if only == "" {
       blocks.append(workspace_profiles(c, core, here))
+      // the machine's own logins not used yet, each offered as a profile
+      match all {
+        Some(a) =>
+          for s in a {
+            offers(Some(s))
+          }
+        None => ()
+      }
     } else {
       match one {
         None =>
@@ -111,12 +129,13 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
               })
             })
           } else {
+            ignore(0)
             for g in group_by(list) {
               blocks.append([
-                fn() { section_header(c, g.0, start=S6) },
+                fn() { section_header(c, g.1, mark=Some(fn() { group_mark(c, g.0) }), start=S6) },
                 fn() {
                   list_card(c, fn() {
-                    for p in g.1 {
+                    for p in g.2 {
                       profile_row(c, core, only, p)
                     }
                   })
@@ -124,6 +143,7 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
               ])
             }
           }
+          offers(sv)
         }
       }
     }
@@ -134,7 +154,7 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
 
 ///|
 /// A station's profiles by the kind they are listed under (`group`, `groupTitle`), in order.
-fn group_by(list : Array[Json]) -> Array[(String, Array[Json])] {
+fn group_by(list : Array[Json]) -> Array[(String, String, Array[Json])] {
   let out : Array[(String, String, Array[Json])] = []
   for p in list {
     let g = text(Some(p), "group")
@@ -143,7 +163,20 @@ fn group_by(list : Array[Json]) -> Array[(String, Array[Json])] {
       None => out.push((g, text(Some(p), "groupTitle"), [p]))
     }
   }
-  out.map(fn(x) { (x.1, x.2) })
+  out
+}
+
+///|
+/// A kind of account's mark, before its section's title (Profiles.kt GroupMark): its vendor's for a subscription, a
+/// key for keys.
+fn group_mark(c : @ui.Ctx, group : String) -> Unit {
+  match group {
+    "key" => @sf.icon(c, "key", size=16.0, color=@sf.theme().p.text) |> ignore
+    "chatgpt" => provider_mark(c, "codex", "subscription", 16.0, "")
+    // SuperGrok: xAI's
+    "grok" => provider_mark(c, "grok", "api-provider", 16.0, "xai")
+    _ => provider_mark(c, "claude", "subscription", 16.0, "")
+  }
 }
 
 ///|
@@ -183,7 +216,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
   }
   for g in profile_groups(list) {
     blocks.append([
-      fn() { section_header(c, g.0, start=S6) },
+      fn() { section_header(c, g.0, mark=Some(fn() { group_mark(c, text(g.1.get(0), "group")) }), start=S6) },
       fn() {
         list_card(c, fn() {
           for e in g.1 {
@@ -221,7 +254,9 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
                 }
                 chevron(c)
               }) {
-              (core.push)(Profile(text(ev, "station"), text(p, "id")))
+              // an account on several stations: its own page, each station's part under it
+              let signed = items(ev, "members").filter(fn(m) { text(Some(m), "role") != "user" }).length()
+              (core.push)(if signed > 1 { ProfileAccount(text(ev, "key")) } else { Profile(text(ev, "station"), text(p, "id")) })
             }
           }
         })
@@ -344,7 +379,12 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
         let pv = Some(pj)
         let kind = text(field(pv, "access"), "kind")
         let copy = text(field(pv, "share"), "role") == "user"
-        nav_bar(c, core, text(sv, "name"), text(pv, "name"), sub=fn() {
+        let more = fn() {
+          if nav_button(c, "profile-more", "more") {
+            open_profile_menu(core, address, pv)
+          }
+        }
+        nav_bar(c, core, text(sv, "name"), text(pv, "name"), trailing?=if copy { None } else { Some(more) }, sub=fn() {
           c.text(
             if flag(pv, "machine") {
               tr("android-settings.profile.machine")
@@ -400,10 +440,22 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
             |> ignore
           },
         ]
+        blocks.append(profile_recovery(c, core, sv, pv))
+        // a subscription, or an OpenCode Go profile on an OpenCode account: signed in (again) here
+        if !copy &&
+          (kind == "subscription" || (kind == "opencode-go" && flag(field(pv, "access"), "login"))) &&
+          !flag(pv, "machine") {
+          blocks.append(profile_sign_in(c, core, address, pv))
+        }
         if text(field(pv, "trouble"), "action") != "quota" {
           blocks.append(quota_section(c, core, address, pv))
         }
+        if flag(field(sv, "overview"), "sharing") {
+          blocks.append(profile_share(c, core, here, sv, pv))
+        }
         if !copy {
+          blocks.append(profile_workspaces(c, core, address, pv))
+          blocks.append(profile_run(c, core, address, pv))
           blocks.append(models_section(c, core, address, pv))
         }
         blocks.append([
@@ -446,64 +498,37 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
             })
           },
         ])
-        if !copy && (kind == "opencode-go" || kind == "anthropic-api" || kind == "api-provider") &&
-          !flag(field(pv, "access"), "login") {
+        if copy {
+          ()
+        } else if flag(pv, "machine") {
+          // on the machine's own login: whose it is is changed on that machine, not here
+          let runtime = runtime_label(text(pv, "runtime"))
           blocks.append([
             fn() { section_header(c, tr("android-settings.run.account"), start=S6) },
             fn() {
-              list_card(c, fn() {
-                list_row(c, fn() {
-                  c.box(w=Fill(1.0), fn() {
-                    c.text(
-                      if kind == "opencode-go" {
-                        "OpenCode Go key"
-                      } else {
-                        match opt_text(pv, "providerName") {
-                          Some(n) => n + " key"
-                          None => "API key"
-                        }
-                      },
-                      size=15.0,
-                      color=t.p.text,
-                      line=21.0,
-                    )
-                    |> ignore
-                    mono(
-                      c,
-                      match text(field(pv, "access"), "key") {
-                        "" => tr("android-settings.profile.notSaved")
-                        k => k
-                      },
-                      size=13.0,
-                      color=t.p.muted,
-                      line=18.0,
-                    )
-                  })
+              card(c, fn() {
+                c.text(
+                  fill("android-settings.profile.machineLogin", [("station", text(sv, "name")), ("runtime", runtime)]),
+                  size=15.0,
+                  color=t.p.text,
+                  w=Fill(1.0),
+                  line=21.0,
+                )
+                |> ignore
+                c.box(w=Fill(1.0), pt=4.0, fn() {
+                  c.text(fill("android-settings.profile.machineNote", [("runtime", runtime)]), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
                   |> ignore
                 })
                 |> ignore
               })
+              |> ignore
             },
           ])
+        } else if keyed.contains(kind) && !flag(field(pv, "access"), "login") {
+          blocks.append(profile_key(c, core, address, pv))
         }
         if kind == "env" && !copy {
-          blocks.append([
-            fn() { section_header(c, tr("android-settings.env.title"), start=S6) },
-            fn() {
-              list_card(c, fn() {
-                for e in items(pv, "env") {
-                  list_row(c, fn() {
-                    c.box(w=Fill(1.0), fn() {
-                      mono(c, text(Some(e), "key"), size=15.0, line=21.0)
-                      mono(c, text(Some(e), "value"), size=13.0, color=t.p.muted, line=18.0)
-                    })
-                    |> ignore
-                  })
-                  |> ignore
-                }
-              })
-            },
-          ])
+          blocks.append(profile_env(c, core, address, pv))
         }
         blocks.push(fn() { gap(c, 30.0) })
         scroll_page(c, "profile/" + address + "/" + id, blocks)

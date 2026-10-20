@@ -1,6 +1,6 @@
 // A chat's cards answered from the chat, over the fixture's own answers (chat_fixture.mbt: a card answered or let go
-// at once, the chat kept): what goes, what comes in its place, and how long it takes (Decisions.kt DecisionUnder,
-// Chat.kt AskDismiss, ArchiveUnder, ChatBar).
+// at once): what goes, what comes in its place, and how long it takes (Decisions.kt DecisionUnder,
+// Chat.kt AskDismiss, ChatBar).
 
 ///|
 /// The fixture's chat open (the first row's), its calls kept in `calls` and answered by the fixture.
@@ -106,45 +106,4 @@ test "忽略: it and the ask go at once (decision.dismiss), drawn going, then go
   // the ask's room closed after it
   t.run_for(options_gone_ms())
   t.assert_idle()
-}
-
-///|
-test "保留 kept: the buttons under the post go and the bar's 归档 with them" {
-  let calls : Array[Made] = []
-  let t = cards_core(calls)
-  scroll_to_words(t, "保留")
-  t.tap_text("保留")
-  assert_eq(named(calls, "chat.keep").length(), 1)
-  t.run_for(archive_ms)
-  assert_true(t.find("归档此对话") is None)
-  t.assert_idle()
-}
-
-///|
-test "保留 that failed is marked so for 6 s, said in a toast" {
-  let calls : Array[Made] = []
-  let t = cards_core(calls, mode="chat-cards")
-  scroll_to_words(t, "保留")
-  assert_true(dui.failed.contains("keep/ws1/st1/7"))
-  t.tap_text("保留")
-  assert_eq(named(calls, "chat.keep").length(), 1)
-  assert_true(app.toast.contains("Studio 没有回应"))
-  // still offered
-  assert_true(t.find("归档此对话") is Some(_))
-  assert_true(dui.failed.contains("keep/ws1/st1/7"))
-  t.run_for(failed_ms)
-  assert_true(dui.failed.is_empty())
-}
-
-///|
-test "an option pressed is drawn smaller, its tap where it is laid out" {
-  let calls : Array[Made] = []
-  let t = cards_core(calls)
-  scroll_to_words(t, "保留")
-  let (x, y) = t.find("保留").unwrap()
-  t.press_at(x, y)
-  // drawn pressed, the finger still down
-  t.draw()
-  t.release(x, y)
-  assert_eq(named(calls, "chat.keep").length(), 1)
 }

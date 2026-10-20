@@ -16,7 +16,6 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   assert_true(y < 844.0 - 110.0 && y > 500.0)
-  assert_true(t.find("归档此对话") is Some(_))
   assert_true(t.find("发消息") is Some(_))
   // an options card, a login card, a failing notice
   assert_true(t.find("一起换") is Some(_))
@@ -89,15 +88,7 @@ test "near the top the page before comes in, and what is in view stays where it 
 ///|
 test "a reference to another chat is its chip, and opens that chat" {
   let t = chat_tester("chat")
-  t.move(195.0, 400.0)
-  let mut scrolled = -1.0
-  for _ in 0..<4 {
-    if t.find("性能数据放在") is Some(_) {
-      break
-    }
-    t.wheel(195.0, 400.0, -400.0)
-    scrolled = t.time()
-  }
+  let scrolled = scroll_run_clear(t, "首页的列表改成按天分组")
   assert_true(t.find("@首页的列表改成按天分组") is Some(_))
   t.tap_run("首页的列表改成按天分组")
   assert_eq(app.nav.depth(), 3)

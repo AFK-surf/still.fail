@@ -12,7 +12,7 @@ test "03-send-text" {
     f.run_for(@ui.nav_push_ms)
     f.see("=studio")
     f.tap("发消息")
-    f.type_text("第一条来自 mbui 的消息 053246")
+    f.type_text("第一条来自 mbui 的消息 064618")
     // a row already there (the agent's name over its answer: the chat's title has its words too): where it is across,
     // before the words go
     let said = "默认模型"
@@ -29,10 +29,8 @@ test "03-send-text" {
         None => ()
       }
     }
-    f.see("第一条来自 mbui 的消息 053246")
+    f.see("第一条来自 mbui 的消息 064618")
     f.gone("正在发送")
-    // after the station's two rows came (the message, the agent's turn) the run's app told the core the chat was off
-    // its end (client.focus end: false): its list had not followed them yet, this one's has
-    f.end(unmade=["\"end\":false"])
+    f.end()
   })
 }

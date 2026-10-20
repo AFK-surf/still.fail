@@ -33,7 +33,12 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     Some(Array(a)) => Some(a)
     _ => None
   }
-  place_page(c, core, tr("android-misc.bar.place.stations"), fn() {
+  // adding one: its owners' and admins' ＋ (the bar's notch at the stack's root)
+  let add = match place_action(core, here, "stations") {
+    Some(run) => Some(("add-station", run))
+    None => None
+  }
+  place_page(c, core, tr("android-misc.bar.place.stations"), primary?=add, fn() {
     let blocks : Array[() -> Unit] = []
     match list {
       None =>
@@ -46,7 +51,7 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             },
           )
         })
-      Some(a) if a.length() == 0 => blocks.push(fn() { first_station(c) })
+      Some(a) if a.length() == 0 => blocks.push(fn() { first_station(c, core, here) })
       Some(a) =>
         for st in a {
           blocks.push(fn() { station_card(c, core, st) })
@@ -55,21 +60,6 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     blocks.push(fn() { gap(c, 30.0) })
     scroll_page(c, "stations", blocks)
   })
-}
-
-///|
-/// A workspace with no station yet (Settings.kt FirstStation): what a station is. (Adding one here, its command to
-/// copy and the wait, is a later slice's.)
-fn first_station(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), pad=30.0, gap=10.0, align=ACenter, fn() {
-    @sf.drawable(c, if t.dark { "illus_no_station_dark" } else { "illus_no_station" }, 240.0) |> ignore
-    c.text(tr("android-settings.station.first"), size=17.0, weight=600, color=t.p.text, center=true, w=Fill(1.0))
-    |> ignore
-    c.text(tr("android-settings.station.firstNote"), size=14.0, color=t.p.muted, center=true, w=Fill(1.0), line=20.0)
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|
@@ -474,7 +464,7 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
       Some(_) => {
         let overview = field(st, "overview")
         let read = overview is Some(Object(_))
-        scroll_page(c, "station/" + address, [
+        let blocks : Array[() -> Unit] = [
           fn() { gap(c, 12.0) },
           fn() {
             if flag(st, "online") {
@@ -521,6 +511,20 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
               if go_row(c, "st-memory", tr("android-settings.memory")) {
                 (core.push)(Memory(address))
               }
+              // this device's adb, lent to its agents (AdbShare.kt)
+              let shared = (core.topic)("adbShare", Map([])).value
+              if go_row(
+                  c,
+                  "st-adb",
+                  tr("android-misc.adb.title"),
+                  value=if flag(shared, "sharing") && text(shared, "station") == address {
+                    tr("android-misc.adb.sharing")
+                  } else {
+                    ""
+                  },
+                ) {
+                (core.push)(AdbShare(address))
+              }
               // the folders it lends its members (docs/drive.md); none offered by a station from before the drive
               match field(overview, "drive") {
                 Some(Object(_)) as drive => {
@@ -542,8 +546,50 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
               }
             })
           },
-          fn() { gap(c, 30.0) },
-        ])
+        ]
+        // what is under it, each from its own topic or the overview's part (none from a station older than it)
+        let online = flag(st, "online")
+        let more : Array[() -> Unit] = []
+        for b in station_screens(c, core, address) {
+          more.push(b)
+        }
+        match field(overview, "permissions") {
+          Some(Object(_)) as p if online =>
+            for b in station_permissions(c, core, address, p) {
+              more.push(b)
+            }
+          _ => ()
+        }
+        match field(overview, "agentEnv") {
+          Some(Array(env)) =>
+            for b in station_agent_env(c, core, address, env, manager) {
+              more.push(b)
+            }
+          _ => ()
+        }
+        match field(overview, "search") {
+          Some(Object(_)) as sr if online && text(sr, "files") == "spotlight" =>
+            for b in station_search(c, core, address, flag(sr, "personal"), manager) {
+              more.push(b)
+            }
+          _ => ()
+        }
+        if manager {
+          for b in station_workspaces(c, core, address) {
+            more.push(b)
+          }
+        }
+        // its updates are its home workspace's managers'
+        if online && read {
+          for b in station_versions(c, core, address, items(overview, "updates"), manager, flag(st, "betaOffered")) {
+            more.push(b)
+          }
+        }
+        more.push(fn() { gap(c, 30.0) })
+        for b in more {
+          blocks.push(b)
+        }
+        scroll_page(c, "station/" + address, blocks)
       }
     }
   })
@@ -604,9 +650,29 @@ fn station_menu(core : Core, here : Here, s : Json?) -> Unit {
         },
       )
     }
-    // (its mark picked from still.fail's icons, an emoji or a picture: the picker is a later slice's)
-    pick_row(c, "st-mark", tr("android-settings.station.emoji"), mark=fn() { station_mark(c, s, 15.0, t.p.text) })
-    |> ignore
+    if pick_row(c, "st-mark", tr("android-settings.station.emoji"), mark?=if @sf.has_station_mark(text(s, "emoji"), text(s, "icon")) {
+        Some(fn() { station_mark(c, s, 15.0, t.p.text) })
+      } else {
+        None
+      }) {
+      open_mark_pick(core, name, text(s, "emoji"), text(s, "icon"), tr("android-settings.station.emojiWhat"), fn(
+        emoji,
+        icon,
+        done,
+      ) {
+        (core.call)(
+          "workspace.renameStation",
+          obj([
+            ("workspace", str(here.workspace)),
+            ("station", str(id)),
+            ("emoji", str(emoji)),
+            ("icon", str(icon)),
+            ("account", str(here.sub)),
+          ]),
+          done,
+        )
+      })
+    }
     if pick_row(c, "st-remove", tr("android-settings.station.removeRow"), color=t.p.red) {
       confirm(
         fill("android-settings.station.removeTitle", [("name", name)]),

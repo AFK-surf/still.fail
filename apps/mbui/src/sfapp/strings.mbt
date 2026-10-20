@@ -28,7 +28,6 @@ let zh : Map[String, String] = {
   "android-chat.chat.archiveThis": "归档此对话",
   "android-chat.chat.delete.verb": "删除",
   "android-chat.chat.empty": "在此发送消息，此对话中的 agent 会在这里回复",
-  "android-chat.chat.keep": "保留",
   "android-chat.chat.latest": "跳到最新",
   "android-chat.chat.loadingFrom": "正在从 {name} 读取对话",
   "android-chat.chat.newBelow": "以下是新消息",

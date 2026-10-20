@@ -14,7 +14,7 @@ test "11-quote" {
     f.tap("icon:arrow-up")
     f.run_for(@sfapp.flight_ms)
     f.see_n(2, "这句话会被引用 085022")
-    f.see("归档此对话")
+    f.see("icon:archive")
     f.hold("这句话会被引用 085022", @ui.long_press_ms)
     f.see("=引用")
     f.tap("=全选")

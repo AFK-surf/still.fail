@@ -9,10 +9,64 @@ priv struct SettingsFixture {
   names : Map[String, String]
   restored : Map[String, Bool]
   mut version : Int
+  /// the stations' marks set (by id)
+  marks : Map[String, String]
+  /// the station's updating by itself
+  mut auto : Bool
+  /// the mode's page has no station (settings-first-station)
+  mut none : Bool
+  /// the subscription signing in (settings-profile-login)
+  mut login : Bool
+  /// the vault not set up on this device (settings-vault-off)
+  mut vault_off : Bool
 }
 
 ///|
-let fx : SettingsFixture = { names: {}, restored: {}, version: 0 }
+let fx : SettingsFixture = {
+  names: {},
+  restored: {},
+  version: 0,
+  marks: {},
+  auto: false,
+  none: false,
+  login: false,
+  vault_off: false,
+}
+
+///|
+/// A sheet a fixture's mode puts up over its page once it is drawn (mark, add, add-existing, add-command, env), and a
+/// page's list to scroll to a block ("" none).
+priv struct FixtureOpen {
+  mut sheet : String
+  mut list : String
+  mut block : Int
+  mut frames : Int
+}
+
+///|
+let fixture_open : FixtureOpen = { sheet: "", list: "", block: 0, frames: 0 }
+
+///|
+/// The new connect's step its fixture shows (MBUI_FIXTURE=settings-new-connect: team; -platform, -scan: Feishu's).
+let fx_connect_step : Ref[String] = Ref("team")
+
+///|
+/// The made-up settings as a run starts (reset): none changed, no sheet or scroll to put up.
+fn fixture_reset() -> Unit {
+  fx.names.clear()
+  fx.restored.clear()
+  fx.version = 0
+  fx.marks.clear()
+  fx.auto = false
+  fx.none = false
+  fx.login = false
+  fx.vault_off = false
+  fixture_open.sheet = ""
+  fixture_open.list = ""
+  fixture_open.block = 0
+  fixture_open.frames = 0
+  fx_connect_step.val = "team"
+}
 
 ///|
 /// How often the made-up settings changed: added to the fixture's own version.
@@ -28,8 +82,66 @@ pub fn fixture_page(mode : String) -> String {
   } else {
     mode
   }
+  // a sheet up over the page, or the page scrolled down (fixture_open)
+  let up = fn(sheet : String, list : String, block : Int) {
+    fixture_open.sheet = sheet
+    fixture_open.list = list
+    fixture_open.block = block
+    fixture_open.frames = 0
+  }
+  match m {
+    "settings-station-mark" => up("mark", "", 0)
+    "settings-station-env" => up("env", "", 0)
+    "settings-station-lower" => up("", "settings/station/ws1/st1", 6)
+    "settings-station-versions" => up("", "settings/station/ws1/st1", 10)
+    "settings-stations-add" => up("add", "", 0)
+    "settings-stations-existing" => up("add-existing", "", 0)
+    "settings-stations-command" => up("add-command", "", 0)
+    "settings-first-station" => fx.none = true
+    "settings-profile-menu" => up("profile-menu", "", 0)
+    "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 4)
+    "settings-profile-login" => {
+      fx.login = true
+      up("", "settings/profile/ws1/st1/cc", 2)
+    }
+    "settings-connect-menu" => up("connect-menu", "", 0)
+    "settings-connect-mode" => up("connect-mode", "", 0)
+    "settings-vault-off" => fx.vault_off = true
+    "settings-vault-words" => recovery_words["ws1"] = fx_words()
+    "settings-vault-add" => up("vault-add", "", 0)
+    "settings-vault-editor" => up("vault-editor", "", 0)
+    "settings-vault-recover" => up("vault-recover", "", 0)
+    "settings-add-people" => up("add-people", "", 0)
+    "settings-workspace-mark" => up("workspace-mark", "", 0)
+    "settings-new-connect-platform" => fx_connect_step.val = "platform"
+    "settings-new-connect-scan" => fx_connect_step.val = "feishuScan"
+    _ => fx_connect_step.val = "team"
+  }
   match m {
     "settings" => "home"
+    "settings-station-mark" | "settings-station-env" | "settings-station-lower" | "settings-station-versions" =>
+      "station:ws1/st1"
+    "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
+      "stations"
+    "settings-adb" => "adb:ws1/st1"
+    "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" => "profile:ws1/st1#cc"
+    "settings-new-profile" => "new-profile:ws1/st1"
+    "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
+    "settings-connect-run" => "connect-run:ws1/st1#k1"
+    "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" => "new-connect:ws1/st1"
+    "settings-slack-app" => "slack-app:ws1/st1#k1"
+    "settings-vault-off" | "settings-vault-words" | "settings-vault-add" | "settings-vault-editor" => "vault"
+    "settings-vault-recover" => "vault"
+    "settings-vault-item" => "vault-item:v1#it1"
+    "settings-decisions" => "decisions-settings"
+    "settings-completion" => "completion"
+    "settings-policy" => "policy:ws1/st1"
+    "settings-bars" => "bars"
+    "settings-kept" => "kept"
+    "settings-changelog" => "changelog"
+    "settings-prices" => "prices:7"
+    "settings-run" => "run:ws1/st1#s-c1"
+    "settings-add-people" | "settings-workspace-mark" => "workspace"
     "settings-notify-off" => "home"
     "settings-station" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
@@ -126,7 +238,28 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
 ///|
 fn fx_profiles() -> Array[Json] {
   [
-    fx_profile("cc", "Claude 主账号", "subscription", "green", "可用", "claude", "Claude 订阅", []),
+    fx_profile("cc", "Claude 主账号", "subscription", "green", "可用", "claude", "Claude 订阅", [
+      ("share", obj([("id", str("sh1")), ("role", str("host")), ("host", str("st1")), ("users", ["st2"])])),
+      ("fast", Json::boolean(false)),
+      ("backgroundOnMessage", Json::boolean(true)),
+      ("workspaces", ["ws2"]),
+      ("loginCommand", str("claude setup-token")),
+      (
+        "login",
+        if fx.login {
+          obj([
+            ("profile", str("cc")),
+            ("runtime", str("claude")),
+            ("state", str("needs_code")),
+            ("url", str("https://claude.example/oauth/authorize")),
+            ("startedAt", Json::number(0.0)),
+            ("expiresAt", Json::number(0.0)),
+          ])
+        } else {
+          Json::null()
+        },
+      ),
+    ]),
     fx_profile("cx", "ChatGPT 团队", "subscription", "green", "可用", "chatgpt", "ChatGPT 订阅", [("modelsText", str("1 个模型"))]),
     fx_profile("k2", "备用 key", "anthropic-api", "red", "没能使用", "key", "API key", [
       ("trouble", obj([("title", str("key 已失效")), ("detail", str("服务商拒绝了这个 key")), ("next", str("")), ("action", str("key")), ("label", str(""))])),
@@ -170,7 +303,7 @@ fn fx_station(address : String) -> Json {
       ("station", str(address)),
       ("id", str(id)),
       ("name", str(renamed.unwrap_or("Studio"))),
-      ("icon", str("glyph:desktop")),
+      ("icon", str(fx.marks.get(id).unwrap_or("glyph:desktop"))),
       ("summary", str("Apple M2 Max · 2 个 agent 在工作")),
       ("face", str("working")),
       ("line", str("Apple M2 Max · 64 GB · macOS 26")),
@@ -222,15 +355,115 @@ fn fx_station(address : String) -> Json {
           ("profiles", Json::array(fx_profiles())),
           ("processesText", str("2 个 agent 进程 · claude 1.2 GB")),
           ("slackApps", []),
+          ("drive", obj([("roots", ["~/项目", "~/文档"]), ("all", Json::boolean(false))])),
+          (
+            "updates",
+            [
+              obj([
+                ("id", str("station")),
+                ("name", str("Station")),
+                ("installed", Json::boolean(true)),
+                ("version", str("0.1.1288")),
+                ("latest", str("0.1.1300")),
+                ("newer", Json::boolean(true)),
+                ("channel", str("stable")),
+                ("auto", Json::boolean(fx.auto)),
+                ("updatable", Json::boolean(true)),
+                ("state", str("idle")),
+                ("checkedAt", Json::number(1.0)),
+              ]),
+              obj([
+                ("id", str("claude")),
+                ("name", str("Claude Code")),
+                ("installed", Json::boolean(true)),
+                ("version", str("2.1.4")),
+                ("latest", str("2.1.4")),
+                ("newer", Json::boolean(false)),
+                ("updatable", Json::boolean(true)),
+                ("state", str("idle")),
+                ("checkedAt", Json::number(1.0)),
+              ]),
+              obj([
+                ("id", str("codex")),
+                ("name", str("Codex")),
+                ("installed", Json::boolean(false)),
+                ("newer", Json::boolean(false)),
+                ("updatable", Json::boolean(true)),
+                ("state", str("idle")),
+                ("checkedAt", Json::number(1.0)),
+              ]),
+            ],
+          ),
+          (
+            "permissions",
+            obj([
+              (
+                "grants",
+                [
+                  obj([("id", str("capture")), ("name", str("屏幕录制")), ("line", str("查看这台 Mac 的屏幕")), ("granted", Json::boolean(true)), ("asking", Json::boolean(false))]),
+                  obj([("id", str("control")), ("name", str("辅助功能")), ("line", str("操作这台 Mac 的鼠标和键盘")), ("granted", Json::boolean(false)), ("asking", Json::boolean(false))]),
+                  obj([("id", str("documents")), ("name", str("文稿")), ("line", str("读写「文稿」中的文件")), ("granted", Json::boolean(false)), ("asking", Json::boolean(true))]),
+                ],
+              ),
+              ("note", str("未允许辅助功能：agent 只能查看屏幕，不能操作")),
+              ("canRequest", Json::boolean(true)),
+            ]),
+          ),
+          (
+            "agentEnv",
+            [
+              obj([("key", str("HTTPS_PROXY")), ("secret", Json::boolean(false)), ("value", str("http://127.0.0.1:7890"))]),
+              obj([("key", str("NO_PROXY")), ("secret", Json::boolean(false)), ("value", str("localhost,.internal"))]),
+            ],
+          ),
+          ("search", obj([("files", str("spotlight")), ("personal", Json::boolean(false))])),
+          ("sharing", Json::boolean(true)),
+          (
+            "machineLogins",
+            [
+              obj([("runtime", str("codex")), ("installed", Json::boolean(true)), ("loggedIn", Json::boolean(true)), ("email", str("lin@example.com")), ("plan", str("plus")), ("usable", Json::boolean(true)), ("text", str("")), ("offered", Json::boolean(true))]),
+            ],
+          ),
+          (
+            "automaticDecisions",
+            obj([
+              ("canEdit", Json::boolean(true)),
+              ("canReview", Json::boolean(true)),
+              ("settings", obj([("completion", obj([("enabled", Json::boolean(true))]))])),
+              ("models", [obj([("id", str("gpt-6-mini")), ("name", str("GPT-6 mini")), ("profiles", ["cx"])])]),
+              ("recent", []),
+              (
+                "policy",
+                obj([
+                  ("text", str("做完、没有待办的对话归档；还在等人回复或有后续计划的留下。")),
+                  (
+                    "options",
+                    [
+                      obj([("id", str("o1")), ("name", str("已完成")), ("rubric", str("任务做完，没有后续")), ("archive", Json::boolean(true)), ("count", Json::number(12.0)), ("chats", [obj([("session", str("s-c3")), ("title", str("夜里的构建又失败了"))])])]),
+                      obj([("id", str("o2")), ("name", str("被放弃")), ("rubric", str("明确不再继续")), ("archive", Json::boolean(true)), ("count", Json::number(3.0)), ("chats", [])]),
+                      obj([("id", str("o3")), ("name", str("等回复")), ("rubric", str("在等某人的答复")), ("archive", Json::boolean(false)), ("count", Json::number(5.0)), ("chats", [])]),
+                    ],
+                  ),
+                  ("days", Json::number(7.0)),
+                  ("checked", Json::number(20.0)),
+                  ("failed", Json::number(0.0)),
+                  ("edited", Json::boolean(false)),
+                  ("summaryText", str("近 7 天检查了 20 个对话")),
+                  ("changeText", str("上次修改 3 天前")),
+                ]),
+              ),
+            ]),
+          ),
         ]),
       ),
+      ("betaOffered", Json::boolean(true)),
     ])
   } else {
     obj([
       ("station", str(address)),
       ("id", str(id)),
       ("name", str(renamed.unwrap_or("MBA"))),
-      ("icon", str("glyph:laptop:teal")),
+      ("icon", str(fx.marks.get(id).unwrap_or("glyph:laptop:teal"))),
       ("summary", str("离线 · 2 天前")),
       ("face", str("offline")),
       ("online", Json::boolean(false)),
@@ -354,6 +587,23 @@ fn fx_usage(days : Int) -> Json {
     ),
     ("notes", []),
     ("basis", str("按各服务商公开的 API 价格折算，不是实际账单。")),
+    (
+      "prices",
+      [
+        obj([
+          ("station", str("Studio")),
+          ("note", str("每百万 token 的美元价格，取自服务商公开价格")),
+          (
+            "rows",
+            [
+              obj([("model", str("Opus 5.5")), ("rates", [obj([("label", str("输入")), ("value", str("$5"))]), obj([("label", str("输出")), ("value", str("$25"))]), obj([("label", str("缓存读")), ("value", str("$0.5"))])])]),
+              obj([("model", str("Sonnet 5")), ("rates", [obj([("label", str("输入")), ("value", str("$3"))]), obj([("label", str("输出")), ("value", str("$15"))]), obj([("label", str("缓存读")), ("value", str("$0.3"))])])]),
+            ],
+          ),
+        ]),
+        obj([("station", str("MBA")), ("note", str("station 离线，读不到它的价格表")), ("rows", [])]),
+      ],
+    ),
   ])
 }
 
@@ -433,7 +683,168 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("relays", []),
         ]),
       )
-    "stations" => Some([fx_station("ws1/st1"), fx_station("ws1/st2")])
+    "stations" => if fx.none { Some([]) } else { Some([fx_station("ws1/st1"), fx_station("ws1/st2")]) }
+    "screens" =>
+      Some(
+        obj([
+          (
+            "screens",
+            [
+              obj([("id", str("desktop")), ("kind", str("desktop")), ("title", str("Studio 的屏幕")), ("width", Json::number(3024.0)), ("height", Json::number(1964.0)), ("line", str("3024 × 1964 · 无人在看")), ("link", str(""))]),
+              obj([("id", str("browser:t1")), ("kind", str("browser")), ("title", str("发布清单 - 文档")), ("width", Json::number(1280.0)), ("height", Json::number(800.0)), ("line", str("浏览器标签页 · 1280 × 800")), ("link", str(""))]),
+            ],
+          ),
+          ("outdated", Json::boolean(false)),
+          ("control", Json::boolean(true)),
+          ("known", Json::boolean(true)),
+        ]),
+      )
+    "adbShare" =>
+      Some(obj([("sharing", Json::boolean(false)), ("phase", str("idle")), ("tunnels", Json::number(0.0))]))
+    "joinable" =>
+      Some(
+        obj([
+          ("offered", Json::boolean(true)),
+          ("loading", Json::boolean(false)),
+          (
+            "items",
+            [
+              obj([("station", str("ws2/st9")), ("id", str("st9")), ("name", str("家里的 mini")), ("icon", str("glyph:mini:green")), ("workspace", str("ws2")), ("workspaceName", str("个人")), ("online", Json::boolean(true)), ("line", str("个人 · 在线"))]),
+              obj([("station", str("ws3/st7")), ("id", str("st7")), ("name", str("实验机")), ("workspace", str("ws3")), ("workspaceName", str("实验室")), ("online", Json::boolean(false)), ("line", str("实验室已开启安全模式，此 workspace 未开启")), ("needsLock", Json::boolean(true))]),
+            ],
+          ),
+        ]),
+      )
+    "memberships" =>
+      Some(
+        obj([
+          ("manages", Json::boolean(true)),
+          ("loading", Json::boolean(false)),
+          ("canJoin", Json::boolean(true)),
+          (
+            "workspaces",
+            [
+              obj([("id", str("ws1")), ("workspace", str("ws1")), ("home", Json::boolean(true)), ("name", str("星火工作室")), ("line", str("主 workspace"))]),
+              obj([("id", str("ws2")), ("workspace", str("ws2")), ("home", Json::boolean(false)), ("name", str("个人")), ("line", str("~/项目/个人"))]),
+            ],
+          ),
+        ]),
+      )
+    "profileFlow" => Some(fx_profile_flow())
+    "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => Some(fx_session_pick())
+    "connectFlow" if fx_connect_step.val != "team" => Some(fx_feishu_flow(fx_connect_step.val))
+    "connectFlow" =>
+      Some(
+        obj([
+          ("step", str("team")),
+          ("title", str("Slack 工作区")),
+          ("back", str("close")),
+          ("number", Json::number(1.0)),
+          ("total", Json::number(4.0)),
+          ("mobile", Json::boolean(true)),
+          ("adding", Json::boolean(false)),
+          ("settings", obj([("name", str("still.fail")), ("description", str("Coding agent in your threads (still.fail)"))])),
+          ("config", str("")),
+          ("configReady", Json::boolean(false)),
+          ("mode", str("multi-session")),
+          ("requireMention", Json::boolean(true)),
+          ("gettingToken", Json::boolean(false)),
+          ("noProfile", Json::boolean(false)),
+          ("canMake", Json::boolean(false)),
+          ("canCreate", Json::boolean(false)),
+          (
+            "teams",
+            [
+              obj([("teamId", str("T1")), ("name", str("星火")), ("owner", obj([("user", str("林")), ("teamDomain", str("xinghuo"))]))]),
+              obj([("teamId", str("T2")), ("name", str("实验室")), ("owner", obj([("user", str("林"))]))]),
+            ],
+          ),
+          ("chosen", obj([("teamId", str("T1")), ("name", str("星火"))])),
+        ]),
+      )
+    "slackApp" =>
+      Some(
+        obj([
+          ("state", str("ok")),
+          ("appId", str("A1")),
+          ("links", obj([("settings", str("https://api.slack.com/apps/A1")), ("install", str("")), ("appToken", str("")), ("oauth", str(""))])),
+          (
+            "settings",
+            obj([
+              ("name", str("星火助手")),
+              ("displayName", str("星火助手")),
+              ("description", str("帮团队整理发布和构建")),
+              ("longDescription", str("")),
+              ("backgroundColor", str("#F3E3D3")),
+              ("groups", obj([("base", Json::boolean(true)), ("public", Json::boolean(true)), ("dm", Json::boolean(true)), ("files", Json::boolean(true))])),
+            ]),
+          ),
+        ]),
+      )
+    "vaultUses" =>
+      Some(
+        obj([
+          (
+            "uses",
+            [
+              obj([("at", stamp_of("昨天")), ("session", str("s-c1")), ("station", str("st1")), ("chatTitle", str("整理发布清单")), ("mode", str("proxy")), ("hosts", ["api.github.com"]), ("command", str("git push origin main"))]),
+              obj([("at", stamp_of("3 天前")), ("session", str("s-c4")), ("station", str("st1")), ("chatTitle", str("给设置页加一个深色模式开关")), ("mode", str("proxy")), ("hosts", []), ("denied", Json::boolean(true))]),
+            ],
+          ),
+        ]),
+      )
+    "decisionForm" =>
+      Some(obj([("enabled", Json::boolean(true)), ("model", str("gpt-6-mini")), ("dirty", Json::boolean(false)), ("pending", Json::boolean(false))]))
+    "policyForm" =>
+      Some(obj([("policy", str("做完、没有待办的对话归档；还在等人回复或有后续计划的留下。")), ("options", []), ("dirty", Json::boolean(false)), ("pending", Json::boolean(false))]))
+    "changelog" =>
+      Some(
+        obj([
+          ("build", Json::number(1300.0)),
+          (
+            "tabs",
+            [
+              obj([
+                ("part", str("app")),
+                ("label", str("此 app")),
+                (
+                  "days",
+                  [
+                    obj([
+                      ("label", str("10 月 19 日")),
+                      (
+                        "entries",
+                        [
+                          obj([("version", Json::number(2.0)), ("versionName", str("0.1.1300")), ("text", []), ("lines", [obj([("kind", str("new")), ("label", str("新增")), ("text", str("设置里可以添加 station 和 Profile"))])]), ("has", Json::boolean(false)), ("note", str("更新后可用")), ("mine", Json::boolean(true))]),
+                          obj([("version", Json::number(1.0)), ("versionName", str("0.1.1288")), ("text", []), ("lines", [obj([("kind", str("fix")), ("label", str("修复")), ("text", str("对话列表偶尔重复显示同一行"))])]), ("has", Json::boolean(true)), ("note", str("")), ("mine", Json::boolean(true))]),
+                        ],
+                      ),
+                    ]),
+                  ],
+                ),
+              ]),
+              obj([("part", str("station")), ("label", str("Station")), ("days", [])]),
+            ],
+          ),
+        ]),
+      )
+    "agentEnvForm" =>
+      Some(
+        obj([
+          ("text", str("HTTPS_PROXY=http://127.0.0.1:7890\nNO_PROXY=localhost,.internal\nBAD LINE")),
+          (
+            "lines",
+            [
+              obj([("parts", []), ("error", Json::boolean(false))]),
+              obj([("parts", []), ("error", Json::boolean(false))]),
+              obj([("parts", []), ("error", Json::boolean(true)), ("problem", str("缺少「=」"))]),
+            ],
+          ),
+          ("errors", Json::number(1.0)),
+          ("dirty", Json::boolean(true)),
+          ("pending", Json::boolean(false)),
+        ]),
+      )
     "connects" =>
       Some(
         obj([
@@ -542,7 +953,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("available", Json::boolean(true)),
           ("locked", Json::boolean(true)),
           ("canSign", Json::boolean(true)),
-          ("setUp", Json::boolean(true)),
+          ("setUp", Json::boolean(!fx.vault_off)),
           (
             "vaults",
             [
@@ -618,7 +1029,19 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("hostOnline", Json::boolean(true)),
           ("usable", Json::boolean(true)),
           ("where", str("只在 Studio")),
-          ("stations", []),
+          (
+            "stations",
+            [
+              obj([("id", str("st1")), ("station", str("ws1/st1")), ("name", str("Studio")), ("online", Json::boolean(true)), ("allowed", Json::boolean(true))]),
+              obj([("id", str("st2")), ("station", str("ws1/st2")), ("name", str("MBA")), ("online", Json::boolean(false)), ("allowed", Json::boolean(true))]),
+            ],
+          ),
+          (
+            "members",
+            [
+              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Studio")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(1.0))]),
+            ],
+          ),
           ("editable", Json::boolean(true)),
           ("canShare", Json::boolean(true)),
         ])
@@ -672,7 +1095,11 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   match name {
     "workspace.renameStation" => {
-      fx.names[text(p, "station")] = text(p, "name")
+      // a name, or (the mark picker's) a mark
+      match field(p, "icon") {
+        Some(_) => fx.marks[text(p, "station")] = text(p, "icon")
+        None => fx.names[text(p, "station")] = text(p, "name")
+      }
       fx.version += 1
       Some(Ok(obj([])))
     }
@@ -682,7 +1109,51 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     }
     "memory.get" => Some(Ok(fx_memory()))
+    "cache.usage" =>
+      Some(
+        Ok(
+          obj([
+            (
+              "chats",
+              [
+                obj([("station", str("ws1/st1")), ("thread", Json::number(1.0)), ("title", str("整理发布清单")), ("sessions", ["s-c1"]), ("bytes", Json::number(2400000.0))]),
+                obj([("station", str("ws1/st1")), ("thread", Json::number(4.0)), ("title", str("给设置页加一个深色模式开关")), ("sessions", ["s-c4"]), ("bytes", Json::number(860000.0))]),
+                obj([("station", str("ws1/st2")), ("thread", Json::number(3.0)), ("title", str("夜里的构建又失败了")), ("sessions", ["s-c3"]), ("bytes", Json::number(41000.0))]),
+              ],
+            ),
+          ]),
+        ),
+      )
+    "machineSessions.list" => Some(Ok(obj([("sessions", [])])))
+    "workspace.enroll" =>
+      Some(
+        Ok(
+          obj([
+            ("token", str("made-up")),
+            ("install", str("curl -fsSL https://still.fail/install.sh | sh -s -- 4f7c2a9e1b")),
+            ("command", str("stillfail station enroll https://still.fail 4f7c2a9e1b")),
+          ]),
+        ),
+      )
+    "software.auto" => {
+      fx.auto = flag(p, "on")
+      fx.version += 1
+      Some(Ok(obj([])))
+    }
+    "software.check" | "software.update" | "software.channel" | "search.setPersonal" | "permissions.request" =>
+      Some(Ok(obj([])))
+    "agentEnv.form.open" | "agentEnv.form.edit" | "agentEnv.form.drop" | "agentEnv.form.save" => Some(Ok(obj([])))
     "profile.quota" | "profile.check" | "profile.put" => Some(Ok(obj([])))
+    // the drafts' forms (a new profile's, a new connect's, the decisions' and the archive policy's), opened and edited
+    "profile.flow.open" | "profile.flow.edit" | "profile.flow.drop" | "connect.flow.open" | "connect.flow.edit"
+    | "connect.flow.drop" | "automaticDecisions.form.open" | "automaticDecisions.form.edit"
+    | "automaticDecisions.form.drop" | "automaticDecisions.policy.open" | "automaticDecisions.policy.drop" =>
+      Some(Ok(obj([])))
+    // people added: each as one who has not signed in yet
+    "workspace.addMembers" =>
+      Some(Ok(obj([("joined", []), ("added", field(p, "emails").unwrap_or(Json::array([]))), ("already", [])])))
+    // a chat agent's run settings (a new chat's picks are the new chat fixture's)
+    "pick.set" if text(p, "of").has_prefix("session:") => Some(Ok(obj([])))
     _ => None
   }
 }
@@ -754,4 +1225,220 @@ fn waiting_lock(mode : String) -> Json {
     ("stations", []),
     ("renew", []),
   ])
+}
+
+///|
+/// The sheet a fixture's mode puts up, once its page is drawn with what it needs (`page`).
+fn fixture_sheet(core : Core, here : Here) -> Unit {
+  let what = fixture_open.sheet
+  if what == "" {
+    return
+  }
+  fixture_open.sheet = ""
+  match what {
+    "mark" => {
+      let s = Some(fx_station("ws1/st1"))
+      open_mark_pick(core, text(s, "name"), text(s, "emoji"), text(s, "icon"), "", fn(_, _, _) {  })
+    }
+    "env" => open_agent_env(core, "ws1/st1")
+    "profile-menu" => {
+      let p = fx_profiles()[0]
+      open_profile_menu(core, "ws1/st1", Some(p))
+    }
+    "connect-menu" | "connect-mode" => {
+      let item = obj([
+        ("station", str("ws1/st1")),
+        ("connect", fx_connect("k1", "星火助手", "online", "在线", "multi-session")),
+        ("candidates", []),
+        ("running", Json::number(2.0)),
+      ])
+      if what == "connect-menu" {
+        open_connect_menu(core, here, "ws1/st1", Some(item))
+      } else {
+        open_mode(core, "ws1/st1", Some(item))
+      }
+    }
+    "vault-add" => open_vault_add(core, here)
+    "vault-editor" => open_vault_editor(core, "ws1", "v1", None, kind="token")
+    "vault-recover" => open_vault_recover(core, "ws1")
+    "add-people" => open_add_people(core, here, workspace_view(core, here).value)
+    "workspace-mark" => open_mark_pick(core, "星火工作室", "", "glyph:rocket:orange", "", fn(_, _, _) {  })
+    "add" | "add-existing" | "add-command" => {
+      open_add_station(core, here, ["st1", "st2"], existing=what == "add-existing")
+      if what == "add-command" {
+        adding.made = Some(
+          (
+            "curl -fsSL https://still.fail/install.sh | sh -s -- 4f7c2a9e1b",
+            "stillfail station enroll https://still.fail 4f7c2a9e1b",
+          ),
+        )
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
+/// A page's list scrolled as a fixture's mode asks (its first frames), by its key.
+fn fixture_scroll(c : @ui.Ctx, key : String) -> Unit {
+  if fixture_open.list == key && fixture_open.frames < 4 {
+    fixture_open.frames += 1
+    // (the list asks for the frames its scroll takes)
+    c.list_scroll_to(key, fixture_open.block)
+  }
+}
+
+///|
+/// Made-up recovery words for the words' screenshot (no one's: the words of a fixture are not a key to anything).
+fn fx_words() -> Array[String] {
+  [
+    "amber", "basin", "cedar", "delta", "ember", "fable", "grove", "harbor", "island", "jasper", "kettle", "lantern", "meadow",
+    "nectar", "orbit", "pebble", "quarry", "river", "saddle", "timber", "umbra", "velvet", "willow", "zephyr",
+  ]
+}
+
+///|
+/// A new profile's draft at its first step (`profileFlow`): the providers by group.
+fn fx_profile_flow() -> Json {
+  let provider = fn(id : String, name : String, group : String, runtime : String, mark : String) {
+    obj([("id", str(id)), ("name", str(name)), ("group", str(group)), ("kind", str("api-provider")), ("runtime", str(runtime)), ("mark", str(mark))])
+  }
+  obj([
+    ("step", str("pick")),
+    ("station", str("ws1/st1")),
+    ("title", str("选择服务商")),
+    ("hint", str("订阅和 API key 都在这里添加，选择服务商开始")),
+    (
+      "groups",
+      [
+        obj([
+          ("id", str("labs")),
+          ("title", str("模型厂商")),
+          (
+            "providers",
+            [
+              provider("openai", "OpenAI", "labs", "codex", "openai"),
+              provider("anthropic", "Anthropic", "labs", "claude", "anthropic"),
+              provider("deepseek", "DeepSeek", "labs", "", "deepseek"),
+              provider("kimi", "Kimi", "labs", "", "kimi"),
+            ],
+          ),
+        ]),
+        obj([("id", str("gateways")), ("title", str("中转站")), ("providers", [provider("openrouter", "OpenRouter", "gateways", "", "openrouter")])]),
+      ],
+    ),
+    ("choices", []),
+    ("showEndpoint", Json::boolean(false)),
+    ("endpoint", str("")),
+    ("protocols", []),
+    ("showKey", Json::boolean(false)),
+    ("key", str("")),
+    ("keyLabel", str("")),
+    ("canSubmit", Json::boolean(false)),
+    ("pending", Json::boolean(false)),
+    ("submitLabel", str("")),
+    ("usesLine", str("")),
+  ])
+}
+
+///|
+/// A chat's agent as it runs and as it is to run (`pick` of `session:<key>`, MBUI_FIXTURE=settings-run): its effort
+/// raised to high, the rest as it was.
+fn fx_session_pick() -> Json {
+  let model = obj([("model", str("claude-opus-5-5")), ("name", str("Opus 5.5")), ("maker", obj([("id", str("anthropic"))]))])
+  obj([
+    ("value", obj([("model", str("claude-opus-5-5")), ("runtime", str("claude"))])),
+    ("draft", obj([("model", str("claude-opus-5-5")), ("runtime", str("claude")), ("effort", str("high"))])),
+    ("option", str("claude-opus-5-5")),
+    ("options", [model]),
+    ("maker", obj([("id", str("anthropic"))])),
+    ("modelText", str("Opus 5.5")),
+    ("efforts", ["low", "medium", "high"]),
+    ("was", ["Opus 5.5", "默认深度", "自动 · Claude 主账号"]),
+    ("becomes", ["Opus 5.5", "high", "自动 · Claude 主账号"]),
+    ("accountText", str("自动分配")),
+    ("accountNote", str("Claude 主账号 · 5 小时窗口已用 62%")),
+    ("accounts", [obj([("id", str("p1")), ("name", str("Claude 主账号")), ("line", str("订阅 · 只在 Studio"))])]),
+    ("changed", Json::boolean(true)),
+    ("saveText", str("改成 Opus 5.5 · high · 自动分配")),
+  ])
+}
+
+///|
+/// A new connect on Feishu's path (MBUI_FIXTURE=settings-new-connect-platform, -scan): the platform picked (飞书), or
+/// the bot being made by scanning, its QR code waiting.
+fn fx_feishu_flow(step : String) -> Json {
+  let scan = step == "feishuScan"
+  let feishu : Array[(String, Json)] = [
+    ("way", str("scan")),
+    ("appId", str("")),
+    ("appSecret", str("")),
+    ("lark", Json::boolean(false)),
+    ("canVerify", Json::boolean(false)),
+    ("verified", Json::boolean(false)),
+    ("errors", []),
+    ("failed", Json::boolean(false)),
+    ("creating", Json::boolean(false)),
+    ("error", Json::null()),
+    ("connect", Json::null()),
+  ]
+  if scan {
+    feishu.push(("registration", obj([("state", str("waiting")), ("url", str("https://open.feishu.cn/page/launcher?code=made-up"))])))
+    feishu.push(("stateText", str("使用飞书扫描二维码，按提示创建机器人")))
+    feishu.push(("qr", fx_qr(25)))
+  }
+  obj([
+    ("step", str(step)),
+    ("title", str(if scan { "扫码创建" } else { "选择平台" })),
+    ("back", str(if scan { "feishuWay" } else { "close" })),
+    ("number", Json::number(if scan { 4.0 } else { 1.0 })),
+    ("total", Json::number(4.0)),
+    ("mobile", Json::boolean(true)),
+    ("platforms", [str("slack"), str("feishu")]),
+    ("platform", str("feishu")),
+    ("feishu", obj(feishu)),
+    ("mode", str("multi-session")),
+    ("requireMention", Json::boolean(true)),
+    ("noProfile", Json::boolean(false)),
+    ("canCreate", Json::boolean(true)),
+  ])
+}
+
+///|
+/// A made-up QR code's modules, `n` a side (the three finder squares, the rest a fixed scatter): only drawn, never
+/// read.
+fn fx_qr(n : Int) -> Json {
+  let rows : Array[Json] = []
+  for y in 0..<n {
+    let row = StringBuilder::new()
+    for x in 0..<n {
+      let finder = fn(ox : Int, oy : Int) {
+        let dx = x - ox
+        let dy = y - oy
+        if dx < 0 || dy < 0 || dx > 6 || dy > 6 {
+          None
+        } else {
+          let ring = if dx < dy { dx } else { dy }
+          let far = if 6 - dx < 6 - dy { 6 - dx } else { 6 - dy }
+          let d = if ring < far { ring } else { far }
+          Some(d != 1)
+        }
+      }
+      let dark = match finder(0, 0) {
+        Some(b) => b
+        None =>
+          match finder(n - 7, 0) {
+            Some(b) => b
+            None =>
+              match finder(0, n - 7) {
+                Some(b) => b
+                None => (x * 7 + y * 13 + x * y * 3) % 5 < 2
+              }
+          }
+      }
+      row.write_char(if dark { '1' } else { '0' })
+    }
+    rows.push(str(row.to_string()))
+  }
+  obj([("size", Json::number(n.to_double())), ("rows", Json::array(rows))])
 }

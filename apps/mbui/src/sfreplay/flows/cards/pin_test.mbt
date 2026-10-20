@@ -21,8 +21,11 @@ test "27-pin" {
     f.run_to(@kit.sheet_rest("decide-sheet"))
     // the bottom bar at its end
     f.run_to(@sfapp.bar_rest())
-    // the test chat ended all done: 保留 and 归档此对话 come under its last post meanwhile
-    f.run_to(@sfapp.under_rest())
+    // the test chat ended all done: the bar's 归档 comes in meanwhile, to the end it sets out
+    let rest = f.t.rest_of("bar-archive/")
+    if rest > f.t.time() {
+      f.run_to(rest)
+    }
     f.end()
   })
 }

@@ -10,19 +10,24 @@ let connects_mine : Ref[Bool] = Ref(false)
 
 ///|
 /// How a connect's conversations become sessions, in words (Words.kt MODE_LABEL, MODE_TEXT).
-fn mode_label(mode : String) -> String {
-  match mode {
-    "multi-session" => tr("android-misc.mode.multi")
-    "single-session" => tr("android-misc.mode.single")
-    m => m
+/// A Feishu connect's (`kind` feishu) in its groups' words (modeLabel, modeText).
+fn mode_label(mode : String, kind? : String = "") -> String {
+  match (mode, kind == "feishu") {
+    ("multi-session", false) => tr("android-misc.mode.multi")
+    ("single-session", false) => tr("android-misc.mode.single")
+    ("multi-session", true) => tr("web-main.mode.feishu.multi.label")
+    ("single-session", true) => tr("web-main.mode.feishu.single.label")
+    (m, _) => m
   }
 }
 
 ///|
-fn mode_text(mode : String) -> String {
-  match mode {
-    "multi-session" => tr("android-misc.mode.multi.text")
-    "single-session" => tr("android-misc.mode.single.text")
+fn mode_text(mode : String, kind? : String = "") -> String {
+  match (mode, kind == "feishu") {
+    ("multi-session", false) => tr("android-misc.mode.multi.text")
+    ("single-session", false) => tr("android-misc.mode.single.text")
+    ("multi-session", true) => tr("web-main.mode.feishu.multi.description")
+    ("single-session", true) => tr("web-main.mode.feishu.single.description")
     _ => ""
   }
 }
@@ -34,7 +39,11 @@ fn connect_avatar(c : @ui.Ctx, core : Core, cv : Json?, size : Double) -> Unit {
     Some(image) => avatar(c, core, text(cv, "id"), text(cv, "name"), size, picture=image)
     None =>
       c.box(w=Px(size), h=Px(size), align=ACenter, justify=JCenter, fn() {
-        @sf.slack_mark(c, size * 0.55) |> ignore
+        if text(cv, "kind") == "feishu" {
+          @sf.feishu_mark(c, size * 0.55) |> ignore
+        } else {
+          @sf.slack_mark(c, size * 0.55) |> ignore
+        }
       })
       |> ignore
   }
@@ -93,10 +102,15 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
   }
   let view = topic.value
   let filters = [tr("android-settings.connects.all"), tr("android-settings.connects.mine")]
+  let add = match place_action(core, here, "connects") {
+    Some(run) => Some(("add-connect", run))
+    None => None
+  }
   place_page(
     c,
     core,
     tr("android-settings.connects.title"),
+    primary?=add,
     back=match one {
       Some(o) => text(Some(o), "name")
       None => tr("android-settings.title")
@@ -158,47 +172,9 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
                   for x in here_list {
                     connect_row(c, core, address, field(Some(x), "connect"))
                   }
-                  // the Slack apps made here that no connect has taken yet (finishing one is a later slice's)
+                  // the Slack apps made here that no connect has taken yet: to be finished any time
                   for app in waiting {
-                    let av = Some(app)
-                    let where_ = if flag(av, "installed") {
-                      fill("android-settings.waiting.installed", [
-                        (
-                          "team",
-                          match opt_text(av, "installedTeam") {
-                            Some(x) => x
-                            None => opt_text(av, "team").unwrap_or(tr("android-settings.flow.team"))
-                          },
-                        ),
-                      ])
-                    } else if has(av, "install") {
-                      tr("android-settings.waiting.notInstalled")
-                    } else {
-                      tr("android-settings.waiting.noTokens")
-                    }
-                    list_row(c, fn() {
-                      c.box(w=Px(30.0), h=Px(30.0), align=ACenter, justify=JCenter, fn() {
-                        @sf.slack_mark(c, 16.0) |> ignore
-                      })
-                      |> ignore
-                      row_lines(
-                        c,
-                        text(av, "name") +
-                        (match opt_text(av, "team") {
-                          Some(team) => " · " + team
-                          None => ""
-                        }),
-                        where_,
-                        wrap_sub=true,
-                        wrap_title=false,
-                      )
-                      if online {
-                        c.text(tr("android-settings.waiting.continue"), size=14.0, color=t.p.accent, wrap=false) |> ignore
-                      } else {
-                        c.text(tr("android-settings.waiting.offline"), size=12.0, color=t.p.muted, wrap=false) |> ignore
-                      }
-                    })
-                    |> ignore
+                    waiting_app(c, core, address, app, online)
                   }
                 })
               })
@@ -226,7 +202,7 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
 
 ///|
 /// A connect's page (ConnectScreen).
-fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit {
+fn connect_page(c : @ui.Ctx, core : Core, here : Here, station : String, id : String) -> Unit {
   let t = @sf.theme()
   let topic = (core.topic)("connects", { "scope": str(workspace_of(station)), "mine": Json::boolean(false) })
   let view = topic.value
@@ -258,7 +234,11 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
         let link = field(cv, "connection")
         let bind = field(cv, "bind")
         let mode = text(cv, "mode")
-        nav_bar(c, core, tr("android-settings.connects.title"), text(cv, "name"), sub=fn() {
+        nav_bar(c, core, tr("android-settings.connects.title"), text(cv, "name"), trailing=fn() {
+          if nav_button(c, "connect-more", "more") {
+            open_connect_menu(core, here, station, iv)
+          }
+        }, sub=fn() {
           presence_dot(c, text(cv, "presence"))
           c.text(text(cv, "statusText"), size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore
         })
@@ -291,10 +271,21 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
             |> ignore
           },
         ]
-        if state == "no_tokens" || state == "error" || (state == "reconnecting" && has(link, "lastError")) {
+        let feishu = field(cv, "feishu")
+        if (state == "no_tokens" && !(feishu is Some(Object(_)))) || state == "error" || (state == "reconnecting" && has(link, "lastError")) {
           blocks.push(fn() {
             c.box(w=Fill(1.0), padx=12.0, pb=10.0, fn() {
               c.box(w=Fill(1.0), padx=12.0, pady=10.0, radius=12.0, bg=@sf.alpha(warn, 0.12), fn() {
+                if state == "no_tokens" {
+                  c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, fn() {
+                    c.text(tr("android-settings.connect.noTokens"), size=13.0, color=t.p.text, wrap=false, line=18.0) |> ignore
+                    if tap_text(c, "connect-fill-tokens", tr("android-settings.connect.fillTokens"), size=13.0) {
+                      open_tokens(core, station, cv)
+                    }
+                  })
+                  |> ignore
+                  return
+                }
                 c.text(
                   if state == "no_tokens" {
                     tr("android-settings.connect.noTokens")
@@ -325,8 +316,7 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
                 })
                 |> ignore
               }
-              // (its model, effort and account, and the sheets that change how it runs, are a later slice's)
-              list_row(c, fn() {
+              if list_row(c, key="connect-run", fn() {
                 label(tr("android-settings.connect.model"))
                 row_title(
                   c,
@@ -350,14 +340,15 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
                   ),
                 )
                 chevron(c)
-              })
-              |> ignore
-              list_row(c, fn() {
+              }) {
+                (core.push)(ConnectRun(station, id))
+              }
+              if list_row(c, key="connect-mode", fn() {
                 label(tr("android-settings.connect.sessions"))
                 row_lines(
                   c,
-                  mode_label(mode),
-                  mode_text(mode) +
+                  mode_label(mode, kind=text(cv, "kind")),
+                  mode_text(mode, kind=text(cv, "kind")) +
                   (if mode == "single-session" {
                     if flag(cv, "requireMention") {
                       tr("android-settings.connect.mentionOnly")
@@ -370,10 +361,11 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
                   wrap_sub=true,
                 )
                 chevron(c)
-              })
-              |> ignore
+              }) {
+                open_mode(core, station, iv)
+              }
               if mode == "single-session" {
-                list_row(c, fn() {
+                if list_row(c, key="connect-session", fn() {
                   label(tr("android-settings.connect.current"))
                   let bound = field(iv, "bound")
                   row_title(
@@ -384,9 +376,12 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
                     },
                     color=if bound is Some(Object(_)) { t.p.text } else { t.p.muted },
                   )
+                  let on = [("station", station), ("connect", id)]
+                  doing_mark(c, is_doing(core, ["connect.bindSession"], on), failed_of(core, ["connect.bindSession"], on))
                   chevron(c)
-                })
-                |> ignore
+                }) {
+                  open_session(core, station, iv)
+                }
               }
             })
             c.box(w=Fill(1.0), padx=24.0, pady=4.0, fn() {
@@ -395,16 +390,24 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
             })
             |> ignore
           },
-          fn() { section_header(c, "Slack app", start=S6) },
+          // a Feishu connect's app (its App ID, its secret replaced from here); a Slack one's Slack app
           fn() {
-            list_card(c, fn() {
-              list_row(c, fn() {
-                @sf.slack_mark(c, 16.0) |> ignore
-                row_lines(c, tr("android-settings.slack.sub"), tr("android-settings.connect.slackAppNote"))
-                chevron(c)
+            section_header(c, if text(cv, "kind") == "feishu" { tr("web-mobile.connects.feishu.section") } else { "Slack app" }, start=S6)
+          },
+          fn() {
+            if field(cv, "feishu") is Some(Object(_)) {
+              feishu_section(c, core, station, cv)
+            } else if text(cv, "kind") != "feishu" {
+              list_card(c, fn() {
+                if list_row(c, key="connect-slack-app", fn() {
+                  @sf.slack_mark(c, 16.0) |> ignore
+                  row_lines(c, tr("android-settings.slack.sub"), tr("android-settings.connect.slackAppNote"))
+                  chevron(c)
+                }) {
+                  (core.push)(SlackApp(station, id))
+                }
               })
-              |> ignore
-            })
+            }
           },
           fn() { section_header(c, tr("android-settings.connect.recent"), start=S6) },
           fn() {
@@ -412,7 +415,11 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
               let sessions = items(iv, "sessions")
               if sessions.length() == 0 {
                 list_row(c, fn() {
-                  row_title(c, fill("android-settings.connect.noSessions", [("name", text(cv, "name"))]), color=t.p.muted)
+                  row_title(
+                    c,
+                    fill(if text(cv, "kind") == "feishu" { "web-mobile.connects.noSessions.feishu" } else { "android-settings.connect.noSessions" }, [("name", text(cv, "name"))]),
+                    color=t.p.muted,
+                  )
                 })
                 |> ignore
               }

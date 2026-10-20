@@ -234,7 +234,6 @@ fn rich_chat(older : Int) -> Json {
     "outbox": [],
     "offline": false,
     "archivable": true,
-    "archiveOffered": true,
     // what waits to be decided: the two cards not answered (with_cards takes those answered here off)
     "asks": [{ "seq": 8 }, { "seq": 10 }],
   }
@@ -909,22 +908,18 @@ fn seeded_outbox(mode : String) -> Array[Json] {
 // ── the made-up chat's cards, answered here ─────────────────────────────
 //
 // The fixture takes a card's answer as the core does (Decisions.kt): answered at once (the option picked, 你 选择了
-// 「…」 as how it went), let go at once (no longer asked), the chat kept (no longer offered to archive). An option with
-// 失败 in it fails, as 保留 does in the mode chat-cards. The modes chat-cards (the card answered, 保留 failed a moment
-// ago) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards).
+// 「…」 as how it went), let go at once (no longer asked). An option with 失败 in it fails. The modes chat-cards (the
+// card answered) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards).
 
 ///|
-/// How the first row's chat's cards stand as answered here: by seq, the card's decision; whether it was kept.
+/// How the first row's chat's cards stand as answered here: by seq, the card's decision.
 let fix_decided : Map[Int, Json] = {}
-
-///|
-let fix_kept : Ref[Bool] = { val: false }
 
 ///|
 /// The chat `v` with what was answered here in it.
 fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
-  if session != "s-c1" || (fix_decided.is_empty() && !fix_kept.val && !seeded) {
+  if session != "s-c1" || (fix_decided.is_empty() && !seeded) {
     return v
   }
   match v {
@@ -958,9 +953,6 @@ fn with_cards(f : Fixture, v : Json, session : String) -> Json {
         .filter(fn(x) { field(field(Some(x), "decision"), "resolved") is Some(False) })
         .map(fn(x) { { "seq": Json::number(number(Some(x), "seq")) } }),
       )
-      if fix_kept.val {
-        o["archiveOffered"] = Json::boolean(false)
-      }
       Json::object(o)
     }
     _ => v
@@ -978,7 +970,7 @@ fn decided_json(label : String) -> Json {
 }
 
 ///|
-/// The cards' calls in the made-up chat (`decision.answer`, `decision.dismiss`, `chat.keep`): None for any other.
+/// The cards' calls in the made-up chat (`decision.answer`, `decision.dismiss`): None for any other.
 fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   let seq = number(p, "seq").to_int()
@@ -997,25 +989,16 @@ fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       f.version += 1
       Some(Ok(Json::object({})))
     }
-    "chat.keep" => {
-      if f.mode == "chat-cards" {
-        return Some(Err({ "code": "unavailable", "message": "Studio 没有回应" }))
-      }
-      fix_kept.val = true
-      f.version += 1
-      Some(Ok(Json::object({})))
-    }
     _ => None
   }
 }
 
 ///|
-/// What the modes of the cards and words set going as the chat opens: chat-answering's option under way, chat-cards' 保留
-/// failed, chat-pick's word picked, chat-link-menu's link held.
+/// What the modes of the cards and words set going as the chat opens: chat-answering's option under way, chat-pick's
+/// word picked, chat-link-menu's link held.
 pub fn open_cards_fixture(mode : String) -> Unit {
   match mode {
     "chat-answering" => dui.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
-    "chat-cards" => dui.failed["keep/ws1/st1/7"] = failed_next()
     // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
     "chat-pick" => {
       pk.ts = "ts11"

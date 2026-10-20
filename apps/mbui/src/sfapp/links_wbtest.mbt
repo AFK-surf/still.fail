@@ -2,16 +2,28 @@
 // opens it here; held, its menu.
 
 ///|
+/// The chat scrolled till `words` (a run of its text) is in the list's clear middle, under its bar and over the
+/// composer, not under either; the moment of the last wheel (-1 when none).
+fn scroll_run_clear(t : @ui.Tester, words : String) -> Double {
+  t.move(195.0, 400.0)
+  let mut wheeled = -1.0
+  for _ in 0..<12 {
+    let dy = match t.run_rects(words) {
+      [(_, y, _, h), ..] if y + h / 2.0 > 160.0 && y + h / 2.0 < 660.0 => break
+      [(_, y, _, h), ..] if y + h / 2.0 >= 660.0 => 200.0
+      _ => -300.0
+    }
+    t.wheel(195.0, 400.0, dy)
+    wheeled = t.time()
+  }
+  wheeled
+}
+
+///|
 test "a bare address tapped is handed to the system; one to a chat opens it here" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
-  t.move(195.0, 400.0)
-  for _ in 0..<8 {
-    if t.run_rects("example.com/bench/list").length() > 0 {
-      break
-    }
-    t.wheel(195.0, 400.0, -300.0)
-  }
+  scroll_run_clear(t, "example.com/bench/list") |> ignore
   t.tap_run("https://example.com/bench/list")
   assert_eq(t.opened(), ["https://example.com/bench/list"])
   let depth = app.nav.depth()
@@ -24,13 +36,7 @@ test "a bare address tapped is handed to the system; one to a chat opens it here
 test "a link held still: its menu (打开链接, 复制链接), the link not followed" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
-  t.move(195.0, 400.0)
-  for _ in 0..<8 {
-    if t.run_rects("example.com/bench/list").length() > 0 {
-      break
-    }
-    t.wheel(195.0, 400.0, -300.0)
-  }
+  scroll_run_clear(t, "example.com/bench/list") |> ignore
   let (x, y, w, h) = t.run_rects("example.com/bench/list")[0]
   t.press_at(x + w / 2.0, y + h / 2.0)
   t.run_for(long_press_ms)

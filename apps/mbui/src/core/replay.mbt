@@ -80,9 +80,11 @@ pub(all) enum Pace {
 } derive(Eq, Show)
 
 ///|
-/// Asks that only tell the core what the app sees or keeps (where its chat's list is, a draft, where it was read to):
-/// how many and when depends on the run's timing. Not strict (Replay::pace), they wait nothing and none is required.
-let reports : Array[String] = ["client.focus", "chat.place", "draft.put"]
+/// Asks that only tell the core what the app sees or keeps (where its chat's list is, a draft, where it was read to,
+/// where a player was left): how many and when depends on the run's timing, and what they say with it (a player's
+/// place is how far it played). Not strict (Replay::pace), they wait nothing and none is required; one made again with
+/// other params is the run's next of its name, not said to differ.
+let reports : Array[String] = ["client.focus", "chat.place", "draft.put", "drive.place"]
 
 ///|
 /// The conversation in `log`: a trace's lines (`{"out":…}`, `{"in":…}`), or a log with them after CORETRACE. Other
@@ -797,7 +799,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       let e = self.evs[i]
       if e.out && !e.done && e.msg is Object(r) && kind_of(r) == kind && name_of(r) == name {
         found = i
-        self.fuzzy.push(text)
+        if !(kind == "call" && reports.contains(name)) {
+          self.fuzzy.push(text)
+        }
         break
       }
     }

@@ -67,7 +67,7 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             )
           })
         Some(_) => {
-          blocks.push(fn() { usage_tiles(c, v) })
+          blocks.push(fn() { usage_tiles(c, core, v) })
           let wait = field(v, "wait")
           if flag(v, "empty") && note_waits(wait) {
             blocks.push(fn() { waiting_cards(c, count=2, failing=failing_of(wait)) })
@@ -99,7 +99,7 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 
 ///|
 /// The totals, two to a row (Usage.kt Tiles); the first one's last line the way to the prices.
-fn usage_tiles(c : @ui.Ctx, v : Json?) -> Unit {
+fn usage_tiles(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   let t = @sf.theme()
   let tiles = items(v, "tiles")
   c.box(w=Fill(1.0), padx=12.0, pb=10.0, gap=10.0, fn() {
@@ -113,7 +113,12 @@ fn usage_tiles(c : @ui.Ctx, v : Json?) -> Unit {
       c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
         for k, tile in pair {
           let tv = Some(tile)
-          c.box(w=Fill(1.0), padx=16.0, pady=14.0, radius=18.0, bg=t.p.card, fn() {
+          // the first's last line is the way to the prices
+          let pid = if first && k == 0 { c.id("usage-prices") } else { 0 }
+          if pid != 0 && hit(c, pid) {
+            (core.push)(UsagePrices(usage_state.days))
+          }
+          c.box(w=Fill(1.0), padx=16.0, pady=14.0, radius=18.0, bg=t.p.card, id=pid, fn() {
             c.text(text(tv, "label"), size=12.0, color=t.p.muted, wrap=false, line=17.0) |> ignore
             c.text(text(tv, "value"), style=@sf.title.then(@sf.one_line)) |> ignore
             c.text(

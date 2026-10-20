@@ -1,0 +1,48 @@
+// 81-station-mark (e2e/traces/settings-station-mark.trace): the test station → "…" → 图标: robot found and picked
+// (workspace.renameStation, icon glyph:robot); Emoji, one pasted; then 不使用图标.
+
+///|
+test "81-station-mark" {
+  @sfreplay.orders(fn(seed) raise {
+    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_station_mark, seed~)
+    f.tap("icon:settings")
+    f.run_to(@ui.nav_rest())
+    f.tap("=Station")
+    f.run_to(@ui.nav_rest())
+    f.tap("=studio")
+    f.run_to(@ui.nav_rest())
+    f.see("在此 station 上")
+    f.tap("icon:more")
+    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.tap("=图标")
+    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.see("为 studio 选择图标")
+    f.tap("搜索图标")
+    f.type_text("robot")
+    f.tap("img:glyph/robot")
+    // said as the cloud answers, the sheet still going down (its toast's time its own: looked at as it shows)
+    f.see("已设置图标")
+    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.tap("icon:more")
+    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.tap("=图标")
+    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.tap("=Emoji")
+    f.tap("粘贴或输入任意 emoji")
+    f.paste("🚀")
+    // said as the cloud answers, the sheet still going down (its toast's time its own: looked at as it shows)
+    f.see("已设置图标")
+    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.tap("icon:more")
+    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.tap("=图标")
+    f.run_to(@kit.sheet_rest("settings-sheet"))
+    // 不使用图标 is under the icons: a search that finds none brings it up
+    f.tap("=图标")
+    f.tap("搜索图标")
+    f.type_text("zzzz")
+    f.tap("不使用图标")
+    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.end()
+  })
+}
