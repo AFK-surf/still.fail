@@ -81,6 +81,11 @@ fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, 
 }
 
 ///|
+/// A fitted sheet's side margin, and as much under its last card: the cards stand as far from its bottom as from its
+/// sides (Android has 30 under the chat's and 24 under the agent's, ChatInfo.kt and AgentSheet.kt).
+let sheet_side : Double = 18.0
+
+///|
 /// A row of an info card, its ground under the finger: Android ChatInfo.kt INFO_ROW (14.dp).
 let info_row_radius : Double = 14.0
 
@@ -417,16 +422,8 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
   }
   let slack = text(chat, "slackUrl")
   let xshare = field(chat, "xshare")
-  let rows = dmax(agents.length().to_double(), 1.0) * 56.0 +
-    (
-      (if pinned is Some(_) { 1.0 } else { 0.0 }) +
-      (if slack != "" { 1.0 } else { 0.0 }) +
-      (if xshare is Some(_) { 1.0 } else { 0.0 }) +
-      2.0
-    ) *
-    40.0
-  let tall = 22.0 + 84.0 + rows + 10.0 + 30.0
-  sheet_frame(c, "info", tall, fn() {
+  // as tall as what it shows (ChatInfo.kt openChatInfo: SheetSpec(0.55f, fit)), its share until it is laid out
+  sheet_frame(c, "info", c.height * 0.55, fit=true, fn() {
     let (archived, offline) = match view {
       Some(v) => (v.archived, v.offline)
       None => (false, false)
@@ -436,7 +433,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
     let thread = field(chat, "thread")
     let link = if view is Some(_) { chat_link(r.station, r.session) } else { "" }
     let title = text(chat, "title")
-    c.box(w=Fill(1.0), pl=18.0, pr=18.0, pb=30.0, fn() {
+    c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=sheet_side, fn() {
       c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=AStart, fn() {
         c.box(w=Fill(1.0), max_h=48.0, clip=true, fn() {
           c.text(title, size=18.0, weight=700, color=t.p.text, line=24.0) |> ignore
@@ -740,22 +737,13 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
   let a = agent_json(chat, key)
   let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
   let jobs = items(a, "jobs")
-  let notes = items(card, "attention").length()
-  let turns = items(a, "turns").length() > 0
-  let rows = 3.0 + (if jobs.length() > 0 { 1.0 } else { 0.0 })
-  let tall = 22.0 +
-    52.0 +
-    (if turns { 72.0 + 76.0 } else { 0.0 }) +
-    (if notes > 0 { 8.0 + notes.to_double() * 20.0 } else { 0.0 }) +
-    12.0 +
-    rows * 40.0 +
-    24.0
   let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
-  sheet_frame(c, "agent", tall, fn() {
+  // as tall as what it shows (AgentSheet.kt: SheetSpec(0.55f, fit)), its share until it is laid out
+  sheet_frame(c, "agent", c.height * 0.55, fit=true, fn() {
     let s = field(a, "session")
     let status = text(a, "status")
-    c.box(w=Fill(1.0), pl=18.0, pr=18.0, pb=24.0, fn() {
+    c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=sheet_side, fn() {
       c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=ACenter, fn() {
         model_mark_big(
           c,
