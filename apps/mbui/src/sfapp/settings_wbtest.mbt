@@ -30,6 +30,8 @@ test "settings: the account, the workspace's rows and how each stands, this devi
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("lin@example.com · Google") is Some(_))
   assert_true(t.find("Chrome · macOS") is Some(_))
+  // the bottom bar going out of the way, on its own springs and glides, to where it rests
+  t.run_for(bar.rest() - t.time())
   t.assert_idle()
 }
 
@@ -42,7 +44,7 @@ test "appearance: 深色 chosen, the app is drawn dark at once and the core keep
   assert_true(@sf.theme().dark)
   t.tap_text("浅色")
   assert_false(@sf.theme().dark)
-  // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
+  // (not idle yet: the choice's thumb is on a Ctx::spring (settings/parts.mbt), whose end the app cannot read)
 }
 
 ///|
@@ -108,7 +110,9 @@ test "the archive: its chats by day; one restored leaves it" {
   t.tap(390.0 - 10.0 - 34.0 - 17.0, y)
   assert_true(t.find("整理上个月的发票") is None)
   assert_true(t.find("周会纪要") is Some(_))
-  // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
+  // the bottom bar going out of the way, on its own springs and glides, to where it rests
+  t.run_for(bar.rest() - t.time())
+  t.assert_idle()
 }
 
 ///|
@@ -120,7 +124,9 @@ test "the workspace: its people, those added, the invitations out" {
   assert_true(t.find("he@example.com") is Some(_))
   assert_true(t.find("qin@example.com") is Some(_))
   assert_true(t.find("撤回") is Some(_))
-  // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
+  // the bottom bar going out of the way, on its own springs and glides, to where it rests
+  t.run_for(bar.rest() - t.time())
+  t.assert_idle()
 }
 
 ///|
@@ -131,7 +137,7 @@ test "security mode: a device waiting, confirmed in its sheet by its code" {
   t.tap_text("482 917")
   assert_true(t.find("一致，批准") is Some(_))
   assert_true(t.find("不一致，拒绝") is Some(_))
-  // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
+  // (not idle yet: the sheet is still rising on kit's spring (kit/sheet.mbt), whose end it does not say)
 }
 
 ///|
@@ -143,6 +149,8 @@ test "memory: a station's global memory, its projects, a skill's page" {
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("步骤") is Some(_))
   assert_true(t.find("checklist") is Some(_))
+  // the bottom bar going out of the way, on its own springs and glides, to where it rests
+  t.run_for(bar.rest() - t.time())
   t.assert_idle()
 }
 
@@ -167,5 +175,7 @@ test "profiles, connects, the vault: their lists" {
   let t3 = settings_tester("vault")
   assert_true(t3.find("GitHub token") is Some(_))
   assert_true(t3.find("git push origin main") is Some(_))
-  // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
+  // the bottom bar going out of the way, on its own springs and glides, to where it rests
+  t3.run_for(bar.rest() - t3.time())
+  t3.assert_idle()
 }

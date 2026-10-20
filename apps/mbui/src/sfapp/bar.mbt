@@ -548,6 +548,24 @@ fn BarModel::sample(self : BarModel) -> Unit {
 }
 
 ///|
+/// When all of the bar is at rest (the frames' clock, ms; before now: it is), as its springs and glides said as they
+/// set out.
+fn BarModel::rest(self : BarModel) -> Double {
+  let mut e = -1.0
+  for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
+    e = dmax(e, s.end())
+  }
+  let gs = [self.vis, self.ball_alpha, self.ball_scale, self.icon_swap]
+  for _, g in self.tints {
+    gs.push(g)
+  }
+  for g in gs {
+    e = dmax(e, g.anim().ends_at())
+  }
+  e
+}
+
+///|
 /// Everything where it is going, at once (the first frame; reduced motion).
 fn BarModel::jump(self : BarModel) -> Unit {
   for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
