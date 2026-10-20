@@ -99,7 +99,6 @@
     "stable-mode": {},
     "retired-api": {},
     "app-clock": {
-      "src/sfapp/bar.mbt": 1,
       "src/sfapp/chat_fixture.mbt": 1
     },
     "wall-clock": {
