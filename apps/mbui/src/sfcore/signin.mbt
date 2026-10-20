@@ -58,14 +58,24 @@ pub fn start() -> Bool {
   let cloud = @ui.env("MBUI_CLOUD")
   let started = if cloud != "" {
     @host.log("still.fail cloud at " + cloud)
-    state.account = @host.env_text("MBUI_CORE_ACCOUNT")
     @core.start(cloud~)
   } else {
     @core.start()
   }
   if started {
-    tell_device()
+    // (a local cloud's run: its account taken in)
+    begin(account=if cloud != "" { @host.env_text("MBUI_CORE_ACCOUNT") } else { "" })
   }
+  started
+}
+
+///|
+/// What follows the core's start, its engine's or a replay's (src/sfreplay): the device told (`client.device`), and
+/// what the environment asks of signing in read; `account` (a local cloud's run's, MBUI_CORE_ACCOUNT) taken in as
+/// signed in (`migrate`) once the accounts are read.
+pub fn begin(account? : String = "") -> Unit {
+  state.account = account
+  tell_device()
   state.auto = @ui.env("MBUI_CORE_SIGNIN") == "1"
   state.login = @ui.env("MBUI_AUTH_LOGIN") == "1"
   state.by_hand = if @ui.env("MBUI_AUTH_BEGIN") == "1" {
@@ -73,7 +83,6 @@ pub fn start() -> Bool {
   } else {
     @ui.env("MBUI_AUTH_COMPLETE")
   }
-  started
 }
 
 ///|
