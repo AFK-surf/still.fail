@@ -83,6 +83,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
+      # Gradle's own distribution, the dependencies and its build cache from main's last run: cold, the first build's
+      # Gradle was ~90 s of the job's ~150 (written on main only, read on branches)
+      - uses: gradle/actions/setup-gradle@v4
       - name: Install MoonBit
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
