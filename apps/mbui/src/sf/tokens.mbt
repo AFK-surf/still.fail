@@ -401,6 +401,15 @@ pub let message_size : @ui.TextSize = Exact(15.0, 24.75)
 pub let caption_size : @ui.TextSize = Exact(12.0, 16.8)
 
 ///|
+/// What says more about something, a row's second line, a page's account of itself (13/18.2: 13sp with no line, 292
+/// places: Settings.kt:163, 191, 258).
+pub let secondary_size : @ui.TextSize = Exact(13.0, 18.2)
+
+///|
+/// A row's value at its end (14/19.6: 14sp with no line, 156 places: SettingParts.kt:258, Settings.kt:176).
+pub let value_size : @ui.TextSize = Exact(14.0, 19.6)
+
+///|
 /// A row's line of small words under its title, in a list (12/16: OpenJobs.kt:98, AgentSheet.kt:217,
 /// DriveScreen.kt:409, Attach.kt:197).
 pub let row_caption_size : @ui.TextSize = Exact(12.0, 16.0)

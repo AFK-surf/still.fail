@@ -27,6 +27,14 @@ pub let message : @ui.TextStyle = @ui.text_style(size=message_size, color=Fg)
 pub let caption : @ui.TextStyle = @ui.text_style(size=caption_size, color=Muted)
 
 ///|
+/// What says more about something: a row's second line, a page's account of itself (13/18.2, muted).
+pub let secondary : @ui.TextStyle = @ui.text_style(size=secondary_size, color=Muted)
+
+///|
+/// A row's value at its end (14/19.6, muted).
+pub let value : @ui.TextStyle = @ui.text_style(size=value_size, color=Muted, wrap=false)
+
+///|
 /// A row's one line of small words in a list (12/16).
 pub let row_caption : @ui.TextStyle = @ui.text_style(size=row_caption_size, color=Muted, wrap=false)
 
@@ -61,7 +69,26 @@ pub let strong : @ui.TextStyle = @ui.text_style(weight=Semibold)
 pub let one_line : @ui.TextStyle = @ui.text_style(wrap=false)
 
 ///|
+pub let accent : @ui.TextStyle = @ui.text_style(color=Accent)
+
+///|
+/// A page's words in from its sides as a card's (20), a little under them.
+pub let page_words : @ui.Style = @ui.style(w=Full, px=S5, pb=S1)
+
+///|
+/// A page's words under a card, in from its sides as the card's words (20), a little over them.
+pub let under_card_words : @ui.Style = @ui.style(w=Full, px=S5, pt=S1_5)
+
+///|
+/// As wide as where it is.
+pub let full_width : @ui.Style = @ui.style(w=Full)
+
+///|
 pub let centered : @ui.TextStyle = @ui.text_style(w=Full, center=true)
+
+///|
+/// Words as wide as where they are (wrapped to it).
+pub let full_words : @ui.TextStyle = @ui.text_style(w=Full)
 
 ///|
 /// A page that holds a column a phone's width at most in its middle (phone_column), as far in from the window's
