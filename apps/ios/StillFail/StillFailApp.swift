@@ -14,7 +14,18 @@ struct StillFailApp: App {
                 .environment(\.locale, L10n.locale(for: appLanguage))
                 .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
                 .tint(Color("AccentColor"))
-                .task { store.resume() }
+                .task {
+                    if scenePhase == .active { store.resume() }
+                    #if WIDGET_E2E
+                    if ProcessInfo.processInfo.arguments.contains("--seed-widget-fixture") {
+                        for _ in 0..<50 {
+                            if store.isReady { break }
+                            try? await Task.sleep(for: .milliseconds(100))
+                        }
+                        if store.isReady { try? WidgetE2EFactory.seedFromApp() }
+                    }
+                    #endif
+                }
                 // Each scope (account, workspace, core restart) gets its own widget feed subscriptions.
                 .task(id: store.scopeEpoch) { widgetFeed.restart(store: store) }
                 .onOpenURL { url in store.open(url) }
@@ -24,6 +35,7 @@ struct StillFailApp: App {
                     else { store.pause() }
                 }
         }
+
     }
 }
 

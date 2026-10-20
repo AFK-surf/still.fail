@@ -78,6 +78,7 @@ final class AppStore {
     @ObservationIgnored private var restoredScope = false
     @ObservationIgnored private var restoringScope = false
     @ObservationIgnored private var choseOnlyWorkspace = false
+    @ObservationIgnored private(set) var isForeground = false
     @ObservationIgnored private var pausedAt: ContinuousClock.Instant?
     @ObservationIgnored private var networkMonitor: NWPathMonitor?
     static let rememberedScopeKey = "lastWorkspaceScope"
@@ -234,6 +235,7 @@ final class AppStore {
         }
     }
     func resume() {
+        isForeground = true
         if let pausedAt {
             let elapsed = pausedAt.duration(to: ContinuousClock().now).components
             self.pausedAt = nil
@@ -262,6 +264,7 @@ final class AppStore {
         requestedRoute = ChatRoute(station: station, session: session, thread: query["thread"].flatMap(Int.init))
     }
     func pause() {
+        isForeground = false
         // Preserve the first departure when active → inactive → background.
         if pausedAt == nil { pausedAt = ContinuousClock().now }
         Task { [weak self] in _ = try? await self?.call("client.focus", params: ["visible": .bool(false), "focused": .bool(false)]) }
@@ -367,7 +370,7 @@ final class AppStore {
     private func sendFocus() {
         Task { [weak self] in
             guard let self else { return }
-            _ = try? await call("client.focus", params: ["visible": .bool(true), "focused": .bool(true),
+            _ = try? await call("client.focus", params: ["visible": .bool(isForeground), "focused": .bool(isForeground),
                                                        "workspace": selectedWorkspaceID.map(JSONValue.string) ?? .null])
         }
     }

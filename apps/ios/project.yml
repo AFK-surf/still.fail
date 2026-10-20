@@ -30,21 +30,15 @@ settings:
     STILLFAIL_SOURCE_ROOT: '$(SRCROOT)/../..'
     LIBRARY_SEARCH_PATHS: '$(inherited) "$(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core"'
     OTHER_LDFLAGS: '$(inherited) -lstillfail_shell -framework Security -framework SystemConfiguration -lresolv'
-targets:
-  StillFail:
-    type: application
-    platform: iOS
-    sources:
-      - path: StillFail
-      - path: Shared
-      - path: ../../.airbuild/generated/core/stillfail-core.js
-        buildPhase: resources
-    preBuildScripts:
+aggregateTargets:
+  StillFailNative:
+    buildScripts:
       - name: Prepare shared TypeScript core and native IO shell
         shell: /bin/bash
         basedOnDependencyAnalysis: false
         outputFiles:
           - $(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/stillfail-core.js
+          - $(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/stillfail-widget.js
           - $(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/libstillfail_shell.a
         script: |
           set -e -o pipefail
@@ -53,10 +47,24 @@ targets:
           /bin/bash apps/ios/bootstrap-rust.sh
           /bin/bash apps/ios/build-core.sh
     settings:
+      ENABLE_USER_SCRIPT_SANDBOXING: NO
+      SDKROOT: iphoneos
+      SUPPORTED_PLATFORMS: 'iphoneos iphonesimulator'
+targets:
+  StillFail:
+    type: application
+    platform: iOS
+    sources:
+      - path: StillFail
+      - path: Shared
+      - path: StillFailWidgetTests/WidgetE2EFactory.swift
+      - path: ../../.airbuild/generated/core/stillfail-core.js
+        buildPhase: resources
+    settings:
       base:
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         SWIFT_OBJC_BRIDGING_HEADER: '$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail/Core/Shell.h'
-        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone
+        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone$(WIDGET_E2E_SUFFIX)
         PRODUCT_NAME: StillFail
         INFOPLIST_FILE: '$(STILLFAIL_SOURCE_ROOT)/apps/ios/Info.plist'
         CODE_SIGN_ENTITLEMENTS: '$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail.entitlements'
@@ -64,6 +72,7 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
     dependencies:
+      - target: StillFailNative
       - package: MarkdownView
         product: MarkdownView
       - package: MarkdownView
@@ -78,17 +87,25 @@ targets:
       - sdk: WidgetKit.framework
       - target: StillFailWidgets
         embed: true
-  # Home-screen widgets. They read the snapshot the app writes into the shared App
-  # Group (Shared/WidgetSnapshot.swift); they never start the client core.
+  # Widgets run a bounded, read-only data reader in their own process. The main
+  # application's core/database and background lifecycle are not involved.
   StillFailWidgets:
     type: app-extension
     platform: iOS
     sources:
+      - path: ../../.airbuild/generated/core/stillfail-widget.js
+        buildPhase: resources
+      - path: StillFail/Core/NativeCoreEngine.swift
+      - path: StillFail/Core/KeychainStorage.swift
+      - path: StillFail/Core/CoreBridge.swift
+      - path: StillFail/Core/JSONValue.swift
+      - path: StillFail/Core/Localization.swift
       - path: StillFailWidgets
         excludes:
           - Info.plist
           - StillFailWidgets.entitlements
       - path: Shared
+      - path: StillFailWidgetTests/WidgetE2EFactory.swift
       - path: StillFail/Localizable.xcstrings
     info:
       path: StillFailWidgets/Info.plist
@@ -106,16 +123,21 @@ targets:
         com.apple.security.application-groups: [group.fail.still.iphone]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone.widgets
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone$(WIDGET_E2E_SUFFIX).widgets
         PRODUCT_NAME: StillFailWidgets
         SKIP_INSTALL: YES
         SWIFT_EMIT_LOC_STRINGS: NO
-        # The project links the native shell into every target; the widgets need none of it.
-        OTHER_LDFLAGS: ''
+        SWIFT_OBJC_BRIDGING_HEADER: '$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail/Core/Shell.h'
+        APPLICATION_EXTENSION_API_ONLY: YES
+        OTHER_LDFLAGS: '$(inherited) -framework Network'
         LD_RUNPATH_SEARCH_PATHS: '$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks'
     dependencies:
+      - target: StillFailNative
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
+      - sdk: JavaScriptCore.framework
+      - sdk: Security.framework
   StillFailTests:
     type: bundle.unit-test
     platform: iOS
@@ -128,6 +150,26 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone.tests
         GENERATE_INFOPLIST_FILE: YES
         OTHER_LDFLAGS: '$(inherited)'
+  StillFailWidgetUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: StillFailWidgetUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fail.still.iphone.widget-uitests
+        TEST_TARGET_NAME: StillFail
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_LDFLAGS: ''
+    info:
+      path: StillFailWidgetUITests/Info.plist
+      properties:
+        WidgetFixtureOrigin: $(WIDGET_FIXTURE_ORIGIN)
+        WidgetMainBundleID: fail.still.iphone$(WIDGET_E2E_SUFFIX)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    dependencies:
+      - target: StillFail
 schemes:
   StillFail:
     build:
@@ -141,3 +183,12 @@ schemes:
       config: Debug
       targets:
         - StillFailTests
+  WidgetExtensionE2E:
+    build:
+      targets:
+        StillFail: all
+        StillFailWidgetUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - StillFailWidgetUITests

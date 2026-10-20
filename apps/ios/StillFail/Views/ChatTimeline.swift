@@ -2,9 +2,6 @@ import SwiftUI
 import UIKit
 import ImageIO
 
-extension JSONValue {
-    var numberValue: Double? { if case .number(let value) = self { return value }; return nil }
-}
 
 struct ChatTimelineRow: Equatable, Identifiable {
     enum Kind: Equatable { case message, decision, older, newer, empty }

@@ -6,15 +6,35 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXAggregateTarget section */
+		6B00E9697B97A54E6624489E /* StillFailNative */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 3D5D271546AE5587D3BFCC4E /* Build configuration list for PBXAggregateTarget "StillFailNative" */;
+			buildPhases = (
+				B2F4199254C9FD7282761000 /* Prepare shared TypeScript core and native IO shell */,
+			);
+			dependencies = (
+			);
+			name = StillFailNative;
+			packageProductDependencies = (
+			);
+			productName = StillFailNative;
+		};
+/* End PBXAggregateTarget section */
+
 /* Begin PBXBuildFile section */
 		0125AC0016C4878082DF3FD6 /* NativeCoreEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA47BE52094ACA879D56196C /* NativeCoreEngineTests.swift */; };
 		01C94A07573FA4F03C12D9AA /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E7528F3FA255DE028C234B57 /* Localizable.xcstrings */; };
+		038A816D3667C4EBDA2C3164 /* WidgetCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0BFA02BD356869A0520229 /* WidgetCredentials.swift */; };
 		042F17D98ADF737D73823C80 /* KeychainStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A998985BBF18B04CB006610E /* KeychainStorage.swift */; };
 		06B5A503F40A7F8D069FD642 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 904D93A8CB6C8A641BB80406 /* JSONValue.swift */; };
 		07E2C7F5A33AA69FCBE42409 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC694D444099A658DD81D293 /* Security.framework */; };
+		08F16DFA2D8730FD7470332A /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 904D93A8CB6C8A641BB80406 /* JSONValue.swift */; };
 		0B27AC4E18A8EF7F6D5355B4 /* NewChatFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AB4EAEB936E1BEF5306C5A2 /* NewChatFlowTests.swift */; };
 		0E91040527342533292D3081 /* WidgetSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56015C848C1B91E39DDE2978 /* WidgetSupport.swift */; };
 		11691A3AB1D926936C9BE953 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5948A7FF69B49D7514763CD7 /* WidgetKit.framework */; };
+		186ADE9BEF65FC71E259F708 /* CoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7FD0EE4D1172B7D3F4F7773 /* CoreBridge.swift */; };
+		1AEE26A57D44EA2AFCACB4E4 /* WidgetSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F875204AB947AF8393E7596 /* WidgetSelection.swift */; };
 		1EEDA201CCDAD163D7A091ED /* ChatTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D842FE11E9550EDB2B0699 /* ChatTimeline.swift */; };
 		1F9C9A468370E53E4036AFD3 /* Litext in Frameworks */ = {isa = PBXBuildFile; productRef = 7A219B34613E57AE6C38A847 /* Litext */; };
 		2397D3EA68263586E2889B91 /* ChatMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7CCE8C49DAD4B230BD0E406 /* ChatMarkdown.swift */; };
@@ -27,14 +47,20 @@
 		331763B82AE7ECD0ED147FF6 /* NativeScrollingPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4B6BC3221C2A9CE71014F98 /* NativeScrollingPerformanceTests.swift */; };
 		34FE9E9684D6D5394DBFA375 /* ChatDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729D23748EEC6F7C6370668A /* ChatDetails.swift */; };
 		39095D093163E147D8779AEA /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C5924C53D334AB93807E74 /* WidgetSnapshot.swift */; };
+		3AAD7E41228BDF53F72C5713 /* WidgetSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F875204AB947AF8393E7596 /* WidgetSelection.swift */; };
+		3B986A28E92E17B3E34F6103 /* WidgetE2EFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61584B2FE8F0AD45CEBCACDE /* WidgetE2EFactory.swift */; };
+		3DD7BE4F15E84C961CAA5E0D /* NativeCoreEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141F04CB866473260F504236 /* NativeCoreEngine.swift */; };
+		4B03AD9E96A01D613A1C5720 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC694D444099A658DD81D293 /* Security.framework */; };
 		4C22DBC8B844DAC089A7FFA0 /* ChatComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E55704D15545E0CFA9928BB /* ChatComposer.swift */; };
 		4F8CB30B24E370B5BDBB70C1 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF9C3D0A5411B736F85B8C0C /* Localization.swift */; };
+		53B8FC3BBF7EE431462A4709 /* RefreshWidgetsIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83DC70CE05EDF06EA8E97D62 /* RefreshWidgetsIntent.swift */; };
 		54BD91670A36D8893B571175 /* TaskWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C06807582FE01B326294FD0 /* TaskWidgets.swift */; };
 		559ECEEA1A7818F8D5E4AD97 /* Common.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E8D4BB09A9D7B024DF8A6A7 /* Common.swift */; };
 		5744A434E147A45D3366E722 /* JavaScriptCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF26D5584BEB3FA880E4A333 /* JavaScriptCore.framework */; };
 		5998879C8BCC6159E285B078 /* ChatTimelineStressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F78F379339462EF18D5048 /* ChatTimelineStressTests.swift */; };
 		5C970CE4570B20FDB46167CF /* NativeCoreEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141F04CB866473260F504236 /* NativeCoreEngine.swift */; };
 		5E1BF575F0DF982317540C92 /* SlackTimelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BB6754782881E139406C41B /* SlackTimelineTests.swift */; };
+		5E3EAB24F25F9354968456B5 /* KeychainStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A998985BBF18B04CB006610E /* KeychainStorage.swift */; };
 		6244810D9B4BC36C80F4AAFF /* ChatSlack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85548373412A3907F4F5E410 /* ChatSlack.swift */; };
 		62D28F228B793230E5E4BD48 /* StillFailWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2C0C931E6B1548FFA006270 /* StillFailWidgets.swift */; };
 		63E023C82B976BBFBAA80432 /* NativePreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334282F8CABF63F396C6CB8D /* NativePreviewTests.swift */; };
@@ -44,6 +70,7 @@
 		6AE2CF3B29BC6E31CAB23995 /* CoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7FD0EE4D1172B7D3F4F7773 /* CoreBridge.swift */; };
 		6DB197596210DDC6544A0BBD /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7624AEA455E9FFEF3B6D53D3 /* UniformTypeIdentifiers.framework */; };
 		71E554E7958B809E9B5F60B2 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21BF1B3277665CC8606EA56A /* Settings.swift */; };
+		722DC3DD8379BDAEB59DB814 /* WidgetSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFC3B2641B21C5EC841A2435 /* WidgetSync.swift */; };
 		723903C5252338C78F493262 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B7CFE0C7DF5ECEF051EB2C /* AppStore.swift */; };
 		730001F243BDC87D4D0AEB34 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E917716F8F4153750310E7F2 /* SwiftUI.framework */; };
 		7956E8CB7A20A9588B286331 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 102A597081E9DDBB2F8A7CA4 /* Assets.xcassets */; };
@@ -51,27 +78,51 @@
 		847BF69033A4F3F62F14DAC1 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AD81D9E57A018D85C5B3C63 /* Chat.swift */; };
 		858932207BBCE6CDD5791D36 /* CoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20BC8B220AB8AF6D27437CFB /* CoreTests.swift */; };
 		8734884770735AFDA4B139FC /* StatsWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4764AD16F34BDBFC519943CB /* StatsWidgets.swift */; };
+		88117B3F88E20267A2059C8B /* WidgetProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474602A001F90B6AD67E1AD /* WidgetProjection.swift */; };
 		8E81CB88BEB461C66A98EC73 /* MarkdownHotPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA7CEA7BC0245349A76DB43 /* MarkdownHotPathTests.swift */; };
 		943466102CB3916321AA4518 /* WidgetFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282F3E78D54C4772D4D1C7DE /* WidgetFeed.swift */; };
+		953FACFB697814C62B041E2E /* WidgetE2EFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61584B2FE8F0AD45CEBCACDE /* WidgetE2EFactory.swift */; };
 		9FC997FDC4B5258490B99401 /* PhotosUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E46F9F9084D46ECEF009E536 /* PhotosUI.framework */; };
 		A99158BF194C80655715F92E /* stillfail-core.js in Resources */ = {isa = PBXBuildFile; fileRef = 760ADB1A8CCFF55C8B3E1A0F /* stillfail-core.js */; };
+		AE3112F3B9EBAF5267635130 /* WidgetCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0BFA02BD356869A0520229 /* WidgetCredentials.swift */; };
 		B0DB75DEB977FDDE6C09F3BB /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5948A7FF69B49D7514763CD7 /* WidgetKit.framework */; };
+		B877126FC07838D9C0737117 /* WidgetSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 640978A95350936EF4F94C61 /* WidgetSyncTests.swift */; };
 		B8B4CA33C7B3E2AA8BFA9CB0 /* ToolStepRendering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F8BFEA54C0C94F5BC4B6494 /* ToolStepRendering.swift */; };
 		B98167224C27775C870D51D5 /* HistoryTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD61577DB0E446A8B73E2A2B /* HistoryTimeline.swift */; };
+		BA2982B0E2D70EAFE18972E3 /* WidgetExtensionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23701143CD06E98ED12B9938 /* WidgetExtensionUITests.swift */; };
+		BA440EA5A5E0C388A17212CF /* stillfail-widget.js in Resources */ = {isa = PBXBuildFile; fileRef = 67EC0720287C7D680276F46C /* stillfail-widget.js */; };
 		BE6A8D5C6999796D310D556C /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C5924C53D334AB93807E74 /* WidgetSnapshot.swift */; };
+		C6B5476B732F49EFD7DA1D6A /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF9C3D0A5411B736F85B8C0C /* Localization.swift */; };
 		D0FD7FF88D37D1B9FFC39162 /* ChatProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8989631140C542D58754D2AE /* ChatProtocolTests.swift */; };
 		D1F08298612D69EC20010350 /* StillFailApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09493D6CC93011D3A31E2935 /* StillFailApp.swift */; };
 		D39839710C694C413538DA2A /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E7528F3FA255DE028C234B57 /* Localizable.xcstrings */; };
+		D4BE150401847106E0DB7122 /* WidgetSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFC3B2641B21C5EC841A2435 /* WidgetSync.swift */; };
 		D84C5716F170084BBE588D6E /* MarkdownView in Frameworks */ = {isa = PBXBuildFile; productRef = 2570CB8EE4D2533BF3F5FE4D /* MarkdownView */; };
 		DAF5FA2B0299AC925BA2EF71 /* StillFailWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CCF8D6E9F183F605C83987B0 /* StillFailWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E58B9AFE0A1FE53EF7B3F33B /* LoginCopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF2D858B371C157739EB5D3D /* LoginCopyTests.swift */; };
+		E7E91994EA926DB1BF84E159 /* WidgetProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474602A001F90B6AD67E1AD /* WidgetProjection.swift */; };
 		E8EFB17D6487BF6D9E986F59 /* NewChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2DE4889D0A986882AB930C2 /* NewChat.swift */; };
 		EF53C57AD72AF107DD52E4CC /* AuthenticationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DAFD32954893ABB324AFA974 /* AuthenticationServices.framework */; };
+		F133603B5747770401CF29FB /* JavaScriptCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF26D5584BEB3FA880E4A333 /* JavaScriptCore.framework */; };
 		F2A714A7E563490880DC6ACF /* MarkdownParser in Frameworks */ = {isa = PBXBuildFile; productRef = 027209FF2D5D8741B5184703 /* MarkdownParser */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		16AAD16E76ACE4E667F45CFA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8D49830A126F69BA57C56A8D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 00136EC5932308097F50CF1A;
+			remoteInfo = StillFail;
+		};
+		4A0DEE01070AFADA83A41B38 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8D49830A126F69BA57C56A8D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6B00E9697B97A54E6624489E;
+			remoteInfo = StillFailNative;
+		};
+		B32CA0DEAF0B7CD064BECD55 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 8D49830A126F69BA57C56A8D /* Project object */;
 			proxyType = 1;
@@ -84,6 +135,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 91183E5DDF71CAE926D202F3;
 			remoteInfo = StillFailWidgets;
+		};
+		E1D1D5513A28EAD3D7F8D038 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8D49830A126F69BA57C56A8D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6B00E9697B97A54E6624489E;
+			remoteInfo = StillFailNative;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -107,10 +165,12 @@
 		0E55704D15545E0CFA9928BB /* ChatComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatComposer.swift; sourceTree = "<group>"; };
 		102A597081E9DDBB2F8A7CA4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		141F04CB866473260F504236 /* NativeCoreEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCoreEngine.swift; sourceTree = "<group>"; };
+		1474602A001F90B6AD67E1AD /* WidgetProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetProjection.swift; sourceTree = "<group>"; };
 		1BB6754782881E139406C41B /* SlackTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackTimelineTests.swift; sourceTree = "<group>"; };
 		20BC8B220AB8AF6D27437CFB /* CoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreTests.swift; sourceTree = "<group>"; };
 		21BF1B3277665CC8606EA56A /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		2331F6126F19C80B8C6BED01 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
+		23701143CD06E98ED12B9938 /* WidgetExtensionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetExtensionUITests.swift; sourceTree = "<group>"; };
 		282F3E78D54C4772D4D1C7DE /* WidgetFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetFeed.swift; sourceTree = "<group>"; };
 		2AD81D9E57A018D85C5B3C63 /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
 		2C06807582FE01B326294FD0 /* TaskWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskWidgets.swift; sourceTree = "<group>"; };
@@ -131,14 +191,21 @@
 		5948A7FF69B49D7514763CD7 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		5CADAA1B5A485394B568F6DE /* DeletionCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeletionCopyTests.swift; sourceTree = "<group>"; };
 		5EA7CEA7BC0245349A76DB43 /* MarkdownHotPathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownHotPathTests.swift; sourceTree = "<group>"; };
+		5F875204AB947AF8393E7596 /* WidgetSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSelection.swift; sourceTree = "<group>"; };
+		61584B2FE8F0AD45CEBCACDE /* WidgetE2EFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetE2EFactory.swift; sourceTree = "<group>"; };
+		640978A95350936EF4F94C61 /* WidgetSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSyncTests.swift; sourceTree = "<group>"; };
+		67EC0720287C7D680276F46C /* stillfail-widget.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "stillfail-widget.js"; sourceTree = "<group>"; };
 		712DC3D47ECA9676A13D295A /* NewChatFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatFlow.swift; sourceTree = "<group>"; };
 		729D23748EEC6F7C6370668A /* ChatDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetails.swift; sourceTree = "<group>"; };
 		72B7CFE0C7DF5ECEF051EB2C /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
 		74233A3FF0A66C2A09DD04B4 /* ChatRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRenderingTests.swift; sourceTree = "<group>"; };
 		760ADB1A8CCFF55C8B3E1A0F /* stillfail-core.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "stillfail-core.js"; sourceTree = "<group>"; };
 		7624AEA455E9FFEF3B6D53D3 /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
+		7B2652F1E30AA8C8C5AC5041 /* StillFailWidgetUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StillFailWidgetUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		83DC70CE05EDF06EA8E97D62 /* RefreshWidgetsIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshWidgetsIntent.swift; sourceTree = "<group>"; };
 		85548373412A3907F4F5E410 /* ChatSlack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSlack.swift; sourceTree = "<group>"; };
 		8989631140C542D58754D2AE /* ChatProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatProtocolTests.swift; sourceTree = "<group>"; };
+		8D83FEAE14752BFBC7BCF07A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		904D93A8CB6C8A641BB80406 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
 		A998985BBF18B04CB006610E /* KeychainStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStorage.swift; sourceTree = "<group>"; };
 		A9C5924C53D334AB93807E74 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
@@ -148,6 +215,7 @@
 		C2C0C931E6B1548FFA006270 /* StillFailWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillFailWidgets.swift; sourceTree = "<group>"; };
 		C7CCE8C49DAD4B230BD0E406 /* ChatMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMarkdown.swift; sourceTree = "<group>"; };
 		CCF8D6E9F183F605C83987B0 /* StillFailWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StillFailWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		CFC3B2641B21C5EC841A2435 /* WidgetSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSync.swift; sourceTree = "<group>"; };
 		D010178D41AB2630134F8054 /* Nodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nodes.swift; sourceTree = "<group>"; };
 		DAFD32954893ABB324AFA974 /* AuthenticationServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AuthenticationServices.framework; path = System/Library/Frameworks/AuthenticationServices.framework; sourceTree = SDKROOT; };
 		DC694D444099A658DD81D293 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
@@ -158,6 +226,7 @@
 		EF9C3D0A5411B736F85B8C0C /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 		F0D842FE11E9550EDB2B0699 /* ChatTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTimeline.swift; sourceTree = "<group>"; };
 		F7FD0EE4D1172B7D3F4F7773 /* CoreBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreBridge.swift; sourceTree = "<group>"; };
+		FC0BFA02BD356869A0520229 /* WidgetCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetCredentials.swift; sourceTree = "<group>"; };
 		FD61577DB0E446A8B73E2A2B /* HistoryTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryTimeline.swift; sourceTree = "<group>"; };
 		FF2D858B371C157739EB5D3D /* LoginCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginCopyTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -169,6 +238,8 @@
 			files = (
 				B0DB75DEB977FDDE6C09F3BB /* WidgetKit.framework in Frameworks */,
 				730001F243BDC87D4D0AEB34 /* SwiftUI.framework in Frameworks */,
+				F133603B5747770401CF29FB /* JavaScriptCore.framework in Frameworks */,
+				4B03AD9E96A01D613A1C5720 /* Security.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -194,6 +265,7 @@
 		03FEDF2073622EF563041101 /* StillFailWidgets */ = {
 			isa = PBXGroup;
 			children = (
+				83DC70CE05EDF06EA8E97D62 /* RefreshWidgetsIntent.swift */,
 				4764AD16F34BDBFC519943CB /* StatsWidgets.swift */,
 				C2C0C931E6B1548FFA006270 /* StillFailWidgets.swift */,
 				2C06807582FE01B326294FD0 /* TaskWidgets.swift */,
@@ -210,9 +282,28 @@
 				8193A5A7604299898DF7F3B9 /* StillFail */,
 				FE65BAEB0CA1A69D2F093E85 /* StillFailTests */,
 				03FEDF2073622EF563041101 /* StillFailWidgets */,
+				79E62D89E510E3CFE67A8FC5 /* StillFailWidgetTests */,
+				5A57DB7706CE62782F9B4AE2 /* StillFailWidgetUITests */,
 				90C06ABB40FFD78BC9737933 /* Frameworks */,
 				E934DF45F1282E083984969F /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		5A57DB7706CE62782F9B4AE2 /* StillFailWidgetUITests */ = {
+			isa = PBXGroup;
+			children = (
+				8D83FEAE14752BFBC7BCF07A /* Info.plist */,
+				23701143CD06E98ED12B9938 /* WidgetExtensionUITests.swift */,
+			);
+			path = StillFailWidgetUITests;
+			sourceTree = "<group>";
+		};
+		79E62D89E510E3CFE67A8FC5 /* StillFailWidgetTests */ = {
+			isa = PBXGroup;
+			children = (
+				61584B2FE8F0AD45CEBCACDE /* WidgetE2EFactory.swift */,
+			);
+			path = StillFailWidgetTests;
 			sourceTree = "<group>";
 		};
 		8193A5A7604299898DF7F3B9 /* StillFail */ = {
@@ -230,7 +321,11 @@
 		8E2A4FA9AA293BA78BDC04BD /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				FC0BFA02BD356869A0520229 /* WidgetCredentials.swift */,
+				1474602A001F90B6AD67E1AD /* WidgetProjection.swift */,
+				5F875204AB947AF8393E7596 /* WidgetSelection.swift */,
 				A9C5924C53D334AB93807E74 /* WidgetSnapshot.swift */,
+				CFC3B2641B21C5EC841A2435 /* WidgetSync.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -269,6 +364,7 @@
 			isa = PBXGroup;
 			children = (
 				760ADB1A8CCFF55C8B3E1A0F /* stillfail-core.js */,
+				67EC0720287C7D680276F46C /* stillfail-widget.js */,
 			);
 			path = core;
 			sourceTree = "<group>";
@@ -327,6 +423,7 @@
 				4101189D81D8F532C85B96C7 /* StillFail.app */,
 				2CB0384F249F445F7341F4D2 /* StillFailTests.xctest */,
 				CCF8D6E9F183F605C83987B0 /* StillFailWidgets.appex */,
+				7B2652F1E30AA8C8C5AC5041 /* StillFailWidgetUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -348,6 +445,7 @@
 				E4B6BC3221C2A9CE71014F98 /* NativeScrollingPerformanceTests.swift */,
 				4AB4EAEB936E1BEF5306C5A2 /* NewChatFlowTests.swift */,
 				1BB6754782881E139406C41B /* SlackTimelineTests.swift */,
+				640978A95350936EF4F94C61 /* WidgetSyncTests.swift */,
 			);
 			path = StillFailTests;
 			sourceTree = "<group>";
@@ -359,7 +457,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 157E01640C7DF9C44141B465 /* Build configuration list for PBXNativeTarget "StillFail" */;
 			buildPhases = (
-				3D3AD2EBE714F68D99D24E95 /* Prepare shared TypeScript core and native IO shell */,
 				D6E277F0AC48676CDA41B50E /* Sources */,
 				D138C91786368B78CE3119EE /* Resources */,
 				7FC2C721C9F41554135FB244 /* Frameworks */,
@@ -368,6 +465,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				2A4A352EF0AC1CC0DBD92B46 /* PBXTargetDependency */,
 				9DDDD8F8FD76D79B3E5B93ED /* PBXTargetDependency */,
 			);
 			name = StillFail;
@@ -409,6 +507,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				A7B34FAAD937AA45BBCB4765 /* PBXTargetDependency */,
 			);
 			name = StillFailWidgets;
 			packageProductDependencies = (
@@ -416,6 +515,24 @@
 			productName = StillFailWidgets;
 			productReference = CCF8D6E9F183F605C83987B0 /* StillFailWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
+		};
+		A57717D1DD5BC6A66C1F59B0 /* StillFailWidgetUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DBFA02607051C46C4CF82A5B /* Build configuration list for PBXNativeTarget "StillFailWidgetUITests" */;
+			buildPhases = (
+				89D07A58DE2A70C55C9F8EEC /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FF41A0F349A73106503E0848 /* PBXTargetDependency */,
+			);
+			name = StillFailWidgetUITests;
+			packageProductDependencies = (
+			);
+			productName = StillFailWidgetUITests;
+			productReference = 7B2652F1E30AA8C8C5AC5041 /* StillFailWidgetUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -432,8 +549,15 @@
 					0A5A366C3317C82117E91E1A = {
 						DevelopmentTeam = D9AAN3VJK8;
 					};
+					6B00E9697B97A54E6624489E = {
+						DevelopmentTeam = D9AAN3VJK8;
+					};
 					91183E5DDF71CAE926D202F3 = {
 						DevelopmentTeam = D9AAN3VJK8;
+					};
+					A57717D1DD5BC6A66C1F59B0 = {
+						DevelopmentTeam = D9AAN3VJK8;
+						TestTargetID = 00136EC5932308097F50CF1A;
 					};
 				};
 			};
@@ -461,7 +585,9 @@
 			projectRoot = "";
 			targets = (
 				00136EC5932308097F50CF1A /* StillFail */,
+				6B00E9697B97A54E6624489E /* StillFailNative */,
 				0A5A366C3317C82117E91E1A /* StillFailTests */,
+				A57717D1DD5BC6A66C1F59B0 /* StillFailWidgetUITests */,
 				91183E5DDF71CAE926D202F3 /* StillFailWidgets */,
 			);
 		};
@@ -473,6 +599,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				01C94A07573FA4F03C12D9AA /* Localizable.xcstrings in Resources */,
+				BA440EA5A5E0C388A17212CF /* stillfail-widget.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -489,7 +616,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		3D3AD2EBE714F68D99D24E95 /* Prepare shared TypeScript core and native IO shell */ = {
+		B2F4199254C9FD7282761000 /* Prepare shared TypeScript core and native IO shell */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -504,6 +631,7 @@
 			);
 			outputPaths = (
 				"$(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/stillfail-core.js",
+				"$(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/stillfail-widget.js",
 				"$(STILLFAIL_SOURCE_ROOT)/.airbuild/generated/core/libstillfail_shell.a",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -517,11 +645,30 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				186ADE9BEF65FC71E259F708 /* CoreBridge.swift in Sources */,
+				08F16DFA2D8730FD7470332A /* JSONValue.swift in Sources */,
+				5E3EAB24F25F9354968456B5 /* KeychainStorage.swift in Sources */,
+				C6B5476B732F49EFD7DA1D6A /* Localization.swift in Sources */,
+				3DD7BE4F15E84C961CAA5E0D /* NativeCoreEngine.swift in Sources */,
+				53B8FC3BBF7EE431462A4709 /* RefreshWidgetsIntent.swift in Sources */,
 				8734884770735AFDA4B139FC /* StatsWidgets.swift in Sources */,
 				62D28F228B793230E5E4BD48 /* StillFailWidgets.swift in Sources */,
 				54BD91670A36D8893B571175 /* TaskWidgets.swift in Sources */,
+				038A816D3667C4EBDA2C3164 /* WidgetCredentials.swift in Sources */,
+				953FACFB697814C62B041E2E /* WidgetE2EFactory.swift in Sources */,
+				88117B3F88E20267A2059C8B /* WidgetProjection.swift in Sources */,
+				1AEE26A57D44EA2AFCACB4E4 /* WidgetSelection.swift in Sources */,
 				39095D093163E147D8779AEA /* WidgetSnapshot.swift in Sources */,
 				0E91040527342533292D3081 /* WidgetSupport.swift in Sources */,
+				D4BE150401847106E0DB7122 /* WidgetSync.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		89D07A58DE2A70C55C9F8EEC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BA2982B0E2D70EAFE18972E3 /* WidgetExtensionUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -543,6 +690,7 @@
 				331763B82AE7ECD0ED147FF6 /* NativeScrollingPerformanceTests.swift in Sources */,
 				0B27AC4E18A8EF7F6D5355B4 /* NewChatFlowTests.swift in Sources */,
 				5E1BF575F0DF982317540C92 /* SlackTimelineTests.swift in Sources */,
+				B877126FC07838D9C0737117 /* WidgetSyncTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -573,8 +721,13 @@
 				71E554E7958B809E9B5F60B2 /* Settings.swift in Sources */,
 				D1F08298612D69EC20010350 /* StillFailApp.swift in Sources */,
 				B8B4CA33C7B3E2AA8BFA9CB0 /* ToolStepRendering.swift in Sources */,
+				AE3112F3B9EBAF5267635130 /* WidgetCredentials.swift in Sources */,
+				3B986A28E92E17B3E34F6103 /* WidgetE2EFactory.swift in Sources */,
 				943466102CB3916321AA4518 /* WidgetFeed.swift in Sources */,
+				E7E91994EA926DB1BF84E159 /* WidgetProjection.swift in Sources */,
+				3AAD7E41228BDF53F72C5713 /* WidgetSelection.swift in Sources */,
 				BE6A8D5C6999796D310D556C /* WidgetSnapshot.swift in Sources */,
+				722DC3DD8379BDAEB59DB814 /* WidgetSync.swift in Sources */,
 				6862A012754B644378BB218D /* Workspace.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -587,14 +740,57 @@
 			target = 00136EC5932308097F50CF1A /* StillFail */;
 			targetProxy = 16AAD16E76ACE4E667F45CFA /* PBXContainerItemProxy */;
 		};
+		2A4A352EF0AC1CC0DBD92B46 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6B00E9697B97A54E6624489E /* StillFailNative */;
+			targetProxy = E1D1D5513A28EAD3D7F8D038 /* PBXContainerItemProxy */;
+		};
 		9DDDD8F8FD76D79B3E5B93ED /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 91183E5DDF71CAE926D202F3 /* StillFailWidgets */;
 			targetProxy = BEA6AB180C95FA76FFE0D7D0 /* PBXContainerItemProxy */;
 		};
+		A7B34FAAD937AA45BBCB4765 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6B00E9697B97A54E6624489E /* StillFailNative */;
+			targetProxy = 4A0DEE01070AFADA83A41B38 /* PBXContainerItemProxy */;
+		};
+		FF41A0F349A73106503E0848 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 00136EC5932308097F50CF1A /* StillFail */;
+			targetProxy = B32CA0DEAF0B7CD064BECD55 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		152598C83C6584242C7950B0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+			};
+			name = Debug;
+		};
+		2745C7626621C6EA038A0AFC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StillFailWidgetUITests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_LDFLAGS = "";
+				PRODUCT_BUNDLE_IDENTIFIER = "fail.still.iphone.widget-uitests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = StillFail;
+			};
+			name = Release;
+		};
 		37F7F833D8AF50B0F223315B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -685,7 +881,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = fail.still.iphone;
+				PRODUCT_BUNDLE_IDENTIFIER = "fail.still.iphone$(WIDGET_E2E_SUFFIX)";
 				PRODUCT_NAME = StillFail;
 				SDKROOT = iphoneos;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail/Core/Shell.h";
@@ -765,18 +961,49 @@
 		727DA7C00A89E37C10FA7E13 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = StillFailWidgets/StillFailWidgets.entitlements;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = StillFailWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
-				OTHER_LDFLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = fail.still.iphone.widgets;
+				OTHER_LDFLAGS = "$(inherited) -framework Network";
+				PRODUCT_BUNDLE_IDENTIFIER = "fail.still.iphone$(WIDGET_E2E_SUFFIX).widgets";
 				PRODUCT_NAME = StillFailWidgets;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail/Core/Shell.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
+		};
+		7F39A160CA461A4BECE17DF5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+			};
+			name = Release;
+		};
+		8D0BD39E6C5F8E3F82F0AF9E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StillFailWidgetUITests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_LDFLAGS = "";
+				PRODUCT_BUNDLE_IDENTIFIER = "fail.still.iphone.widget-uitests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = StillFail;
+			};
+			name = Debug;
 		};
 		958397B6B7712541D953288C /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -792,7 +1019,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = fail.still.iphone;
+				PRODUCT_BUNDLE_IDENTIFIER = "fail.still.iphone$(WIDGET_E2E_SUFFIX)";
 				PRODUCT_NAME = StillFail;
 				SDKROOT = iphoneos;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail/Core/Shell.h";
@@ -839,15 +1066,18 @@
 		E22B9BF1856D3587EB678716 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = StillFailWidgets/StillFailWidgets.entitlements;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = StillFailWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
-				OTHER_LDFLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = fail.still.iphone.widgets;
+				OTHER_LDFLAGS = "$(inherited) -framework Network";
+				PRODUCT_BUNDLE_IDENTIFIER = "fail.still.iphone$(WIDGET_E2E_SUFFIX).widgets";
 				PRODUCT_NAME = StillFailWidgets;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(STILLFAIL_SOURCE_ROOT)/apps/ios/StillFail/Core/Shell.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -860,6 +1090,15 @@
 			buildConfigurations = (
 				41FE968EE6F7772847143A1C /* Debug */,
 				958397B6B7712541D953288C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		3D5D271546AE5587D3BFCC4E /* Build configuration list for PBXAggregateTarget "StillFailNative" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				152598C83C6584242C7950B0 /* Debug */,
+				7F39A160CA461A4BECE17DF5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -887,6 +1126,15 @@
 			buildConfigurations = (
 				E22B9BF1856D3587EB678716 /* Debug */,
 				727DA7C00A89E37C10FA7E13 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DBFA02607051C46C4CF82A5B /* Build configuration list for PBXNativeTarget "StillFailWidgetUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8D0BD39E6C5F8E3F82F0AF9E /* Debug */,
+				2745C7626621C6EA038A0AFC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -55,11 +55,11 @@ final class NativeCoreEngine: CoreEngine, @unchecked Sendable {
     private var clients: Set<UInt64> = []
     private var failed = false
 
-    init(dataDirectory: URL? = nil, storage: any CoreSecureStorage = KeychainStorage(), cloudOrigin: String = "https://app.still.fail",
+    init(dataDirectory: URL? = nil, scriptName: String = "stillfail-core", scriptURL: URL? = nil, storage: any CoreSecureStorage = KeychainStorage(), cloudOrigin: String = "https://app.still.fail",
          callback: @escaping @Sendable (UInt64, String) -> Void) throws {
         self.callback = callback; self.storage = storage
         let directory = try dataDirectory ?? (storage as? KeychainStorage)?.prepareDirectory()
-        guard let directory, let scriptURL = Bundle.main.url(forResource: "stillfail-core", withExtension: "js") else {
+        guard let directory, let scriptURL = scriptURL ?? Bundle.main.url(forResource: scriptName, withExtension: "js") else {
             throw CoreFailure(code: "core_unavailable")
         }
         let script = try String(contentsOf: scriptURL, encoding: .utf8)

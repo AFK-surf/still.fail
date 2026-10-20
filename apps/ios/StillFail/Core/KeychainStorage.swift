@@ -1,13 +1,14 @@
 import Foundation
 import Security
 
-/// Only this application's service is touched. No preferences, access group,
-/// synchronization or plaintext fallback. Safe on foreign storage threads.
+/// Private application storage, with account/device credentials shared only with
+/// its widget through the existing App Group Keychain entitlement.
 enum SecureStorageError: Error { case unavailable }
 
 final class KeychainStorage: @unchecked Sendable {
     static let service = "fail.still.iphone.core"
     private let lock = NSLock()
+    private let shared = WidgetCredentials(widget: false)
 
     private func query(_ key: String? = nil) -> [String: Any] {
         var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
@@ -23,12 +24,19 @@ final class KeychainStorage: @unchecked Sendable {
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
         let status = SecItemCopyMatching(q as CFDictionary, &result)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = result as? Data else { throw SecureStorageError.unavailable }
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw SecureStorageError.unavailable }
+        let data = result as? Data
+        if WidgetCredentials.keys.contains(key) {
+            let migrated = try shared.migrate(key: key, legacy: data)
+            // Once moved, an old private item must never resurrect a signed-out session.
+            if data != nil { SecItemDelete(query(key) as CFDictionary) }
+            return migrated
+        }
         return data
     }
     func set(key: String, value: Data) throws {
         lock.lock(); defer { lock.unlock() }
+        if WidgetCredentials.keys.contains(key) { try shared.set(key: key, value: value); return }
         let attributes: [String: Any] = [kSecValueData as String: value,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
         var status = SecItemUpdate(query(key) as CFDictionary, attributes as CFDictionary)
@@ -39,6 +47,7 @@ final class KeychainStorage: @unchecked Sendable {
     }
     func delete(key: String) throws {
         lock.lock(); defer { lock.unlock() }
+        if WidgetCredentials.keys.contains(key) { try shared.delete(key: key) }
         let status = SecItemDelete(query(key) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw SecureStorageError.unavailable }
     }
@@ -55,6 +64,8 @@ final class KeychainStorage: @unchecked Sendable {
         if !fm.fileExists(atPath: marker.path) {
             let status = SecItemDelete(query() as CFDictionary)
             guard status == errSecSuccess || status == errSecItemNotFound else { throw SecureStorageError.unavailable }
+            try shared.clear()
+            try WidgetFiles.select(account: nil, workspace: nil)
             // Any orphan cache belongs to the old identity, not a new install.
             if fm.fileExists(atPath: directory.path) { try fm.removeItem(at: directory) }
         }

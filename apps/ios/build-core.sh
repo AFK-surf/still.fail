@@ -25,6 +25,7 @@ if ! command -v node >/dev/null || ! command -v pnpm >/dev/null; then
 fi
 pnpm --dir "$ROOT/client/core-ts" install --frozen-lockfile --prefer-offline
 node "$ROOT/client/core-ts/scripts/ios-bundle.ts" "$GENERATED/stillfail-core.js"
+node "$ROOT/client/core-ts/scripts/ios-bundle.ts" "$GENERATED/stillfail-widget.js" widget
 "$CARGO" build --manifest-path "$ROOT/client/Cargo.toml" --locked -p stillfail-shell --lib --release --target "$TARGET"
 cp "$CARGO_TARGET_DIR/$TARGET/release/libstillfail_shell.a" "$GENERATED/libstillfail_shell.a"
 printf '%s\n' "$TARGET" > "$GENERATED/rust-target.txt"

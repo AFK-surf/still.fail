@@ -126,3 +126,12 @@ struct CoreTopicState: Sendable {
         }
     }
 }
+
+extension JSONValue {
+    func text(_ key: String, fallback: String = "") -> String { self[key].stringValue ?? fallback }
+    func flag(_ key: String) -> Bool { self[key].boolValue == true }
+}
+
+extension JSONValue {
+    var numberValue: Double? { if case .number(let value) = self { return value }; return nil }
+}

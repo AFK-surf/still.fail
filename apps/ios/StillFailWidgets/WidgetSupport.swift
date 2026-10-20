@@ -9,9 +9,8 @@ struct SnapshotEntry: TimelineEntry {
     let snapshot: WidgetSnapshot?
 }
 
-/// Every widget reads the app's latest snapshot. The app reloads the timelines when it
-/// writes; on its own, a widget re-reads at the next midnight (the day rolls over) or
-/// in half an hour, whichever comes first.
+/// Each timeline reads current data through the extension's own authenticated
+/// connection. The shared snapshot is a fallback when that read cannot finish.
 struct SnapshotProvider: TimelineProvider {
     func placeholder(in context: Context) -> SnapshotEntry { SnapshotEntry(date: Date(), snapshot: .preview) }
     func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry) -> Void) {
@@ -19,10 +18,13 @@ struct SnapshotProvider: TimelineProvider {
         completion(SnapshotEntry(date: Date(), snapshot: saved ?? (context.isPreview ? .preview : nil)))
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
-        let now = Date(), calendar = Calendar.current
-        let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(3600)
-        let next = min(midnight, now.addingTimeInterval(30 * 60))
-        completion(Timeline(entries: [SnapshotEntry(date: now, snapshot: WidgetSnapshot.load()?.aligned(to: now))], policy: .after(next)))
+        Task {
+            let snapshot = await WidgetSync.shared.update()
+            let now = Date(), calendar = Calendar.current
+            let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(3600)
+            let next = min(midnight, now.addingTimeInterval(30 * 60))
+            completion(Timeline(entries: [SnapshotEntry(date: now, snapshot: snapshot?.aligned(to: now))], policy: .after(next)))
+        }
     }
 }
 
@@ -99,7 +101,14 @@ struct WidgetHeader: View {
             Image(systemName: symbol).font(.caption.weight(.semibold)).foregroundStyle(WidgetPalette.accent)
             Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
             Spacer(minLength: 4)
-            if let trailing { Text(trailing).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary) }
+            if let trailing { Text(trailing).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary).lineLimit(1) }
+            Button(intent: RefreshWidgetsIntent()) {
+                Image(systemName: "arrow.clockwise").font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(Text("刷新"))
+            .accessibilityIdentifier("widget.refresh")
         }
     }
 }

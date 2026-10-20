@@ -37,8 +37,8 @@ struct WidgetSnapshot: Codable, Equatable {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent(fileName)
     }
 
-    static func load() -> WidgetSnapshot? {
-        guard let url = fileURL, let data = try? Data(contentsOf: url) else { return nil }
+    static func load(from url: URL? = fileURL) -> WidgetSnapshot? {
+        guard let url, let data = try? Data(contentsOf: url) else { return nil }
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .millisecondsSince1970
         return try? decoder.decode(WidgetSnapshot.self, from: data)
     }

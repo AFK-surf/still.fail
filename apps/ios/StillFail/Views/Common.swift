@@ -1,10 +1,6 @@
 import SwiftUI
 import UIKit
 
-extension JSONValue {
-    func text(_ key: String, fallback: String = "") -> String { self[key].stringValue ?? fallback }
-    func flag(_ key: String) -> Bool { self[key].boolValue == true }
-}
 
 struct ViewRecord: Identifiable {
     let id: String
