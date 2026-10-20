@@ -14,9 +14,9 @@
 //
 // E2E_EMBER (the core's checkout), E2E_ORIGIN (the local cloud), E2E_CORE_DATA (a directory of its own: each tape's
 // core data), E2E_START_CORE (the starting point's core data, copied for each tape), E2E_STATION (the test station's
-// directory: its home is where the drive's tapes' folders are), E2E_SEED (a command: `restore [TAG…]`, back to the
-// starting point, the drive folder of each tag seeded as e2e/run.sh seeds it as each flow starts; `step WORDS`, a
-// tape's step: scripts/e2e-local.sh WORDS).
+// directory: its home is where the drive's tapes' folders are), E2E_SEED (a command: `restore`, back to the starting
+// point; `step WORDS`, a tape's step: scripts/e2e-local.sh WORDS, a drive folder seeded among them as e2e/run.sh
+// seeds it as each flow starts: `drive-seed TAG`).
 //
 // What is compared, and how (the rules a tape's answers are normalized by):
 // - Ids made anew each run (a workspace's, a station's, a chat's, a notice's, a ULID, a 64-hex key, a thread's number,
@@ -84,7 +84,7 @@ const NUMBER_IDS = new Set(["thread"]);
 // ---- a tape
 
 type Ev = { out: true; msg: J } | { out: false; id: number; msg: J; bytes: boolean } | { step: string };
-type Tape = { name: string; evs: Ev[]; start: string | null; home: string | null; tags: string[] };
+type Tape = { name: string; evs: Ev[]; start: string | null; home: string | null };
 
 function readTape(name: string): Tape {
   const text = readFileSync(join(HERE, "traces", `${name}.trace`), "utf8");
@@ -100,9 +100,7 @@ function readTape(name: string): Tape {
   }
   // the station's home the tape's run had (its drive folder's path: …/home/e2e-TAG)
   const m = /"(\/[^"]*?)\/home\/e2e-\d{6}/.exec(text);
-  // the drive folders it uses (e2e-TAG: the run's tag, seeded as each flow starts)
-  const tags = [...new Set([...text.matchAll(/\be2e-(\d{6})\b/g)].map((x) => x[1]))];
-  return { name, evs, start, home: m ? m[1] : null, tags };
+  return { name, evs, start, home: m ? m[1] : null };
 }
 
 // ---- the live core
@@ -346,8 +344,8 @@ function seedRun(...args: string[]) {
 
 async function play(t: Tape): Promise<string[]> {
   if (!t.start) return [`${t.name}: the tape says no starting point (its first line {"start":…}): record it again from one (e2e/run.sh with E2E_START)`];
-  // back to the starting point, with the drive folder each flow's run seeds there (e2e/run.sh start_flow: drive-seed TAG)
-  seedRun("restore", ...t.tags);
+  // back to the starting point (its drive folder is the tape's first step)
+  seedRun("restore");
   const r = new Run(coreFor(t));
   if (t.home) r.prefix = [t.home, stationDir];
 
