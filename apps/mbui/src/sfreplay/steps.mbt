@@ -77,8 +77,8 @@ pub fn Flow::core(self : Flow) -> Unit {
     self.r.deliver(to=fn(json, bytes) { self.t.post("core", json, bytes?) }) |> ignore
     self.t.draw()
   }
-  // (in a scripted run, the step waits for what the core answered it here: answered NAME)
-  emit_answered(self.r.take_answered())
+  // (in a scripted run, the step waits for what it asked of the core to be answered: answered NAME)
+  emit_answered(self.r.take_asked())
 }
 
 ///|
@@ -342,6 +342,7 @@ fn Flow::spot(self : Flow, what : String, top? : Bool = false) -> (Double, Doubl
 ///|
 /// The pointer over the lowest `what`, no button down (a flow's `hover`).
 pub fn Flow::hover(self : Flow, what : String) -> Unit {
+  emit("hover " + what)
   guard self.spot(what) is Some((x, y)) else { return }
   self.t.move(x, y)
   self.t.draw()
@@ -351,6 +352,7 @@ pub fn Flow::hover(self : Flow, what : String) -> Unit {
 ///|
 /// A secondary click on the lowest `what` (a flow's `rightclick`: a row's menu).
 pub fn Flow::right_click(self : Flow, what : String) -> Unit {
+  emit("rightclick " + what)
   guard self.spot(what) is Some((x, y)) else { return }
   self.t.right_click(x, y)
   self.core()
@@ -359,6 +361,7 @@ pub fn Flow::right_click(self : Flow, what : String) -> Unit {
 ///|
 /// The window made w × h (a flow's `resize`: a desktop's window across the wide frame's breakpoint).
 pub fn Flow::resize(self : Flow, w : Double, h : Double) -> Unit {
+  emit("resize \{w.to_int()} \{h.to_int()}")
   self.t.resize(w, h)
   self.core()
 }
@@ -366,6 +369,7 @@ pub fn Flow::resize(self : Flow, w : Double, h : Double) -> Unit {
 ///|
 /// The wheel turned by `dy` over the window's middle (a flow's `wheel`).
 pub fn Flow::wheel(self : Flow, dy : Double) -> Unit {
+  emit("wheel \{dy.to_int()}")
   let (w, h) = self.t.size()
   self.t.wheel(w / 2.0, h / 2.0, dy)
   self.core()
@@ -374,6 +378,8 @@ pub fn Flow::wheel(self : Flow, dy : Double) -> Unit {
 ///|
 /// The lowest `what` dragged by (dx, dy) in `steps` moves, a frame apart, then let go (a flow's `dragon`).
 pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? : Int = 10) -> Unit {
+  // (a host's drag moves a frame a step: as many frames)
+  emit("dragon \{dx.to_int()} \{dy.to_int()} \{(steps.to_double() * @ui.drag_step_ms).to_int()} " + what)
   guard self.spot(what) is Some((x, y)) else { return }
   self.t.drag(x, y, x + dx, y + dy, steps~)
   self.t.draw()

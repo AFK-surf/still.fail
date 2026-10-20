@@ -37,8 +37,8 @@ pub struct Replay {
   priv walls : Array[Double]
   /// the order what may come is given in: as it came (0), or drawn from this seed (`shuffle`)
   priv mut seed : UInt
-  /// the calls whose answer was given since the last take_answered, by name, in the order given
-  priv answered : Array[String]
+  /// the calls made again since the last take_asked that the run answered, by name, in the order made
+  priv asked : Array[String]
 }
 
 ///|
@@ -86,7 +86,7 @@ pub fn Replay::parse(log : String) -> Replay {
     wall: 0.0,
     walls: [],
     seed: 0,
-    answered: [],
+    asked: [],
   }
   r.advance()
   r
@@ -210,10 +210,6 @@ pub fn Replay::deliver(
             }
           }
         }
-        match self.call_answered(e.msg) {
-          Some(name) => self.answered.push(name)
-          None => ()
-        }
         n += 1
       }
       None => self.diverged.push("came for an ask not made again: " + e.msg.stringify())
@@ -224,23 +220,19 @@ pub fn Replay::deliver(
 }
 
 ///|
-/// The call a message in answers (its `ok` or `error`, not a stream's part or a subscription's value): its name.
-fn Replay::call_answered(self : Replay, msg : Json) -> String? {
-  guard msg is Object(m) && (m.contains("ok") || m.contains("error")) && id_of(m) is Some(id) else { return None }
-  for e in self.evs {
-    if e.out && e.msg is Object(o) && id_of(o) == Some(id) && kind_of(o) == "call" {
-      return Some(name_of(o))
-    }
-  }
-  None
+/// Whether the run answered the call it had as `id` (an `ok` or an `error` for it).
+fn Replay::answers(self : Replay, id : Int) -> Bool {
+  self.evs.iter().any(fn(e) {
+    !e.out && e.msg is Object(m) && (m.contains("ok") || m.contains("error")) && id_of(m) == Some(id)
+  })
 }
 
 ///|
-/// The calls answered since the last time asked, by name, in the order their answers were given (a scripted run's
-/// `answered NAME` for each: what the step waited for there, src/sfreplay/emit.mbt).
-pub fn Replay::take_answered(self : Replay) -> Array[String] {
-  let a = self.answered.copy()
-  self.answered.clear()
+/// The calls made again since the last time asked that the run answered, by name, in the order made (a scripted
+/// run's `answered NAME` for each, after the step that made it: what that step waits for, src/sfreplay/emit.mbt).
+pub fn Replay::take_asked(self : Replay) -> Array[String] {
+  let a = self.asked.copy()
+  self.asked.clear()
   a
 }
 
@@ -395,6 +387,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       (Some(then), Some(now)) => {
         self.ids[then] = now
         self.back[now] = then
+        if kind == "call" && self.answers(then) {
+          self.asked.push(name_of(m))
+        }
       }
       _ => ()
     }
