@@ -2,14 +2,16 @@
 test "join gives the value, raises the failure, and Interrupt for an interrupted fiber" {
   let rt = @effect.Runtime::new()
   let out = []
+  // when a and b end; c is interrupted then, long before its own end
+  let ends = 5
   ignore(
     rt.fork(() => @effect.scoped(s => {
       let a = s.fork(async fn() {
-        @effect.sleep(5)
+        @effect.sleep(ends)
         1
       })
       let b : @effect.Fiber[Int] = s.fork(async fn() {
-        @effect.sleep(5)
+        @effect.sleep(ends)
         raise Broke("b broke")
       })
       let c = s.fork(async fn() {
@@ -26,9 +28,10 @@ test "join gives the value, raises the failure, and Interrupt for an interrupted
       }
     })),
   )
-  assert_true(rt.settle())
+  rt.advance(ends)
   assert_eq(out, ["a 1", "b: b broke", "c: interrupted"])
-  assert_eq(rt.now(), 5L)
+  // c's timer went with it
+  assert_idle(rt)
 }
 
 ///|
@@ -46,27 +49,33 @@ test "interrupted before it ever ran, a fiber never runs" {
 test "interrupt_and_wait waits until its finalizers have run" {
   let rt = @effect.Runtime::new()
   let log = []
+  // the victim cannot be interrupted until `held`; the killer asks at `asked`
+  let held = 30
+  let asked = 10
   ignore(
     rt.fork(async fn() {
       let rt2 = @effect.runtime()
       let f = rt2.fork(async fn() {
         defer log.push("victim: finalizer done")
-        @effect.uninterruptible(() => @effect.sleep(30))
+        @effect.uninterruptible(() => @effect.sleep(held))
         @effect.sleep(1000)
       })
-      @effect.sleep(10)
+      @effect.sleep(asked)
       let exit = f.interrupt_and_wait()
       log.push("killer: \{exit is Interrupted} at \{@effect.now()}")
     }),
   )
-  assert_true(rt.settle())
-  assert_eq(log, ["victim: finalizer done", "killer: true at 30"])
+  rt.advance(held)
+  assert_eq(log, ["victim: finalizer done", "killer: true at \{held}"])
+  assert_idle(rt)
 }
 
 ///|
 test "race_first: the first to end wins; the other is interrupted, its finalizers run" {
   let rt = @effect.Runtime::new()
   let log = []
+  // when the fast side ends
+  let fast = 10
   let f = rt.fork(() => @effect.race_first(
     async fn() {
       defer log.push("slow cleaned up")
@@ -75,23 +84,25 @@ test "race_first: the first to end wins; the other is interrupted, its finalizer
       "slow"
     },
     async fn() {
-      @effect.sleep(10)
+      @effect.sleep(fast)
       "fast"
     },
   ))
-  assert_true(rt.settle())
+  rt.advance(fast)
   assert_eq(log, ["slow cleaned up"])
   assert_eq(outcome(f), "ok fast")
   // the loser's timer went with it
-  assert_eq(rt.now(), 10L)
+  assert_idle(rt)
 }
 
 ///|
 test "race_first: a failure that comes first is the answer" {
   let rt = @effect.Runtime::new()
+  // when the failing side ends; the other is interrupted then
+  let first = 5
   let f : @effect.Fiber[String] = rt.fork(() => @effect.race_first(
     async fn() {
-      @effect.sleep(5)
+      @effect.sleep(first)
       raise Broke("first broke")
     },
     async fn() {
@@ -99,20 +110,23 @@ test "race_first: a failure that comes first is the answer" {
       "late"
     },
   ))
-  assert_true(rt.settle())
+  rt.advance(first)
   assert_eq(outcome(f), "failed: first broke")
+  assert_idle(rt)
 }
 
 ///|
 test "race: the first success wins, a failure leaves it to the other; both failing says both" {
   let rt = @effect.Runtime::new()
+  // the last of the four sides to end
+  let last = 10
   let one : @effect.Fiber[String] = rt.fork(() => @effect.race(
     async fn() {
       @effect.sleep(5)
       raise Broke("first broke")
     },
     async fn() {
-      @effect.sleep(10)
+      @effect.sleep(last)
       "late but fine"
     },
   ))
@@ -126,39 +140,46 @@ test "race: the first success wins, a failure leaves it to the other; both faili
       raise Broke("b broke")
     },
   ))
-  assert_true(rt.settle())
+  rt.advance(last)
   assert_eq(outcome(one), "ok late but fine")
   assert_eq(outcome(both), "failed: both failed: b broke; a broke")
+  assert_idle(rt)
 }
 
 ///|
 test "a race that is itself interrupted interrupts both sides" {
   let rt = @effect.Runtime::new()
   let log = []
+  // both sides sleep `long`; the race is interrupted at `cut`, before either ends
+  let long = 100
+  let cut = 10
   let f = rt.fork(() => @effect.race_first(
     async fn() {
       defer log.push("a cleaned up")
-      @effect.sleep(100)
+      @effect.sleep(long)
     },
     async fn() {
       defer log.push("b cleaned up")
-      @effect.sleep(100)
+      @effect.sleep(long)
     },
   ))
-  rt.advance(10)
+  rt.advance(cut)
   f.interrupt()
-  assert_true(rt.settle())
+  ignore(rt.run_ready())
   assert_eq(log, ["a cleaned up", "b cleaned up"])
   assert_eq(outcome(f), "interrupted")
+  assert_idle(rt)
 }
 
 ///|
 test "all: the values in order; the first failure fails it and interrupts the rest" {
   let rt = @effect.Runtime::new()
   let log = []
+  // the slowest of `ok`'s; `bad` fails before it
+  let slowest = 30
   let ok = rt.fork(() => @effect.all([
     async fn() {
-      @effect.sleep(30)
+      @effect.sleep(slowest)
       "a"
     },
     async fn() {
@@ -181,30 +202,34 @@ test "all: the values in order; the first failure fails it and interrupts the re
       raise Broke("one broke")
     },
   ]))
-  assert_true(rt.settle())
+  rt.advance(slowest)
   assert_eq(outcome(ok), "ok [a, b, c]")
   assert_eq(outcome(bad), "failed: one broke")
   assert_eq(log, ["slow one cleaned up"])
-  assert_eq(rt.now(), 30L)
+  // the slow one's timer went with it
+  assert_idle(rt)
 }
 
 ///|
 test "timeout: the value in time, None (and the work interrupted) when late" {
   let rt = @effect.Runtime::new()
   let log = []
-  let quick = rt.fork(() => @effect.timeout(50, async fn() {
+  // the time both are given
+  let limit = 50
+  let quick = rt.fork(() => @effect.timeout(limit, async fn() {
     @effect.sleep(10)
     1
   }))
-  let slow = rt.fork(() => @effect.timeout(50, async fn() {
+  let slow = rt.fork(() => @effect.timeout(limit, async fn() {
     defer log.push("slow work interrupted")
     @effect.sleep(100)
     2
   }))
-  assert_true(rt.settle())
+  rt.advance(limit)
   assert_eq(outcome(quick), "ok Some(1)")
   assert_eq(outcome(slow), "ok None")
   assert_eq(log, ["slow work interrupted"])
+  assert_idle(rt)
 }
 
 ///|
@@ -225,6 +250,8 @@ test "errors are checked: catch narrows what a fiber raised" {
       }
     }),
   )
-  assert_true(rt.settle())
+  // the failing side raises at once: no time goes by
+  ignore(rt.run_ready())
   assert_eq(out, ["err nope"])
+  assert_idle(rt)
 }

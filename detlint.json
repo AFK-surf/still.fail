@@ -69,13 +69,8 @@
       "src/ui/sideways.mbt": 1
     },
     "settle": {
-      "src/effecttest/fiber_test.mbt": 9,
-      "src/effecttest/frame_test.mbt": 2,
-      "src/effecttest/outside_test.mbt": 16,
-      "src/effecttest/prims_test.mbt": 6,
-      "src/effecttest/scheduler_test.mbt": 4,
-      "src/effecttest/scope_test.mbt": 6,
-      "src/effecttest/sims_test.mbt": 3,
+      "src/effecttest/outside_test.mbt": 10,
+      "src/effecttest/scheduler_test.mbt": 2,
       "src/kit/controls_test.mbt": 4,
       "src/kit/menus_test.mbt": 5,
       "src/kit/overlays_test.mbt": 17,
@@ -117,10 +112,6 @@
       "src/ui/words_test.mbt": 1
     },
     "literal-time": {
-      "src/effecttest/fiber_test.mbt": 1,
-      "src/effecttest/outside_test.mbt": 2,
-      "src/effecttest/scheduler_test.mbt": 4,
-      "src/effecttest/scope_test.mbt": 4,
       "src/kit/disclosure_test.mbt": 1,
       "src/kit/menus_test.mbt": 5,
       "src/kit/overlays_test.mbt": 13,

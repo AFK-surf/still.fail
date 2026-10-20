@@ -111,7 +111,8 @@ test "shut down, a runtime holds nothing: no fiber, timer, waiter or finalizer i
     let (live, _, _, _, _, _) = rt.holding()
     assert_true(live > 0)
     rt.shutdown()
-    assert_true(rt.settle())
+    // what the interruptions woke runs; no time goes by
+    ignore(rt.run_ready())
     assert_eq(rt.holding(), (0, 0, 0, 0, 0, 0))
   })
 }
@@ -136,14 +137,16 @@ test "all: the first failure fails it, others that failed too are told to on_def
   let rt = @effect.Runtime::new()
   let told : Array[String] = []
   rt.on_defect(e => told.push(describe(e)))
+  // when both fail; the third is interrupted then
+  let fail_at = 10
   let f = rt.fork(async fn() {
     @effect.all([
       async fn() {
-        @effect.sleep(10)
+        @effect.sleep(fail_at)
         raise Broke("first")
       },
       async fn() {
-        @effect.sleep(10)
+        @effect.sleep(fail_at)
         raise Broke("second")
       },
       async fn() {
@@ -152,8 +155,9 @@ test "all: the first failure fails it, others that failed too are told to on_def
       },
     ])
   })
-  ignore(rt.settle())
+  rt.advance(fail_at)
   assert_eq(outcome(f), "failed: first")
   // the root scope tells the failed fiber's error too
   assert_true(told.contains("second"))
+  assert_idle(rt)
 }

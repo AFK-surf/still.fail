@@ -32,3 +32,17 @@ fn[X : Show] outcome(f : @effect.Fiber[X]) -> String {
     Some(Interrupted) => "interrupted"
   }
 }
+
+///|
+/// Nothing is left (the runtime's Tester::assert_idle): no fiber ready, none waiting for a frame, nothing awaited from
+/// outside, no timer set (one set `later` too). A test ends on it where what it ran to must be all there was.
+fn assert_idle(rt : @effect.Runtime, loc~ : SourceLoc = _) -> Unit raise {
+  let why = rt.unsettled()
+  let why = match (why, rt.next_timer()) {
+    ("", Some(at)) => "a timer at \{at} ms"
+    _ => why
+  }
+  if why != "" {
+    fail("not idle: " + why, loc~)
+  }
+}

@@ -2,6 +2,8 @@
 test "a scope's finalizers run last first: on success, on failure, on interruption" {
   let rt = @effect.Runtime::new()
   let log = []
+  // how long cut's slow finalizer sleeps
+  let slow = 10
   let ok = rt.fork(() => @effect.scoped(s => {
     s.add_finalizer(() => log.push("ok 1"))
     s.add_finalizer(() => log.push("ok 2"))
@@ -15,7 +17,7 @@ test "a scope's finalizers run last first: on success, on failure, on interrupti
   let cut = rt.fork(() => @effect.scoped(s => {
     s.add_finalizer(() => log.push("cut 1"))
     s.add_finalizer(async fn() {
-      @effect.sleep(10)
+      @effect.sleep(slow)
       log.push("cut 2 (slow)")
     })
     @effect.sleep(1000)
@@ -24,38 +26,47 @@ test "a scope's finalizers run last first: on success, on failure, on interrupti
   }))
   ignore(rt.run_ready())
   cut.interrupt()
-  assert_true(rt.settle())
+  ignore(rt.run_ready())
+  // the finalizer sleeps on the virtual clock, uninterrupted
+  assert_eq(log, ["ok 2", "ok 1", "bad 2", "bad 1"])
+  rt.advance(slow)
   assert_eq(log, ["ok 2", "ok 1", "bad 2", "bad 1", "cut 2 (slow)", "cut 1"])
   assert_eq(outcome(ok), "ok 1")
   assert_eq(outcome(bad), "failed: bad broke")
   assert_eq(outcome(cut), "interrupted")
-  // the finalizer slept 10 on the virtual clock, uninterrupted
-  assert_eq(rt.now(), 10L)
+  assert_idle(rt)
 }
 
 ///|
 test "interrupted while its finalizers run, a fiber still runs them all" {
   let rt = @effect.Runtime::new()
   let log = []
+  // the body sleeps `body`, then the slow finalizer `slow`; it is interrupted at `cut`, in that finalizer, and
+  // looked at `a_while` after
+  let body = 10
+  let slow = 100
+  let cut = 50
+  let a_while = 10
   let f = rt.fork(() => @effect.scoped(s => {
     s.add_finalizer(() => log.push("added first"))
     s.add_finalizer(async fn() {
-      @effect.sleep(100)
+      @effect.sleep(slow)
       log.push("slow finalizer done")
     })
-    @effect.sleep(10)
+    @effect.sleep(body)
     0
   }))
-  rt.advance(50)
+  rt.advance(cut)
   // in the slow finalizer now
   f.interrupt()
-  rt.advance(10)
+  rt.advance(a_while)
   assert_eq(log, [])
-  assert_true(rt.settle())
+  // to the slow finalizer's end
+  rt.advance(body + slow - rt.now().to_int())
   assert_eq(log, ["slow finalizer done", "added first"])
   // its body had ended: the interruption came too late to change the outcome
   assert_eq(outcome(f), "ok 0")
-  assert_eq(rt.now(), 110L)
+  assert_idle(rt)
 }
 
 ///|
@@ -68,20 +79,25 @@ test "a finalizer that fails is a defect; the others still run" {
     s.add_finalizer(() => log.push("last"))
     "body"
   }))
-  assert_true(rt.settle())
+  // nothing here sleeps: no time goes by
+  ignore(rt.run_ready())
   assert_eq(log, ["last", "first"])
   assert_eq(outcome(f), "ok body")
   assert_eq(rt.defects.length(), 1)
+  assert_idle(rt)
 }
 
 ///|
 test "acquisition is uninterruptible, and what it acquired is released" {
   let rt = @effect.Runtime::new()
   let log = []
+  // acquiring takes `acquiring`; it is asked to stop at `cut`, halfway
+  let acquiring = 100
+  let cut = 50
   let f = rt.fork(() => @effect.scoped(s => {
     let r = s.acquire_release(
       async fn() {
-        @effect.sleep(100)
+        @effect.sleep(acquiring)
         log.push("acquired")
         7
       },
@@ -91,12 +107,16 @@ test "acquisition is uninterruptible, and what it acquired is released" {
     @effect.sleep(1000)
     r
   }))
-  rt.advance(50)
+  rt.advance(cut)
   f.interrupt()
-  assert_true(rt.settle())
+  ignore(rt.run_ready())
+  assert_eq(log, [])
+  // to the acquisition's end
+  rt.advance(acquiring - cut)
   assert_eq(log, ["acquired", "released 7"])
   assert_eq(outcome(f), "interrupted")
-  assert_eq(rt.now(), 100L)
+  // the body's sleep never began
+  assert_idle(rt)
 }
 
 ///|
@@ -111,11 +131,14 @@ test "a child scope closes with its parent, before the parent's earlier finalize
     defer log.push("child's fiber")
     @effect.sleep(1_000_000)
   }))
-  rt.advance(5)
+  // the parent closes a while after, its child's fiber asleep
+  let a_while = 5
+  rt.advance(a_while)
   parent.close_now()
-  assert_true(rt.settle())
+  ignore(rt.run_ready())
   assert_eq(log, ["child's fiber", "child", "parent"])
   assert_true(child.is_closed())
+  assert_idle(rt)
 }
 
 ///|
@@ -146,7 +169,9 @@ test "a fiber closing its own scope does not wait for itself" {
     @effect.sleep(10)
     log.push("woke (wrong)")
   })
-  assert_true(rt.settle())
+  // it is interrupted as it sleeps: no time goes by
+  ignore(rt.run_ready())
   assert_eq(log, ["finalized", "closed"])
   assert_eq(outcome(f), "interrupted")
+  assert_idle(rt)
 }

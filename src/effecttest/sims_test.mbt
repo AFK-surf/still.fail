@@ -1,7 +1,10 @@
 ///|
 fn arrivals(seed : Int) -> (Array[String], Array[Int64]) {
   let rt = @effect.Runtime::new(seed~)
-  let net = @effect.SimNet::new(rt, latency=20, jitter=30)
+  // every packet is in by latency + jitter
+  let latency = 20
+  let jitter = 30
+  let net = @effect.SimNet::new(rt, latency~, jitter~)
   let a = net.endpoint("a")
   let b = net.endpoint("b")
   let got = []
@@ -18,7 +21,7 @@ fn arrivals(seed : Int) -> (Array[String], Array[Int64]) {
   for i in 0..<5 {
     (a.send)("b", "m\{i}")
   }
-  ignore(rt.settle(max_ms=1000))
+  rt.advance(latency + jitter)
   (got, times)
 }
 
@@ -41,21 +44,27 @@ test "SimNet: jitter from the seed reorders packets; the same seed, the same arr
 ///|
 test "SimNet: a lossy network loses packets, as the seed says" {
   let rt = @effect.Runtime::new(seed=11)
-  let net = @effect.SimNet::new(rt, latency=5, loss=0.5)
+  // what is not lost is in by `latency`
+  let latency = 5
+  let net = @effect.SimNet::new(rt, latency~, loss=0.5)
   let a = net.endpoint("a")
   for i in 0..<40 {
     (a.send)("b", "m\{i}")
   }
-  ignore(rt.settle())
+  rt.advance(latency)
   let lost = net.log.filter(l => l.contains("lost")).length()
   assert_true(lost > 5 && lost < 35)
   assert_eq(net.log.length(), 40)
+  assert_idle(rt)
 }
 
 ///|
 test "SimFiles: reads and writes take time on the clock; a full disk fails writes" {
   let rt = @effect.Runtime::new()
-  let sim = @effect.SimFiles::new(rt, latency=3)
+  // four operations one after another, each `latency`
+  let latency = 3
+  let ops = 4
+  let sim = @effect.SimFiles::new(rt, latency~)
   let files = sim.files()
   let out = []
   ignore(
@@ -69,8 +78,9 @@ test "SimFiles: reads and writes take time on the clock; a full disk fails write
       }
     }),
   )
-  assert_true(rt.settle())
+  rt.advance(ops * latency)
   assert_eq(out, [
     "read Some(2) at 6", "missing None", "io: no space left writing c.txt",
   ])
+  assert_idle(rt)
 }

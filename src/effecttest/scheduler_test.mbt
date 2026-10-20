@@ -22,7 +22,9 @@ fn order(seed : Int) -> Array[Int] raise {
       }),
     )
   }
-  assert_true(rt.settle())
+  // a pause is a turn, not a time
+  ignore(rt.run_ready())
+  assert_idle(rt)
   seen
 }
 
@@ -44,26 +46,31 @@ test "a seed draws which ready fiber runs next; the same seed, the same order" {
 test "sleep waits on the virtual clock: advance fires each timer at its time" {
   let rt = @effect.Runtime::new()
   let woke : Array[Int64] = []
+  // one fiber sleeps `long`; the other `short`, then `long` again
+  let long = 100
+  let short = 50
   ignore(
     rt.fork(async fn() {
-      @effect.sleep(100)
+      @effect.sleep(long)
       woke.push(@effect.now())
     }),
   )
   ignore(
     rt.fork(async fn() {
-      @effect.sleep(50)
+      @effect.sleep(short)
       woke.push(@effect.now())
-      @effect.sleep(100)
+      @effect.sleep(long)
       woke.push(@effect.now())
     }),
   )
-  rt.advance(99)
+  // just before the first one's time, then to it
+  rt.advance(long - 1)
   assert_eq(woke, [50L])
-  rt.advance(1)
+  rt.advance(long - rt.now().to_int())
   assert_eq(woke, [50L, 100L])
   // a long way on, at once: nothing waits for real time
-  rt.advance(1_000_000_000)
+  let a_long_way = 1_000_000_000
+  rt.advance(a_long_way)
   assert_eq(woke, [50L, 100L, 150L])
   assert_eq(rt.now(), 1_000_000_100L)
 }
@@ -144,22 +151,25 @@ test "a fiber of the root scope that fails is a defect, told and kept" {
 test "shutdown interrupts everything and runs every finalizer" {
   let rt = @effect.Runtime::new()
   let log = []
+  // each fiber sleeps `long`; the runtime is shut down at `cut`, before
+  let long = 1000
+  let cut = 10
   for i in 0..<3 {
     ignore(
       rt.fork(async fn() {
         defer log.push("fiber \{i} cleaned up")
-        @effect.sleep(1000)
+        @effect.sleep(long)
       }),
     )
   }
   rt.root().add_finalizer(() => log.push("root finalizer"))
-  rt.advance(10)
+  rt.advance(cut)
   rt.shutdown()
   ignore(rt.run_ready())
   assert_eq(log, [
     "fiber 0 cleaned up", "fiber 1 cleaned up", "fiber 2 cleaned up", "root finalizer",
   ])
-  assert_true(rt.settle())
+  assert_idle(rt)
 }
 
 ///|
