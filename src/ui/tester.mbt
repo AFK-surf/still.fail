@@ -58,6 +58,7 @@ fn reset_globals() -> Unit {
   code_clears.clear()
   image_data.clear()
   open_views.clear()
+  streams_reset()
   native_nodes.clear()
   picture_at.clear()
   wheels.clear()
@@ -108,6 +109,7 @@ fn leaked_state() -> Array[String] {
   check("pagers", pagers.length())
   check("code_fields", code_fields.length() + code_clears.length())
   check("open_views", open_views.length())
+  check("streams", open_streams.length() + stream_nodes.length())
   check("native_nodes", native_nodes.length())
   check("picture_at", picture_at.length())
   check("wheels", wheels.length())
@@ -143,6 +145,7 @@ fn leaked_state() -> Array[String] {
 /// loading) is done by itself at the next frame, in the order asked; false: it
 /// stays undone until the test says (Tester::finish, finish_all), so the test
 /// decides when and in what order it comes in.
+/// `h264`: whether its host decodes H.264 (@ui.h264_here: a stream's frames, stream.mbt).
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
@@ -160,6 +163,7 @@ pub fn Tester::new(
   stable? : Bool = false,
   finish? : Bool = true,
   run? : String,
+  h264? : Bool = false,
 ) -> Tester {
   let f = {
     time,
@@ -236,6 +240,10 @@ pub fn Tester::new(
     scripts_run: {},
     page_there: {},
     scripts_sent: [],
+    h264,
+    stream_ids: 0,
+    streams_fed: {},
+    stream_said: {},
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)

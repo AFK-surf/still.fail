@@ -1,12 +1,14 @@
 // The system's settings the app is drawn by, kept with its frames as its input is (MBUI_DRAW_LOG=1, a Tester's tape):
-// motion reduced, transparency reduced, the system dark, the window's buttons in the app's top row. Read as each frame
+// motion reduced, transparency reduced, the system dark, the window's buttons in the app's top row; and whether the host
+// decodes H.264 (@ui.h264_here: what a stream asks its sender for, stream.mbt). Read as each frame
 // begins; an ENV line before the first frame's DRAWHASH, and again before the frame where one of them changed. A
 // Tester made with the run (Tester::new's `run`) draws its first frame by those it began with; its `replay_frames`
 // sets the later ones again at their place (its fake host's: Tester::set_reduce_motion,
 // set_reduce_transparency, set_dark, set_window_inset), so a run is drawn again by the settings it was drawn by.
 //
-//   ENV {"motion":0|1,"glass":0|1,"dark":0|1,"inset":0|1}    motion reduced, transparency reduced (glass solid), dark,
-//                                                            the window's inset
+//   ENV {"motion":0|1,"glass":0|1,"dark":0|1,"inset":0|1,"h264":0|1}
+//                                                            motion reduced, transparency reduced (glass solid), dark,
+//                                                            the window's inset, H.264 decoded (a tape without it: not)
 
 ///|
 /// The settings last kept on the tape ("" none yet).
@@ -23,6 +25,7 @@ fn env_at_frame() -> Unit {
     "glass": Json::number(if h_reduce_transparency() { 1.0 } else { 0.0 }),
     "dark": Json::number(if system_dark() { 1.0 } else { 0.0 }),
     "inset": Json::number(if window_inset() { 1.0 } else { 0.0 }),
+    "h264": Json::number(if h_h264_here() { 1.0 } else { 0.0 }),
   }
   let line = "ENV " + Json::object(m).stringify()
   if line != env_kept.val {
@@ -47,6 +50,7 @@ fn replay_env(f : FakeHost, line : String) -> Unit {
   f.reduce_transparency = on("glass", f.reduce_transparency)
   f.dark = on("dark", f.dark)
   f.inset = on("inset", f.inset)
+  f.h264 = on("h264", f.h264)
   f.wants = true
 }
 

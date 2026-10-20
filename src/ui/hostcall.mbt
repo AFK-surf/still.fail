@@ -128,6 +128,13 @@ struct FakeHost {
   scripts_run : Map[Int, Array[String]]
   page_there : Map[Int, Bool]
   scripts_sent : Array[String]
+  /// streams (stream.mbt): whether it decodes H.264 (Tester::new's `h264`; a run's ENV line), the streams opened, what
+  /// each was handed (Tester::stream_fed), and each one's events to come (Tester::stream_shows, stream_drops,
+  /// stream_broken; a run's, Tester::view_said), taken as the next frame begins
+  mut h264 : Bool
+  mut stream_ids : Int
+  streams_fed : Map[Int, Array[String]]
+  stream_said : Map[Int, Array[String]]
 }
 
 ///|
@@ -543,6 +550,11 @@ let outside_grab = 6
 /// An update downloading (id 1): state 0 each time how it goes changes, while the host works at it; 1 once the host
 /// works at it no more (handed to the installer, waiting on the person's leave), -1 failed.
 let outside_update = 7
+
+///|
+/// A stream's frame handed over (stream.mbt), until its event says it decoded or was let go: the framework's own
+/// number for it (the host tells no event of this kind: the stream's own events end it, as they are taken).
+let outside_stream = 8
 
 ///|
 let outside_tickets : Map[Int64, Int] = Map::new()
@@ -1209,7 +1221,8 @@ let views_told_text : Map[(Int, Int), String] = {}
 /// view stands (`{"info":{"view":N,"state":S,"at":[view_info's ten numbers]}}`), a video's frames' times and a grab's
 /// state (`{"view":{"view":N,"what":W,"text":T}}`) and a frame grabbed, its bytes in hex (`{"still":{"view":N},"b":HEX}`);
 /// a site view's page's events (`{"site":…}`), its requests' bodies (`{"sitebody":…}`) and where it is
-/// (`{"sitestate":…}`): what a run keeps beside its other messages (its own clock added), for a
+/// (`{"sitestate":…}`); a stream's events as they are taken (`{"stream":{"id":N,"e":E}}`, stream.mbt): what a run keeps
+/// beside its other messages (its own clock added), for a
 /// Tester to be told again (Tester::view_said). Under a Tester, nothing.
 pub fn trace_views(line : (Map[String, Json]) -> Unit) -> Unit {
   views_tracer.val = Some(line)

@@ -89,7 +89,18 @@ fn drawn_images(c : Ctx) -> Array[(Int, String, Int)] {
         seen[id] = true
         match by_id.get(id) {
           Some((src, px)) => out.push((id, src, px))
-          None => out.push((id, "", 0))
+          // a stream's picture (stream.mbt): its size and frame's time in place of a source
+          None =>
+            match stream_of_image(id) {
+              Some(s) => {
+                let px = match s.size {
+                  Some((w, h)) => if w > h { w } else { h }
+                  None => 0
+                }
+                out.push((id, stream_drawn(id), px))
+              }
+              None => out.push((id, "", 0))
+            }
         }
       }
     }

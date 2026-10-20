@@ -306,7 +306,8 @@ pub fn Tester::shared_out(self : Tester) -> Array[(String, String, String, Bytes
 /// view_text answers until it is said again), or a frame grabbed (`{"still":{"view":N},"b":HEX}`: its grab ready, the
 /// bytes what the next view_still gives); of a site view, what its page asked of its host (`{"site":{"view":N,"event":E}}`:
 /// taken on the next frame, as Tester::site_says), the body of a request it made (`{"sitebody":{"view":N,"req":R},"b":HEX}`)
-/// and where its page is (`{"sitestate":{"view":N,"state":S}}`: what view_site_state answers until it is said again).
+/// and where its page is (`{"sitestate":{"view":N,"state":S}}`: what view_site_state answers until it is said again);
+/// of a stream, an event its host told (`{"stream":{"id":N,"e":E}}`: taken at the next frame, as Tester::stream_shows).
 /// What is not said is not known (NativeView::frames None, no frame grabbed). False for a line that is none of these.
 pub fn Tester::view_said(self : Tester, line : String) -> Bool {
   fake_view_said(self.fake, line)
@@ -358,6 +359,7 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
         }
         _ => false
       }
+    Object(m) if m.get("stream") is Some(Object(v)) => fake_stream_said(f, v)
     Object(m) if m.get("info") is Some(Object(v)) =>
       match (num(v, "view"), num(v, "state"), v.get("at")) {
         (Some(id), Some(state), Some(Array(xs))) if xs.length() == 10 => {

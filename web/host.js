@@ -62,8 +62,10 @@
     clock = frames * (1000 / 60);
     H.requestFrame();
   }
+  // (no frame before the host knows what it decodes: H.run)
+  let known = false;
   H.requestFrame = () => {
-    if (!pending && cb && window.__done === undefined && window.__shot === undefined) {
+    if (!pending && cb && known && window.__done === undefined && window.__shot === undefined) {
       pending = true;
       requestAnimationFrame(tick);
     }
@@ -638,7 +640,12 @@
         start = end;
         continue;
       }
-      const im = tid ? images.get(tid) : null;
+      // a stream's picture (STREAM_TEX + its id): nothing until a frame of its own shows
+      const im = tid > STREAM_TEX ? streams.get(tid - STREAM_TEX) : tid ? images.get(tid) : null;
+      if (tid > STREAM_TEX && !(im && im.tex)) {
+        start = end;
+        continue;
+      }
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
       for (let i = 0; i < 8; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
@@ -910,6 +917,158 @@
     const im = images.get(id);
     if (im && im.tex) gl.deleteTexture(im.tex);
     images.delete(id);
+  };
+
+  // ---- streams (src/host/stream.mbt) ----
+  // A picture decoded frame by frame: H.264 by WebCodecs' VideoDecoder where the browser has one (AVCC as it is, the
+  // avcC its description), JPEG by createImageBitmap. Each frame decoded is kept until the app shows it ("f TS W H",
+  // then streamShow: uploaded into the stream's texture), or a later one; frames let go ("d TS": no decoder or not past
+  // a key frame, the older of two it holds, those inside as it starts anew, a JPEG that does not decode) and the
+  // decoder broken ("b": an error) told the same way, each asking for a frame.
+  const STREAM_TEX = 4194304;
+  const streams = new Map();
+  let nextStream = 0;
+  // (a VideoDecoder that takes no H.264, as Chromium's own build has: asked once as the page loads, the app's first
+  // frame held until it is answered, so that h264_here is the same from the app's start). Asked of what a station
+  // sends: constrained baseline (its helper's VideoToolbox, AutoLevel: ScreenView.swift) at a 1920 × 1080 view's
+  // level, 4.2 (a viewer's maxWidth, Android's ScreenSession).
+  let hasVideoDecoder = false;
+  const h264Asked = typeof VideoDecoder === 'undefined'
+    ? Promise.resolve()
+    : VideoDecoder.isConfigSupported({ codec: 'avc1.42E02A', codedWidth: 1920, codedHeight: 1080, optimizeForLatency: true })
+      .then((r) => { hasVideoDecoder = !!r.supported; }, () => {});
+  H.h264Here = () => (hasVideoDecoder ? 1 : 0);
+  const num = (v) => String(v);
+  function say(s, e) {
+    if (s.closed) return;
+    s.events.push(e);
+    H.requestFrame();
+  }
+  // the decoder for the config there is (none without one): whether there is one now
+  function startDecoder(s) {
+    stopDecoder(s);
+    if (!s.config || s.closed || !hasVideoDecoder) return false;
+    const gen = ++s.gen;
+    try {
+      const d = new VideoDecoder({
+        output: (frame) => {
+          if (gen !== s.gen || s.closed) return frame.close();
+          const ts = frame.timestamp;
+          while (s.inside.length && s.inside[0] <= ts) s.inside.shift();
+          s.decoded.push({ ts, frame, w: frame.displayWidth, h: frame.displayHeight });
+          say(s, `f ${num(ts)} ${frame.displayWidth} ${frame.displayHeight}`);
+        },
+        error: (e) => {
+          if (gen !== s.gen) return;
+          console.warn('stream ' + s.id + ': the H.264 decoder failed', e);
+          // anew, from the next key frame
+          if (startDecoder(s)) say(s, 'b');
+        },
+      });
+      d.configure(s.config);
+      s.decoder = d;
+      s.needKey = true;
+      return true;
+    } catch (e) {
+      console.warn('stream ' + s.id + ': no H.264 decoder', e);
+      return false;
+    }
+  }
+  function stopDecoder(s) {
+    if (s.decoder) {
+      try { s.decoder.close(); } catch (e) {}
+      s.decoder = null;
+    }
+    s.gen++;
+    if (s.inside.length) say(s, 'd ' + num(Math.max(...s.inside)));
+    s.inside = [];
+    s.needKey = true;
+  }
+  H.streamOpen = () => {
+    const id = ++nextStream;
+    streams.set(id, { id, events: [], decoded: [], inside: [], gen: 0, needKey: true, decoder: null, config: null,
+      tex: null, closed: false, jpegs: Promise.resolve() });
+    return id;
+  };
+  H.streamH264 = (id, avcc, w, h) => {
+    const s = streams.get(id);
+    if (!s) return;
+    const a = new Uint8Array(avcc);
+    const hex = (b) => b.toString(16).padStart(2, '0');
+    s.config = a.length >= 4 && a[0] === 1
+      ? { codec: 'avc1.' + hex(a[1]) + hex(a[2]) + hex(a[3]), description: a.slice(), codedWidth: w, codedHeight: h,
+          optimizeForLatency: true }
+      : null;
+    // the sender's next frame after a config is a key frame
+    if (!s.config) stopDecoder(s);
+    else startDecoder(s);
+  };
+  H.streamFrame = (id, data, key, ts) => {
+    const s = streams.get(id);
+    if (!s) return;
+    if (!s.decoder || (s.needKey && !key)) return say(s, 'd ' + num(ts));
+    s.needKey = false;
+    try {
+      s.inside.push(ts);
+      s.decoder.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp: ts, data: new Uint8Array(data) }));
+    } catch (e) {
+      // not a frame it takes: the next key frame asked for
+      s.inside = s.inside.filter((t) => t !== ts);
+      say(s, 'd ' + num(ts));
+      if (startDecoder(s)) say(s, 'b');
+      return;
+    }
+    // a decoder that holds frames back would wait for more while the sender waits: with two inside, the older taken
+    if (s.inside.length >= 2) say(s, 'd ' + num(s.inside.shift()));
+  };
+  H.streamJpeg = (id, data, ts) => {
+    const s = streams.get(id);
+    if (!s) return;
+    const blob = new Blob([new Uint8Array(data)], { type: 'image/jpeg' });
+    // (in the order they came, each decoded off the page's thread)
+    s.jpegs = s.jpegs.then(() => createImageBitmap(blob).then((bmp) => {
+      if (s.closed) return bmp.close();
+      s.decoded.push({ ts, frame: bmp, w: bmp.width, h: bmp.height });
+      say(s, `f ${num(ts)} ${bmp.width} ${bmp.height}`);
+    }, () => say(s, 'd ' + num(ts))));
+  };
+  H.streamNext = (id) => {
+    const s = streams.get(id);
+    return s && s.events.length ? s.events.shift() : '';
+  };
+  H.streamShow = (id, ts) => {
+    const s = streams.get(id);
+    if (!s) return;
+    const at = s.decoded.findIndex((f) => f.ts === ts);
+    if (at < 0) return;
+    const f = s.decoded[at];
+    // it, and those decoded before it passed over
+    s.decoded = s.decoded.filter((g) => {
+      if (g.ts > ts) return true;
+      if (g !== f) g.frame.close();
+      return false;
+    });
+    if (!s.tex) {
+      s.tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, s.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, s.tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, f.frame);
+    f.frame.close();
+  };
+  H.streamClose = (id) => {
+    const s = streams.get(id);
+    if (!s) return;
+    stopDecoder(s);
+    s.closed = true;
+    for (const f of s.decoded) f.frame.close();
+    s.decoded = [];
+    if (s.tex) gl.deleteTexture(s.tex);
+    streams.delete(id);
   };
 
   // ---- text ----
@@ -1258,14 +1417,18 @@
 
   H.run = (title, frame, pointer, wheel, key, text) => {
     document.title = title;
-    cb = { frame, pointer, wheel, key, text };
-    window.__mb = cb;
     canvas = document.getElementById('c');
     ta = document.getElementById('ime');
     setupGL();
     setupInput();
+    cb = { frame, pointer, wheel, key, text };
+    window.__mb = cb;
     resize();
-    H.requestFrame();
+    // (the app's first frame once the host knows what it decodes: h264Asked)
+    h264Asked.then(() => {
+      known = true;
+      H.requestFrame();
+    });
   };
 
   // ---- mbui-render (src/render, scripts/render_web.mjs): no frames, no input ----

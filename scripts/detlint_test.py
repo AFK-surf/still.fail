@@ -473,6 +473,24 @@ class BuildEffect(unittest.TestCase):
         # choice as it stands each frame, a closure built as it is given, a seek on what is not the finger's: not
         self.assertEqual([f.line for f in got], [17, 24, 34], "\n".join(f.what for f in got))
 
+    def test_build_effect_a_streams_callbacks_are_its_events(self):
+        files = {
+            "src/app/view.mbt": """
+                fn view(c : @ui.Ctx, src : Source, s : Ref[@ui.Stream?]) -> Unit {
+                  if s.val is None {
+                    s.val = Some(@ui.Stream::new(
+                      shown=fn(ts) { (src.call)("screen.ack", Json::null(), fn(_) {  }) },
+                      broken=fn() { (src.call)("screen.keyframe", Json::null(), fn(_) {  }) },
+                    ))
+                  }
+                  c.box(fn() { (src.call)("screen.view", Json::null(), fn(_) {  }) }) |> ignore
+                }
+                """,
+        }
+        got = found(self, files, "build-effect", 1)
+        # what a stream says shown or broken is told as its event comes, not as the frame builds; a box's children are
+        self.assertEqual([f.line for f in got], [9], "\n".join(f.what for f in got))
+
 
 class Exceptions(unittest.TestCase):
     def test_reason_on_the_line_or_over_it(self):

@@ -497,7 +497,12 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
       continue;
     }
     [enc setRenderPipelineState:(hole ? hpipe : p)];
-    id<MTLTexture> t = tid ? mb_image_texture(tid) : nil;
+    id<MTLTexture> t = tid > MB_STREAM_TEX ? mb_stream_texture(tid - MB_STREAM_TEX) : tid ? mb_image_texture(tid) : nil;
+    // (a stream with no frame of its own yet, or lost: nothing, not the atlas)
+    if (tid > MB_STREAM_TEX && !t) {
+      start = end;
+      continue;
+    }
     [enc setFragmentTexture:(t ?: atlas) atIndex:1];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
             instanceCount:end - start baseInstance:start];

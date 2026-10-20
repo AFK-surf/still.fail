@@ -1,7 +1,7 @@
 # The host's and the text's contracts on Windows (docs/determinism.md, "What is compared, and where"; scripts/
 # host_contract.sh): kitdemo's controls page run in a window with its scripted taps, its tape made a Tester's test and
 # run here (every frame the same), then the committed tape's text (windows_controls) asked of DirectWrite again (every
-# answer the same). When Windows' host changes.
+# answer the same); streamdemo's JPEG stream decoded by WIC to its end. When Windows' host changes.
 name: host-windows
 on:
   pull_request:
@@ -19,6 +19,9 @@ on:
       - "test/host/**"
       - "src/kitdemo/textcheck.mbt"
       - "src/kitdemo/textrec_windows_*"
+      - "src/host/stream*"
+      - "src/ui/stream*"
+      - "src/streamdemo/**"
       - ".github/workflows/host-windows.yml"
   push:
     branches: [main]
@@ -73,6 +76,16 @@ jobs:
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: success() || failure()
         run: scripts/host_contract.sh windows runner
+      - name: "Streams: streamdemo's JPEG (WIC) said shown to its end (STREAM done)"
+        if: success() || failure()
+        timeout-minutes: 10
+        run: |
+          APP=streamdemo bash scripts/win.sh build >/dev/null
+          mkdir -p out/host
+          env MBUI_BENCH=-1 MBUI_WIN=720x480 MBUI_STREAM=jpeg MBUI_STREAM_EXIT=1 \
+            ./out/win/mod/_build/native/release/build/streamdemo/streamdemo.exe > out/host/stream-jpeg.log 2>&1
+          cat out/host/stream-jpeg.log | grep -a STREAM
+          grep -q 'STREAM done' out/host/stream-jpeg.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:

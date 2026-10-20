@@ -202,6 +202,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.focus_frame_start()
   // how each native view stands, read before the view builds what it shows of it (a player's time, its first frame)
   views_frame_start()
+  // each stream's events since the last frame (a frame decoded, let go, a decoder broken), the frame it shows from now
+  streams_frame_start()
   // built and laid out; built again, at once, while what the view read in it changed as it was built or laid out
   // (Ctx::read_changed: the focus given, a layer dismissed, a list scrolled, words laid out elsewhere): what is drawn
   // is what the view builds from the state as it is, never a frame of it as it was (frame_passes_most at most)
@@ -269,6 +271,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.paint(root, 1.0)
   c.paint_overlays()
   c.sync_views()
+  // the streams' frames taken in this frame said shown (stream.mbt)
+  streams_after_paint()
   // back goes where the stack drawn now says (Ctx::nav, while building)
   c.back = c.back_next
   c.back_node = c.back_node_next

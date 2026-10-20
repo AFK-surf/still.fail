@@ -37,7 +37,7 @@ sync() {
   cp -p moon.mod $SM/
   # exactly src/: a file gone from it goes from the copy too (then the copy's own files, after)
   cp -rp src/. $SM/src/
-  sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp", "win_image.cpp", "win_listen.c", "win_browser_login.c", "win_views.cpp" ]/' \
+  sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp", "win_image.cpp", "win_listen.c", "win_browser_login.c", "win_views.cpp", "win_stream.cpp" ]/' \
       -e 's/-fobjc-arc *//' src/host/moon.pkg > $SM/src/host/moon.pkg
   # every app (demo, photos…) links no Apple frameworks
   for p in src/*/moon.pkg; do

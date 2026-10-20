@@ -296,6 +296,10 @@ fn image_leaf_size(
 
 ///|
 fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
+  // a stream's picture (Ctx::stream)
+  if self.paint_stream(i, n, alpha) {
+    return
+  }
   match picture_at.get(i) {
     // drawn at a rect of its own (Ctx::picture)
     Some((x, y, w, h, max_px)) =>

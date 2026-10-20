@@ -974,6 +974,15 @@ fn Ctx::owe_start(self : Ctx) -> Unit {
 }
 
 ///|
+/// An event for the next frame's start to take, come in a frame that took its events already (a stream's frame let
+/// go as it builds: Stream::let_go): the next frame is owed to it, the host told now, as for a motion set out
+/// (owe_start); building this one again would not take it.
+fn Ctx::owe_next(self : Ctx) -> Unit {
+  self.wants_frame = true
+  h_request_frame()
+}
+
+///|
 #callsite(autofill(loc))
 pub fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
   self.wants_frame = true

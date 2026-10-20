@@ -3,6 +3,7 @@
 // as its query), waited on until the app ends itself (@host.exit: window.__done, its named end), its log written to
 // OUT a line each; the app's end code is this script's.
 //   node scripts/host-web.mjs QUERY OUT [W H]
+// MBUI_WEB_CHANNEL=chrome: the system's Google Chrome in place of Playwright's Chromium (whose build decodes no H.264).
 import { createRequire } from 'node:module';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -22,7 +23,10 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 // WebGL2 without a GPU: SwiftShader's
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({
+  ...(process.env.MBUI_WEB_CHANNEL ? { channel: process.env.MBUI_WEB_CHANNEL } : {}),
+  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+});
 const ctx = await browser.newContext({ viewport: { width: Number(w), height: Number(h) }, deviceScaleFactor: 1 });
 const page = await ctx.newPage();
 const errors = [];

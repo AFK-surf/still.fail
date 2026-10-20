@@ -102,7 +102,7 @@ case "${1:-build}" in
     python3 "$D/errs.py" < $OUT/moon.log | grep -v '^errors: 0' || true
     R=$MOON_HOME/lib/runtime
     EXTRA=
-    for f in apple_render apple_text apple_image apple_listen apple_browser_login apple_views ios_app; do
+    for f in apple_render apple_text apple_image apple_listen apple_browser_login apple_views apple_stream ios_app; do
       EXTRA="$EXTRA --extra=$ROOT/src/host/$f.m"
     done
     python3 "$D/mbc.py" compile "--cc=$CC" "--cflags=$CFLAGS" --objc-flags=-fobjc-arc --obj=$OUT/obj \

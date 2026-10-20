@@ -221,7 +221,13 @@ typedef struct {
 static mb_image *imgs;  // by id; ids are not reused
 static int nimgs, img_cap;
 
+// a stream's texture (Streams.java; its instances' image is MB_STREAM_TEX + its id: src/host/stream.mbt), below
+#define MB_STREAM_TEX 4194304
+static GLuint stream_tex(int id);
+static void streams_lost(JNIEnv *env);
+
 static GLuint image_tex(int id) {
+  if (id > MB_STREAM_TEX) return stream_tex(id - MB_STREAM_TEX);
   return id > 0 && id < nimgs && imgs[id].state == 1 ? imgs[id].tex : 0;
 }
 
@@ -234,6 +240,7 @@ static void images_lost(JNIEnv *env) {
   }
   for (int i = 0; i < nimgs; i++) imgs[i].tex = 0;
   (*env)->CallStaticVoidMethod(env, images_cls, m_img_reload);
+  streams_lost(env);
 }
 
 static int image_new(void) {
@@ -1903,3 +1910,161 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
 int32_t mb_host_window_inset(void) { return 0; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
+
+// ---------------------------------------------------------------------------
+// Streams (src/host/stream.mbt): dev.mbui.Streams decodes (MediaCodec, BitmapFactory) and draws each frame the app
+// shows into a texture of its own on the GL thread, told here (Streams.texture) for the renderer to draw the stream's
+// instances with. What MediaCodec takes of H.264 is made by avc.h, the conversion the hosts share.
+
+#include "avc.h"
+
+static jclass streams_cls;
+static jmethodID m_st_open, m_st_h264, m_st_frame, m_st_jpeg, m_st_next, m_st_show, m_st_close, m_st_here, m_st_lost;
+static GLuint *stream_texs;  // by id
+static int stream_cap;
+
+// (looked up as the first stream opens, on the GL thread under a call from Java: the app's class loader)
+static JNIEnv *streams_env(void) {
+  JNIEnv *env = env_();
+  if (!streams_cls) {
+    streams_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Streams"));
+    m_st_open = (*env)->GetStaticMethodID(env, streams_cls, "open", "()I");
+    m_st_h264 = (*env)->GetStaticMethodID(env, streams_cls, "h264", "(I[BII)V");
+    m_st_frame = (*env)->GetStaticMethodID(env, streams_cls, "frame", "(I[BZD)V");
+    m_st_jpeg = (*env)->GetStaticMethodID(env, streams_cls, "jpeg", "(I[BD)V");
+    m_st_next = (*env)->GetStaticMethodID(env, streams_cls, "next", "(I)Ljava/lang/String;");
+    m_st_show = (*env)->GetStaticMethodID(env, streams_cls, "show", "(ID)V");
+    m_st_close = (*env)->GetStaticMethodID(env, streams_cls, "close", "(I)V");
+    m_st_here = (*env)->GetStaticMethodID(env, streams_cls, "h264Here", "()Z");
+    m_st_lost = (*env)->GetStaticMethodID(env, streams_cls, "lost", "()V");
+  }
+  return env;
+}
+
+static GLuint stream_tex(int id) { return id > 0 && id < stream_cap ? stream_texs[id] : 0; }
+
+// A Java exception out of a call into Streams: logged (its stack on logcat) and cleared, so the GL thread's next JNI
+// call does not find it pending (CheckJNI aborts the process on that).
+static int streams_threw(JNIEnv *env) {
+  if (!(*env)->ExceptionCheck(env)) return 0;
+  (*env)->ExceptionDescribe(env);
+  (*env)->ExceptionClear(env);
+  return 1;
+}
+
+static void streams_lost(JNIEnv *env) {
+  if (!streams_cls) return;
+  for (int i = 0; i < stream_cap; i++) stream_texs[i] = 0;
+  (*env)->CallStaticVoidMethod(env, streams_cls, m_st_lost);
+  streams_threw(env);
+}
+
+JNIEXPORT void JNICALL Java_dev_mbui_Streams_texture(JNIEnv *env, jclass c, jint id, jint tex) {
+  if (id <= 0) return;
+  if (id >= stream_cap) {
+    int cap = stream_cap ? stream_cap : 16;
+    while (cap <= id) cap *= 2;
+    stream_texs = realloc(stream_texs, (size_t)cap * sizeof *stream_texs);
+    memset(stream_texs + stream_cap, 0, (size_t)(cap - stream_cap) * sizeof *stream_texs);
+    stream_cap = cap;
+  }
+  stream_texs[id] = (GLuint)tex;
+}
+
+JNIEXPORT jint JNICALL Java_dev_mbui_Streams_avcLengthSize(JNIEnv *env, jclass c, jbyteArray avcc) {
+  jsize n = (*env)->GetArrayLength(env, avcc);
+  jbyte *b = (*env)->GetByteArrayElements(env, avcc, NULL);
+  mb_avc_config cfg;
+  int ok = mb_avc_parse((const uint8_t *)b, (size_t)n, &cfg);
+  (*env)->ReleaseByteArrayElements(env, avcc, b, JNI_ABORT);
+  return ok ? cfg.length_size : -1;
+}
+
+JNIEXPORT jbyteArray JNICALL Java_dev_mbui_Streams_avcCsd(JNIEnv *env, jclass c, jbyteArray avcc, jint kind) {
+  jsize n = (*env)->GetArrayLength(env, avcc);
+  jbyte *b = (*env)->GetByteArrayElements(env, avcc, NULL);
+  mb_avc_config cfg;
+  jbyteArray out = NULL;
+  if (mb_avc_parse((const uint8_t *)b, (size_t)n, &cfg)) {
+    size_t size = mb_avc_csd(&cfg, kind, NULL, 0);
+    uint8_t *tmp = malloc(size ? size : 1);
+    mb_avc_csd(&cfg, kind, tmp, size);
+    out = (*env)->NewByteArray(env, (jsize)size);
+    (*env)->SetByteArrayRegion(env, out, 0, (jsize)size, (const jbyte *)tmp);
+    free(tmp);
+  }
+  (*env)->ReleaseByteArrayElements(env, avcc, b, JNI_ABORT);
+  return out;
+}
+
+JNIEXPORT jbyteArray JNICALL Java_dev_mbui_Streams_annexB(JNIEnv *env, jclass c, jbyteArray frame, jint length_size) {
+  jsize n = (*env)->GetArrayLength(env, frame);
+  jbyte *b = (*env)->GetByteArrayElements(env, frame, NULL);
+  jbyteArray out = NULL;
+  long size = mb_avc_annexb_size((const uint8_t *)b, (size_t)n, length_size);
+  if (size >= 0) {
+    out = (*env)->NewByteArray(env, (jsize)size);
+    jbyte *o = (*env)->GetByteArrayElements(env, out, NULL);
+    mb_avc_annexb((const uint8_t *)b, (size_t)n, length_size, (uint8_t *)o, (size_t)size);
+    (*env)->ReleaseByteArrayElements(env, out, o, 0);
+  }
+  (*env)->ReleaseByteArrayElements(env, frame, b, JNI_ABORT);
+  return out;
+}
+
+int32_t mb_host_stream_open(void) {
+  JNIEnv *env = streams_env();
+  jint id = (*env)->CallStaticIntMethod(env, streams_cls, m_st_open);
+  return streams_threw(env) ? 0 : id;
+}
+
+void mb_host_stream_h264(int32_t id, moonbit_bytes_t avcc, int32_t w, int32_t h) {
+  JNIEnv *env = streams_env();
+  jbyteArray b = jbytes(env, avcc);
+  (*env)->CallStaticVoidMethod(env, streams_cls, m_st_h264, id, b, w, h);
+  streams_threw(env);
+  (*env)->DeleteLocalRef(env, b);
+}
+
+void mb_host_stream_frame(int32_t id, moonbit_bytes_t data, int32_t key, double ts) {
+  JNIEnv *env = streams_env();
+  jbyteArray b = jbytes(env, data);
+  (*env)->CallStaticVoidMethod(env, streams_cls, m_st_frame, id, b, key ? JNI_TRUE : JNI_FALSE, ts);
+  streams_threw(env);
+  (*env)->DeleteLocalRef(env, b);
+}
+
+void mb_host_stream_jpeg(int32_t id, moonbit_bytes_t data, double ts) {
+  JNIEnv *env = streams_env();
+  jbyteArray b = jbytes(env, data);
+  (*env)->CallStaticVoidMethod(env, streams_cls, m_st_jpeg, id, b, ts);
+  streams_threw(env);
+  (*env)->DeleteLocalRef(env, b);
+}
+
+moonbit_string_t mb_host_stream_next(int32_t id) {
+  JNIEnv *env = streams_env();
+  jstring s = (*env)->CallStaticObjectMethod(env, streams_cls, m_st_next, id);
+  if (streams_threw(env) || !s) return moonbit_make_string_raw(0);
+  moonbit_string_t out = mstr(env, s);
+  (*env)->DeleteLocalRef(env, s);
+  return out;
+}
+
+void mb_host_stream_show(int32_t id, double ts) {
+  JNIEnv *env = streams_env();
+  (*env)->CallStaticVoidMethod(env, streams_cls, m_st_show, id, ts);
+  streams_threw(env);
+}
+
+void mb_host_stream_close(int32_t id) {
+  JNIEnv *env = streams_env();
+  (*env)->CallStaticVoidMethod(env, streams_cls, m_st_close, id);
+  streams_threw(env);
+}
+
+int32_t mb_host_h264_here(void) {
+  JNIEnv *env = streams_env();
+  jboolean here = (*env)->CallStaticBooleanMethod(env, streams_cls, m_st_here);
+  return !streams_threw(env) && here ? 1 : 0;
+}

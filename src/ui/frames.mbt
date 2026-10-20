@@ -36,6 +36,12 @@ fn drawn_text() -> String {
     for j in 0..<inst_size {
       sb.write_string(" \{(inst_named(c, named, k, j) * 64.0).round().to_int64()}")
     }
+    if c.inst[k * inst_size + 5] == 4.0 {
+      let s = stream_drawn(c.inst[k * inst_size + 20].to_int())
+      if s != "" {
+        sb.write_string(" " + s)
+      }
+    }
     sb.write_char('\n')
   }
   sb.to_string()
@@ -82,6 +88,12 @@ fn drawn_hash() -> Int64 {
         continue
       }
       h = hash_mix(h, (x * 64.0).round().to_int64())
+    }
+    // a stream's picture: its frame's size and time (stream.mbt)
+    if c.inst[k * inst_size + 5] == 4.0 {
+      for ch in stream_drawn(c.inst[k * inst_size + 20].to_int()) {
+        h = hash_mix(h, ch.to_int().to_int64())
+      }
     }
   }
   let sb = StringBuilder()

@@ -1,5 +1,5 @@
 options(
-  targets: { "host_native.mbt": [ "native" ], "host_js.mbt": [ "js" ], "textref_native.mbt": [ "native" ], "textref_js.mbt": [ "js" ] },
-  "native-stub": [ "apple_render.m", "apple_text.m", "apple_image.m", "apple_listen.m", "apple_browser_login.m", "apple_views.m", "mac_app.m" ],
+  targets: { "host_native.mbt": [ "native" ], "host_js.mbt": [ "js" ], "textref_native.mbt": [ "native" ], "textref_js.mbt": [ "js" ], "stream_native.mbt": [ "native" ], "stream_js.mbt": [ "js" ] },
+  "native-stub": [ "apple_render.m", "apple_text.m", "apple_image.m", "apple_listen.m", "apple_browser_login.m", "apple_views.m", "apple_stream.m", "mac_app.m" ],
   link: { "native": { "stub-cc-flags": "-fobjc-arc -O2" } },
 )

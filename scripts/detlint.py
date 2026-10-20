@@ -605,7 +605,8 @@ BUILD_EFFECT_METHODS = ["go_back", "go_forward", "reload", "load", "set_scale", 
 # a closure given to one of these runs later than the build: a fiber, a timer, a host's answer, a page's leaving
 LATER_CALLS = {"fork", "effect", "spawn", "after", "later", "video", "site", "subscribe", "each_later", "watch",
                "take_back"}
-LATER_LABELS = {"done", "answer", "then", "leave", "serve", "read", "back", "cancel", "fail", "ok"}
+# (a stream's `shown` and `broken`: @ui.Stream's events, taken as a frame begins and after it is painted)
+LATER_LABELS = {"done", "answer", "then", "leave", "serve", "read", "back", "cancel", "fail", "ok", "shown", "broken"}
 # called with the Ctx in a condition, not a widget's use: a time, a hold, a layout's read
 NOT_INPUT_CALLS = {"after", "held", "within", "mark", "list_info", "rect_of", "words_of", "is_wide", "presence",
                    "animate", "theme", "window_size", "list_place"}
