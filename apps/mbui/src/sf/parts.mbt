@@ -312,7 +312,7 @@ pub fn menu_item(
     gap=8.0,
     align=ACenter,
     bg=if c.hovered(id) { t.p.hover } else { 0L },
-    radius=r_menu - panel_pad,
+    radius=@ui.concentric(r_menu, panel_pad),
     id~,
     fn() {
       if icon != "" {
