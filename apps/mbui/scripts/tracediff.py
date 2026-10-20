@@ -12,7 +12,8 @@ VOLATILE = re.compile(r"^(id|ts|at|createdAt|updatedAt|startedAt|endedAt|w|time|
 
 def calm(v):
     if isinstance(v, dict):
-        return {k: ("…" if VOLATILE.match(k) else calm(x)) for k, x in sorted(v.items())}
+        # (a key can be a run's own too: barsBy's workspace)
+        return {calm(k): ("…" if VOLATILE.match(k) else calm(x)) for k, x in sorted(v.items())}
     if isinstance(v, list):
         return [calm(x) for x in v]
     if isinstance(v, str):
