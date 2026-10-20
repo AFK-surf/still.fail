@@ -170,7 +170,6 @@ test "a long paste goes up by the same id and name whatever the clocks say: from
     t.run_for(run.1)
     t.tap_text("发消息")
     t.type_text(long)
-    t.draw()
     let parts = named(calls, "station.upload.part")
     assert_eq(parts.length(), 1)
     let p = Some(parts[0].params)
@@ -195,7 +194,6 @@ test "the same paste in the next message is another upload: the core names the n
   let up = fn() {
     t.tap_text("发消息")
     t.type_text(long)
-    t.draw()
     let parts = named(calls, "station.upload.part")
     let p = Some(parts[parts.length() - 1].params)
     (parts[parts.length() - 1].done)(
@@ -330,7 +328,6 @@ test "a long paste goes as a text file, up to the station, and with the message"
   t.tap_text("发消息")
   let long = "第一行要点\n" + String::make(6000, 'x')
   t.type_text(long)
-  t.draw()
   // not in the field: a card with its first line, going up
   let (_, words, _, _) = t.ime()
   assert_eq(words, "")
@@ -436,7 +433,6 @@ test "a message held: its words quoted into the draft, with a line for a comment
   t.press_at(x, y)
   t.run_for(long_press_ms)
   t.release(x, y)
-  t.draw()
   assert_true(t.find("引用") is Some(_))
   // a word was picked; all of the message, then quoted
   t.tap_text("全选")
@@ -535,7 +531,6 @@ test "the app tells the core it is shown and in front, in which workspace, and w
   assert_true(first.contains("\"workspace\":\"ws1\""))
   // the window covered or the activity paused: said at once (no frame need come after it), and only once
   t.app_state(false, false)
-  t.draw()
   let after = named(calls, "client.focus").filter(fn(m) { m.params.stringify().contains("\"visible\"") })
   assert_eq(after.length(), 2)
   assert_true(after[1].params.stringify().contains("\"visible\":false"))

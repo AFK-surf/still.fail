@@ -10,7 +10,6 @@ fn hold_on(t : @ui.Tester, words : String) -> (Double, Double) {
   t.press_at(x, y)
   t.run_for(long_press_ms)
   t.release(x, y)
-  t.draw()
   (x, y)
 }
 
@@ -51,7 +50,6 @@ test "a finger sliding on widens it by words, from the word first held; the list
   let first = (pk.a, pk.b)
   slide(t, x, y, x + 60.0, y, 6)
   t.release(x + 60.0, y)
-  t.draw()
   assert_eq(pk.a, first.0)
   assert_true(pk.b > first.1 + 2)
   assert_eq(t.list_offset(), before)
@@ -91,7 +89,6 @@ test "a handle moves its end: the passage's end follows the finger" {
   t.press_at(kx, ky)
   slide(t, kx, ky, kx + 50.0, ky, 5)
   t.release(kx + 50.0, ky)
-  t.draw()
   assert_true(pk.b > was + 2)
   assert_true(pk.ts != "")
   t.assert_idle()

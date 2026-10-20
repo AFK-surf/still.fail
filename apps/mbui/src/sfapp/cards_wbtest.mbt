@@ -60,14 +60,12 @@ test "an option answered: the options go, how it went comes in their place, the 
   let t = cards_core(calls)
   scroll_to_words(t, "把首页和聊天页的截图都更新")
   tap_now(t, "把首页和聊天页的截图都更新")
-  t.draw()
   assert_eq(named(calls, "decision.answer").length(), 1)
   // half way through their fade: the options still drawn as they go (only drawn: a tap on them answers nothing), 忽略
   // going with them
   t.run_for(options_out_ms / 2.0)
   assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
   tap_now(t, "这次只改列表，截图下次再说")
-  t.draw()
   assert_eq(named(calls, "decision.answer").length(), 1)
   // once they have gone (faded, then their room closing on the delayed spring), how it went
   t.run_for(options_gone_ms())
@@ -86,7 +84,6 @@ test "the options' room closes on the rows' spring, a little late, and the line 
   assert_eq(h0, -1.0)
   tap_now(t, "把首页和聊天页的截图都更新")
   // within their fade the options still are
-  t.draw()
   t.run_for(options_out_ms / 2.0)
   assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
   // once they have faded, the line is
@@ -104,13 +101,11 @@ test "忽略: it and the ask go at once (decision.dismiss), drawn going, then go
   let t = cards_core(calls)
   scroll_to_words(t, "忽略")
   tap_now(t, "忽略")
-  t.draw()
   assert_eq(named(calls, "decision.dismiss").length(), 1)
   // going: drawn, not tapped
   t.run_for(archive_ms() / 4.0)
   assert_true(t.find("忽略") is Some(_))
   tap_now(t, "忽略")
-  t.draw()
   assert_eq(named(calls, "decision.dismiss").length(), 1)
   t.run_for(archive_ms())
   assert_true(t.find("忽略") is None)
@@ -158,6 +153,5 @@ test "an option pressed is drawn smaller, its tap where it is laid out" {
     t.frame()
   }
   t.release(x, y)
-  t.draw()
   assert_eq(named(calls, "chat.keep").length(), 1)
 }
