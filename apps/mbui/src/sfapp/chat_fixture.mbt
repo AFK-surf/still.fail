@@ -532,6 +532,17 @@ fn fix_tick(f : Fixture) -> Unit {
 }
 
 ///|
+/// What the fixture's station takes its time over: a message sent (or retried) is in the chat after
+/// `fix_deliver_ms`; its agent answers `fix_answer_ms` after that, and its turn ends `fix_turn_end_ms` after the answer.
+let fix_deliver_ms : Double = 700.0
+
+///|
+let fix_answer_ms : Double = 1400.0
+
+///|
+let fix_turn_end_ms : Double = 700.0
+
+///|
 fn fix_later(ms : Double, f : () -> Unit) -> Unit {
   fix_timers.push(((fix_clock.val)() + ms, f))
   (fix_wake.val)(ms)
@@ -628,9 +639,9 @@ fn fix_deliver(session : String, id : String) -> Unit {
   // its agent sets to work at once (its activity comes in), answers a moment later (its answer said while the chat
   // shows: out of the activity's avatar), and its turn ends a moment after that
   fc.working = (fix_clock.val)()
-  fix_later(1400.0, fn() {
+  fix_later(fix_answer_ms, fn() {
     fix_serial.val += 1
-    fix_later(700.0, fn() { fix_chat(session).working = -1.0 })
+    fix_later(fix_turn_end_ms, fn() { fix_chat(session).working = -1.0 })
     let first = paste_preview(words)
     let said = if first == "" {
       "收到文件了，我看一下。"
@@ -670,7 +681,7 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       let id = "out\{fix_serial.val}"
       fix_chat(session).outbox.push(outgoing_json(id, params, "sending", ""))
       f.version += 1
-      fix_later(700.0, fn() { fix_deliver(session, id) })
+      fix_later(fix_deliver_ms, fn() { fix_deliver(session, id) })
       Some(Ok(Json::object({})))
     }
     "chat.retry" => {
@@ -685,7 +696,7 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
       fc.outbox.push(outgoing_json(id, was, "retried", ""))
       f.version += 1
-      fix_later(700.0, fn() { fix_deliver(session, id) })
+      fix_later(fix_deliver_ms, fn() { fix_deliver(session, id) })
       Some(Ok(Json::object({})))
     }
     "chat.discard" => {

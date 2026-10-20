@@ -971,6 +971,10 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
 }
 
 ///|
+/// Options answered fade out in this long (Decisions.kt DecisionUnder); how it went fades in after them as long.
+let options_out_ms : Double = 200.0
+
+///|
 /// Under a post (Decisions.kt DecisionUnder): a login card as its login stands; an options card's options while it
 /// waits, who is to decide above them, a tap answering with one; once answered (or let go, or replaced) the options go
 /// (200 ms, CSS's ease-out: fading, to 90%, the one picked as it was while the rest step back, their room closing on
@@ -1053,7 +1057,7 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
     c,
     "options/" + key,
     !resolved,
-    exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)),
+    exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(options_out_ms, ease=CssOut)),
     close=close_gap,
     fn() {
       // (who decides over the options as the message's column has them: 4 apart)
@@ -1086,7 +1090,11 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
     c,
     "outcome/" + key,
     outcome is Some(_),
-    enter=@motion.trans(fade=0.0, spec=@motion.Snap(0.0), fade_spec=@motion.tween(200.0, ease=CssOut, delay=200.0)),
+    enter=@motion.trans(
+      fade=0.0,
+      spec=@motion.Snap(0.0),
+      fade_spec=@motion.tween(options_out_ms, ease=CssOut, delay=options_out_ms),
+    ),
     open=close_gap,
     exit=@motion.trans(spec=@motion.Snap(0.0)),
     close=@motion.Snap(0.0),
@@ -1494,6 +1502,17 @@ fn unsent_button(
 }
 
 ///|
+/// A running clock's second.
+let clock_tick_ms : Double = 1000.0
+
+///|
+/// From `ms` shown (elapsed) to the next whole second it shows.
+fn to_next_second(ms : Double) -> Double {
+  let ms = dmax(ms, 0.0)
+  clock_tick_ms * ((ms / clock_tick_ms).floor() + 1.0) - ms
+}
+
+///|
 /// A running clock's reading in short (Chat.kt elapsed): 45s, 3m 20s, 1h 5m.
 fn elapsed(ms : Double) -> String {
   let s = dmax(ms / 1000.0, 0.0).to_int()
@@ -1545,12 +1564,15 @@ fn activity(
     ""
   } else {
     let now = (src.now)()
-    c.wake_in(1000.0)
     match a.wait {
       Some((since, most, _)) => {
         let waited = match most {
           Some(sec) => dmin(now, since + sec * 1000.0)
           None => now
+        }
+        // (stopped at the most it waits)
+        if waited >= now {
+          c.wake_in(to_next_second(waited - since))
         }
         elapsed(waited - since) +
         (match most {
@@ -1560,7 +1582,10 @@ fn activity(
       }
       None =>
         match a.since {
-          Some(s) => elapsed(now - s)
+          Some(s) => {
+            c.wake_in(to_next_second(now - s))
+            elapsed(now - s)
+          }
           None => ""
         }
     }

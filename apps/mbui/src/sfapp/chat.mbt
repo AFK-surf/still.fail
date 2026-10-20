@@ -385,10 +385,15 @@ fn messages(
               open.animate(1.0, @motion.tween(220.0, ease=Out))
             }
             let leaving = match rd.linger.get(a.key) {
-              Some((_, at)) => c.now() - at >= 600.0
+              Some((_, at)) => c.now() - at >= linger_fade_ms
               None => false
             }
-            let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(220.0))
+            let fade = @motion.animate(
+              c,
+              "fade/" + mk,
+              if leaving { 0.0 } else { 1.0 },
+              spec=@motion.tween(linger_out_ms),
+            )
             let p = open.get()
             @motion.reveal(c, mk, p, fn() {
               let ri = c.box(w=Fill(1.0), pl=row_side(c), pr=row_side(c), pt=top, fn() {
@@ -626,6 +631,16 @@ fn messages(
 }
 
 ///|
+/// An activity whose agent's turn ended stays this long, then fades (`linger_out_ms`), then is gone.
+let linger_fade_ms : Double = 600.0
+
+///|
+let linger_out_ms : Double = 220.0
+
+///|
+let linger_ms : Double = linger_fade_ms + linger_out_ms
+
+///|
 /// The list with the activities of agents whose turn just ended, kept a moment (Chat.kt: 600 ms, then fading 220).
 fn with_lingering(
   c : @ui.Ctx,
@@ -656,10 +671,10 @@ fn with_lingering(
     }
   }
   for k, l in rd.linger {
-    if running.contains(k) || now - l.1 >= 820.0 {
+    if running.contains(k) || now - l.1 >= linger_ms {
       over.push(k)
     } else {
-      c.wake_in(dmax(1.0, if now - l.1 < 600.0 { 600.0 - (now - l.1) } else { 820.0 - (now - l.1) }))
+      c.wake_in(if now - l.1 < linger_fade_ms { linger_fade_ms - (now - l.1) } else { linger_ms - (now - l.1) })
     }
   }
   for k in over {
@@ -800,7 +815,7 @@ let at_end_env : Ref[Int] = { val: -1 }
 ///|
 fn at_end_asked() -> Bool {
   if at_end_env.val < 0 {
-    at_end_env.val = if @host.env("MBUI_CHAT_AT_END") == "1" { 1 } else { 0 }
+    at_end_env.val = if @ui.env("MBUI_CHAT_AT_END") == "1" { 1 } else { 0 }
   }
   at_end_env.val == 1
 }
@@ -1449,7 +1464,7 @@ let bench_on : Ref[Int] = { val: -1 }
 ///|
 fn chat_bench(c : @ui.Ctx, key : String, rd : Reading, more : Bool, rows : Int) -> Unit {
   if bench_on.val < 0 {
-    bench_on.val = if @host.env("MBUI_CHAT_BENCH") != "" { 1 } else { 0 }
+    bench_on.val = if @ui.env("MBUI_CHAT_BENCH") != "" { 1 } else { 0 }
   }
   if bench_on.val == 0 || !rd.placed {
     return
