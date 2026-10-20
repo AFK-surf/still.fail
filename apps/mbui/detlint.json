@@ -48,8 +48,7 @@
       "src/sfapp/service.mbt": 1,
       "src/sfapp/share.mbt": 1,
       "src/sfapp/sheet.mbt": 1,
-      "src/sfapp/updates.mbt": 1,
-      "src/sfcore/signin.mbt": 1
+      "src/sfapp/updates.mbt": 1
     },
     "settle": {
       "src/sfapp/newchat_wbtest.mbt": 5
@@ -146,7 +145,22 @@
       "src/sfapp/service.mbt": 1
     },
     "host-read": {},
-    "globals": {}
+    "globals": {},
+    "unsettled-ok": {
+      "src/sfapp/newchat_wbtest.mbt": 5,
+      "src/sfreplay/flows/appearance_kept_test.mbt": 1,
+      "src/sfreplay/flows/bar_glass_test.mbt": 1,
+      "src/sfreplay/flows/delete_failed_test.mbt": 1,
+      "src/sfreplay/flows/home_new_chat_test.mbt": 1,
+      "src/sfreplay/flows/markdown_test.mbt": 1,
+      "src/sfreplay/flows/offline_retry_test.mbt": 1,
+      "src/sfreplay/flows/places_test.mbt": 1,
+      "src/sfreplay/flows/settings_appearance_test.mbt": 1,
+      "src/sfreplay/flows/wide_new_chat_test.mbt": 1,
+      "src/sfreplay/flows/wide_places_test.mbt": 1,
+      "src/sfreplay/flows/wide_row_menu_test.mbt": 1,
+      "src/sfreplay/steps.mbt": 1
+    }
   },
   "excused": {
     "frame-request": {},

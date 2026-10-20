@@ -25,7 +25,6 @@ test "kinds by name, as the Android app's kindOf" {
 }
 
 ///|
-#skip("等 #747：预览关闭的淡出登记成动画（迁移 chat）")
 test "an image opens fitted, its bar over it; a double tap zooms in, another back" {
   let t = preview_tester("image")
   assert_true(t.find("界面草图.png") is Some(_))
@@ -57,7 +56,6 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
 }
 
 ///|
-#skip("等 #747：预览关闭的淡出登记成动画（迁移 chat）")
 test "a video plays in a native view, its bytes read through the core; its controls over it" {
   let t = preview_tester("video")
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("open 1 1 ") }))

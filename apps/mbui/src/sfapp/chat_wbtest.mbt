@@ -108,8 +108,12 @@ test "a reference to another chat is its chip, and opens that chat" {
     }
     _ => fail("not a chat")
   }
-  // the chat pushed in (to where its slide said it ends: it starts the frame after the tap)
-  nav_rested(t)
+  // the chat pushed in
+  t.run_for(@ui.nav_push_ms)
+  // and the scroll bar of the list under it gone: shown since its last wheel, then faded out
+  if scrolled >= 0.0 {
+    t.run_for(scrolled + @ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms - t.time())
+  }
   t.assert_idle()
 }
 
