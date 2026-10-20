@@ -67,9 +67,9 @@ export function installFlowDemo(state: "missing" | "installing"): DemoExtension 
   };
 }
 
-/** The add-profile picker on a station that runs Cursor (core forms.ts `groups`): Cursor last of the makers, its plan alone
- *  (no key), and its variables by hand among the rest. */
-export function cursorPickDemo(): DemoExtension {
+/** The add-profile picker on a station that runs Cursor, and Devin with `devin` (core forms.ts `groups`): each last of the
+ *  makers, its plan alone (no key), and its variables by hand among the rest. */
+export function cursorPickDemo(devin = false): DemoExtension {
   type Tile = ApiProvider;
   const tile = (id: string, name: string, over: Partial<Tile>): Tile => ({
     id, name, group: "labs", mark: id, kind: "api-provider", hasKey: true, hasPlan: false, endpointRequired: false, protocols: [], keyOptional: false, uses: [], usesText: "", ...over,
@@ -86,8 +86,9 @@ export function cursorPickDemo(): DemoExtension {
         tile("anthropic", "Anthropic", { hasPlan: true, runtime: "claude", uses: ["claude", "dsh"], usesText: "Claude Code · DeepSeek Harness" }),
         tile("deepseek", "DeepSeek", { uses: ["claude", "dsh", "decision"], usesText: "Claude Code · DeepSeek Harness · 自动决策" }),
         tile("cursor", "Cursor", { hasKey: false, hasPlan: true, runtime: "cursor", uses: ["cursor"], usesText: "Cursor" }),
+        ...(devin ? [tile("devin", "Devin", { hasKey: false, hasPlan: true, runtime: "devin", uses: ["devin"], usesText: "Devin" })] : []),
       ] },
-      { id: "local", title: "本地", providers: [env("claude", "Claude Code"), env("codex", "Codex"), env("dsh", "DeepSeek Harness"), env("cursor", "Cursor")] },
+      { id: "local", title: "本地", providers: [env("claude", "Claude Code"), env("codex", "Codex"), env("dsh", "DeepSeek Harness"), env("cursor", "Cursor"), ...(devin ? [env("devin", "Devin")] : [])] },
     ],
   };
   return {

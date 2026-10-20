@@ -35,9 +35,9 @@ export type Icon = (props: IconProps) => ReactNode;
 // ── model marks ────────────────────────────────────────────────────────
 
 
-/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own; xAI's for Grok Build). */
+/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own; xAI's for Grok Build; Cursor's and Devin's own). */
 export function MakerIcon({ maker, runtime, size }: { maker?: Maker | undefined; runtime?: RuntimeKind | string | undefined; size: number }) {
-  const id = maker && MARKS.has(maker.id) ? maker.id : runtime === "codex" ? "openai" : runtime === "dsh" ? "dsh" : runtime === "grok" ? "xai" : runtime === "cursor" ? "cursor" : "anthropic";
+  const id = maker && MARKS.has(maker.id) ? maker.id : runtime === "codex" ? "openai" : runtime === "dsh" ? "dsh" : runtime === "grok" ? "xai" : runtime === "cursor" ? "cursor" : runtime === "devin" ? "devin" : "anthropic";
   return <img className={css.mMaker} src={`${BASE}models/${id}.svg`} alt={maker?.name ?? ""} width={size} height={size} data-mono={MONO.has(id) || undefined} />;
 }
 
@@ -126,7 +126,7 @@ export function ProviderMark({ runtime, kind, mark, size = 16 }: { runtime: stri
   }
   // A key on a listed provider: its maker's mark, or the generic plug where there is none.
   if (kind === "api-provider") return mark && MARKS.has(mark) ? <MakerIcon maker={{ id: mark, name: mark }} runtime={runtime} size={size} /> : <Plug size={size} strokeWidth={1.7} aria-hidden="true" />;
-  const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : runtime === "grok" ? { id: "xai", name: "xAI" } : runtime === "cursor" ? { id: "cursor", name: "Cursor" } : { id: "openai", name: "OpenAI" };
+  const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : runtime === "grok" ? { id: "xai", name: "xAI" } : runtime === "cursor" ? { id: "cursor", name: "Cursor" } : runtime === "devin" ? { id: "devin", name: "Devin" } : { id: "openai", name: "OpenAI" };
   return <MakerIcon maker={maker} runtime={runtime} size={size} />;
 }
 

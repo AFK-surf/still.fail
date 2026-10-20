@@ -170,6 +170,7 @@ const everyKind: DemoExtension = {
         as("codex", "chatgpt", "ChatGPT 订阅", { name: "lin@acme.dev", runtime: "codex", runtimes: ["codex"], quota: null }),
         as("grok", "grok", "SuperGrok 订阅", { name: "lin@acme.dev", runtime: "grok", runtimes: ["grok"], quota: null }),
         as("cursor", "cursor", "Cursor 订阅", { name: "lin@acme.dev", runtime: "cursor", runtimes: ["cursor"], quota: null }),
+        as("devin", "devin", "Devin 订阅", { name: "lin@acme.dev", runtime: "devin", runtimes: ["devin"], quota: null }),
         // A key with an allowance of several windows: they take a line of their own, under its name and where it is.
         as("key", "key", "API Key", { name: "OpenRouter", access: { kind: "api-provider", key: "sk-or…9f2c" }, providerMark: "openrouter", quota: { checkedAt: 0, state: "ok", windows: [
           { label: "5 小时", mark: "5H", left: 100, level: "ok", usedPercent: 0 },
@@ -235,6 +236,36 @@ const cursorAccount = (signingIn: boolean): DemoExtension => {
       if (t.topic === "profiles") {
         const v = value as { items: Record<string, unknown>[] };
         return { ...v, items: v.items.map((e) => ({ ...e, group: "cursor", groupTitle: "Cursor 订阅", profile: cursor(e.profile as Record<string, unknown>) })) };
+      }
+      return undefined;
+    },
+  };
+};
+/** The demo's profile as a Devin subscription: signed in, or being signed in again (`signingIn`: Devin's page is up; the code
+ *  it shows once signed in is pasted back, as Claude's). The workspace's list has it under its own kind too. */
+const devinAccount = (signingIn: boolean): DemoExtension => {
+  const at = Date.UTC(2026, 9, 21, 3, 0);
+  const login = { profile: "machine-claude", runtime: "devin", state: "needs_code", url: "https://app.devin.ai/auth/cli/continue?state=4b1e…&code_challenge=Qx2…&code_challenge_method=S256&cli_pkce_marker=1", startedAt: at, expiresAt: at + 600_000 };
+  const models = ["swe-2", "claude-opus-5-5"];
+  const devin = (p: Record<string, unknown>) => ({
+    ...p, machine: false, runtime: "devin", runtimes: ["devin"], loginCommand: undefined, providerName: undefined,
+    access: { kind: "subscription", key: "" }, quota: { state: "unavailable", windows: [], checkedAt: at }, trouble: null,
+    models, available: models, modelsText: "已启用 2 / 2 个模型", series: [{ name: "SWE", models: ["swe-2"] }, { name: "Claude", models: ["claude-opus-5-5"] }],
+    makers: { "swe-2": { id: "devin", name: "Cognition" }, "claude-opus-5-5": { id: "anthropic", name: "Anthropic" } }, names: { "swe-2": "SWE-2", "claude-opus-5-5": "Claude Opus 5.5" },
+    ...(signingIn
+      ? { login, check: { checkedAt: 0, state: "login", detail: "Devin 登录已失效", models: null }, checkText: "需要登录", checkTone: "amber" }
+      : { login: null, check: { checkedAt: 0, state: "ok", detail: "已登录", models }, checkText: "可用", checkTone: "green" }),
+  });
+  return {
+    then: (t, value) => {
+      if (!value || typeof value !== "object") return undefined;
+      if (t.topic === "overview") {
+        const o = value as { profiles: Record<string, unknown>[] };
+        return { ...o, profiles: o.profiles.map(devin) };
+      }
+      if (t.topic === "profiles") {
+        const v = value as { items: Record<string, unknown>[] };
+        return { ...v, items: v.items.map((e) => ({ ...e, group: "devin", groupTitle: "Devin 订阅", profile: devin(e.profile as Record<string, unknown>) })) };
       }
       return undefined;
     },
@@ -571,7 +602,7 @@ export const stories: Story[] = [
     render: () => sheet([
       ["标签", <><Pill>普通</Pill><Pill tone="green">在线</Pill><Pill tone="blue">进行中</Pill><Pill tone="amber">等待</Pill><Pill tone="red">失败</Pill><Pill tone="accent">强调</Pill></>],
       ["状态", <><StatusDot state="online" label="在线" /><StatusDot state="busy" label="忙" /><StatusDot state="error" label="出错" /><StatusDot state="offline" label="离线" /><StatusText text="已连接 · 3 分钟前" /></>],
-      ["模型和运行时", <><ModelLogo maker={ANTHROPIC} runtime="claude" size={20} /><ModelLogo maker={OPENAI} runtime="codex" size={20} /><ModelLogo maker={null} runtime="dsh" size={20} /><ModelLogo maker={null} runtime="grok" size={20} /><ModelLogo maker={null} runtime="cursor" size={20} /><AgentMark maker={ANTHROPIC} runtime="claude" badge={undefined} size={28} /><RuntimeTags runtimes={["claude", "codex", "dsh", "grok", "cursor"]} /></>],
+      ["模型和运行时", <><ModelLogo maker={ANTHROPIC} runtime="claude" size={20} /><ModelLogo maker={OPENAI} runtime="codex" size={20} /><ModelLogo maker={null} runtime="dsh" size={20} /><ModelLogo maker={null} runtime="grok" size={20} /><ModelLogo maker={null} runtime="cursor" size={20} /><ModelLogo maker={null} runtime="devin" size={20} /><AgentMark maker={ANTHROPIC} runtime="claude" badge={undefined} size={28} /><RuntimeTags runtimes={["claude", "codex", "dsh", "grok", "cursor", "devin"]} /></>],
     ]),
   },
   {
@@ -670,6 +701,9 @@ export const stories: Story[] = [
   { id: "app-profile-add-cursor", group: "应用", title: "添加 Profile · 选择服务商（Cursor 只有订阅）", app: true, demo: cursorPickDemo(), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-cursor", group: "应用", title: "Profile · Cursor 订阅", app: true, demo: cursorAccount(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-cursor-signing-in", group: "应用", title: "Profile · Cursor 重新登录（无代码，打开页面确认）", app: true, demo: cursorAccount(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-add-devin", group: "应用", title: "添加 Profile · 选择服务商（Cursor、Devin 只有订阅）", app: true, demo: cursorPickDemo(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
+  { id: "app-profile-devin", group: "应用", title: "Profile · Devin 订阅", app: true, demo: devinAccount(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-devin-signing-in", group: "应用", title: "Profile · Devin 重新登录（贴回代码）", app: true, demo: devinAccount(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "pick-workspace-models", group: "选模型", title: "模型 · 本机、借用的、可借用的", render: () => borrowStory(false), steps: [{ click: "text=Opus 5.5" }] },
   { id: "pick-borrow", group: "选模型", title: "模型 · 选了别的 station 的，借用", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }] },
   { id: "pick-phone-models", group: "选模型", title: "手机 · 模型列表（本机、借用的、可借用的）", phone: true, render: phoneModels },
@@ -998,6 +1032,8 @@ export const stories: Story[] = [
   { id: "phone-profile-supergrok-signing-in", group: "手机", title: "Profile · SuperGrok 重新登录（设备码）", app: true, phone: true, demo: superGrok(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-add-cursor", group: "手机", title: "添加 Profile · 选择服务商（Cursor 只有订阅）", app: true, phone: true, demo: cursorPickDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
   { id: "phone-profile-cursor-signing-in", group: "手机", title: "Profile · Cursor 重新登录（无代码，打开页面确认）", app: true, phone: true, demo: cursorAccount(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-add-devin", group: "手机", title: "添加 Profile · 选择服务商（Cursor、Devin 只有订阅）", app: true, phone: true, demo: cursorPickDemo(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
+  { id: "phone-profile-devin-signing-in", group: "手机", title: "Profile · Devin 重新登录（贴回代码）", app: true, phone: true, demo: devinAccount(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-new-chat-not-shared", group: "手机", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, phone: true, demo: notShared, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="新建对话"]' }] },
   { id: "phone-station-add-existing", group: "手机", title: "添加 station · 已有的", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
   { id: "phone-station-add-existing-done", group: "手机", title: "添加 station · 已加入", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },
