@@ -61,24 +61,6 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
 }
 
 ///|
-test "归档此对话 archives the chat and goes home; 保留 keeps it" {
-  let calls : Array[Made] = []
-  let t = decide_core(calls, "chat")
-  t.tap_text("保留")
-  let kept = named(calls, "chat.keep")
-  assert_eq(kept.length(), 1)
-  assert_eq(number(Some(kept[0].params), "thread"), 7.0)
-  t.tap_text("归档此对话")
-  let archived = named(calls, "chat.archive")
-  assert_eq(archived.length(), 1)
-  assert_eq(text(Some(archived[0].params), "session"), "s-c1")
-  assert_true(flag(Some(archived[0].params), "archived"))
-  assert_eq(app.nav.depth(), 1)
-  t.run_for(@ui.nav_push_ms)
-  // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
-}
-
-///|
 test "the chat's own sheet: its agents, pinning it, and on to the agent's card and its history" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-info")

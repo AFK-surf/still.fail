@@ -17,8 +17,16 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let ws = text(v, "id")
   let blocks : Array[() -> Unit] = [
     fn() {
-      // (adding people by email or from Slack is a later slice's sheet: its ＋ is not shown yet)
-      top_back(c, core, tr("android-settings.title"))
+      // adding people by email or from Slack: its owners' and admins'
+      if manager {
+        top_back(c, core, tr("android-settings.title"), trailing=fn() {
+          if nav_button(c, "ws-add-people", "user-plus", size=20.0) {
+            open_add_people(core, here, v)
+          }
+        })
+      } else {
+        top_back(c, core, tr("android-settings.title"))
+      }
     },
   ]
   if v is None {
@@ -94,8 +102,8 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     blocks.push(fn() {
       gap(c, 10.0)
       list_card(c, fn() {
-        // (its mark is picked in the station's picker, a later slice's: the row says what it is)
-        list_row(c, fn() {
+        // its mark, picked in the sheet a station's is (an icon, an emoji, a picture, or none)
+        if list_row(c, key="ws-mark", fn() {
           row_title(c, tr("android-settings.workspace.icon"))
           let busy = is_doing(core, ["workspace.rename"], [("workspace", ws)])
           doing_mark(c, busy, failed_of(core, ["workspace.rename"], [("workspace", ws)]))
@@ -108,8 +116,19 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             c.text(tr("android-settings.workspace.iconNone"), style=@sf.value) |> ignore
           }
           chevron(c)
-        })
-        |> ignore
+        }) {
+          open_mark_pick(core, text(v, "name"), text(v, "emoji"), text(v, "icon"), tr("android-settings.workspace.iconWhat"), fn(
+            emoji,
+            icon,
+            done,
+          ) {
+            (core.call)(
+              "workspace.rename",
+              obj([("workspace", str(ws)), ("emoji", str(emoji)), ("icon", str(icon)), ("account", str(here.sub))]),
+              done,
+            )
+          })
+        }
       })
     })
   }

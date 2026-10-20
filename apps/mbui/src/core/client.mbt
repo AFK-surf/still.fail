@@ -40,6 +40,9 @@ pub struct Client {
   /// the tickets: by call id, by subscription id
   priv call_waits : Map[Int, Int]
   priv sub_waits : Map[Int, Int]
+  /// calls whose effect the core shows on a draft topic (`echo_topic`), by call id: the draft's subscription, whether
+  /// the call is answered, whether the draft has changed since it was made; its ticket held until both
+  priv echo_waits : Map[Int, (Int, Bool, Bool)]
   /// Told of each subscription made (its id, its topic's name, None) and of its first message (its value, or None
   /// when it could not be read): Client::time_topics
   priv mut timing : ((Int, String, Json?, Bool) -> Unit)?
@@ -67,6 +70,7 @@ pub fn Client::new(
     end_wait: fn(_) {  },
     call_waits: {},
     sub_waits: {},
+    echo_waits: {},
     timing: None,
   }
 }
@@ -130,6 +134,34 @@ fn topic_name(t : Json) -> String {
       }
     _ => ""
   }
+}
+
+///|
+/// An edit of a draft the core keeps (a form's), by call, and the topic that draft is read from: the call is answered
+/// at once, the draft as the station has it comes after. What is asked is awaited until the draft has come too (a
+/// scripted run's `answered NAME`, a screen settled), so what depends on the draft (a button it lets be pressed) is
+/// there when the step after looks.
+fn echo_topic(name : String) -> String? {
+  match name {
+    "agentEnv.form.edit" => Some("agentEnvForm")
+    "profile.flow.edit" => Some("profileFlow")
+    _ => None
+  }
+}
+
+///|
+/// The subscription to the draft an edit `name` with `params` changes (`echo_topic`: its topic, the same station and
+/// form), if the client has one.
+fn Client::echo_of(self : Client, name : String, params : Json) -> Sub? {
+  guard echo_topic(name) is Some(topic) else { return None }
+  guard params is Object(p) else { return None }
+  for _, s in self.subs {
+    guard s.topic is Object(t) else { continue }
+    if topic_name(s.topic) == topic && t.get("station") == p.get("station") && t.get("form") == p.get("form") {
+      return Some(s)
+    }
+  }
+  None
 }
 
 ///|
@@ -204,6 +236,10 @@ pub fn Client::call(
   self.next_id += 1
   self.calls[id] = on_done
   self.call_waits[id] = (self.start_wait)("core: \{name} (call \{id})")
+  match self.echo_of(name, params) {
+    Some(e) => self.echo_waits[id] = (e.id, false, false)
+    None => ()
+  }
   let m : Map[String, Json] = {
     "id": Json::number(id.to_double()),
     "call": Json::string(name),
@@ -299,6 +335,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       // What was asked of this core is not answered by the next one.
       let calls = self.calls.to_array()
       self.calls.clear()
+      self.echo_waits.clear()
       for c in calls {
         self.end_call_wait(c.0)
       }
@@ -349,6 +386,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       s.version += 1
       self.version += 1
       self.end_sub_wait(id)
+      self.draft_came(id)
     }
     None =>
       // A call's answer; a value before it says how it goes (to a `stream`'s `on_value`)
@@ -370,7 +408,15 @@ fn Client::take(self : Client, msg : Json) -> Unit {
 
 ///|
 fn Client::answer(self : Client, id : Int, r : Result[Json, Json]) -> Unit {
-  self.end_call_wait(id)
+  match self.echo_waits.get(id) {
+    // (an edit answered before its draft came: awaited still, until it does; refused: nothing to come)
+    Some((sub, _, false)) if r is Ok(_) => self.echo_waits[id] = (sub, true, false)
+    Some(_) => {
+      self.echo_waits.remove(id)
+      self.end_call_wait(id)
+    }
+    None => self.end_call_wait(id)
+  }
   match self.calls.get(id) {
     Some(f) => {
       self.calls.remove(id)
@@ -401,8 +447,34 @@ pub fn Client::reset(self : Client) -> Unit {
   self.by_key.clear()
   self.calls.clear()
   self.progress.clear()
+  self.echo_waits.clear()
   self.next_id = 1
   self.beside = None
   self.version = 0
   self.fatal = None
+}
+
+///|
+/// A message for the subscription `sub`: the edits of its draft answered by now are over (their tickets given back),
+/// those not answered yet have seen it come.
+fn Client::draft_came(self : Client, sub : Int) -> Unit {
+  let over = []
+  let seen = []
+  for id, w in self.echo_waits {
+    let (s, answered, _) = w
+    if s == sub {
+      if answered {
+        over.push(id)
+      } else {
+        seen.push(id)
+      }
+    }
+  }
+  for id in seen {
+    self.echo_waits[id] = (sub, false, true)
+  }
+  for id in over {
+    self.echo_waits.remove(id)
+    self.end_call_wait(id)
+  }
 }

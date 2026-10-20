@@ -158,6 +158,8 @@ fn init {
 fn reset() -> Unit {
   files_cornered.val = false
   attention.told = false
+  picture_pick.val = None
+  bar_glyph.val = None
   attention.visible = false
   attention.focused = false
   attention.workspace = ""
@@ -264,7 +266,6 @@ fn reset() -> Unit {
   fix_xshared.clear()
   fix_decided.clear()
   emits.clear()
-  fix_kept.val = false
   dv_reset()
   decide_reset()
   close_now()
@@ -661,6 +662,10 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
 }
 
 ///|
+/// A picture the settings asked the system's picker for (a station's or workspace's mark), and who takes it.
+let picture_pick : Ref[(@host.Pick, (Bytes?) -> Unit)?] = Ref(None)
+
+///|
 /// A page of the settings (src/sfapp/settings), over the workspace in view.
 fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -> Unit {
   let core = settings_core(src, w)
@@ -685,6 +690,18 @@ fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
 ///|
 /// What the settings' pages read and call, and how they move: the core as the app has it (Source), the app's stack.
 fn settings_core(src : Source, w : Workspace) -> @settings.Core {
+  // a picture asked of the system's picker for a mark: its answer given (the host asks for a frame as it answers)
+  match picture_pick.val {
+    Some((p, done)) =>
+      match p.files() {
+        Some(files) => {
+          picture_pick.val = None
+          done(files.get(0).map(fn(f) { f.bytes }))
+        }
+        None => ()
+      }
+    None => ()
+  }
   {
     topic: fn(name, params) {
       let t = (src.topic)(name, params)
@@ -736,6 +753,33 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
     },
     version_words: fn() { update_row_words() },
     version_tap: fn() { update_row_tapped(src) },
+    // the system's browser (LocalUriHandler.openUri); nothing took it, said so (android-misc.link.cantOpen)
+    open_link: fn(url) {
+      if !@ui.open_url(url) {
+        app.toast = tr("android-misc.link.cantOpen")
+        app.toast_n += 1
+      }
+    },
+    pick_picture: fn(done) {
+      match @host.pick(@host.PickKind::Photos) {
+        Some(p) => {
+          picture_pick.val = Some((p, done))
+          true
+        }
+        None => false
+      }
+    },
+    bars: fn() { bars_in(src, w.id) },
+    set_bars: fn(sets, cur) { set_bars(src, w.id, sets, cur) },
+    place_icon: fn(c, place, color) {
+      if place == "stations" {
+        // one station on, as no station is meant (BarSettings.kt Still)
+        let still : @sf.GlyphCounts = { online: 1, dim: 0, failing: 0, working: 0, asleep: false, connecting: 0 }
+        @sf.station_glyph(c, still, 28.0, color, @sf.theme().p.red) |> ignore
+      } else {
+        @sf.icon(c, place_icon(place), size=28.0, color~) |> ignore
+      }
+    },
     reporting: fn() { reporting_host.val.map(fn(h) { (h.get)() }) },
     set_reporting: fn(on) {
       match reporting_host.val {

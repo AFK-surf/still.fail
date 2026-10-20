@@ -67,6 +67,11 @@ PY
   echo "rerecord: $n ← $test (trace $trace, mark ${t:-none of its own}${s:+, station $s})"
   FLOW_EMIT="$TMP/$idx-$n.drive" moon test --target js "$test" > "$TMP/$idx-$n.test.log" 2>&1
   [ -s "$TMP/$idx-$n.drive" ] || { grep -a 'Error\]\|error:\|failed\|^flow:' "$TMP/$idx-$n.test.log" | head -20 | cut -c1-300; die "$test wrote no script"; }
+  # (from a starting point (E2E_START), the app's core already made: the first start's `migrate`, which a test over a
+  # first start's trace waits for, is not asked again)
+  if [ -n "${E2E_START:-}" ]; then
+    grep -v '^answered migrate$' "$TMP/$idx-$n.drive" > "$TMP/$idx-$n.drive.tmp" && mv "$TMP/$idx-$n.drive.tmp" "$TMP/$idx-$n.drive"
+  fi
   tests="$tests $idx-$n:$trace:$test"
 done
 [ -n "$tests" ] || die "no test among: $*"
@@ -112,6 +117,7 @@ for x in $tests; do
   if ! grep -aq '^DRIVE PASS' "out/e2e/mac/$name.log" 2>/dev/null; then
     why=$(grep -a -m1 'DRIVE FAIL line' "out/e2e/mac/$name.log" 2>/dev/null | sed 's/^ *DRIVE FAIL //' | cut -c1-160)
     echo "  $test: its run failed, its trace kept as it was:"; grep -a 'DRIVE FAIL' "out/e2e/mac/$name.log" 2>/dev/null | head -2 | cut -c1-300
+    cp "out/e2e/mac/$name.log" "$TMP/$name.run.log" 2>/dev/null
     kept="$kept
   $(basename "$trace"): the run failed (${why:-no DRIVE FAIL line})"
     continue
@@ -126,6 +132,8 @@ for x in $tests; do
     # (the new trace is the run's; the test does not hold over it: the old one back, said)
     cp "$TMP/$(basename "$trace").old" "$trace"
     cp "$TMP/$(basename "$mbt").old" "$mbt"
+    # (the run's log kept with it: the next run's takes its place in out/e2e/mac)
+    cp "out/e2e/mac/$name.log" "$TMP/$name.run.log" 2>/dev/null
     kept="$kept
   $(basename "$trace"): its test fails over the new one ($(grep -a -m1 '^flow:\|assert_idle' "$TMP/$name.after.log" | cut -c1-160))"
   fi

@@ -6,6 +6,8 @@
 test "19-drive-rename" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace_drive_rename, seed~)
+    // (the photo 18's upload left, put there before the app starts: the run apart from 18's)
+    f.before("drive-photo 082940")
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-082940")
     f.run_to(@ui.nav_rest())

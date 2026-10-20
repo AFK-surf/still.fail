@@ -274,6 +274,12 @@ fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     "days": Json::array(days),
     "leading": "agents",
     "note": { "reading": false, "failing": [], "empty": Json::boolean(empty) },
+    // the stations at a glance (Station's place in the bar): Studio online, MBA not
+    "glyph": if scope == "ws1" {
+      { "online": 1, "dim": 1, "failing": 0, "working": 0, "connecting": 0, "label": "1 台在线" }
+    } else {
+      { "online": 1, "dim": 0, "failing": 0, "working": 0, "connecting": 0, "label": "1 台在线" }
+    },
   })
 }
 
@@ -321,6 +327,8 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
       })
     "status" => Some({ "items": [] })
     "screenCard" | "adbCard" => fixture_link_card(name, params)
+    // (a chat's agent's run settings, a settings page: the settings' own)
+    "pick" if f.mode == "settings-run" => @settings.fixture_topic(f.mode, name, params)
     "newChat" | "pick" => fixture_new_topic(f, name)
     _ =>
       match decide_fixture_topic(f, name, params) {

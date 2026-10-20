@@ -3,6 +3,7 @@ import {
   "stillfail/sfapp",
   "stillfail/sfcore",
   "mbui/ui",
+  "mbui/kit",
   "mbui/motion",
   "moonbitlang/core/json",
 }

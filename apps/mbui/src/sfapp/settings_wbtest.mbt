@@ -1,9 +1,13 @@
 // The settings' pages (src/sfapp/settings) over the made-up ones (settings/fixture.mbt), as the app shows them.
 
 ///|
-/// The app over the settings' fixture, a page of them open (by its name, @settings.route_of).
-fn settings_tester(page : String, mode? : String = "settings") -> @ui.Tester {
+/// The app over the settings' fixture, a page of them open (by its name, @settings.route_of); `shows`: a fixture mode
+/// of the settings' (MBUI_FIXTURE=settings-…) whose page this is, as it sets its fixture up (a step of a flow).
+fn settings_tester(page : String, mode? : String = "settings", shows? : String = "") -> @ui.Tester {
   reset()
+  if shows != "" {
+    @settings.fixture_page(shows) |> ignore
+  }
   let src = fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   open_setting(page)
@@ -178,4 +182,59 @@ test "profiles, connects, the vault: their lists" {
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
   t3.run_for(bar.rest() - t3.time())
   t3.assert_idle()
+}
+
+///|
+test "下方栏: a place's \"−\" takes it off its bar (the bars kept as the workspace's)" {
+  let t = settings_tester("bars")
+  bars_picked.val = None
+  assert_true(t.find("第 1 栏") is Some(_))
+  // Station's "−", at its icon's top right over the first bar's last slot
+  t.tap(345.0, 199.0)
+  match bars_picked.val {
+    Some((sets, _)) => {
+      assert_eq(sets[0].length(), 3)
+      assert_false(sets[0].contains("stations"))
+    }
+    None => fail("the bars were not changed")
+  }
+}
+
+///|
+test "添加成员: what is typed counts at once, 添加 lit by it" {
+  let t = settings_tester("workspace")
+  t.tap(362.0, 22.0)
+  assert_true(t.find("添加成员") is Some(_))
+  t.tap_text("name@example.com")
+  t.type_text("he2@example.com")
+  // the sheet's 添加, its last words (the page's 添加中继 lies under it)
+  match t.find_last("添加") {
+    Some((x, y)) => t.tap(x, y)
+    None => fail("no 添加")
+  }
+  // the fixture adds them: the sheet says what came of it
+  assert_true(t.find("完成") is Some(_))
+}
+
+///|
+test "飞书: a new connect picks its platform first, Slack's and 飞书's said (FeishuConnect.kt)" {
+  let t = settings_tester("new-connect:ws1/st1", shows="settings-new-connect-platform")
+  assert_true(t.find("选择平台") is Some(_))
+  assert_true(t.find("在 Slack 的频道和私信中使用") is Some(_))
+  assert_true(t.find("在飞书的群和私聊中使用，含国际版 Lark") is Some(_))
+  assert_true(t.find("下一步") is Some(_))
+  // no QR code before the bot is being made
+  assert_true(t.find("在飞书中打开") is None)
+}
+
+///|
+test "飞书: scanning, its QR code drawn on white and 在飞书中打开 handed to the system" {
+  let t = settings_tester("new-connect:ws1/st1", shows="settings-new-connect-scan")
+  assert_true(t.find("使用飞书扫描二维码，按提示创建机器人") is Some(_))
+  assert_true(t.find("也可用另一台设备上的飞书扫码") is Some(_))
+  // the code's dark runs, black on the white square
+  let dark = t.drawn_rects().filter(fn(r) { r.4 == 0x000000FFL })
+  assert_true(dark.length() > 25)
+  t.tap_text("在飞书中打开")
+  assert_eq(t.opened(), ["https://open.feishu.cn/page/launcher?code=made-up"])
 }

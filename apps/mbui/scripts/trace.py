@@ -62,7 +62,13 @@ def body_kept(b):
         j = None
     if isinstance(j, dict):
         k = json_kept(j)
-        return b if k == j else json.dumps(k, ensure_ascii=False, separators=(",", ":")).encode("latin-1")
+        if k == j:
+            return b
+        try:
+            return json.dumps(k, ensure_ascii=False, separators=(",", ":")).encode("latin-1")
+        except UnicodeEncodeError:
+            # (a body that wrote characters past latin-1 as \uXXXX escapes: not written back, all of it "-")
+            return b"-"
     if "=" in s and " " not in s and "\n" not in s:
         k = query_kept("?" + s)[1:]
         return b if k == s else k.encode("latin-1")
@@ -98,6 +104,10 @@ for line in open(src, encoding="utf-8", errors="replace"):
     if i < 0:
         continue
     ev = preview_kept(scrub(json.loads(line[i + 10:])))
+    # (a step that named the run's own log (a flow's {LOG}: second-station reads the command off it) as the test writes
+    # it, {LOG}: the test's step is the same in every run)
+    if isinstance(ev.get("step"), str) and os.path.abspath(src) in ev["step"]:
+        ev["step"] = ev["step"].replace(os.path.abspath(src), "{LOG}")
     # (what the app was started with: its account's tokens put as "-" as a migrate's are)
     if isinstance(ev.get("env"), dict) and "MBUI_CORE_ACCOUNT" in ev["env"]:
         try:

@@ -16,16 +16,10 @@ test "74-markdown" {
     f.gone("正在发送")
     f.see("聊天页的列表和输入框")
     f.see("placeRows")
-    // (the post all done: its 归档 under it coming in, its room opening, the list gliding to its end after what came,
-    // the composer letting go of the room it held for the words sent (composer_hold): all at rest before the code is
-    // dragged)
-    let rest = [f.t.rest_of("under/"), f.t.rest_of("glide"), f.t.rest_of("composer/")].fold(init=-1.0, fn(a, b) {
-      if b > a {
-        b
-      } else {
-        a
-      }
-    })
+    // (the post all done: what comes under it, its room opening, the list gliding to its end after what came, the
+    // agent's activity going and its mark ending its pose, the composer letting go of the room it held for the words
+    // sent (composer_hold): all that moves at rest before the code is dragged, in every timing)
+    let rest = f.t.rest_of("")
     if rest > f.t.time() {
       f.run_to(rest)
     }

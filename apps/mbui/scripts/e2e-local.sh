@@ -30,9 +30,17 @@
 #   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
 #   scripts/e2e-local.sh drive-big TAG    the downloads' folder in it (e2e-TAG/大文件: 48 MB and a small file)
 #   scripts/e2e-local.sh drive-gb TAG     a novel in GB18030 in it (e2e-TAG/旧小说-gb.txt)
+#   scripts/e2e-local.sh drive-photo TAG  the run's photo in it (e2e-TAG/e2e-photo.jpg), as 18's upload left it
 #   scripts/e2e-local.sh android-stage FILE…  files to attach put where the app's provider serves them (a share's intent)
 #   scripts/e2e-local.sh android-gallery FILE…  files put in the emulator's gallery, the app let read it
 #   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
+#   scripts/e2e-local.sh second-station FILE   a second station enrolled with the command the app made (its log, FILE)
+#   scripts/e2e-local.sh second-down      that station stopped, its directory gone
+#   scripts/e2e-local.sh connects [WORDS]   the test station's connects as its config has them (CONNECT id enabled=
+#                                       mode=), once a line has WORDS
+#   scripts/e2e-local.sh profiles [WORDS]   its profiles as its config has them (PROFILE id name), once a line has WORDS
+#   scripts/e2e-local.sh config-has WORDS   whether its config has WORDS, once it has (CONFIG HAS / CONFIG LACKS)
+#   scripts/e2e-local.sh config-lacks WORDS   the same once it has them no more
 #   scripts/e2e-local.sh status
 #
 # E2E_WORK (default: e2e-local beside this checkout), E2E_STATION (the station's data and HOME, /tmp/mbui-e2e-<uid>),
@@ -227,13 +235,15 @@ stop() {
 }
 
 down() {
+  second_down >/dev/null 2>&1 || true
   stop station
   # whatever of the test station is left (its node, runner): only processes on its own data directory
   pkill -f "$STATION/data" 2>/dev/null || true
-  # a web service its agent started (flow 47's, on E2E_PORT + 7: e2e/run.sh's SVC) outlives the station: ended when it
-  # runs in the station's own directories (never another's on that port)
+  # a web service its agent started (flow 47's, on E2E_PORT + 7: e2e/run.sh's SVC; or on the port its test's words name,
+  # 19107, as the env it was recorded on had it) outlives the station: ended when it runs in the station's own
+  # directories (never another's)
   local p
-  for p in $(lsof -tnP -iTCP:$((PORT + 7)) -sTCP:LISTEN 2>/dev/null); do
+  for p in $( (lsof -tnP -iTCP:$((PORT + 7)) -sTCP:LISTEN; pgrep -f -- "-m http\.server ") 2>/dev/null | sort -u); do
     lsof -a -p $p -d cwd -Fn 2>/dev/null | grep -qE "^n(/private)?$STATION/" && kill $p 2>/dev/null
   done
   stop cloud
@@ -361,6 +371,15 @@ drive_big() {
   say "drive big $d"
 }
 
+# the photo the uploads' flow (18) puts up, put in the drive flows' e2e-<tag> as that run left it: for the flows after
+# it (19-rename, 20-delete) when they are run apart from it
+drive_photo() {
+  local d=$STATION/home/e2e-${1:?a tag}
+  mkdir -p $d
+  cp $WORK/files/e2e-photo.jpg $d/e2e-photo.jpg
+  say "drive photo $d/e2e-photo.jpg"
+}
+
 # a novel of made-up chapters in GB18030 (98-reader: not UTF-8, read as the Android app reads it), e2e-<tag>/旧小说-gb.txt
 drive_gb() {
   local d=$STATION/home/e2e-${1:?a tag}
@@ -404,6 +423,71 @@ release_seed() {
   local adb=${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb
   [ -n "${EMU_PORT:-}" ] && $adb -s emulator-$EMU_PORT shell appops set ${E2E_PKG:-dev.mbui.demo} REQUEST_INSTALL_PACKAGES allow && say "the app may install apps"
   return 0
+}
+
+# a second station (flow 80, adding one): enrolled with the token of the command the app made (the last
+# `ANSWER workspace.enroll` in the flow's log, FILE), its own data and HOME beside the first's ($STATION-b), started;
+# `second-down` stops it and takes its directory away
+second_station() {
+  local token=$(grep 'ANSWER workspace.enroll ok' "${1:?the log of the flow}" | tail -1 | sed 's/.*"command":"\([^"]*\)".*/\1/' | awk '{print $NF}')
+  [ -n "$token" ] || die "no command made in $1"
+  local B=$STATION-b
+  second_down >/dev/null 2>&1
+  mkdir -p $B/data $B/home $B/app/node/bin
+  ln -s $E/station/dist $B/app/station
+  ln -s "$(command -v node)" $B/app/node/bin/node
+  echo '{"autoUpdate":false}' > $B/data/config.json
+  (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && \
+    node $E/station/dist/main.js enroll $ORIGIN $token --data $B/data >$RUN/second-enroll.log 2>&1) \
+    || { cat $RUN/second-enroll.log; die "enrolling the second station failed"; }
+  (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && \
+    detach "$(native launcher)" run --app $B/app --data $B/data >$RUN/second.log 2>&1 & echo $! > $RUN/second.pid)
+  wait_for "[ -f $B/data/stillfail.db ]" 60 || { tail -20 $RUN/second.log; die "the second station did not start"; }
+  say "second station up ($(cat $RUN/second.pid)), enrolled"
+}
+second_down() {
+  stop second
+  pkill -9 -f "$STATION-b/data" 2>/dev/null || true
+  rm -rf "$STATION-b"
+  say "second station down"
+}
+
+# the test station's connects as its config.json has them: CONNECT <id> enabled=<on> mode=<mode>, a line each
+connects() {
+  # (with WORDS: once a line has them, a minute at most)
+  [ $# -eq 0 ] || wait_for "connects_now | grep -qF -- '$*'" 60 || true
+  connects_now
+}
+connects_now() {
+  python3 -c 'import json,sys
+for c in json.load(open(sys.argv[1])).get("connects", []):
+    print("CONNECT %s enabled=%s mode=%s" % (c.get("id"), "false" if c.get("enabled") is False else "true", c.get("mode") or "multi-session"))' "$STATION/data/config.json"
+}
+
+# the test station's profiles as its config.json has them: PROFILE <id> <name>, a line each
+profiles() {
+  # (with WORDS: once a line has them, a minute at most)
+  [ $# -eq 0 ] || wait_for "profiles_now | grep -qF -- '$*'" 60 || true
+  profiles_now
+}
+profiles_now() {
+  python3 -c 'import json,sys
+for p in json.load(open(sys.argv[1])).get("profiles", []):
+    print("PROFILE %s %s" % (p.get("id"), p.get("name")))' "$STATION/data/config.json"
+}
+
+# whether the test station's config.json has WORDS, once it has them (a minute at most): CONFIG HAS <words>, or CONFIG
+# LACKS <words>; config_lacks once it has them no more
+config_has() {
+  wait_for "grep -qF -- '$*' '$STATION/data/config.json'" 60 || true
+  config_now "$@"
+}
+config_lacks() {
+  wait_for "! grep -qF -- '$*' '$STATION/data/config.json'" 60 || true
+  config_now "$@"
+}
+config_now() {
+  if grep -qF -- "$*" "$STATION/data/config.json"; then echo "CONFIG HAS $*"; else echo "CONFIG LACKS $*"; fi
 }
 
 # waits (a minute at most) until the test station has a chat whose first words begin with WORDS, said in it
@@ -459,6 +543,10 @@ case "${1:-all}" in
     for p in relay cloud station; do echo "$p: $(alive $p && echo "up ($(cat $RUN/$p.pid))" || echo down)"; done ;;
   peer) shift; peer "$@" ;;
   sql) shift; sql "$@" ;;
+  connects) shift; connects "$@" ;;
+  profiles) shift; profiles "$@" ;;
+  config-has) shift; config_has "$@" ;;
+  config-lacks) shift; config_lacks "$@" ;;
   reads) reads ;;
   pins) pins ;;
   wait-chat) shift; wait_chat "$@" ;;
@@ -470,9 +558,12 @@ case "${1:-all}" in
   drive-media) shift; drive_media "$@" ;;
   drive-big) shift; drive_big "$@" ;;
   drive-gb) shift; drive_gb "$@" ;;
+  drive-photo) shift; drive_photo "$@" ;;
   android-stage) shift; android_stage "$@" ;;
   android-gallery) shift; android_gallery "$@" ;;
   release-seed) release_seed ;;
+  second-station) shift; second_station "$@" ;;
+  second-down) second_down ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   ios) shift; "$ROOT/e2e/run.sh" ios "$@" ;;

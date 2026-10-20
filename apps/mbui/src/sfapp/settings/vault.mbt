@@ -55,11 +55,27 @@ fn vault_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let ws = here.workspace
   let topic = (core.topic)("vaults", { "workspace": str(ws) })
   let v = topic.value
+  let words = recovery_words.get(ws)
+  // not locked (no security mode): the library kept in the clear on its station, usable at once
+  let usable = v is Some(_) &&
+    words is None &&
+    (flag(v, "plain") || (flag(v, "available") && flag(v, "locked") && flag(v, "canSign") && flag(v, "setUp")))
   let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
+    fn() {
+      if usable {
+        top_back(c, core, tr("android-settings.title"), trailing=fn() {
+          if round_icon(c, "vault-add", "plus", @sf.theme().p.text) {
+            open_vault_add(core, here)
+          }
+        })
+      } else {
+        top_back(c, core, tr("android-settings.title"))
+      }
+    },
     fn() { large_title(c, tr("android-settings.vault.title")) },
   ]
   match v {
+    _ if words is Some(_) => blocks.push(fn() { vault_words(c, words.unwrap()) })
     None =>
       blocks.push(fn() {
         waiting_cards(
@@ -89,7 +105,11 @@ fn vault_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     Some(_) => blocks.append(library(c, core, ws, v))
   }
   blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "vault", blocks)
+  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() { scroll_page(c, "vault", blocks) }) |> ignore
+    vault_foot(c, core, ws, v)
+  })
+  |> ignore
 }
 
 ///|
@@ -221,31 +241,7 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
   if !plain && vaults.length() > 0 {
     blocks.append([
       fn() { section_header(c, tr("android-settings.vault.devices"), start=S6) },
-      fn() {
-        list_card(c, fn() {
-          for row in vaults {
-            let rv = Some(row)
-            let hold = fill("android-settings.vault.devicesHold", [("n", count(rv, "devices").to_string())])
-            list_row(c, fn() {
-              row_lines(
-                c,
-                if vaults.length() > 1 {
-                  text(rv, "name") + " · " + hold
-                } else {
-                  hold
-                },
-                if count(rv, "missing") > 0 {
-                  fill("android-settings.vault.missing", [("n", count(rv, "missing").to_string())])
-                } else {
-                  ""
-                },
-                sub_color=warn,
-              )
-            })
-            |> ignore
-          }
-        })
-      },
+      fn() { vault_devices(c, core, ws, vaults) },
     ])
   }
   for r in items(v, "refused") {
@@ -441,6 +437,9 @@ fn vault_section(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() 
     blocks.push(fn() {
       list_card(c, fn() {
         body(c, fn() { para(c, tr("android-settings.vault.noKey"), sub=tr("android-settings.vault.noKeyHow")) })
+        if flag(rv, "recoverable") && go_row(c, "vault-recover/" + text(rv, "id"), tr("android-settings.vault.recover")) {
+          open_vault_recover(core, ws)
+        }
       })
     })
   }
@@ -526,8 +525,7 @@ fn library_vault(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
         list_card(c, fn() {
           for it in rows {
             let iv = Some(it)
-            // (an item's own page, its fields shown and copied, is a later slice's)
-            list_row(c, fn() {
+            if list_row(c, key="vault-item/" + text(iv, "id"), fn() {
               c.box(w=Px(18.0), align=ACenter, fn() {
                 @sf.icon(c, kind_icon(kind), size=18.0, color=t.p.subtle) |> ignore
               })
@@ -550,8 +548,9 @@ fn library_vault(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
               })
               |> ignore
               chevron(c)
-            })
-            |> ignore
+            }) {
+              (core.push)(VaultItem(text(rv, "id"), text(iv, "id")))
+            }
           }
         })
       },

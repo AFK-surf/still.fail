@@ -440,8 +440,12 @@ pub fn Flow::paste(self : Flow, s : String) -> Unit {
 /// step waits for when what it waits on is what the app asked of the core and nothing on screen says it (a site view's
 /// page loaded, its requests through the core answered).
 pub fn Flow::answered(self : Flow, call : String, n : Int) -> Unit {
+  // (what was asked before, written as the steps would have; this call's own counted by the n written here, not
+  // written again by the next step: a scripted run waits for the n-th, not for more)
+  emit_answered(self.r.take_asked().filter(fn(c) { c != call }))
   emit_answered_to(call, n)
   self.until(fn() { self.r.answers_given(call) >= n })
+  emit_answered(self.r.take_asked().filter(fn(c) { c != call }))
   if self.r.answers_given(call) < n {
     self.fail("\{call} answered \{self.r.answers_given(call)} times, not \{n}")
   }
@@ -524,10 +528,17 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
     while self.t.rest_of("") > self.t.time() {
       self.t.run_for(self.t.rest_of("") - self.t.time())
     }
+    // (a toast's time too, before the frame owed: what is shown does not wait for it, but one left at the end goes at
+    // its time, not as the end's last frame happens to fall)
+    let toast = @kit.toast_due("toast")
+    if toast > self.t.time() {
+      self.t.run_for(toast - self.t.time())
+      continue
+    }
     // (the frame the last one left owed: what it asks (a page gone, its player's place told) answered too)
     self.t.draw()
-    // (and what is told to happen at a time of its own (a timer: an agent's activity lingering, a toast's time), to that
-    // time, as a motion to its end; one that keeps telling itself again never ends: said, not run on)
+    // (and what is told to happen at a time of its own (a timer: an agent's activity lingering), to that time, as a
+    // motion to its end; one that keeps telling itself again never ends: said, not run on)
     match self.t.next_wake() {
       Some((at, by)) if at > self.t.time() => {
         let n = wakes.get(by).unwrap_or(0) + 1
@@ -741,6 +752,31 @@ pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? :
   self.t.drag(x, y, x + dx, y + dy, steps~)
   self.t.draw()
   self.core()
+}
+
+///|
+/// The list under the lowest `what` scrolled by `dy` (a mouse wheel's: down the page as it grows), and what the core
+/// answers to it given.
+pub fn Flow::wheel_at(self : Flow, what : String, dy : Double) -> Unit {
+  emit("wheelat \{dy.to_int()} " + what)
+  guard self.spot(what) is Some((x, y)) else { return }
+  self.t.wheel(x, y, dy)
+  self.core()
+  // the list's wheel eased to where it goes
+  self.run_to(self.t.rest_of("wheel ease"))
+}
+
+///|
+/// The toast on screen gone: its time shown (`@sfapp.toast_ms`, a timer), then the frame that sends it away and its way
+/// out (`@kit.toast_rest`).
+pub fn Flow::toast_gone(self : Flow) -> Unit {
+  self.run_for(@sfapp.toast_ms)
+  self.t.draw()
+  // (its way out over already where it began before the test looked at it: a step that waited took the clock past)
+  let out = @kit.toast_rest("toast")
+  if out > self.t.time() {
+    self.run_to(out)
+  }
 }
 
 ///|

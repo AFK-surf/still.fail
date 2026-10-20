@@ -38,6 +38,12 @@ test "70-card-motion" {
     f.run_for(@sfapp.flight_ms)
     f.gone("正在发送")
     f.see("=设置页 083209")
+    // (the list come to its end after the card, its 忽略 in view under it: at a quicker pace it is still gliding there)
+    let glide = f.t.rest_of("a list gliding")
+    if glide > f.t.time() {
+      f.run_to(glide)
+    }
+    f.see("=忽略")
     let after = f.tap_now("=忽略")
     // let go (decision.dismiss): 忽略 goes from the frame after the one that took the tap (decide.mbt ask_dismiss), on
     // ArchiveEase's 280 ms, to 85% from its top left, its room closing

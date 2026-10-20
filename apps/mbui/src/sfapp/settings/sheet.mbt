@@ -126,12 +126,30 @@ fn sheet_head(c : @ui.Ctx, title : String, lead? : () -> Unit) -> Unit {
 }
 
 ///|
+/// The pages' editors' fields by their editors' keys (@ui.Field: the only way to write an editor), so an answer that
+/// puts words in one writes them by its key; put back by reset.
+let keyed_fields : Map[String, @ui.Field] = {}
+
+///|
+fn field_of(key : String) -> @ui.Field {
+  match keyed_fields.get(key) {
+    Some(f) => f
+    None => {
+      let f = @ui.Field::new()
+      keyed_fields[key] = f
+      f
+    }
+  }
+}
+
+///|
 /// A line to type in (Controls.kt Field): on a soft frame, its placeholder until it has words.
 fn field_box(
   c : @ui.Ctx,
   key : String,
   placeholder : String,
   mono? : Bool = false,
+  secret? : Bool = false,
   field? : @ui.Field,
 ) -> String {
   let t = @sf.theme()
@@ -156,7 +174,11 @@ fn field_box(
         placeholder_color=t.p.subtle,
         caret_color=t.p.accent,
         enter_sends=true,
-        field?,
+        secret~,
+        field=match field {
+          Some(f) => f
+          None => field_of(key)
+        },
       )
       ignore(mono)
       words = r.text
@@ -177,6 +199,7 @@ fn ask(
   action : String,
   run : (String) -> Unit,
   hint? : String = "",
+  secret? : Bool = false,
 ) -> Unit {
   let key = "ask/" + (sheet.serial + 1).to_string()
   let filled : Ref[Bool] = Ref(false)
@@ -190,7 +213,7 @@ fn ask(
     }
     sheet_head(c, title)
     c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
-      let words = field_box(c, key, placeholder, field~).trim(chars=" \t\n").to_owned()
+      let words = field_box(c, key, placeholder, secret~, field~).trim(chars=" \t\n").to_owned()
       if hint != "" {
         c.text(hint, size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
       }

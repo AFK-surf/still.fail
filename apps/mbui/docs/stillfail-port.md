@@ -141,8 +141,8 @@ ChatFiles.kt, Decisions.kt, LoginCards.kt, Follow.kt):
   boxes of their own proportions before they load (their ThumbHash
   likeness meanwhile, `station.file` with `thumb`), videos as their boxes
   with the play mark, what went to Slack, options cards (who is to decide,
-  the options, 忽略), login cards (the `machineLogin` topic), 保留 / 归档此对话
-  under the last all-done post, the unread line, the activity line of an
+  the options, 忽略), login cards (the `machineLogin` topic), the unread
+  line, the activity line of an
   agent at work (the `live` topic), the outbox. The words are the Chinese
   catalog's. Times are the core's (`time.createdAt.ago`); the Android app
   has no day separators in a chat, so neither has this.
@@ -363,8 +363,8 @@ OpenJobs.kt, History.kt, ui/ToolStep.kt, ui/Sheet.kt):
 - The cards in a chat do what they say: an options card's option tapped answers it (`decision.answer`: the core sends
   the viewer's message quoting the post, or, for an option the agent made with action=close, closes the card with no
   message: `decision.close`), a spinner on it meanwhile, its row pressed as the Android app's ripple; 忽略 lets the ask
-  go (`decision.dismiss`), at once, back if it failed; 保留 (`chat.keep`, 已保留… said) and 归档此对话 under the last
-  all-done post, as the bar's 归档 (`chat.archive`: Home at once, 已归档 said); a login card for one who may finish it
+  go (`decision.dismiss`), at once, back if it failed; the bar's 归档 archives the chat (`chat.archive`: Home at once,
+  已归档 said); a login card for one who may finish it
   (the station's `machineLogins.canLogin`) says what to do now by its step, with its pill and 取消
   (`machineLogin.cancel`). Anything that fails is said in a toast (无法…：…), as AppState.act says it.
 - Their states and motion (branch mbui-chat-complete, src/sfapp/decide.mbt `under_post`): an option pressed is drawn at
@@ -372,8 +372,7 @@ OpenJobs.kt, History.kt, ui/ToolStep.kt, ui/Sheet.kt):
   whole, the rest at half) while they go (200 ms, CSS's ease-out: fading, to 90%), their room closing on the rows'
   spring 100 ms late (ListMotion.kt closeGap), 忽略 going with them, and how it went (你 选择了「…」) fades in once they
   have gone (200 after 200), its room opening on the same spring; 忽略 tapped goes on ArchiveEase (280 ms, fading, to 85%
-  from its top left, its room closing); 保留 / 归档此对话 come and go on ArchiveEase (to 85% about their top's middle,
-  their room opening or closing), 保留 that failed keeps the red mark for 6 s (the core's doing, DoingMark); the bar's
+  from its top left, its room closing); the bar's
   归档 comes and goes as nothing is left in the chat or something is again (280 ms, ArchiveEase, fading, from 85%, its
   width from its end). Only drawn, but for the rooms (as the Android app lays them out): going, they take no tap. Each
   is in the motion log (`under/options/…`, `under/outcome/…`, `under/dismiss/…`, `under/archive/…`, `bar-archive/…`).
@@ -737,12 +736,48 @@ the menu from a button):
   red marks from the core's `doing`). `APP=sffix MBUI_FIXTURE=settings-<page>` shows a page over made-up settings
   (src/sfapp/settings/fixture.mbt): `scripts/shots.sh settings web-settings`.
 
-Not yet, against the current app (each drawn as there and not opened, or left out): adding a station, a profile or a
-connect (and signing a subscription in), a station's mark picker, its screens, adb lending, drive, updates and macOS
-grants; a profile's "…", its sharing and workspaces; a connect's sheets and Slack app page; a vault item's page, its
-editor, setting the vault up and its recovery words; the automatic decisions, the bottom bars' settings, kept files and
-the changelog (their rows only); the prices page; adding people to the workspace and
-its mark; the language changing the app's own words (they are the Chinese catalog's); the sheets' drag.
+Completed (branch mbui-settings-complete, 2026-10-19), what the slice left drawn and not opened:
+
+- Stations: adding one (Station's ＋, the bar's notch at the stack's root: a new machine named, `workspace.enroll`'s
+  command copied, the wait until it joins, said in green; a station of another workspace the viewer manages joined as
+  it is, `station.join`), the first one in the page itself (FirstStation); a station's page in full: its mark picked
+  (station_mark.mbt: still.fail's 314 icons searched by their words, in a colour, an emoji typed or pasted, a picture,
+  none; `workspace.renameStation` with emoji and icon), its screens (`screens`), 共享调试 (its page: AdbShare.kt's), its
+  drive, the macOS grants (`permissions.request`), the agents' variables (their sheet over `agentEnvForm`), what its
+  search finds (`search.setPersonal`), the workspaces it is in (`memberships`), its versions (`software.update`,
+  `.check`, `.channel`, `.auto`); the bar's Station place drawn as the stations' glyph of their states (src/sf
+  glyph.mbt, StationGlyph.kt's: arcs, failing dots, the robot blinking, asleep).
+- Profiles and connects: adding a profile (`profileFlow`: the providers, a plan signed in through `login.new` and its
+  steps, a key checked first by `profile.flow.submit`) or a connect (`connectFlow`, a step a screen: the Slack
+  workspace's configuration token, the app made and installed, its tokens, the model and the mode); a subscription
+  signed in (`profile.login`, its steps: the page handed to the system's browser, `@ui.open_url`, as
+  LocalUriHandler; 无法打开此链接 where nothing took it); a profile's "…" (renamed, checked, deleted or stopped), its sharing (`profile.share`, `.move`), its
+  workspaces, its run switches, its key and its variables changed, what to do in trouble; the machine's own logins
+  offered; an account on several stations; a connect's "…" (reconnect, its tokens checked by `slack.tokens.verify`,
+  Slack, off and on, its owner, deleted), its mode and session sheets, what it runs (`pick` of `connect:<id>`, another
+  station's model borrowed once asked again), its Slack app page (`slackApp`, `connect.putSlackApp`), the apps made and
+  not connected yet. A new profile is what a new chat's 添加 Profile opens.
+- Vault: an item's page (masked until shown by `vault.open`, each field shown and copied: a secret cleared from the
+  clipboard 30 s later), its editor (`vault.putItem`, `.deleteItem`), 添加, setting the vault up (`vault.setup`) and its
+  24 recovery words shown that once (never kept), the key given to devices set up since, this device keyed again by
+  the words (`vault.recover`). Every secret is typed into a secret's field (mbui `Ctx::editor(secret=true)`: dots, never
+  copied out); the call log (MBUI_CALL_LOG) redacts every secret's value (stillfail/main.mbt `logged`).
+- The rest: the automatic decisions (the rule's page, each station's settings of it over `decisionForm`, a station's
+  archive policy over `policyForm`), 下方栏, 本机缓存 (what the core keeps of each chat: `cache.usage`, `cache.clear`),
+  更新日志 (`changelog`, `changelog.seen`), 价目表, adding people (`workspace.addMembers`, from Slack: `slack.people`) and
+  the workspace's mark, how a chat's agent runs (RunSettings: `pick` of `session:<key>`, opened from its history's
+  details), the machine's own sessions to go on with (`machineSessions.*`), another station's model borrowed from a new
+  chat's picker, asked again first.
+- `APP=sffix MBUI_FIXTURE=settings-<page>` has each (src/sfapp/settings/fixture.mbt): `scripts/shots.sh settings
+  web-settings`.
+
+Not yet, against the current app: the language changing the app's own words (they are the Chinese catalog's); the
+sheets' drag; opening a station's screen (the remote screen's viewer is slice 14's: its row says it cannot be opened);
+lending this device's adb (the host does not find Wireless debugging's ports: the page says the device cannot); a
+picture as a mark cropped to its middle 96 px square (one small enough is put up as it is, a larger one refused); a
+Slack app's icon drawn from still.fail's buddies (no way to draw one into a JPEG yet); the times of day that need a
+clock (上次检查 …, 还剩 N 分钟); 本机缓存's files outside the core (this app keeps none of its own); a field's input
+type told to the system's keyboard as a password's; a secret marked sensitive for the system's clipboard preview.
 
 Slice 10, notifications and pushes (branch notify, 2026-10-19; ember apps/android app/Notices.kt, Push.kt, App.kt,
 MainActivity.kt, screens/SettingsHome.kt Notify; docs/notifications.md → Clients): src/sfapp/notices.mbt over the host's
@@ -978,7 +1013,8 @@ only by `run_for` a declared length. At its end every message was given, nothing
 (`diverged`) or with other params (`fuzzy`), every ask of the run's made again (`unmade`, but those the test names and
 says why), and the app idle (`assert_idle`). Each flow runs as the run had it and again with what may come at once in
 orders drawn from seeds (`Replay::shuffle`: answers to different asks in any order, an ask's own in theirs), ending on
-the same screen each time (`orders`). A flow's trace is recorded again from its test, one command: `scripts/rerecord.sh NAME…` (a test's name, or a flow
+the same screen each time (`orders`). 03 and 05 were recorded again on 2026-10-20 once the bottom bar asked the
+core for its workspace's `status` (the stations' glyph asleep, as Places.kt). A flow's trace is recorded again from its test, one command: `scripts/rerecord.sh NAME…` (a test's name, or a flow
 kept in e2e/flows that it needs before it) has the test write its steps as a scripted run (FLOW_EMIT,
 src/sfreplay/emit.mbt: `tap` a `tap`, `see` an `until`, `peer` what alice's other device does), runs them against a
 local still.fail of its own under the old trace's mark and station directory, makes the run's conversation the trace
@@ -1039,7 +1075,6 @@ while the card moved the list):
 | 22 answer-option | the agent posts an options card (e2e/fake: `card:`), the recommended one marked; one tapped (decision.answer); 你 选择了「…」 under it | alice's message with the option's words, quoting the post; the card as posted, `recommended` on the one；暂留端到端：Tester 和真机对「列表是否在末尾」的判断不一样（client.focus end:false/true 发不发、发几次），已交确定性负责人查 |
 | 23 dismiss | another card; 忽略 tapped: it and the options go at once (decision.dismiss) | `dismissed` has alice's row for the post; nothing answered；Tester 重放（src/sfreplay/flows/cards/dismiss_test.mbt） |
 | 24 close-option | a card with an option made to close it (action=close) tapped | `closed_cards` has the post; no message sent for it；Tester 重放（src/sfreplay/flows/cards/close_option_test.mbt） |
-| 25 archive | a chat made on the other device (before the app starts: `#before`, see below) ends all done; opened, 归档此对话: 已归档, Home without it | the session the app archived and its thread put away by hand (`archived_by`, `hidden_by` manual; its entries leave the live tables); the test chat not；Tester 重放（src/sfreplay/flows/cards/archive_test.mbt） |
 | 26 history | the agent does steps (e2e/fake: `steps:` writes its transcript); "…" → its row → its card → 历史: received and posted, the group opened, the command opened to what it printed | the agent's post; its transcript (what the history is read from) has the steps；Tester 重放（src/sfreplay/flows/cards/history_test.mbt） |
 | 27 pin | "…" → 固定到列表顶部, then 取消固定 | the station's `pins` has alice's for the chat, then none；Tester 重放（src/sfreplay/flows/cards/pin_test.mbt） |
 | 28 decisions-page | the 奏 page (MBUI_OPEN_PAGE=decisions, a flow's `#env`); the other device asks with a card; the option tapped there; 奏折已全部批完 | alice's answer quoting the post；Tester 重放（src/sfreplay/flows/pages/decisions_page_test.mbt） |
@@ -1077,11 +1112,20 @@ while the card moved the list):
 | 65 wide-places | (1280×800) the rail: 文件 (the stations' folders in the sidebar), the chats, settings (外观: 深色, then 跟随系统), back to the chats | the host told dark; the core's store on the device keeps appearance system；Tester 重放（src/sfreplay/flows/wide/wide_places_test.mbt） |
 | 66 wide-resize | 390 wide: Home; the window resized to 1280 (the wide frame; the chat pressed in the sidebar), then to 390 again: the same chat, a phone's page; words sent | the window resized twice (the host's RESIZED); the words at the station, once, in the test chat；Tester 重放（src/sfreplay/flows/wide/wide_resize_test.mbt） |
 | 70 card-motion | an options card answered in the chat (the options go, 你 选择了「…」 comes in their place), another let go with 忽略 | alice's answer quoting the post; `dismissed` has alice's row for the second, nothing answered; the motion log has the options going (to 90%, their room closing), the line coming, 忽略 going (to 85%)；暂留端到端：Tester 和真机对「列表是否在末尾」的判断不一样（client.focus end:false/true 发不发、发几次），已交确定性负责人查；app 在状态没变时重复发 end:true，交 app 迁移 |
-| 71 card-keep | a chat ended all done (made by the other device before the app starts): 保留 under its last post; 已保留…; the buttons and the bar's 归档 go | the station's `kept_chats` has alice's row for that chat's thread; the motion log has the buttons and the bar's 归档 going；Tester 重放（src/sfreplay/flows/cards/card_keep_test.mbt） |
 | 72 bar-archive | the same kind of chat archived from its bar's 归档: Home at once, 已归档 | the session archived by hand at the station; the test chat not；Tester 重放（src/sfreplay/flows/cards/bar_archive_test.mbt） |
 | 73 pick-words | held still on the agent's words: a word picked, 复制 (已复制); held again, 引用, sent with words (flow 11 now takes 全选 first) | alice's message quotes a passage of the agent's words, not all of them; on macOS the pasteboard holds just a word of them · 仍走 e2e：Tester 的分词和 macOS 不同，系统的分词结果没录进带子（等「分词进带子」） |
 | 74 markdown | the agent's Markdown (e2e/fake `md:`): a table, TypeScript highlighted, its long line scrolled sideways by a finger; a link held: its menu, 复制链接 | the entry has the table and the code; the motion log has the code scrolled across; the link was not handed to the browser; on macOS the pasteboard has the address · Tester 重放（src/sfreplay/flows/chat/markdown_test.mbt） |
 | 75 open-link | a link in a message tapped: handed to the system (a scripted macOS run only logs it; Android's ACTION_VIEW) | `open-url:` with the address on the app's log · Tester 重放（src/sfreplay/flows/chat/open_link_test.mbt） |
+| 80 add-station | Station → ＋: a name, 生成命令; the runner enrolls a second station with it (`second-station`); 已加入, 完成; its page → … → 移除 | the command made (workspace.enroll); the second station enrolled and in the cloud's workspace, then not · Tester 重放（src/sfreplay/flows/pages/settings_add_station_test.mbt） |
+| 81 station-mark | the test station → … → 图标: robot found and picked; an emoji pasted; 不使用图标 | still.fail cloud's workspace has the station's icon glyph:robot, then the emoji, then none · Tester 重放（src/sfreplay/flows/pages/settings_station_mark_test.mbt） |
+| 82 station-settings | the station's page: Agent 环境变量 edited and saved; 版本: 自动更新 on and off; 检查更新 | the station's config has the variable; software.auto answered on and off, the config off; software.check answered · Tester 重放（src/sfreplay/flows/pages/settings_station_settings_test.mbt） |
+| 83 profile | the profile → … → 重命名, 重新检查; ＋: Anthropic API, a made-up key, 验证并添加 refused | the station's config has the new name; profile.check answered; no profile added; the key never on the log · Tester 重放（src/sfreplay/flows/pages/settings_profile_test.mbt） |
+| 84 connect | a connect made without tokens (peer `connect-put`): its page; 停用; 单会话; made-up tokens refused; 删除连接 | the station's connect off, then single-session, then gone; the tokens not saved, not on the log · Tester 重放（src/sfreplay/flows/pages/settings_connect_test.mbt） |
+| 85 vault-item | 密钥 (in the clear): ＋ → Token: a name, its value, agents by the proxy to a host, 保存; its page, 显示; 编辑 → 删除 | vault.putItem answered; this device's core lists it for agents; vault.deleteItem, gone; the value never on the log · Tester 重放（src/sfreplay/flows/pages/settings_vault_item_test.mbt） |
+| 86 decisions | 自动决策 → 归档建议: 启用 switched, 保存修改, back and saved again | automaticDecisions.form.open and two saves answered; the station's config has the rule · Tester 重放（src/sfreplay/flows/pages/settings_decisions_test.mbt） |
+| 87 device-pages | 下方栏: a place taken off, 用量 added; 本机缓存; 更新日志; 用量 → 价目表 | prefs.set barsBy, kept on the device; cache.usage answered with the test chat · Tester 重放（src/sfreplay/flows/pages/settings_device_pages_test.mbt） |
+| 88 workspace-people | Workspace → ＋: an email added; 移除; 图标: an emoji, then none | the cloud had the email added, then not; workspace.rename with the emoji, then none · Tester 重放（src/sfreplay/flows/pages/settings_workspace_people_test.mbt） |
+| 89 run-settings | the chat's agent → 历史 → 详情 → how it runs: 思考深度 high, saved | pick.set of session:<key> with the effort; pick.save answered · Tester 重放（src/sfreplay/flows/pages/settings_run_settings_test.mbt） |
 | 90 drive-download | a file of the lent folder held, ⋯ → 下载: 正在下载「说明.txt」, then 已保存到「下载」 | drive.read through the core; the device keeps the station's file byte for byte (macOS: MBUI_DOWNLOADS_DIR; Android: the emulator's Download/, as MediaStore named it) |
 | 91 drive-download-many | in a folder of its own (drive-big), a 48 MB file and a small one chosen, 下载 2 个文件: the big one's row says how far, then gone; 已保存到「下载」 | the big file read in a dozen parts; both kept byte for byte · Tester 重放（src/sfreplay/flows/drive/drive_download_many_test.mbt：大文件分段读、两个都留存；48 MB 逐字节比对由冒烟 90 负责） |
 | 92 drive-zip | a folder held, ⋯ → 下载为 zip: 正在下载「子文件夹.zip」, 已保存到「下载」 | the station zipped it (drive.zip); the kept zip holds the folder's file, its words the same · Tester 重放（src/sfreplay/flows/drive/drive_zip_test.mbt） |
@@ -1101,8 +1145,8 @@ tap (the browser comes in front), passing on both. Android's words are ICU's (�
 Flows 33–37 (branch settings, 2026-10-19; 22–26 on its first base, numbered after slice 8's 22–28, glass's 29 and
 the new chat's and bottom bar's 30–32; the preview's 38 after them): the whole suite passed on macOS, and 33–37 on Android (the emulator; 36 once
 alice's other device found its chat by all its words: it had taken an earlier run's of the same title). 36
-archive-restore is not 25 archive: 25 archives a chat from the chat itself (归档此对话), 36 finds one archived elsewhere
-on the 已归档 page and restores it.
+archive-restore is not 72 bar-archive: 72 archives a chat from its bar, 36 finds one archived elsewhere on the 已归档
+page and restores it.
 
 Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
 never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however

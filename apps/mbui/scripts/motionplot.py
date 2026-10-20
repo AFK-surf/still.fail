@@ -134,7 +134,7 @@ SPECS = [
     (r"^under/options/", "open", "a card's options' room closing (ListMotion.kt closeGap: spring(1, 350), 100 ms late)",
      [spring(350.0, threshold=0.002, delay=100.0)], 1, 0.0),
     (r"^under/outcome/", "open", "how a card went, its room opening (closeGap)", [spring(350.0, threshold=0.002, delay=100.0)], 1, 1.0),
-    (r"^under/(dismiss|archive)/", "open", "忽略, 保留 / 归档此对话 coming or going (Chat.kt: 280 ms, ArchiveEase)",
+    (r"^under/(dismiss|archive)/", "open", "忽略 coming or going (Chat.kt: 280 ms, ArchiveEase)",
      [tween(280, "soft")], 1, None),
     (r"^under/(dismiss|archive)/", "alpha", "their opacity (Chat.kt: 280 ms, ArchiveEase)", [tween(280, "soft")], 1, None),
     (r"^bar-archive/", "alpha", "the bar's 归档 coming or going (Chat.kt ChatBar: 280 ms, ArchiveEase)", [tween(280, "soft")], 1, None),

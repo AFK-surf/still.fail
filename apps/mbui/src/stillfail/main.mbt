@@ -34,6 +34,41 @@ let dump : Bool = @ui.env("MBUI_CORE_DUMP") == "1"
 let call_log : Bool = @ui.env("MBUI_CALL_LOG") == "1"
 
 ///|
+/// The fields whose values are secrets (keys, tokens, passwords, a vault item's value, recovery words, a sign-in's code):
+/// never put on the call log, at any depth.
+let secret_fields : Array[String] = [
+  "key", "token", "appToken", "botToken", "refreshToken", "config", "secret", "secrets", "value", "password", "code",
+  "words", "phrase", "recovery", "fields", "env",
+]
+
+///|
+/// A call's params or answer as the call log may show them: every secret's value replaced (`redacted`), and an
+/// agent environment's text (it holds proxies' passwords) too.
+fn logged(name : String, v : Json) -> String {
+  fn scrub(v : Json) -> Json {
+    match v {
+      Object(m) => {
+        let out : Map[String, Json] = Map([])
+        for k, x in m {
+          out[k] = if secret_fields.contains(k) || (k == "text" && name.has_prefix("agentEnv")) {
+            match x {
+              Null => x
+              _ => Json::string("<redacted>")
+            }
+          } else {
+            scrub(x)
+          }
+        }
+        Json::object(out)
+      }
+      Array(a) => Json::array(a.map(scrub))
+      _ => v
+    }
+  }
+  scrub(v).stringify()
+}
+
+///|
 /// People's pictures as the core gives them (`picture`): asked once each, kept as images.
 let pictures : Map[String, String] = {}
 
@@ -125,12 +160,12 @@ let core_source : @sfapp.Source = {
       return
     }
     if call_log {
-      @host.log("CALL \{name} \{params.stringify()}")
+      @host.log("CALL \{name} \{logged(name, params)}")
     }
     @core.call(name, params~, on_done=fn(r) {
       if call_log {
         match r {
-          Ok(v) => @host.log("ANSWER \{name} ok \{v.stringify()}")
+          Ok(v) => @host.log("ANSWER \{name} ok \{logged(name, v)}")
           Err(e) => @host.log("ANSWER \{name} error \{e.stringify()}")
         }
       }
@@ -143,12 +178,12 @@ let core_source : @sfapp.Source = {
       return
     }
     if call_log {
-      @host.log("CALL \{name} \{params.stringify()} with \{bytes.length()} bytes")
+      @host.log("CALL \{name} \{logged(name, params)} with \{bytes.length()} bytes")
     }
     @core.call(name, params~, bytes=Some(bytes), on_done=fn(r) {
       if call_log {
         match r {
-          Ok(v) => @host.log("ANSWER \{name} ok \{v.stringify()}")
+          Ok(v) => @host.log("ANSWER \{name} ok \{logged(name, v)}")
           Err(e) => @host.log("ANSWER \{name} error \{e.stringify()}")
         }
       }
@@ -161,13 +196,13 @@ let core_source : @sfapp.Source = {
       return
     }
     if call_log {
-      @host.log("CALL \{name} \{params.stringify()}")
+      @host.log("CALL \{name} \{logged(name, params)}")
     }
     @core.call_bytes(name, params~, on_done=fn(r) {
       match r {
         Ok((v, bytes)) => {
           if call_log {
-            @host.log("ANSWER \{name} ok \{v.stringify()} with \{bytes.map(fn(b) { b.length() }).unwrap_or(0)} bytes")
+            @host.log("ANSWER \{name} ok \{logged(name, v)} with \{bytes.map(fn(b) { b.length() }).unwrap_or(0)} bytes")
           }
           done(Ok((v, bytes.unwrap_or(Bytes::new(0)))))
         }
@@ -187,7 +222,7 @@ let core_source : @sfapp.Source = {
       return 0
     }
     if call_log {
-      @host.log("CALL \{name} \{params.stringify()}")
+      @host.log("CALL \{name} \{logged(name, params)}")
     }
     @core.stream(name, params~, bytes~, on_value=fn(v, b) {
       on_value(v, b)

@@ -254,22 +254,6 @@ fn said(
       decision_under(c, src, here, m)
       // letting go what it asks (Chat.kt AskDismiss)
       ask_dismiss(c, src, here, m)
-      match m.archive_check {
-        Some((words, failed)) =>
-          c.box(pt=6.0, fn() {
-            c.text(
-              words,
-              size=12.0,
-              color=if failed { @sf.theme().p.red } else { @sf.theme().p.muted },
-              line=18.0,
-            )
-            |> ignore
-          })
-          |> ignore
-        None => ()
-      }
-      // under its agent's latest 做完了 while nothing is left in the chat: keeping or archiving it, right there
-      archive_under_post(c, src, here, m)
     })
     // coming out of its agent's avatar (emit.mbt): from 35% at its corner, unrolling from its top
     if emit_goes(em, m.seq) {
@@ -290,24 +274,6 @@ fn said(
     |> ignore
   })
   |> ignore
-}
-
-///|
-/// The post 归档这个 chat goes under (Chat.kt Here.archiveUnder): the agents' latest that ended all done, while the
-/// chat is offered to archive.
-fn archive_under(v : ChatView) -> Double? {
-  if !v.archive_offered || v.archived || v.pending {
-    return None
-  }
-  let mut i = v.messages.length() - 1
-  while i >= 0 {
-    let m = v.messages[i]
-    if m.author_kind == "agent" && m.ending == "all_done" {
-      return Some(m.seq)
-    }
-    i = i - 1
-  }
-  None
 }
 
 ///|

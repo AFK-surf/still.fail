@@ -236,7 +236,6 @@ pub(all) struct Message {
   decision : Decision?
   asked : Bool
   ending : String
-  archive_check : (String, Bool)?
   elsewhere : Array[Elsewhere]
   placed : Array[String]
   /// said while the chat shows (not caught up on): it comes in rather than being there at once
@@ -293,10 +292,6 @@ fn message_of(m : Json) -> Message {
     },
     asked: flag(s, "asked"),
     ending: text(s, "ending"),
-    archive_check: match field(s, "archiveCheck") {
-      Some(Object(_)) as a => Some((text(a, "text"), flag(a, "failed")))
-      _ => None
-    },
     elsewhere: items(s, "elsewhere").map(elsewhere_of),
     placed: items(s, "placed").map(fn(n) {
       match n {
@@ -386,7 +381,6 @@ pub(all) struct ChatView {
   offline : Bool
   archived : Bool
   archivable : Bool
-  archive_offered : Bool
   pending : Bool
   key : String
   /// what waits to be decided in it (the core's `asks`), by the post each is about
@@ -429,7 +423,6 @@ pub fn chat_view(v : Json) -> ChatView {
     offline: flag(s, "offline"),
     archived: flag(s, "archived"),
     archivable: flag(s, "archivable"),
-    archive_offered: flag(s, "archiveOffered"),
     asks: items(s, "asks").map(fn(a) { number(Some(a), "seq") }),
     pending: flag(s, "pending"),
     key: text(s, "key"),

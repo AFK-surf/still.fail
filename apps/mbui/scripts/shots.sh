@@ -35,7 +35,7 @@ PLAYER_MODES="video audio ended opening"
 SERVICE_MODES="service service-sized service-restart service-stopped"
 SHARE_MODES="share-in share-in-stations share-in-files"
 WIDE_MODES=${WIDE_MODES:-home chat settings-appearance files decisions}
-SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security vault stations station profiles profile connects memory memory-doc usage archive}
+SETTINGS_PAGES=${SETTINGS_PAGES:-home home-dark appearance me workspace security vault stations station profiles profile connects memory memory-doc usage archive station-mark station-env station-lower station-versions stations-add stations-existing stations-command first-station adb profile-menu profile-lower profile-login new-profile connect-menu connect-mode connect-run new-connect slack-app vault-off vault-words vault-add vault-editor vault-recover vault-item decisions completion policy bars kept changelog prices run add-people workspace-mark}
 if [ ! -d out/node/node_modules/playwright ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs playwright >/dev/null 2>&1)
 fi

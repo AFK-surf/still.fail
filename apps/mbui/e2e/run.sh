@@ -11,8 +11,9 @@
 #     ios-mbui-sf, as mbui's; scripts/ios.sh; on Mini1: Studio's simulators open no app), the app installed afresh, its
 #     log followed (e2e/ios-flow.sh), recorded; with no NAME its smoke flows only (01, 03, 05)
 #
-# A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed),
-# then says so to the app (e2e/runner-do.sh: the drive's `done N-WORD` waits for that);
+# A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed;
+# `{LOG}` in it is the flow's own log, as it is so far), then says so to the app (e2e/runner-do.sh: the drive's
+# `done N-WORD` waits for that);
 # `#only PLATFORM…` runs it on those platforms only (mac, android, ios);
 # its `#env K=V` lines are given to the app (as MBUI_OPEN_PAGE=decisions: a page opened at the start), its `#before
 # WORDS` lines run as `scripts/e2e-local.sh WORDS` before the app starts.
@@ -194,11 +195,13 @@ step_line() { python3 -c 'import json, sys; print("CORETRACE " + json.dumps({"st
 # runs a flow in the app; its log as it goes, `log do:` acted on. A flow's `#env K=V` lines are put in the app's
 # environment for that run (MBUI_OPEN_PAGE=files: the drive's 文件 pushed over Home)
 run_flow() {
+  # (each its own: a local's words are all expanded before any is set, and the starting point's run comes before any
+  # flow has set a global `name`)
   local name=$1
   local log=$OUT/$name.log script=$OUT/$name.drive
-  # {T} this run's tag; {SVC} the service port; {FILES} where the files to attach are (on Android the app's own copy of them); {PKG} the app
+  # {T} this run's tag; {SVC} the service port; {LOG} the flow's log; {FILES} where the files to attach are (on Android the app's own copy of them); {PKG} the app
   local files=$FILES; [ $PLATFORM = android ] && files=/data/data/$E2E_PKG/files/e2e
-  sed "s/{T}/$TAG/g; s/{SVC}/$SVC/g; s|{FILES}|$files|g; s/{PKG}/${E2E_PKG:-}/g" $2 > $script
+  sed "s/{T}/$TAG/g; s/{SVC}/$SVC/g; s|{FILES}|$files|g; s/{PKG}/${E2E_PKG:-}/g; s|{LOG}|$log|g" $2 > $script
   mkdir -p $OUT/$name
   # (an earlier run's word of what it did, not this one's: e2e/runner-do.sh)
   rm -rf $OUT/$name/done
@@ -230,7 +233,9 @@ run_flow() {
           "DRIVE LOG do: "*) step_line "${line#DRIVE LOG do: }" >> $log; n=$((n + 1))
             "$D/runner-do.sh" $n $OUT/$name/done ${line#DRIVE LOG do: } >> $log 2>&1 & ;;
         esac
-      done; }
+      done
+      # (what the flow set going beside it has ended before its checks look)
+      wait; }
     grep -q "^DRIVE PASS" $log
   elif [ $PLATFORM = ios ]; then
     "$D/ios-flow.sh" $name $script $log

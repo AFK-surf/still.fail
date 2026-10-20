@@ -45,6 +45,18 @@ pub(all) struct Core {
   version_words : () -> (String, Bool)
   /// the version row tapped: a newer build installed, or still.fail cloud asked now
   version_tap : () -> Unit
+  /// a web page to open (a sign-in's, Slack's): handed to the system's browser (@ui.open_url), said so where nothing
+  /// took it
+  open_link : (String) -> Unit
+  /// the system's photo picker asked for a picture (false: this host has none); its bytes given as it answers (None:
+  /// called off, nothing read)
+  pick_picture : ((Bytes?) -> Unit) -> Bool
+  /// this device's bottom bars in the workspace in view, and the one shown (Places.kt's)
+  bars : () -> (Array[Array[String]], Int)
+  /// the bars changed (kept as the workspace's), the one shown
+  set_bars : (Array[Array[String]], Int) -> Unit
+  /// a place's icon, 28 high in a colour (Station's the stations' glyph, one on)
+  place_icon : (@ui.Ctx, String, Int64) -> Unit
   /// whether usage statistics and error reports go out from this device (Crashes.reporting); None where nothing is
   /// sent anyway (no host takes them, a build without PostHog's key): no row then
   reporting : () -> Bool?
@@ -84,6 +96,35 @@ pub(all) enum Route {
   Usage
   /// the archived chats (the list's filter menu, settings)
   Archive
+  /// this device's adb lent to a station's agents (AdbShare.kt), by the station's address
+  AdbShare(String)
+  /// a new profile on a station (NewProfileScreen), by its address
+  NewProfile(String)
+  /// an account on several stations (ProfileAccountScreen), by its key in the workspace's profiles
+  ProfileAccount(String)
+  /// a new connect on a station (NewConnectScreen), by its address
+  NewConnect(String)
+  /// what a connect runs (ConnectRunScreen): its station's address, its id
+  ConnectRun(String, String)
+  /// a connect's Slack app (SlackAppScreen): its station's address, its id
+  SlackApp(String, String)
+  /// a secret's page (VaultItemScreen): its vault, its id
+  VaultItem(String, String)
+  /// the automatic decisions (AutomaticDecisionsScreen), the completion rule's page, a station's archive policy
+  AutoDecisions
+  AutoCompletion
+  AutoPolicy(String)
+  /// this device's bottom bars (BarSettingsScreen)
+  BarSettings
+  /// what this device keeps (KeptFilesScreen), a chat's of it: its station, its thread
+  KeptFiles
+  KeptChat(String, Int)
+  /// what changed in still.fail (ChangelogScreen)
+  Changelog
+  /// the prices the usage is counted at, over its days (UsagePricesScreen)
+  UsagePrices(Int)
+  /// how a chat's agent runs (RunSettingsScreen): its station, its session's key
+  RunSettings(String, String)
 } derive(Eq)
 
 ///|
@@ -388,6 +429,10 @@ pub fn here_of(core : Core, id : String, name : String) -> Here {
 }
 
 ///|
+/// The core the pages were last drawn with (what a page left lets go of: a draft of the core's).
+let left_core : Ref[Core?] = Ref(None)
+
+///|
 /// A page of the settings left the stack: what it kept goes (its words looked for, a sheet of its own).
 pub fn left(route : Route) -> Unit {
   match route {
@@ -399,6 +444,41 @@ pub fn left(route : Route) -> Unit {
         None => ()
       }
     Connects(_) => connects_mine.val = false
+    NewConnect(a) =>
+      match left_core.val {
+        Some(core) => new_connect_left(core, a)
+        None => ()
+      }
+    NewProfile(a) =>
+      match left_core.val {
+        Some(core) => new_profile_left(core, a)
+        None => ()
+      }
+    ConnectRun(a, id) => {
+      run_opened.remove("connect:" + id)
+      run_list.remove("connect:" + id)
+      ignore(a)
+    }
+    VaultItem(_, item) => vault_item_left(item)
+    AutoCompletion | AutoPolicy(_) =>
+      match left_core.val {
+        Some(core) => decisions_left(core, route)
+        None => ()
+      }
+    KeptFiles => {
+      kept.chats = None
+      kept.asked += 1
+    }
+    Changelog => changelog_state.seen = false
+    BarSettings => bar_adding.val = false
+    RunSettings(_, key) => {
+      run_opened.remove("session:" + key)
+      run_list.remove("session:" + key)
+    }
+    SlackApp(a, id) => {
+      app_drafts.remove(a + "/" + id)
+      slack_adding.remove(a + "/" + id)
+    }
     Usage => {
       usage_state.day = ""
       usage_state.all = false
@@ -413,6 +493,7 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  keyed_fields.clear()
   notify_switched.val = None
   opening_lock.val = false
   memories.clear()
@@ -443,9 +524,61 @@ pub fn reset() -> Unit {
   top_trailing.val = None
   top_label.val = ""
   on_card.val = false
-  fx.names.clear()
-  fx.restored.clear()
-  fx.version = 0
+  // the pages' own state (settings complete): drafts, fields filled once, what was being done, as a run starts
+  tokens_sent.app_token = ""
+  tokens_sent.bot_token = ""
+  tokens_form.val = 0
+  connect_forms.val = 0
+  config_sent.val = ""
+  new_filled.clear()
+  feishu_made.clear()
+  feishu_typed.clear()
+  login_state.copied.clear()
+  login_state.manual.clear()
+  login_state.error.clear()
+  login_state.seen.clear()
+  profile_forms.val = 0
+  machine_sessions.clear()
+  adding.existing = false
+  adding.made = None
+  adding.error = ""
+  adding.known = []
+  adding.took.clear()
+  adding.order.clear()
+  adding.picked = ""
+  adding.serial = 0
+  mark_pick.emojis = false
+  mark_pick.color = ""
+  mark_pick.serial = 0
+  mark_pick.asking = false
+  env_form.val = 0
+  versions_state.updating.clear()
+  versions_state.checking.clear()
+  versions_state.switching.clear()
+  versions_state.turning.clear()
+  versions_state.failed.clear()
+  recovery_words.clear()
+  copied.words = ""
+  copied.serial = 0
+  vault_serial.val = 0
+  // the drafts each page opened of the core (a form a station, a new connect's, a profile's, a Slack app's): a run
+  // opens its own
+  decision_forms.clear()
+  policy_forms.clear()
+  run_opened.clear()
+  run_list.clear()
+  new_connects.clear()
+  app_drafts.clear()
+  slack_adding.clear()
+  new_profiles.clear()
+  bar_adding.val = false
+  changelog_state.part = ""
+  changelog_state.seen = false
+  opened.plain.clear()
+  opened.opening.clear()
+  opened.shown.clear()
+  left_core.val = None
+  fixture_reset()
 }
 
 ///|
@@ -466,6 +599,11 @@ pub fn route_of(name : String) -> Route? {
     "memories" => Some(Memories)
     "usage" => Some(Usage)
     "archive" => Some(Archive)
+    "decisions-settings" => Some(AutoDecisions)
+    "completion" => Some(AutoCompletion)
+    "bars" => Some(BarSettings)
+    "kept" => Some(KeptFiles)
+    "changelog" => Some(Changelog)
     _ =>
       match name.find(":") {
         Some(i) => {
@@ -478,6 +616,15 @@ pub fn route_of(name : String) -> Route? {
           }
           match what {
             "station" => Some(Station(arg))
+            "adb" => Some(AdbShare(arg))
+            "new-profile" => Some(NewProfile(arg))
+            "new-connect" => Some(NewConnect(arg))
+            "connect-run" => Some(ConnectRun(address, id))
+            "slack-app" => Some(SlackApp(address, id))
+            "vault-item" => Some(VaultItem(address, id))
+            "policy" => Some(AutoPolicy(arg))
+            "prices" => Some(UsagePrices(int_of(arg, 7)))
+            "run" => Some(RunSettings(address, id))
             "memory" => Some(Memory(arg))
             "memory-doc" => Some(MemoryDoc(address, id, 0))
             "profiles" => Some(Profiles(arg))
@@ -496,4 +643,20 @@ pub fn route_of(name : String) -> Route? {
 /// Whether the thing `id` was tapped (what it changed is drawn in the next frame, which a handled click asks for).
 fn hit(c : @ui.Ctx, id : Int) -> Bool {
   c.clicked(id)
+}
+
+///|
+/// The number `s` writes (digits only), else `or_else`.
+fn int_of(s : String, or_else : Int) -> Int {
+  if s == "" {
+    return or_else
+  }
+  let mut n = 0
+  for ch in s {
+    if ch < '0' || ch > '9' {
+      return or_else
+    }
+    n = n * 10 + (ch.to_int() - 48)
+  }
+  n
 }
