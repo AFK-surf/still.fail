@@ -132,12 +132,25 @@ pub impl @ui.Moving for Anim with rest_at(self, now, frame) {
 
 ///|
 /// When it is there (whole ms, the frames' clock): from when it was told in a frame; +inf while it has not started
-/// yet (told between frames, it starts at the first frame after), before now (-1) when it is at rest.
+/// yet (told between frames, it starts at the first frame after), before now (-1) when it is at rest. For the frames
+/// (rounded up): the next of a chain of motions starts at `ends()`, its declared end.
 pub fn Anim::ends_at(self : Anim) -> Double {
   if !self.running {
     -1.0
   } else if self.start >= 0.0 {
     self.start + self.dur.ceil()
+  } else {
+    @double.infinity
+  }
+}
+
+///|
+/// When it is there exactly (the frames' clock, not to the whole ms): where the next of a chain of motions starts
+/// (`animate(start_at=…)`), so each goes on from its declared end, not from the frame that saw it end; +inf while it
+/// has not started yet. Once at rest, still when it got there (or would have: told to stop, when it was to).
+pub fn Anim::ends(self : Anim) -> Double {
+  if self.start >= 0.0 {
+    self.start + self.dur
   } else {
     @double.infinity
   }
@@ -165,9 +178,19 @@ pub fn Anim::target(self : Anim) -> Double {
 
 ///|
 /// Off to `target` by `spec`, from where it is now and as fast as it moves (or `velocity`, per second), from this
-/// frame's time on (told between frames: from the next frame's).
+/// frame's time on (told between frames: from the next frame's). `start_at`: from that moment instead, one the
+/// framework worked out (the motion before's `ends()`), never later than now: one motion going on from where the one
+/// before it was declared to end, whichever frame saw that; its value this frame as far on as the time since says.
+/// Already over by now (a chain caught up after a while unseen), it is there at once and is not said to move.
 #callsite(autofill(loc))
-pub fn Anim::animate(self : Anim, target : Double, spec : Spec, velocity? : Double, loc~ : SourceLoc) -> Unit {
+pub fn Anim::animate(
+  self : Anim,
+  target : Double,
+  spec : Spec,
+  velocity? : Double,
+  start_at? : Double,
+  loc~ : SourceLoc,
+) -> Unit {
   let c = @ui.current()
   self.step(c)
   self.from = self.value
@@ -192,10 +215,30 @@ pub fn Anim::animate(self : Anim, target : Double, spec : Spec, velocity? : Doub
     }
   }
   // (this frame shows it at its start: where it is now)
-  self.start = if c.in_frame() { c.now() } else { -1.0 }
+  self.start = match start_at {
+    Some(at) => {
+      if at > c.now() {
+        let s = "Anim::animate: start_at \{at} is later than now (\{c.now()}), told at \{loc}"
+        println(s)
+        abort(s)
+      }
+      at
+    }
+    None => if c.in_frame() { c.now() } else { -1.0 }
+  }
   self.asked = c.frame_number()
-  self.stepped = c.frame_number()
-  if c.still() || (self.dur <= 0.0 && self.from == self.end) {
+  // (started earlier: stepped this frame to where it is by now, as get() asks)
+  self.stepped = if start_at is Some(_) { -1 } else { c.frame_number() }
+  // motion reduced: its length none (Motion.kt), there at once, its end the moment it was told, so a chain goes on
+  // from it in the same build, all of it there at once
+  if c.still() {
+    self.dur = 0.0
+    if self.start < 0.0 {
+      self.start = c.now()
+    }
+  }
+  let over = start_at is Some(at) && at + self.dur <= c.now()
+  if c.still() || over || (self.dur <= 0.0 && self.from == self.end) {
     self.finish()
   } else {
     self.running = true

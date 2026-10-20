@@ -722,3 +722,127 @@ test "run_for: what its last frame says starts there is drawn at that moment, it
   t.run_for(end - t.time())
   t.assert_idle()
 }
+
+///|
+test "a chain of tweens each from the one before's declared end, whichever frame saw it end: as if one" {
+  // three of 100, 70 and 130 ms (lengths that are no whole number of frames), each told a frame after the one before
+  // was seen at its end
+  let lengths = [100.0, 70.0, 130.0]
+  let segs : Array[@motion.Anim] = [@motion.Anim::new(0.0), @motion.Anim::new(0.0), @motion.Anim::new(0.0)]
+  let k = Ref::new(-1)
+  let seen_end = Ref::new(false)
+  let seen : Array[(Double, Int, Double)] = []
+  let t = @ui.Tester::new(fn(c) {
+    let i = k.val
+    if i < 0 {
+      k.val = 0
+      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
+    } else if i < 3 && !segs[i].moving() {
+      if !seen_end.val {
+        // seen at its end: the next told only the frame after
+        seen_end.val = true
+      } else if i < 2 {
+        seen_end.val = false
+        k.val = i + 1
+        segs[i + 1].animate(1.0, @motion.tween(lengths[i + 1], ease=Linear), start_at=segs[i].ends())
+      }
+    }
+    let j = k.val
+    seen.push((c.now(), j, segs[j].get()))
+    c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
+  })
+  t.draw()
+  let start = segs[0].ends() - lengths[0]
+  // the whole chain and a frame or so after it
+  let after_ms = 100.0
+  t.run_for(lengths[0] + lengths[1] + lengths[2] + after_ms)
+  // each frame: the segment it is in, as far on as the time since the chain's start says (once its segment is told)
+  let ends = [start + lengths[0], start + lengths[0] + lengths[1], start + lengths[0] + lengths[1] + lengths[2]]
+  for f in seen {
+    let (now, j, v) = f
+    let from = if j == 0 { start } else { ends[j - 1] }
+    let want = if now >= ends[j] { 1.0 } else { (now - from) / lengths[j] }
+    assert_true(near(v, want, 1.0e-9), msg="at \{now} segment \{j}: \{v} not \{want}")
+  }
+  // the last one's end: the three lengths from the first's start, exactly
+  assert_true(near(segs[2].ends(), start + lengths[0] + lengths[1] + lengths[2], 1.0e-9))
+  t.assert_idle()
+}
+
+///|
+test "a chain caught up after a while unseen: what is over is there at once, only the one under way said to move" {
+  let lengths = [100.0, 70.0, 130.0]
+  let segs : Array[@motion.Anim] = [@motion.Anim::new(0.0), @motion.Anim::new(0.0), @motion.Anim::new(0.0)]
+  let shown = Ref::new(true)
+  let k = Ref::new(-1)
+  let t = @ui.Tester::new(fn(c) {
+    if k.val < 0 {
+      k.val = 0
+      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
+    }
+    if shown.val {
+      // in the same build, each over one followed by the next from its declared end, till one is under way
+      while k.val < 2 && !segs[k.val].moving() {
+        segs[k.val + 1].animate(1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
+        k.val += 1
+      }
+      segs[k.val].get() |> ignore
+    }
+    c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
+  })
+  t.draw()
+  let start = segs[0].ends() - lengths[0]
+  // unseen a while: nothing asks it on, the first is over long since
+  shown.val = false
+  let unseen_ms = 150.0
+  t.run_for(unseen_ms)
+  // seen again at 150 ms in: the first and second over (100, 170 is still to come: the second under way)
+  shown.val = true
+  t.draw()
+  assert_eq(k.val, 1)
+  assert_true(near(segs[1].get(), (t.time() - (start + lengths[0])) / lengths[1], 1.0e-9))
+  assert_false(segs[0].moving())
+  assert_true(segs[1].moving())
+  // (said to move: only the one under way)
+  assert_eq(t.moving().length(), 1)
+  // unseen past the whole chain's end, seen again: caught up in one build, at the last one's end, nothing moving
+  shown.val = false
+  let away_ms = 5000.0
+  t.run_for(away_ms)
+  shown.val = true
+  t.draw()
+  assert_eq(k.val, 2)
+  assert_eq(segs[2].get(), 1.0)
+  assert_false(segs[2].moving())
+  assert_true(near(segs[2].ends(), start + lengths[0] + lengths[1] + lengths[2], 1.0e-9))
+  t.assert_idle()
+}
+
+///|
+test "a chain with motion reduced: each there at once, its end the moment it was told, the whole chain in one build" {
+  let lengths = [100.0, 70.0, 130.0]
+  let segs : Array[@motion.Anim] = [@motion.Anim::new(0.0), @motion.Anim::new(0.0), @motion.Anim::new(0.0)]
+  let k = Ref::new(-1)
+  let t = @ui.Tester::new(fn(c) {
+    if k.val < 0 {
+      k.val = 0
+      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
+    }
+    // each at its end followed by the next from its declared end, in the same build
+    while k.val < 2 && !segs[k.val].moving() {
+      segs[k.val + 1].animate(1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
+      k.val += 1
+    }
+    c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
+  })
+  t.set_reduce_motion(true)
+  k.val = -1
+  t.draw()
+  assert_eq(k.val, 2)
+  for s in segs {
+    assert_eq(s.get(), 1.0)
+    assert_false(s.moving())
+    assert_true(s.ends() <= t.time())
+  }
+  t.assert_idle()
+}
