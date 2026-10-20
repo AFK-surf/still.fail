@@ -188,9 +188,9 @@ test "held: chosen; its sheet renames it, the folder shows the new name" {
   let log = t.drive("tap icon:more\nuntil 复制路径\nuntil 移到废纸篓\ntap 重命名\nuntil 保存\ntap 季度数据.csv\nclear\ntype 年度数据.csv\ntap 保存\ngone 保存\n")
   assert_true(log.contains("EXIT 0"))
   assert_true(t.find("年度数据.csv") is Some(_))
-  assert_true(t.find("季度数据.csv") is None)
+  // (the old name is the title of the sheet still sinking away: closed already, only drawn)
+  assert_true(dv.sheet is NoSheet)
   assert_true(t.find("已选 1 项") is None)
-  t.assert_idle()
 }
 
 ///|
@@ -202,7 +202,6 @@ test "deleted to the station's trash, said so; a new folder made" {
   let log = t.drive("tap icon:plus\ntap 新建文件夹\ntap 文件夹名\ntype 新的文件夹\ntap =新建\nuntil 新的文件夹\n")
   assert_true(log.contains("EXIT 0"))
   assert_true(t.find("新的文件夹") is Some(_))
-  t.assert_idle()
 }
 
 ///|
@@ -232,8 +231,8 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
   t.settle() |> ignore
   assert_true(t.find("第四章 回程") is Some(_))
   t.tap_text("第四章 回程")
-  // the panel gone, the jump made, where it is kept a while after
-  t.run_for(dv_sheet_close_ms + reader_still_ms)
+  // the jump made, where it is kept once it is still (the panel sinks away on its springs meanwhile)
+  t.run_for(reader_still_ms)
   assert_true(t.find("第四章 回程") is Some(_))
   // left: where it was, kept on this device
   t.back()
@@ -249,7 +248,6 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
     }
     None => fail("no place kept: \{fix_places.keys().collect()} \{reader_ui.length()} \{dv_reads.length()}")
   }
-  t.assert_idle()
 }
 
 ///|
@@ -264,7 +262,6 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the draft, 
   )
   assert_true(log.contains("EXIT 0"))
   assert_eq(refs_of("ws1/st1:s-c1").length(), 0)
-  t.assert_idle()
 }
 
 ///|

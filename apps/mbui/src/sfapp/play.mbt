@@ -232,7 +232,7 @@ fn play_back(c : @ui.Ctx) -> Unit {
 /// viewer over a picture or a video dark; a reader as its paper. None: as the theme.
 fn page_dark(src : Source) -> Bool? {
   match viewer.val {
-    Some(v) if v.closing < 0.0 && v.dark() => return Some(true)
+    Some(v) if !v.closing && v.dark() => return Some(true)
     _ => ()
   }
   if app.nav.top() is DrivePlay(_) {

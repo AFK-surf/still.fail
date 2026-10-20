@@ -52,9 +52,8 @@ priv struct DvUpload {
 priv struct DriveUi {
   mut sheet : DvSheet
   mut sheet_at : Double
-  /// the sheet closing (from when), what it showed kept until it is down
+  /// the sheet closing, what it showed kept until it is down
   mut closing : DvSheet
-  mut closed_at : Double
   /// what is chosen in a folder (by its page's key), by name
   chosen : Map[String, Array[String]]
   uploads : Array[DvUpload]
@@ -92,7 +91,6 @@ let dv : DriveUi = {
   sheet: NoSheet,
   sheet_at: 0.0,
   closing: NoSheet,
-  closed_at: 0.0,
   chosen: {},
   uploads: [],
   serial: 0,
@@ -121,7 +119,6 @@ fn dv_reset() -> Unit {
   dv.sheet = NoSheet
   dv.sheet_at = 0.0
   dv.closing = NoSheet
-  dv.closed_at = 0.0
   dv.chosen.clear()
   dv.uploads.clear()
   dv.serial = 0
@@ -149,14 +146,12 @@ fn dv_reset() -> Unit {
   fix_places.clear()
   draft_refs.clear()
   sfs.open = false
-  sfs.at = 0.0
-  sfs.closed_at = -1.0e9
+  sfs.closing = false
   sfs.draft = ""
   sfs.place = None
   sfs.ticked.clear()
   sfs.ref = None
-  sfs.ref_at = 0.0
-  sfs.ref_closed = -1.0e9
+  sfs.ref_closing = false
 }
 
 ///|
@@ -172,7 +167,6 @@ fn dv_close(c : @ui.Ctx) -> Unit {
     NoSheet => ()
     s => {
       dv.closing = s
-      dv.closed_at = c.now()
     }
   }
   dv.sheet = NoSheet
@@ -418,21 +412,23 @@ fn dv_fit(rows : Int) -> Double {
 /// A sheet from the bottom over the page (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%, a tap beside
 /// it closes it), top corners of 26, frosted over the page and the scrim (@sf.sheet_look; `ground`: on that instead),
 /// only drawn while it closes; `h` tall (most of the screen at most). Its grabber (SheetGrab) and head (SheetHead), then
-/// `body`. The drive's sheets are one sheet, the reader's panels (`at` given) another.
+/// `body`. The drive's sheets are one sheet, the reader's panels (`reader`) another. `closing`: closed, drawn sinking
+/// away on the sheet's springs (they ask for their frames) until it has gone, `gone` then told.
 fn dv_sheet_frame(
   c : @ui.Ctx,
   title : String,
   h : Double,
   body : () -> Unit,
   closing~ : Bool,
-  at? : Double = -1.0,
+  reader? : Bool = false,
   close? : (() -> Unit)? = None,
+  gone? : () -> Unit = fn() { dv.closing = NoSheet },
   ground? : Int64 = 0L,
 ) -> Unit {
   let t = @sf.theme()
   let r = @kit.sheet(
     c,
-    if at >= 0.0 { "dv-reader-sheet" } else { "dv-sheet" },
+    if reader { "dv-reader-sheet" } else { "dv-sheet" },
     !closing,
     h=dmin(h, c.height * 0.9),
     scrim=@sf.sheet_scrim,
@@ -451,6 +447,9 @@ fn dv_sheet_frame(
       c.box(w=Fill(1.0), h=Fill(1.0), clip=true, body) |> ignore
     },
   )
+  if closing && !r.shown {
+    gone()
+  }
   if !closing && !r.open {
     match close {
       Some(f) => f()
@@ -537,10 +536,6 @@ fn dv_held(c : @ui.Ctx, id : Int) -> Bool {
   }
   false
 }
-
-///|
-/// A sheet of the drive's (or a reader's panel) drawn closing this long after it was closed.
-let dv_sheet_close_ms : Double = 300.0
 
 ///|
 /// How long a row is held before the hold acts (the system's long press).

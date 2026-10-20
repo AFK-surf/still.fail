@@ -404,7 +404,6 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       let r = reading_for(reader_key(at))
       if mode != "reader" && mode != "reader-md" {
         r.chrome = true
-        r.chrome_at = -1.0e9
       }
       if mode == "reader-contents" {
         r.panel = Contents
@@ -419,7 +418,6 @@ pub fn open_drive_fixture(mode : String) -> Unit {
     // in the draft
     "chat-station-files" => {
       sfs.open = true
-      sfs.at = -1.0e9
       sfs.draft = "ws1/st1:s-c1"
       sfs.place = Some({ station: "ws1/st1", station_name: "Studio", root: fix_docs, root_name: "文档", path: "" })
       let r = draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)
@@ -460,7 +458,6 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       draft_refs["ws1/st1:s-c1"] = [file, folder]
       if mode == "chat-station-sheet" {
         sfs.ref = Some(("ws1/st1:s-c1", file))
-        sfs.ref_at = -1.0e9
       }
     }
     // the player (play_fixture.mbt), a service's page (service_fixture.mbt)
