@@ -4,7 +4,9 @@
 #   scripts/ios-smoke.sh gate   until Mini1 can take it: the load low enough (IOS_LOAD_MAX, the 5 minutes' average:
 #                               under 20, twice Mini1's 10 cores; the simulator's SimLaunchHost crashed above it on
 #                               2026-10-20, and Mini1 sits at 18 to 25 most of a working day, so 12 was never met in
-#                               20 minutes), 3 GB free; IOS_GATE_MIN minutes at most (30), then it fails saying why
+#                               20 minutes), 3 GB free; IOS_GATE_MIN minutes at most (30): the load still high then, it
+#                               runs all the same with a warning saying the load (a busy Mini1 is no red job); too
+#                               little disk, it fails
 #   scripts/ios-smoke.sh build  the app for the simulator (scripts/ios.sh build: the Rust shell for aarch64-apple-ios-sim
 #                               in a Cargo target kept in ~/stillfail-ci/mbui, Hermes's xcframework from its cache)
 #   scripts/ios-smoke.sh take   the simulator (ios-mbui-sf) for this run alone: its lock taken (LOCK, ~/.mbui-ios-sim.lock,
@@ -84,10 +86,17 @@ take_lock() {
   done
   printf '%s\npid %s\n' "$ME" "$holder" > "$LOCK/owner"
 }
-wait_for() {  # wait_for WHAT CHECK: until CHECK says nothing, IOS_GATE_MIN minutes at most (the load: no event)
+wait_for() {  # wait_for WHAT CHECK: until CHECK says nothing, IOS_GATE_MIN minutes at most
   local end=$(( $(date +%s) + ${IOS_GATE_MIN:-30} * 60 )) why
   while why=$($2); [ -n "$why" ]; do
-    [ "$(date +%s)" -lt $end ] || { echo "ios-smoke: not run, $1 for ${IOS_GATE_MIN:-30} minutes: $why"; exit 1; }
+    if [ "$(date +%s)" -ge $end ]; then
+      # (the load still high: run all the same, the load said where a failure's log shows it, not a red job for a
+      # busy Mini1; too little disk is no run)
+      case $why in
+        load*) echo "::warning title=mbui-ios ran on a loaded Mini1::$why after ${IOS_GATE_MIN:-30} minutes"; return ;;
+        *) echo "ios-smoke: not run, $1 for ${IOS_GATE_MIN:-30} minutes: $why"; exit 1 ;;
+      esac
+    fi
     echo "ios-smoke: waiting: $why"
     # det-ok(script-wait): Mini1's load has no event to wait for
     sleep 30
