@@ -288,7 +288,9 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
                 if (log == null) WaitLine()
                 else {
                     val runs = log.runs
-                    val shown = remember(runs, C.dark) { runs?.let { termText(it, C.ink, C.dark) } }
+                    val ink = C.ink
+                    val dark = C.dark
+                    val shown = remember(runs, ink, dark) { runs?.let { termText(it, ink, dark) } }
                     if (shown != null) Text(shown, style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
                     else Text(text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
                 }
