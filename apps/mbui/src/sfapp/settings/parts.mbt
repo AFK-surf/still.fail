@@ -357,18 +357,34 @@ let card_ground : @ui.Style = @ui.style(
 let card_foot_ground : @ui.Style = card_ground.then(@ui.style(radius=@sf.card_foot_radius))
 
 ///|
-/// Rows on one rounded card, no lines between them (Parts.kt ListCard).
+/// Rows on one rounded card, no lines between them (Parts.kt ListCard, RowsCard): its rows know they are on one
+/// (`on_card`, LocalOnCard).
 fn list_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=card_room, fn() { c.box(style=list_ground, body) |> ignore }) |> ignore
+  c.box(style=card_room, fn() {
+    c.box(style=list_ground, fn() {
+      let was = on_card.val
+      on_card.val = true
+      body()
+      on_card.val = was
+    })
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|
-/// A list card: 16 round, its rows to its edges.
-// kept across runs: a value (no field of it changes)
-let list_ground : @ui.Style = @ui.style(w=Full, radius=Xl, bg=Card, clip=true)
+/// Whether what is being drawn is on a list card (Parts.kt LocalOnCard): a PickRow's ground is then the card's
+/// padding in from its edge already. Set only while a list card's rows are drawn.
+let on_card : Ref[Bool] = Ref(false)
 
 ///|
-/// A row of a list card (Parts.kt ListRow): 16 and 12 in, what it holds 12 apart; tapped when `key` is given. True on
+/// A list card: its rows 8 in (LIST_PAD), its corner concentric round theirs (LIST_CARD_CORNER).
+// kept across runs: a value (no field of it changes)
+let list_ground : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radius, bg=Card, clip=true)
+
+///|
+/// A row of a list card (Parts.kt ListRow): its ground concentric with the card's (LIST_ROW_CORNER), its words 12 and
+/// 12 in (CARD_PAD less LIST_PAD: 20 from the card's edge), what it holds 12 apart; tapped when `key` is given. True on
 /// the frame after a tap.
 fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "") -> Bool {
   let id = if key == "" { 0 } else { c.id(key) }
@@ -377,14 +393,15 @@ fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "") -> Bool {
 }
 
 ///|
-/// ListRow's line: 16 and 12 in, 12 apart, the ink at 5% under it while pressed.
+/// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card, the ink at 5% under it while pressed.
 // kept across runs: a value (no field of it changes)
 let list_line : @ui.Style = @ui.style(
   row=true,
   w=Full,
-  px=S4,
+  px=S3,
   py=S3,
   gap=S3,
+  radius=Inner,
   align=ACenter,
   pressed=@ui.patch(bg=A(Fg, O5)),
 )
@@ -1062,8 +1079,14 @@ fn pick_row(
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(style=pick_room, fn() {
-    c.box(style=if enabled { pick_line } else { pick_line_off }, id~, fn() {
+  let line = match (on_card.val, enabled) {
+    (true, true) => pick_card_line
+    (true, false) => pick_card_line_off
+    (false, true) => pick_line
+    (false, false) => pick_line_off
+  }
+  c.box(style=if on_card.val { @sf.full_width } else { pick_room }, fn() {
+    c.box(style=line, id~, fn() {
       c.box(style=@sf.full_width, fn() {
         c.box(style=pick_label_line, fn() {
           match mark {
@@ -1095,7 +1118,8 @@ fn pick_row(
 
 ///|
 /// PickRow: 12 from the sheet's sides; its line 8 and 12 in, 12 apart, the ink at 5% under it while pressed (not
-/// when off); its label after its mark, 6 apart.
+/// when off); its label after its mark, 6 apart. On a list card (Controls.kt:62 onCard) to the card's padding, its line
+/// 12 in and rounded concentric with the card, as a ListRow.
 // kept across runs: a value (no field of it changes)
 let pick_room : @ui.Style = @ui.style(w=Full, px=S3)
 
@@ -1106,6 +1130,14 @@ let pick_line_off : @ui.Style = @ui.style(row=true, w=Full, px=S2, py=S3, gap=S3
 ///|
 // kept across runs: a value (no field of it changes)
 let pick_line : @ui.Style = pick_line_off.then(@ui.style(pressed=@ui.patch(bg=A(Fg, O5))))
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_card_line_off : @ui.Style = pick_line_off.then(@ui.style(px=S3, radius=Inner))
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_card_line : @ui.Style = pick_line.then(@ui.style(px=S3, radius=Inner))
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -400,11 +400,11 @@ pub let leading_scale : @ui.LeadingScale = {
 }
 
 ///|
-/// still.fail's corners on mbui's scale (in order): Xl 16 (a settings list's ground), Xl2 18 (what waits in the
+/// still.fail's corners on mbui's scale (in order): Xl2 18 (what waits in the
 /// composer, where it is in none of the capsule's corners: Glass.kt InComposerFiles, concentric(ComposerCorner 26,
 /// ComposerFilesIn 10), what Android gives Smooth), Xl3 22 (a settings page's card and the waiting cards' shapes:
 /// Parts.kt CARD_CORNER, Waiting.kt:185).
-pub let radii : @ui.RadiusScale = { ..@ui.RadiusScale::tailwind(), xl: 16.0, xl2: 18.0, xl3: card_corner }
+pub let radii : @ui.RadiusScale = { ..@ui.RadiusScale::tailwind(), xl2: 18.0, xl3: card_corner }
 
 ///|
 /// A message's line (24.75: Chat.kt:1363, 1367, 1374), the one place Android says it.
@@ -414,6 +414,11 @@ pub let message_line : @ui.Leading = Exact(24.75)
 /// A card with a button (a capsule) in its corner: concentric with it, card_pad and the button's half (Parts.kt:607
 /// Card foot: CARD_PAD + BUTTON_HEIGHT 38 / 2): worked out as Android does, no step of the scale.
 pub let card_foot_radius : @ui.Radius = Exact(card_pad + 19.0)
+
+///|
+/// A list card's corner: concentric round its rows (row_corner, list_pad in), as Android works it out (Parts.kt:640
+/// LIST_CARD_CORNER = concentricOut(LIST_ROW_CORNER 18, LIST_PAD 8)); its rows take theirs from it (radius=Inner).
+pub let list_card_radius : @ui.Radius = Exact(concentric_out(row_corner, list_pad))
 
 ///|
 /// A card with a Seg (rounded 10) in its top corners: concentric with it (Usage.kt:204 concentricOut(10, CARD_PAD)):

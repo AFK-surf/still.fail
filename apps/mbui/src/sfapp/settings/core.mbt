@@ -437,6 +437,7 @@ pub fn reset() -> Unit {
   wide_deep.val = false
   top_trailing.val = None
   top_label.val = ""
+  on_card.val = false
   fx.names.clear()
   fx.restored.clear()
   fx.version = 0
