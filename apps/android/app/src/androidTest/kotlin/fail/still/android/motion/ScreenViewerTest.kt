@@ -544,7 +544,7 @@ class ScreenViewerTest {
 
     @Test fun overStates() {
         val v = Viewer()
-        // Ended by the station: the frame kept under it, 再试一次 and 退出.
+        // Ended by the station: the frame kept under it, 返回 and 重新打开.
         v.open()
         v.state("live")
         v.config()
@@ -555,7 +555,7 @@ class ScreenViewerTest {
         v.h.deliver()
         v.shot("screen-ended")
         rule.onNodeWithText("已结束").assertIsDisplayed()
-        rule.onNodeWithText("重试").assertIsDisplayed()
+        rule.onNodeWithText("重新打开").assertIsDisplayed()
 
         for ((phase, why) in listOf(
             "outdated" to "这台 station 的版本还不能共享屏幕，更新后再试",
@@ -573,6 +573,14 @@ class ScreenViewerTest {
             access?.message?.let { rule.onNodeWithText(it).assertIsDisplayed() }
         }
 
+        // Gone, the core saying the same words as the headline: said once.
+        v.open()
+        v.state("gone", others = emptyList(), message = "此屏幕已不存在")
+        v.h.fake.finish(VIEW)
+        v.h.deliver()
+        v.shot("screen-gone-said-once")
+        assertEquals(1, rule.onAllNodesWithTextCount("此屏幕已不存在"))
+
         // The call itself failed (the station unreachable): said with the core's words.
         v.open()
         v.h.fake.fail(VIEW, "offline", "station 不在线")
@@ -581,8 +589,8 @@ class ScreenViewerTest {
         v.shot("screen-failed")
         rule.onNodeWithText("station 不在线").assertIsDisplayed()
 
-        // 退出 leaves.
-        rule.onNodeWithText("退出").performTouchInput { click() }
+        // 返回 leaves.
+        rule.onNodeWithText("返回").performTouchInput { click() }
         v.h.settle()
         assertTrue(v.exited)
     }

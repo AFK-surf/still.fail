@@ -8,6 +8,7 @@
 package fail.still.android.remote
 
 import fail.still.android.ui.BUTTON_HEIGHT
+import fail.still.android.ui.CARD_PAD
 import android.content.ClipData
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.WaitPill
@@ -802,20 +803,21 @@ private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onEx
         "connecting" -> Waiting(message ?: t("common.connecting"), modifier)
         "reconnecting" -> Waiting(message ?: t("common.reconnecting"), modifier)
         else -> Column(
-            // Its buttons at the foot, toward its corners: 20 from every edge, its corner theirs and that, concentric.
-            modifier.padding(24.dp).widthIn(max = 360.dp).floatingStill(Smooth(20.dp + BUTTON_HEIGHT / 2)).padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
+            // The web's note (ScreenViewer.css.ts): as wide as it can be up to 320, its words from its start, its buttons
+            // at the foot's end, the last in the corner: 20 from every edge, its corner theirs and that, concentric.
+            modifier.padding(16.dp).widthIn(max = 320.dp).fillMaxWidth().floatingStill(Smooth(CARD_PAD + BUTTON_HEIGHT / 2)).padding(CARD_PAD),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            IconIn(if (session.state?.kind == "browser") Icons.Web else Icons.Monitor, 28.dp, C.muted)
-            Text(t("android-misc.screen.$phase"), fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center)
-            if (message != null) Text(message, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, textAlign = TextAlign.Center)
-            // What to turn on where (macOS's grants), when the station says and its message did not already.
-            session.state?.access?.message?.takeIf { it.isNotEmpty() && it != message }?.let {
-                Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, textAlign = TextAlign.Center)
+            val headline = t("android-misc.screen.$phase")
+            Text(headline, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+            // Why, as the core says it (and what to turn on where, macOS's grants), each once and not the headline again.
+            listOfNotNull(message, session.state?.access?.message).filter { it.isNotEmpty() && it != headline }.distinct().forEach {
+                Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
             }
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (phase in setOf("ended", "denied", "failed")) Button(t("android-misc.screen.retry"), primary = true) { session.open() }
-                Button(t("android-misc.screen.exit"), primary = false, onClick = onExit)
+            val again = phase in setOf("ended", "denied", "failed")
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+                Button(t("common.back"), primary = !again, onClick = onExit)
+                if (again) Button(t("web-pages.screen.again"), primary = true) { session.open() }
             }
         }
     }
