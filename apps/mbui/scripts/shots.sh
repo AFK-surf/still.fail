@@ -23,6 +23,12 @@ D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
 mkdir -p out/shots goldens
+# Not compared, until the screens' draw lists and their offscreen references replace these shots: what shows a spinner
+# or a breath (a c.cycle, which asks for a frame while shown) is never settled, so its shot is never taken.
+SKIPPED="mac-home-dark mac-chat-loading mac-chat-answering mac-composer-sending mac-chat-station-file mac-chat-station-sheet
+  mac-decide-decisions-idle mac-decide-home-jobs mac-newchat-home-bars mac-preview-video mac-settings-stations
+  mac-wide-home mac-wide-home-dark mac-wide-chat mac-wide-chat-dark"
+SKIPPED=$(echo $SKIPPED)
 PLATFORMS=${*:-kit home chat cards composer drive decide glass newchat preview settings wide web-kit web-home web-chat web-cards web-composer web-drive web-decide web-glass web-newchat web-preview web-settings}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-download drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref chat-station-file chat-station-sheet"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
@@ -357,7 +363,9 @@ done
 t_p=$(date +%s)
 : > out/compare.txt
 for p in $all; do
-  if [ "${UPDATE:-}" = 1 ]; then
+  if [[ " $SKIPPED " == *" $p "* ]]; then
+    echo "$p: skipped (a spinner or a breath on it is a c.cycle: these shots wait for settled; 待 .dl + 离屏参考替换)"
+  elif [ "${UPDATE:-}" = 1 ]; then
     cp out/shots/$p.png goldens/$p.png && echo "$p: golden updated"
   elif [ -f goldens/$p.png ]; then
     printf '%s\t%s\t%s\n' goldens/$p.png out/shots/$p.png out/shots/$p-review.png >> out/compare.txt

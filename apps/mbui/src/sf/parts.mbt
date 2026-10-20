@@ -443,19 +443,17 @@ pub fn done_waiting(c : @ui.Ctx, key : String) -> Unit {
 }
 
 ///|
-/// The placeholders' breath: 1 → 0.5 → 1 in 1.4s, eased; still (1) for
-/// screenshots, 0.6 when what they wait on failed.
+/// One breath of the placeholders.
+let breath_ms : Double = 1400.0
+
+///|
+/// The placeholders' breath: 1 → 0.5 → 1 in breath_ms, eased; 0.6 when what they wait on failed.
 pub fn breath(c : @ui.Ctx, failed? : Bool = false) -> Double {
   if failed {
     return 0.6
   }
-  if c.stable() {
-    return 1.0
-  }
-  c.request_frame()
   let pi = 3.141592653589793
-  let k = c.now() / 1400.0
-  let f = k - k.floor()
+  let f = c.cycle(breath_ms)
   // ease-in-out between the two ends
   0.75 + 0.25 * @math.cos(2.0 * pi * f)
 }
