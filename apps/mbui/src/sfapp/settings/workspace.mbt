@@ -56,7 +56,7 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           },
         )
       }
-      c.box(w=Fill(1.0), id=if manager { id } else { 0 }, fn() {
+      c.box(style=@sf.full_width, id=if manager { id } else { 0 }, fn() {
         let emoji = text(v, "emoji")
         let icon = text(v, "icon")
         if @sf.has_station_mark(emoji, icon) {
@@ -68,7 +68,8 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       |> ignore
     },
     fn() {
-      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=4.0, fn() {
+      // Settings.kt:163 (13sp, muted)
+      c.box(style=@sf.page_words, fn() {
         c.text(
           fill(
             if manager {
@@ -82,10 +83,7 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
               ("stations", fill("android-settings.workspace.stations", [("n", items(v, "stations").length().to_string())])),
             ],
           ),
-          size=13.0,
-          color=t.p.muted,
-          w=Fill(1.0),
-          line=18.0,
+          style=@sf.secondary.then(@sf.full_words),
         )
         |> ignore
       })
@@ -106,7 +104,8 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           if @sf.has_station_mark(emoji, icon) {
             @sf.station_mark(c, emoji, icon, 20.0, t.p.text)
           } else {
-            c.text(tr("android-settings.workspace.iconNone"), size=14.0, color=t.p.muted, wrap=false) |> ignore
+            // Settings.kt:176 (14sp, muted)
+            c.text(tr("android-settings.workspace.iconNone"), style=@sf.value) |> ignore
           }
           chevron(c)
         })
@@ -232,10 +231,8 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             list_row(c, key="relay-add", fn() {
               c.text(
                 tr(if busy { "common.saving" } else { "android-settings.relays.add" }),
-                size=15.0,
-                color=t.p.accent,
-                wrap=false,
-                line=21.0,
+                // Settings.kt:256 (15sp)
+                style=@sf.body.then(@sf.accent).then(@sf.one_line),
               )
               |> ignore
             }) &&
@@ -260,8 +257,9 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             )
           }
         })
-        c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=6.0, fn() {
-          c.text(fill("android-settings.relays.lead", [("app", "still.fail")]), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
+        // Settings.kt:258 (13sp, muted)
+        c.box(style=@sf.under_card_words, fn() {
+          c.text(fill("android-settings.relays.lead", [("app", "still.fail")]), style=@sf.secondary.then(@sf.full_words))
           |> ignore
         })
         |> ignore
@@ -273,7 +271,7 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     fn() {
       list_card(c, fn() {
         if list_row(c, key="ws-leave", fn() {
-            c.text(tr("android-settings.workspace.leaveRow"), size=15.0, color=t.p.red, wrap=false, line=21.0)
+            c.text(tr("android-settings.workspace.leaveRow"), style=@sf.body.then(@sf.bad).then(@sf.one_line))
             |> ignore
           }) {
           confirm(
@@ -295,7 +293,7 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         }
         if role == "owner" &&
           list_row(c, key="ws-delete", fn() {
-            c.text(tr("android-settings.workspace.delete"), size=15.0, color=t.p.red, wrap=false, line=21.0)
+            c.text(tr("android-settings.workspace.delete"), style=@sf.body.then(@sf.bad).then(@sf.one_line))
             |> ignore
           }) {
           confirm(
@@ -343,21 +341,22 @@ fn member_row(c : @ui.Ctx, core : Core, here : Here, v : Json?, m : Json) -> Uni
   let can = sub != here.sub && manager && (text(mv, "role") != "owner" || role == "owner")
   if list_row(c, key=if can { "member/" + sub } else { "" }, fn() {
       avatar(c, core, email, name, 28.0, picture=text(mv, "picture"))
-      c.box(w=Fill(1.0), fn() {
-        c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-          c.text(name, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+      // Settings.kt:269-278 (15sp, its email and role 13sp muted)
+      c.box(style=@sf.full_width, fn() {
+        c.box(style=member_name_row, fn() {
+          c.text(name, style=@sf.body.then(@sf.one_line)) |> ignore
           if sub == here.sub {
             you(c, tr("android-settings.members.you"))
           }
         })
         |> ignore
-        c.text(email, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
+        c.text(email, style=@sf.secondary.then(@sf.one_line).then(@sf.full_words)) |> ignore
       })
       |> ignore
       let on = [("workspace", ws), ("member", sub)]
       let calls = ["workspace.setRole", "workspace.removeMember"]
       doing_mark(c, is_doing(core, calls, on), failed_of(core, calls, on))
-      c.text(role_label(text(mv, "role")), size=13.0, color=t.p.muted, wrap=false) |> ignore
+      c.text(role_label(text(mv, "role")), style=@sf.secondary.then(@sf.one_line)) |> ignore
     }) {
     member_sheet(core, here, v, m)
   }
@@ -422,3 +421,8 @@ fn member_sheet(core : Core, here : Here, v : Json?, m : Json) -> Unit {
     }
   })
 }
+
+///|
+/// A person's name and what marks them (你), in a line (Settings.kt:270: 6 apart).
+// kept across runs: a value (no field of it changes)
+let member_name_row : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
