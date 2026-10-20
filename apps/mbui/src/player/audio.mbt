@@ -98,7 +98,9 @@ fn light_timeline(c : @ui.Ctx, key : String, n : @ui.NativeView, s : Status, rea
     Some((x, _, w, _)) if ready && dur > 0.0 && c.pressed(id) => {
       let (px, _, _) = c.pointer()
       let k = (px - x) / (if w < 1.0 { 1.0 } else { w })
-      n.seek((if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }) * dur)
+      let to = (if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }) * dur
+      // (once the frame's builds are over: where the finger is on the track as the last laid it out)
+      c.after_build(key + "/seek", fn() { n.seek(to) })
     }
     _ => ()
   }

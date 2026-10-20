@@ -129,6 +129,7 @@ fn open_listed(view : ChatsView) -> Unit {
     Some(n) => n.reading
     None => false
   }
+  // (said of the rows as the core lists them: the same in each build of the frame)
   if !reading && rows > 0 {
     open_titled.val = ""
     @host.log("OPEN not found among \{rows} rows")

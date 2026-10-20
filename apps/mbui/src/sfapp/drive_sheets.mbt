@@ -504,6 +504,7 @@ fn dv_picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> 
     Some(p) => params["path"] = Json::string(p)
     None => ()
   }
+  // det-ok(build-effect): asked as the sheet opens (once: picker_asking) or a folder is tapped; a later ask supersedes it
   (src.call)("drive.folders", Json::object(params), fn(r) {
     if serial != dv.picker_serial {
       return

@@ -181,6 +181,7 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit 
       name = text(Some(s), "name")
     }
   }
+  // det-ok(build-effect): asked once, by the station's address: nothing a build changes
   let read = memory_of(core, address)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     nav_bar(c, core, name, tr("android-misc.memory.title"), sub=fn() {
@@ -313,6 +314,7 @@ let doc_picked : Map[String, Int] = Map::new()
 /// files (`skill`), or the global memory a part at a time (from `at`); the parts as pills across the top.
 fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, at : Int) -> Unit {
   let t = @sf.theme()
+  // det-ok(build-effect): asked once, by the station's address: nothing a build changes
   let read = memory_of(core, address)
   let m = read.value
   let k = if skill == "" {

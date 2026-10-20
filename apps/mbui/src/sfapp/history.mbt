@@ -243,16 +243,21 @@ fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
   let more = flag(h, "more")
   let older = more && dui.history_asked == first && first != ""
   match c.list_info(lkey) {
-    Some(info) if more && info.first >= 0 && info.first <= 2 && dui.history_asked != first => {
-      dui.history_asked = first
-      (src.call)("history.older", { "station": Json::string(r.station), "key": Json::string(key) }, fn(
-        res,
-      ) {
-        if res is Err(_) {
-          dui.history_asked = ""
+    Some(info) if more && info.first >= 0 && info.first <= 2 && dui.history_asked != first =>
+      // (asked once the frame's builds are over, from where the last laid the list out)
+      c.after_build("older", fn() {
+        if dui.history_asked == first {
+          return
         }
+        dui.history_asked = first
+        (src.call)("history.older", { "station": Json::string(r.station), "key": Json::string(key) }, fn(
+          res,
+        ) {
+          if res is Err(_) {
+            dui.history_asked = ""
+          }
+        })
       })
-    }
     _ => ()
   }
   c.list(
@@ -774,9 +779,13 @@ fn whole(c : @ui.Ctx, src : Source, r : ChatRef, key : String, content : Json?, 
   })
   let ekey = key + "/" + entries.map(fn(e) { e.to_int64().to_string() }).join(",")
   match dui.detail_at.get(ekey) {
-    None => {
-      dui.detail_at[ekey] = -1.0
-      if entries.length() > 0 {
+    // (asked once the frame's builds are over: for the rows the last built)
+    None if entries.length() > 0 =>
+      c.after_build("detail/" + ekey, fn() {
+        if dui.detail_at.contains(ekey) {
+          return
+        }
+        dui.detail_at[ekey] = -1.0
         let mut lo = entries[0]
         let mut hi = entries[0]
         for e in entries {
@@ -798,8 +807,8 @@ fn whole(c : @ui.Ctx, src : Source, r : ChatRef, key : String, content : Json?, 
             }
           },
         )
-      }
-    }
+      })
+    None => dui.detail_at[ekey] = -1.0
     _ => ()
   }
   let at = dui.detail_at.get(ekey).unwrap_or(-1.0)

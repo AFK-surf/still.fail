@@ -80,6 +80,8 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
   let waited = @kit.after(c, "play-place", !pl.opened, play_place_ms)
   if !pl.opened {
     if place.value is Some(_) || place.error is Some(_) || waited {
+      // (opened from what the core keeps (drivePlace, the folder) and the frame's time: the same in each build of
+      // the frame)
       pl.opened = true
       let left = number(place.value, "at")
       let of = number(place.value, "of")
@@ -133,6 +135,7 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
   }
   // the subtitle beside it, once the folder is known
   if !pl.subtitle_asked && folder is Some(_) {
+    // (read by the folder as the core lists it: the same in each build of the frame)
     pl.subtitle_asked = true
     let names = entries.filter(fn(e) { !e.dir }).map(fn(e) { e.name })
     match @player.pick_subtitle(name, names) {
@@ -158,9 +161,12 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     // (the place kept now and then: nothing shown waits for it; the next wait starts in the frame this one ends)
     let kept = fn() { @kit.after(c, "play-keep/" + key + "/\{pl.keeps}", true, play_keep_ms, later=true) }
     if kept() {
-      play_keep(src, at, pl)
-      pl.keeps = pl.keeps + 1
-      kept() |> ignore
+      // (once the frame's builds are over: a build let go of keeps nothing)
+      c.after_build("play-keep", fn() {
+        play_keep(src, at, pl)
+        pl.keeps = pl.keeps + 1
+        kept() |> ignore
+      })
     }
 
   }

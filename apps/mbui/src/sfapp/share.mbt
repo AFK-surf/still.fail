@@ -90,6 +90,7 @@ let searched_from : Int = 6
 ///|
 /// Each frame once signed in: what another app shared since, its sheet raised; let go once its sheet closed.
 fn share_in_frame(c : @ui.Ctx) -> Unit {
+  // (what the host says was shared, taken once: the same whichever build takes it)
   if share_in.shared is None {
     let said = @ui.shared_in()
     let mut got : (String, String?)? = None

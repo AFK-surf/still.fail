@@ -946,6 +946,7 @@ fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Json]) 
 /// video's player.
 fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   let v = self
+  // (each asked once a viewer, by its file: nothing a build changes)
   if v.kind is None && v.sniffed is None && !v.sniffing {
     v.sniffing = true
     v.read_part(src, 0.0, 8192, fn(r) {
@@ -986,6 +987,7 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
             }
           })
         })
+        // det-ok(build-effect): the view just made, played once: nothing a build changes
         n.play()
         v.video = Some(n)
       }
@@ -1159,6 +1161,8 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
   let p = v.flying()
   // (the motions ask for their frames, said once as they set out: the flight, the fade)
   let landed = v.flies && v.fly_back && !v.fly.is_animating()
+  // (landed by the frame's time, the same in each build of the frame; what is let go is the viewer going, built
+  // no more)
   if landed {
     // landed in its thumbnail: drawn there this once (where the thumbnail is, hidden this frame), then gone
     leaving_done()
@@ -1169,6 +1173,7 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
     pv_hidden.val = ""
   }
   let faded = if v.flies { 1.0 } else { v.fade.get() }
+  // (faded by the frame's time: the same in each build of the frame)
   if v.closing && !v.flies && !v.fade.is_animating() {
     // faded out: gone
     leaving_done()
@@ -1260,6 +1265,7 @@ fn Viewer::close(self : Viewer, c : @ui.Ctx) -> Unit {
     }
     // the views under the canvas go at once (they cannot fade)
     match self.video {
+      // det-ok(build-effect): closed as the back is taken or the marks are put (Viewer::marks_frame), once
       Some(n) => n.pause()
       None => ()
     }
@@ -1382,8 +1388,10 @@ fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             marked_into[key] = list
             marks_leave()
             say(c, pv("android-chat.preview.put.done"))
+            // det-ok(build-effect): the host's picture of the marks, said once
             self.close(c)
           } else {
+            // (the host's picture of the marks, said once)
             keep_bytes(c, marking.job_name, "image/png", png)
           }
         }
@@ -1636,7 +1644,8 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
   z.natural(nw, nh)
   z.step()
   let (before, after) = v.near(src)
-  v.read_near(src, before, after)
+  // (once the frame's builds are over: a step taken further on in this one reads beside the image it comes to)
+  c.after_build("pv-near", fn() { v.read_near(src, before, after) })
   if marking.on {
     // marking: one finger draws, two pinch as ever (no stepping meanwhile)
     if c.second_pointer() is Some(_) || v.pinched {
@@ -2202,6 +2211,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
             Some(i) if i > 0 => v.file.name.view(end_offset=i).to_owned()
             _ => v.file.name
           }
+          // (the host's picture of the frame, said once)
           keep_bytes(c, base + "-\{v.grab_frame + 1}.png", "image/png", png)
         } else {
           say(c, pv("android-chat.video.saveFrame.failed"))
@@ -2359,7 +2369,9 @@ fn timeline(c : @ui.Ctx, v : Viewer, n : @ui.NativeView, dur : Double, pos : Dou
   let held = match c.rect_of(id) {
     Some((x, _, w, _)) if c.pressed(id) && dur > 0.0 => {
       let (px, _, _) = c.pointer()
-      n.seek(dmax(0.0, dmin(1.0, (px - x) / dmax(1.0, w))) * dur)
+      let to = dmax(0.0, dmin(1.0, (px - x) / dmax(1.0, w))) * dur
+      // (once the frame's builds are over: where the finger is on the track as the last laid it out)
+      c.after_build("preview/seek", fn() { n.seek(to) })
       true
     }
     _ => false
@@ -2512,6 +2524,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
           "<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\"><body style=\"margin:0;padding:16px;font-family:system-ui,sans-serif\">" +
           words
         }
+        // (made once, from the file's words, which no build changes; the build places it, so it is made in it)
         let p = @ui.NativeView::page(html)
         v.page = Some(p)
         p

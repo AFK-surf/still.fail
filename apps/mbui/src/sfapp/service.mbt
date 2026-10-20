@@ -252,6 +252,7 @@ fn service_body(
   let site = match p.site {
     Some(v) => v
     None => {
+      // (made once a page; the build places it, so it is made in it)
       let v = @ui.NativeView::site(
         "/",
         fn(req, reply) { service_serve(src, p, req, reply) },
@@ -272,6 +273,7 @@ fn service_body(
   }
   // up again after a restart: the page loads anew
   if p.restarting && !restarting {
+    // det-ok(build-effect): by the job's restart as the core says it: the same in each build of the frame
     site.reload()
   }
   p.restarting = restarting
@@ -733,7 +735,8 @@ fn service_stage(
         let x = (16.0 + dmax(0.0, (room_w - w * fitted) / 2.0)).round()
         let y = (16.0 + dmax(0.0, (room_h - h * fitted) / 2.0)).round()
         let corner = if v.width <= 600 { 44.0 } else if v.width < 1024 { 24.0 } else { 5.0 / fitted }
-        site.set_scale(fitted)
+        // (told once the frame's builds are over, as the last laid the stage out)
+        c.after_build("scale", fn() { site.set_scale(fitted) })
         c.layer(fn() {
           c.box(pl=x, pt=y, fn() {
             c.box(
@@ -754,7 +757,7 @@ fn service_stage(
       }
       (Some(_), None) => c.request_frame()
       (None, _) => {
-        site.set_scale(1.0)
+        c.after_build("scale", fn() { site.set_scale(1.0) })
         c.native(site) |> ignore
       }
     }

@@ -48,6 +48,7 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             wrong_edge=c.color(Danger),
           )
           if typed is Some(code) {
+            // det-ok(build-effect): the code as typed: the frame's input
             (core.call)("lock.pairCode", obj([("workspace", str(ws)), ("code", str(code))]), fn(r) {
               // a code refused: the boxes empty for the next try
               if r is Err(_) {

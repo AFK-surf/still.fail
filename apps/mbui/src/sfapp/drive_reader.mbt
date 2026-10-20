@@ -261,6 +261,7 @@ pub fn reader_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     "path": Json::string(at.path),
   }
   let place = (src.topic)("drivePlace", place_params)
+  // (asked once, by the file and the size its folder lists: the core's, the same in each build of the frame)
   if !r.asked {
     r.asked = true
     // its size as its folder says, for how far it has come
@@ -473,7 +474,8 @@ fn reader_book(
   // kept as the reader stops (not on every pixel)
   // (each move a wait of its own; nothing shown waits for it)
   if @kit.after(c, "reader-keep/" + r.key + "/\{r.moves}", r.moves > r.kept_moves, reader_still_ms, later=true) {
-    reader_keep(src, at, r, novel, false)
+    // (once the frame's builds are over, where the last put it)
+    c.after_build("reader-keep", fn() { reader_keep(src, at, r, novel, false) })
   }
   // a jump: its block at the top, then slid to the offset in it once it is laid out
   if r.jump_step == 1 {
@@ -1198,6 +1200,7 @@ fn reader_panels(
             )
             let want = if k == 0 { "serif" } else { "sans" }
             if want != prefs.face {
+              // det-ok(build-effect): a choice the segmented took: the frame's input
               reader_put(src, "face", Json::string(want))
             }
           })
@@ -1209,6 +1212,7 @@ fn reader_panels(
               if prefs.indent { 0 } else { 1 },
             )
             if (k == 0) != prefs.indent {
+              // det-ok(build-effect): a choice the segmented took: the frame's input
               reader_put(src, "indent", Json::boolean(k == 0))
             }
           })

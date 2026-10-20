@@ -546,6 +546,7 @@ fn messages(
             Some(thread) if v.more && first > target =>
               if rd.asked != first {
                 rd.asked = first
+                // det-ok(build-effect): the messages are the core's, the target the tap's: the same in each build
                 (src.call)(
                   "chat.older",
                   { "station": Json::string(r.station), "thread": Json::number(thread) },
@@ -566,21 +567,27 @@ fn messages(
           Some(Said(m)) => m.seq
           _ => -1.0
         }
+        // (asked once the frame's builds are over, from where the last laid the list out)
         if rd.asked != first {
-          rd.asked = first
-          (src.call)(
-            "chat.older",
-            { "station": Json::string(r.station), "thread": Json::number(thread) },
-            fn(res) {
-              match res {
-                Err(e) => {
-                  rd.asked = -1.0
-                  @host.log("chat.older failed: " + text(Some(e), "message"))
+          c.after_build("older", fn() {
+            if rd.asked == first {
+              return
+            }
+            rd.asked = first
+            (src.call)(
+              "chat.older",
+              { "station": Json::string(r.station), "thread": Json::number(thread) },
+              fn(res) {
+                match res {
+                  Err(e) => {
+                    rd.asked = -1.0
+                    @host.log("chat.older failed: " + text(Some(e), "message"))
+                  }
+                  _ => ()
                 }
-                _ => ()
-              }
-            },
-          )
+              },
+            )
+          })
         }
       }
       _ => ()
@@ -593,12 +600,17 @@ fn messages(
           None => -1.0
         }
         if rd.asked_newer != last {
-          rd.asked_newer = last
-          (src.call)(
-            "chat.newer",
-            { "station": Json::string(r.station), "thread": Json::number(thread) },
-            fn(res) { if res is Err(_) { rd.asked_newer = -1.0 } },
-          )
+          c.after_build("newer", fn() {
+            if rd.asked_newer == last {
+              return
+            }
+            rd.asked_newer = last
+            (src.call)(
+              "chat.newer",
+              { "station": Json::string(r.station), "thread": Json::number(thread) },
+              fn(res) { if res is Err(_) { rd.asked_newer = -1.0 } },
+            )
+          })
         }
       }
       _ => ()
@@ -622,7 +634,9 @@ fn messages(
       }
       _ => -1.0
     }
-    tell_focus(src, r, v, rd, seen)
+    // (told once the frame's builds are over, as the last says it: a build let go of, the frame built again, read the
+    // list from before its layout)
+    c.after_build("focus", fn() { tell_focus(src, r, v, rd, seen) })
     // the way to the newest: away from the end by more than a corner of the screen, or short of the chat's end (not
     // before the list is first laid out: until then nothing is in view, and the end is not far, only not known)
     let away = match info {
@@ -1641,6 +1655,7 @@ fn chat_bench(c : @ui.Ctx, key : String, rd : Reading, more : Bool, rows : Int) 
       "cpu_p95=\{a[n * 95 / 100]} cpu_p99=\{a[n * 99 / 100]} cpu_max=\{a[n - 1]} slow(>8ms)=\{slow} " +
       "present_avg=\{psum / n.to_double()}",
     )
+    // det-ok(build-effect): the bench's end, once its frames are counted (MBUI_CHAT_BENCH runs only)
     @host.exit(0)
   }
 }
