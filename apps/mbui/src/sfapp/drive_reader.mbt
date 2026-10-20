@@ -436,7 +436,11 @@ fn reader_jump(r : TextReading, chunk : Int, offset : Int) -> Unit {
 
 ///|
 /// How long the reader holds still before where it is is kept (not on every pixel).
-let reader_still_ms : Double = 800.0
+pub let reader_still_ms : Double = 800.0
+
+///|
+/// How long the reader's bars take to come or go (a tap on the text).
+pub let reader_bars_ms : Double = 180.0
 
 ///|
 /// The column of text and what floats over it (Reader.kt Book).
@@ -550,7 +554,7 @@ fn reader_book(
   let k = if c.stable() {
     if r.chrome { 1.0 } else { 0.0 }
   } else {
-    let e = dmin(1.0, (c.now() - r.chrome_at) / 180.0)
+    let e = dmin(1.0, (c.now() - r.chrome_at) / reader_bars_ms)
     if e < 1.0 {
       c.request_frame()
     }

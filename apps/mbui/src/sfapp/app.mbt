@@ -699,7 +699,7 @@ fn toast(c : @ui.Ctx) -> Unit {
 
 ///|
 /// How long a toast stays (paused while the pointer is on it).
-let toast_ms : Double = 2600.0
+pub let toast_ms : Double = 2600.0
 
 ///|
 fn say(c : @ui.Ctx, words : String) -> Unit {
