@@ -169,7 +169,19 @@
       "src/sfapp/preview.mbt": 3,
       "src/sfapp/share.mbt": 2
     },
-    "globals": {}
+    "globals": {},
+    "unsettled-ok": {
+      "src/sfapp/newchat_wbtest.mbt": 5,
+      "src/sfapp/share_wbtest.mbt": 6,
+      "src/sfreplay/flows/appearance_kept_test.mbt": 1,
+      "src/sfreplay/flows/bar_glass_test.mbt": 1,
+      "src/sfreplay/flows/places_test.mbt": 1,
+      "src/sfreplay/flows/settings_appearance_test.mbt": 1,
+      "src/sfreplay/flows/wide_new_chat_test.mbt": 1,
+      "src/sfreplay/flows/wide_places_test.mbt": 1,
+      "src/sfreplay/flows/wide_row_menu_test.mbt": 1,
+      "src/sfreplay/steps.mbt": 1
+    }
   },
   "excused": {
     "frame-request": {},
@@ -185,6 +197,7 @@
     "wall-clock": {},
     "poll": {},
     "host-read": {},
-    "globals": {}
+    "globals": {},
+    "unsettled-ok": {}
   }
 }
