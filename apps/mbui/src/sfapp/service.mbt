@@ -719,8 +719,8 @@ fn service_stage(
   let stage = c.id("service/stage")
   c.box(w=Fill(1.0), h=Fill(1.0), bg=if p.viewport is Some(_) { ground } else { t.p.card }, clip=true, id=stage, fn() {
     // (the stage's size as this frame lays it out: read back, built again once it is)
-    match (p.viewport, c.laid_rect(stage)) {
-      (Some(v), Some((_, _, sw, sh))) => {
+    match (p.viewport, c.laid_size(stage)) {
+      (Some(v), Some((sw, sh))) => {
         let room_w = sw - 32.0
         let room_h = sh - 32.0
         let w = v.width.to_double()

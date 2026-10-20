@@ -807,8 +807,8 @@ fn composer_content_id(c : @ui.Ctx) -> Int {
 ///|
 /// How tall the capsule's content is as this frame lays it out (read back: grown this frame, built again from it).
 fn composer_natural(c : @ui.Ctx) -> Double? {
-  match c.laid_rect(cui.content_id) {
-    Some((_, _, _, h)) => Some(h)
+  match c.laid_size(cui.content_id) {
+    Some((_, h)) => Some(h)
     None => None
   }
 }
@@ -863,8 +863,8 @@ fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
     // otherwise the room the capsule is drawn with (the list's rows going with it)
     (None, _, Some(h)) => h + top + composer_inset + 8.0 + 10.0
     _ =>
-      match c.laid_rect(cui.cap_id) {
-        Some((_, _, _, h)) => h + 8.0 + 10.0
+      match c.laid_size(cui.cap_id) {
+        Some((_, h)) => h + 8.0 + 10.0
         None => 0.0
       }
   }
