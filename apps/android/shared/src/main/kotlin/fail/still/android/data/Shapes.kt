@@ -2523,7 +2523,12 @@ data class DraftView (
 	val quotes: List<Quote>,
 	val files: List<Attachment>,
 	/// Links shared into it (docs/share-in.md): drawn as files are, sent as words after the text.
-	val links: List<ComposerLink>? = null
+	val links: List<ComposerLink>? = null,
+	/// The draft's own name, the core's (`draft.get` gives it, `draft.put` answers it): what is written between two
+	/// sends is one draft; taken to send, or put back empty, the next is another. What goes up from it is named by it
+	/// (the station gives back an upload it finished within the hour by its id), so the same file in the next message,
+	/// or in another new chat, is another upload. Said by `draft.put`, it is not taken: the core keeps its own.
+	val id: String? = null
 )
 
 /// What opens an entry of the drive.

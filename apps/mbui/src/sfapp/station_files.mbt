@@ -180,7 +180,7 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
           let bytes = all.to_bytes()
           let p2 = { ..p, size: bytes.length() }
           r.up = Some(p2)
-          upload_part(src, d, station, p2, bytes, upload_id(d.key + "\u{1}" + d.after + "\u{1}" + file_seed(station, p2.name, bytes), d.files.length()), 0)
+          upload_part(src, d, station, p2, bytes, upload_id(d.key + "\u{1}" + d.id + "\u{1}" + file_seed(station, p2.name, bytes), d.files.length()), 0)
         }
         Some(e) => failed(e)
       }

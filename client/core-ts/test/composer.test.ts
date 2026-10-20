@@ -12,6 +12,9 @@ import { CoreError } from "../src/error.ts";
 import { stationReplies, started } from "./station-fixture.ts";
 import { HostWire } from "../src/station/wire.ts";
 
+/// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
+const noId = ({ id: _, ...d }: any) => d;
+
 type J = any;
 
 test("desktop_upload_retry_keeps_its_source_after_a_station_failure", async () => {
@@ -276,19 +279,19 @@ test("draft_subscriptions_follow_both_chat_keys_when_joined_edited_and_taken", a
     await t.settle();
     call(t.core, t.ui, 901, "draft.put", { key: `ws/st:${pending}`, ...draft });
     await t.settle();
-    assert.deepEqual(v(t.values, 1), draft);
-    assert.deepEqual(v(t.values, 2), { text: "", quotes: [], files: [], links: [] });
+    assert.deepEqual(noId(v(t.values, 1)), draft);
+    assert.deepEqual(noId(v(t.values, 2)), { text: "", quotes: [], files: [], links: [] });
 
     t.core.inner.views.local.pendingMade(pending, "ember:made", 9);
     await t.settle();
-    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), draft);
+    for (const sub of [1, 2]) assert.deepEqual(noId(v(t.values, sub)), draft);
     const edited = { ...draft, text: "继续写" };
     call(t.core, t.ui, 902, "draft.put", { key: "ws/st:ember:made", ...edited });
     await t.settle();
-    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), edited);
+    for (const sub of [1, 2]) assert.deepEqual(noId(v(t.values, sub)), edited);
 
     await t.ask("take", { key: "ws/st:ember:made" });
-    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), { text: "", quotes: [], files: [], links: [] });
+    for (const sub of [1, 2]) assert.deepEqual(noId(v(t.values, sub)), { text: "", quotes: [], files: [], links: [] });
   } finally { t.core.close(); }
 });
 

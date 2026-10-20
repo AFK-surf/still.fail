@@ -101,10 +101,10 @@ priv struct Draft {
   mut warmed : Double
   /// the quote whose comment line takes the focus next frame (0 none); -1: the words' field (ids count from 1)
   mut focus : Int
-  /// where the chat stood as last drawn, as the core has it: its latest message and what waits in its outbox
-  /// (draft_after): what the message this draft becomes comes after, so files put in it are another upload than the
-  /// same files in the message before ("" for a chat not made yet)
-  mut after : String
+  /// the draft's own name, the core's (DraftView.id: `draft.get` gives it, `draft.put` answers it): another once it
+  /// is sent or put back empty, so what goes up from it is another upload than the same in the message before, or in
+  /// another new chat ("" until the core has said it)
+  mut id : String
 }
 
 ///|
@@ -156,12 +156,16 @@ fn draft_by(src : Source, key : String) -> Draft {
         changed_at: 0.0,
         warmed: -1.0e12,
         focus: 0,
-        after: "",
+        id: "",
       }
       drafts[key] = d
       (src.call)("draft.get", { "key": Json::string(key) }, fn(res) {
         match res {
           Ok(Object(_) as v) if draft_empty(d) => fill_draft(d, v)
+          _ => ()
+        }
+        match res {
+          Ok(v) => draft_named(d, v)
           _ => ()
         }
         d.loaded = true
@@ -290,7 +294,32 @@ fn save_draft(src : Source, d : Draft) -> Unit {
   d.kept = sig
   let params = draft_view(d)
   params["key"] = Json::string(d.key)
-  (src.call)("draft.put", Json::object(params), fn(_) {  })
+  (src.call)("draft.put", Json::object(params), fn(res) {
+    match res {
+      Ok(v) => draft_named(d, v)
+      _ => ()
+    }
+  })
+}
+
+///|
+/// A draft sent with `files` in it: kept again (empty) whatever was kept before, so the core names the next draft
+/// (`draft.put`'s answer); until it has, what goes up is named by no draft of the core's.
+fn sent_draft(d : Draft, files : Int) -> Unit {
+  // (only one files went up from needs it: a draft with none named nothing)
+  if files > 0 {
+    d.kept = "\u{0}sent"
+    d.id = ""
+  }
+}
+
+///|
+/// The draft's name as the core says it (`draft.get`'s value, `draft.put`'s answer), when it says one.
+fn draft_named(d : Draft, v : Json) -> Unit {
+  match text(Some(v), "id") {
+    "" => ()
+    id => d.id = id
+  }
 }
 
 ///|
@@ -485,7 +514,7 @@ fn add_file(src : Source, d : Draft, station : String, name : String, bytes : By
     station,
     p,
     bytes,
-    upload_id(d.key + "\u{1}" + d.after + "\u{1}" + file_seed(station, name, bytes), d.files.length() - 1),
+    upload_id(d.key + "\u{1}" + d.id + "\u{1}" + file_seed(station, name, bytes), d.files.length() - 1),
     0,
   )
 }
@@ -496,25 +525,6 @@ fn file_seed(station : String, name : String, bytes : Bytes) -> String {
   "\{station}\u{1}\{name}\u{1}\{bytes.length()}\u{1}\{bytes.hash()}"
 }
 
-///|
-/// Where a chat stands for the draft written to it (Draft::after), as the core has it: its latest message's seq and
-/// what waits in its outbox. Each message sent moves it on, so the same file in the next message is another upload
-/// (the station gives back an upload it finished within the hour by its id: hub.ts savePart).
-fn draft_after(v : ChatView?) -> String {
-  match v {
-    Some(view) => {
-      let mut last = -1.0
-      for m in view.messages {
-        if m.seq > last {
-          last = m.seq
-        }
-      }
-      let out = view.outbox.map(fn(o) { o.id }).join(",")
-      "\{view.key}\u{1}\{last}\u{1}\{out}"
-    }
-    None => ""
-  }
-}
 
 ///|
 /// What a read-only run says it does not do.
@@ -599,13 +609,13 @@ fn uploading_text(f : Pending) -> String {
 ///|
 /// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it; paste_name).
 fn paste_as_file(src : Source, d : Draft, station : String, words : String) -> Unit {
-  let name = paste_name(d.key + "\u{1}" + d.after, words, d.files.length())
+  let name = paste_name(d.key + "\u{1}" + d.id, words, d.files.length())
   add_file(src, d, station, name, utf8_bytes(words), Some(words))
 }
 
 ///|
-/// The name a long paste goes up as: from the draft it is in and where its chat stands (`draft`: Draft::key and
-/// after), its words and its place among the draft's files (`n`), never a clock.
+/// The name a long paste goes up as: from the draft it is in (`draft`: Draft::key and the core's name for it), its
+/// words and its place among the draft's files (`n`), never a clock.
 fn paste_name(draft : String, words : String, n : Int) -> String {
   "pasted-text-" + uuid(upload_id("paste\u{1}" + draft + "\u{1}" + words, n)) + ".txt"
 }
@@ -734,6 +744,8 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   d.quotes.clear()
   d.comments.clear()
   d.error = None
+  // sent: what is written next is another draft, which the core names as this one is kept empty
+  sent_draft(d, taken_files.length())
   save_draft(src, d)
   let params : Map[String, Json] = {
     "station": Json::string(r.station),
@@ -786,7 +798,6 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     Some(f) => draft_by(src, f.key)
     None => draft_of(src, r)
   }
-  d.after = draft_after(v)
   let offline = match v {
     Some(v) => v.offline
     None => false

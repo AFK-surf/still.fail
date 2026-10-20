@@ -1045,6 +1045,7 @@ export const SHAPES: Record<string, Shape> = {
     ["quotes", vec("Quote")],
     ["files", vec("Attachment")],
     ["links", vec("ComposerLink"), { default: true, doc: "Links shared into it (docs/share-in.md): drawn as files are, sent as words after the text." }],
+    ["id", opt("String"), { doc: "The draft's own name, the core's (`draft.get` gives it, `draft.put` answers it): what is written between two\nsends is one draft; taken to send, or put back empty, the next is another. What goes up from it is named by it\n(the station gives back an upload it finished within the hour by its id), so the same file in the next message,\nor in another new chat, is another upload. Said by `draft.put`, it is not taken: the core keeps its own." }],
   ], { doc: "What is being written to a chat on this device (the `draft` topic, `draft.put`): its text as typed, the passages\nit quotes with what is said about them, and the files already up (the station keeps them in no chat until a\nmessage takes them). Files still going up are the page's own.", keepNone: true }),
   PastedInfo: struct([
     ["preview", "String"],

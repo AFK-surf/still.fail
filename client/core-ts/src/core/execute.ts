@@ -117,8 +117,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         prefs.deferDecision(inner.data, `${call.station}\t${call.thread}\t${call.seq}`, inner.host.nowMs());
         return Effect.succeed(null);
       case "draftPut": {
-        inner.composers.putDraft(call.station, call.chat, call.draft);
-        return Effect.succeed(null);
+        return Effect.succeed(inner.composers.putDraft(call.station, call.chat, call.draft));
       }
       case "draftGet": {
         return Effect.succeed(inner.composers.readDraft(call.station, call.chat));

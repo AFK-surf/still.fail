@@ -7,6 +7,9 @@ import { HostWire } from "../src/station/wire.ts";
 import { apply, subscribe, v } from "./helpers.ts";
 import { started } from "./station-fixture.ts";
 
+/// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
+const noId = ({ id: _, ...d }: any) => d;
+
 type J = any;
 
 async function setup() {
@@ -122,13 +125,13 @@ test("draft_snapshots_clear_whitespace_but_keep_quotes_or_uploaded_files_without
   try {
     const blank = { text: "", quotes: [], files: [] };
     t.composer.putDraft("ws/st", "new", { text: "  " });
-    assert.deepEqual(t.composer.readDraft("ws/st", "new"), blank);
+    assert.deepEqual(noId(t.composer.readDraft("ws/st", "new")), blank);
     assert.equal((t.composer.value("new:ws/st") as J).text, "");
     const quote = { author: "agent", text: "quoted", comment: "" };
     t.composer.putDraft("ws/st", "new", { quotes: [quote] });
-    assert.deepEqual(t.composer.readDraft("ws/st", "new"), { ...blank, quotes: [quote] });
+    assert.deepEqual(noId(t.composer.readDraft("ws/st", "new")), { ...blank, quotes: [quote] });
     const file = { name: "a.txt", path: "/u/a.txt", size: 1 };
     t.composer.putDraft("ws/st", "new", { files: [file] });
-    assert.deepEqual(t.composer.readDraft("ws/st", "new"), { ...blank, files: [file] });
+    assert.deepEqual(noId(t.composer.readDraft("ws/st", "new")), { ...blank, files: [file] });
   } finally { t.core.close(); }
 });
