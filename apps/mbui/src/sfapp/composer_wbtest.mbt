@@ -86,6 +86,10 @@ test "words typed go with send: by the chat's thread, the field emptied, Enter a
   assert_true(puts.length() > 0)
   assert_eq(text(Some(puts[puts.length() - 1].params), "text"), "")
   assert_eq(text(Some(puts[puts.length() - 1].params), "key"), "ws1/st1:s-c1")
+  // the words sent wait over the field for their row, which this core never gives; the composer's room held as
+  // tall as they went meanwhile, then let go to its own height (both said as they set off)
+  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.assert_idle()
 }
 
 ///|
@@ -129,6 +133,10 @@ test "a kept quote's comment comes back into its line and goes with the message"
     Some(Array([q])) => assert_eq(text(Some(q), "comment"), "这里要对齐")
     _ => fail("the quote did not go with the message")
   }
+  // the words sent wait over the field for their row, which this core never gives; the composer's room held as
+  // tall as they went meanwhile, then let go to its own height (both said as they set off)
+  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.assert_idle()
 }
 
 ///|
@@ -162,10 +170,9 @@ test "a long paste goes as a text file, up to the station, and with the message"
     Some(Array([a])) => assert_eq(text(Some(a), "path"), "uploads/u1/p.txt")
     _ => fail("the pasted file did not go with the message")
   }
-  // the words sent wait over the field for their row, which this core never gives; then the capsule takes its own
-  // height
-  t.run_for(flight_wait_ms)
-  t.run_for(composer_morph_ms)
+  // the words sent wait over the field for their row, which this core never gives; the composer's room held as
+  // tall as they went meanwhile, then let go to its own height (both said as they set off)
+  t.run_for(flight_wait_ms + composer_morph_ms)
   t.assert_idle()
 }
 
@@ -194,6 +201,10 @@ test "a station's file sent as a file: staged on the chat's station, the message
     _ => fail("the station's file did not go with the message")
   }
   assert_eq(refs_of("ws1/st1:s-c1").length(), 0)
+  // the words sent wait over the field for their row, which this core never gives; the composer's room held as
+  // tall as they went meanwhile, then let go to its own height (both said as they set off)
+  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.assert_idle()
 }
 
 ///|
@@ -208,10 +219,9 @@ test "refused before the outbox, the words come back and why is said" {
   t.draw()
   assert_true(t.dump().contains("发不出去的话"))
   assert_true(t.find("没有这个对话") is Some(_))
-  // the words sent wait over the field for their row, which this core never gives; then the capsule takes its own
-  // height
-  t.run_for(flight_wait_ms)
-  t.run_for(composer_morph_ms)
+  // the words sent wait over the field for their row, which this core never gives; the composer's room held as
+  // tall as they went meanwhile, then let go to its own height (both said as they set off)
+  t.run_for(flight_wait_ms + composer_morph_ms)
   t.assert_idle()
 }
 
@@ -265,6 +275,10 @@ test "a message held: its words quoted into the draft, with a line for a comment
     }
     _ => fail("no quote went")
   }
+  // the words sent wait over the field for their row, which this core never gives; the composer's room held as
+  // tall as they went meanwhile, then let go to its own height (both said as they set off)
+  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.assert_idle()
 }
 
 ///|

@@ -108,9 +108,11 @@ priv struct Reading {
   linger : Map[String, (Agent, Double)]
   /// the agents running as last drawn
   running : Map[String, Agent]
-  /// a message gone to (a notification's), flashing since when ("" none: ChatMotion.kt flashed)
+  /// a message gone to (a notification's, "" none: ChatMotion.kt flashed) and how lit it is (flash_of)
   mut flash : String
-  mut flash_at : Double
+  flash_lit : @motion.Anim
+  /// flashes started (each one's own hold, with motion reduced)
+  mut flash_n : Int
 }
 
 ///|
@@ -147,7 +149,8 @@ fn reading_of(key : String) -> Reading {
         linger: {},
         running: {},
         flash: "",
-        flash_at: 0.0,
+        flash_lit: @motion.Anim::new(0.0),
+        flash_n: 0,
       }
       readings[key] = r
       r
@@ -295,7 +298,7 @@ fn messages(
   // (once under way, it goes on while the end is near: the answer coming in grows the list under the reader, who is
   // a moment short of its end until the list follows; only scrolled away, as the way to the newest shows, it ends)
   let playing = em.current is Some(_) || em.queue.length() > 0
-  em.watched = (rd.at_end || (playing && !rd.jump)) && !v.newer && !c.stable() && app_in_front()
+  em.watched = (rd.at_end || (playing && !rd.jump)) && !v.newer && app_in_front()
   let showing : Map[String, Bool] = {}
   for a in v.agents {
     if a.status == "running" {
@@ -440,7 +443,7 @@ fn messages(
                 rd.fresh.remove(keys[i]) |> ignore
               }
               // the rows above go up with the words (ChatHost.kt sendReflow)
-              Some(f) if f.placed_at >= 0.0 =>
+              Some(f) if f.placed =>
                 @motion.layout(
                   c,
                   ri,
@@ -535,7 +538,7 @@ fn messages(
         }
         if at >= 0 {
           go_tos.remove(gk)
-          rd.flash_at = c.now()
+          flash_start(rd)
           c.list_scroll_to(key, at, offset=-(chat_bar_h + 14.0))
           @host.log("chat: gone to message \{target.to_int()}")
         } else {
@@ -664,7 +667,7 @@ fn with_lingering(
     }
   }
   for k, a in rd.running {
-    if !running.contains(k) && !rd.linger.contains(k) && !c.stable() {
+    if !running.contains(k) && !rd.linger.contains(k) {
       rd.linger[k] = (a, now)
     }
   }
@@ -742,7 +745,7 @@ fn row_keys(
     Some(i) => i.at_end || i.gliding
     None => true
   }
-  if rd.drawn && following && !c.stable() {
+  if rd.drawn && following {
     for i, e in list {
       let caught = match e {
         Said(m) => !m.said
@@ -786,9 +789,39 @@ pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
 let flash_held : Ref[Bool] = Ref(false)
 
 ///|
-/// How much a message gone to is lit now (ChatMotion.kt flash: the accent's ground in over 160 ms on Ease.Out, held
-/// to 900, gone by 1700 on the standard curve; with motion reduced there at once, as long, then gone); 0 for any
-/// other message.
+/// A message gone to flashes (ChatMotion.kt flash): the accent's ground in over `flash_in_ms` on Ease.Out, held to
+/// `flash_held_ms`, gone by `flash_ms` on the standard curve.
+let flash_in_ms : Double = 160.0
+
+///|
+let flash_held_ms : Double = 900.0
+
+///|
+let flash_ms : Double = 1700.0
+
+///|
+/// The flash of the message gone to, all of its way said as it starts.
+fn flash_start(rd : Reading) -> Unit {
+  rd.flash_n += 1
+  rd.flash_lit.snap(0.0)
+  rd.flash_lit.animate(
+    0.0,
+    @motion.keyframes_to(
+      [1.0, 1.0, 0.0],
+      duration=flash_ms,
+      times=[0.0, flash_in_ms / flash_ms, flash_held_ms / flash_ms, 1.0],
+      eases=[
+        fn(t) { @motion.Ease::Out.at(t) },
+        fn(t) { t },
+        fn(t) { @motion.Ease::Standard.at(t) },
+      ],
+    ),
+  )
+}
+
+///|
+/// How much a message gone to is lit now (flash_start); 0 for any other message. With motion reduced it is lit whole
+/// for `flash_ms`, then not: less motion, not less said (which message it went to).
 fn flash_of(c : @ui.Ctx, rd : Reading, ts : String) -> Double {
   if rd.flash == "" || rd.flash != ts {
     return 0.0
@@ -796,21 +829,10 @@ fn flash_of(c : @ui.Ctx, rd : Reading, ts : String) -> Double {
   if flash_held.val {
     return 1.0
   }
-  let t = c.now() - rd.flash_at
-  if t >= 1700.0 {
-    rd.flash = ""
-    return 0.0
-  }
-  c.request_frame()
   if @ui.reduced_motion() {
-    1.0
-  } else if t < 160.0 {
-    @motion.Ease::Out.at(t / 160.0)
-  } else if t < 900.0 {
-    1.0
-  } else {
-    1.0 - @motion.Ease::Standard.at((t - 900.0) / 800.0)
+    return if @kit.after(c, "chat-flash/\{rd.flash_n}", true, flash_ms) { 0.0 } else { 1.0 }
   }
+  rd.flash_lit.get()
 }
 
 ///|

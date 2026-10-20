@@ -569,7 +569,7 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
   let k = ink()
   // words sent flying here: the bubble's ground comes in round them on their way (flight.mbt)
   let ground = match flying.val {
-    Some(f) if f.placed_at >= 0.0 => flight_ground(flight_p(c, f))
+    Some(f) if f.placed => flight_ground(flight_p(c, f))
     _ => 1.0
   }
   // gone to (a notification's), the bubble takes the accent's ground as it flashes (Chat.kt Bubble: lit)
@@ -1560,35 +1560,31 @@ fn activity(
         s => s
       }
   }
-  let clock = if c.stable() {
-    ""
-  } else {
-    let now = (src.now)()
-    match a.wait {
-      Some((since, most, _)) => {
-        let waited = match most {
-          Some(sec) => dmin(now, since + sec * 1000.0)
-          None => now
-        }
-        // (stopped at the most it waits)
-        if waited >= now {
-          c.wake_in(to_next_second(waited - since))
-        }
-        elapsed(waited - since) +
-        (match most {
-          Some(sec) => " / " + elapsed(sec * 1000.0)
-          None => ""
-        })
+  let now = (src.now)()
+  let clock = match a.wait {
+    Some((since, most, _)) => {
+      let waited = match most {
+        Some(sec) => dmin(now, since + sec * 1000.0)
+        None => now
       }
-      None =>
-        match a.since {
-          Some(s) => {
-            c.wake_in(to_next_second(now - s))
-            elapsed(now - s)
-          }
-          None => ""
-        }
+      // (stopped at the most it waits)
+      if waited >= now {
+        c.wake_in(to_next_second(waited - since))
+      }
+      elapsed(waited - since) +
+      (match most {
+        Some(sec) => " / " + elapsed(sec * 1000.0)
+        None => ""
+      })
     }
+    None =>
+      match a.since {
+        Some(s) => {
+          c.wake_in(to_next_second(now - s))
+          elapsed(now - s)
+        }
+        None => ""
+      }
   }
   // tapped, its execution history (History.kt), its press drawn round it
   let id = c.id("activity/" + a.key)
