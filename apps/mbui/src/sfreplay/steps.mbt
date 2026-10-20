@@ -288,15 +288,9 @@ pub fn Flow::run_for(self : Flow, ms : Double) -> Unit {
 /// The flow's end: all the run's conversation given, every ask of the run's made again as it was (but `unmade`, the
 /// run's asks this one does not make, each said why at the test), nothing else asked, and the app idle. The screen
 /// as it ends, in a number (screen_sum). The app's core the engine again.
-pub fn Flow::end(self : Flow, unmade? : Array[String] = [], unsettled_ok? : String = "") -> String {
+pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   self.core()
-  // (unsettled_ok: why the app still asks for frames of its own here, until its migration lands; the idle check is
-  // left out for this flow, said on the log)
-  if unsettled_ok == "" {
-    self.t.assert_idle()
-  } else {
-    println("flow: not checked idle: " + unsettled_ok)
-  }
+  self.t.assert_idle()
   let r = self.r
   let why = []
   if r.left() > 0 {

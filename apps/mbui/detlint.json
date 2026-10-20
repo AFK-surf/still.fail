@@ -241,9 +241,7 @@
       "src/sf/tokens.mbt": 6
     },
     "build-effect": {},
-    "unsettled-ok": {
-      "src/sfreplay/steps.mbt": 1
-    }
+    "unsettled-ok": {}
   },
   "excused": {
     "frame-request": {},
