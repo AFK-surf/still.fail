@@ -1,6 +1,8 @@
 ///|
 /// The controls page as kept from mini1 (textrec_mini1_controls_wbtest.mbt), its last frame drawn again.
 fn controls_kept() -> @ui.Tester {
+  // (the page's own values as the run began: not those another test left)
+  reset()
   let t = @ui.Tester::new(fn(c) { gallery(c, "controls") }, w=960.0, h=720.0, text=run_mini1_controls, scale=1.0, time=7950001676.833502 - 16.0, stable=true)
   t.replay_frames(run_mini1_controls) |> ignore
   t

@@ -302,3 +302,45 @@ test "how a view stands is what the run said the host said: still opening, then 
   assert_eq(v.duration(), 4000.0)
   assert_eq(v.natural(), (1920.0, 1080.0))
 }
+
+///|
+test "a native view between pixels is placed on whole device pixels, its hole and clip on the same ones, at any scale" {
+  for scale in [1.0, 2.0, 3.0, 2.625] {
+    let cell : Ref[@ui.NativeView?] = { val: None }
+    let t = @ui.Tester::new(
+      fn(c) {
+        let v = once(cell, fn() {
+          @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+        })
+        c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+          c.box(h=Px(100.3), fn() { () }) |> ignore
+          // a picture fitted between pixels (a 16:9 one in 366 across: 205.875 down)
+          c.native(v, h=Px(300.0), content=Some((12.0, 47.0625, 366.0, 205.875))) |> ignore
+        })
+        |> ignore
+      },
+      scale~,
+    )
+    let on_px = fn(p : Double) { ((p * scale).round() - p * scale).abs() < 1.0e-6 }
+    let (hx, hy, hw, hh) = t.holes()[0]
+    assert_true(on_px(hx) && on_px(hy) && on_px(hx + hw) && on_px(hy + hh), msg="hole at \{scale}")
+    // what the host was told (place ID X Y W H in CX0 CY0 CX1 CY1): its content's edges the hole's, its clip on
+    // whole device pixels too
+    let place = t.views().filter(fn(l) { l.has_prefix("place 1 ") }).last().unwrap()
+    let n = place
+      .split(" ")
+      .to_array()
+      .filter_map(fn(p) {
+        match (try Some(@json.parse(p.to_string())) catch { _ => None }) {
+          Some(Number(d, ..)) => Some(d)
+          _ => None
+        }
+      })
+    // (1, x, y, w, h, cx0, cy0, cx1, cy1)
+    assert_eq(n.length(), 9, msg=place)
+    assert_eq((n[1], n[2], n[1] + n[3], n[2] + n[4]), (hx, hy, hx + hw, hy + hh), msg=place)
+    for i in 5..<9 {
+      assert_true(on_px(n[i]), msg=place)
+    }
+  }
+}

@@ -450,8 +450,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
     return
   }
   // the hole: where the content is, within that, on whole device pixels (no edge row half covered)
-  let sc = self.scale
-  let snap = fn(v : Double) { (v * sc).round() / sc }
+  let snap = fn(v : Double) { device_px(v, self.scale) }
   let hx0 = snap(dmax(x, x0))
   let hy0 = snap(dmax(y, y0))
   let hx1 = snap(dmin(x + w, x1))
@@ -475,14 +474,26 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
     )
   }
   v.painted = self.frame_no
-  v.at[0] = x
-  v.at[1] = y
-  v.at[2] = w
-  v.at[3] = h
-  v.at[4] = x0
-  v.at[5] = y0
-  v.at[6] = x1
-  v.at[7] = y1
+  // (its content on whole device pixels too, as its hole is: placed between pixels, the row its edge half covers
+  // shows what is under the canvas, a line along the picture's edge)
+  let cx0 = snap(x)
+  let cy0 = snap(y)
+  v.at[0] = cx0
+  v.at[1] = cy0
+  v.at[2] = snap(x + w) - cx0
+  v.at[3] = snap(y + h) - cy0
+  v.at[4] = snap(x0)
+  v.at[5] = snap(y0)
+  v.at[6] = snap(x1)
+  v.at[7] = snap(y1)
+}
+
+///|
+/// `v` (points) on the nearest whole device pixel at `scale` device pixels a point (a Mac's 2, a phone's 3, an
+/// Android's 2.625): where a native view, its clip and the hole it shows through are all put, the one rule for all
+/// of them, so that their edges meet on the same pixel (none half covered, showing what is under the canvas).
+fn device_px(v : Double, scale : Double) -> Double {
+  (v * scale).round() / scale
 }
 
 ///|
