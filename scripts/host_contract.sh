@@ -406,7 +406,9 @@ open(sys.argv[2],'wb').write(base64.b64decode(''.join(parts)))
           EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 SHOT_AT=$m ENV="MBUI_SCREEN=$REST_PAGE" bash scripts/android.sh run
           # (said once it is on the screen: MBView's shotFrame)
           $ADB logcat -v raw -m 1 -e "SHOT [0-9]+ [0-9]|SHOT FAIL|FATAL EXCEPTION|Fatal signal" | tr -d '\r' > $O/rest-$m.log
-          grep -aq "^SHOT [0-9]" $O/rest-$m.log && $ADB exec-out screencap -p > $O/rest-$m.png ;;
+          # (and the app's window the one shown, the system's splash gone: android.sh shown)
+          grep -aq "^SHOT [0-9]" $O/rest-$m.log && EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh shown \
+            && $ADB exec-out screencap -p > $O/rest-$m.png ;;
       esac
       grep -aE "SHOT" $O/rest-$m.log | tr -d '\r' | head -2
       if ! grep -aqE "^SHOT [0-9]+ [0-9]" $O/rest-$m.log || [ ! -s $O/rest-$m.png ]; then

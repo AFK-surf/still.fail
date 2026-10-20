@@ -64,6 +64,8 @@ for p in $PLATFORMS; do
       SHOT_AT=100 BENCH=-1 bash scripts/android.sh run
       $A -s emulator-${EMU_PORT:-5580} logcat -v raw -m 1 -e "SHOT [0-9]+ [0-9]|FATAL EXCEPTION|Fatal signal" \
         | grep -q "SHOT [0-9]" || { echo "android: no picture"; fail=1; continue; }
+      # (the app's window the one shown, the system's splash gone)
+      bash scripts/android.sh shown || { fail=1; continue; }
       $A -s emulator-${EMU_PORT:-5580} exec-out screencap -p > out/shots/android.png ;;
   esac
   for p in $names; do

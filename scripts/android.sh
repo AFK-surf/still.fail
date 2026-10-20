@@ -4,7 +4,7 @@
 # emulator of our own (AVD mbui-avd, port 5580). APP=demo|textdiff picks the app (still.fail's apps: its
 # apps/mbui/scripts/android.sh, these scripts on its module);
 # ENV="K=V;K2=V2" gives `run` the app's environment variables (MainActivity sets them before the app starts).
-#   scripts/android.sh build | emu | run [script] | shot NAME | record NAME SECONDS [drive] | log | stop | delete
+#   scripts/android.sh build | emu | run [script] | shown | shot NAME | record NAME SECONDS [drive] | log | stop | delete
 # moon.pkg cannot choose files per OS, so the build runs on a copy of the
 # module in out/android/mod, where an app's src/photos/pictures/android.mbt takes pictures_native.mbt's place.
 #
@@ -228,6 +228,22 @@ case "${1:-build}" in
     $ADB -s $SERIAL shell rm -f /data/local/tmp/$NAME.mp4
     $ADB -s $SERIAL logcat -d -s mbui:I > $R/$NAME.log
     echo "RECORDED $R/$NAME.mp4 ($(grep -c MOTION $R/$NAME.log) moving frames logged)"
+    ;;
+  shown)
+    # Until the app's own window is what the screen shows: it has the focus, and the system's starting window (its
+    # splash, "Splash Screen <package>", or a snapshot's) is gone. A frame on the app's window, focused (MBView's
+    # "SHOT n t"), can still be under the splash as the system fades it out; a picture taken then is the splash's.
+    # (the whole dump: its windows, and each display's focus, mCurrentFocus)
+    for n in $(seq 600); do
+      w=$($ADB -s $SERIAL shell dumpsys window | tr -d '\r')
+      if echo "$w" | grep -q "mCurrentFocus=.* $APP_ID/" && ! echo "$w" | grep -qE "Window\{[0-9a-f]+ u[0-9]+ (Splash Screen $APP_ID|SnapshotStartingWindow)"; then
+        echo "android.sh: $APP_ID's window shown ($n looks)"
+        exit 0
+      fi
+    done
+    echo "android.sh: $APP_ID's window not the one shown ($SERIAL)" >&2
+    echo "$w" | grep -iE "focus|splash|starting" | head -20 >&2
+    exit 1
     ;;
   shot)
     mkdir -p $OUT/shots

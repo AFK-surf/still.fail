@@ -102,7 +102,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             final String said = "SHOT " + shotFrames + " " + t;
             // (and not before the window is the one shown: the system's starting window, its splash, is over the
             // app's until the app's has drawn and taken the focus, a picture as early as the first frame would be of
-            // the splash)
+            // the splash; and the system fades that out after it, so a picture is taken once its window is gone too:
+            // scripts/android.sh shown)
             Runnable say = () -> Choreographer.getInstance().postFrameCallback(a ->
                     Choreographer.getInstance().postFrameCallback(b -> Host.log(said)));
             Host.main.post(() -> {
