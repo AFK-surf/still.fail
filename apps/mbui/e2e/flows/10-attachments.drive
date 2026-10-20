@@ -3,7 +3,7 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
+answered draft.get
 tap icon:plus
 until =文件
 shot 1-sheet
