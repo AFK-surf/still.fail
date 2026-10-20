@@ -173,8 +173,9 @@ priv struct Draft {
   /// what was last kept, and when it last changed
   mut kept : String
   mut changed_at : Double
-  /// when typing last woke the agent's runtime (`session.warm`, once a minute)
-  mut warmed : Double
+  /// how many times typing woke the agent's runtime (`session.warm`, once a minute: the next a minute of this
+  /// composer shown after the last)
+  mut warm_n : Int
   /// the quote whose comment line takes the focus next frame (0 none); -1: the words' field (ids count from 1)
   mut focus : Int
   /// the draft's own name, the core's (DraftView.id: `draft.get` gives it, `draft.put` answers it): another once it
@@ -230,7 +231,7 @@ fn draft_by(src : Source, key : String) -> Draft {
         loaded: false,
         kept: "",
         changed_at: 0.0,
-        warmed: -1.0e12,
+        warm_n: 0,
         focus: 0,
         id: "",
       }
@@ -1136,6 +1137,9 @@ fn composer_bar(
   fresh : Fresh?,
 ) -> Unit {
   let t = @sf.theme()
+  // typing may warm the agent's runtime: the first time, then a minute after the last (asked each frame, so it counts)
+  let warm_due = d.warm_n == 0 ||
+    @kit.after(c, "warm/" + d.key + "/\{d.warm_n}", true, warm_every_ms, later=true)
   let ready = draft_ready(d, locked)
   let plus = c.id("composer/plus")
   let send = c.id("composer/send")
@@ -1248,8 +1252,8 @@ fn composer_bar(
           // typing starts the agent's runtime, so a cold start overlaps the writing (once a minute)
           match v {
             Some(view) if !locked && !src.read_only && view.agents.length() > 0 &&
-              c.now() - d.warmed > warm_every_ms => {
-              d.warmed = c.now()
+              warm_due => {
+              d.warm_n += 1
               (src.call)(
                 "session.warm",
                 {
