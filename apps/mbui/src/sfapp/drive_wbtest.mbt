@@ -129,8 +129,38 @@ fn drive_tester(mode : String) -> @ui.Tester {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.draw()
   // the fixture's pages in
-  t.run_for(@ui.nav_push_ms)
+  nav_rested(t)
   t
+}
+
+///|
+/// Frames on to where the pages' slides said they end (@ui.nav_rest: a page pushed, popped or risen).
+fn nav_rested(t : @ui.Tester) -> Unit {
+  t.draw()
+  let e = @ui.nav_rest()
+  if e > t.time() && e < 1.0e300 {
+    t.run_for(e - t.time())
+  }
+}
+
+///|
+/// Frames on to where the bottom bar said all of it rests (BarModel::rest: its springs and glides).
+fn bar_rested(t : @ui.Tester) -> Unit {
+  t.draw()
+  let e = bar.rest()
+  if e > t.time() && e < 1.0e300 {
+    t.run_for(e - t.time())
+  }
+}
+
+///|
+/// Frames on to where sheet `key` said it is at rest (its springs and its scrim's fade: @kit.sheet_rest).
+fn sheet_rested(t : @ui.Tester, key : String) -> Unit {
+  t.draw()
+  let e = @kit.sheet_rest(key)
+  if e > t.time() && e < 1.0e300 {
+    t.run_for(e - t.time())
+  }
 }
 
 ///|
@@ -161,7 +191,7 @@ test "文件: each station's home and folders lent under its name; one away fain
 test "a folder: what it holds in a line, folders first, hidden files left out; in and back by the crumbs" {
   let t = drive_tester("files")
   t.tap_text("文档")
-  t.run_for(@ui.nav_push_ms)
+  nav_rested(t)
   assert_true(t.find("2 个文件夹 · 7 个文件") is Some(_))
   assert_true(t.find(".草稿缓存") is None)
   let (_, y1) = t.find("设计稿").unwrap()
@@ -170,13 +200,15 @@ test "a folder: what it holds in a line, folders first, hidden files left out; i
   assert_true(t.find("14:05") is Some(_))
   t.tap_text("设计稿")
   assert_eq(app.nav.depth(), 4)
-  t.run_for(@ui.nav_push_ms)
+  nav_rested(t)
   assert_true(t.find("配色说明.md") is Some(_))
   // the crumbs: 文档 › 设计稿, the root a way back
   t.tap_text("文档")
   assert_eq(app.nav.depth(), 3)
-  t.run_for(@ui.nav_push_ms)
+  nav_rested(t)
   assert_true(t.find("长篇小说.txt") is Some(_))
+  // (the bottom bar comes back over the place's pages on its springs: run to where they said they rest)
+  bar_rested(t)
   t.assert_idle()
 }
 
@@ -187,10 +219,13 @@ test "held: chosen; its sheet renames it, the folder shows the new name" {
   assert_true(t.find("已选 1 项") is Some(_))
   let log = t.drive("tap icon:more\nuntil 复制路径\nuntil 移到废纸篓\ntap 重命名\nuntil 保存\ntap 季度数据.csv\nclear\ntype 年度数据.csv\ntap 保存\ngone 保存\n")
   assert_true(log.contains("EXIT 0"))
-  assert_true(t.find("年度数据.csv") is Some(_))
-  // (the old name is the title of the sheet still sinking away: closed already, only drawn)
   assert_true(dv.sheet is NoSheet)
+  // (its sheet sunk away)
+  sheet_rested(t, "dv-sheet")
+  assert_true(t.find("年度数据.csv") is Some(_))
+  assert_true(t.find("季度数据.csv") is None)
   assert_true(t.find("已选 1 项") is None)
+  t.assert_idle()
 }
 
 ///|
@@ -202,6 +237,8 @@ test "deleted to the station's trash, said so; a new folder made" {
   let log = t.drive("tap icon:plus\ntap 新建文件夹\ntap 文件夹名\ntype 新的文件夹\ntap =新建\nuntil 新的文件夹\n")
   assert_true(log.contains("EXIT 0"))
   assert_true(t.find("新的文件夹") is Some(_))
+  sheet_rested(t, "dv-sheet")
+  t.assert_idle()
 }
 
 ///|
@@ -221,23 +258,25 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
   let t = drive_tester("drive")
   t.tap_text("长篇小说.txt")
   // in, and where it was left waited on (none here)
-  t.run_for(@ui.nav_push_ms + reader_place_ms)
+  nav_rested(t)
+  t.run_for(reader_place_ms)
   assert_true(t.find("上一章") is None)
   t.tap(195.0, 420.0)
   t.run_for(reader_bars_ms)
   assert_true(t.find("上一章") is Some(_))
   assert_true(t.find("目录") is Some(_))
   t.tap_text("目录")
-  t.settle() |> ignore
+  sheet_rested(t, "dv-reader-sheet")
   assert_true(t.find("第四章 回程") is Some(_))
   t.tap_text("第四章 回程")
-  // the jump made, where it is kept once it is still (the panel sinks away on its springs meanwhile)
+  // the panel sunk away, the jump made, where it is kept once it is still
+  sheet_rested(t, "dv-reader-sheet")
   t.run_for(reader_still_ms)
   assert_true(t.find("第四章 回程") is Some(_))
   // left: where it was, kept on this device
   t.back()
   assert_eq(app.nav.depth(), 3)
-  t.run_for(@ui.nav_push_ms)
+  nav_rested(t)
   t.draw()
   match fix_places.get("长篇小说.txt") {
     // at the fourth chapter (a little before it shows too)
@@ -248,6 +287,7 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
     }
     None => fail("no place kept: \{fix_places.keys().collect()} \{reader_ui.length()} \{dv_reads.length()}")
   }
+  t.assert_idle()
 }
 
 ///|
@@ -262,6 +302,10 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the draft, 
   )
   assert_true(log.contains("EXIT 0"))
   assert_eq(refs_of("ws1/st1:s-c1").length(), 0)
+  // its sheet sunk away, the words sent flown to their row
+  sheet_rested(t, "dv-reader-sheet")
+  t.run_for(flight_ms)
+  t.assert_idle()
 }
 
 ///|
@@ -269,7 +313,7 @@ test "a text read where it was left goes there, then asks for no frame more" {
   // (the fixture's 长篇小说.txt was left at 2400 in every reader mode but `reader`: in its third block)
   let t = drive_tester("reader-bars")
   // the reader's page in, then where it went kept once it holds still
-  t.run_for(@ui.nav_push_ms)
+  nav_rested(t)
   t.run_for(reader_still_ms)
   let r = reading_for(reader_key({ station: "ws1/st1", root: Some(fix_docs), path: "长篇小说.txt" }))
   assert_eq(r.jump_step, 0)

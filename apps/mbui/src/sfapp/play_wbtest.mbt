@@ -18,7 +18,7 @@ test "the player left: where it was kept on the device (drive.place), its view c
   t.back()
   // the page's way out; once it is gone (the frame after), where it was kept and its view closed (app.mbt's
   // left_pages are let go of at the start of a frame after that one, which nothing asks for yet: drawn here)
-  t.run_for(@ui.nav_push_ms)
+  nav_rested(t)
   t.draw()
   t.draw()
   match fix_places.get(fix_films + "/第02集.mp4") {
@@ -36,7 +36,7 @@ test "the player left: where it was kept on the device (drive.place), its view c
 test "a video's row on a folder's page plays it" {
   let t = drive_tester("drive")
   t.tap_text("演示录屏.mp4")
-  t.run_for(@ui.nav_push_ms)
+  nav_rested(t)
   match app.nav.top() {
     DrivePlay(at) => assert_eq(at.path, "演示录屏.mp4")
     _ => fail("not the player")

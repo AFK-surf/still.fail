@@ -52,7 +52,6 @@
       "src/sfcore/signin.mbt": 1
     },
     "settle": {
-      "src/sfapp/drive_wbtest.mbt": 1,
       "src/sfapp/newchat_wbtest.mbt": 5
     },
     "flow-wait": {

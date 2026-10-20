@@ -9,7 +9,7 @@ fn share_tester(mode : String) -> @ui.Tester {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.draw()
   // the fixture's pages in
-  t.run_for(@ui.nav_push_ms)
+  nav_rested(t)
   t
 }
 
@@ -36,7 +36,7 @@ test "a chat tapped: what is shared goes to its composer and the chat opens; a n
   assert_true(n.find("MBA") is Some(_))
   n.tap_text("MBA")
   assert_true(app.nav.top() is NewChat)
-  n.run_for(@ui.nav_rise_ms)
+  nav_rested(n)
 }
 
 ///|

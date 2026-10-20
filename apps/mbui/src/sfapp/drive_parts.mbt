@@ -412,7 +412,7 @@ fn dv_fit(rows : Int) -> Double {
 /// A sheet from the bottom over the page (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%, a tap beside
 /// it closes it), top corners of 26, frosted over the page and the scrim (@sf.sheet_look; `ground`: on that instead),
 /// only drawn while it closes; `h` tall (most of the screen at most). Its grabber (SheetGrab) and head (SheetHead), then
-/// `body`. The drive's sheets are one sheet, the reader's panels (`reader`) another. `closing`: closed, drawn sinking
+/// `body`. The drive's sheets are one sheet, the reader's panels and Station 文件's (`reader`) another. `closing`: closed, drawn sinking
 /// away on the sheet's springs (they ask for their frames) until it has gone, `gone` then told.
 fn dv_sheet_frame(
   c : @ui.Ctx,

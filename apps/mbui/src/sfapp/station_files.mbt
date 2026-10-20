@@ -269,6 +269,8 @@ fn station_files_sheet(c : @ui.Ctx, src : Source, w : String, key : String) -> U
     tr("web-pages.chat.files"),
     c.height * 0.86,
     closing~,
+    // (the reader's sheet: one of its own over the chat, not the drive's)
+    reader=true,
     close=Some(fn() { station_files_close(c) }),
     gone=fn() { sfs.closing = false },
     fn() {
@@ -570,6 +572,7 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
     r.name,
     dv_fit(rows) + 30.0,
     closing~,
+    reader=true,
     close=Some(fn() { sfs.ref_closing = true }),
     gone=fn() {
       sfs.ref = None
