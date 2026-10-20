@@ -419,6 +419,11 @@ pub let leading_scale : @ui.LeadingScale = {
 pub let radii : @ui.RadiusScale = { ..@ui.RadiusScale::tailwind(), xl2: 18.0, xl3: card_corner }
 
 ///|
+/// A large title's letters drawn closer (Parts.kt:559, 562 LargeTitle: letterSpacing -0.6sp): off Tailwind's scale
+/// (Tight is -0.8 at 32).
+pub let large_title_tracking : @ui.Tracking = Exact(-0.6)
+
+///|
 /// A message's line (24.75: Chat.kt:1363, 1367, 1374), the one place Android says it.
 pub let message_line : @ui.Leading = Exact(24.75)
 

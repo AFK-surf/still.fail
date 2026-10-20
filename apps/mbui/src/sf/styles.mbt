@@ -67,8 +67,14 @@ pub let back : @ui.TextStyle = @ui.text_style(size=Xl2, color=Link, wrap=false)
 pub let bar_title : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
 
 ///|
-/// A page's large title, on one line (32/44.8, bold: Parts.kt:559 LargeTitle).
-pub let large_title : @ui.TextStyle = @ui.text_style(size=Xl4, weight=Bold, color=Fg, wrap=false)
+/// A page's large title, on one line, its letters 0.6 closer (32/44.8, bold: Parts.kt:559 LargeTitle).
+pub let large_title : @ui.TextStyle = @ui.text_style(
+  size=Xl4,
+  weight=Bold,
+  color=Fg,
+  tracking=large_title_tracking,
+  wrap=false,
+)
 
 ///|
 /// Modifiers laid over a role (`@sf.meta.then(@sf.bad)`): what went wrong, quieter, heavier, on one line, centred
