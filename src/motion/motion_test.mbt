@@ -131,15 +131,17 @@ test "an animated value starts the frame it is asked in, and follows its target"
   // asked this frame: it starts here, at its start
   assert_eq(seen[seen.length() - 1], 0.0)
   let start = t.time()
+  // (where a linear tween is at a frame: the whole ms since it started, of its length)
+  let linear = fn() { (t.time() - start).floor() / tween_ms }
   t.run_for(tween_ms / 10.0)
-  assert_true(near(seen[seen.length() - 1], 0.1, 1.0e-9))
+  assert_true(near(seen[seen.length() - 1], linear(), 1.0e-9))
   t.run_for(start + tween_ms / 2.0 - t.time())
-  assert_true(near(seen[seen.length() - 1], 0.5, 1.0e-9))
-  // turned back mid-way: from where it is in the frame it is told in (0.6), back from there on
+  assert_true(near(seen[seen.length() - 1], linear(), 1.0e-9))
+  // turned back mid-way: from where it is in the frame it is told in, back from there on
   shown.val = false
   t.run_for(tween_ms / 10.0)
   let back = seen[seen.length() - 1]
-  assert_true(near(back, 0.6, 1.0e-9), msg="\{back}")
+  assert_true(near(back, linear(), 1.0e-9), msg="\{back}")
   t.run_for(tween_ms / 10.0)
   assert_true(seen[seen.length() - 1] < back)
   // on its way still, to its own end
@@ -642,6 +644,8 @@ test "an Anim's start is the frame it is told in, whoever asks its end then or b
   quiet.draw()
   let a2 : Ref[@motion.Anim?] = Ref(None)
   let asked = told_once(true, fade_ms, a2)
+  // (told in its first frame)
+  let told = asked.time()
   asked.draw()
   let end = fn(r : Ref[@motion.Anim?]) {
     match r.val {
@@ -653,7 +657,7 @@ test "an Anim's start is the frame it is told in, whoever asks its end then or b
   let e = end(a2)
   assert_eq(e, end(a1))
   assert_eq(end(a2), e)
-  assert_eq(e, asked.time() + fade_ms)
+  assert_eq(e, told + fade_ms)
   // asked again half-way, the same
   asked.run_for(fade_ms / 2.0)
   assert_eq(end(a2), e)
@@ -756,12 +760,13 @@ test "a chain of tweens each from the one before's declared end, whichever frame
   // the whole chain and a frame or so after it
   let after_ms = 100.0
   t.run_for(lengths[0] + lengths[1] + lengths[2] + after_ms)
-  // each frame: the segment it is in, as far on as the time since the chain's start says (once its segment is told)
+  // each frame: the segment it is in, as far on as the time since the chain's start says (once its segment is told;
+  // in whole ms, as a motion's time goes)
   let ends = [start + lengths[0], start + lengths[0] + lengths[1], start + lengths[0] + lengths[1] + lengths[2]]
   for f in seen {
     let (now, j, v) = f
     let from = if j == 0 { start } else { ends[j - 1] }
-    let want = if now >= ends[j] { 1.0 } else { (now - from) / lengths[j] }
+    let want = if now >= ends[j] { 1.0 } else { (now - from).floor() / lengths[j] }
     assert_true(near(v, want, 1.0e-9), msg="at \{now} segment \{j}: \{v} not \{want}")
   }
   // the last one's end: the three lengths from the first's start, exactly
@@ -794,13 +799,13 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   let start = segs[0].ends() - lengths[0]
   // unseen a while: nothing asks it on, the first is over long since
   shown.val = false
-  let unseen_ms = 150.0
-  t.run_for(unseen_ms)
-  // seen again at 150 ms in: the first and second over (100, 170 is still to come: the second under way)
+  // seen again at the display's frame at or past the second's middle: the first over (100), the second under way
+  // (170 still to come)
+  t.run_for(t.display_frame(start + lengths[0] + lengths[1] / 2.0) - t.frame_period() - t.time())
   shown.val = true
   t.draw()
   assert_eq(k.val, 1)
-  assert_true(near(segs[1].get(), (t.time() - (start + lengths[0])) / lengths[1], 1.0e-9))
+  assert_true(near(segs[1].get(), (t.time() - (start + lengths[0])).floor() / lengths[1], 1.0e-9))
   assert_false(segs[0].moving())
   assert_true(segs[1].moving())
   // (said to move: only the one under way)

@@ -172,10 +172,13 @@ test "held long: long_pressed once, and no click when let go" {
     }
   })
   let (x, y, w, h) = t.get(Button, label="hold me").rect
+  // (held from the moment the finger went down: the press's own time)
+  let pressed = t.time()
   t.press_at(x + w / 2.0, y + h / 2.0)
   t.draw()
-  let due = t.time() + long_press_ms
-  t.run_for(long_press_ms - 1.0)
+  let due = pressed + long_press_ms
+  // (the display's last frame before it)
+  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
   assert_eq(log, [])
   t.run_for(due - t.time())
   assert_eq(log, ["long"])

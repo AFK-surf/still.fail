@@ -190,13 +190,15 @@ test "Android: a fling follows Compose's spline frame by frame, from the velocit
   while t.list_moving() && frames < 400 {
     t.frame()
     frames = frames + 1
-    let played = t.time() - t0
+    // (in whole ms played, as Compose's)
+    let played = (t.time() - t0).floor()
     let want = spline_at(played, dur).0 * dist
     approx(t.list_offset() - start, want, 0.01)
   }
   approx(t.list_offset() - start, dist, 0.01)
-  // it ends at the frame its duration is over
-  approx((frames * 16).to_double(), dur, 16.0)
+  // it ends at the frame its duration is over (in whole ms): the display's at or past it
+  assert_true(frames > 0)
+  assert_eq(t.time(), t.display_frame(t0 + dur.ceil()))
 }
 
 ///|

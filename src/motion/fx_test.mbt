@@ -18,20 +18,35 @@ fn run_frames(t : @ui.Tester, n : Int) -> Unit {
 ///|
 test "animate: the value the view reads at frame n is the transition's generator at n frames" {
   let seen : Array[Double] = []
+  let at : Array[Double] = []
+  let started = Ref(-1L)
   let x = Ref(@motion.Value::new(0.0))
   let spec = @motion.spring_to(stiffness=300.0, damping=20.0)
   let t = @ui.Tester::new(fn(c) {
     x.val = @motion.value(c, "x", 0.0)
-    c.effect("go", async fn(_s) { ignore(x.val.animate(100.0, spec)) })
+    c.effect("go", async fn(_s) {
+      started.val = @effect.now()
+      ignore(x.val.animate(100.0, spec))
+    })
     seen.push(x.val.get())
+    at.push(c.now())
   })
-  // forked in the first frame (at 1016), run in the frame it owes at that moment (where it starts: seen[1]); every
-  // frame after reads where the spring is 16 ms more on
+  // forked in the first frame, run in a frame after; from the frame it starts in, every frame reads where the spring is
+  // by then (the runtime's clock: the frame's moment in whole ms)
   let g = @motion.spring_generator(0.0, 100.0, stiffness=300.0, damping=20.0)
   run_frames(t, 20)
-  for k in 0..=20 {
-    assert_true(same(seen[k + 1], g.next(16.0 * k.to_double()).value), msg="frame \{k}: \{seen[k + 1]}")
+  assert_true(started.val >= 0L)
+  let mut read = 0
+  for k, now in at {
+    let since = now.floor() - started.val.to_double()
+    let want = if since < 0.0 { 0.0 } else { g.next(since).value }
+    assert_true(same(seen[k], want), msg="frame \{k} at \{now}: \{seen[k]} not \{want}")
+    if since >= 0.0 {
+      read += 1
+    }
   }
+  // (twenty frames of it at least)
+  assert_true(read >= 20, msg="\{read}")
   // and it stops asking for frames once it is there: at the spring's own end
   t.run_for(x.val.ends_at() - t.time())
   assert_eq(x.val.get(), 100.0)
@@ -45,16 +60,18 @@ test "Value::ends_at: its start and its length, as it was told; -1 when nothing 
   let tween_ms = 200.0
   let x = Ref(@motion.Value::new(0.0))
   let go = Ref(true)
+  let told = Ref(0L)
   let t = @ui.Tester::new(fn(c) {
     x.val = @motion.value(c, "x", 0.0)
     if go.val {
       go.val = false
+      told.val = @ui.runtime().now()
       ignore(x.val.start(100.0, @motion.tween_to(duration=tween_ms, ease=@motion.linear)))
     }
   })
-  // told in the first frame, at its moment
+  // told in the first frame, at its moment (the runtime's clock)
   let end = x.val.ends_at()
-  assert_eq(end, t.time() + tween_ms)
+  assert_eq(end, told.val.to_double() + tween_ms)
   // asked again half-way, the same
   t.run_for(tween_ms / 2.0)
   assert_eq(x.val.ends_at(), end)
@@ -80,12 +97,14 @@ test "a timeline: each animation awaited in turn; the next starts the frame the 
     })
     log.push("\{x.get()} \{y.get()}")
   })
-  // the timeline's own length: x's, then y's (told at its first frame's moment, 1016: the frame it owes there starts
-  // it)
-  t.run_for(x_ms + y_ms)
+  // the timeline's own length, from where it started: x's, then y's. Forked in the first frame (the display's first
+  // after the Tester's start, 1016.7), run at the start of the next at the time it was forked (the runtime's 1016).
+  // Each frame of the display's (1000/60 ms apart) reads where the tweens are in whole ms: x at 1033 is 17 of its 64
+  // ms on, at 1050 34, at 1066 50, there at 1083 (67); y from 1083, at 1100 17 of its 32, there at 1116
+  let started = (1000.0 + t.frame_period()).floor()
+  t.run_for(started + x_ms + y_ms - t.time())
   assert_eq(log, [
-    "0 0", "0 0", "2.5 0", "5 0", "7.5 0", "x there at 1080", "10 0", "10 5", "y there at 1112",
-    "10 10",
+    "0 0", "2.65625 0", "5.3125 0", "7.8125 0", "x there at 1083", "10 0", "10 5.3125", "y there at 1116", "10 10",
   ])
   t.assert_idle()
 }
@@ -140,22 +159,29 @@ test "in parallel (all) both move from the same frame; staggered, each `each` ms
 
 ///|
 /// A spring to 100 interrupted at frame `k` by one back to 0, told from a fiber that runs in the same frame as the
-/// spring's own: the values the view reads, frame by frame.
-fn interrupted(seed : Int, k : Int) -> Array[Double] {
-  let seen : Array[Double] = []
+/// spring's own: the values the view reads, frame by frame, each with its frame's moment; and the moments (the
+/// runtime's clock) the two set out at.
+fn interrupted(seed : Int, k : Int) -> (Array[(Double, Double)], Int64, Int64) {
+  let seen : Array[(Double, Double)] = []
   let xv = Ref(@motion.Value::new(0.0))
+  let out = Ref(-1L)
+  let back = Ref(-1L)
   let t = @ui.Tester::new(
     fn(c) {
       let x = @motion.value(c, "x", 0.0)
       xv.val = x
-      c.effect("go", async fn(_s) { ignore(x.animate(100.0, @motion.spring_to(stiffness=200.0, damping=15.0))) })
+      c.effect("go", async fn(_s) {
+        out.val = @effect.now()
+        ignore(x.animate(100.0, @motion.spring_to(stiffness=200.0, damping=15.0)))
+      })
       c.effect("back", async fn(_s) {
         for _ in 0..<k {
           @effect.next_frame()
         }
+        back.val = @effect.now()
         ignore(x.animate(0.0, @motion.spring_to(stiffness=200.0, damping=15.0)))
       })
-      seen.push(x.get())
+      seen.push((c.now(), x.get()))
     },
     seed~,
   )
@@ -167,28 +193,39 @@ fn interrupted(seed : Int, k : Int) -> Array[Double] {
   // to the spring back's own end
   t.run_for(xv.val.ends_at() - t.time())
   t.assert_idle()
-  // from the frame they start in (the one the first frame owes, at its moment: the fibers forked in it run there)
-  seen[1:].to_array()
+  (seen, out.val, back.val)
 }
 
 ///|
 test "interrupted, an animation hands on where the value is and how fast it goes, whichever fiber ran first" {
   let k = 6
-  let base = interrupted(1, k)
+  let (base, out, back) = interrupted(1, k)
   // over seeds: the same values, frame for frame (the new one samples the old at that instant)
-  @effect.for_seeds(count=30, s => assert_eq(interrupted(s, k), base))
-  // and they are Motion's: the second spring starts where the first was at frame k, with its velocity
+  @effect.for_seeds(count=30, s => assert_eq(interrupted(s, k), (base, out, back)))
+  // and they are Motion's: the second spring starts where the first was as it took over, with its velocity (the
+  // runtime's clock: whole ms)
   let g1 = @motion.spring_generator(0.0, 100.0, stiffness=200.0, damping=15.0)
-  let at = 16.0 * k.to_double()
+  let at = (back - out).to_double()
   let x0 = g1.next(at).value
   let v0 = g1.velocity(at)
   let g2 = @motion.spring_generator(x0, 0.0, stiffness=200.0, damping=15.0, velocity=v0)
-  for j in 1..=10 {
-    assert_true(same(base[k + j], g2.next(16.0 * j.to_double()).value), msg="frame \{k + j}")
+  let mut after = 0
+  let mut took = -1
+  for f, e in base {
+    let (now, v) = e
+    let since = now.floor() - back.to_double()
+    if since >= 0.0 {
+      if took < 0 {
+        took = f
+      }
+      after += 1
+      assert_true(same(v, g2.next(since).value), msg="frame \{f} at \{now}: \{v}")
+    }
   }
+  assert_true(after > 10, msg="\{after}")
   // it went on upwards first (velocity carried), then came back
-  assert_true(base[k + 1] > base[k])
-  assert_eq(base[base.length() - 1], 0.0)
+  assert_true(base[took + 1].1 > base[took].1)
+  assert_eq(base[base.length() - 1].1, 0.0)
 }
 
 ///|
@@ -383,19 +420,24 @@ test "layout: a node that moves is drawn from where it was, and goes to its new 
   })
   let (_, y0) = t.drawn_of("card").unwrap()
   top.val = false
-  t.draw()
-  // laid out 200 lower, drawn where it was
+  // the frame that takes it: laid out 200 lower, drawn where it was; it sets out there (the runtime's clock: that
+  // frame's moment in whole ms)
+  t.frame()
   let (_, y1) = t.drawn_of("card").unwrap()
   assert_true(same(y1, y0))
-  let ys : Array[Double] = []
+  let set_out = t.time().floor()
+  let ys : Array[(Double, Double)] = []
   // its way in tenths
   for _ in 0..<10 {
     t.run_for(move_ms / 10.0)
-    ys.push(t.drawn_of("card").unwrap().1)
+    ys.push((t.time(), t.drawn_of("card").unwrap().1))
   }
-  // 20 px a tenth (linear), there at the end
-  for k, y in ys {
-    assert_true(same(y, y0 + 20.0 * (k + 1).to_double()), msg="frame \{k}: \{y}")
+  // as far down the 200 as the whole ms since it set out say (linear), there at the end
+  for k, e in ys {
+    let (now, y) = e
+    let p = (now.floor() - set_out) / move_ms
+    let want = y0 + 200.0 * (if p > 1.0 { 1.0 } else { p })
+    assert_true(same(y, want), msg="frame \{k} at \{now}: \{y} not \{want}")
   }
   t.draw()
   assert_true(same(t.drawn_of("card").unwrap().1, y0 + 200.0))

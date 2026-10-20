@@ -12,19 +12,20 @@ test "the runtime's clock is the frames' clock: a sleep wakes in the frame its t
       woke.push(@effect.now())
     })
   })
-  let due = t.time() + nap.to_double()
-  // the first frame (1016) forked it; it first ran at the start of the second, at the time it was forked (what is
-  // ready at a time runs at that time, before the clock moves on), and sleeps until 1116
+  // its first frame (the display's first after the Tester's start: 1016.7, the runtime's 1016) forked it; it first
+  // ran at the start of the second, at the time it was forked, and sleeps until 1116
+  let ran = (1000.0 + t.frame_period()).floor().to_int64()
+  let due = ran + nap.to_int64()
   t.frame()
-  assert_eq(@ui.runtime().now(), 1032L)
+  assert_eq(@ui.runtime().now(), t.time().floor().to_int64())
   assert_eq(woke, [])
-  t.run_for(due - 1.0 - t.time())
-  // a frame at 1115: not yet
+  // the display's last frame before it (1100): not yet
+  t.run_for(t.display_frame(due.to_double()) - t.frame_period() - t.time())
   assert_eq(woke, [])
-  t.run_for(nap.to_double() / 4.0)
-  // a frame at 1140: the timer fired at its own time, before the frame's
-  assert_eq(woke, [1116L])
-  assert_eq(@ui.runtime().now().to_double(), t.time())
+  // the frame its time falls in (1116.7): the timer fired at its own time, before the frame's
+  t.run_for(t.frame_period())
+  assert_eq(woke, [due])
+  assert_eq(@ui.runtime().now().to_double(), t.time().floor())
 }
 
 ///|
@@ -50,12 +51,14 @@ test "a frame's handler forks; the fiber first runs at the start of the next fra
   let (x, y) = t.find("Go").unwrap()
   t.touch(0, x, y)
   t.touch(2, x, y)
-  // at 1016, the tap's frame: the handler forks; the frame after (at that moment): the fiber runs first, then the view;
-  // it sleeps until 1048
+  // the tap's frame (the display's next, 1033.3): the handler forks; the frame after: the fiber runs first, at the time
+  // it was forked (1033), then the view; it sleeps until 1065
+  let tapped = t.next_frame_time().floor().to_int64()
   t.draw()
-  assert_eq(log[0:3].to_array(), ["view idle", "fiber at 1016", "view busy"])
-  let due = t.time() + nap.to_double()
-  t.run_for(due - 1.0 - t.time())
+  assert_eq(log[0:3].to_array(), ["view idle", "fiber at \{tapped}", "view busy"])
+  let due = (tapped + nap.to_int64()).to_double()
+  // the display's last frame before it
+  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
   assert_eq(log[log.length() - 1], "view busy")
   assert_false(log.contains("view done"))
   t.run_for(due - t.time())
@@ -73,10 +76,12 @@ test "next_frame steps a fiber once a frame, at the frame's time" {
       }
     })
   })
-  // frames keep coming while it waits for them (four frames' time: a frame each 16 ms, a 60 Hz display's, as a
-  // drag's moves come), and stop when it is done
-  t.run_for(4.0 * @ui.drag_step_ms)
-  assert_eq(times, [1016L, 1032L, 1048L, 1064L])
+  // its first frame (the display's first after the Tester's start, 1016.7) forked it, its first step at that time.
+  // Frames keep coming while it waits for them (four frames' time: the display's, 1000/60 ms apart), and stop when it
+  // is done: each step at its frame's time in whole ms (1016, 1033, 1050, 1066)
+  let first = 1000.0 + t.frame_period()
+  t.run_for(4.0 * t.frame_period())
+  assert_eq(times, [0, 1, 2, 3].map(fn(k) { (first + k.to_double() * t.frame_period()).floor().to_int64() }))
   assert_true(!t.ctx().wants_frame)
   t.assert_idle()
 }
@@ -107,20 +112,24 @@ test "a lifetime ends the first frame its key is not built: its fibers interrupt
       })
     }
   })
+  // (forked in its first frame, the display's first after the Tester's start: 1016.7, started at that time)
+  let first = (1000.0 + t.frame_period()).floor()
   t.frame()
   t.frame()
   shown.val = false
   t.frame()
-  // 1064: not built, its life ends (closed at the start of the next frame, at 1064)
-  assert_eq(log, ["started at 1016"])
+  // not built (1066.7): its life ends, closed at the start of the next frame, at the time it was not built (1066)
+  let gone = t.time().floor()
+  assert_eq(log, ["started at \{first}"])
   t.frame()
-  assert_eq(log, ["started at 1016", "fiber ended at 1064", "finalizer at 1064"])
-  // built again: a new life
+  assert_eq(log, ["started at \{first}", "fiber ended at \{gone}", "finalizer at \{gone}"])
+  // built again: a new life, forked in the frame that builds it, run at its time
   shown.val = true
+  let built = t.next_frame_time().floor()
   t.frame()
   t.frame()
   assert_eq(log.length(), 4)
-  assert_eq(log[3], "started at 1096")
+  assert_eq(log[3], "started at \{built}")
 }
 
 ///|

@@ -1,23 +1,24 @@
-// Time in a test is said by the test (docs/determinism.md): an input is handed in and the frames it causes drawn, at
-// its moment; time goes on only by `run_for` (a declared duration: a motion's, a timer's); and at its end nothing may
-// go on asking for frames (`assert_idle`). Nothing waits for motion to end: motion only draws what the state already
+// Time in a test is said by the test (docs/determinism.md): an input is handed in and the frames it causes drawn, each
+// at the display's next frame (a host draws only at its display's vsync: Tester::frame, 1000/60 ms apart by default);
+// time goes on by `run_for` (a declared duration: a motion's, a timer's), to the display's first frame at or past it;
+// and at its end nothing may go on asking for frames (`assert_idle`). Nothing waits for motion to end: motion only draws what the state already
 // is, so what a test asserts of the state holds as the input is taken, and a picture is taken at a moment the test
 // names.
 
 ///|
-/// The frames owed now, drawn at this moment (no time goes by): after an input, the frame that takes it, the one after
-/// (what read it late: a list's rows), a layout read back once more; after a change the test made (a value it set),
-/// the frame that shows it; a motion said, the frame it starts at. Not a motion going on: at this moment it is where
-/// it is (time goes on by run_for). Three at most: a layout read back still moving after them never converges, and
-/// the test fails, saying whose.
+/// The frames owed now, each at the display's next frame, as a host draws them: after an input, the frame that takes
+/// it, the one after (what read it late: a list's rows), a layout read back once more; after a change the test made (a
+/// value it set), the frame that shows it; a motion said, the frame it starts at. Not a motion going on (time goes on
+/// by run_for). Three at most: a layout read back still moving after them never converges, and the test fails, saying
+/// whose.
 pub fn Tester::draw(self : Tester) -> Unit {
   self.frame(ms=0.0)
   self.draw_owed(1)
 }
 
 ///|
-/// The frames owed at this moment drawn (Tester::draw's, after `n` drawn at it already): what a frame left owed is
-/// drawn where the Tester stands, at its making (Tester::new) and a run's end (run_for), not left to the next input.
+/// The frames owed drawn (Tester::draw's, after `n` drawn already), each at the display's next frame: what a frame left
+/// owed is drawn as the Tester stands, at its making (Tester::new) and a run's end (run_for), not left to the next input.
 fn Tester::draw_owed(self : Tester, n : Int) -> Unit {
   let mut n = n
   while self.owed_now() {
@@ -36,7 +37,7 @@ fn Tester::draw_owed(self : Tester, n : Int) -> Unit {
 }
 
 ///|
-/// The most frames drawn at one moment (Tester::draw).
+/// The most frames drawn owed one after another (Tester::draw).
 let draw_frames_most = 3
 
 ///|
@@ -81,14 +82,12 @@ pub fn rest_of(name : String) -> Double {
 }
 
 ///|
-/// `ms` on the frames' clock, a frame each 16 ms, the last at `ms`.
+/// `ms` on the frames' clock, a frame at each of the display's frames, the last the first at or past `ms` (where a
+/// host would show what is so at `ms`).
 pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
   let end = self.fake.time + ms
-  while self.fake.time + 16.0 < end {
+  while self.fake.time < end - 1.0e-9 {
     self.frame()
-  }
-  if end > self.fake.time {
-    self.frame(ms=end - self.fake.time)
   }
   // (what its last frame said starts there: drawn at that moment, as an input's frames are)
   self.draw_owed(1)

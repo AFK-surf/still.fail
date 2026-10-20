@@ -211,22 +211,34 @@ test "the pressed item laid out anew (its words longer): its thumb on it in the 
 
 ///|
 test "another item pressed: the thumb on its way between the two, and another chosen mid-way it goes on from there" {
-  let v = Ref(["l"])
-  let t = slid_group(Ref(0.0), v)
-  t.draw()
-  t.click(@ui.Radio, label="Right")
-  assert_eq(v.val, ["r"])
   // a moment on its way
   let mid_way = 60.0
-  t.run_for(mid_way)
+  let on_its_way = fn(v : Ref[Array[String]]) -> @ui.Tester raise {
+    let t = slid_group(Ref(0.0), v)
+    t.draw()
+    t.click(@ui.Radio, label="Right")
+    assert_eq(v.val, ["r"])
+    t.run_for(mid_way)
+    assert_false(thumb_on(t, "Left"))
+    assert_false(thumb_on(t, "Right"))
+    t
+  }
+  // where it is the frame after, nothing else chosen: still on its way to Right
+  let going_on = {
+    let t = on_its_way(Ref(["l"]))
+    t.draw()
+    thumb_of(t)
+  }
+  let v = Ref(["l"])
+  let t = on_its_way(v)
   let before = thumb_of(t)
-  assert_false(thumb_on(t, "Left"))
-  assert_false(thumb_on(t, "Right"))
-  // another chosen at the same moment (the view's choice): from where it is, not from an item
+  // another chosen (the view's choice), the frame that takes it: from where it is in that frame, not from an item; the
+  // same frame as going on would have shown, not a jump
   v.val = ["m"]
   t.draw()
   let after = thumb_of(t)
-  assert_true((after.0 - before.0).abs() < 0.000001 && (after.2 - before.2).abs() < 0.000001)
+  assert_true((after.0 - going_on.0).abs() < 0.000001 && (after.2 - going_on.2).abs() < 0.000001)
+  assert_true(after != before)
   t.run_for(@ui.cover_slide_ms)
   assert_true(thumb_on(t, "Middle"))
   t.assert_idle()

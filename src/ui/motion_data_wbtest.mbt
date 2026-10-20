@@ -19,22 +19,36 @@ test "a spring solved comes to rest by the end it said, and is still at it" {
 test "a spring's frames are drawn until its end, then none; retargeted, it goes on as fast as it went" {
   let target = Ref::new(0.0)
   let seen = Ref::new(0.0)
-  let t = Tester::new(fn(c) { seen.val = c.spring("x", target.val, from=0.0) }, w=100.0, h=100.0)
-  t.assert_idle()
-  target.val = 100.0
-  t.draw()
   // the spring's own end (its way said as it set out)
   let end = fn() { g().springs.values().fold(init=-1.0, fn(e, s) { if s.end() > e { s.end() } else { e } }) }
-  assert_true(end() > t.time())
   // a moment mid-way
   let mid_way = 50.0
-  t.run_for(mid_way)
+  let mid_way_on = fn() -> Tester raise {
+    let t = Tester::new(fn(c) { seen.val = c.spring("x", target.val, from=0.0) }, w=100.0, h=100.0)
+    t.assert_idle()
+    target.val = 100.0
+    t.draw()
+    assert_true(end() > t.time())
+    t.run_for(mid_way)
+    assert_true(seen.val > 0.0 && seen.val < 100.0)
+    t
+  }
+  // where it is the frame after, its target kept
+  let going_on = {
+    target.val = 0.0
+    let t = mid_way_on()
+    t.draw()
+    seen.val
+  }
+  target.val = 0.0
+  let t = mid_way_on()
   let mid = seen.val
-  assert_true(mid > 0.0 && mid < 100.0)
-  // a new target mid-way: from where it is, not from rest
+  // a new target mid-way, the frame that takes it: from where it is in that frame (as going on would have shown it),
+  // not from rest
   target.val = 50.0
   t.draw()
-  assert_true((seen.val - mid).abs() < 0.000001)
+  assert_true((seen.val - going_on).abs() < 0.000001)
+  assert_true(seen.val != mid)
   t.run_for(end() - t.time())
   assert_true((seen.val - 50.0).abs() < 0.001)
   t.assert_idle()
@@ -81,16 +95,16 @@ test "every from when its count started: the next period's frame where the count
   })
   t.draw()
   t.run_for(begin.val + 600.0 - t.time())
-  let s0 = begin.val + 600.0
+  // (it starts at the display's frame at or past 600 ms after)
+  let s0 = t.display_frame(begin.val + 600.0)
   assert_eq(started.val, s0)
   assert_eq(shown.val, 0)
-  // its frame is asked for at 1600 ms after, then 2600: where what it shows changes
+  // its frame is asked for a second after it started, then two: where what it shows changes
   assert_eq(g().wake_at, s0 + 1000.0)
-  // a millisecond short of its first second, then that second
-  let short = second - 1.0
-  t.run_for(short)
+  // the display's last frame before its first second, then the one at it
+  t.run_for(t.display_frame(s0 + second) - t.frame_period() - t.time())
   assert_eq(shown.val, 0)
-  t.run_for(second - short)
+  t.run_for(s0 + second - t.time())
   assert_eq(shown.val, 1)
   assert_eq(g().wake_at, s0 + 2000.0)
   t.run_for(second)

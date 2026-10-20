@@ -413,6 +413,7 @@ test "a scripted shot is of the frame just drawn; a host that cannot take it is 
   assert_true(log.contains("SHOT one"))
   assert_true(log.contains("SHOT two"))
   assert_true(log.contains("DRIVE PASS"))
-  assert_true(frames.val >= 2 * (1500 / 16))
+  // (a frame each of the display's frames through each 1.5 s)
+  assert_true(frames.val >= 2 * (1500.0 / t.frame_period()).floor().to_int())
 }
 

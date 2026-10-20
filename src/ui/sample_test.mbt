@@ -57,9 +57,10 @@ test "set out after a long rest: its start that frame's time, each frame handed 
   t.run_for(rest_ms)
   t.assert_idle()
   go.val = true
+  // set out in the frame it was told in (the display's next): that frame's time
+  let told = t.next_frame_time()
   t.draw()
-  // set out in the frame it was told in: that frame's time
-  assert_eq(w.start, t.time())
+  assert_eq(w.start, told)
   let start = w.start
   t.run_for(way_ms + 50.0)
   // each frame after the one it set out in handed its time before it built, and what it built read the closed form at
@@ -91,8 +92,10 @@ test "set out between frames: +inf till the next frame (asked for), whose sample
   w.start = at
   // not started: the next frame is owed to it
   assert_true(t.moving().length() == 1 && t.moving()[0].contains("not started"))
+  // (the next frame, the display's: its sample hands it that frame's time)
+  let next = t.next_frame_time()
   t.draw()
-  assert_eq(w.start, t.time())
+  assert_eq(w.start, next)
   t.run_for(way_ms)
   t.assert_idle()
 }

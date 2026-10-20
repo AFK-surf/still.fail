@@ -262,6 +262,8 @@ pub fn Runtime::root(self : Runtime) -> Scope {
 }
 
 ///|
+/// The runtime's clock, in whole ms: under a window's frames, the frame's time rounded down (a display's frames come
+/// 1000/60 ms apart, its timers are whole ms: what a host's own clock gives too).
 pub fn Runtime::now(self : Runtime) -> Int64 {
   match self.clock {
     Some(f) => f()

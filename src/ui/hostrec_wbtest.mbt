@@ -46,6 +46,8 @@ test "a frame's pictures are compared by the order they are drawn in, not the ho
   ])
   t.draw()
   t.draw()
+  // (each frame on the display's clock: both run on to where b has faded in, the same picture)
+  t.run_for(image_fade_ms)
   let straight = t.frame_hash()
   let u = Tester::new(fn(c) { c.image(first.val, w=Px(50.0), h=Px(50.0)) |> ignore }, images=[
     ("a.png", 10, 10),
@@ -58,5 +60,6 @@ test "a frame's pictures are compared by the order they are drawn in, not the ho
   first.val = "b.png"
   u.draw()
   u.draw()
+  u.run_for(image_fade_ms)
   assert_eq(u.frame_hash(), straight)
 }

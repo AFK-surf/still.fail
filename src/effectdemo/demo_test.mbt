@@ -1,7 +1,8 @@
 ///|
 test "the screen and the core keep one clock, frame by frame" {
   let w = @effectdemo.World::new(1, fixed=true)
-  assert_eq(w.rt.now(), 1032L)
+  // (made at 1000, a frame there, then the world's first step: the display's next frame, in whole ms)
+  assert_eq(w.rt.now().to_double(), (1000.0 + 2.0 * @ui.frame_period_default).floor())
   w.tap("Send")
   // tapped: the frame after the finger lifted sent it; the core has it
   assert_eq(w.chat.sent, 1)

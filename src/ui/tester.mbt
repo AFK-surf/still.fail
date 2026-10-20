@@ -10,7 +10,15 @@ pub struct Tester {
   mut frames : Int
   /// the seed it was made with (Tester::finish_all's order)
   seed : Int?
+  /// its display's frames: one only ever at `origin` and a whole number of `period`s after it, as a host draws only
+  /// at its display's vsync (Tester::set_frame_period)
+  mut origin : Double
+  mut period : Double
 }
+
+///|
+/// A display's frame period, the Tester's own unless told another (Tester::set_frame_period): a 60 Hz display's.
+pub let frame_period_default : Double = 1000.0 / 60.0
 
 ///|
 /// What a test leaves behind forgotten before the next starts: the window's context made anew (every field of it as a
@@ -224,8 +232,16 @@ pub fn Tester::new(
   }
   fx_reset(seed)
   g_view.val = view
-  let t = { fake: f, w, h, frames: 0, seed }
-  t.frame()
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default }
+  // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
+  // there; else the display's first frame after `time`
+  match run.bind(run_first_frame) {
+    Some(at) => {
+      t.origin = at
+      t.frame_at(at)
+    }
+    None => t.frame()
+  }
   // (what the first frame left owed, drawn at its moment, as Tester::draw draws an input's; a host's run replayed has
   // only the frames it drew: Tester::replay_frames draws the next where it did)
   if run is None {
@@ -317,9 +333,58 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 }
 
 ///|
-/// Draws one frame, `ms` after the previous one.
+/// Draws one frame, at the display's first frame `ms` or more on (the next one at the least): frames come only at the
+/// display's vsync (Tester::set_frame_period), as on a host.
 pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
-  self.fake.time = self.fake.time + ms
+  let next = self.tick_after(self.fake.time)
+  let want = self.fake.time + ms
+  self.frame_at(if want > next { self.tick_at(want) } else { next })
+}
+
+///|
+/// The display's first frame after `t` (Tester::frame).
+fn Tester::tick_after(self : Tester, t : Double) -> Double {
+  let k = ((t - self.origin) / self.period + 1.0e-9).floor() + 1.0
+  self.origin + k * self.period
+}
+
+///|
+/// The display's first frame at or after `t`.
+fn Tester::tick_at(self : Tester, t : Double) -> Double {
+  let k = ((t - self.origin) / self.period - 1.0e-9).ceil()
+  self.origin + k * self.period
+}
+
+///|
+/// The display's frame period (ms): its frames this far apart.
+pub fn Tester::frame_period(self : Tester) -> Double {
+  self.period
+}
+
+///|
+/// When the display's next frame is: where the next input is taken, the next change the test makes is shown.
+pub fn Tester::next_frame_time(self : Tester) -> Double {
+  self.tick_after(self.fake.time)
+}
+
+///|
+/// The display's first frame at or after `t` on the clock: where a test sees what is so at `t` (a deadline, a motion's
+/// end), as a host shows it.
+pub fn Tester::display_frame(self : Tester, t : Double) -> Double {
+  self.tick_at(t)
+}
+
+///|
+/// The display's frame period from now on (ms; a run's own, as its tape says it), its frames counted from now.
+pub fn Tester::set_frame_period(self : Tester, ms : Double) -> Unit {
+  self.origin = self.fake.time
+  self.period = ms
+}
+
+///|
+/// Draws one frame at `at` on the clock, whatever the display's frames (a host's run replayed: where it drew).
+pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
+  self.fake.time = at
   // decodes started last frame are done, the views opened are ready: the host's events for them (unless the test
   // says when: Tester::finish)
   if self.fake.auto_finish {
@@ -372,17 +437,19 @@ pub fn Tester::drag(
   for i in 1..=steps {
     let t = i.to_double() / steps.to_double()
     // (a finger's moves come a display's frame apart: the drag takes steps × drag_step_ms)
-    self.fake.time = self.fake.time + drag_step_ms
+    // (each move in the display's next frame, as a finger's come)
+    let at = self.tick_after(self.fake.time)
+    self.fake.time = at
     on_pointer(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0)
-    self.frame(ms=0.0)
+    self.frame_at(at)
   }
   on_pointer(2, x1, y1, 0)
   self.draw()
 }
 
 ///|
-/// How far apart a drag's moves come (ms): a 60 Hz display's frame, as a finger's moves reach an app. A drag of
-/// `steps` moves takes steps × drag_step_ms of the test's time; nothing else an input does takes any.
+/// How far apart a drag's moves come (ms), about: a 60 Hz display's frame, as a finger's moves reach an app. A drag's
+/// moves come each in the display's next frame (Tester::frame_period_default apart, or the period told).
 pub let drag_step_ms : Double = 16.0
 
 ///|
@@ -797,9 +864,10 @@ pub fn Tester::back_gesture(
 ) -> Unit {
   on_back(0, 0.0, 0.0, 0)
   for i in 1..=steps {
-    self.fake.time = self.fake.time + drag_step_ms
+    let at = self.tick_after(self.fake.time)
+    self.fake.time = at
     on_back(1, x * i.to_double() / steps.to_double(), 0.0, 0)
-    self.frame(ms=0.0)
+    self.frame_at(at)
   }
   on_back(if commit { 2 } else { 3 }, x, 1.0, 0)
   self.draw()
@@ -874,9 +942,11 @@ pub fn Tester::hold_drag(
   on_pointer(0, x0, y0, 0)
   for i in 1..=steps {
     let t = i.to_double() / steps.to_double()
-    self.fake.time = self.fake.time + drag_step_ms
+    // (each move in the display's next frame, as a finger's come)
+    let at = self.tick_after(self.fake.time)
+    self.fake.time = at
     on_pointer(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0)
-    self.frame(ms=0.0)
+    self.frame_at(at)
   }
 }
 

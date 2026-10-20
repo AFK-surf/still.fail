@@ -98,9 +98,10 @@ fn reading_back(step : Double) -> @ui.Tester {
 }
 
 ///|
-test "draw: a layout read back that moves once is placed again at the same moment, and then is still" {
+test "draw: a layout read back that moves once is placed again in the frame that takes it, and then is still" {
   let t = reading_back(0.0)
-  let at = t.time()
+  // (the display's next frame: built again in it, no frame owed after)
+  let at = t.next_frame_time()
   t.draw()
   assert_eq(t.time(), at)
   assert_eq(t.ctx().words_of("w").unwrap().pieces[0].x, 20.0)
@@ -295,11 +296,9 @@ test "a tap's input told as handed over: after the frames it waits for its words
   let log = t.drive("tap go\nexit")
   @ui.trace_steps(fn(_, _) {  })
   assert_true(began.val >= 0.0 && acted.val > began.val, msg="began \{began.val}, acted \{acted.val}\n" + log.join("\n"))
-  // handed over in the frame it was told (the drive's turn after that frame was drawn): the app takes it the next
-  assert_true(
-    clicked_at.val > acted.val && clicked_at.val - acted.val <= 16.0,
-    msg="clicked \{clicked_at.val}, acted \{acted.val}",
-  )
+  // handed over in the frame it was told (the drive's turn after that frame was drawn): the app takes it in the
+  // display's next frame (the grid's next after `acted`, a frame on)
+  assert_eq(clicked_at.val, t.display_frame(acted.val + t.frame_period() / 2.0), msg="acted \{acted.val}")
   let tap = log.search_by(fn(l) { l.has_prefix("DRIVE tap go at") }).unwrap()
   assert_true(tap >= 0)
 }

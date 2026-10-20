@@ -120,9 +120,12 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
     |> ignore
   })
   let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
+  // (from the frame that takes it: the display's next)
+  let moved = t.next_frame_time()
   t.move(x + w / 2.0, y + h / 2.0)
-  let due = t.time() + tooltip_delay_ms
-  t.run_for(tooltip_delay_ms - 1.0)
+  let due = moved + tooltip_delay_ms
+  // (the display's last frame before it)
+  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
   assert_false(shown.val)
   t.run_for(due - t.time())
   assert_true(shown.val)
@@ -184,9 +187,12 @@ test "hover card: opened once the pointer rests on its trigger, kept while over 
     |> ignore
   })
   let (x, y, w, h) = t.get(@ui.Button, label="@ada").rect
+  // (from the frame that takes it: the display's next)
+  let moved = t.next_frame_time()
   t.move(x + w / 2.0, y + h / 2.0)
-  let due = t.time() + hover_card_open_ms
-  t.run_for(hover_card_open_ms - 1.0)
+  let due = moved + hover_card_open_ms
+  // (the display's last frame before it)
+  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
   assert_false(open.val)
   t.run_for(due - t.time())
   assert_true(open.val)
@@ -197,9 +203,12 @@ test "hover card: opened once the pointer rests on its trigger, kept while over 
   t.run_for(hover_card_close_ms)
   assert_true(open.val)
   // off both: closed after its delay
+  // (from the frame that takes it: the display's next)
+  let moved = t.next_frame_time()
   t.move(380.0, 800.0)
-  let due = t.time() + hover_card_close_ms
-  t.run_for(hover_card_close_ms - 1.0)
+  let due = moved + hover_card_close_ms
+  // (the display's last frame before it)
+  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
   assert_true(open.val)
   t.run_for(due - t.time())
   assert_false(open.val)
@@ -229,9 +238,12 @@ test "toasts: each goes after its time, paused under the pointer; closed, acted 
   t.run_for(life_ms)
   assert_eq(list.val.length(), 2)
   // (none of their time went by before the pointer came over them)
+  // (from the frame that takes it: the display's next)
+  let moved = t.next_frame_time()
   t.move(1.0, 1.0)
-  let due = t.time() + life_ms
-  t.run_for(life_ms - 1.0)
+  let due = moved + life_ms
+  // (the display's last frame before it)
+  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
   assert_eq(list.val.length(), 2)
   t.run_for(due - t.time())
   assert_eq(list.val.map(fn(x) { x.id }), [])

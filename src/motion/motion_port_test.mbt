@@ -1227,7 +1227,8 @@ test "animate plays a Motion spring as its generator says, from the frame it is 
   for i in 1..=5 {
     let at = span * i.to_double() / 10.0
     t.run_for(start + at - t.time())
-    let want = g.next(at).value
+    // (at the display's frame there: the whole ms since it started)
+    let want = g.next((t.time() - start).floor()).value
     assert_true((seen[seen.length() - 1] - want).abs() < 1.0e-9, msg="\{i}: \{seen[seen.length() - 1]} \{want}")
   }
   // the spring's own end, asked
@@ -1285,9 +1286,12 @@ test "animate plays keyframes through their values" {
   on.val = true
   // told in this frame, at its start; halfway its keyframes' length on
   t.frame()
+  let start = t.time()
   t.run_for(keys_ms / 2.0)
-  // halfway: at the middle value
-  assert_true((seen[seen.length() - 1] - 10.0).abs() < 1.0e-9, msg="\{seen[seen.length() - 1]}")
+  // halfway (the display's frame there, the whole ms since it started): through the middle value, as they say
+  let g = @motion.keyframes_generator([0.0, 10.0, 5.0], duration=keys_ms, ease=@motion.linear)
+  let want = g.next((t.time() - start).floor()).value
+  assert_true((seen[seen.length() - 1] - want).abs() < 1.0e-9, msg="\{seen[seen.length() - 1]} \{want}")
   // to the keyframes' own end
   t.run_for(kept.val.unwrap().ends_at() - t.time())
   assert_eq(seen[seen.length() - 1], 5.0)

@@ -130,6 +130,26 @@ pub fn Tester::frames(self : Tester, n : Int, ms? : Double = 16.0) -> Array[Int6
 }
 
 ///|
+/// When a real host's run drew its first frame (its log's first DRAWHASH line's time), if it says.
+fn run_first_frame(run : String) -> Double? {
+  for line in run.split("\n") {
+    match line.find("DRAWHASH ") {
+      Some(i) => {
+        let parts = line.view(start_offset=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
+        if parts.length() >= 2 {
+          match (try Some(@json.parse(parts[1])) catch { _ => None }) {
+            Some(Number(d, ..)) => return Some(d)
+            _ => ()
+          }
+        }
+      }
+      None => ()
+    }
+  }
+  None
+}
+
+///|
 /// A real host's frames as its log said them (MBUI_DRAW_LOG: DRAWHASH lines) drawn again, each at its time, the
 /// window's size, scale and stability (Ctx::stable) as it had them: for each, its number, the host's hash and this
 /// one's (as text). A frame at the time this Tester drew its last is that one (Tester::new at the host's first frame:
@@ -187,7 +207,7 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     // (the frame a Tester made at this time already, as it was made: its first, Tester::new's `time`; any later one at
     // the same time is drawn, as a Tester's tape has them: Tester::draw)
     if t != self.fake.time || out.length() > 0 {
-      self.frame(ms=t - self.fake.time)
+      self.frame_at(t)
     }
     out.push((n.to_int(), parts[5], drawn_hash().to_string()))
   }

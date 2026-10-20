@@ -152,8 +152,9 @@ pub fn World::new(seed : Int, fixed~ : Bool) -> World {
 /// One frame: the runtime runs up to the frame's time, then the screen is built.
 pub fn World::step(self : World, ms? : Int = 16) -> Unit {
   self.t.frame(ms=ms.to_double())
+  // (the core's clock is the frame's time in whole ms, rounded down: Runtime::now)
   // det-ok(app-clock): a check that the core's clock is the Tester's; nothing is worked out from it
-  if self.rt.now().to_double() != self.t.time() {
+  if self.rt.now().to_double() != self.t.time().floor() {
     abort("the screen's clock and the core's parted")
   }
   self.frames.push("\{self.rt.now()} \{self.chat.shown} (\{self.chat.pending} waiting)")
