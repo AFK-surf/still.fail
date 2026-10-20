@@ -21,6 +21,10 @@
         defined twice among the units.
     mbc.py work MOON.WORK COPY
         A workspace's moon.work for a copy of its module elsewhere: the module ".", its other members by absolute path.
+    mbc.py mirror STAGE COPY
+        COPY's files as STAGE has them (each file and directory at STAGE's top, the rest of COPY left alone: its
+        _build), a file only written when its content changed, so that moon, which goes by mtimes, builds anew only
+        what changed (scripts/win.sh: the copies of the modules it makes afresh each build). Gone from STAGE: gone.
 
 moonbit_init (every global's initial value, tens of thousands of lines, run once) is a unit of its own, compiled with
 --init-flags (MBC_INIT_FLAGS) after the others' flags: by default -O0 (/Od), as optimising it is most of the time
@@ -175,6 +179,46 @@ def cmd_work(a):
     if not os.path.isfile(a.dst) or open(a.dst, encoding='utf-8').read() != new:
         with open(a.dst, 'w', encoding='utf-8') as f:
             f.write(new)
+
+
+def cmd_mirror(a):
+    def same(x, y):
+        if os.path.getsize(x) != os.path.getsize(y):
+            return False
+        with open(x, 'rb') as f, open(y, 'rb') as g:
+            return f.read() == g.read()
+    written = 0
+    for top in sorted(os.listdir(a.src)):
+        src, dst = os.path.join(a.src, top), os.path.join(a.dst, top)
+        if os.path.isfile(src):
+            pairs = [(src, dst)]
+            if os.path.isdir(dst):
+                shutil.rmtree(dst)
+        else:
+            if os.path.isfile(dst):
+                os.remove(dst)
+            pairs = []
+            for root, dirs, names in os.walk(src):
+                rel = os.path.relpath(root, src)
+                pairs += [(os.path.join(root, n), os.path.normpath(os.path.join(dst, rel, n))) for n in names]
+            keep = {d for _, d in pairs}
+            for root, dirs, names in os.walk(dst, topdown=False):
+                for n in names:
+                    if os.path.join(root, n) not in keep:
+                        os.remove(os.path.join(root, n))
+                if root != dst and not os.listdir(root):
+                    os.rmdir(root)
+        for s_, d in pairs:
+            if os.path.isfile(d) and same(s_, d):
+                continue
+            os.makedirs(os.path.dirname(d), exist_ok=True)
+            if os.path.isdir(d):
+                shutil.rmtree(d)
+            # (a file written now: newer than anything built from what it was)
+            shutil.copyfile(s_, d)
+            written += 1
+    if os.environ.get('MBC_VERBOSE'):
+        log(f'mirror {a.dst}: {written} files written')
 
 
 # ---------------------------------------------------------------- compile
@@ -557,7 +601,9 @@ def cmd_shim(a):
             t = os.path.join(os.path.dirname(real), tool + '.exe')
             if not os.path.isfile(t):
                 die(f'no {t} beside {real}')
-            prefix[tool] = [t]
+            # (lib's archive with no time stamps in it: the same objects, the same .lib, and the link that takes it
+            # found made already; cl's and link's own are scripts/win.sh's CL and LINK)
+            prefix[tool] = [t, '/Brepro'] if tool == 'lib' else [t]
         for tool, line in prefix.items():
             t = os.path.join(d, tool + '.exe')
             if not os.path.isfile(t) or file_hash(t) != file_hash(exe):
@@ -678,6 +724,9 @@ def main():
     wk = sub.add_parser('work')
     wk.add_argument('src')
     wk.add_argument('dst')
+    mi = sub.add_parser('mirror')
+    mi.add_argument('src')
+    mi.add_argument('dst')
     sh = sub.add_parser('shim')
     sh.add_argument('dir')
     k = sub.add_parser('check')
@@ -692,7 +741,7 @@ def main():
     if a.cmd == 'wrap' and a.args and a.args[0] == '--':
         a.args = a.args[1:]
     {'gen': cmd_gen, 'compile': cmd_compile, 'link': cmd_link, 'wrap': cmd_wrap, 'shim': cmd_shim,
-     'check': cmd_check, 'work': cmd_work}[a.cmd](a)
+     'check': cmd_check, 'work': cmd_work, 'mirror': cmd_mirror}[a.cmd](a)
 
 
 if __name__ == '__main__':

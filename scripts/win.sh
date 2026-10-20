@@ -22,49 +22,56 @@ EXE=$M/_build/native/$MODE/build/$PKG/$PKG.exe
 # an app of another module: built in its copy, beside mbui's
 APPMOD=${MBUI_APP_MOD:+$(cd "$MBUI_APP_MOD" && pwd)}
 AM=out/win/app
+SM=out/win/stage/mod
+SA=out/win/stage/app
+PY=$(command -v python || command -v python3)
 if [ -n "$APPMOD" ]; then
   EXE=$AM/_build/native/$MODE/build/$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$APPMOD/moon.mod")/$PKG/$PKG.exe
 fi
 
+# Each build's copies made afresh in out/win/stage, then mirrored into out/win/mod and out/win/app (scripts/mbc.py
+# mirror: a file only written when its content changed), so that moon, which goes by mtimes, builds anew only what
+# changed: a build of the same sources (a cache of out/win, as still.fail's CI has) compiles nothing.
 sync() {
-  mkdir -p $M/src
-  cp -p moon.mod $M/
-  # exactly src/: a file gone from it goes from the copy too (then the copy's own files, after; Git Bash has no rsync)
-  if command -v rsync >/dev/null; then rsync -a --delete src/ $M/src/; else rm -rf $M/src && cp -rp src $M/src; fi
+  rm -rf $SM && mkdir -p $SM/src
+  cp -p moon.mod $SM/
+  # exactly src/: a file gone from it goes from the copy too (then the copy's own files, after)
+  cp -rp src/. $SM/src/
   sed -e 's/"native-stub": *\[[^]]*\]/"native-stub": [ "win_app.c", "win_render.cpp", "win_text.cpp", "win_image.cpp", "win_listen.c", "win_browser_login.c", "win_views.cpp" ]/' \
-      -e 's/-fobjc-arc *//' src/host/moon.pkg > $M/src/host/moon.pkg
+      -e 's/-fobjc-arc *//' src/host/moon.pkg > $SM/src/host/moon.pkg
   # every app (demo, photos…) links no Apple frameworks
   for p in src/*/moon.pkg; do
-    grep -q '"is-main"' $p && sed -e '/"cc-link-flags"/d' $p > $M/$p
+    grep -q '"is-main"' $p && sed -e '/"cc-link-flags"/d' $p > $SM/$p
   done
   # WebView2's SDK (win_views.cpp): its header beside the host's sources, its static loader where the linker looks
-  cp -p "$WV2/build/native/include/WebView2.h" $M/src/host/
-  [ ! -f src/photos/pictures/windows.mbt ] || cp -p src/photos/pictures/windows.mbt $M/src/photos/pictures_native.mbt
-  if ! grep -q win_app.c $M/src/host/moon.pkg || grep -q -e -framework -e '\.m"' $M/src/*/moon.pkg; then
+  cp -p "$WV2/build/native/include/WebView2.h" $SM/src/host/
+  [ ! -f src/photos/pictures/windows.mbt ] || cp -p src/photos/pictures/windows.mbt $SM/src/photos/pictures_native.mbt
+  if ! grep -q win_app.c $SM/src/host/moon.pkg || grep -q -e -framework -e '\.m"' $SM/src/*/moon.pkg; then
     echo "win.sh: src/host/moon.pkg or an app's moon.pkg no longer has the expected shape" >&2
     exit 1
   fi
+  "$PY" "$D/mbc.py" mirror $SM $M
   [ -z "$APPMOD" ] || sync_app
 }
 
 # the other module's copy: its sources, its workspace naming the copy of mbui above, its apps linking nothing of Apple's
 sync_app() {
-  mkdir -p $AM
-  cp -p "$APPMOD/moon.mod" $AM/
-  rm -rf $AM/src && cp -rp "$APPMOD/src" $AM/src
-  printf 'members = [\n  ".",\n  "../mod",\n]\n' > $AM/moon.work
+  rm -rf $SA && mkdir -p $SA
+  cp -p "$APPMOD/moon.mod" $SA/
+  cp -rp "$APPMOD/src" $SA/src
+  printf 'members = [\n  ".",\n  "../mod",\n]\n' > $SA/moon.work
   # (its packages with Apple's own native stubs, a core host's: their Windows one, win_engine.c, instead, else left out)
-  for p in $(grep -l '\.m"' $AM/src/*/moon.pkg 2>/dev/null); do
+  for p in $(grep -l '\.m"' $SA/src/*/moon.pkg 2>/dev/null); do
     if [ -f "$(dirname $p)/win_engine.c" ]; then
       sed -i -e 's/"native-stub": *\[[^]]*\.m"[^]]*\]/"native-stub": [ "win_engine.c" ]/' -e 's/-fobjc-arc *//' $p
     else
       rm -rf "$(dirname $p)"
     fi
   done
-  for p in $AM/src/*/moon.pkg; do
+  for p in $SA/src/*/moon.pkg; do
     grep -q '"is-main"' $p && sed -i -e '/"cc-link-flags"/d' $p
   done
-  true
+  "$PY" "$D/mbc.py" mirror $SA $AM
 }
 
 # WebView2's SDK, from NuGet (the header and the loader linked in statically; the browser is the system's own runtime)
@@ -94,6 +101,10 @@ case "${1:-build}" in
     # whole). Windows' python is `python`.
     PY=$(command -v python || command -v python3)
     SHIM=$(cygpath -u "$("$PY" "$D/mbc.py" shim "$(cygpath -w "$PWD/out/mbc/win")" | tr -d '\r')")
+    # cl's and link's outputs reproducible (-Brepro: no time stamps in them; lib's is mbc.py shim's), so that the same C
+    # makes the same objects and mbc.py's link, finding its inputs as they were, is not run again. (-, not /: Git Bash
+    # hands a variable's /Brepro to Windows programs as a path, C:/Program Files/Git/Brepro)
+    export CL="-Brepro ${CL:-}" LINK="-Brepro ${LINK:-}"
     rm -f out/mbc.log
     LOG=$(cygpath -w "$PWD/out/mbc.log")
     code=0
