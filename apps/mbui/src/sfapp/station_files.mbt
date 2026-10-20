@@ -149,7 +149,6 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
         m => m
       },
     )
-    c.request_frame()
   }
   if r.station == station {
     (src.call)(
@@ -165,7 +164,6 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
           Ok(a) => {
             p.done = Some(a)
             p.sent = p.size
-            c.request_frame()
           }
           Err(e) => failed(e)
         }
@@ -604,8 +602,8 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
           )
           if picked != now {
             r.mode = if picked == 0 { "path" } else { "file" }
-            // (the composer puts it up: ref_send_up)
-            c.request_frame()
+            // (the composer puts it up: ref_send_up; a pick asks for its frame)
+
           }
         })
         |> ignore

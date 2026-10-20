@@ -60,14 +60,14 @@ priv struct DriveUi {
   uploads : Array[DvUpload]
   mut serial : Int
   mut pumping : Bool
-  /// what is under way on an entry ("remove|<station>|<root>|<path>"), and what failed a moment ago (its words, when)
+  /// what is under way on an entry ("remove|<station>|<root>|<path>"), and what failed a moment ago (its words: shown
+  /// on its row for dv_failed_ms)
   busy : Map[String, Bool]
-  failed : Map[String, (String, Double)]
+  failed : Map[String, String]
   /// folders being read again
   refreshing : Map[String, Bool]
-  /// a row held: its id, since when, whether the hold has acted
+  /// a row held: its id, whether the hold has acted
   mut held : Int
-  mut held_at : Double
   mut held_done : Bool
   /// the views chosen here, before the prefs say
   mut sort_set : String?
@@ -101,7 +101,6 @@ let dv : DriveUi = {
   failed: {},
   refreshing: {},
   held: 0,
-  held_at: 0.0,
   held_done: false,
   sort_set: None,
   hidden_set: None,
@@ -131,7 +130,6 @@ fn dv_reset() -> Unit {
   dv.failed.clear()
   dv.refreshing.clear()
   dv.held = 0
-  dv.held_at = 0.0
   dv.held_done = false
   dv.sort_set = None
   dv.hidden_set = None
@@ -524,25 +522,29 @@ fn dv_card_row(
 /// A row held (a long press, 400 ms as the system's): true on the frame the hold acts, once; the tap that ends it is
 /// then no tap (`dv_tapped`).
 fn dv_held(c : @ui.Ctx, id : Int) -> Bool {
-  if c.pressed(id) {
-    if dv.held != id {
-      dv.held = id
-      dv.held_at = c.now()
-      dv.held_done = false
-    }
-    let held = c.now() - dv.held_at
-    if !dv.held_done && !cui.moved {
-      if held >= 400.0 {
-        dv.held_done = true
-        return true
-      }
-      c.wake_in(400.0 - held)
-    }
-  } else if dv.held == id && !c.clicked(id) {
+  let pressed = c.pressed(id)
+  if pressed && dv.held != id {
+    dv.held = id
+    dv.held_done = false
+  }
+  // (`after` asks for the frame it acts on)
+  if @kit.after(c, "dv-held/\{id}", pressed && dv.held == id && !dv.held_done && !cui.moved, dv_hold_ms) {
+    dv.held_done = true
+    return true
+  }
+  if !pressed && dv.held == id && !c.clicked(id) {
     dv.held = 0
   }
   false
 }
+
+///|
+/// How long a row is held before the hold acts (the system's long press).
+let dv_hold_ms : Double = 400.0
+
+///|
+/// How long what failed on a row is said on it.
+let dv_failed_ms : Double = 4000.0
 
 ///|
 /// A tap on a row that was not a hold.
@@ -607,7 +609,8 @@ fn dv_doing(
     match r {
       Ok(v) => then(v)
       Err(e) => {
-        dv.failed[key] = (dv_error(e), c.now())
+        dv.failed[key] = dv_error(e)
+
         (dv_act(c, what))(r)
       }
     }

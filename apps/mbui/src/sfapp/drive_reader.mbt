@@ -303,11 +303,12 @@ pub fn reader_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
               }
             }
             None =>
-              if waited > 1000.0 || place.error is Some(_) {
+              if waited >= reader_place_ms || place.error is Some(_) {
                 r.started = true
               } else {
-                c.wake_in(1000.0 - waited)
+                c.wake_in(reader_place_ms - waited)
               }
+
           }
         }
         if r.started {
@@ -479,7 +480,8 @@ fn reader_book(
   if r.moved_at > r.kept_at && c.now() - r.moved_at >= reader_still_ms {
     reader_keep(src, at, r, novel, false, c.now())
   } else if r.moved_at > r.kept_at {
-    c.wake_in(reader_still_ms - (c.now() - r.moved_at))
+    // (nothing shown waits for it)
+    c.wake_in(reader_still_ms - (c.now() - r.moved_at), later=true)
   }
   // a jump: its block at the top, then slid to the offset in it once it is laid out
   if r.jump_step == 1 {
@@ -518,12 +520,12 @@ fn reader_book(
       r.searched = r.query
       r.matches = []
       r.hit = -1
-    } else if c.now() - r.typed_at > 250.0 {
+    } else if c.now() - r.typed_at >= reader_search_ms {
       r.searched = r.query
       r.matches = search_chunks(novel.chunks, r.query)
       r.hit = -1
     } else {
-      c.wake_in(260.0 - (c.now() - r.typed_at))
+      c.wake_in(reader_search_ms - (c.now() - r.typed_at))
     }
   }
   let size = prefs.size.to_double()
@@ -1380,7 +1382,17 @@ fn reader_toggle(c : @ui.Ctx, r : TextReading) -> Unit {
   }
   r.chrome = !r.chrome
   r.chrome_at = c.now()
+  // (the bars' way in or out drawn from the next frame: a block's tap is seen as its row is built, after this frame
+  // has drawn its bars; a click handled asks for that frame)
 }
+
+///|
+/// The search goes this long after the last thing typed.
+let reader_search_ms : Double = 250.0
+
+///|
+/// Where it was left on this device is waited on this long at most (no wait for a station).
+let reader_place_ms : Double = 1000.0
 
 ///|
 /// The paper's darkness while a reader is on top (Reader.kt PaperBars: the system bars' icons readable on it), None

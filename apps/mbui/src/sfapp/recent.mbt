@@ -72,6 +72,10 @@ fn latest_photos(photos : Array[@host.GalleryPhoto], now : Int64, n : Int) -> Ar
 }
 
 ///|
+/// How often the gallery's read is looked at until it is done (the host tells no event for it yet).
+let recent_poll_ms : Double = 50.0
+
+///|
 /// Each frame ＋'s sheet is drawn: the gallery read again as it opens and on each of the system's answers.
 fn recent_frame(c : @ui.Ctx, src : Source, open : Bool) -> Unit {
   let answers = @host.gallery_answers()
@@ -96,7 +100,8 @@ fn recent_frame(c : @ui.Ctx, src : Source, open : Bool) -> Unit {
           @host.log("recent photos: \{recent.photos.length()} of \{all.length()}")
           c.request_frame()
         }
-        None => c.wake_in(50.0)
+        None => c.wake_in(recent_poll_ms)
+
       }
     None => ()
   }

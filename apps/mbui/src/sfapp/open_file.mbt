@@ -13,5 +13,5 @@ pub fn open_file(c : @ui.Ctx, src : Source, file : DriveFile, near : Array[Drive
   } else {
     NoSteps
   })
-  c.request_frame()
 }
+

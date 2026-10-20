@@ -764,13 +764,10 @@ fn entry_row(
   let path = dv_join(at.path, e.name)
   let busy_key = dv_key("entry", at.station, root, path)
   let busy = dv.busy.contains(busy_key)
-  let failed = match dv.failed.get(busy_key) {
-    Some((why, when)) if c.now() - when < 4000.0 => {
-      c.wake_in(4000.0 - (c.now() - when))
-      Some(why)
-    }
-    _ => None
-  }
+  let why = dv.failed.get(busy_key)
+  // said for a while from when it is first shown (`after` asks for the frame it goes on)
+  let failed = if @kit.after(c, "failed/" + busy_key, why is Some(_), dv_failed_ms) { None } else { why }
+
   let id = c.id("entry/" + path)
   if !busy {
     // right clicked (a desktop's): its sheet, as ⋯ on it chosen opens (Drive.tsx's row menu)

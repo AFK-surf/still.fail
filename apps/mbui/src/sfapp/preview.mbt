@@ -197,6 +197,15 @@ let rest_ms : Double = 2000.0
 let tap_rest_ms : Double = 4000.0
 
 ///|
+/// A finger held still this long before it is let go flings nothing (its speed is of moves long past).
+let swipe_still_ms : Double = 100.0
+
+///|
+/// How often the host's work for the viewer is looked at until it is done (a marked image drawn, a video's frame
+/// saved): the host tells no event for them yet.
+let host_poll_ms : Double = 50.0
+
+///|
 /// Dark whatever the theme, as a viewer of pictures: its text, what is quieter, its canvas.
 let dark_text : Int64 = 0xF4F4F5FFL
 
@@ -460,6 +469,8 @@ priv struct Viewer {
   mut closing : Double
   // a finger on the stage: where it was last frame, how far it has gone, the last tap (time, where)
   mut held : Bool
+  /// a finger on a video's timeline: the bars stay while it is (their rest counted from when it is let go)
+  mut scrubbing : Bool
   mut last_x : Double
   mut last_y : Double
   mut moved : Double
@@ -604,6 +615,7 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     opened: -1.0,
     closing: -1.0,
     held: false,
+    scrubbing: false,
     last_x: 0.0,
     last_y: 0.0,
     moved: 0.0,
@@ -1158,7 +1170,6 @@ fn Viewer::close(self : Viewer, c : @ui.Ctx) -> Unit {
       Some(n) => n.pause()
       None => ()
     }
-    c.request_frame()
   }
 }
 
@@ -1193,7 +1204,7 @@ fn Viewer::wake(self : Viewer, now : Double, ms : Double) -> Unit {
 /// emulator a flow's next step can outlast their rest), where only a tap hides them.
 fn bars_rest() -> Bool {
   if viewer_awake_env.val < 0 {
-    viewer_awake_env.val = if @host.env("MBUI_VIEWER_AWAKE") == "1" { 1 } else { 0 }
+    viewer_awake_env.val = if @ui.env("MBUI_VIEWER_AWAKE") == "1" { 1 } else { 0 }
   }
   viewer_awake_env.val == 0
 }
@@ -1242,7 +1253,6 @@ fn Viewer::finish_marks(self : Viewer, c : @ui.Ctx, to_draft : Bool) -> Unit {
     }
     None => marking.error = pv("android-chat.file.drawFailed")
   }
-  c.request_frame()
 }
 
 ///|
@@ -1283,7 +1293,7 @@ fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             keep_bytes(c, marking.job_name, "image/png", png)
           }
         }
-        None => c.wake_in(50.0)
+        None => c.wake_in(host_poll_ms)
       }
     None => ()
   }
@@ -1444,7 +1454,6 @@ fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
       self.save_after = true
     }
   }
-  c.request_frame()
 }
 
 // ── an image ───────────────────────────────────────────────────────────
@@ -1556,7 +1565,6 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
               v.held = true
             }
             moved_to()
-            c.request_frame()
           } else if v.held || c.clicked(stage) {
             if !v.held {
               down()
@@ -1579,9 +1587,7 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
     None => ()
   }
   let sx = strip.get()
-  if strip.moving() {
-    c.request_frame()
-  } else {
+  if !strip.moving() {
     pv_strip.leaving = None
   }
   let width = c.width + slide_gap
@@ -1849,7 +1855,6 @@ fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity : Do
       strip.snap(from + dir.to_double() * width)
       strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0), velocity~)
       @ui.log("preview: stepped to \{n.file.name}")
-      c.request_frame()
     }
   }
 }
@@ -1886,7 +1891,6 @@ fn Viewer::gestures(
       v.pinched = true
       // one finger again after it: followed from where it is then
       v.held = false
-      c.request_frame()
       return
     }
     _ => v.pinch_d = 0.0
@@ -1927,8 +1931,11 @@ fn Viewer::gestures(
     }
     v.last_x = px
     v.last_y = py
-    c.request_frame()
   } else {
+    // held still a while before it was let go: no speed left (its frames come only as it moves)
+    if v.held && now - v.vt > swipe_still_ms {
+      v.vx = 0.0
+    }
     // let go further sideways than its frames showed (a slow frame took the whole swipe, down and up in one or two
     // frames): from where it went down to where it was let go, as a swipe
     if (v.held || c.clicked(stage)) && !v.swiping && !z.zoomed() && !v.pinched && (has_before || has_after) {
@@ -1968,7 +1975,6 @@ fn Viewer::gestures(
       v.tap_at = -1.0e9
       v.toggle(now)
       z.double_tap(px, py, now)
-      c.request_frame()
     } else {
       v.tap_at = now
       v.tap_x = px
@@ -1979,7 +1985,6 @@ fn Viewer::gestures(
   let dy = @ui.wheel(c, stage)
   if dy != 0.0 && z.nw > 0.0 {
     z.zoom_to(z.scale * @math.pow(1.0015, -dy), px, py, now, false)
-    c.request_frame()
   }
 }
 
@@ -2095,7 +2100,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
           say(c, pv("android-chat.video.saveFrame.failed"))
         }
       }
-      None => c.wake_in(50.0)
+      None => c.wake_in(host_poll_ms)
     }
   }
   let controls = c.id("preview/video-controls")
@@ -2248,10 +2253,21 @@ fn timeline(c : @ui.Ctx, v : Viewer, n : @ui.NativeView, dur : Double, pos : Dou
     Some((x, _, w, _)) if c.pressed(id) && dur > 0.0 => {
       let (px, _, _) = c.pointer()
       n.seek(dmax(0.0, dmin(1.0, (px - x) / dmax(1.0, w))) * dur)
-      v.wake(c.now(), tap_rest_ms)
-      c.request_frame()
+      // held there: the bars stay (seen again as it moves; a finger held still asks nothing)
+      v.awake = true
+      v.rest_at = -1.0
+      v.scrubbing = true
     }
-    _ => ()
+    _ =>
+      if v.scrubbing {
+        // let go: the bars rest from now
+        v.scrubbing = false
+        v.wake(c.now(), tap_rest_ms)
+        if v.rest_at > 0.0 {
+          c.wake_in(tap_rest_ms)
+        }
+
+      }
   }
   c.box(w=Fill(1.0), h=Px(22.0), padx=6.0, justify=JCenter, id~, fn() {
     // what has played, then the rest (Fill shares the row: one alone would fill it)
@@ -2330,7 +2346,8 @@ fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> Unit
     tap_stage(c, v, stage)
     v.note(c, fn() {
       c.text(
-        pv_fill("android-chat.file.pdf.failed", [("error", if @host.platform() == 3 || @host.platform() == 4 { "此平台不能显示 PDF" } else { "" })]),
+        pv_fill("android-chat.file.pdf.failed", [("error", if @ui.platform() == 3 || @ui.platform() == 4 {
+ "此平台不能显示 PDF" } else { "" })]),
         size=15.0,
         color=t.p.muted,
         center=true,

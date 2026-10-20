@@ -64,7 +64,6 @@ fn keep_bytes(c : @ui.Ctx, name : String, mime : String, bytes : Bytes) -> Unit 
     Some(k) => keepings.push({ keep: k, name })
     None => say(c, tr("android-chat.file.saveFailed"))
   }
-  c.request_frame()
 }
 
 ///|
@@ -149,7 +148,6 @@ fn download_drive_file(
             app.toast_at = -1.0
           }
         }
-        c.request_frame()
       })
   }
 }
@@ -195,9 +193,9 @@ fn download_drive_zip(c : @ui.Ctx, src : Source, station : String, root : String
         app.toast_at = -1.0
       }
     }
-    c.request_frame()
   })
 }
+
 
 ///|
 /// How far a file of the drive has come while it is fetched (Parts.kt DownloadChip, FillChip's `progress`): the

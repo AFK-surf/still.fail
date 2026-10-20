@@ -11,8 +11,6 @@
 priv struct Playing {
   player : @player.Player
   mut opened : Bool
-  /// when it was first drawn (the place is waited on a moment)
-  mut asked_at : Double
   mut subtitle_asked : Bool
   mut kept_at : Double
   /// a read logged, the first times
@@ -37,7 +35,6 @@ fn playing_for(key : String) -> Playing {
       let p : Playing = {
         player: @player.Player::new(key="drive-play"),
         opened: false,
-        asked_at: -1.0,
         subtitle_asked: false,
         kept_at: 0.0,
         reads: 0,
@@ -58,7 +55,16 @@ fn play_params(at : DriveAt, path : String) -> Map[String, Json] {
 }
 
 ///|
+/// How long where a file was left is waited on before it plays from the start.
+let play_place_ms : Double = 1000.0
+
+///|
+/// How often where it is is kept while it plays.
+let play_keep_ms : Double = 5000.0
+
+///|
 /// The file `at.path` of `at.root` on `at.station`, played (Player.kt PlayerScreen).
+
 pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
   let key = reader_key(at)
   play_srcs[key] = src
@@ -69,12 +75,11 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
   let folder = (src.topic)("drive", play_params(at, dir)).value
   let entries = items(folder, "entries").map(dv_entry)
   let place = (src.topic)("drivePlace", play_params(at, at.path))
+  // where it was left, held on this device: waited on a moment at most from when it is first drawn (`after` asks for
+  // the frame it is up on)
+  let waited = @kit.after(c, "play-place", !pl.opened, play_place_ms)
   if !pl.opened {
-    if pl.asked_at < 0.0 {
-      pl.asked_at = now
-    }
-    // where it was left, held on this device: waited on a moment at most
-    if place.value is Some(_) || place.error is Some(_) || now - pl.asked_at >= 1000.0 {
+    if place.value is Some(_) || place.error is Some(_) || waited {
       pl.opened = true
       let left = number(place.value, "at")
       let of = number(place.value, "of")
@@ -124,8 +129,6 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
         },
         start~,
       )
-    } else {
-      c.wake_in(1000.0 - (now - pl.asked_at))
     }
   }
   // the subtitle beside it, once the folder is known
@@ -155,12 +158,13 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     if pl.kept_at <= 0.0 {
       pl.kept_at = now
     }
-    if now - pl.kept_at >= 5000.0 {
+    if now - pl.kept_at >= play_keep_ms {
       play_keep(src, at, pl)
       pl.kept_at = now
     }
     // (the place kept now and then: nothing shown waits for it)
-    c.wake_in(5000.0 - (now - pl.kept_at), later=true)
+    c.wake_in(play_keep_ms - (now - pl.kept_at), later=true)
+
   }
   let list = @player.playlist_of(
     entries
