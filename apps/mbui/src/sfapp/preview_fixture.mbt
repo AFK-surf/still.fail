@@ -15,6 +15,8 @@ fn preview_files() -> Array[(Attachment, () -> Bytes)] {
   [
     (at("界面草图.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
     (at("第二版.png", 21000.0, 400.0, 560.0), fn() { fixture_png(400, 560) }),
+    // the chat's own picture (chat_fixture.mbt rich_chat), opened from its thumbnail there
+    (at("compare.png", 402000.0, 1600.0, 900.0), fn() { fixture_png(1600, 900) }),
     (at("设计说明.pdf", 2400.0, 0.0, 0.0), fn() { fixture_pdf() }),
     (at("演示录屏.mp4", 5242880.0, 1280.0, 720.0), fn() { b"" }),
     (at("会议录音.m4a", 1489000.0, 0.0, 0.0), fn() { b"" }),

@@ -183,3 +183,50 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
   assert_eq(marking.shapes.length(), 1)
   marks_leave()
 }
+
+///|
+/// Frames on to where `a` has said it ends (its first frame drawn first: it starts at the one after it was told).
+fn run_out(t : @ui.Tester, a : @motion.Anim) -> Unit {
+  t.draw()
+  let e = a.ends_at()
+  if e > t.time() && e < 1.0e9 {
+    t.run_for(e - t.time())
+  }
+}
+
+///|
+test "a picture of the chat grows from its thumbnail; back closes it at once, it goes, then nothing moves" {
+  reset()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  // the picture's message is above what shows first (the chat opens at its end): the list put a row up at a time
+  // (not wheeled: a wheel shows the list's scroll bar, which goes after a while of its own)
+  let mut tries = 0
+  while t.locate("img:compare.png").length() == 0 && tries < 12 {
+    let (first, _) = t.visible()
+    t.scroll_to(if first > 0 { first - 1 } else { 0 })
+    t.draw()
+    tries += 1
+  }
+  let at = t.locate("img:compare.png")
+  assert_true(at.length() > 0)
+  let (x, y) = at[0]
+  t.tap(x, y)
+  let v = viewer.val.unwrap()
+  assert_eq(v.file.name, "compare.png")
+  assert_true(v.flies && !v.fly_back)
+  run_out(t, v.fly)
+  assert_true(!v.flies)
+  t.back()
+  // closed as back is taken: only drawn going (back into its thumbnail when the chat drew it in the last frames, else
+  // fading out: its row is not built anew under the viewer, so here it fades)
+  assert_true(viewer.val is None)
+  assert_true(pv_leaving.val is Some(_))
+  run_out(t, if v.flies { v.fly } else { v.fade })
+  assert_true(pv_leaving.val is None)
+  assert_eq(pv_hidden.val, "")
+  t.assert_idle()
+}
