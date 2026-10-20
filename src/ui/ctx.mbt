@@ -915,6 +915,15 @@ fn Ctx::read_changed(self : Ctx, what : String, loc~ : SourceLoc) -> Unit {
 }
 
 ///|
+/// A motion set out between frames (Ctx::set_out): the next frame is owed to it (its start), the host told now, as
+/// a frame asked between frames is.
+fn Ctx::owe_start(self : Ctx) -> Unit {
+  self.motion_unstarted = true
+  self.wants_frame = true
+  h_request_frame()
+}
+
+///|
 #callsite(autofill(loc))
 pub fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
   self.wants_frame = true

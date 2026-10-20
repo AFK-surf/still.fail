@@ -12,6 +12,18 @@
 /// frame to come), a frame is owed to it; at or before `now`: at rest, forgotten.
 pub(open) trait Moving {
   rest_at(Self, now : Double, frame : Int) -> Double
+  sample(Self, now : Double) -> Unit = _
+}
+
+///|
+/// This frame's time, handed to what is said to move (`now`). Each frame, in this order: the runtime runs to the
+/// frame's time (its fibers, fx.mbt); what is said to move is handed it; the view builds. Handed it while it is said to
+/// move and the frame it is at rest too: sampled first, forgotten at that frame's end (Ctx::motion_owed). What sets out
+/// as the view builds is not handed that frame's: Ctx::set_out answers it. What moves as data reads where it is from
+/// it, not the clock. By default nothing.
+impl Moving with sample(self, now) {
+  ignore(self)
+  ignore(now)
 }
 
 ///|
@@ -42,6 +54,32 @@ struct MoverEntry {
 #callsite(autofill(loc))
 pub fn Ctx::moving(self : Ctx, who : Mover, m : &Moving, what? : String = "", loc~ : SourceLoc) -> Unit {
   self.moving_as(who, m, (if what == "" { "" } else { what + ", " }) + "told at \{loc}")
+}
+
+///|
+/// `m` (`who` its mover) sets out now, as Ctx::moving says, and the moment it sets out at (the frames' clock): told as
+/// the view builds or in an input's handler, this frame's; told between frames, +inf, the next frame (one is asked
+/// for) then handing its time to `m`'s first sample. Where what moves as data starts from, not the clock. Not for a
+/// fiber: its clock is the runtime's (whole ms), not the frames'.
+#callsite(autofill(loc))
+pub fn Ctx::set_out(self : Ctx, who : Mover, m : &Moving, what? : String = "", loc~ : SourceLoc) -> Double {
+  self.moving_as(who, m, (if what == "" { "" } else { what + ", " }) + "told at \{loc}")
+  if self.in_frame() {
+    self.now
+  } else {
+    self.owe_start()
+    @double.infinity
+  }
+}
+
+///|
+/// What is said to move, handed this frame's time (Moving::sample): before the view builds.
+fn Ctx::movers_sample(self : Ctx) -> Unit {
+  // (what a sample sets out anew is handed the time from the next frame)
+  let n = self.movers.length()
+  for i in 0..<n {
+    self.movers[i].m.sample(self.now)
+  }
 }
 
 ///|

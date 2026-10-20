@@ -169,6 +169,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   take_messages()
   // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
   fx_frame_start(c)
+  // what is said to move, handed this frame's time, before the view reads where it is (motion_data.mbt)
+  c.movers_sample()
   desk_frame_start()
   // the keys and presses since the last frame that move the focus, press what has it, dismiss a layer (focus.mbt,
   // overlay.mbt), before the view builds
