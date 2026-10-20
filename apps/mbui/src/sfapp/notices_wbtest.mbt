@@ -75,6 +75,7 @@ fn notify_core(
   sys : FakeSystem,
   notify? : Ref[Json] = Ref({ "on": true, "asked": true, "push": true, "show": [] }),
   show? : Array[Json] = [],
+  env? : Array[(String, String)] = [],
 ) -> @ui.Tester {
   reset()
   use_system(sys)
@@ -104,8 +105,8 @@ fn notify_core(
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.settle() |> ignore
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, env~)
+  t.draw()
   t
 }
 
@@ -114,7 +115,6 @@ test "a notice the core says to show: taken, then shown once in the system, as t
   let calls : Array[Made] = []
   let sys = fake_system()
   let t = notify_core(calls, sys, show=[a_notice])
-  t.settle() |> ignore
   assert_eq(named(calls, "notice.claim").length(), 1)
   assert_eq(sys.shown.length(), 1)
   let (tag, title, body, opens) = sys.shown[0]
@@ -124,9 +124,9 @@ test "a notice the core says to show: taken, then shown once in the system, as t
   assert_eq(opens, "/o/ws1/st1/s-c2?message=2\n2")
   // frames on: not taken again
   t.frame()
-  t.settle() |> ignore
   assert_eq(named(calls, "notice.claim").length(), 1)
   assert_eq(sys.shown.length(), 1)
+  // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
 }
 
 ///|
@@ -136,7 +136,8 @@ test "tapped, the notice's chat opens over Home at its message, which flashes; i
   let t = notify_core(calls, sys, show=[a_notice])
   sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
   t.frame()
-  t.settle() |> ignore
+  // its chat slid in
+  t.run_for(@ui.nav_push_ms)
   let parsed = named(calls, "link.parse")
   assert_eq(parsed.length(), 1)
   assert_true(parsed[0].params.stringify().contains("/o/ws1/st1/s-c2?message=2"))
@@ -154,8 +155,11 @@ test "tapped, the notice's chat opens over Home at its message, which flashes; i
   assert_true(sys.cancelled.contains("ws1/st1/s-c2"))
   // back: Home
   app.nav.pop() |> ignore
-  t.settle() |> ignore
   assert_eq(app.nav.depth(), 1)
+  // it slides off from the frame that takes it
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
 }
 
 ///|
@@ -178,9 +182,22 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
   }
   assert_true(seen)
   assert_true(lit > 0.99)
-  t.settle() |> ignore
   t.frame(ms=2000.0)
   t.frame()
+  assert_eq(flashing.val.1, 0.0)
+  t.assert_idle()
+}
+
+///|
+test "with motion reduced, a message gone to is lit whole for its flash's time, then not: no fade" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let t = notify_core(calls, sys, env=[("MBUI_REDUCE_MOTION", "1")])
+  sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(flashing.val, ("ts2", 1.0))
+  t.run_for(flash_ms)
   assert_eq(flashing.val.1, 0.0)
 }
 
@@ -200,17 +217,15 @@ test "the system told what it allows; asked once when it never was, with notific
   // allowed: told so
   sys.answer = Some(true)
   t.frame()
-  t.settle() |> ignore
   let after = named(calls, "notify.permission")
   assert_eq(after.length(), 2)
   assert_true(after[1].params.stringify().contains("\"granted\""))
   // hidden and shown again: told again; not asked again
   t.app_state(false, false)
-  t.settle() |> ignore
   t.app_state(true, true)
-  t.settle() |> ignore
   assert_eq(named(calls, "notify.permission").length(), 3)
   assert_eq(sys.asks, 1)
+  // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
 }
 
 ///|
@@ -241,7 +256,6 @@ test "a push delivered: shown as the core says, then what it is about brought on
   let t = notify_core(calls, sys)
   sys.push = "{\"type\":\"notice\",\"kind\":\"done\",\"title\":\"周报的模板\",\"body\":\"Claude: 放好了\",\"tag\":\"ws1/st1/s-c10\",\"url\":\"/o/ws1/st1/s-c10?message=4\",\"workspace\":\"ws1\",\"station\":\"st1\",\"session\":\"s-c10\",\"at\":\"1790000000000\",\"seq\":\"4\"}"
   t.frame()
-  t.settle() |> ignore
   assert_eq(named(calls, "notice.pushed").length(), 1)
   assert_true(sys.shown.iter().any(fn(n) { n.0 == "ws1/st1/s-c10" && n.2 == "Claude: 放好了" }))
   let bring = named(calls, "notice.bring")
@@ -249,6 +263,7 @@ test "a push delivered: shown as the core says, then what it is about brought on
   let p = bring[0].params.stringify()
   assert_true(p.contains("\"station\":\"ws1/st1\""))
   assert_true(p.contains("\"seq\":4"))
+  // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
 }
 
 ///|
@@ -258,10 +273,10 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   let notify : Ref[Json] = Ref({ "on": true, "asked": true, "push": true, "show": [] })
   let t = notify_core(calls, sys, notify~)
   open_setting("home")
-  t.settle() |> ignore
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
   assert_true(t.find("任务完成、需要处理、出错或有新消息时通知你") is Some(_))
   t.tap_text("通知")
-  t.settle() |> ignore
   let set = named(calls, "notify.set")
   assert_eq(set.length(), 1)
   assert_true(set[0].params.stringify().contains("\"on\":false"))
@@ -269,11 +284,10 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   assert_true(t.find("不接收通知") is Some(_))
   notify.val = { "on": false, "asked": true, "push": false, "show": [] }
   (set[0].done)(Ok(notify.val))
-  t.settle() |> ignore
+  t.draw()
   assert_eq(named(calls, "push.unregister").length(), 1)
   let asks = sys.asks
   t.tap_text("通知")
-  t.settle() |> ignore
   assert_eq(sys.asks, asks + 1)
   let on = named(calls, "notify.set")
   assert_true(on[on.length() - 1].params.stringify().contains("\"on\":true"))
@@ -282,8 +296,8 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   assert_eq(app.toast, "无法开启通知：坏了")
   sys.answer = Some(false)
   t.frame()
-  t.settle() |> ignore
   assert_eq(app.toast, "在系统设置里允许 still.fail 发通知")
   let told = named(calls, "notify.permission")
   assert_true(told[told.length() - 1].params.stringify().contains("\"denied\""))
+  // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
 }

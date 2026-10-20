@@ -21,6 +21,7 @@
 // hosts yet: it is copied and said so), document.cookie (the cookies are the app's, not the web view's).
 
 ///|
+// kept across runs: a table, never written
 let svc_zh : Map[String, String] = {
   "android-chat.link.failed": "无法打开此链接",
   "android-chat.load.failed": "失败",
@@ -73,6 +74,7 @@ priv struct Viewport {
 
 ///|
 /// The sizes offered (Preview.kt PRESETS).
+// kept across runs: a table, never written
 let svc_presets : Array[(String, Int, Int)] = [
   ("phone", 390, 844),
   ("tablet", 820, 1180),
@@ -855,17 +857,9 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
   }
   let bar = c.id("service/toolbar")
   // held still half a second: folded away (the bar's size button opens it again)
-  if c.pressed(bar) || toolbar_child_pressed(c) {
-    if svc_hold.val < 0.0 {
-      svc_hold.val = c.now()
-    } else if c.now() - svc_hold.val >= 500.0 {
-      p.folded = true
-      svc_folded.val = true
-      svc_hold.val = -1.0
-    }
-    c.wake_in(100.0)
-  } else {
-    svc_hold.val = -1.0
+  if @kit.after(c, "service/fold-hold", c.pressed(bar) || toolbar_child_pressed(c), svc_fold_hold_ms) {
+    p.folded = true
+    svc_folded.val = true
   }
   c.box(w=Fill(1.0), bg=if sized { @sf.mix(t.p.chip, 0.55, t.p.card) } else { t.p.card }, pl=10.0, pr=10.0, pb=10.0, fn() {
     c.box(
@@ -926,7 +920,12 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
 }
 
 ///|
+/// (The toolbar's hold is @kit.after's now; app.mbt's reset still puts this back, so it stays until that goes.)
 let svc_hold : Ref[Double] = Ref(-1.0)
+
+///|
+/// How long the toolbar is held still before it folds away.
+let svc_fold_hold_ms : Double = 500.0
 
 ///|
 /// Whether a finger holds one of the toolbar's chips (a hold anywhere on it folds it).

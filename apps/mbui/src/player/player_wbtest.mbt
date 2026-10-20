@@ -91,8 +91,7 @@ test "the player: its bar, where it is, its controls; the picture fitted in the 
   let backs = []
   let t = tester_with(p, ["E1.mp4", "E2.mp4", "E3.mp4"], opened, backs)
   p.open(track("E2.mp4"))
-  t.settle() |> ignore
-  t.frame()
+  t.draw()
   assert_true(t.find("E2.mp4") is Some(_))
   assert_true(t.find("2 / 3") is Some(_))
   assert_true(t.find("0:00 / 0:10") is Some(_))
@@ -107,6 +106,7 @@ test "the player: its bar, where it is, its controls; the picture fitted in the 
   assert_true((y - (844.0 - 219.375) / 2.0).abs() < 1.0)
   // asked to play once opened
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(" 1 0") }))
+  t.assert_idle()
 }
 
 ///|
@@ -114,16 +114,15 @@ test "the player: a double tap on the right third jumps 15 s on (at most to the 
   let p = Player::new()
   let t = tester_with(p, [], [], [])
   p.open(track("a.mp4"))
-  t.settle() |> ignore
+  t.draw()
   t.tap(350.0, 400.0)
   t.tap(350.0, 400.0)
   assert_true(t.find("快进 15 秒") is Some(_))
   // the fake view is 10 s long: to its end
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(" 3 10000") }))
-  t.advance(900.0)
-  t.frame()
-  t.settle() |> ignore
+  t.run_for(note_ms)
   assert_true(t.find("快进 15 秒") is None)
+  t.assert_idle()
 }
 
 ///|
@@ -133,7 +132,7 @@ test "the player: the speed steps through 1× 1.25× 1.5× 2× 0.5× 0.75×; bac
   let backs = []
   let t = tester_with(p, ["E1.mp4", "E2.mp4"], opened, backs)
   p.open(track("E1.mp4"))
-  t.settle() |> ignore
+  t.draw()
   t.tap_text("1×")
   assert_true(t.find("1.25×") is Some(_))
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(" 4 1.25") }))
@@ -143,6 +142,7 @@ test "the player: the speed steps through 1× 1.25× 1.5× 2× 0.5× 0.75×; bac
   t.tap(26.0, y)
   assert_eq(backs.length(), 1)
   ignore(opened)
+  t.assert_idle()
 }
 
 ///|
@@ -150,12 +150,12 @@ test "a song: its mark and name in the middle, no sideways key, the controls sta
   let p = Player::new()
   let t = tester_with(p, [], [], [])
   p.open(track("曲.mp3", audio=true))
-  t.settle() |> ignore
-  t.advance(4000.0)
-  t.frame()
-  t.settle() |> ignore
+  t.draw()
+  // past the time a video's controls go, and their fade
+  t.run_for(rest_ms + shown_ms)
   assert_true(t.find("0:00 / 0:10") is Some(_))
   assert_eq(t.find_last("曲.mp3") is Some(_), true)
+  t.assert_idle()
 }
 
 ///|
@@ -164,7 +164,7 @@ test "a subtitle's words over the picture at their time; the captions key turns 
   let t = tester_with(p, [], [], [])
   p.open(track("a.mp4"))
   p.set_subtitle(true, [{ from: 0.0, to: 5000.0, text: "第一句" }])
-  t.settle() |> ignore
-  t.frame()
+  t.draw()
   assert_true(t.find("第一句") is Some(_))
+  t.assert_idle()
 }

@@ -11,10 +11,10 @@
 ///|
 fn main {
   // MBUI_DARK=1: the dark theme
-  if @host.env("MBUI_DARK") == "1" {
+  if @ui.env("MBUI_DARK") == "1" {
     @sf.set_dark(Some(true))
   }
-  let mode = @host.env("MBUI_FIXTURE")
+  let mode = @ui.env("MBUI_FIXTURE")
   let src = @sfapp.fixture(mode)
   let rich : @sfapp.ChatRef = {
     station: "ws1/st1",

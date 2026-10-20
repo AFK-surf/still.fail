@@ -66,19 +66,3 @@ pub let trace_agent_reply : String =
   #|{"in":{"id":17,"delta":[{"path":[0,"overview","disk","freeBytes"],"set":105224675328}]},"w":1792446022244.147}
   #|{"in":{"id":14,"delta":[{"path":["messages"],"key":["seq","outgoing"],"put":{"seq":6,"thread":1,"ts":"1792446022.081000","authorKind":"agent","author":"ember:c-193a575f79","text":"收到，这是 agent 的回复 053246","attachments":[],"quotes":[],"declared":"final","ending":"all_done","createdAt":1792446022081,"mine":false,"system":false,"by":{"name":"默认模型","agent":"ember:c-193a575f79","runtime":"claude","here":true},"waiting":false,"said":true,"time":{"createdAt":{"at":1792446022081,"ago":"刚刚","full":"10/20 05:40:22","until":"1 分钟内","past":true}}},"before":null},{"path":["messages"],"key":["seq","outgoing"],"put":{"outgoing":"out-2d95387c26cc989934","seq":5,"thread":1,"ts":"1792446022.068000","authorKind":"person","author":"alice@example.test","authorName":"Name of alice","text":"请回答一句 053246 post:收到，这是 agent 的回复 053246","attachments":[],"quotes":[],"createdAt":1792446022068,"mine":true,"system":false,"by":{"name":"Name of alice","picture":"https://example.test/p.png"},"waiting":false,"said":true,"time":{"createdAt":{"at":1792446022068,"ago":"刚刚","full":"10/20 05:40:22","until":"1 分钟内","past":true}}},"before":[6,null]},{"path":["outbox"],"key":["id"],"drop":"out-2d95387c26cc989934"}]},"w":1792446022427.056}
 
-///|
-/// The flow's script as the run had it (05-agent-reply.drive).
-pub let drive_agent_reply : String =
-  #|# An agent's answer comes while the chat is open, and the list follows its end to show it.
-  #|timeout 60000
-  #|tap 端到端测试
-  #|until =studio
-  #|until 发消息
-  #|wait 1000
-  #|tap 发消息
-  #|type 请回答一句 053246 post:收到，这是 agent 的回复 053246
-  #|tap icon:arrow-up
-  #|gone 正在发送
-  #|timeout 120000
-  #|untiln 2 收到，这是 agent 的回复 053246
-  #|shot 1-answered

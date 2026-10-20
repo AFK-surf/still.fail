@@ -18,6 +18,7 @@ priv struct PaperInk {
 }
 
 ///|
+// kept across runs: a table, never written
 let paper_keys : Array[String] = ["follow", "white", "green", "grey", "night"]
 
 ///|
@@ -434,6 +435,14 @@ fn reader_jump(r : TextReading, chunk : Int, offset : Int) -> Unit {
 }
 
 ///|
+/// How long the reader holds still before where it is is kept (not on every pixel).
+pub let reader_still_ms : Double = 800.0
+
+///|
+/// How long the reader's bars take to come or go (a tap on the text).
+pub let reader_bars_ms : Double = 180.0
+
+///|
 /// The column of text and what floats over it (Reader.kt Book).
 fn reader_book(
   c : @ui.Ctx,
@@ -467,18 +476,22 @@ fn reader_book(
     }
   }
   // kept as the reader stops (not on every pixel)
-  if r.moved_at > r.kept_at && c.now() - r.moved_at > 800.0 {
+  if r.moved_at > r.kept_at && c.now() - r.moved_at >= reader_still_ms {
     reader_keep(src, at, r, novel, false, c.now())
   } else if r.moved_at > r.kept_at {
-    c.wake_in(820.0 - (c.now() - r.moved_at))
+    c.wake_in(reader_still_ms - (c.now() - r.moved_at))
   }
   // a jump: its block at the top, then slid to the offset in it once it is laid out
   if r.jump_step == 1 {
-    let (k, _, _) = r.jump
-    c.list_scroll_to(list_key, k + 1)
-    r.chunk = k
-    r.within = 0.0
-    r.jump_step = 2
+    // (only once the list is there, laid out in a frame before this one: built further down this frame the first
+    // time, before which a scroll to it is lost, and the second step would wait for its block for ever)
+    if c.list_place(list_key) is Some(_) {
+      let (k, _, _) = r.jump
+      c.list_scroll_to(list_key, k + 1)
+      r.chunk = k
+      r.within = 0.0
+      r.jump_step = 2
+    }
     c.request_frame()
   } else if r.jump_step == 2 {
     let (k, off, lead) = r.jump
@@ -538,10 +551,8 @@ fn reader_book(
   })
   |> ignore
   // the bars
-  let k = if c.stable() {
-    if r.chrome { 1.0 } else { 0.0 }
-  } else {
-    let e = dmin(1.0, (c.now() - r.chrome_at) / 180.0)
+  let k = {
+    let e = dmin(1.0, (c.now() - r.chrome_at) / reader_bars_ms)
     if e < 1.0 {
       c.request_frame()
     }
@@ -1059,7 +1070,7 @@ fn reader_panels(
 ) -> Unit {
   let (panel, closing) = match r.panel {
     NoPanel =>
-      if r.closing != NoPanel && c.now() - r.closed_at < 300.0 && !c.stable() {
+      if r.closing != NoPanel && c.now() - r.closed_at < 300.0 {
         c.request_frame()
         (r.closing, true)
       } else {

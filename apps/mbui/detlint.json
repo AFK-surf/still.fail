@@ -1,0 +1,190 @@
+{
+  "mbt": {
+    "roots": [
+      "src"
+    ],
+    "framework": [
+      "src/host",
+      "src/core"
+    ],
+    "clock_sources": [
+      "src/core",
+      "src/host"
+    ],
+    "frame_core": [
+      "src/host"
+    ]
+  },
+  "globals": {
+    "roots": [
+      "src/sfapp"
+    ]
+  },
+  "flows": [
+    "e2e/flows/*.drive"
+  ],
+  "scripts": [
+    "scripts/*.sh",
+    "scripts/*.mjs",
+    "scripts/*.py",
+    "e2e/*.sh",
+    "e2e/*.ts",
+    "e2e/*.py",
+    "e2e/flows/*.check",
+    "e2e/win/*"
+  ],
+  "skip": [
+    "scripts/detlint*.py",
+    "mbui",
+    "out"
+  ],
+  "counts": {
+    "frame-request": {
+      "src/sfapp/chat.mbt": 1,
+      "src/sfapp/composer.mbt": 4,
+      "src/sfapp/drive_reader.mbt": 4,
+      "src/sfapp/drive_sheets.mbt": 1,
+      "src/sfapp/keep.mbt": 3,
+      "src/sfapp/open_file.mbt": 1,
+      "src/sfapp/pick.mbt": 2,
+      "src/sfapp/preview.mbt": 16,
+      "src/sfapp/recent.mbt": 1,
+      "src/sfapp/service.mbt": 1,
+      "src/sfapp/share.mbt": 4,
+      "src/sfapp/sheet.mbt": 1,
+      "src/sfapp/station_files.mbt": 4,
+      "src/sfapp/updates.mbt": 1,
+      "src/sfcore/signin.mbt": 1
+    },
+    "settle": {
+      "src/sfapp/drive_wbtest.mbt": 20,
+      "src/sfapp/newchat_wbtest.mbt": 5,
+      "src/sfapp/play_wbtest.mbt": 11,
+      "src/sfapp/preview_wbtest.mbt": 12,
+      "src/sfapp/share_wbtest.mbt": 10
+    },
+    "flow-wait": {
+      "e2e/flows/03-send-text.drive": 1,
+      "e2e/flows/05-agent-reply.drive": 1,
+      "e2e/flows/09-paste-long.drive": 1,
+      "e2e/flows/10-attachments.drive": 1,
+      "e2e/flows/15-drive-lend.drive": 1,
+      "e2e/flows/22-answer-option.drive": 2,
+      "e2e/flows/23-dismiss.drive": 2,
+      "e2e/flows/24-close-option.drive": 2,
+      "e2e/flows/25-archive.drive": 1,
+      "e2e/flows/26-history.drive": 2,
+      "e2e/flows/27-pin.drive": 3,
+      "e2e/flows/28-decisions-page.drive": 1,
+      "e2e/flows/29-glass.drive": 3,
+      "e2e/flows/36-archive-restore.drive": 1,
+      "e2e/flows/38-preview.drive": 10,
+      "e2e/flows/40-notice-wait.drive": 3,
+      "e2e/flows/41-notice-failed.drive": 1,
+      "e2e/flows/42-notice-looking.drive": 3,
+      "e2e/flows/43-notify-off.drive": 6,
+      "e2e/flows/45-drive-play.drive": 3,
+      "e2e/flows/46-chat-audio.drive": 3,
+      "e2e/flows/47-service-page.drive": 7,
+      "e2e/flows/48-share.drive": 5,
+      "e2e/flows/49-update.drive": 2,
+      "e2e/flows/67-lock-wait.drive": 2,
+      "e2e/flows/70-card-motion.drive": 3,
+      "e2e/flows/71-card-keep.drive": 1,
+      "e2e/flows/72-bar-archive.drive": 1,
+      "e2e/flows/73-pick-words.drive": 2,
+      "e2e/flows/90-drive-download.drive": 1,
+      "e2e/flows/91-drive-download-many.drive": 2,
+      "e2e/flows/92-drive-zip.drive": 1,
+      "e2e/flows/93-share-files.drive": 4,
+      "e2e/flows/95-recent-photos.drive": 3,
+      "e2e/flows/96-viewer.drive": 8,
+      "e2e/flows/97-video-frames.drive": 4,
+      "e2e/flows/98-reader.drive": 1
+    },
+    "script-wait": {
+      "e2e/android-flow.sh": 7,
+      "e2e/flows/48-share.check": 2,
+      "e2e/flows/49-update.check": 2,
+      "e2e/peer.ts": 1,
+      "e2e/win.sh": 2,
+      "scripts/android-core.sh": 3,
+      "scripts/beta.sh": 1,
+      "scripts/core.sh": 2,
+      "scripts/e2e-local.sh": 6,
+      "scripts/shots.sh": 8,
+      "scripts/web-ref.mjs": 3,
+      "scripts/web-shots.mjs": 1
+    },
+    "page-settle": {},
+    "frame-count": {
+      "src/sfapp/cards_wbtest.mbt": 1,
+      "src/sfapp/drive_wbtest.mbt": 3,
+      "src/sfapp/notices_wbtest.mbt": 1
+    },
+    "literal-time": {
+      "src/sfapp/drive_wbtest.mbt": 3,
+      "src/sfapp/notices_wbtest.mbt": 1,
+      "src/sfapp/play_wbtest.mbt": 1,
+      "src/sfapp/preview.mbt": 2,
+      "src/sfapp/preview_wbtest.mbt": 3,
+      "src/sfapp/recent.mbt": 1,
+      "src/sfapp/share_wbtest.mbt": 2
+    },
+    "stable-mode": {},
+    "retired-api": {},
+    "app-clock": {
+      "src/sfapp/app.mbt": 5,
+      "src/sfapp/bar.mbt": 1,
+      "src/sfapp/chat.mbt": 5,
+      "src/sfapp/chat_fixture.mbt": 1,
+      "src/sfapp/composer.mbt": 4,
+      "src/sfapp/decide.mbt": 3,
+      "src/sfapp/decisions.mbt": 3,
+      "src/sfapp/drive.mbt": 2,
+      "src/sfapp/drive_parts.mbt": 5,
+      "src/sfapp/drive_reader.mbt": 17,
+      "src/sfapp/drive_sheets.mbt": 1,
+      "src/sfapp/emit.mbt": 5,
+      "src/sfapp/home.mbt": 7,
+      "src/sfapp/pick.mbt": 1,
+      "src/sfapp/play.mbt": 1,
+      "src/sfapp/preview.mbt": 17,
+      "src/sfapp/station_files.mbt": 6
+    },
+    "wall-clock": {
+      "src/coredemo/shelf.mbt": 1,
+      "src/sfreplay/source.mbt": 1,
+      "src/stillfail/main.mbt": 1
+    },
+    "poll": {
+      "src/sfapp/composer.mbt": 1,
+      "src/sfapp/drive_reader.mbt": 1,
+      "src/sfapp/keep.mbt": 1,
+      "src/sfapp/preview.mbt": 6,
+      "src/sfapp/recent.mbt": 2,
+      "src/sfapp/service.mbt": 1
+    },
+    "host-read": {
+      "src/sfapp/preview.mbt": 3,
+      "src/sfapp/share.mbt": 2
+    },
+    "globals": {}
+  },
+  "excused": {
+    "frame-request": {},
+    "settle": {},
+    "flow-wait": {},
+    "script-wait": {},
+    "page-settle": {},
+    "frame-count": {},
+    "literal-time": {},
+    "stable-mode": {},
+    "retired-api": {},
+    "app-clock": {},
+    "wall-clock": {},
+    "poll": {},
+    "host-read": {},
+    "globals": {}
+  }
+}

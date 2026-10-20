@@ -431,12 +431,14 @@ fn history_item(c : @ui.Ctx, src : Source, r : ChatRef, key : String, item : Jso
             if field(wait, "until") is None || field(wait, "until") == Some(Json::null()) {
               // still waiting: it counts on here
               let since = number(wait, "since")
-              let now = if c.stable() { since } else { (src.now)() }
-              if !c.stable() {
-                c.wake_in(1000.0)
+              let now = (src.now)()
+              let most = opt_number(wait, "seconds")
+              // (at its most it stands still)
+              if most is None || now - since < most.unwrap_or(0.0) * second_ms {
+                wake_next_second(c, now - since)
               }
-              let waited = dmax((now - since) / 1000.0, 0.0)
-              let waited = match opt_number(wait, "seconds") {
+              let waited = dmax((now - since) / second_ms, 0.0)
+              let waited = match most {
                 Some(most) => dmin(waited, most)
                 None => waited
               }
@@ -627,7 +629,6 @@ fn history_group(c : @ui.Ctx, src : Source, r : ChatRef, key : String, ik : Stri
     } else {
       dui.opened[gkey] = true
     }
-    c.request_frame()
   }
   let open = dui.opened.contains(gkey)
   let failures = number(g, "failures").to_int()
@@ -750,7 +751,6 @@ fn folding(
     } else {
       dui.opened[key] = true
     }
-    c.request_frame()
   }
   let open = dui.opened.contains(key)
   c.box(w=Fill(1.0), gap=4.0, fn() {
@@ -835,12 +835,12 @@ fn whole(c : @ui.Ctx, src : Source, r : ChatRef, key : String, content : Json?, 
     _ => ()
   }
   let at = dui.detail_at.get(ekey).unwrap_or(-1.0)
-  let settled = at >= 0.0 && ((src.now)() - at > 1000.0 || c.stable())
+  let settled = at >= 0.0 && (src.now)() - at >= detail_settle_ms
   if settled {
     body()
   } else {
     if at >= 0.0 {
-      c.wake_in(1000.0)
+      c.wake_in(at + detail_settle_ms - (src.now)())
     }
     c.text(
       if at <= -2.0 {
@@ -856,15 +856,28 @@ fn whole(c : @ui.Ctx, src : Source, r : ChatRef, key : String, content : Json?, 
 }
 
 ///|
+/// A second: what a clock shown in whole seconds goes on by.
+let second_ms : Double = 1000.0
+
+///|
+/// How long a step's details read show 读取中 after the read answered, for the history to take what it read.
+let detail_settle_ms : Double = 1000.0
+
+///|
+/// A clock showing `ms` gone by in whole seconds is drawn again when it shows the next second (not a second after
+/// whatever frame came last).
+fn wake_next_second(c : @ui.Ctx, ms : Double) -> Unit {
+  let shown = (dmax(ms, 0.0) / second_ms).floor()
+  c.wake_in((shown + 1.0) * second_ms - ms)
+}
+
+///|
 /// The turn's state with the model (History.kt PhaseLine): a dot in the accent, its words, a clock running.
 fn phase_line(c : @ui.Ctx, src : Source, p : Json?) -> Unit {
   let t = @sf.theme()
-  let secs = if c.stable() {
-    0
-  } else {
-    c.wake_in(1000.0)
-    dmax(((src.now)() - number(p, "since")) / 1000.0, 0.0).to_int()
-  }
+  let ran = (src.now)() - number(p, "since")
+  wake_next_second(c, ran)
+  let secs = dmax(ran / second_ms, 0.0).to_int()
   c.box(dir=Row, gap=8.0, align=ACenter, fn() {
     c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.accent, fn() {  }) |> ignore
     c.text(text(p, "text"), size=13.0, color=t.p.text, wrap=false) |> ignore

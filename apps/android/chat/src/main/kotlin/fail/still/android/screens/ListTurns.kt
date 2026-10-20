@@ -41,11 +41,13 @@ internal class ListTurns {
 
     /** `block` (its motion, from its start to its end) in its turn; the next goes once it is over and the list still.
      *  `after`: asked for a couple of frames on, after what else changed with it (what closes under a post as an
-     *  agent starts: the agent's line comes after it). */
-    fun take(after: Boolean = false, block: suspend () -> Unit): Job? = scope?.launch {
+     *  agent starts: the agent's line comes after it). `block` is told whether it waited for another's turn. */
+    fun take(after: Boolean = false, block: suspend (waited: Boolean) -> Unit): Job? = scope?.launch {
         if (after) repeat(2) { withFrameNanos { } }
+        // (On the main thread: unlocked now, it is had at once.)
+        val waited = mutex.isLocked
         mutex.withLock {
-            withTimeoutOrNull(MOST_MS) { block() }
+            withTimeoutOrNull(MOST_MS) { block(waited) }
             // Looked at from two frames on (what it moved is laid out in the frame after it, the list sets out then).
             withTimeoutOrNull(MOST_MS) {
                 var calm = 0
@@ -61,10 +63,11 @@ internal class ListTurns {
         if (take(after) { waiting.remove(key); delay(ms) } == null) waiting.remove(key)
     }
 
-    /** Words sent: their row comes in its turn, which lasts till they have landed (`landed`). */
-    fun send(landed: suspend () -> Unit) {
+    /** Words sent: their row comes in its turn, which lasts till they have landed (`landed`: whether it `waited` for
+     *  others first, what they moved being where it is now rather than where it was as they were sent). */
+    fun send(landed: suspend (waited: Boolean) -> Unit) {
         sendWaiting = true
-        if (take { sendWaiting = false; landed() } == null) sendWaiting = false
+        if (take { waited -> sendWaiting = false; landed(waited) } == null) sendWaiting = false
     }
 }
 

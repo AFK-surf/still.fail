@@ -82,6 +82,9 @@ priv struct DriveUi {
   mut picker_error : String
   mut picker_denied : Bool
   mut picker_serial : Int
+  /// the folder picker's last ask (`picker_serial`) on its way, not answered yet: what is shown is coming, not asked
+  /// again
+  mut picker_asking : Bool
 }
 
 ///|
@@ -110,24 +113,37 @@ let dv : DriveUi = {
   picker_error: "",
   picker_denied: false,
   picker_serial: 0,
+  picker_asking: false,
 }
 
 ///|
 /// As at the start (tests).
 fn dv_reset() -> Unit {
   dv.sheet = NoSheet
+  dv.sheet_at = 0.0
   dv.closing = NoSheet
+  dv.closed_at = 0.0
   dv.chosen.clear()
   dv.uploads.clear()
+  dv.serial = 0
   dv.pumping = false
   dv.busy.clear()
   dv.failed.clear()
   dv.refreshing.clear()
   dv.held = 0
+  dv.held_at = 0.0
   dv.held_done = false
   dv.sort_set = None
   dv.hidden_set = None
   dv.picking = None
+  dv.picking_for = { station: "", root: None, path: "" }
+  dv.asked = ""
+  dv.picker_at = None
+  dv.picker = None
+  dv.picker_error = ""
+  dv.picker_denied = false
+  dv.picker_serial = 0
+  dv.picker_asking = false
   reader_ui.clear()
   reader_set.clear()
   dv_reads.clear()
@@ -135,7 +151,14 @@ fn dv_reset() -> Unit {
   fix_places.clear()
   draft_refs.clear()
   sfs.open = false
+  sfs.at = 0.0
+  sfs.closed_at = -1.0e9
+  sfs.draft = ""
+  sfs.place = None
   sfs.ticked.clear()
+  sfs.ref = None
+  sfs.ref_at = 0.0
+  sfs.ref_closed = -1.0e9
 }
 
 ///|

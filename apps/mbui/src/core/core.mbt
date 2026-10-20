@@ -59,8 +59,8 @@ pub let client : Client = Client::new(
 
 ///|
 /// Starts the core: its files in `data_dir` (empty: the platform's place for the app's data, or $MBUI_CORE_DATA),
-/// still.fail cloud at `cloud`. Messages are taken on the UI thread as they come; `on_change` is told after each run
-/// of them that changed something. False when this build has no engine linked in.
+/// still.fail cloud at `cloud`. Messages are taken as a frame begins (`pump`); `on_change` is told when one is
+/// queued (it asks for that frame). False when this build has no engine linked in.
 pub fn start(
   data_dir? : String = "",
   cloud? : String = "https://app.still.fail",
@@ -85,6 +85,13 @@ pub fn stop() -> Unit {
     ffi_stop()
     engine.started = false
   }
+}
+
+///|
+/// What is asked of the core is awaited until answered or first read (see Client::track): an mbui app gives its
+/// runtime's `outside_start` and `outside_end`, so its screens are settled only once what they asked of the core is in.
+pub fn track(start : (String) -> Int, end : (Int) -> Unit) -> Unit {
+  client.track(start, end)
 }
 
 ///|
@@ -163,19 +170,16 @@ pub fn fatal() -> String? {
 }
 
 ///|
-/// Takes what the core said since last time, in its order; `on_change` once if any of it changed something. The app
+/// Takes what the core said since last time, in its order. The app
 /// calls it as each frame begins, before it reads anything (src/stillfail): what came is seen whole at a frame's
 /// boundary, never part-way through one or between two, so how much of it a frame sees depends on frames, not on when
 /// the core's thread happened to answer (the queue's wake only asks for a frame).
 pub fn pump() -> Unit {
-  let v0 = client.version
-  let mut n = 0
   while true {
     let text = ffi_next()
     if text.length() == 0 {
       break
     }
-    n += 1
     let msg = @json.parse(text) catch { _ => continue }
     match msg {
       Object(m) if m.contains("mbui_auth") => web_auth_done(m)
@@ -190,9 +194,7 @@ pub fn pump() -> Unit {
       }
     }
   }
-  if n > 0 && client.version != v0 {
-    (engine.on_change)()
-  }
+  // (no frame asked for after: what came is read by the frame this runs in, the one the queue's wake asked for)
 }
 
 ///|

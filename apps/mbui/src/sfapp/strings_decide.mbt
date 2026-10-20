@@ -62,6 +62,7 @@ let zh_decide : Map[String, String] = {
   "android-chat.pick.model": "选择模型",
   "android-chat.pick.speed.follow": "跟随订阅",
   "android-chat.pick.speed.standard": "标准",
+  "android-chat.pin": "固定",
   "android-chat.pin.verb": "固定",
   "android-chat.rename": "重命名",
   "android-chat.rename.field": "对话名称",

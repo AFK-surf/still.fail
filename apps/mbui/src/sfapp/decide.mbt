@@ -28,11 +28,9 @@ priv struct Decide {
   gone : Map[String, Bool]
   /// what failed a moment ago (the core's doing, `stage: failed`, kept 6 s: DoingMark's red mark), by its key, when
   failed : Map[String, Double]
-  /// the sheet open, since when; the one going, since when
+  /// the sheet open; the one going (its motion is @kit.sheet's)
   mut sheet : Sheet?
-  mut sheet_at : Double
   mut leaving : Sheet?
-  mut leave_at : Double
   /// the jobs' sheet shows all of them, not only those that matter now
   mut jobs_all : Bool
   /// a job's sheet: what it said (0) or its output (1)
@@ -61,13 +59,15 @@ priv struct Decide {
   mut last_x : Double
   mut last_t : Double
   mut speed : Double
-  /// the front one going: 1 right (不再提醒), -1 left (待定), 2 up (answered), 0 not; since when; what then
+  /// the front one let go short of going: going back where it rests (3, decisions.mbt card_back), else 0; from
+  /// where across
   mut going : Int
-  mut going_at : Double
   mut going_from : Double
-  mut after_go : () -> Unit
-  /// the front one coming in, since when (-1: there at once)
-  mut arrive_at : Double
+  /// the one that went (out of the deck at once), only drawn as it flies off: it, which way (1 right 不再提醒, -1
+  /// left 待定, 2 up answered; decisions.mbt card_out), from where across
+  mut out : Json?
+  mut out_dir : Int
+  mut out_from : Double
 }
 
 ///|
@@ -76,9 +76,7 @@ let dui : Decide = {
   gone: {},
   failed: {},
   sheet: None,
-  sheet_at: 0.0,
   leaving: None,
-  leave_at: 0.0,
   jobs_all: false,
   job_tab: 0,
   history_tab: 0,
@@ -98,10 +96,10 @@ let dui : Decide = {
   last_t: 0.0,
   speed: 0.0,
   going: 0,
-  going_at: 0.0,
   going_from: 0.0,
-  after_go: fn() {  },
-  arrive_at: -1.0,
+  out: None,
+  out_dir: 0,
+  out_from: 0.0,
 }
 
 ///|
@@ -124,8 +122,17 @@ fn decide_reset() -> Unit {
   dui.drag = 0.0
   dui.held = false
   dui.swiping = false
+  dui.from_x = 0.0
+  dui.from_y = 0.0
+  dui.base = 0.0
+  dui.last_x = 0.0
+  dui.last_t = 0.0
+  dui.speed = 0.0
   dui.going = 0
-  dui.arrive_at = -1.0
+  dui.going_from = 0.0
+  dui.out = None
+  dui.out_dir = 0
+  dui.out_from = 0.0
 }
 
 ///|
@@ -225,7 +232,8 @@ fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
         dui.failed.remove(key)
         false
       } else {
-        c.wake_in(left)
+        // (its going is not what is shown waits for: a screenshot of it failing shows the mark)
+        c.wake_in(left, later=true)
         true
       }
     }
@@ -242,10 +250,12 @@ fn seq_key(station : String, thread : Double, seq : Double) -> String {
 
 ///|
 /// ListMotion.kt closeGap: the room left closed by the rows' spring (critically damped, 350), a little late (100 ms).
+// kept across runs: a curve, never written
 let close_gap : @motion.Spec = @motion.spring(stiffness=350.0, threshold=0.002, delay=100.0)
 
 ///|
 /// The archive buttons' curve and time (Chat.kt ArchiveEase, 280 ms): a quick start, a soft landing.
+// kept across runs: a curve, never written
 let archive_tween : @motion.Spec = @motion.tween(280.0, ease=Soft)
 
 ///|
@@ -341,7 +351,6 @@ fn ask_dismiss(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
   let id = c.id("ask-dismiss/" + m.ts)
   if shown && c.clicked(id) {
     dui.gone[k] = true
-    c.request_frame()
     act(
       src,
       tr("android-misc.decisions.dismissWhat"),
@@ -671,24 +680,18 @@ fn login_pill(c : @ui.Ctx, key : String, label : String, filled : Bool, busy : B
 /// Opens `s` over the pages (one at a time: the one open goes).
 fn open_sheet(c : @ui.Ctx, s : Sheet) -> Unit {
   dui.sheet = Some(s)
-  dui.sheet_at = c.now()
   dui.leaving = None
   c.blur()
-  c.request_frame()
 }
 
 ///|
 /// Closes the sheet open, which goes down.
 fn close_sheet(c : @ui.Ctx) -> Unit {
   match dui.sheet {
-    Some(s) => {
-      dui.leaving = Some(s)
-      dui.leave_at = c.now()
-    }
+    Some(s) => dui.leaving = Some(s)
     None => ()
   }
   dui.sheet = None
-  c.request_frame()
 }
 
 ///|

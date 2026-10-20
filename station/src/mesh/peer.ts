@@ -11,6 +11,8 @@ import { answerLock } from "./lock-sync.ts";
 
 export const PEER_ALPN = Buffer.from("stillfail/station/1");
 const MAX_MESSAGE = 1024 * 1024;
+/// A request answered later than this is said in the log (a caller gives up at 30 s).
+const SLOW_MS = 10_000;
 
 /// The workspace a peer is asked or heard in, if it is another station of it now; throws why not. Without one said,
 /// the first workspace of this station's (its home one first) the peer is in too.
@@ -118,13 +120,36 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
   } catch (error) {
     if (cloud.peersCurrent) throw error;
   }
+  // Each request answered on its own, as it comes: answered one after another, a slow one (a sync while the station
+  // was loaded) held up every other one of the caller's, whose chats all share the connection; each timed out at 30 s,
+  // the caller dialed again and its next requests queued behind the same, while those left on the old connection were
+  // still run (2026-10-20, ccvm to Studio for hours after Studio's load came down). Idle only with none being answered.
+  // The stream being waited for stays the one waited for past each minute: one asked for again would be lost to it.
+  let answering = 0;
+  let next: Promise<Stream | null> | null = null;
   for (;;) {
-    const stream = await within(60_000, conn.acceptBi(), "peer idle");
+    next ??= conn.acceptBi();
+    let stream: Stream | null;
+    try {
+      stream = await within(60_000, next, "peer idle");
+    } catch (error) {
+      if (answering > 0) continue;
+      throw error;
+    }
+    next = null;
     if (stream === null) return;
+    answering++;
+    void answerStream(stream).finally(() => answering--);
+  }
+
+  async function answerStream(stream: Stream) {
     let answer: unknown;
+    let asked: unknown = null;
+    const begun = performance.now();
     try {
       const envelope = JSON.parse((await within(15_000, readAll(stream, MAX_MESSAGE), "peer request timed out")).toString("utf8"));
       if (typeof envelope?.workspace !== "string") throw new Error("workspace missing");
+      asked = envelope.request;
       const ours = inside();
       const there = ours && cloud.membership(envelope.workspace)?.peers.some((p) => p?.id === peer) === true;
       if (there || (ours && !remote.hearsOutside?.())) {
@@ -138,8 +163,21 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
     } catch (error) {
       answer = { error: (error as Error).message };
     }
-    await stream.write(Buffer.from(JSON.stringify(answer)));
-    await stream.finish();
+    // A request this slow has callers giving up at 30 s: said, so who held the station up is found (2026-10-20: nothing
+    // in Studio's log said which of ccvm's requests took it twenty minutes).
+    const ms = Math.round(performance.now() - begun);
+    if (ms >= SLOW_MS) {
+      const r = asked as { method?: unknown; session?: unknown; key?: unknown } | null;
+      log.warn("mesh", "peer request answered slowly", { peer: peer.slice(0, 12), method: String(r?.method ?? ""), session: String(r?.session ?? ""), key: String(r?.key ?? ""), ms });
+    }
+    try {
+      await stream.write(Buffer.from(JSON.stringify(answer)));
+      await stream.finish();
+    } catch (error) {
+      // The caller gone (it gave up, the connection closed): nobody to answer.
+      log.info("mesh", "peer answer not sent", { error: (error as Error).message });
+      return;
+    }
     void within(10_000, stream.stopped(), "").catch(() => {});
   }
 }

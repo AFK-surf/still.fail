@@ -18,6 +18,7 @@
 // macOS's sharing picker); 本机没有可打开此文件的应用 when nothing takes it.
 
 ///|
+// kept across runs: a table, never written
 let share_zh : Map[String, String] = {
   "android-misc.shareIn.to": "发到",
   "android-misc.shareIn.search": "搜索",

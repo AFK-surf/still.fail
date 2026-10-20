@@ -279,7 +279,6 @@ fn act(
   then? : (Json) -> Unit = fn(_) {  },
 ) -> Unit {
   (core.call)(name, params, fn(r) {
-    wake()
     match r {
       Ok(v) => {
         if done != "" {
@@ -421,7 +420,26 @@ pub fn reset() -> Unit {
   builtin_open.clear()
   doc_picked.clear()
   close_sheet()
+  sheet.last = None
+  sheet.was_up = false
+  sheet.height = 0.5
+  sheet.on_close = fn() {  }
+  sheet.serial = 0
+  menu.items = []
+  menu.selected = -1
+  menu.x = 0.0
+  menu.y = 0.0
+  menu.pick = fn(_) {  }
   menu.up = false
+  frame_core.val = None
+  at_root.val = false
+  wide.val = false
+  wide_deep.val = false
+  top_trailing.val = None
+  top_label.val = ""
+  fx.names.clear()
+  fx.restored.clear()
+  fx.version = 0
 }
 
 ///|
@@ -469,27 +487,7 @@ pub fn route_of(name : String) -> Route? {
 }
 
 ///|
-/// The frame being drawn, for asking for the next one from what happens in it (a sheet put up as a row is laid out).
-let frame_ctx : Ref[@ui.Ctx?] = Ref(None)
-
-///|
-/// Another frame: what a tap or an answer changed shows (asked of the frame being drawn, and of the host, as an answer
-/// can come between frames).
-fn wake() -> Unit {
-  match frame_ctx.val {
-    Some(c) => c.request_frame()
-    None => ()
-  }
-  @host.request_frame()
-}
-
-///|
-/// Whether the thing `id` was tapped, the next frame asked for when it was (what it changed is drawn then).
+/// Whether the thing `id` was tapped (what it changed is drawn in the next frame, which a handled click asks for).
 fn hit(c : @ui.Ctx, id : Int) -> Bool {
-  if c.clicked(id) {
-    c.request_frame()
-    true
-  } else {
-    false
-  }
+  c.clicked(id)
 }

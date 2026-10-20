@@ -6,51 +6,50 @@ fn service_tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_drive_fixture(mode)
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  // the page opened slid in
+  t.run_for(@ui.nav_push_ms)
+  t
 }
 
 ///|
 test "a service's page: its name and station in the bar, where it is, the sizes under it, its resources' ring" {
   let t = service_tester("service")
-  t.settle() |> ignore
   t.frame()
-  t.settle() |> ignore
   assert_true(t.find("web") is Some(_))
   assert_true(t.find("对话") is Some(_))
   assert_true(t.find("自适应") is Some(_))
   assert_true(t.find("手机") is Some(_))
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("open ") && s.contains(" 3 ") }))
+  t.assert_idle()
 }
 
 ///|
 test "the page's requests answered from the station through the core: the head, the body, the end; not found said" {
   let t = service_tester("service")
-  t.settle() |> ignore
   t.frame()
   t.site_says("{\"req\":1,\"method\":\"GET\",\"path\":\"/\",\"headers\":[[\"Accept\",\"text/html\"]],\"page\":true}")
   t.frame()
-  t.settle() |> ignore
   let v = t.views()
   assert_true(v.iter().any(fn(s) { s.has_prefix("site head ") && s.contains(" 1 200 ") && s.contains("text/html") }))
   assert_true(v.iter().any(fn(s) { s.has_prefix("site chunk ") && s.contains(" 1 ") }))
   assert_true(v.iter().any(fn(s) { s.has_prefix("site end ") && s.has_suffix(" 1 ") }))
   t.site_says("{\"req\":2,\"method\":\"GET\",\"path\":\"/nothing\",\"headers\":[],\"page\":false}")
   t.frame()
-  t.settle() |> ignore
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("site head ") && s.contains(" 2 404 ") }))
+  t.assert_idle()
 }
 
 ///|
 test "a service being started again is said over its page; one stopped in its place" {
   let t = service_tester("service-restart")
-  t.settle() |> ignore
   t.frame()
   assert_true(t.find("web正在重启") is Some(_))
   assert_true(t.find("第 2 次") is Some(_))
   let s = service_tester("service-stopped")
-  s.settle() |> ignore
   s.frame()
   assert_true(s.find("「web」已停止") is Some(_))
+  s.assert_idle()
 }
 
 ///|

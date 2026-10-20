@@ -10,7 +10,7 @@ fn dv_sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       match dv.closing {
         NoSheet => return
         x =>
-          if c.now() - dv.closed_at < 300.0 && !c.stable() {
+          if c.now() - dv.closed_at < 300.0 {
             c.request_frame()
             (x, true)
           } else {
@@ -485,19 +485,24 @@ fn dv_open_picker(c : @ui.Ctx, station : String, lent : Array[String]) -> Unit {
   dv.picker = None
   dv.picker_error = ""
   dv.picker_denied = false
+  // (an ask of an earlier opening still on its way is let go: its answer is not this one's)
   dv.picker_serial += 1
+  dv.picker_asking = false
   c.set_editor_text("dv-picker-filter", "")
   dv_open(c, Picker(station, lent))
 }
 
 ///|
-/// The folders at `path` asked of the station (its home when None); a later ask supersedes one on its way.
+/// The folders at `path` asked of the station (its home when None); a later ask supersedes one on its way. The one
+/// place that asks: whoever wants another place (a step of the way, a folder tapped, the sheet opened) comes here, and
+/// the ask is on its way until its answer (picker_asking), so nothing asks it again meanwhile.
 fn dv_picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> Unit {
   dv.picker_at = path
   dv.picker = None
   dv.picker_error = ""
   dv.picker_denied = false
   dv.picker_serial += 1
+  dv.picker_asking = true
   let serial = dv.picker_serial
   c.set_editor_text("dv-picker-filter", "")
   let params : Map[String, Json] = { "station": Json::string(station) }
@@ -509,6 +514,7 @@ fn dv_picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> 
     if serial != dv.picker_serial {
       return
     }
+    dv.picker_asking = false
     match r {
       Ok(v) => {
         dv.picker = Some(v)
@@ -560,12 +566,10 @@ fn dv_way(here : Json) -> Array[(String, String)] {
 /// says so. 选择此文件夹 lends the one shown.
 fn picker_sheet(c : @ui.Ctx, src : Source, station : String, lent : Array[String], closing : Bool) -> Unit {
   let t = @sf.theme()
-  if !closing && dv.picker is None && dv.picker_error == "" && !dv.picker_denied && !dv.busy.contains("picker") {
-    dv.busy["picker"] = true
+  // opened, nothing shown and nothing on its way: its place asked (a step or a folder tapped asked already, as it was
+  // tapped: dv_picker_go)
+  if !closing && dv.picker is None && dv.picker_error == "" && !dv.picker_denied && !dv.picker_asking {
     dv_picker_go(c, src, station, dv.picker_at)
-  }
-  if dv.picker is Some(_) || dv.picker_error != "" || dv.picker_denied {
-    dv.busy.remove("picker")
   }
   dv_sheet_frame(c, tr("android-misc.drive.pick.title"), c.height * 0.85, closing~, fn() {
     let here = dv.picker

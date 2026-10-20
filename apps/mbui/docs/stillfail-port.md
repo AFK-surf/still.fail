@@ -942,15 +942,18 @@ file), a run's own, which flow 15 lends through the app.
 
 A run is also kept to be seen again without a backend: with MBUI_CORE_TRACE=1 (only on a local cloud) the app logs
 every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace.py
-out/e2e/mac/NN-name.log NAME` makes it e2e/traces/NAME.trace and src/sfreplay/trace_NAME.mbt (with the flow's script as
-the run had it; a sign-in's tokens put as "-"), and a test runs the flow's script in a Tester over the app with that
-conversation as its core (src/core/replay.mbt, src/sfreplay/flow.mbt): what came given as each frame begins, all that
-may or one at a time, the ids of now matched to the run's, and whatever the app asks that the run did not
-(`diverged`), asks with other params (`fuzzy`), or the run asked and the app does not (`unmade`) said. One flow a test
-process (src/sfreplay/send_text, send_text_frames, agent_reply), as the app's pages keep what they were told. Recorded
-2026-10-20 on Studio (flows 01, 02, 03, 05, all passing): 03 (54 messages) and 05 (62) seen again with nothing
-diverged or fuzzy and every message given; 03 ends on the same screen given all at once or one a frame (正在发送 drawn
-for four frames in the second, none in the first), its one ask not made again a `client.focus` of the run's.
+out/e2e/mac/NN-name.log NAME` makes it e2e/traces/NAME.trace and src/sfreplay/trace_NAME.mbt (a sign-in's tokens put
+as "-"). The flow is then a test of src/sfreplay/flows, its steps written as a Tester's (src/sfreplay/steps.mbt:
+`tap`, `see`, `gone`, `type_text`…, ending in `end`) over the app with that conversation as its core
+(src/core/replay.mbt): an input draws only the frames it causes; what the core said comes at a frame's start, each
+message once what it came after has been asked again; a step that looks looks then, waiting for nothing; time goes on
+only by `run_for` a declared length. At its end every message was given, nothing asked that the run did not
+(`diverged`) or with other params (`fuzzy`), every ask of the run's made again (`unmade`, but those the test names and
+says why), and the app idle (`assert_idle`). Each flow runs as the run had it and again with what may come at once in
+orders drawn from seeds (`Replay::shuffle`: answers to different asks in any order, an ask's own in theirs), ending on
+the same screen each time (`orders`). Only a few flows stay end to end, as smoke (the whole chain: sign-in, send and
+the agent's answer; parts going up; the preview's native views reading through the core; the system's notice; a
+download kept on the device).
 
 The flows (macOS, 390×844, and Android on the emulator, Pixel 7 size). On 2026-10-19 all 14 passed on macOS; on
 Android 13 of 14 in the full run and 11 (the quote) alone, twice, once it waited for the all-done card (it had held
@@ -959,26 +962,26 @@ while the card moved the list):
 | Flow | What the app does | Checked on the backend's side |
 |---|---|---|
 | 01 signin | signed in with the mock account; Home lists the test chat, the agent's answer as where it stands | the core's store holds alice's sign-in |
-| 02 home-new-chat | on Home while alice's other device makes a chat: its row comes in, then its agent's answer as the row's last words | the station has the second chat and the agent's answer in it |
+| 02 home-new-chat | on Home while alice's other device makes a chat: its row comes in, then its agent's answer as the row's last words | the station has the second chat and the agent's answer in it · Tester 重放（src/sfreplay/flows/home_new_chat_test.mbt） |
 | 03 send-text | a chat opened from Home, words typed and sent (正在发送, then sent) | the station's entry: the words, once, as alice's |
-| 04 chinese-enter | Chinese composed and committed through the input method, Enter a new line, sent | one entry of both lines; none of the first line alone |
+| 04 chinese-enter | Chinese composed and committed through the input method, Enter a new line, sent | one entry of both lines; none of the first line alone · Tester 重放（src/sfreplay/flows/chinese_enter_test.mbt） |
 | 05 agent-reply | a question; the fake agent's answer comes while the chat shows, the list following its end | the agent's entry; the answer shown in the window |
-| 06 draft | words left in the field, the chat left and opened again: they are back | the draft in the core's store on the device, nothing of it at the station |
-| 07 draft-restart | the app started again: the draft is back; emptied | the core keeps no draft of it any more |
-| 08 paste-short | a short paste (Cmd+V, KEYCODE_PASTE) goes into the field, sent | the entry's words are the pasted ones |
-| 09 paste-long | 6000 characters pasted become a text file's card (6000 字符), put up at once, sent with words | the entry's attachment, a .txt; the station keeps it whole (18000 bytes) |
+| 06 draft | words left in the field, the chat left and opened again: they are back | the draft in the core's store on the device, nothing of it at the station · Tester 重放（src/sfreplay/flows/draft_test.mbt） |
+| 07 draft-restart | the app started again: the draft is back; emptied | the core keeps no draft of it any more · Tester 重放（src/sfreplay/flows/draft_restart_test.mbt） |
+| 08 paste-short | a short paste (Cmd+V, KEYCODE_PASTE) goes into the field, sent | the entry's words are the pasted ones · Tester 重放（src/sfreplay/flows/paste_short_test.mbt） |
+| 09 paste-long | 6000 characters pasted become a text file's card (6000 字符), put up at once, sent with words | the entry's attachment, a .txt; the station keeps it whole (18000 bytes) · 仍走 e2e：app 按时钟生成文本文件的 id 和文件名，重放时参数对不上（等 app 迁移） |
 | 10 attachments | ＋ → 文件: a photo and a 9 MB file, each put up at once in 4 MB parts (three for the file), sent | the entry's two attachments; both files at the station, byte for byte |
-| 11 quote | the agent's words held still: 引用, a comment on the quote, sent | the entry's quote: the agent's words, its role, the comment |
-| 12 offline-retry | the station frozen (SIGSTOP) as a message goes: 未发送 after some 30 s; thawed, 重试 | the station has the message, once |
-| 13 delete-failed | the same, 删除 | the station never gets it, even once thawed |
-| 14 mark-read | on Home, the other device asks; the answer comes unread; the chat opened at its end | the station's reads: alice unread before, read to the end after |
-| 15 drive-lend | 文件 (MBUI_OPEN_PAGE=files): the station's home; ＋, the folder picker into the station's home, this run's e2e-<tag>, 选择此文件夹 | the station's config lends the folder (drive.roots) |
-| 16 drive-list | the folder: 1 个文件夹 · 2 个文件, its entries; into its folder and back by the crumbs | the station's folder holds what was listed; nothing written |
-| 17 drive-read | a novel of made-up chapters read: the bars, 目录 → 第三章; left, its row says how far | drive.read through the core; drive.place past the second chapter; the core keeps the place on the device |
+| 11 quote | the agent's words held still: 引用, a comment on the quote, sent | the entry's quote: the agent's words, its role, the comment · Tester 重放（src/sfreplay/flows/quote_test.mbt） |
+| 12 offline-retry | the station frozen (SIGSTOP) as a message goes: 未发送 after some 30 s; thawed, 重试 | the station has the message, once · Tester 重放（src/sfreplay/flows/offline_retry_test.mbt） |
+| 13 delete-failed | the same, 删除 | the station never gets it, even once thawed · Tester 重放（src/sfreplay/flows/delete_failed_test.mbt） |
+| 14 mark-read | on Home, the other device asks; the answer comes unread; the chat opened at its end | the station's reads: alice unread before, read to the end after · Tester 重放（src/sfreplay/flows/mark_read_test.mbt） |
+| 15 drive-lend | 文件 (MBUI_OPEN_PAGE=files): the station's home; ＋, the folder picker into the station's home, this run's e2e-<tag>, 选择此文件夹 | the station's config lends the folder (drive.roots); Tester 重放（src/sfreplay/flows/drive_lend_test.mbt）；端到端里仍留着，借出文件夹是 18、21、35、45、48、52、90、91、92、98 等的前提 |
+| 16 drive-list | the folder: 1 个文件夹 · 2 个文件, its entries; into its folder and back by the crumbs | the station's folder holds what was listed; nothing written; Tester 重放（src/sfreplay/flows/drive_list_test.mbt） |
+| 17 drive-read | a novel of made-up chapters read: the bars, 目录 → 第三章; left, its row says how far | drive.read through the core; drive.place past the second chapter; the core keeps the place on the device; Tester 重放（src/sfreplay/flows/drive_read_test.mbt） |
 | 18 drive-upload | ＋ → 上传文件: a photo and a 9 MB file, each a row going up in parts, then entries | both files in the station's folder, byte for byte; several drive.upload.part |
-| 19 drive-rename | the photo held: 已选 1 项, ⋯ → 重命名, a new name typed, 保存 | the station has it under the new name, the same bytes; the old name gone |
-| 20 drive-delete | the renamed file held, ⋯ → 删除, asked (the test station has no trash), 删除 | gone from the station's folder, the others there |
-| 21 station-files | in the chat, ＋ → Station 文件: the lent folder, a file ticked, 添加 1 个: its card; sent with words | the station's entry: the words and studio 上的文件：<path> under them; no attachment |
+| 19 drive-rename | the photo held: 已选 1 项, ⋯ → 重命名, a new name typed, 保存 | the station has it under the new name, the same bytes; the old name gone; Tester 重放（src/sfreplay/flows/drive_rename_test.mbt） |
+| 20 drive-delete | the renamed file held, ⋯ → 删除, asked (the test station has no trash), 删除 | gone from the station's folder, the others there; Tester 重放（src/sfreplay/flows/drive_delete_test.mbt） |
+| 21 station-files | in the chat, ＋ → Station 文件: the lent folder, a file ticked, 添加 1 个: its card; sent with words | the station's entry: the words and studio 上的文件：<path> under them; no attachment · Tester 重放（src/sfreplay/flows/station_files_test.mbt） |
 | 22 answer-option | the agent posts an options card (e2e/fake: `card:`), the recommended one marked; one tapped (decision.answer); 你 选择了「…」 under it | alice's message with the option's words, quoting the post; the card as posted, `recommended` on the one |
 | 23 dismiss | another card; 忽略 tapped: it and the options go at once (decision.dismiss) | `dismissed` has alice's row for the post; nothing answered |
 | 24 close-option | a card with an option made to close it (action=close) tapped | `closed_cards` has the post; no message sent for it |
@@ -987,16 +990,16 @@ while the card moved the list):
 | 27 pin | "…" → 固定到列表顶部, then 取消固定 | the station's `pins` has alice's for the chat, then none |
 | 28 decisions-page | the 奏 page (MBUI_OPEN_PAGE=decisions, a flow's `#env`); the other device asks with a card; the option tapped there; 奏折已全部批完 | alice's answer quoting the post |
 | 29 glass | four long messages sent from the composer's glass; the newest run under the top bar's glass, then, scrolled up, under the composer's | the four entries, as alice's; on macOS the bar's and the capsule's rows in the shots are not flat (what is under them shows through, blurred) |
-| 30 new-chat | 令 in the bar's notch: the new chat rises; the first message typed and sent; the page becomes its chat; the agent's answer comes there; back on Home | the station's entry: the words, once, alice's, in a thread of their own; the agent's answer in that thread; alice's other device lists the chat |
-| 31 places | 文件 tapped on the bar (the drive's page in place); the bar drawn up into the other bar's panel and let go on 奏 (that bar, 奏's page); 用量; the panel again, back on the chats | the bar chosen kept as the workspace's in the core's store on the device (`prefs.set {barsBy}`) |
-| 32 sheet-drag | the workspaces' sheet drawn up to 94% and dragged closed; a new chat's station sheet dragged a little (back) and past 80 (closed), opened again and its station tapped | the sheet's settling as the app logs it; the core took the pick (`newChat.pick` answered) |
-| 33 settings-appearance | Home's gear → settings → 外观 → 深色: the app turns dark at once | the host told (the log's theme: dark); the core's store on the device keeps appearance dark |
-| 34 appearance-kept | the app started again: dark from its first frame; 跟随系统 chosen again | the first theme told is dark; the store keeps appearance system |
-| 35 station-rename | settings → Station → the test station → "…" → 重命名: the new name shown, then the old one back | still.fail cloud's workspace (read by alice's other device) has the new name, then the old |
+| 30 new-chat | 令 in the bar's notch: the new chat rises; the first message typed and sent; the page becomes its chat; the agent's answer comes there; back on Home | the station's entry: the words, once, alice's, in a thread of their own; the agent's answer in that thread; alice's other device lists the chat；Tester 重放（src/sfreplay/flows/new_chat_test.mbt） |
+| 31 places | 文件 tapped on the bar (the drive's page in place); the bar drawn up into the other bar's panel and let go on 奏 (that bar, 奏's page); 用量; the panel again, back on the chats | the bar chosen kept as the workspace's in the core's store on the device (`prefs.set {barsBy}`)；Tester 重放（src/sfreplay/flows/places_test.mbt） |
+| 32 sheet-drag | the workspaces' sheet drawn up to 94% and dragged closed; a new chat's station sheet dragged a little (back) and past 80 (closed), opened again and its station tapped | the sheet's settling as the app logs it; the core took the pick (`newChat.pick` answered)；Tester 重放（src/sfreplay/flows/sheet_drag_test.mbt） |
+| 33 settings-appearance | Home's gear → settings → 外观 → 深色: the app turns dark at once | the host told (the log's theme: dark); the core's store on the device keeps appearance dark；Tester 重放（src/sfreplay/flows/settings_appearance_test.mbt） |
+| 34 appearance-kept | the app started again: dark from its first frame; 跟随系统 chosen again | the first theme told is dark; the store keeps appearance system；Tester 重放（src/sfreplay/flows/appearance_kept_test.mbt） |
+| 35 station-rename | settings → Station → the test station → "…" → 重命名: the new name shown, then the old one back | still.fail cloud's workspace (read by alice's other device) has the new name, then the old；Tester 重放（src/sfreplay/flows/station_rename_test.mbt） |
 | 36 archive-restore | the other device archives a chat (chat.archive): it leaves Home; the filter → 已归档 shows it; 还原 from its row | the other device saw it in the archive; restored, the station's thread has no archived_at |
-| 37 workspace-members | settings → Workspace: its people, alice among them | the cloud's workspace has alice as a member |
+| 37 workspace-members | settings → Workspace: its people, alice among them | the cloud's workspace has alice as a member；Tester 重放（src/sfreplay/flows/workspace_members_test.mbt） |
 | 38 preview | the other device makes a chat with a picture, a PDF, a video and a page (`peer createfiles`: put up in parts, then the chat made with them, so the test chat's end stays as the other flows know it); opened from Home, each file opened in the preview, shot, closed | the station's entry has the four files; the app's log: the picture and the page read through the core, the PDF's 2 pages drawn, the player's reads through the core (`station.file.part`) and its first frame, the page loaded in the web view; each shot shows something in its place (e2e/pngstat.py) |
-| 39 send-flying | two messages sent back to back, the second while the first's words still fly to their bubble | both at the station, once each, in order; the flight in the motion log |
+| 39 send-flying | two messages sent back to back, the second while the first's words still fly to their bubble | both at the station, once each, in order; the flight in the motion log · Tester 重放（src/sfreplay/flows/send_flying_test.mbt） |
 | 40 notice-wait | on Home, the other device asks the agent for a card: the system shows the test chat's notice (待你决定 · …); tapped, the chat opens over Home at the card, which flashes; the notification gone; back, Home | the agent's card at the station; the core said to show it and the app took it (notice.claim); the notice was the test chat's (its tag); the chat opened at the card's seq and went to it; the station marks alice read to its end |
 | 41 notice-failed | on Home, the other device says something the fake agent does not answer: the station's ⚠ makes a notice that something went wrong (出错 · …); tapped, the chat opens at it | the station's ⚠ entry after the words; the notice was the test chat's; the chat opened at the ⚠ entry's seq |
 | 42 notice-looking | the test chat open while the other device asks for a card in it: no notice, the card comes in the chat | the card at the station; no NOTICE for it; the app told the core it shows the chat (client.focus) |
@@ -1007,29 +1010,29 @@ while the card moved the list):
 | 47 service-page | the agent starts a web service (e2e/fake: serve:); the chat's jobs sheet → its row: the page; /b.html typed in the bar; back in its history; 手机 | the station's job has the port; station.preview for the page, its stylesheet and what its script fetched; the site view loaded each page |
 | 48 share | a link shared in (MBUI_SHARE_TEXT): the sheet, the test chat tapped, the link a card in its composer, sent; a drive's file 分享 | shareIn.open; alice's entry has the title and the link; the file handed to the system's share sheet; on Android an ACTION_SEND intent taken in |
 | 49 update | (Android only: `#only`) settings' row says 更新到 0.1.1 (release-seed: the APK as built in the local cloud's releases); tapped | app.update found it; downloaded with the feed's sha256; handed to the installer, whose confirmation shows |
-| 50 bar-glass | the bar of glass: 文件 and back (the notch's icon swapping between 令 and ＋), the panel drawn up and let go on 奏 (that bar sliding down into the bar's place), 用量 tapped on it as it lands (its page at once), the chats again from the panel | the swap and the landing in the motion log; 用量's page; the bar chosen kept on the device (`prefs.set {barsBy}`) |
-| 51 sheets-sinking | the workspaces' sheet let go of, the bar's 文件 tapped under it as it sinks; the chat's own sheet let go of, the composer tapped through it as it goes down, words typed and sent | 文件 opened; the words at the station, once, alice's; no pin of alice's at the station |
-| 52 drive-sheet-closing | a file held, ⋯ → its sheet, the scrim tapped, the sheet's rows tapped where they are drawn as it closes | no rename asked; the station keeps the file, its name and words |
-| 53 settings-sheet-sinking | settings → Station → the test station → … → 重命名, a name typed, the scrim tapped, 保存 tapped where it is drawn as the sheet goes down | the station's page as it was; still.fail cloud has the old name |
-| 54 bar-going-down | the test chat opened from Home, the composer tapped under the bar still going down, words sent | the words at the station, once, alice's; the bar going down in the motion log |
-| 60 wide-send | (1280×800) the test chat pressed in the sidebar's list opens beside it; words typed, Enter sends them | the station's entry: the words, once, alice's, in the test chat |
-| 61 wide-newline | (1280×800) ⇧Enter a new line in the composer, Enter sends both | one entry of both lines; none of the first alone |
-| 62 wide-row-menu | (1280×800) the row hovered, right clicked: its menu; 固定 (the row goes under 已固定), then 取消固定 from the menu again | the station's `pins` has alice's for the chat, then none |
-| 63 wide-switcher | (1280×800) ⌘K, words typed, Enter opens the chat; ⌘K again, Esc closes it; words sent there | the entry in the test chat, once |
-| 64 wide-new-chat | (1280×800) ⌘N: a new chat beside the list; its first words sent with Enter make the chat, the page becomes it, the agent answers (in the chat and its row) | the first message once, in a thread of its own; the agent's answer there |
-| 65 wide-places | (1280×800) the rail: 文件 (the stations' folders in the sidebar), the chats, settings (外观: 深色, then 跟随系统), back to the chats | the host told dark; the core's store on the device keeps appearance system |
-| 66 wide-resize | 390 wide: Home; the window resized to 1280 (the wide frame; the chat pressed in the sidebar), then to 390 again: the same chat, a phone's page; words sent | the window resized twice (the host's RESIZED); the words at the station, once, in the test chat |
+| 50 bar-glass | the bar of glass: 文件 and back (the notch's icon swapping between 令 and ＋), the panel drawn up and let go on 奏 (that bar sliding down into the bar's place), 用量 tapped on it as it lands (its page at once), the chats again from the panel | the swap and the landing in the motion log; 用量's page; the bar chosen kept on the device (`prefs.set {barsBy}`)；Tester 重放（src/sfreplay/flows/bar_glass_test.mbt） |
+| 51 sheets-sinking | the workspaces' sheet let go of, the bar's 文件 tapped under it as it sinks; the chat's own sheet let go of, the composer tapped through it as it goes down, words typed and sent | 文件 opened; the words at the station, once, alice's; no pin of alice's at the station；Tester 重放（src/sfreplay/flows/sheets_sinking_test.mbt） |
+| 52 drive-sheet-closing | a file held, ⋯ → its sheet, the scrim tapped, the sheet's rows tapped where they are drawn as it closes | no rename asked; the station keeps the file, its name and words；Tester 重放（src/sfreplay/flows/drive_sheet_closing_test.mbt） |
+| 53 settings-sheet-sinking | settings → Station → the test station → … → 重命名, a name typed, the scrim tapped, 保存 tapped where it is drawn as the sheet goes down | the station's page as it was; still.fail cloud has the old name；Tester 重放（src/sfreplay/flows/settings_sheet_sinking_test.mbt） |
+| 54 bar-going-down | the test chat opened from Home, the composer tapped under the bar still going down, words sent | the words at the station, once, alice's; the bar going down in the motion log；Tester 重放（src/sfreplay/flows/bar_going_down_test.mbt） |
+| 60 wide-send | (1280×800) the test chat pressed in the sidebar's list opens beside it; words typed, Enter sends them | the station's entry: the words, once, alice's, in the test chat；Tester 重放（src/sfreplay/flows/wide_send_test.mbt） |
+| 61 wide-newline | (1280×800) ⇧Enter a new line in the composer, Enter sends both | one entry of both lines; none of the first alone；Tester 重放（src/sfreplay/flows/wide_newline_test.mbt） |
+| 62 wide-row-menu | (1280×800) the row hovered, right clicked: its menu; 固定 (the row goes under 已固定), then 取消固定 from the menu again | the station's `pins` has alice's for the chat, then none；Tester 重放（src/sfreplay/flows/wide_row_menu_test.mbt） |
+| 63 wide-switcher | (1280×800) ⌘K, words typed, Enter opens the chat; ⌘K again, Esc closes it; words sent there | the entry in the test chat, once；Tester 重放（src/sfreplay/flows/wide_switcher_test.mbt） |
+| 64 wide-new-chat | (1280×800) ⌘N: a new chat beside the list; its first words sent with Enter make the chat, the page becomes it, the agent answers (in the chat and its row) | the first message once, in a thread of its own; the agent's answer there；Tester 重放（src/sfreplay/flows/wide_new_chat_test.mbt） |
+| 65 wide-places | (1280×800) the rail: 文件 (the stations' folders in the sidebar), the chats, settings (外观: 深色, then 跟随系统), back to the chats | the host told dark; the core's store on the device keeps appearance system；Tester 重放（src/sfreplay/flows/wide_places_test.mbt） |
+| 66 wide-resize | 390 wide: Home; the window resized to 1280 (the wide frame; the chat pressed in the sidebar), then to 390 again: the same chat, a phone's page; words sent | the window resized twice (the host's RESIZED); the words at the station, once, in the test chat；Tester 重放（src/sfreplay/flows/wide_resize_test.mbt） |
 | 70 card-motion | an options card answered in the chat (the options go, 你 选择了「…」 comes in their place), another let go with 忽略 | alice's answer quoting the post; `dismissed` has alice's row for the second, nothing answered; the motion log has the options going (to 90%, their room closing), the line coming, 忽略 going (to 85%) |
 | 71 card-keep | a chat ended all done (made by the other device before the app starts): 保留 under its last post; 已保留…; the buttons and the bar's 归档 go | the station's `kept_chats` has alice's row for that chat's thread; the motion log has the buttons and the bar's 归档 going |
 | 72 bar-archive | the same kind of chat archived from its bar's 归档: Home at once, 已归档 | the session archived by hand at the station; the test chat not |
-| 73 pick-words | held still on the agent's words: a word picked, 复制 (已复制); held again, 引用, sent with words (flow 11 now takes 全选 first) | alice's message quotes a passage of the agent's words, not all of them; on macOS the pasteboard holds just a word of them |
-| 74 markdown | the agent's Markdown (e2e/fake `md:`): a table, TypeScript highlighted, its long line scrolled sideways by a finger; a link held: its menu, 复制链接 | the entry has the table and the code; the motion log has the code scrolled across; the link was not handed to the browser; on macOS the pasteboard has the address |
-| 75 open-link | a link in a message tapped: handed to the system (a scripted macOS run only logs it; Android's ACTION_VIEW) | `open-url:` with the address on the app's log |
+| 73 pick-words | held still on the agent's words: a word picked, 复制 (已复制); held again, 引用, sent with words (flow 11 now takes 全选 first) | alice's message quotes a passage of the agent's words, not all of them; on macOS the pasteboard holds just a word of them · 仍走 e2e：Tester 的分词和 macOS 不同，系统的分词结果没录进带子（等「分词进带子」） |
+| 74 markdown | the agent's Markdown (e2e/fake `md:`): a table, TypeScript highlighted, its long line scrolled sideways by a finger; a link held: its menu, 复制链接 | the entry has the table and the code; the motion log has the code scrolled across; the link was not handed to the browser; on macOS the pasteboard has the address · Tester 重放（src/sfreplay/flows/markdown_test.mbt） |
+| 75 open-link | a link in a message tapped: handed to the system (a scripted macOS run only logs it; Android's ACTION_VIEW) | `open-url:` with the address on the app's log · Tester 重放（src/sfreplay/flows/open_link_test.mbt） |
 | 90 drive-download | a file of the lent folder held, ⋯ → 下载: 正在下载「说明.txt」, then 已保存到「下载」 | drive.read through the core; the device keeps the station's file byte for byte (macOS: MBUI_DOWNLOADS_DIR; Android: the emulator's Download/, as MediaStore named it) |
 | 91 drive-download-many | in a folder of its own (drive-big), a 48 MB file and a small one chosen, 下载 2 个文件: the big one's row says how far, then gone; 已保存到「下载」 | the big file read in a dozen parts; both kept byte for byte |
 | 92 drive-zip | a folder held, ⋯ → 下载为 zip: 正在下载「子文件夹.zip」, 已保存到「下载」 | the station zipped it (drive.zip); the kept zip holds the folder's file, its words the same |
 | 93 share-files | files shared in (Android: an ACTION_SEND intent of a photo; macOS: a photo and a PDF): the sheet heads with them, the test chat tapped, the files in its composer going up, sent with words | the entry's attachments; the photo at the station byte for byte; on Android the intent's file taken in |
-| 94 station-file-sent | ＋ → Station 文件, the novel ticked, 添加; its card's sheet: 文件; sent with words | drive.stage called; the entry's attachment is the file, no path line; the station keeps it byte for byte |
+| 94 station-file-sent | ＋ → Station 文件, the novel ticked, 添加; its card's sheet: 文件; sent with words | drive.stage called; the entry's attachment is the file, no path line; the station keeps it byte for byte; Tester 重放（src/sfreplay/flows/station_file_sent_test.mbt） |
 | 95 recent-photos | (Android) the photo put in the emulator's gallery; ＋: the strip shows it after the camera; tapped, it goes up; sent | the gallery read and ranked; the entry's attachment, the photo byte for byte at the station |
 | 96 viewer | two pictures from the other device: the first grows from its thumbnail; ›; a swipe back; a box marked, its note said, 下载标注后的图片, 添加到对话, sent | imageNear stepped; the marks drawn by the host; the marked PNG kept on the device; the entry's attachment and the note's quote |
 | 97 video-frames | a video from the other device: 120 帧 read from the file (wherever it has played to), ‹ ‹ ›, 保存此帧 | 120 frames read; ‹ then › one frame apart; the kept frame a PNG of 640 × 360 named by that frame |

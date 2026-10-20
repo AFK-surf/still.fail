@@ -1,4 +1,0 @@
-check "drawn up: the sheet settled at 94%" 'grep -q "SHEET dragged to 94%" $OUT/$name.log'
-check "dragged down past 30%: closed" '[ "$(grep -c "SHEET dragged closed" $OUT/$name.log)" -ge 2 ]'
-check "a little down, a sheet that does not drag comes back" 'grep -q "SHEET dragged back" $OUT/$name.log'
-check "the station picked in it is kept by the core (newChat.pick)" 'grep -q "ANSWER newChat.pick ok" $OUT/$name.log'

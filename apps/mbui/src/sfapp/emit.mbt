@@ -66,6 +66,8 @@ priv struct Emits {
   mut copied : String
   /// the flight as last worked out: how far through its pose, from where (y) to where (y), for the motion log
   mut trace : (Double, Double, Double)
+  /// what it is said to move by (Ctx::moving): its turns, each pose's end known as it starts
+  mover : Int
 }
 
 ///|
@@ -87,6 +89,7 @@ fn emits_of(key : String) -> Emits {
         watched: false,
         copied: "",
         trace: (0.0, 0.0, 0.0),
+        mover: @ui.current().mover_id(),
       }
       emits[key] = e
       e
@@ -109,7 +112,7 @@ fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Bool]) 
       continue
     }
     let agent = if m.author_kind == "agent" && !m.mine && !m.system { m.by.agent } else { "" }
-    let goes = e.watched && m.said && agent != "" && showing.contains(agent) && !c.stable()
+    let goes = e.watched && m.said && agent != "" && showing.contains(agent)
     e.decided[k] = goes
     if goes {
       e.queue.push((m.seq, agent, c.now()))
@@ -208,6 +211,20 @@ fn emit_next(c : @ui.Ctx, e : Emits, agent : String) -> Unit {
     fold: dmax(left, 0.0),
     start: c.now(),
   })
+  // said once as a turn sets out: it moves until its poses are played (Emits::rest_at)
+  c.moving(e.mover, e as &@ui.Moving)
+}
+
+///|
+/// When what plays is at rest: the end of the pose under way (each pose's end known as it starts; at that frame the
+/// next pose starts, its own end known then), none playing: at rest.
+impl @ui.Moving for Emits with rest_at(self, now, frame) {
+  ignore(now)
+  ignore(frame)
+  match self.current {
+    Some(t) => t.start + turn_ms(t)
+    None => -1.0
+  }
 }
 
 ///|
@@ -232,6 +249,7 @@ fn emit_step(c : @ui.Ctx, e : Emits) -> Unit {
     emit_next(c, e, "")
   }
   // a pose's end reached: the next pose, from its own beginning in this frame
+  let was = e.current
   let mut steps = 0
   while steps < 6 {
     steps = steps + 1
@@ -278,8 +296,10 @@ fn emit_step(c : @ui.Ctx, e : Emits) -> Unit {
     Some(t) if t.pose != Fold => t.agent
     _ => ""
   }
-  if e.current is Some(_) {
-    c.request_frame()
+  // a pose ended here: what plays now says so (its end known as it starts)
+  match (was, e.current) {
+    (Some(a), Some(b)) if a.pose != b.pose || a.seq != b.seq => c.moving(e.mover, e as &@ui.Moving)
+    _ => ()
   }
 }
 

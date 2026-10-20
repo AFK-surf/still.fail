@@ -88,6 +88,8 @@ priv struct Reading {
   /// the jump button: shown since when (or hidden since when), and which
   mut jump : Bool
   mut jump_at : Double
+  /// the bell to what waits to be decided: shown
+  mut ask : Bool
   /// a scripted scroll through it (MBUI_CHAT_BENCH): frames so far, their times
   mut bench : Int
   /// 0: bringing in the pages before (up to 3000 messages), 1: measuring
@@ -106,9 +108,11 @@ priv struct Reading {
   linger : Map[String, (Agent, Double)]
   /// the agents running as last drawn
   running : Map[String, Agent]
-  /// a message gone to (a notification's), flashing since when ("" none: ChatMotion.kt flashed)
+  /// a message gone to (a notification's, "" none: ChatMotion.kt flashed) and how lit it is (flash_of)
   mut flash : String
-  mut flash_at : Double
+  flash_lit : @motion.Anim
+  /// flashes started (each one's own hold, with motion reduced)
+  mut flash_n : Int
 }
 
 ///|
@@ -131,6 +135,7 @@ fn reading_of(key : String) -> Reading {
         top_seq: -1.0,
         at_end: true,
         jump: false,
+        ask: false,
         jump_at: -1.0e9,
         bench: 0,
         bench_phase: 0,
@@ -144,7 +149,8 @@ fn reading_of(key : String) -> Reading {
         linger: {},
         running: {},
         flash: "",
-        flash_at: 0.0,
+        flash_lit: @motion.Anim::new(0.0),
+        flash_n: 0,
       }
       readings[key] = r
       r
@@ -292,7 +298,7 @@ fn messages(
   // (once under way, it goes on while the end is near: the answer coming in grows the list under the reader, who is
   // a moment short of its end until the list follows; only scrolled away, as the way to the newest shows, it ends)
   let playing = em.current is Some(_) || em.queue.length() > 0
-  em.watched = (rd.at_end || (playing && !rd.jump)) && !v.newer && !c.stable() && app_in_front()
+  em.watched = (rd.at_end || (playing && !rd.jump)) && !v.newer && app_in_front()
   let showing : Map[String, Bool] = {}
   for a in v.agents {
     if a.status == "running" {
@@ -385,10 +391,15 @@ fn messages(
               open.animate(1.0, @motion.tween(220.0, ease=Out))
             }
             let leaving = match rd.linger.get(a.key) {
-              Some((_, at)) => c.now() - at >= 600.0
+              Some((_, at)) => c.now() - at >= linger_fade_ms
               None => false
             }
-            let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(220.0))
+            let fade = @motion.animate(
+              c,
+              "fade/" + mk,
+              if leaving { 0.0 } else { 1.0 },
+              spec=@motion.tween(linger_out_ms),
+            )
             let p = open.get()
             @motion.reveal(c, mk, p, fn() {
               let ri = c.box(w=Fill(1.0), pl=row_side(c), pr=row_side(c), pt=top, fn() {
@@ -432,7 +443,7 @@ fn messages(
                 rd.fresh.remove(keys[i]) |> ignore
               }
               // the rows above go up with the words (ChatHost.kt sendReflow)
-              Some(f) if f.placed_at >= 0.0 =>
+              Some(f) if f.placed =>
                 @motion.layout(
                   c,
                   ri,
@@ -527,7 +538,7 @@ fn messages(
         }
         if at >= 0 {
           go_tos.remove(gk)
-          rd.flash_at = c.now()
+          flash_start(rd)
           c.list_scroll_to(key, at, offset=-(chat_bar_h + 14.0))
           @host.log("chat: gone to message \{target.to_int()}")
         } else {
@@ -618,12 +629,24 @@ fn messages(
       None => false
     }
     jump_to_latest(c, src, r, v, rd, away || v.newer)
+    // what waits to be decided and does not show: a bell over the way to the end (Chat.kt JumpToAsk)
+    rd.ask = jump_to_ask(c, r, v, list, info, away || v.newer)
     // the avatar flying out of an activity to its message and back, over the list
     emit_flyer(c, ek, em, v)
     chat_bench(c, key, rd, v.more, n)
   })
   |> ignore
 }
+
+///|
+/// An activity whose agent's turn ended stays this long, then fades (`linger_out_ms`), then is gone.
+let linger_fade_ms : Double = 600.0
+
+///|
+let linger_out_ms : Double = 220.0
+
+///|
+let linger_ms : Double = linger_fade_ms + linger_out_ms
 
 ///|
 /// The list with the activities of agents whose turn just ended, kept a moment (Chat.kt: 600 ms, then fading 220).
@@ -644,7 +667,7 @@ fn with_lingering(
     }
   }
   for k, a in rd.running {
-    if !running.contains(k) && !rd.linger.contains(k) && !c.stable() {
+    if !running.contains(k) && !rd.linger.contains(k) {
       rd.linger[k] = (a, now)
     }
   }
@@ -656,10 +679,10 @@ fn with_lingering(
     }
   }
   for k, l in rd.linger {
-    if running.contains(k) || now - l.1 >= 820.0 {
+    if running.contains(k) || now - l.1 >= linger_ms {
       over.push(k)
     } else {
-      c.wake_in(dmax(1.0, if now - l.1 < 600.0 { 600.0 - (now - l.1) } else { 820.0 - (now - l.1) }))
+      c.wake_in(if now - l.1 < linger_fade_ms { linger_fade_ms - (now - l.1) } else { linger_ms - (now - l.1) })
     }
   }
   for k in over {
@@ -722,7 +745,7 @@ fn row_keys(
     Some(i) => i.at_end || i.gliding
     None => true
   }
-  if rd.drawn && following && !c.stable() {
+  if rd.drawn && following {
     for i, e in list {
       let caught = match e {
         Said(m) => !m.said
@@ -766,9 +789,39 @@ pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
 let flash_held : Ref[Bool] = Ref(false)
 
 ///|
-/// How much a message gone to is lit now (ChatMotion.kt flash: the accent's ground in over 160 ms on Ease.Out, held
-/// to 900, gone by 1700 on the standard curve; with motion reduced there at once, as long, then gone); 0 for any
-/// other message.
+/// A message gone to flashes (ChatMotion.kt flash): the accent's ground in over `flash_in_ms` on Ease.Out, held to
+/// `flash_held_ms`, gone by `flash_ms` on the standard curve.
+let flash_in_ms : Double = 160.0
+
+///|
+let flash_held_ms : Double = 900.0
+
+///|
+let flash_ms : Double = 1700.0
+
+///|
+/// The flash of the message gone to, all of its way said as it starts.
+fn flash_start(rd : Reading) -> Unit {
+  rd.flash_n += 1
+  rd.flash_lit.snap(0.0)
+  rd.flash_lit.animate(
+    0.0,
+    @motion.keyframes_to(
+      [1.0, 1.0, 0.0],
+      duration=flash_ms,
+      times=[0.0, flash_in_ms / flash_ms, flash_held_ms / flash_ms, 1.0],
+      eases=[
+        fn(t) { @motion.Ease::Out.at(t) },
+        fn(t) { t },
+        fn(t) { @motion.Ease::Standard.at(t) },
+      ],
+    ),
+  )
+}
+
+///|
+/// How much a message gone to is lit now (flash_start); 0 for any other message. With motion reduced it is lit whole
+/// for `flash_ms`, then not: less motion, not less said (which message it went to).
 fn flash_of(c : @ui.Ctx, rd : Reading, ts : String) -> Double {
   if rd.flash == "" || rd.flash != ts {
     return 0.0
@@ -776,21 +829,10 @@ fn flash_of(c : @ui.Ctx, rd : Reading, ts : String) -> Double {
   if flash_held.val {
     return 1.0
   }
-  let t = c.now() - rd.flash_at
-  if t >= 1700.0 {
-    rd.flash = ""
-    return 0.0
-  }
-  c.request_frame()
   if @ui.reduced_motion() {
-    1.0
-  } else if t < 160.0 {
-    @motion.Ease::Out.at(t / 160.0)
-  } else if t < 900.0 {
-    1.0
-  } else {
-    1.0 - @motion.Ease::Standard.at((t - 900.0) / 800.0)
+    return if @kit.after(c, "chat-flash/\{rd.flash_n}", true, flash_ms) { 0.0 } else { 1.0 }
   }
+  rd.flash_lit.get()
 }
 
 ///|
@@ -800,7 +842,7 @@ let at_end_env : Ref[Int] = { val: -1 }
 ///|
 fn at_end_asked() -> Bool {
   if at_end_env.val < 0 {
-    at_end_env.val = if @host.env("MBUI_CHAT_AT_END") == "1" { 1 } else { 0 }
+    at_end_env.val = if @ui.env("MBUI_CHAT_AT_END") == "1" { 1 } else { 0 }
   }
   at_end_env.val == 1
 }
@@ -955,6 +997,91 @@ fn jump_to_latest(
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// Which of the chat's asks the bell went to last, by chat (it goes to the next one each time, round again).
+let ask_turns : Map[String, Int] = {}
+
+///|
+/// How long the bell rises over the way to the end as that comes, and goes back down.
+let ask_lift_ms : Double = 200.0
+
+///|
+/// The way to what waits to be decided in the chat (Chat.kt JumpToAsk, web Chat.tsx useAsksShown): its asks whose
+/// posts are not all in view (one not loaded counts as not in view), a bell (no words) floating where the way to the
+/// end goes, over it while that shows; tapped, the list goes to an ask's post (as a notification's does: go_to), then
+/// the next one's, round again. It comes and goes as the way to the end does. None in an archived chat.
+fn jump_to_ask(
+  c : @ui.Ctx,
+  r : ChatRef,
+  v : ChatView,
+  list : Array[Entry],
+  info : @ui.ListInfo?,
+  to_end : Bool,
+) -> Bool {
+  let t = @sf.theme()
+  let asks = if v.archived || v.thread is None { [] } else { v.asks }
+  let in_view = asks.length() > 0 &&
+    asks.iter().all(fn(seq) {
+      let mut at = -1
+      for i, e in list {
+        match e {
+          Said(m) if m.seq == seq => {
+            at = i
+            break
+          }
+          _ => ()
+        }
+      }
+      match info {
+        Some(i) => at >= 0 && at >= i.first && at <= i.last
+        None => false
+      }
+    })
+  let shown = asks.length() > 0 && !in_view
+  let look = match
+    @motion.presence(
+      c,
+      "chat-ask",
+      shown,
+      enter=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css)),
+      exit=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css)),
+    ) {
+    Some(l) => l
+    None => return shown
+  }
+  let lift = @motion.animate(c, "chat-ask/lift", if to_end { 44.0 } else { 0.0 }, spec=@motion.tween(ask_lift_ms, ease=Standard))
+  let id = c.id("chat-ask")
+  if c.clicked(id) && shown {
+    let k = r.station + "\u{1}" + r.session
+    let turn = ask_turns.get(k).unwrap_or(0)
+    go_to(r, asks[turn % asks.length()])
+    ask_turns[k] = turn + 1
+  }
+  c.layer(align=AEnd, fn() {
+    c.spacer()
+    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=composer_room_of(c) + 2.0 + lift, fn() {
+      let bell = c.box(
+        w=Px(36.0),
+        h=Px(36.0),
+        radius=18.0,
+        align=ACenter,
+        justify=JCenter,
+        glass=@sf.glass_floating(),
+        shadow=2.0,
+        shadow_color=0x0000004DL,
+        shadow_y=0.5,
+        id~,
+        fn() { @sf.icon(c, "bell", size=18.0, color=t.p.text) |> ignore },
+      )
+      c.look(bell, look)
+      @motion.leaving(c, bell, shown)
+    })
+    |> ignore
+  })
+  |> ignore
+  shown
 }
 
 ///|
@@ -1391,6 +1518,7 @@ fn avatar(
 }
 
 ///|
+// kept across runs: a table, never written
 let shapes : Array[(Bool, Double, Double)] = [
   (false, 220.0, 40.0),
   (false, 160.0, 58.0),
@@ -1448,7 +1576,7 @@ let bench_on : Ref[Int] = { val: -1 }
 ///|
 fn chat_bench(c : @ui.Ctx, key : String, rd : Reading, more : Bool, rows : Int) -> Unit {
   if bench_on.val < 0 {
-    bench_on.val = if @host.env("MBUI_CHAT_BENCH") != "" { 1 } else { 0 }
+    bench_on.val = if @ui.env("MBUI_CHAT_BENCH") != "" { 1 } else { 0 }
   }
   if bench_on.val == 0 || !rd.placed {
     return

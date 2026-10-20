@@ -99,7 +99,7 @@ priv struct Draft {
   mut changed_at : Double
   /// when typing last woke the agent's runtime (`session.warm`, once a minute)
   mut warmed : Double
-  /// the quote whose comment line takes the focus next frame (0 none); 1: the words' field
+  /// the quote whose comment line takes the focus next frame (0 none); -1: the words' field (ids count from 1)
   mut focus : Int
 }
 
@@ -289,24 +289,45 @@ fn save_draft(src : Source, d : Draft) -> Unit {
 }
 
 ///|
+/// The capsule changes shape over this long (Composer.kt Morph).
+let composer_morph_ms : Double = 260.0
+
+///|
+/// Words sent from chat `chat`'s composer hold its room as tall as when they went (`room`) for `ms` from the next frame,
+/// then let it go to its own height over the morph's time: all of it said now, as they set off (flight_start), and
+/// anew when they know their way (flight_placed).
+fn composer_hold(chat : String, room : Double, ms : Double) -> Unit {
+  let c = @ui.current()
+  @motion.anim(c, "composer/held/" + chat, 0.0, global=true).snap(room)
+  let a = @motion.anim(c, "composer/hold/" + chat, 0.0, global=true)
+  a.snap(1.0)
+  a.animate(0.0, @motion.tween(composer_morph_ms, ease=Out, delay=ms))
+}
+
+///|
+/// The room held for words sent (composer_hold) and how much of it is still held (1 … 0).
+fn composer_held(c : @ui.Ctx, chat : String) -> (Double, Double) {
+  (
+    @motion.anim(c, "composer/held/" + chat, 0.0, global=true).get(),
+    @motion.anim(c, "composer/hold/" + chat, 0.0, global=true).get(),
+  )
+}
+
+///|
+/// Typing warms the agent's runtime at most this often.
+let warm_every_ms : Double = 60000.0
+
+///|
+/// How long after a change to the draft it is kept.
+pub let draft_keep_ms : Double = 400.0
+
+///|
 /// A change kept a moment after it is made (the core writes it down then too), and at once as the chat is left.
 fn keep_draft_soon(c : @ui.Ctx, src : Source, d : Draft) -> Unit {
-  if !d.loaded || src.read_only {
-    return
-  }
-  let sig = draft_sig(d)
-  if sig == d.kept {
-    return
-  }
-  if d.changed_at == 0.0 {
-    d.changed_at = c.now()
-  }
-  let age = c.now() - d.changed_at
-  if age >= 400.0 {
-    d.changed_at = 0.0
+  let unsaved = d.loaded && !src.read_only && draft_sig(d) != d.kept
+  // (asked each frame, unsaved or not: kept, its time starts again; nothing shown waits for it)
+  if @kit.after(c, "draft/" + d.key, unsaved, draft_keep_ms, later=true) && unsaved {
     save_draft(src, d)
-  } else {
-    c.wake_in(400.0 - age)
   }
 }
 
@@ -709,7 +730,6 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   // the reader goes to the chat's end with what was sent (Chat.kt: by the composer as it sends); with words flying
   // there at once, the rows above going up with them (flight.mbt)
   c.list_to_end(list_key(r), glide=flight_of(d.key) is None)
-  c.request_frame()
 }
 
 // ── the composer ────────────────────────────────────────────────────────
@@ -745,7 +765,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     }
     None => ()
   }
-  if d.focus == 1 {
+  if d.focus == -1 {
     c.focus_editor(field_key)
     d.focus = 0
   }
@@ -762,17 +782,17 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   // its content now takes (260 ms, Ease.Out), its ground standing on its bottom edge and its content cut to it, its
   // parts drawn carried from where they were to their places on the same timeline. Only drawn: laid out as tall as its
   // content at once, all of it (＋, the field, send, a quote's line) tapped where it is from the first frame. At rest
-  // (and in screenshots) as tall as its content
+  // as tall as its content
   let natural = @motion.measured(c, "composer/content")
-  // words just sent: as tall as when they went, until they are a quarter of the way (ChatHost.kt hold)
-  let held = match flight_of(d.key) {
-    Some(f) if flight_p(c, f) < flight_settle => f.room
-    _ => 0.0
-  }
   let morph = match natural {
-    Some(h) if !c.stable() =>
-      Some(@motion.animate(c, "composer/morph", dmax(h, held), spec=@motion.tween(260.0, ease=Out)))
-    _ => None
+    Some(h) => {
+      let m = @motion.animate(c, "composer/morph", h, spec=@motion.tween(composer_morph_ms, ease=Out))
+      // words just sent: as tall as when they went, until they are a quarter of the way (ChatHost.kt hold), then
+      // down to its own on the morph's curve (composer_hold)
+      let (room, share) = composer_held(c, d.key)
+      Some(if room > m && share > 0.0 { m + (room - m) * share } else { m })
+    }
+    None => None
   }
   let mut content = -1
   c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=8.0, pb=10.0, fn() {
@@ -1095,13 +1115,12 @@ fn composer_bar(
           None => ()
         }
         if res.text != d.text {
-          // drawn again: what shows (opened, send ready) follows the words at once
-          c.request_frame()
+          // what shows (opened, send ready) follows the words: the typing's own frames draw it
           d.text = res.text
           // typing starts the agent's runtime, so a cold start overlaps the writing (once a minute)
           match v {
             Some(view) if !locked && !src.read_only && view.agents.length() > 0 &&
-              c.now() - d.warmed > 60000.0 => {
+              c.now() - d.warmed > warm_every_ms => {
               d.warmed = c.now()
               (src.call)(
                 "session.warm",
@@ -1118,7 +1137,6 @@ fn composer_bar(
         match res.pasted {
           Some(words) => {
             paste_as_file(src, d, r.station, words)
-            c.request_frame()
           }
           None => ()
         }
@@ -1213,7 +1231,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
             if res.submitted is Some(_) {
               c.set_editor_text(key, res.submitted.unwrap())
               d.comments[q.id] = res.submitted.unwrap()
-              d.focus = 1
+              d.focus = -1
             }
           })
           |> ignore
@@ -1353,7 +1371,7 @@ fn pasted_card(
       let now = if d.text == "" { words } else { d.text + "\n" + words }
       d.text = now
       d.put_text = Some(now)
-      d.focus = 1
+      d.focus = -1
     }
   }
   c.box(

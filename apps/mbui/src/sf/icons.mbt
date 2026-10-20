@@ -6,6 +6,18 @@
 let made : Map[String, Bool] = {}
 
 ///|
+/// Every Tester starts as the app does (mbui's on_reset): the images made here gone with its own, nothing waited on or
+/// copied, the theme the first frame's. (markdown.mbt's `parsed` stays: what a text parses to is the text's alone.)
+fn init {
+  @ui.on_reset(fn() {
+    made.clear()
+    copied_at.clear()
+    dark_set.val = None
+    current.val = { dark: false, narrow: false, p: wide_light, t: wide_type }
+  })
+}
+
+///|
 fn px_of(c : @ui.Ctx, size : Double) -> Int {
   let p = (size * c.scale).ceil().to_int()
   if p < 1 {
@@ -60,13 +72,7 @@ pub fn spinner(
   let t = theme()
   let ring = ring.unwrap_or(t.p.line_strong)
   let arc = arc.unwrap_or(t.p.accent)
-  let frame = if c.stable() {
-    0
-  } else {
-    c.request_frame()
-    let turns = c.now() / period
-    ((turns - turns.floor()) * spin_frames.to_double()).to_int() % spin_frames
-  }
+  let frame = (c.cycle(period) * spin_frames.to_double()).to_int() % spin_frames
   let px = px_of(c, size)
   let key = "mem:sf/spin/\{px}/\{ring}/\{arc}/\{frame}" +
     (if sweep != 0.25 { "/\{sweep}" } else { "" })

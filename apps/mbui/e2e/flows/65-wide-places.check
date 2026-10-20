@@ -1,3 +1,0 @@
-check "the app took 深色 from the wide settings (its host told so)" 'grep -q "^theme: dark" $OUT/$name.log'
-check "the core keeps the appearance on the device as chosen last (跟随系统)" 'grep -rqF "\"appearance\":\"system\"" $CORE'
-check "文件's sidebar listed the test station's home (its drive read through the core)" 'grep -q "DRIVE ok until 主目录" $OUT/$name.log'

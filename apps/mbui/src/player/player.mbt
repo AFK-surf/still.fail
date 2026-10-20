@@ -67,6 +67,10 @@ let double_tap_ms : Double = 300.0
 let note_ms : Double = 800.0
 
 ///|
+/// The controls coming or going.
+let shown_ms : Double = 200.0
+
+///|
 /// What is played: its name, its media type, whether it is known to be a song, and how its bytes are read
 /// (`read(offset, length, answer)`: `answer(bytes, total)`, as `@ui.NativeView::video` reads).
 pub(all) struct Track {
@@ -111,7 +115,6 @@ pub struct Player {
   priv mut view : @ui.NativeView?
   priv mut start_at : Double
   priv mut started : Bool
-  priv mut opened_at : Double
   priv mut speed : Double
   priv mut subs_on : Bool
   priv mut subtitle : Bool
@@ -121,15 +124,12 @@ pub struct Player {
   priv mut awake : Bool
   priv mut poke : Int
   priv mut rest_key : String
-  priv mut rest_at : Double
   priv mut note : String
-  priv mut note_at : Double
-  /// a tap waiting to be a single one (when); -1: none
-  priv mut tap_at : Double
+  /// a tap waiting to be a single one (for double_tap_ms)
+  priv mut tap_waiting : Bool
   /// where the timeline is dragged to (ms); -1: it is not
   priv mut scrub : Double
   priv mut pinned : Status?
-  priv mut wait_from : Double
 }
 
 ///|
@@ -141,7 +141,6 @@ pub fn Player::new(key? : String = "player") -> Player {
     view: None,
     start_at: 0.0,
     started: false,
-    opened_at: -1.0,
     speed: 1.0,
     subs_on: true,
     subtitle: false,
@@ -151,13 +150,10 @@ pub fn Player::new(key? : String = "player") -> Player {
     awake: true,
     poke: 0,
     rest_key: "",
-    rest_at: 0.0,
     note: "",
-    note_at: 0.0,
-    tap_at: -1.0,
+    tap_waiting: false,
     scrub: -1.0,
     pinned: None,
-    wait_from: -1.0,
   }
 }
 
@@ -177,7 +173,6 @@ pub fn Player::open(self : Player, track : Track, start? : Double = 0.0) -> Unit
   self.track = Some(track)
   self.start_at = start
   self.started = false
-  self.opened_at = -1.0
   self.awake = true
   self.scrub = -1.0
   @ui.log(
@@ -381,7 +376,6 @@ pub fn Player::view(
   on_open : (String) -> Unit,
 ) -> Unit {
   let p = self
-  let now = c.now()
   let s = p.status()
   let name = match p.track {
     Some(t) => t.name
@@ -389,9 +383,6 @@ pub fn Player::view(
   }
   if s.state == 1 && !p.started {
     p.started = true
-    if p.opened_at < 0.0 {
-      p.opened_at = now
-    }
     let read = match p.view {
       Some(n) => n.bytes().to_int()
       None => 0
@@ -408,41 +399,31 @@ pub fn Player::view(
     None => false
   }
   let audio = known_audio || (p.started && s.width <= 0.0)
-  // left alone while it plays, the controls go (a song's stay)
+  // left alone while it plays, the controls go (a song's stay): rest_ms from when that last changed
   let rest = "\{p.awake}|\{phase_code(phase)}|\{p.poke}|\{audio}"
   if rest != p.rest_key {
     p.rest_key = rest
-    p.rest_at = now + rest_ms
+    @kit.after(c, p.key + "/rest", false, rest_ms) |> ignore
   }
-  if p.awake && phase == Playing && !audio {
-    if now >= p.rest_at {
+  if @kit.after(c, p.key + "/rest", p.awake && phase == Playing && !audio, rest_ms) {
+    p.awake = false
+  }
+  if p.note != "" && @kit.after(c, p.key + "/note", true, note_ms) {
+    p.note = ""
+  }
+  // what it waits on said only once it has waited @sf.later_ms
+  let waited = @kit.after(c, p.key + "/wait", phase is (Opening | Buffering), @sf.later_ms)
+  // a tap left single: the controls shown or hidden
+  if p.tap_waiting && @kit.after(c, p.key + "/tap", true, double_tap_ms) {
+    p.tap_waiting = false
+    if p.awake && phase == Playing {
       p.awake = false
     } else {
-      c.wake_in(p.rest_at - now)
-    }
-  }
-  if p.note != "" {
-    if now - p.note_at >= note_ms {
-      p.note = ""
-    } else {
-      c.wake_in(note_ms - (now - p.note_at))
-    }
-  }
-  // a tap left single: the controls shown or hidden
-  if p.tap_at >= 0.0 {
-    if now - p.tap_at >= double_tap_ms {
-      p.tap_at = -1.0
-      if p.awake && phase == Playing {
-        p.awake = false
-      } else {
-        p.wake()
-      }
-    } else {
-      c.wake_in(double_tap_ms - (now - p.tap_at))
+      p.wake()
     }
   }
   let target = if p.awake || phase != Playing || audio { 1.0 } else { 0.0 }
-  let shown = @motion.animate(c, p.key + "/shown", target, spec=@motion.tween(200.0))
+  let shown = @motion.animate(c, p.key + "/shown", target, spec=@motion.tween(shown_ms))
   let on = shown > 0.0
   let index = list.search(name).unwrap_or(-1)
   let next = next_in(name, list)
@@ -453,12 +434,12 @@ pub fn Player::view(
     let stage = c.id(p.key + "/stage")
     if c.clicked(stage) {
       let (px, _, _) = c.pointer()
-      if p.tap_at >= 0.0 && now - p.tap_at < double_tap_ms {
-        p.tap_at = -1.0
+      if p.tap_waiting {
+        p.tap_waiting = false
         p.double_tap(c, s, px)
       } else {
-        p.tap_at = now
-        c.wake_in(double_tap_ms)
+        p.tap_waiting = true
+        start_after(c, p.key + "/tap", double_tap_ms)
       }
     }
     c.box(w=Fill(1.0), h=Fill(1.0), id=stage, fn() {
@@ -537,11 +518,8 @@ pub fn Player::view(
     c.layer(fn() {
       c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
         match phase {
-          Opening | Buffering => {
-            if p.wait_from < 0.0 {
-              p.wait_from = now
-            }
-            if now - p.wait_from >= @sf.later_ms {
+          Opening | Buffering =>
+            if waited {
               c.box(dir=Row, padx=12.0, pady=6.0, gap=8.0, radius=15.0, bg=glass, align=ACenter, fn() {
                 @sf.spinner(c, size=12.0) |> ignore
                 c.text(
@@ -558,12 +536,8 @@ pub fn Player::view(
                 |> ignore
               })
               |> ignore
-            } else {
-              c.wake_in(@sf.later_ms - (now - p.wait_from))
             }
-          }
           Failed => {
-            p.wait_from = -1.0
             c.box(pad=32.0, gap=12.0, align=ACenter, fn() {
               c.text(word("android-misc.drive.player.failed"), size=15.0, weight=600, color=ink, wrap=false)
               |> ignore
@@ -574,7 +548,6 @@ pub fn Player::view(
             |> ignore
           }
           Ended => {
-            p.wait_from = -1.0
             match next {
               Some(other) =>
                 c.box(gap=12.0, align=ACenter, fn() {
@@ -589,7 +562,7 @@ pub fn Player::view(
               None => ()
             }
           }
-          _ => p.wait_from = -1.0
+          _ => ()
         }
       })
       |> ignore
@@ -676,8 +649,7 @@ fn Player::double_tap(self : Player, c : @ui.Ctx, s : Status, x : Double) -> Uni
       word("android-misc.drive.player.playing")
     }
   }
-  self.note_at = c.now()
-  c.request_frame()
+  start_after(c, self.key + "/note", note_ms)
 }
 
 ///|
@@ -815,7 +787,6 @@ fn Player::timeline(self : Player, c : @ui.Ctx, s : Status, on : Bool) -> Unit {
       let (px, _, _) = c.pointer()
       let k = (px - x) / (if w < 1.0 { 1.0 } else { w })
       p.scrub = (if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }) * dur
-      c.request_frame()
     }
     _ =>
       if p.scrub >= 0.0 {
@@ -929,4 +900,11 @@ fn chip(c : @ui.Ctx, key : String, label : String) -> Bool {
   )
   |> ignore
   c.clicked(id)
+}
+
+///|
+/// `key`'s @kit.after started now, from nothing (a note said, a tap waiting to be a double one).
+fn start_after(c : @ui.Ctx, key : String, ms : Double) -> Unit {
+  @kit.after(c, key, false, ms) |> ignore
+  @kit.after(c, key, true, ms) |> ignore
 }

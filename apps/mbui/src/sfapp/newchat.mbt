@@ -18,9 +18,8 @@ priv struct FreshChat {
   mut sent : Bool
   /// a message on its way (the create and the send)
   mut starting : Bool
-  /// the chat it became, and when (its scene leaving over it, its list rising)
+  /// the chat it became (its scene leaving over it, its list rising: new_leave, new_rise)
   mut became : ChatRef?
-  mut became_at : Double
   /// the scene's look as it left: the view it showed
   mut scene : Json?
 }
@@ -32,7 +31,6 @@ let fresh : FreshChat = {
   sent: false,
   starting: false,
   became: None,
-  became_at: -1.0,
   scene: None,
 }
 
@@ -45,7 +43,6 @@ fn new_chat(c : @ui.Ctx) -> Unit {
   fresh.sent = false
   fresh.starting = false
   fresh.became = None
-  fresh.became_at = -1.0
   fresh.scene = None
   lower_sheet()
   app.menu = false
@@ -77,8 +74,6 @@ fn pick_new(c : @ui.Ctx, src : Source, ws : String, fill : Map[String, Json]) ->
     return
   }
   fill["scope"] = Json::string(ws)
-  // drawn again for what it changes (the core's answer brings a frame too; a source that answers at once does not)
-  c.request_frame()
   (src.call)("newChat.pick", Json::object(fill), fn(res) {
     match res {
       Err(e) => {
@@ -249,11 +244,7 @@ fn new_chat_on(
   }
   // leaving: up out of view as it fades (140 ms, Arrive), the choices fading where they are (80 ms)
   let (up, fade) = if leaving {
-    let ms = c.now() - fresh.became_at
-    (
-      @ui.bezier(0.2, 0.8, 0.2, 1.0, dclamp(ms / 140.0, 0.0, 1.0)),
-      @ui.bezier(0.3, 0.0, 0.5, 1.0, dclamp(ms / 80.0, 0.0, 1.0)),
-    )
+    (new_leave(c).get(), new_fade(c).get())
   } else {
     (0.0, 0.0)
   }
@@ -641,7 +632,7 @@ fn send_first(
           let r : ChatRef = { station, session: key, title: "", station_name }
           fresh.scene = v
           fresh.became = Some(r)
-          fresh.became_at = -1.0
+          became_starts()
           app.nav.become(Chat(r))
               }
       }
@@ -668,20 +659,31 @@ fn send_first(
 }
 
 ///|
+/// A new chat's scene leaving as it becomes the chat: up out of view as it fades; its choices fading where they are.
+let new_leave_ms : Double = 140.0
+
+///|
+let new_fade_ms : Double = 80.0
+
+///|
+/// The list of the chat a new chat became rising into its place (the words' way up out of the composer), after a
+/// little.
+let new_rise_ms : Double = 480.0
+
+///|
+let new_rise_after_ms : Double = 90.0
+
+///|
 /// Over the chat a new chat became: its scene leaving (140 ms), then nothing.
 fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   match fresh.became {
     Some(b) if b == r => ()
     _ => return
   }
-  if fresh.became_at < 0.0 {
-    fresh.became_at = c.now()
-  }
-  let ms = c.now() - fresh.became_at
-  if ms >= 140.0 || c.stable() {
+  // (drawn only, while it leaves)
+  if !new_leave(c).moving() {
     return
   }
-  c.request_frame()
   let v = fresh.scene
   c.layer(fn() {
     // its bar gone at once (the chat has its own), its room kept
@@ -696,18 +698,48 @@ fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Un
 /// 480 ms on Arrive, after 90.
 fn new_chat_rise(c : @ui.Ctx, r : ChatRef) -> Double {
   match fresh.became {
-    Some(b) if b == r && fresh.became_at >= 0.0 && !c.stable() => {
-      let ms = c.now() - fresh.became_at - 90.0
-      if ms >= 480.0 {
+    Some(b) if b == r => {
+      let k = new_rise(c).get()
+      if k <= 0.0 {
         return 0.0
       }
-      c.request_frame()
-      let e = @ui.bezier(0.2, 0.8, 0.2, 1.0, dclamp(ms / 480.0, 0.0, 1.0))
       let rise = dmax(0.0, c.height - composer_room_of(c) - chat_bar_h - 120.0)
-      rise * (1.0 - e)
+      rise * k
     }
     _ => 0.0
   }
+}
+
+///|
+/// The new chat's scene leaving (0 … 1: up out of view, Arrive), its choices fading (0 … 1, LeaveFade).
+fn new_leave(c : @ui.Ctx) -> @motion.Anim {
+  @motion.anim(c, "new/leave", 1.0, global=true)
+}
+
+///|
+fn new_fade(c : @ui.Ctx) -> @motion.Anim {
+  @motion.anim(c, "new/fade", 1.0, global=true)
+}
+
+///|
+/// How far the list of the chat a new chat became is still below its place (1 … 0, Arrive, after a little).
+fn new_rise(c : @ui.Ctx) -> @motion.Anim {
+  @motion.anim(c, "new/rise", 0.0, global=true)
+}
+
+///|
+/// The new chat became the chat: its scene leaves and the chat's list rises, from now.
+fn became_starts() -> Unit {
+  let c = @ui.current()
+  let leave = new_leave(c)
+  leave.snap(0.0)
+  leave.animate(1.0, @motion.tween(new_leave_ms, ease=Arrive))
+  let fade = new_fade(c)
+  fade.snap(0.0)
+  fade.animate(1.0, @motion.tween(new_fade_ms, ease=LeaveFade))
+  let rise = new_rise(c)
+  rise.snap(1.0)
+  rise.animate(0.0, @motion.tween(new_rise_ms, ease=Arrive, delay=new_rise_after_ms))
 }
 
 // ── the sheets ─────────────────────────────────────────────────────────
@@ -849,7 +881,6 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
     }
     fill["station"] = Json::string(station)
     fill["of"] = Json::string("new")
-    c.request_frame()
     (src.call)("pick.set", Json::object(fill), fn(res) {
       match res {
         Err(e) => {

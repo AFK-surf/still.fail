@@ -99,7 +99,6 @@ fn light_timeline(c : @ui.Ctx, key : String, n : @ui.NativeView, s : Status, rea
       let (px, _, _) = c.pointer()
       let k = (px - x) / (if w < 1.0 { 1.0 } else { w })
       n.seek((if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }) * dur)
-      c.request_frame()
     }
     _ => ()
   }

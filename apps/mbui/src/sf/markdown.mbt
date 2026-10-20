@@ -680,8 +680,12 @@ fn runs_of(
 }
 
 ///|
-/// When a code block's copy was pressed, by its id: it says so for 1.5 s.
-let copied_at : Map[Int, Double] = {}
+/// How long a code block says it was copied, after its copy is pressed.
+let copied_ms : Double = 1500.0
+
+///|
+/// The code blocks saying they were copied, by their id (for copied_ms, on @kit.after's clock).
+let copied_at : Map[Int, Bool] = {}
 
 ///|
 /// A code block as the web phone draws it (Markdown.kt CodeBlock): a quiet
@@ -693,20 +697,20 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String) -> Unit {
   let t = theme()
   let w = web()
   let id = c.id("sf-code/" + code)
+  let copy_key = "sf-copied/\{id}"
   if c.clicked(id) {
     c.copy_text(code)
-    copied_at[id] = c.now()
+    // pressed again while it says so: its time starts again
+    @kit.after(c, copy_key, false, copied_ms) |> ignore
+    copied_at[id] = true
   }
-  let copied = match copied_at.get(id) {
-    Some(at) =>
-      if c.now() - at < 1500.0 {
-        c.wake_in(1500.0 - (c.now() - at))
-        true
-      } else {
-        false
-      }
-    None => false
-  }
+  let copied = copied_at.contains(id) &&
+    (if @kit.after(c, copy_key, true, copied_ms) {
+      copied_at.remove(id)
+      false
+    } else {
+      true
+    })
   c.box(w=Fill(1.0), bg=t.p.code_ground, radius=12.0, clip=true, fn() {
     c.box(
       dir=Row,

@@ -328,6 +328,7 @@ fn novel_text() -> String {
 }
 
 ///|
+// kept across runs: made from the words above alone, the same every time
 let fix_novel : Ref[String?] = { val: None }
 
 ///|

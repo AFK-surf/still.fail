@@ -9,7 +9,8 @@ test "signed out, as a run's core said: the sign-in page" {
   r.attach()
   let t = @ui.Tester::new(app)
   assert_eq(r.deliver(), 1)
-  t.settle() |> ignore
+  t.draw()
   assert_true(t.find("登录") is Some(_))
+  t.assert_idle()
   @core.Replay::detach()
 }

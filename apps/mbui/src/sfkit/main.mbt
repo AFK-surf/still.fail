@@ -4,10 +4,10 @@
 
 ///|
 fn main {
-  if @host.env("MBUI_DARK") == "1" {
+  if @ui.env("MBUI_DARK") == "1" {
     @sf.set_dark(Some(true))
   }
-  if @host.env("MBUI_SCREEN") == "glass" {
+  if @ui.env("MBUI_SCREEN") == "glass" {
     @ui.run("MoonBit UI 玻璃", glass_view)
   } else {
     @ui.run("MoonBit UI 组件", kit_view)

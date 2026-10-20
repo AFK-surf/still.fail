@@ -36,10 +36,10 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
 /// app's top row, their row (44), which drags the window.
 fn side_top(c : @ui.Ctx) -> Unit {
   let id = c.id("side/top")
-  if @host.window_inset() {
+  if @ui.window_inset() {
     c.window_drag(id)
   }
-  c.box(w=Fill(1.0), h=Px(if @host.window_inset() { 44.0 } else { 8.0 }), id~, fn() {  }) |> ignore
+  c.box(w=Fill(1.0), h=Px(if @ui.window_inset() { 44.0 } else { 8.0 }), id~, fn() {  }) |> ignore
 }
 
 ///|
@@ -178,7 +178,7 @@ fn chats_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             |> ignore
           Breathing => side_breathing(c)
           // the band: its top row, 新建对话's (6 + 32 + 2), and 4
-          Top => c.box(h=Px((if @host.window_inset() { 44.0 } else { 8.0 }) + 40.0 + 4.0), fn() {  }) |> ignore
+          Top => c.box(h=Px((if @ui.window_inset() { 44.0 } else { 8.0 }) + 40.0 + 4.0), fn() {  }) |> ignore
           Foot => c.box(h=Px(12.0), fn() {  }) |> ignore
         }
       })
@@ -419,35 +419,37 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
 }
 
 ///|
-/// A row archived from the list (its 归档, its menu's): the chat beside the list goes to the one after it.
+/// A row archived from the list (its 归档, its menu's): the chat beside the list goes to the one after it. One keeping
+/// watch only once asked, in the core's words (its watch runs on in the archive).
 fn archive_row(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
-  match item.watch_ask {
-    // one keeping watch asks first (its watch runs on in the archive): said, not done from here
-    Some(ask) => say(c, ask)
-    None => {
-      match app.nav.top() {
-        Chat(r) if r.station == item.station && (r.session == item.session || r.session == item.id) => {
-          app.nav.pop() |> ignore
-          wide.landed = ""
-        }
-        _ => ()
+  let run = fn() {
+    match app.nav.top() {
+      Chat(r) if r.station == item.station && (r.session == item.session || r.session == item.id) => {
+        app.nav.pop() |> ignore
+        wide.landed = ""
       }
-      let params : Map[String, Json] = {
-        "station": Json::string(item.station),
-        "session": Json::string(item.session),
-        "archived": Json::boolean(true),
-      }
-      match item.thread {
-        Some(th) => params["thread"] = Json::number(th)
-        None => ()
-      }
-      (src.call)("chat.archive", Json::object(params), fn(r) {
-        match r {
-          Ok(_) => say(c, tr("web-main.chat.archived"))
-          Err(e) => say(c, fill("web-main.chat.archiveFailed", [("error", text(Some(e), "message"))]))
-        }
-      })
+      _ => ()
     }
+    let params : Map[String, Json] = {
+      "station": Json::string(item.station),
+      "session": Json::string(item.session),
+      "archived": Json::boolean(true),
+    }
+    match item.thread {
+      Some(th) => params["thread"] = Json::number(th)
+      None => ()
+    }
+    (src.call)("chat.archive", Json::object(params), fn(r) {
+      match r {
+        Ok(_) => say(c, tr("web-main.chat.archived"))
+        Err(e) => say(c, fill("web-main.chat.archiveFailed", [("error", text(Some(e), "message"))]))
+      }
+    })
+  }
+  match item.watch_ask {
+    Some(ask) =>
+      @settings.confirm(fill("android-chat.archive.ask", [("title", item.title)]), ask, tr("android-chat.archive"), run)
+    None => run()
   }
 }
 

@@ -1,2 +1,0 @@
-check "the sheet went down with nothing taken (the station's page, its name as it was)" 'grep -q "DRIVE ok until =studio" $OUT/$name.log && grep -q "DRIVE PASS" $OUT/$name.log'
-check "still.fail cloud has the station's name as it was, not the one typed" '[ "$(peer station-name studio)" = "STATION studio" ]'

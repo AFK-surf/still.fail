@@ -153,7 +153,6 @@ fn flush_thumbs() -> Unit {
               }
             _ => ()
           }
-          @host.request_frame()
         }
         // not had: asked again the next time they show
         _ =>
@@ -181,7 +180,6 @@ fn photo_large(it : @gallery.Item) -> String {
           match r {
             Ok((_, Some(bytes))) => {
               @ui.add_image(key, bytes)
-              @host.request_frame()
             }
             _ => thumbs_asked.remove(key)
           }

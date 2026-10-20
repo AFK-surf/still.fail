@@ -48,8 +48,7 @@ priv struct App {
   /// the filter's menu, and when it was opened
   mut menu : Bool
   mut menu_at : Double
-  /// a place switched to on the bar: when, from which side (1 from the right, -1 the left, 0 from no side)
-  mut switch_at : Double
+  /// a place switched to on the bar: from which side (1 from the right, -1 the left, 0 from no side)
   mut switch_way : Int
   /// a row held: its id, since when (the time shows while it is)
   mut held : Int
@@ -66,7 +65,6 @@ let app : App = {
   filters: {},
   menu: false,
   menu_at: 0.0,
-  switch_at: -1.0e9,
   switch_way: 0,
   held: 0,
   held_at: 0.0,
@@ -124,20 +122,66 @@ pub fn open_page(p : Page) -> Unit {
 }
 
 ///|
-/// As at the start: Home alone, nothing chosen here yet (tests).
+/// reset() called by hand since the last Tester started: what the test set after it (its clock, its system) is the
+/// next Tester's to start from, not forgotten again as it starts.
+let reset_by_hand : Ref[Bool] = Ref(false)
+
+///|
+/// Every Tester starts from the app as at the start (mbui's on_reset), whatever ran before it in the process: what is
+/// kept here from one Tester to the next would be an input the test does not give.
+fn init {
+  @ui.on_reset(fn() {
+    if !reset_by_hand.val {
+      reset()
+    } else {
+      renew_nav()
+    }
+    reset_by_hand.val = false
+  })
+}
+
+///|
+/// The stack as the test set it up by hand before its Tester, made anew on the Tester's own Ctx: a Nav says it moves
+/// by an id its Ctx gave it as it was made (Ctx::mover_id), and a Tester starts a new Ctx counting from 0, so the one
+/// made before would share an id with the first thing that moves in the new one, and whichever says so last is the
+/// only one asked (a page pushed before the Tester stopped mid-slide, no frame asked for the rest of it). The pages
+/// pushed again as they were (the top risen if it rose).
+fn renew_nav() -> Unit {
+  let pages = app.nav.pages()
+  let risen = pages.length() > 1 && app.nav.risen()
+  app.nav = new_nav()
+  for i in 1..<pages.length() {
+    if i == pages.length() - 1 && risen {
+      app.nav.rise(pages[i])
+    } else {
+      app.nav.push(pages[i])
+    }
+  }
+}
+
+///|
+/// As at the start: Home alone, nothing chosen here yet (tests; every Tester as it starts: init above). Each global
+/// of this package is put back here (or in what this calls) as its `let` has it, or says why it is kept across runs
+/// (scripts/check.sh checks).
 fn reset() -> Unit {
   attention.told = false
+  attention.visible = false
+  attention.focused = false
+  attention.workspace = ""
   attention.src = None
   app.nav = new_nav()
   app.picked = ""
   app.filters.clear()
   sheet_host.kind = NoSheet
   sheet_host.shown = NoSheet
+  sheet_host.accounts = false
   bar_reset()
   fresh.became = None
   fresh.made = ""
+  fresh.made_sig = ""
   fresh.sent = false
   fresh.starting = false
+  fresh.scene = None
   new_fix.station = "st1"
   new_fix.model = "claude-opus-5-5"
   new_fix.runtime = "claude"
@@ -147,10 +191,14 @@ fn reset() -> Unit {
   new_fix.d_effort = "high"
   new_fix.d_profile = ""
   new_fix.made = 0
-  app.switch_at = -1.0e9
+  app.switch_way = 0
   app.menu = false
+  app.menu_at = 0.0
   app.held = 0
+  app.held_at = 0.0
+  reset_row_menu()
   app.toast = ""
+  app.toast_at = 0.0
   read_views.clear()
   read_chats.clear()
   readings.clear()
@@ -160,20 +208,35 @@ fn reset() -> Unit {
   service_pages.clear()
   svc_viewports.clear()
   share_in.shared = None
+  share_in.files = []
   share_in.raised = false
+  // (taken: a Tester never reads the machine's MBUI_SHARE_TEXT)
   share_in.env_taken = true
+  share_in.searching = false
+  share_in.choosing = false
+  share_in.opening = None
+  share_in.error = ""
+  share_in.query = ""
   update.available = None
   update.asked = false
+  update.checking = false
+  update.installing = false
+  update.phase = "idle"
   update.source = None
   update_version.val = 0
   svc_folded.val = false
   splash_first.val = -1.0
   drafts.clear()
   cui.attach = false
+  cui.attach_at = 0.0
   cui.picking = None
+  cui.picking_for = ""
   cui.was_down = false
   cui.press_new = false
   cui.released = false
+  cui.down_x = 0.0
+  cui.down_y = 0.0
+  cui.down_at = 0.0
   cui.moved = false
   cui.outside = false
   cui.room = 0.0
@@ -190,9 +253,74 @@ fn reset() -> Unit {
   close_now()
   @settings.reset()
   go_tos.clear()
+  ask_turns.clear()
   flash_held.val = false
   notices_reset()
   wide_reset()
+  // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
+  kept_chats.clear()
+  fixture_pictures.clear()
+  fix_threads.clear()
+  fix_ctx.val = None
+  fix_clock.val = fix_frame_clock
+  fix_wake.val = fix_frame_wake
+  fix_serial.val = 0
+  fix_stream_ids.val = 0
+  // Home (home.mbt), the host told (above), a chat's page and what is in it
+  open_titled.val = ""
+  shown_days.clear()
+  marks_seen.clear()
+  told_bars.val = None
+  told_dark.val = None
+  send_flight.val = None
+  flying.val = None
+  absolute_times.val = false
+  opened_notices.clear()
+  flashing.val = ("", 0.0)
+  flash_row.val = None
+  at_end_env.val = -1
+  bench_on.val = -1
+  boxed_n.val = 0
+  run_picker_opened.val = false
+  run_picker_saving.val = false
+  svc_hold.val = -1.0
+  // the composer: its ids counted from the start, what waits for it
+  next_pending.val = 1
+  quote_seeded.clear()
+  upload_serial.val = 0
+  marked_into.clear()
+  shared_into.clear()
+  share_files_made.val = 0
+  recent.open = false
+  recent.answers = -1
+  recent.access = NoGallery
+  recent.reading = None
+  recent.photos = []
+  // the viewer (preview.mbt, preview_marks.mbt: marks_leave above)
+  marking.color = 0xE5704AFFL
+  marking.next_id = 1
+  marking.to_draft = false
+  marking.job_name = ""
+  marking.write_text = ""
+  marking.note_text = ""
+  pv_thumbs.clear()
+  pv_hidden.val = ""
+  pv_read.clear()
+  pv_strip.leaving = None
+  pv_strip.pinned = None
+  pv_strip.near.clear()
+  viewer_awake_env.val = -1
+  src_now.val = fn() { 0.0 }
+  // a drive's files, a text read (keep.mbt, drive_reader.mbt)
+  dv_fetches.clear()
+  keepings.clear()
+  reader_mds.clear()
+  // the wide frame's keys (wide_keys.mbt)
+  focus_composer.val = false
+  switcher_query.val = ""
+  rename_for.val = ""
+  rename_seen.val = false
+  reset_by_hand.val = true
 }
 
 ///|
@@ -307,6 +435,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)
         filter_menu(c, src, w)
+        // a row's menu, held long (home_menu.mbt)
+        home_row_menu(c, src)
       }
       sheet_layer(c, fn(kind) {
         match kind {
@@ -362,14 +492,7 @@ fn page_view(
 ) -> Unit {
   // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side)
   let root = app.nav.depth() == 1
-  let since = c.now() - app.switch_at
-  let span = if app.switch_way == 0 { 180.0 } else { 220.0 }
-  let e = if root && since < span && !c.stable() {
-    c.request_frame()
-    @ui.bezier(0.2, 0.8, 0.2, 1.0, dclamp(since / span, 0.0, 1.0))
-  } else {
-    1.0
-  }
+  let e = if root { place_switch(c).get() } else { 1.0 }
   c.box(
     w=Fill(1.0),
     h=Fill(1.0),
@@ -438,7 +561,10 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
   } else {
     -1
   }
-  app.switch_at = c.now()
+  // it comes in from here (Arrive)
+  let fade = place_switch(c)
+  fade.snap(0.0)
+  fade.animate(1.0, @motion.tween(if app.switch_way == 0 { switch_fade_ms } else { switch_side_ms }, ease=Arrive))
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
@@ -527,11 +653,24 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
 }
 
 ///|
+/// How long a place switched to on the bar takes to come in: fading in from no side, from the side the ball goes to.
+pub let switch_fade_ms : Double = 180.0
+
+///|
+pub let switch_side_ms : Double = 220.0
+
+///|
+/// How far a place switched to on the bar has come in (0 … 1).
+fn place_switch(c : @ui.Ctx) -> @motion.Anim {
+  @motion.anim(c, "place/switch", 1.0, global=true)
+}
+
+///|
 /// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@host.system_dark)
 /// when it follows it; the host told when it changes (its bars follow).
 fn appearance(src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
-  let dark = @settings.dark(prefs, @host.system_dark())
+  let dark = @settings.dark(prefs, @ui.system_dark())
   @sf.set_dark(Some(dark))
   // (the host told once the prefs are read: not the system's first, then the one chosen)
   if prefs is Some(_) && told_dark.val != Some(dark) {
@@ -567,7 +706,7 @@ fn toast(c : @ui.Ctx) -> Unit {
     app.toast_at = c.now()
   }
   let said = if app.toast != "" { [@kit.toast("t\{app.toast_at}", app.toast)] } else { [] }
-  let r = @kit.toaster(c, "toast", said, duration=2600.0, bottom=90.0, look=fn(c, s, _action, _close) {
+  let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=90.0, look=fn(c, s, _action, _close) {
     let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
     c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
       c.text(s.toast.title, size=14.0, color=t.p.bg, line=20.0) |> ignore
@@ -578,6 +717,10 @@ fn toast(c : @ui.Ctx) -> Unit {
     app.toast = ""
   }
 }
+
+///|
+/// How long a toast stays (paused while the pointer is on it).
+pub let toast_ms : Double = 2600.0
 
 ///|
 fn say(c : @ui.Ctx, words : String) -> Unit {
@@ -599,13 +742,9 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
     align=ACenter,
     justify=JCenter,
     fn() {
-      let lift = if c.stable() {
-        0.0
-      } else {
-        c.request_frame()
-        // 900 ms up, 900 down, eased
-        let k = c.now() / 1800.0
-        let f = k - k.floor()
+      // up for half of splash_float_ms, down the other half, eased: a cycle while it shows
+      let lift = {
+        let f = c.cycle(splash_float_ms)
         let p = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
         p * p * (3.0 - 2.0 * p)
       }
@@ -624,9 +763,9 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
       |> ignore
       match label {
         Some(s) => {
-          let shown = now || c.now() - since > 1000.0
+          let shown = now || c.now() - since > splash_label_ms
           if !shown {
-            c.wake_in(1000.0 - (c.now() - since))
+            c.wake_in(splash_label_ms - (c.now() - since))
           }
           c.box(opacity=if shown { 1.0 } else { 0.0 }, fn() {
             c.text(s, size=13.0, color=t.p.muted, center=true, line=18.0)
@@ -640,6 +779,14 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
   )
   |> ignore
 }
+
+///|
+/// How long the splash waits before it says what it waits for.
+let splash_label_ms : Double = 1000.0
+
+///|
+/// The splash's mark floating: up and down once in this long.
+let splash_float_ms : Double = 1800.0
 
 ///|
 let splash_first : Ref[Double] = { val: -1.0 }
@@ -811,21 +958,6 @@ fn dmax(a : Double, b : Double) -> Double {
   } else {
     b
   }
-}
-
-///|
-/// How far something opened at `at` has come in (0 … 1, eased out over `ms`): all the way at once in screenshots.
-fn opening(c : @ui.Ctx, at : Double, ms : Double) -> Double {
-  if c.stable() {
-    return 1.0
-  }
-  let p = (c.now() - at) / ms
-  if p >= 1.0 {
-    return 1.0
-  }
-  c.request_frame()
-  let q = 1.0 - (if p < 0.0 { 0.0 } else { p })
-  1.0 - q * q * q
 }
 
 ///|

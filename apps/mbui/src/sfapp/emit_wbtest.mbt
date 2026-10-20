@@ -10,21 +10,27 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.settle() |> ignore
+  // the chat pushed in over Home
+  t.run_for(@ui.nav_push_ms)
   t.tap_text("发消息")
   t.type_text("看一下列表")
   tap_send(t)
-  t.settle() |> ignore
-  clock.val = 800.0
-  t.frame()
-  t.settle() |> ignore
+  // the station has it: in the chat, its agent at work
+  clock.val = clock.val + fix_deliver_ms
+  t.draw()
   t
 }
 
 ///|
+/// A message's whole way out of its avatar: fold, float, spit, return.
+fn emit_all_ms() -> Double {
+  Fold.ms() + Float.ms() + Spit.ms() + Return.ms()
+}
+
+///|
 fn emit_restore() -> Unit {
-  fix_clock.val = fn() { @host.now() }
-  fix_wake.val = fn(ms) { @host.wake_after(ms) }
+  fix_clock.val = fix_frame_clock
+  fix_wake.val = fix_frame_wake
 }
 
 ///|
@@ -34,17 +40,15 @@ test "an answer said while its agent's activity shows waits, then comes out of i
   // at work: its activity
   assert_true(t.find("看一下列表") is Some(_))
   let em = emits_of("ws1/st1\u{1}s-c1")
-  clock.val = 2300.0
-  t.frame()
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
   // the answer is taken: it waits (folding, then the avatar on its way), not in the list yet
   assert_eq(em.queue.length() + (if em.current is Some(_) { 1 } else { 0 }), 1)
   assert_true(t.find("收到：「看一下列表」") is None)
-  // fold (170) and float (440): it comes into the list as the avatar lands
-  for _ in 0..<40 {
-    t.frame()
-  }
+  // fold and float: it comes into the list as the avatar lands
+  t.run_for(Fold.ms() + Float.ms())
   assert_true(t.find("收到：「看一下列表」") is Some(_))
-  t.settle() |> ignore
+  t.run_for(Spit.ms() + Return.ms())
   assert_true(em.current is None)
   assert_true(t.find("收到：「看一下列表」") is Some(_))
   emit_restore()
@@ -55,11 +59,9 @@ test "with the reader scrolled up (not watched), an answer just appears" {
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
   t.wheel(195.0, 400.0, -600.0)
-  t.settle() |> ignore
   let em = emits_of("ws1/st1\u{1}s-c1")
-  clock.val = 2300.0
-  t.frame()
-  t.settle() |> ignore
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
   assert_true(em.current is None)
   assert_eq(em.queue.length(), 0)
   assert_false(emit_held(em, 102.0))
@@ -71,10 +73,12 @@ test "the answer coming in does not end its own motion: float, spit and return e
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
-  clock.val = 2300.0
-  t.frame()
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
   let frames : Map[String, Int] = {}
-  for _ in 0..<120 {
+  // frame by frame over its whole way out
+  let end = t.time() + emit_all_ms()
+  while t.time() < end {
     t.frame()
     match em.current {
       Some(turn) => {

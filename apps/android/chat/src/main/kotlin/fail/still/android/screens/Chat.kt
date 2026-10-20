@@ -636,7 +636,12 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             // before the options close, as they do once it is answered.)
             (r is Entry.Working || r is Entry.Out || (r is Entry.Said && !motion.emits(r.m.seq)))
     }
-    val inList = all.filter { r -> r.id !in turns.waiting && r !in newcomers && !(turns.sendWaiting && sentRow(r)) }
+    // Words sent from here (the composer counts them: `sends`) wait from this very composition, not only once their turn
+    // is asked for after it (a SideEffect): a core that has them in the outbox at once would else bring their row in now.
+    val sends = host.sends
+    val sentCount = remember { intArrayOf(sends) }
+    val sendWaits = turns.sendWaiting || sends > sentCount[0]
+    val inList = all.filter { r -> r.id !in turns.waiting && r !in newcomers && !(sendWaits && sentRow(r)) }
     SideEffect { newcomers.forEach { r -> admitted += r.id; turns.admit(r.id, if (r is Entry.Working) 220L else 320L, after = r is Entry.Working) } }
     val rows = if (reveal.count < inList.size) inList.takeLast(reveal.count) else inList
     // What is new is told here, as the list is composed: its rows are composed later (as it is laid out), after the
@@ -826,15 +831,24 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // A message sent from up the list takes the reader to its end at once, following again (web Chat.tsx useToEnd). Told
     // by the composer as it sends, not by the outbox growing: on a quick link the station has the message before the
     // outbox ever shows it.
-    val sends = host.sends
-    val sentCount = remember { intArrayOf(sends) }
     SideEffect {
         val was = lastHead[0]
         lastHead[0] = headKey
         val sent = sends > sentCount[0]
         sentCount[0] = sends
         // Words sent take their turn among what changes the list's height, till they have landed (or never set out).
-        host.flight?.takeIf { sent }?.let { f -> turns.send { snapshotFlow { host.flight !== f }.first { it } } }
+        // Having waited for others' turns, what came in meanwhile has moved the rows already there: they go from where
+        // they are now. Their row comes into the list only now, under the end the list was put at (below, here) and
+        // not followed meanwhile: laid out out of sight (a frame to compose it, one to lay it out), the list goes to it,
+        // for it to come into view rather than wait unseen.
+        host.flight?.takeIf { sent }?.let { f ->
+            turns.send { waited ->
+                if (waited) f.beforePositions = host.rowPositions.toMap()
+                repeat(2) { withFrameNanos { } }
+                if (!short && host.flight === f && !f.placed && list.canScrollForward) list.requestScrollToItem(list.layoutInfo.totalItemsCount - 1, 1_000_000)
+                snapshotFlow { host.flight !== f }.first { it }
+            }
+        }
         // Words sent flying in, while it follows: it is put in place by them (below), not glided after their row.
         if (sent && host.flight?.carried == false && !short) follow.paused = true
         if (toLatest[0] && !short) { toLatest[0] = false; atLatest(); return@SideEffect }

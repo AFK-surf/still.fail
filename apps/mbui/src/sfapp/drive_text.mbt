@@ -924,6 +924,7 @@ priv struct MdStyle {
 }
 
 ///|
+// kept across runs: a style of no mutable field
 let md_plain : MdStyle = {
   bold: false,
   italic: false,

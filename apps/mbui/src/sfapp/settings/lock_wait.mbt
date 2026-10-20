@@ -57,7 +57,6 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       )
       if typed is Some(code) {
         (core.call)("lock.pairCode", obj([("workspace", str(ws)), ("code", str(code))]), fn(r) {
-          wake()
           // a code refused: the boxes empty for the next try
           if r is Err(_) {
             c.clear_code_field(key)

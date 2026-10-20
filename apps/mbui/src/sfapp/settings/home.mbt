@@ -7,7 +7,6 @@
 /// A page of the settings, by its route: call for the page the app's stack shows. `root`: a place of the bottom
 /// bar's at the stack's root (PlacePage.kt), under the app's own top bar, so without its compact one.
 pub fn page(c : @ui.Ctx, core : Core, here : Here, route : Route, root? : Bool = false) -> Unit {
-  frame_ctx.val = Some(c)
   frame_core.val = Some(core)
   at_root.val = root
   match route {
@@ -33,6 +32,7 @@ pub fn page(c : @ui.Ctx, core : Core, here : Here, route : Route, root? : Bool =
 
 ///|
 /// The themes to choose (SettingsHome.kt themes): the system's, light, dark.
+// kept across runs: a table, never written
 let themes : Array[(String, String)] = [
   ("system", "android-settings.theme.system"),
   ("light", "android-settings.theme.light"),
@@ -63,7 +63,6 @@ fn pref(core : Core, name : String) -> String {
 /// A pref set (prefs.set), shown as chosen at once; "" takes it away (null: the default).
 fn set_pref(core : Core, name : String, value : String) -> Unit {
   chosen[name] = value
-  wake()
   (core.call)(
     "prefs.set",
     obj([(name, if value == "" { Json::null() } else { str(value) })]),
@@ -350,7 +349,6 @@ fn use_notify(core : Core, on : Bool) -> Unit {
   notify_switched.val = Some(on)
   (core.call)("notify.set", obj([("on", Json::boolean(on))]), fn(r) {
     notify_switched.val = None
-    wake()
     match r {
       Ok(v) =>
         (core.push_sync)(

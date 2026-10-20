@@ -430,41 +430,30 @@ pub fn card_text(c : @ui.Ctx, title : String, line? : String = "") -> Unit {
 pub let later_ms : Double = 400.0
 
 ///|
-let first_seen : Map[Int, Double] = {}
-
-///|
-/// Since when `key` has been waited on (the first frame that asked).
-fn waited(c : @ui.Ctx, key : String) -> Double {
-  let id = c.id("sf-wait/" + key)
-  match first_seen.get(id) {
-    Some(t) => c.now() - t
-    None => {
-      first_seen[id] = c.now()
-      0.0
-    }
-  }
+/// Whether `key` has been waited on for later_ms, since the first frame that asked (@kit.after's clock: a frame comes
+/// when it has).
+fn waited_long(c : @ui.Ctx, key : String) -> Bool {
+  @kit.after(c, "sf-wait/" + key, true, later_ms)
 }
 
 ///|
 /// Forgets a wait, so the next one on `key` waits its 400ms again.
 pub fn done_waiting(c : @ui.Ctx, key : String) -> Unit {
-  first_seen.remove(c.id("sf-wait/" + key))
+  @kit.after(c, "sf-wait/" + key, false, later_ms) |> ignore
 }
 
 ///|
-/// The placeholders' breath: 1 → 0.5 → 1 in 1.4s, eased; still (1) for
-/// screenshots, 0.6 when what they wait on failed.
+/// One breath of the placeholders.
+let breath_ms : Double = 1400.0
+
+///|
+/// The placeholders' breath: 1 → 0.5 → 1 in breath_ms, eased; 0.6 when what they wait on failed.
 pub fn breath(c : @ui.Ctx, failed? : Bool = false) -> Double {
   if failed {
     return 0.6
   }
-  if c.stable() {
-    return 1.0
-  }
-  c.request_frame()
   let pi = 3.141592653589793
-  let k = c.now() / 1400.0
-  let f = k - k.floor()
+  let f = c.cycle(breath_ms)
   // ease-in-out between the two ends
   0.75 + 0.25 * @math.cos(2.0 * pi * f)
 }
@@ -494,8 +483,7 @@ pub fn bar(
 /// failed; the others only after later_ms.
 pub fn wait_pill(c : @ui.Ctx, text : String, key? : String = "", error? : Bool = false) -> Unit {
   let t = theme()
-  if !error && waited(c, "pill/" + key + text) < later_ms {
-    c.request_frame()
+  if !error && !waited_long(c, "pill/" + key + text) {
     return
   }
   c.box(dir=Row, padx=12.0, pady=6.0, gap=8.0, bg=t.p.neutral_bg, radius=15.0, fn() {
@@ -515,8 +503,7 @@ pub fn wait_pill(c : @ui.Ctx, text : String, key? : String = "", error? : Bool =
 /// after later_ms; red words and no spinner when it failed.
 pub fn wait_line(c : @ui.Ctx, text : String, key? : String = "", error? : Bool = false) -> Unit {
   let t = theme()
-  if !error && waited(c, "line/" + key + text) < later_ms {
-    c.request_frame()
+  if !error && !waited_long(c, "line/" + key + text) {
     c.box(h=Px(18.0), fn() {  }) |> ignore
     return
   }

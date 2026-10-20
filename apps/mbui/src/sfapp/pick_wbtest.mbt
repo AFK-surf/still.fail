@@ -8,10 +8,9 @@ fn hold_on(t : @ui.Tester, words : String) -> (Double, Double) {
   let (rx, ry, _, _) = t.rect_of(words).unwrap()
   let (x, y) = (rx + 24.0, ry + 8.0)
   t.press_at(x, y)
-  t.frame(ms=250.0)
-  t.frame(ms=250.0)
+  t.run_for(long_press_ms)
   t.release(x, y)
-  t.settle() |> ignore
+  t.draw()
   (x, y)
 }
 
@@ -37,6 +36,7 @@ test "held still on a message's words: the word under the finger is picked, the 
   // the passage drawn behind the words, in the accent at 26%
   let ground = @sf.alpha(@sf.theme().p.accent, 0.26)
   assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == ground }))
+  t.assert_idle()
 }
 
 ///|
@@ -47,17 +47,17 @@ test "a finger sliding on widens it by words, from the word first held; the list
   let (x, y) = (rx + 24.0, ry + 8.0)
   let before = t.list_offset()
   t.press_at(x, y)
-  t.frame(ms=250.0)
-  t.frame(ms=250.0)
+  t.run_for(long_press_ms)
   let first = (pk.a, pk.b)
   slide(t, x, y, x + 60.0, y, 6)
   t.release(x + 60.0, y)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(pk.a, first.0)
   assert_true(pk.b > first.1 + 2)
   assert_eq(t.list_offset(), before)
   // lifting it tapped nothing: still picked
   assert_true(pk.ts != "")
+  t.assert_idle()
 }
 
 ///|
@@ -91,9 +91,10 @@ test "a handle moves its end: the passage's end follows the finger" {
   t.press_at(kx, ky)
   slide(t, kx, ky, kx + 50.0, ky, 5)
   t.release(kx + 50.0, ky)
-  t.settle() |> ignore
+  t.draw()
   assert_true(pk.b > was + 2)
   assert_true(pk.ts != "")
+  t.assert_idle()
 }
 
 ///|
@@ -105,7 +106,6 @@ test "a tap anywhere else lets go of it, as back does" {
   assert_eq(pk.ts, "")
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.back()
-  t.settle() |> ignore
   assert_eq(pk.ts, "")
   // the chat is still the page shown (back let go of the pick only)
   assert_eq(app.nav.depth(), 2)
