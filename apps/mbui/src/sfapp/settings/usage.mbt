@@ -289,16 +289,9 @@ fn usage_lists(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   let at = if usage_state.list < lists.length() { usage_state.list } else { 0 }
   let list = Some(lists[at])
   let kind = text(list, "key")
-  card(c, fn() {
-    // (in the card's top corners: concentric with it)
-    let picked = seg(
-      c,
-      "usage-lists",
-      lists.map(fn(l) { text(Some(l), "title") }),
-      at,
-      fill=true,
-      radius=@ui.concentric(card_radius, card_pad),
-    )
+  // (its Seg, rounded 10, in its top corners: the card's corner taken from it, concentric: Usage.kt:204)
+  card(c, corner=@sf.seg_card_radius, fn() {
+    let picked = seg(c, "usage-lists", lists.map(fn(l) { text(Some(l), "title") }), at, fill=true)
     if picked != at {
       usage_state.list = picked
       usage_state.all = false

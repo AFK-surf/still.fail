@@ -321,20 +321,16 @@ fn page_note(c : @ui.Ctx, words : String) -> Unit {
 let page_note_box : @ui.Style = @ui.style(w=Full, px=S6, pb=S2_5)
 
 ///|
-/// A card's corner, and how far in from every edge what it holds stands (what is in its corners as far from both
-/// edges: docs/ui-panels.md); what has a ground of its own there takes @ui.concentric(card_radius, card_pad). The
-/// card's style says them as tokens (Xl3 in @sf.radii, S4).
-let card_radius : Double = 20.0
-
-///|
-let card_pad : Double = 16.0
-
-///|
-/// A card on the page (Parts.kt Card): 12 in from the sides, 10 under it, its words card_pad in; tapped when `key`
-/// is given. True on the frame after a tap.
-fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "") -> Bool {
+/// A card on the page (Parts.kt Card): 12 in from the sides, 10 under it, its words 20 in; its corner 22, or concentric
+/// with a button in its corner (`foot`), or `corner` (taken from what else has a ground there: a Seg at its top);
+/// tapped when `key` is given. True on the frame after a tap.
+fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Bool = false, corner? : @ui.Radius) -> Bool {
   let id = if key == "" { 0 } else { c.id(key) }
-  c.box(style=card_room, fn() { c.box(style=card_ground, id~, body) |> ignore }) |> ignore
+  let ground = match corner {
+    Some(r) => card_ground.then(@ui.style(radius=r))
+    None => if foot { card_foot_ground } else { card_ground }
+  }
+  c.box(style=card_room, fn() { c.box(style=ground, id~, body) |> ignore }) |> ignore
   id != 0 && hit(c, id)
 }
 
@@ -344,16 +340,21 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "") -> Bool {
 let card_room : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5)
 
 ///|
-/// A card: card_pad in, card_radius round, the ink at 5% over it while pressed (tapped: an id).
+/// A card: 20 in (CARD_PAD), 22 round (CARD_CORNER), the ink at 5% over it while pressed (tapped: an id).
 // kept across runs: a value (no field of it changes)
 let card_ground : @ui.Style = @ui.style(
   w=Full,
-  p=S4,
+  p=S5,
   radius=Xl3,
   bg=Card,
   clip=true,
   pressed=@ui.patch(bg=Over(Card, A(Fg, O5))),
 )
+
+///|
+/// A card with a button in its corner: 20 + 19 round.
+// kept across runs: a value (no field of it changes)
+let card_foot_ground : @ui.Style = card_ground.then(@ui.style(radius=@sf.card_foot_radius))
 
 ///|
 /// Rows on one rounded card, no lines between them (Parts.kt ListCard).
