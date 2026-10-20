@@ -525,7 +525,7 @@ priv struct Viewer {
 
 ///|
 /// A thumbnail of the chat's the viewer flies from and back into (FilePreview.kt Thumb): where it was drawn (in the
-/// window), its corners, the frame it was last drawn in.
+/// window), its corners, the frame its row was last built in.
 priv struct Thumb {
   x : Double
   y : Double
@@ -548,7 +548,14 @@ let pv_hidden : Ref[String] = { val: "" }
 fn note_thumb(c : @ui.Ctx, id : String, node : Int, radius : Double) -> Unit {
   match c.rect_of(node) {
     Some((x, y, w, h)) if w > 0.0 && h > 0.0 => pv_thumbs[id] = { x, y, w, h, radius, frame: c.frame_number() }
-    _ => pv_thumbs.remove(id)
+    _ =>
+      match pv_thumbs.get(id) {
+        // under the viewer nothing of the page is hit, so its place is not read back (Ctx::rect_of): where it was
+        // last seen, its row still built (the chat under the viewer does not move)
+        Some(t) if pv_hidden.val == id || viewer.val is Some(_) || pv_leaving.val is Some(_) =>
+          pv_thumbs[id] = { ..t, frame: c.frame_number() }
+        _ => pv_thumbs.remove(id)
+      }
   }
 }
 
@@ -1228,7 +1235,9 @@ fn Viewer::close(self : Viewer, c : @ui.Ctx) -> Unit {
         self.fly.animate(0.0, @motion.tween(dmax(1.0, fly_close_ms * p), ease=Arrive))
         pv_hidden.val = self.id()
       }
-      _ => self.fade.animate(0.0, @motion.tween(pv_fade_ms, ease=Out))
+      // the way in played backwards (web's fp: ease-out on the way in, the same curve run back on the way out): the
+      // ground and the picture stay nearly whole at first, then go
+      _ => self.fade.animate(0.0, @motion.tween(pv_fade_ms, ease=Bezier(0.8, 0.0, 0.8, 0.3)))
     }
     // the views under the canvas go at once (they cannot fade)
     match self.video {

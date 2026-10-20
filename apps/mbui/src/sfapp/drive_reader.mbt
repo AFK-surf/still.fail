@@ -1370,10 +1370,6 @@ fn reader_toggle(c : @ui.Ctx, r : TextReading) -> Unit {
 }
 
 ///|
-/// The reader's bars coming or going.
-let reader_bars_ms : Double = 180.0
-
-///|
 /// The search goes this long after the last thing typed.
 let reader_search_ms : Double = 250.0
 

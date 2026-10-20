@@ -36,19 +36,22 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   t.tap(195.0, 422.0)
   t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  t.run_for(zoom_glide_ms)
+  // (to where its glide said it ends: zoom_glide_ms from its start)
+  run_out(t, v.zoom.glide)
   assert_true((v.zoom.scale - 1.525).abs() < 0.01)
   // (the next two taps a double tap of their own)
   t.run_for(double_tap_ms)
   t.tap(195.0, 422.0)
   t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  t.run_for(zoom_glide_ms)
+  // (to where its glide said it ends: zoom_glide_ms from its start)
+  run_out(t, v.zoom.glide)
   assert_true((v.zoom.scale - 366.0 / 600.0).abs() < 0.001)
   // back closes it at once (only drawn going, back into its thumbnail or fading out), the chat under it again
   t.back()
   assert_true(viewer.val is None)
-  t.run_for(fly_close_ms)
+  // to where its way out said it ends (fly_close_ms or pv_fade_ms from when it set out)
+  run_out(t, if v.flies { v.fly } else { v.fade })
   assert_true(t.find("界面草图.png") is None)
   t.assert_idle()
 }
@@ -68,9 +71,11 @@ test "a video plays in a native view, its bytes read through the core; its contr
   // its frames' times asked of the host and counted (the fake host's file: three frames a 30th of a second apart)
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("control 1 20 ") }))
   assert_true(t.find(" / 3 帧") is Some(_))
+  let v = viewer.val.unwrap()
   t.back()
   assert_true(viewer.val is None)
-  t.run_for(pv_fade_ms)
+  // faded out (pv_fade_ms from when it set out), its view closed
+  run_out(t, v.fade)
   assert_true(t.views().contains("close 1"))
 }
 
@@ -195,7 +200,7 @@ fn run_out(t : @ui.Tester, a : @motion.Anim) -> Unit {
 }
 
 ///|
-test "a picture of the chat grows from its thumbnail; back closes it at once, it goes, then nothing moves" {
+test "a picture of the chat grows from its thumbnail; back closes it at once and it flies back into the thumbnail, then nothing moves" {
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
@@ -220,12 +225,39 @@ test "a picture of the chat grows from its thumbnail; back closes it at once, it
   assert_true(v.flies && !v.fly_back)
   run_out(t, v.fly)
   assert_true(!v.flies)
+  // where its thumbnail is in the chat under it
+  let th = thumb_of(t.ctx(), v.id()).unwrap()
+  let tc = (th.x + th.w / 2.0, th.y + th.h / 2.0)
   t.back()
-  // closed as back is taken: only drawn going (back into its thumbnail when the chat drew it in the last frames, else
-  // fading out: its row is not built anew under the viewer, so here it fades)
+  // closed as back is taken: only drawn, flying back into its thumbnail
   assert_true(viewer.val is None)
   assert_true(pv_leaving.val is Some(_))
-  run_out(t, if v.flies { v.fly } else { v.fade })
+  assert_true(v.flies && v.fly_back)
+  let to = v.zoom.rect().unwrap()
+  // each frame of the way back the picture is drawn where its flight is, nearer the thumbnail than the frame before,
+  // the last one on it
+  let mut last = 1.0e9
+  let mut frames = 0
+  t.draw()
+  let end = v.fly.ends_at()
+  assert_true(end < 1.0e9)
+  while t.time() < end {
+    t.frame()
+    let p = v.flying()
+    let ex = th.x + (to.0 - th.x) * p + (th.w + (to.2 - th.w) * p) / 2.0
+    let ey = th.y + (to.1 - th.y) * p + (th.h + (to.3 - th.h) * p) / 2.0
+    let drawn = t
+      .drawn_images()
+      .iter()
+      .any(fn(i) { (i[0] + i[2] / 2.0 - ex).abs() < 0.5 && (i[1] + i[3] / 2.0 - ey).abs() < 0.5 && i[2] > th.w / 2.0 })
+    assert_true(drawn)
+    let d = (ex - tc.0).abs() + (ey - tc.1).abs()
+    assert_true(d <= last)
+    last = d
+    frames += 1
+  }
+  assert_true(frames > 3)
+  assert_true(last < 0.5)
   assert_true(pv_leaving.val is None)
   assert_eq(pv_hidden.val, "")
   t.assert_idle()
