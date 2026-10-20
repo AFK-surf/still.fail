@@ -569,10 +569,14 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
     }
     let before = v.state
     v.state = h_view_info(v.id, v.info)
-    if v.state != before || (v.playing() && !v.buffering()) {
-      // a player playing moves on its own: its time is shown (not while it waits for what it needs: the host asks
-      // for a frame as it goes on)
-      self.request_frame()
+    if v.state != before {
+      // how it stands changed as the frame was painted (the host's): the next frame shows it
+      self.read_changed("view \{v.id}'s state")
+    }
+    if v.playing() && !v.buffering() {
+      // a player playing moves on its own as the clock goes: its time shown as it plays, a cycle while it does (not
+      // while it waits for what it needs: the host's event comes as it goes on)
+      ignore(self.cycle(0.0))
     }
     match v.serve {
       Some(serve) => v.take_site(serve)
@@ -707,7 +711,7 @@ fn NativeView::take_site(self : NativeView, serve : (SiteRequest, SiteReply) -> 
           _ => ()
         }
         if was != (v.path, v.can_back, v.can_forward, v.loading, v.title) {
-          g().request_frame()
+          g().read_changed("view \{v.id}'s page (where it is, its title, whether it loads)")
         }
       }
       _ => ()
@@ -908,7 +912,6 @@ fn on_second(kind : Int, x : Double, y : Double) -> Unit {
   second_ptr[0] = x
   second_ptr[1] = y
   second_ptr[2] = if kind == 6 { 0.0 } else { 1.0 }
-  h_request_frame()
 }
 
 ///|

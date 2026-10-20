@@ -18,7 +18,8 @@
       "src/ui/ctx.mbt",
       "src/ui/hostcall.mbt",
       "src/ui/hostread.mbt",
-      "src/host"
+      "src/host",
+      "src/ui/fx.mbt"
     ]
   },
   "globals": {
@@ -45,24 +46,16 @@
     "src/bench"
   ],
   "counts": {
-    "frame-request": {
-      "src/ui/fx.mbt": 2,
-      "src/ui/native.mbt": 3,
-      "src/ui/nav.mbt": 4
-    },
+    "frame-request": {},
     "settle": {},
     "flow-wait": {},
     "script-wait": {},
     "page-settle": {},
-    "frame-count": {
-      "src/effecttest/frame_test.mbt": 1
-    },
+    "frame-count": {},
     "literal-time": {},
     "stable-mode": {},
     "retired-api": {},
-    "app-clock": {
-      "src/kit/sheet.mbt": 1
-    },
+    "app-clock": {},
     "wall-clock": {},
     "poll": {},
     "host-read": {},
@@ -162,9 +155,7 @@
     "literal-time": {},
     "stable-mode": {},
     "retired-api": {},
-    "app-clock": {
-      "src/effectdemo/demo.mbt": 1
-    },
+    "app-clock": {},
     "wall-clock": {},
     "poll": {},
     "host-read": {},

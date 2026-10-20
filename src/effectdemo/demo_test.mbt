@@ -9,6 +9,8 @@ test "the screen and the core keep one clock, frame by frame" {
   assert_true(w.t.find("waiting: 1") is Some(_))
   for _ in 0..<20 {
     w.step()
+    // frame by frame: the core's clock is the frame's time in whole ms, rounded down (Runtime::now)
+    assert_eq(w.rt.now().to_double(), w.t.time().floor())
   }
   assert_true(w.t.find("reply: MESSAGE 1") is Some(_))
   assert_eq(w.rt.now().to_double(), w.t.time())

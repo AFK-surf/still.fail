@@ -114,24 +114,23 @@ pub fn sheet(
       s
     }
   }
-  let t = c.now()
   let mut now = open
   let mut dragged : SheetDrag? = None
   // opened: from below at its height; asked another height while open: there on the spring
   if open && !s.was_open {
-    if !s.shown || s.below.value(t) > 1.0 {
+    if !s.shown || s.below.value_at(c) > 1.0 {
       s.h.put(target)
       s.below.put(target)
     }
     if s.h.target() != target {
-      s.h.go(t, target)
+      s.h.go_at(c, target)
     }
-    s.below.go(t, 0.0)
+    s.below.go_at(c, 0.0)
     s.fade.animate(1.0, scrim_fade())
     s.shown = true
     s.asked = target
   } else if open && target != s.asked {
-    s.h.go(t, target)
+    s.h.go_at(c, target)
     s.asked = target
   }
   if !s.shown {
@@ -145,14 +144,14 @@ pub fn sheet(
     Some(d) if open => {
       let (_, dy) = d.take_move()
       if dy != 0.0 {
-        let from = if s.held >= 0.0 { s.held } else { s.h.value(t) }
+        let from = if s.held >= 0.0 { s.held } else { s.h.value_at(c) }
         let top = if draggable { total * detents.fold(init=0.0, fn(a, b) { dmax(a, b) }) } else { target }
         let to = dclamp(from - dy, 120.0, top)
         s.held = to
         s.h.put(to)
       }
       if d.take_end() {
-        let at = if s.held >= 0.0 { s.held } else { s.h.value(t) }
+        let at = if s.held >= 0.0 { s.held } else { s.h.value_at(c) }
         s.held = -1.0
         // up is more, per second
         let v = -d.vy * 1000.0
@@ -162,7 +161,7 @@ pub fn sheet(
             now = false
           } else {
             dragged = Some(DraggedBack)
-            s.h.go(t, target, v~)
+            s.h.go_at(c, target, v~)
           }
         } else if at / total < close_below {
           dragged = Some(DraggedClosed)
@@ -170,14 +169,14 @@ pub fn sheet(
         } else {
           let f = nearest(detents, at / total)
           dragged = Some(DraggedTo(f))
-          s.h.go(t, f * total, v~)
+          s.h.go_at(c, f * total, v~)
         }
       }
       // a tap on the grabber (its top 30): to the other end
-      if d.take_tap() && draggable && d.y - (total - s.h.value(t) + s.below.value(t)) < 30.0 {
+      if d.take_tap() && draggable && d.y - (total - s.h.value_at(c) + s.below.value_at(c)) < 30.0 {
         let lo = detents.fold(init=1.0, fn(a, b) { dmin(a, b) })
         let hi = detents.fold(init=0.0, fn(a, b) { dmax(a, b) })
-        s.h.go(t, if s.h.value(t) > (lo + hi) / 2.0 * total { lo * total } else { hi * total }, v=0.0)
+        s.h.go_at(c, if s.h.value_at(c) > (lo + hi) / 2.0 * total { lo * total } else { hi * total }, v=0.0)
       }
     }
     _ => ()
@@ -185,7 +184,7 @@ pub fn sheet(
   // closed: it sinks away
   if !now && s.was_open {
     s.held = -1.0
-    s.below.go(t, s.h.value(t))
+    s.below.go_at(c, s.h.value_at(c))
     s.fade.animate(0.0, scrim_fade())
   }
   // (the springs and the fade say themselves that they move, as they set out: Ctx::moving)
@@ -193,8 +192,8 @@ pub fn sheet(
     s.h.put(s.h.target())
     s.below.put(s.below.target())
   }
-  let hx = s.h.value(t)
-  let bx = s.below.value(t)
+  let hx = s.h.value_at(c)
+  let bx = s.below.value_at(c)
   let scrim_t = s.fade.get()
   // (logic on a motion's end, to be told at once instead: shown is false only once it has sunk away and its scrim
   // faded, the sheet drawn until then from what it is)
@@ -218,7 +217,7 @@ pub fn sheet(
   if now && o.dismissed is Some(_) {
     now = false
     s.held = -1.0
-    s.below.go(t, hx)
+    s.below.go_at(c, hx)
     s.fade.animate(0.0, scrim_fade())
   }
   s.was_open = now

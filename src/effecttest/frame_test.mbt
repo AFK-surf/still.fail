@@ -105,8 +105,13 @@ test "shut down, a runtime holds nothing: no fiber, timer, waiter or finalizer i
   @effect.for_seeds(count=20, seed => {
     let rt = @effect.Runtime::new(seed~)
     busy(rt)
-    for i in 0..<20 {
-      rt.frame((i * 16).to_int64())
+    // (frames a display's apart for as long as all of it takes to be under way: the sleeps one after another under
+    // the permit, each fiber on to its frame and its wait)
+    let under_way = 320L
+    let mut at = 0L
+    while at <= under_way {
+      rt.frame(at)
+      at = at + 16L
     }
     let (live, _, _, _, _, _) = rt.holding()
     assert_true(live > 0)
