@@ -218,3 +218,16 @@ test "an ask the run's timing made, dropped with what came for it" {
   assert_eq(r.unmade().length(), 0)
   assert_eq(r.drop("nothing like this"), 0)
 }
+
+///|
+test "the bytes the run sent beside a call are the test's to give again" {
+  let r = @core.Replay::parse(
+    #|CORETRACE {"out":{"id":3,"call":"station.upload.part","params":{"name":"a.jpg","offset":0}},"w":10,"b":"ffd8ff"}
+    #|CORETRACE {"in":{"id":3,"ok":{"have":3}},"w":20}
+    #|CORETRACE {"out":{"id":4,"call":"station.upload.part","params":{"name":"b.pdf","offset":0}},"w":30}
+    ,
+  )
+  assert_eq(r.sent_bytes("station.upload.part", "name", "a.jpg"), Some(b"\xff\xd8\xff"))
+  assert_eq(r.sent_bytes("station.upload.part", "name", "b.pdf"), None)
+  assert_eq(r.sent_bytes("chat.send", "name", "a.jpg"), None)
+}
