@@ -23,17 +23,21 @@ test "35-station-rename" {
       f.clear()
       f.type_text(name)
       f.tap("=保存")
+      // said as the rename is answered (settings' act), which may come before the new name is shown or after
+      f.see("已重命名")
       f.run_to(@kit.sheet_rest("settings-sheet"))
       f.see("=" + name)
     }
-    // 已重命名 said for its time from the frame that took the last rename's answer (settings' act: said as it is
-    // answered, which may come after the name is shown), then gone
+    // 已重命名 said for its time from the frame that took the last rename's answer, then gone (at a slower pace the name
+    // can come after its time is out: it is going or gone by then)
     let from = f.answer_taken("workspace.renameStation")
     assert_true(from >= 0.0)
-    f.see("已重命名")
-    f.run_for(@sfapp.toast_ms - (f.t.time() - from))
-    // (its time out at the last frame: it starts going with the one after)
-    f.t.draw()
+    let out = from + @sfapp.toast_ms
+    if f.t.time() < out {
+      f.run_for(out - f.t.time())
+      // (its time out at the last frame: it starts going with the one after)
+      f.t.draw()
+    }
     f.run_to_rest("toast")
     f.end()
   })
