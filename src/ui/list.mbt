@@ -816,16 +816,18 @@ pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
 /// row's height (a reader's place inside a block taller than the window). None before its first layout. Read as the
 /// view builds, it is read back (readback.mbt): laid out otherwise this frame, the frame is built again from it.
 pub fn Ctx::list_place(self : Ctx, key : String) -> (Int, Double, Double)? {
-  let v = self.list_place_now(key)
-  if building.val && !self.place_reads.contains(key) {
-    self.place_reads[key] = v
+  // (by its id where it is read: the scope it is built in)
+  let id = self.id(key)
+  let v = self.list_place_of(id)
+  if building.val && !self.place_reads.contains(id) {
+    self.place_reads[id] = (key, v)
   }
   v
 }
 
 ///|
-fn Ctx::list_place_now(self : Ctx, key : String) -> (Int, Double, Double)? {
-  match self.lists.get(self.id(key)) {
+fn Ctx::list_place_of(self : Ctx, id : Int) -> (Int, Double, Double)? {
+  match self.lists.get(id) {
     Some(st) if st.vis_first >= 0 && st.vis_first < st.heights.length() =>
       Some((st.vis_first, st.anchor_off, st.heights[st.vis_first]))
     _ => None
@@ -836,16 +838,17 @@ fn Ctx::list_place_now(self : Ctx, key : String) -> (Int, Double, Double)? {
 /// Row `item` of list `key`'s height as last laid out; None while it has not been. Read as the view builds, it is
 /// read back (readback.mbt), as list_place is.
 pub fn Ctx::list_row_height(self : Ctx, key : String, item : Int) -> Double? {
-  let v = self.list_row_height_now(key, item)
-  if building.val && !self.row_reads.contains((key, item)) {
-    self.row_reads[(key, item)] = v
+  let id = self.id(key)
+  let v = self.list_row_height_of(id, item)
+  if building.val && !self.row_reads.contains((id, item)) {
+    self.row_reads[(id, item)] = (key, v)
   }
   v
 }
 
 ///|
-fn Ctx::list_row_height_now(self : Ctx, key : String, item : Int) -> Double? {
-  match self.lists.get(self.id(key)) {
+fn Ctx::list_row_height_of(self : Ctx, id : Int, item : Int) -> Double? {
+  match self.lists.get(id) {
     Some(st) if item >= 0 && item < st.heights.length() && st.heights[item] >= 0.0 =>
       Some(st.heights[item])
     _ => None

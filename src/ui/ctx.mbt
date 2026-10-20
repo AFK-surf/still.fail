@@ -212,8 +212,8 @@ pub struct Ctx {
   /// lists' places, rows' heights, whether words are laid out; the boxes whose laid rect is read, and when last, with
   /// their rects as last laid out
   laid_reads : Map[Int, ((Double, Double, Double, Double)?, SourceLoc)]
-  place_reads : Map[String, (Int, Double, Double)?]
-  row_reads : Map[(String, Int), Double?]
+  place_reads : Map[Int, (String, (Int, Double, Double)?)]
+  row_reads : Map[(Int, Int), (String, Double?)]
   words_reads : Map[String, Bool]
   laid_watch : Map[Int, Int]
   laid_rects : Map[Int, (Double, Double, Double, Double)]

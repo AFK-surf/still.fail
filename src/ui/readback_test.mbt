@@ -91,3 +91,33 @@ test "words read before they are first laid out are there in the frame that lays
   assert_eq(read, [false, true])
   t.assert_idle()
 }
+
+///|
+test "a list in a scope of its own is read back by the id it has there" {
+  let tall = Ref::new(40.0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.scope(7, fn() {
+        // (where it is read too: read back by the same id, still once laid out)
+        ignore(c.list_place("rows"))
+        let h = c.list_row_height("rows", 0)
+        c.column(fn() {
+          c.text("row 0: \{h}", wrap=false) |> ignore
+          c.list("rows", 3, 40.0, fn(i) {
+            c.box(w=Fill(1.0), h=Px(if i == 0 { tall.val } else { 40.0 }), fn() {  }) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+    },
+    w=200.0,
+    h=300.0,
+  )
+  // laid out in the first frame, read back there: not a frame late, and still from then on
+  assert_true(t.rect_of("row 0: Some(40)") is Some(_))
+  tall.val = 90.0
+  t.frame()
+  assert_true(t.rect_of("row 0: Some(90)") is Some(_))
+  t.assert_idle()
+}

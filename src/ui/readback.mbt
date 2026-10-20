@@ -47,14 +47,14 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
       moved.push("laid_rect of box \{id}, read at \{r.1}")
     }
   })
-  self.place_reads.each(fn(key, was) {
-    if self.list_place_now(key) != was {
-      moved.push("list_place \"\{key}\"")
+  self.place_reads.each(fn(id, r) {
+    if self.list_place_of(id) != r.1 {
+      moved.push("list_place \"\{r.0}\"")
     }
   })
-  self.row_reads.each(fn(k, was) {
-    if self.list_row_height_now(k.0, k.1) != was {
-      moved.push("list_row_height \"\{k.0}\" \{k.1}")
+  self.row_reads.each(fn(k, r) {
+    if self.list_row_height_of(k.0, k.1) != r.1 {
+      moved.push("list_row_height \"\{r.0}\" \{k.1}")
     }
   })
   self.words_reads.each(fn(key, was) {
