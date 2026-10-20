@@ -84,14 +84,14 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
   match (self.gen, self.spec) {
     (Some(g), Motion(tr)) => {
       // as Motion plays it: its generator at the time since it started (whole ms), done when it says so
-      let t = ms.floor() - tr.delay
+      let t = @ui.whole_ms(ms) - tr.delay
       if t < 0.0 {
         return
       }
       let st = g.next(t)
       self.value = st.value
       self.velocity = g.velocity(t, initial=self.v0)
-      if st.done || ms.floor() >= self.dur {
+      if st.done || @ui.whole_ms(ms) >= self.dur {
         self.finish()
       }
       return
@@ -101,7 +101,7 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
   let (x, v) = self.spec.value_at(ms, self.dur, self.from, self.target, self.v0)
   self.value = x
   self.velocity = v
-  if ms.floor() >= self.dur {
+  if @ui.whole_ms(ms) >= self.dur {
     self.finish()
   }
 }
@@ -224,7 +224,7 @@ pub fn Anim::animate(
       }
       at
     }
-    None => if c.in_frame() { c.now() } else { -1.0 }
+    None => c.moment()
   }
   self.asked = c.frame_number()
   // (started earlier: stepped this frame to where it is by now, as get() asks)
@@ -245,7 +245,12 @@ pub fn Anim::animate(
     // said once, as it is told to go: frames until it is there
     self.told = (if self.name == "" { "an Anim" } else { "Anim \"" + self.name + "\"" }) +
       " to \{target}, told at \{loc}"
-    c.moving_as(self.id, self as &@ui.Moving, self.told)
+    if c.in_frame() {
+      c.moving_as(self.id, self as &@ui.Moving, self.told)
+    } else {
+      // (told between frames: from the moment it was told, a frame asked for to show it)
+      ignore(c.set_out(self.id, self as &@ui.Moving, what=self.told))
+    }
   }
 }
 

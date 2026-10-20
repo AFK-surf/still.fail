@@ -33,20 +33,20 @@ test "a spring's frames are drawn until its end, then none; retargeted, it goes 
     assert_true(seen.val > 0.0 && seen.val < 100.0)
     t
   }
-  // where it is the frame after, its target kept
+  // where it is a frame after (the display's next), its target kept
   let going_on = {
     target.val = 0.0
     let t = mid_way_on()
-    t.draw()
+    t.frame()
     seen.val
   }
   target.val = 0.0
   let t = mid_way_on()
   let mid = seen.val
-  // a new target mid-way, the frame that takes it: from where it is in that frame (as going on would have shown it),
-  // not from rest
+  // a new target mid-way, taken a frame after (the display's next): from where it is in that frame (as going on would
+  // have shown it), not from rest
   target.val = 50.0
-  t.draw()
+  t.frame()
   assert_true((seen.val - going_on).abs() < 0.000001)
   assert_true(seen.val != mid)
   t.run_for(end() - t.time())

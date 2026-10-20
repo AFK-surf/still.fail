@@ -9,8 +9,8 @@ test "after: true once its condition has held so long by the tester's clock; off
   on.val = true
   t.draw()
   let due = t.time() + hold_ms
-  // (the display's last frame before it)
-  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
+  // (a millisecond before it)
+  t.run_for(due - 1.0 - t.time())
   assert_false(done.val)
   t.run_for(due - t.time())
   assert_true(done.val)
@@ -30,8 +30,8 @@ test "after: true once its condition has held so long by the tester's clock; off
   t.draw()
   assert_false(done.val)
   let due = t.time() + hold_ms / 2.0
-  // (the display's last frame before it)
-  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
+  // (a millisecond before it)
+  t.run_for(due - 1.0 - t.time())
   assert_false(done.val)
   t.run_for(due - t.time())
   assert_true(done.val)

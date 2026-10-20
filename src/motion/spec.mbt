@@ -309,7 +309,7 @@ pub fn Spec::value_at(
   to : Double,
   v : Double,
 ) -> (Double, Double) {
-  let t = ms.floor()
+  let t = @ui.whole_ms(ms)
   match self {
     // where its generator is (it may end elsewhere than `to`: inertia, keyframes)
     Motion(tr) => {

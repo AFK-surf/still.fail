@@ -130,8 +130,8 @@ fn reading_back(step : Double) -> @ui.Tester {
 ///|
 test "draw: a layout read back that moves once is placed again in the frame that takes it, and then is still" {
   let t = reading_back(0.0)
-  // (the display's next frame: built again in it, no frame owed after)
-  let at = t.next_frame_time()
+  // (drawn at its moment: built again in it, no frame owed after)
+  let at = t.time()
   t.draw()
   assert_eq(t.time(), at)
   assert_eq(t.ctx().words_of("w").unwrap().pieces[0].x, 20.0)

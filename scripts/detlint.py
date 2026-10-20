@@ -25,6 +25,9 @@ The rules (see RULES below for each one's words):
     script-wait    a test or screenshot script waits a fixed time or a fixed frame count (sleep N, MBUI_SHOT_AT=N,
                    setTimeout(…, N), waitForTimeout(N), time.sleep(N))
     page-settle    a script waits on a web page until the app is settled (__mbhost.settled(), unsettled())
+    frame-wait     a fiber waits for the next frame (@effect.next_frame()) outside the runtime itself: an animation
+                   waits until the moment its run ends, a step until its time or its event, never a frame (how many
+                   frames come is the display's)
     frame-count    a test runs a fixed number of frames (for _ in 0..<N { t.frame() })
     literal-time   a time given as a bare number (run_for(347), wake_in(500.0), advance(16.0), frame(ms=33.0),
                    wake_at(c.now() + 500.0)): a time names what it is (an animation's, a timer's declared length)
@@ -535,6 +538,8 @@ RULES = {
                    "picture at a time the animations declare",
     "page-settle": "a script waits on a web page until the app is settled (__mbhost.settled): take it at a declared "
                    "time, or wait for the named thing",
+    "frame-wait": "a fiber waits for the next frame: wait until the moment (an animation's declared end, a timer) or the "
+                  "event, not a frame: how many frames come is the display's",
     "frame-count": "a test runs a fixed number of frames: give the inputs and run_for a declared time",
     "literal-time": "a time given as a bare number: name what it is (an animation's or a timer's declared length)",
     "stable-mode": "the app draws otherwise when it is screenshotted (Ctx::stable): the picture is taken at a time "
@@ -691,6 +696,10 @@ def lint_mbt(f, cfg, out, returns, readers):
             ty = f.recv_type(c.at, returns) if c.kind == "method" else c.qual
             if not own and (ty is None or ty in SETTLE_TYPES or c.kind == "pkg"):
                 add("settle", c.at, line_text + ("   (receiver's type not known: counted)" if ty is None else ""))
+        # a fiber waiting for a frame, but the runtime's own (src/effect: its definition, its scheduler; src/effecttest:
+        # its tests)
+        if c.name == "next_frame" and c.kind in ("pkg", "bare") and not under(f.rel, ["src/effect", "src/effecttest"]):
+            add("frame-wait", c.at, line_text)
         # the app as it is screenshotted is not the app
         if c.name == "stable" and c.kind == "method" and not test and not c.args and f.recv_type(
                 c.at, returns) in ("Ctx", None):

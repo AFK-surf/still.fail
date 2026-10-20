@@ -169,6 +169,9 @@ fn run_first_frame(run : String) -> Double? {
 pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String, String)] {
   let out = []
   let mut framed = false
+  // an input handed on since the last frame: the next frame is its, drawn though at the Tester's own first frame's
+  // time (an input at a frame's moment is taken in a frame at that moment)
+  let mut fed = false
   // the scripts the run sent its pages (VIEWSCRIPT), and how many of this one's are compared with them: one that is
   // not the run's parts there, as a frame whose hash is not
   let scripts : Array[String] = []
@@ -188,6 +191,7 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     }
     if line.find("INPUT ") is Some(_) {
       replay_input(self.fake, line)
+      fed = true
       continue
     }
     match line.find("VIEWSCRIPT ") {
@@ -235,11 +239,12 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     if parts.length() >= 7 {
       bench.mode = if parts[6] == "1" { -1 } else { 0 }
     }
-    // (the frame a Tester made at this time already, as it was made: its first, Tester::new's `time`; any later one at
-    // the same time is drawn, as a Tester's tape has them: Tester::draw)
-    if t != self.fake.time || out.length() > 0 {
+    // (the frame a Tester made at this time already, as it was made: its first, Tester::new's `time`, unless an input
+    // came before it; any later one at the same time is drawn, as a Tester's tape has them: Tester::draw)
+    if t != self.fake.time || out.length() > 0 || fed {
       self.frame_at(t)
     }
+    fed = false
     out.push((n.to_int(), parts[5], drawn_hash().to_string()))
     // the scripts sent by now: the run's and this one's, the same in the same order
     let ours = self.fake.scripts_sent

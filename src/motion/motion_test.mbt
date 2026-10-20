@@ -757,9 +757,14 @@ test "a chain of tweens each from the one before's declared end, whichever frame
   })
   t.draw()
   let start = segs[0].ends() - lengths[0]
-  // the whole chain and a frame or so after it
+  // the whole chain and a while after it, a frame every look_ms (the moments the test looks at it: the app tells each
+  // next segment at the frame after it saw the last one's end)
   let after_ms = 100.0
-  t.run_for(lengths[0] + lengths[1] + lengths[2] + after_ms)
+  let look_ms = 25.0
+  let until = t.time() + lengths[0] + lengths[1] + lengths[2] + after_ms
+  while t.time() < until {
+    t.run_for(if until - t.time() < look_ms { until - t.time() } else { look_ms })
+  }
   // each frame: the segment it is in, as far on as the time since the chain's start says (once its segment is told;
   // in whole ms, as a motion's time goes)
   let ends = [start + lengths[0], start + lengths[0] + lengths[1], start + lengths[0] + lengths[1] + lengths[2]]
@@ -801,7 +806,7 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   shown.val = false
   // seen again at the display's frame at or past the second's middle: the first over (100), the second under way
   // (170 still to come)
-  t.run_for(t.display_frame(start + lengths[0] + lengths[1] / 2.0) - t.frame_period() - t.time())
+  t.run_for(start + lengths[0] + lengths[1] / 2.0 - 1.0 - t.time())
   shown.val = true
   t.draw()
   assert_eq(k.val, 1)

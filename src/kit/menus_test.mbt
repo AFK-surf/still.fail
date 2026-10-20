@@ -310,12 +310,12 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   })
   ignore(t.get(@ui.Navigation, label="Site"))
   let (x, y, w, h) = t.get(@ui.Button, label="Learn").rect
-  // (from the frame that takes it: the display's next)
-  let moved = t.next_frame_time()
+  // (taken at its moment)
+  let moved = t.time()
   t.move(x + w / 2.0, y + h / 2.0)
   let due = moved + nav_menu_open_ms
-  // (the display's last frame before it)
-  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
+  // (a millisecond before it)
+  t.run_for(due - 1.0 - t.time())
   assert_true(t.find("Guides and tutorials") is None)
   t.run_for(due - t.time())
   t.draw()
@@ -326,12 +326,12 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   assert_true(t.find("What it is") is Some(_))
   assert_true(t.find("Guides and tutorials") is None)
   // away from both: closed after a moment
-  // (from the frame that takes it: the display's next)
-  let moved = t.next_frame_time()
+  // (taken at its moment)
+  let moved = t.time()
   t.move(380.0, 800.0)
   let due = moved + nav_menu_close_ms
-  // (the display's last frame before it)
-  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
+  // (a millisecond before it)
+  t.run_for(due - 1.0 - t.time())
   assert_true(t.find("What it is") is Some(_))
   t.run_for(due - t.time())
   t.draw()

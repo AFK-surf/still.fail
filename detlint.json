@@ -51,6 +51,7 @@
     "flow-wait": {},
     "script-wait": {},
     "page-settle": {},
+    "frame-wait": {},
     "frame-count": {},
     "literal-time": {},
     "stable-mode": {},
@@ -151,6 +152,9 @@
     "flow-wait": {},
     "script-wait": {},
     "page-settle": {},
+    "frame-wait": {
+      "src/ui/fx_test.mbt": 1
+    },
     "frame-count": {},
     "literal-time": {},
     "stable-mode": {},

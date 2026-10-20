@@ -1,7 +1,8 @@
-// Motion done the Effect way: an animation is a fiber of the window's runtime (@ui.runtime, src/effect) that steps
-// its value once a frame, on the frames' clock. Each frame the runtime runs first, so the fibers have put every value
-// where it is at the frame's time before the view reads it (Value::get, synchronously, as immediate-mode code reads
-// anything). Being fibers, animations compose as Effect's code does:
+// Motion done the Effect way: an animation is a fiber of the window's runtime (@ui.runtime, src/effect) that waits on
+// the runtime's clock until the moment its run says it ends (its closed form's), and is done there; where the value is
+// meanwhile is that closed form at the time it is read (Value::get: the frame's time), however many frames there are
+// or none. The value is said to move (@ui.Ctx::moving) until then, so the frames that show it are drawn. Being
+// fibers, animations compose as Effect's code does:
 //
 // - one after another (a timeline): `x.animate(…)` returns once x is there, so the next line starts then;
 // - at once: `@effect.all([() => x.animate(…), () => y.animate(…)])`;
@@ -92,24 +93,36 @@ pub struct Value {
   priv mut run : Run?
   priv mut runner : @effect.Fiber[Bool]?
   priv mut used : Int
+  priv mover : @ui.Mover
+}
+
+///|
+/// Said to move while its run goes: at rest at the moment the run ends (its start and its length, as told).
+impl @ui.Moving for Value with rest_at(self, now, frame) {
+  ignore(now)
+  ignore(frame)
+  match self.run {
+    Some(r) => r.start.to_double() + r.dur
+    None => -1.0
+  }
 }
 
 ///|
 /// A value at `v`, still (kept by whoever holds it; `value` keeps one by key).
 pub fn Value::new(v : Double) -> Value {
-  { v, vel: 0.0, to: v, run: None, runner: None, used: -1 }
+  { v, vel: 0.0, to: v, run: None, runner: None, used: -1, mover: @ui.Mover::new() }
 }
 
 ///|
-/// Where it is this frame.
+/// Where it is now (the frame's time, on the runtime's clock): its run's closed form there, read as it is asked.
 pub fn Value::get(self : Value) -> Double {
-  self.v
+  self.sample(@ui.runtime().now()).0
 }
 
 ///|
-/// How fast it moves this frame (per second).
+/// How fast it moves now (per second).
 pub fn Value::velocity(self : Value) -> Double {
-  self.vel
+  self.sample(@ui.runtime().now()).1
 }
 
 ///|
@@ -182,8 +195,8 @@ pub fn Value::set(self : Value, x : Double) -> Unit {
 ///|
 /// Off to `target` by `spec` (Motion's animate(value, target, transition)), as a fiber of its own: from where it is
 /// and as fast as it moves now (or at `velocity`, per second), interrupting the animation that moved it. The fiber
-/// gives true once the value is there, false when another animation took it over first. It first steps at the start
-/// of the next frame (when told from a frame's handler).
+/// gives true once the value is there, false when another animation took it over first. It starts at the moment it is
+/// told (the runtime's clock), and is said to move until its end.
 pub fn Value::start(self : Value, target : Double, spec : Spec, velocity? : Double) -> @effect.Fiber[Bool] {
   let rt = @ui.runtime()
   let now = rt.now()
@@ -194,28 +207,28 @@ pub fn Value::start(self : Value, target : Double, spec : Spec, velocity? : Doub
   self.to = target
   let r = Run::new(spec, from, target, velocity.unwrap_or(v), now, @ui.current().still())
   self.run = Some(r)
+  @ui.current().moving(self.mover, self as &@ui.Moving, what="Value to \{target}")
   let f = rt.fork(name="animate", () => self.play(r))
   self.runner = Some(f)
   f
 }
 
 ///|
-/// The animation's fiber: the value where `r` has it, a frame at a time, until it is done.
+/// The animation's fiber: it waits until the moment `r` ends (its start and its length, on the runtime's clock), and
+/// is done there: the value at its end. No frame is waited for: where the value is meanwhile is read from `r`.
 async fn Value::play(self : Value, r : Run) -> Bool {
-  while true {
-    // taken over meanwhile (a new animation, a stop, a set): not this one's any more
-    guard self.run is Some(cur) && physical_equal(cur, r) else { return false }
-    let (x, v, done) = r.at((@effect.now() - r.start).to_double())
-    self.v = x
-    self.vel = v
-    if done {
-      self.run = None
-      self.runner = None
-      return true
-    }
-    @effect.next_frame()
+  // taken over meanwhile (a new animation, a stop, a set): not this one's any more
+  guard self.run is Some(cur) && physical_equal(cur, r) else { return false }
+  let wait = (r.start.to_double() + r.dur - @effect.now().to_double()).ceil()
+  if wait > 0.0 {
+    @effect.sleep(wait.to_int())
   }
-  false
+  guard self.run is Some(cur) && physical_equal(cur, r) else { return false }
+  self.v = r.end
+  self.vel = 0.0
+  self.run = None
+  self.runner = None
+  true
 }
 
 ///|
@@ -232,6 +245,11 @@ pub async fn Value::animate(
     if !f.is_done() {
       f.interrupt()
       if self.runner is Some(g) && physical_equal(g, f) {
+        // stopped where it is now
+        let (x, _) = self.sample(@ui.runtime().now())
+        self.v = x
+        self.vel = 0.0
+        self.to = x
         self.run = None
         self.runner = None
       }

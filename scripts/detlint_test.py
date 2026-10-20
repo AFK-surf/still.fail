@@ -141,6 +141,27 @@ class Rules(unittest.TestCase):
         }
         found(self, good, "frame-request", 0)
 
+    def test_frame_wait(self):
+        bad = {
+            "src/motion/fx.mbt": """
+                async fn play(v : Value) -> Unit {
+                  while v.moving() {
+                    @effect.next_frame()
+                  }
+                }
+                """,
+        }
+        found(self, bad, "frame-wait", 1)
+        good = {
+            "src/motion/fx.mbt": """
+                async fn play(v : Value, end : Int) -> Unit {
+                  @effect.sleep(end - @effect.now().to_int())
+                }
+                """,
+            "src/effect/runtime.mbt": "pub async fn next_frame() -> Unit {\n  wait()\n}\nfn loop() -> Unit {\n  next_frame()\n}\n",
+        }
+        found(self, good, "frame-wait", 0)
+
     def test_settle(self):
         bad = {
             "src/app/view_test.mbt": """

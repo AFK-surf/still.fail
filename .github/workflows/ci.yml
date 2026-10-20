@@ -36,6 +36,8 @@ jobs:
         run: |
           set -o pipefail
           moon test --target js -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/md -p mbui/kitdemo 2>&1 | grep -v '^TDUMP' | tail -3
+      - name: "The same tests with the display's frames drawn on the way, at 60, 120, 24 and 7 a second (scripts/fps_check.sh): the same results"
+        run: bash scripts/fps_check.sh
       - name: "effect.mb on native and JS, and the demo of a screen and its logic on one clock over seeds (SEED=<n> replays a failure)"
         run: |
           set -o pipefail

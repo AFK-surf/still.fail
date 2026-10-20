@@ -14,7 +14,7 @@ test "the runtime's clock is the frames' clock: a sleep wakes in the frame its t
   })
   // its first frame (the display's first after the Tester's start: 1016.7, the runtime's 1016) forked it; it first
   // ran at the start of the second, at the time it was forked, and sleeps until 1116
-  let ran = (1000.0 + t.frame_period()).floor().to_int64()
+  let ran = (1000.0 + @ui.first_frame_ms).floor().to_int64()
   let due = ran + nap.to_int64()
   t.frame()
   assert_eq(@ui.runtime().now(), t.time().floor().to_int64())
@@ -29,7 +29,7 @@ test "the runtime's clock is the frames' clock: a sleep wakes in the frame its t
 }
 
 ///|
-test "a frame's handler forks; the fiber first runs at the start of the next frame, before the view" {
+test "a frame's handler forks; the fiber first runs at the start of the next frame, at the tap's moment, before the view" {
   let log : Array[String] = []
   let shown = Ref("idle")
   // how long the fiber sleeps
@@ -51,14 +51,14 @@ test "a frame's handler forks; the fiber first runs at the start of the next fra
   let (x, y) = t.find("Go").unwrap()
   t.touch(0, x, y)
   t.touch(2, x, y)
-  // the tap's frame (the display's next, 1033.3): the handler forks; the frame after: the fiber runs first, at the time
-  // it was forked (1033), then the view; it sleeps until 1065
-  let tapped = t.next_frame_time().floor().to_int64()
+  // the tap's frame, drawn at its moment (1016.7): the handler forks; the frame after, at the same moment: the fiber runs
+  // first, at the time it was forked (1016), then the view; it sleeps until 1048
+  let tapped = t.time().floor().to_int64()
   t.draw()
   assert_eq(log[0:3].to_array(), ["view idle", "fiber at \{tapped}", "view busy"])
   let due = (tapped + nap.to_int64()).to_double()
-  // the display's last frame before it
-  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
+  // a millisecond before it
+  t.run_for(due - 1.0 - t.time())
   assert_eq(log[log.length() - 1], "view busy")
   assert_false(log.contains("view done"))
   t.run_for(due - t.time())
@@ -72,15 +72,20 @@ test "next_frame steps a fiber once a frame, at the frame's time" {
     c.effect("frames", async fn(_s) {
       for _ in 0..<4 {
         times.push(@effect.now())
+        // det-ok(frame-wait): what this test is of, a fiber stepped once a frame (the runtime's own, for the host)
         @effect.next_frame()
       }
     })
   })
-  // its first frame (the display's first after the Tester's start, 1016.7) forked it, its first step at that time.
-  // Frames keep coming while it waits for them (four frames' time: the display's, 1000/60 ms apart), and stop when it
-  // is done: each step at its frame's time in whole ms (1016, 1033, 1050, 1066)
-  let first = 1000.0 + t.frame_period()
-  t.run_for(4.0 * t.frame_period())
+  // its first frame (the Tester's first, 1016.7) forked it, its first step at that time; then a step at each frame the
+  // display draws (1000/60 ms apart: what waits for frames, not for a time), the fourth its last, and none when it is done:
+  // each at its frame's time in whole ms (1016, 1033, 1050, 1066)
+  let first = 1000.0 + @ui.first_frame_ms
+  // (the display's next four frames: what this test is of is a fiber stepped once a frame)
+  t.frame()
+  t.frame()
+  t.frame()
+  t.frame()
   assert_eq(times, [0, 1, 2, 3].map(fn(k) { (first + k.to_double() * t.frame_period()).floor().to_int64() }))
   assert_true(!t.ctx().wants_frame)
   t.assert_idle()

@@ -976,10 +976,9 @@ fn Ctx::read_changed(self : Ctx, what : String, loc~ : SourceLoc) -> Unit {
 }
 
 ///|
-/// A motion set out between frames (Ctx::set_out): the next frame is owed to it (its start), the host told now, as
-/// a frame asked between frames is.
-fn Ctx::owe_start(self : Ctx) -> Unit {
-  self.motion_unstarted = true
+/// A motion set out between frames (Ctx::set_out): a frame is owed to show it, the host told now, as a frame asked
+/// between frames is.
+fn Ctx::owe_frame(self : Ctx) -> Unit {
   self.wants_frame = true
   h_request_frame()
 }
@@ -1016,6 +1015,24 @@ pub fn Ctx::window_size(self : Ctx) -> (Double, Double) {
 ///|
 pub fn Ctx::now(self : Ctx) -> Double {
   self.now
+}
+
+///|
+/// The moment now: the frame's time in a frame (Ctx::now), else the clock's as it stands between frames (an input's
+/// handler, a fiber, a test's change): where what is told now starts from.
+pub fn Ctx::moment(self : Ctx) -> Double {
+  if self.in_frame() {
+    self.now
+  } else {
+    h_now()
+  }
+}
+
+///|
+/// `t` (ms) in whole ms, as a motion's and the runtime's time go: rounded down, a moment summed one way or another
+/// (1316.9999999999998 for 1317) the same.
+pub fn whole_ms(t : Double) -> Double {
+  (t + 1.0e-6).floor()
 }
 
 ///|

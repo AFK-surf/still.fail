@@ -82,7 +82,7 @@ test "Value::ends_at: its start and its length, as it was told; -1 when nothing 
 }
 
 ///|
-test "a timeline: each animation awaited in turn; the next starts the frame the last one ends" {
+test "a timeline: each animation awaited in turn; the next starts the moment the last one ends" {
   let log : Array[String] = []
   let x_ms = 64.0
   let y_ms = 32.0
@@ -97,15 +97,19 @@ test "a timeline: each animation awaited in turn; the next starts the frame the 
     })
     log.push("\{x.get()} \{y.get()}")
   })
-  // the timeline's own length, from where it started: x's, then y's. Forked in the first frame (the display's first
-  // after the Tester's start, 1016.7), run at the start of the next at the time it was forked (the runtime's 1016).
-  // Each frame of the display's (1000/60 ms apart) reads where the tweens are in whole ms: x at 1033 is 17 of its 64
-  // ms on, at 1050 34, at 1066 50, there at 1083 (67); y from 1083, at 1100 17 of its 32, there at 1116
-  let started = (1000.0 + t.frame_period()).floor()
+  // the timeline's own length, from where it started: x's, then y's. Forked in the first frame (1016.7), run at the time
+  // it was forked (the runtime's 1016): x there at 1080 (its 64 ms), y from then, there at 1112 (its 32). A frame at
+  // the moments the test says reads where the tweens are then, in whole ms: x half way at 1048, y half way at 1096
+  let started = (1000.0 + @ui.first_frame_ms).floor()
+  t.run_for(started + x_ms / 2.0 - t.time())
+  assert_eq(log[log.length() - 1], "5 0")
+  t.run_for(started + x_ms + y_ms / 2.0 - t.time())
+  assert_eq(log[log.length() - 1], "10 5")
   t.run_for(started + x_ms + y_ms - t.time())
-  assert_eq(log, [
-    "0 0", "2.65625 0", "5.3125 0", "7.8125 0", "x there at 1083", "10 0", "10 5.3125", "y there at 1116", "10 10",
+  assert_eq(log.filter(fn(l) { l.has_prefix("x there") || l.has_prefix("y there") }), [
+    "x there at 1080", "y there at 1112",
   ])
+  assert_eq(log[log.length() - 1], "10 10")
   t.assert_idle()
 }
 
@@ -158,10 +162,12 @@ test "in parallel (all) both move from the same frame; staggered, each `each` ms
 }
 
 ///|
-/// A spring to 100 interrupted at frame `k` by one back to 0, told from a fiber that runs in the same frame as the
-/// spring's own: the values the view reads, frame by frame, each with its frame's moment; and the moments (the
-/// runtime's clock) the two set out at.
+/// A spring to 100 interrupted `k` ms on by one back to 0, told from a fiber of its own: the values the view reads at
+/// the moments the test draws (every sample_ms), each with its moment; and the moments (the runtime's clock) the two
+/// set out at.
 fn interrupted(seed : Int, k : Int) -> (Array[(Double, Double)], Int64, Int64) {
+  // how often the test draws (a 60 Hz display's frame): its own moments, whatever the display's frames
+  let sample_ms = 1000.0 / 60.0
   let seen : Array[(Double, Double)] = []
   let xv = Ref(@motion.Value::new(0.0))
   let out = Ref(-1L)
@@ -175,9 +181,7 @@ fn interrupted(seed : Int, k : Int) -> (Array[(Double, Double)], Int64, Int64) {
         ignore(x.animate(100.0, @motion.spring_to(stiffness=200.0, damping=15.0)))
       })
       c.effect("back", async fn(_s) {
-        for _ in 0..<k {
-          @effect.next_frame()
-        }
+        @effect.sleep(k)
         back.val = @effect.now()
         ignore(x.animate(0.0, @motion.spring_to(stiffness=200.0, damping=15.0)))
       })
@@ -185,20 +189,27 @@ fn interrupted(seed : Int, k : Int) -> (Array[(Double, Double)], Int64, Int64) {
     },
     seed~,
   )
-  // to the first spring's own end: the one back took it over at frame k, well before
-  t.run_for(xv.val.ends_at() - t.time())
+  // to the first spring's own end, a frame each sample_ms: the one back took it over k ms on, well before
+  let first_end = xv.val.ends_at()
+  while t.time() < first_end {
+    t.run_for(if first_end - t.time() < sample_ms { first_end - t.time() } else { sample_ms })
+  }
   if xv.val.target() != 0.0 {
     abort("the spring back had not taken over by the first one's end")
   }
-  // to the spring back's own end
-  t.run_for(xv.val.ends_at() - t.time())
+  // to the spring back's own end, the same
+  let back_end = xv.val.ends_at()
+  while t.time() < back_end {
+    t.run_for(if back_end - t.time() < sample_ms { back_end - t.time() } else { sample_ms })
+  }
   t.assert_idle()
   (seen, out.val, back.val)
 }
 
 ///|
 test "interrupted, an animation hands on where the value is and how fast it goes, whichever fiber ran first" {
-  let k = 6
+  // (100 ms on)
+  let k = 100
   let (base, out, back) = interrupted(1, k)
   // over seeds: the same values, frame for frame (the new one samples the old at that instant)
   @effect.for_seeds(count=30, s => assert_eq(interrupted(s, k), (base, out, back)))
@@ -223,8 +234,10 @@ test "interrupted, an animation hands on where the value is and how fast it goes
     }
   }
   assert_true(after > 10, msg="\{after}")
-  // it went on upwards first (velocity carried), then came back
-  assert_true(base[took + 1].1 > base[took].1)
+  // it went on upwards first (velocity carried), then came back: the first frame at a later whole ms than the one it
+  // took over in is higher (a frame drawn again within the same ms shows the same: a motion's time is whole ms)
+  let later = base[took:].iter().find_first(fn(e) { e.0.floor() > base[took].0.floor() }).unwrap()
+  assert_true(later.1 > base[took].1, msg="took \{base[took]}, later \{later}")
   assert_eq(base[base.length() - 1].1, 0.0)
 }
 

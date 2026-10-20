@@ -177,8 +177,8 @@ test "held long: long_pressed once, and no click when let go" {
   t.press_at(x + w / 2.0, y + h / 2.0)
   t.draw()
   let due = pressed + long_press_ms
-  // (the display's last frame before it)
-  t.run_for(t.display_frame(due) - t.frame_period() - t.time())
+  // (a millisecond before it)
+  t.run_for(due - 1.0 - t.time())
   assert_eq(log, [])
   t.run_for(due - t.time())
   assert_eq(log, ["long"])

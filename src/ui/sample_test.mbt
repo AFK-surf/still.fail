@@ -57,8 +57,8 @@ test "set out after a long rest: its start that frame's time, each frame handed 
   t.run_for(rest_ms)
   t.assert_idle()
   go.val = true
-  // set out in the frame it was told in (the display's next): that frame's time
-  let told = t.next_frame_time()
+  // set out in the frame it was told in, drawn at its moment: that frame's time
+  let told = t.time()
   t.draw()
   assert_eq(w.start, told)
   let start = w.start
@@ -82,20 +82,20 @@ test "set out after a long rest: its start that frame's time, each frame handed 
 }
 
 ///|
-test "set out between frames: +inf till the next frame (asked for), whose sample hands it its start" {
+test "set out between frames: from the moment it was told, a frame asked for to show it" {
   let way_ms = 100.0
   let w = { start: -1.0, dur: way_ms, sampled: [], mover: @ui.Mover::new() }
   let t = @ui.Tester::new(fn(c) { c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore })
   t.draw()
+  let told = t.time()
   let at = t.ctx().set_out(w.mover, w as &@ui.Moving, what="a way")
-  assert_eq(at, @double.infinity)
+  assert_eq(at, told)
   w.start = at
-  // not started: the next frame is owed to it
-  assert_true(t.moving().length() == 1 && t.moving()[0].contains("not started"))
-  // (the next frame, the display's: its sample hands it that frame's time)
-  let next = t.next_frame_time()
+  // said to move, at rest at its own end; a frame owed to show it
+  assert_true(t.moving().length() == 1 && t.moving()[0].contains("at rest at \{told + way_ms}"), msg=t.moving().join("; "))
+  assert_true(t.ctx().wants_frame)
   t.draw()
-  assert_eq(w.start, next)
+  assert_eq(w.start, told)
   t.run_for(way_ms)
   t.assert_idle()
 }

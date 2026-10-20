@@ -16,6 +16,11 @@ pub struct Tester {
   mut period : Double
   /// the display's frames to come, as a run's tape had them (Tester::set_frame_times): after the last, on its period
   mut times : Array[Double]
+  /// whether run_for draws the display's frames on its way (MBUI_TEST_FPS), or goes straight to its end
+  between : Bool
+  /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
+  /// it (an input's, a draw's, run_for's), not at the moments the test says
+  mut host_frames : Bool
 }
 
 ///|
@@ -266,7 +271,8 @@ pub fn Tester::new(
   }
   fx_reset(seed)
   g_view.val = view
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [] }
+  let (period, between) = test_frame_period()
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period, times: [], between, host_frames: false }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -274,7 +280,7 @@ pub fn Tester::new(
       t.origin = at
       t.frame_at(at)
     }
-    None => t.frame()
+    None => t.frame_at(time + first_frame_ms)
   }
   // (what the first frame left owed, drawn at its moment, as Tester::draw draws an input's; a host's run replayed has
   // only the frames it drew: Tester::replay_frames draws the next where it did)
@@ -367,12 +373,35 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 }
 
 ///|
+/// The display's frame period a Tester starts with, and whether run_for draws the display's frames on the way: by
+/// default frame_period_default and none (run_for goes straight to its end); MBUI_TEST_FPS (frames a second) that
+/// rate's, each drawn: a run of the tests at a frame rate, which must come out the same (scripts/fps_check.sh).
+fn test_frame_period() -> (Double, Bool) {
+  let fps = @host.env("MBUI_TEST_FPS")
+  match (try Some(@json.parse(fps)) catch { _ => None }) {
+    Some(Number(n, ..)) if n > 0.0 => (1000.0 / n, true)
+    _ => (frame_period_default, false)
+  }
+}
+
+///|
+/// When a Tester's first frame is drawn, after its `time`: the app's first frame, as a 60 Hz display's first would be,
+/// whatever the display's period (Tester::set_frame_period): what happens at the app's start happens at the same
+/// moment at any frame rate.
+pub let first_frame_ms : Double = 1000.0 / 60.0
+
+///|
 /// Draws one frame, at the display's first frame `ms` or more on (by default, and at the least, the next one): frames
 /// come only at the display's vsync (Tester::set_frame_period, set_frame_times), as on a host.
 pub fn Tester::frame(self : Tester, ms? : Double = 0.0) -> Unit {
   let next = self.tick_after(self.fake.time)
   let want = self.fake.time + ms
-  self.frame_at(if want > next { self.tick_at(want) } else { next })
+  if ms > 0.0 && !self.host_frames {
+    // a moment the test says: drawn there, whatever the display's frames
+    self.frame_at(self.on_grid(want))
+  } else {
+    self.frame_at(if want > next { self.tick_at(want) } else { next })
+  }
 }
 
 ///|
@@ -426,6 +455,7 @@ pub fn Tester::set_frame_period(self : Tester, ms : Double) -> Unit {
   self.origin = self.fake.time
   self.period = ms
   self.times = []
+  self.host_frames = true
 }
 
 ///|
@@ -444,6 +474,7 @@ pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
     before = at
   }
   self.times = times.copy()
+  self.host_frames = true
   if times.length() > 0 {
     self.origin = times[times.length() - 1]
   }
@@ -504,9 +535,8 @@ pub fn Tester::drag(
   finger(0, x0, y0)
   for i in 1..=steps {
     let t = i.to_double() / steps.to_double()
-    // (a finger's moves come a display's frame apart: the drag takes steps × drag_step_ms)
-    // (each move in the display's next frame, as a finger's come)
-    let at = self.tick_after(self.fake.time)
+    // (a finger's moves come input_step_ms apart, whatever the display's period: each drawn as it comes)
+    let at = self.fake.time + input_step_ms
     self.fake.time = at
     finger(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
     self.frame_at(at)
@@ -516,9 +546,13 @@ pub fn Tester::drag(
 }
 
 ///|
-/// How far apart a drag's moves come (ms), about: a 60 Hz display's frame, as a finger's moves reach an app. A drag's
-/// moves come each in the display's next frame (Tester::frame_period_default apart, or the period told).
+/// How far apart a drag's moves come (ms), about: a 60 Hz display's frame, as a finger's moves reach an app.
 pub let drag_step_ms : Double = 16.0
+
+///|
+/// How far apart a gesture's moves come (a drag's, a held drag's, a back gesture's): a finger's rate, as a 60 Hz
+/// screen samples it, whatever the display's frame period; each move drawn as it comes.
+pub let input_step_ms : Double = 1000.0 / 60.0
 
 ///|
 pub fn Tester::wheel(self : Tester, x : Double, y : Double, dy : Double) -> Unit {
@@ -975,7 +1009,7 @@ pub fn Tester::back_gesture(
 ) -> Unit {
   on_back(0, 0.0, 0.0, 0)
   for i in 1..=steps {
-    let at = self.tick_after(self.fake.time)
+    let at = self.fake.time + input_step_ms
     self.fake.time = at
     on_back(1, x * i.to_double() / steps.to_double(), 0.0, 0)
     self.frame_at(at)
@@ -1053,8 +1087,8 @@ pub fn Tester::hold_drag(
   finger(0, x0, y0)
   for i in 1..=steps {
     let t = i.to_double() / steps.to_double()
-    // (each move in the display's next frame, as a finger's come)
-    let at = self.tick_after(self.fake.time)
+    // (a finger's moves come input_step_ms apart, whatever the display's period: each drawn as it comes)
+    let at = self.fake.time + input_step_ms
     self.fake.time = at
     finger(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
     self.frame_at(at)

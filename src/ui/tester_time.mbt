@@ -1,9 +1,11 @@
-// Time in a test is said by the test (docs/determinism.md): an input is handed in and the frames it causes drawn, each
-// at the display's next frame (a host draws only at its display's vsync: Tester::frame, 1000/60 ms apart by default);
-// time goes on by `run_for` (a declared duration: a motion's, a timer's), to the display's first frame at or past it;
-// and at its end nothing may go on asking for frames (`assert_idle`). Nothing waits for motion to end: motion only draws what the state already
-// is, so what a test asserts of the state holds as the input is taken, and a picture is taken at a moment the test
-// names.
+// Time in a test is said by the test (docs/determinism.md): an input is handed in and the frames it causes drawn, at
+// its own moment; time goes on by `run_for` (a declared duration: a motion's, a timer's), straight to its end, a frame
+// there (and at each wake the view asked for on the way); `frame()` draws the display's next frame (1000/60 ms apart
+// by default). How many frames come before a moment changes nothing of what is so at it: MBUI_TEST_FPS draws the
+// display's frames on run_for's way too, and the tests come out the same (scripts/fps_check.sh). At a test's end
+// nothing may go on asking for frames (`assert_idle`). Nothing waits for motion to end: motion only draws what the
+// state already is, so what a test asserts of the state holds as the input is taken, and a picture is taken at a
+// moment the test names.
 
 ///|
 /// The frames owed now, each at the display's next frame, as a host draws them: after an input, the frame that takes
@@ -12,8 +14,18 @@
 /// by run_for). Three at most: a layout read back still moving after them never converges, and the test fails, saying
 /// whose.
 pub fn Tester::draw(self : Tester) -> Unit {
-  self.frame(ms=0.0)
+  self.frame_now()
   self.draw_owed(1)
+}
+
+///|
+/// A frame at this moment (a host's run's frames: at its next, Tester::set_frame_times).
+fn Tester::frame_now(self : Tester) -> Unit {
+  if self.host_frames {
+    self.frame(ms=0.0)
+  } else {
+    self.frame_at(self.fake.time)
+  }
 }
 
 ///|
@@ -31,7 +43,7 @@ fn Tester::draw_owed(self : Tester, n : Int) -> Unit {
       }
       return
     }
-    self.frame(ms=0.0)
+    self.frame_now()
     n = n + 1
   }
 }
@@ -82,14 +94,53 @@ pub fn rest_of(name : String) -> Double {
 }
 
 ///|
-/// `ms` on the frames' clock, a frame at each of the display's frames, the last the first at or past `ms` (where a
-/// host would show what is so at `ms`), and none after it: what that frame leaves owed (an input's frame after, a host's
-/// event) is the next frame's, as on a host, drawn by what the test does next.
+/// `ms` on the frames' clock, straight to it: a frame at each moment the view asked to be woken at, and the last at
+/// `ms` itself, what is so at `ms` drawn there; with frames between (MBUI_TEST_FPS: a run at a frame rate, which comes
+/// out the same) a frame at each of the display's frames too. None after it: what that frame leaves owed (an input's
+/// frame after, a host's event) is drawn by what the test does next.
 pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
-  let end = self.fake.time + ms
-  while self.fake.time < end - 1.0e-9 {
-    self.frame()
+  // (on the display's frame where it falls on one, to the bit: the same moment however it was summed)
+  let end = self.on_grid(self.fake.time + ms)
+  // (a host's run's frames: each of them on the way, the last the first at or past the end, as the host drew)
+  if self.host_frames {
+    while self.fake.time < end - 1.0e-9 {
+      self.frame()
+    }
+    return
   }
+  while self.fake.time < end - 1.0e-9 {
+    // the next of: what is due (a wake the view asked for), the end, and with frames between (MBUI_TEST_FPS) the
+    // display's next frame; each drawn at its own moment: what happens at a time happens at it, at any frame rate or
+    // none, and the last frame is the end's
+    let mut next = if self.between { dmin(self.tick_after(self.fake.time), end) } else { end }
+    let due = self.on_grid(self.next_due())
+    if due > self.fake.time + 1.0e-9 && due < next {
+      next = due
+    }
+    self.frame_at(next)
+  }
+}
+
+///|
+/// `t`, or the display's frame it falls on (within a millionth of a ms): a moment summed one way or another, the same.
+fn Tester::on_grid(self : Tester, t : Double) -> Double {
+  if t == @double.infinity {
+    return t
+  }
+  let tick = self.tick_at(t - 1.0e-6)
+  if (tick - t).abs() < 1.0e-6 {
+    tick
+  } else {
+    t
+  }
+}
+
+///|
+/// The earliest moment after now that the view asked to be woken at (Ctx::wake_in, wake_at): +inf when none. What
+/// moves needs no frame of its own: where it is is a function of the time.
+fn Tester::next_due(self : Tester) -> Double {
+  let c = g()
+  if c.wake_at > self.fake.time { c.wake_at } else { @double.infinity }
 }
 
 ///|
