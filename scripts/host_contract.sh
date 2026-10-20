@@ -72,13 +72,15 @@ case $CMD in
     NAME=${NAME:-ci_$H}
     run "$REC" $O/run.log || true
     grep -q "DRIVE PASS" $O/run.log || { echo "host_contract: the run did not pass its script"; grep -a "DRIVE" $O/run.log | tail -5; exit 1; }
+    # the system's settings the run was drawn by (ENV: motion reduced, glass, dark, inset), which the Tester is given
+    grep -a "ENV {" $O/run.log | tr -d '\r' || { echo "host_contract: the run kept no ENV line (the system's settings)"; exit 1; }
     echo "the run: $(grep -c DRAWHASH $O/run.log) frames, $(grep -c 'INPUT ' $O/run.log) inputs, $(grep -c TEXTREC $O/run.log) text answers"
     "$PY" scripts/textrec_test.py $O/run.log $NAME $PAGE - - $PLATFORM
     set -o pipefail
     { moon test --target js src/kitdemo/textrec_${NAME}_wbtest.mbt 2>&1 || true; } | tr -d '\r' | grep -v '^TDUMP' | tail -20 | tee $O/test.txt
     if ! grep -q "passed: 1, failed: 0" $O/test.txt; then
       # the first frame as the host drew it (DRAWDUMP) beside a Tester's, over the run cut at that frame: where they part
-      awk '/TEXTREC /{print; next} !d && /INPUT /{print} !d && /DRAWHASH /{print; d=1}' $O/run.log > $O/first.log
+      awk '/TEXTREC /{print; next} !d && (/INPUT / || /ENV \{/){print} !d && /DRAWHASH /{print; d=1}' $O/run.log > $O/first.log
       "$PY" scripts/textrec_test.py $O/first.log ${NAME}_first $PAGE - - $PLATFORM >/dev/null
       { moon test --target js src/kitdemo/textrec_${NAME}_first_wbtest.mbt 2>&1 || true; } | tr -d '\r' | sed -n 's/^TDUMP //p' > $O/tester-frame1.txt
       tr -d '\r' < $O/run.log | sed -n 's/^.*DRAWDUMP //p' > $O/host-frame1.txt

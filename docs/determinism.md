@@ -151,11 +151,10 @@ Only for these, which the framework knows by itself:
   | macOS | `host-mac.yml`: Mini1 (mbui's runner, `[self-hosted, mbui-render]`; never a fork's pull request), a window | 9 frames the same (also on Studio, by hand) | each answer of `mini1_controls` the same (Mini1's own; Studio's text was the same too) | `mini1_*`, `drive_controls` (Mini1's) |
 
   Each workflow runs when its host's code changes (the host's files in src/host, its scripts, these scripts, its kept
-  run). What a tape does not keep yet and a host must therefore have as a Tester plays it: the system's reduced motion
-  (`@host.reduce_motion`; Windows' runner has "Show animations" off, turned on before the run) and reduced
-  transparency, the system's dark, the window's inset. Kept by the framework (on DRAWHASH, given by `replay_frames`)
-  they would need no such care. The kitdemo pages' own state, which a kept run's test starts from, is put back by `reset`
-  (src/kitdemo/reset.mbt); detlint's `globals` has src/kitdemo among its roots, so a global it misses fails.
+  run). The system's settings a run is drawn by (motion and transparency reduced, dark, the window's inset) are on
+  its tape (ENV lines, #50) and given again by `replay_frames`: each host's run is recorded as its machine is set
+  (Windows' runner has "Show animations" off: its run is drawn with motion reduced, and so is its replay). The kitdemo pages' own
+  state, which a kept run's test starts from, is put back by `reset` (src/kitdemo/reset.mbt); detlint's `globals` has src/kitdemo among its roots, so a global it misses fails.
 - **Image decoding** is checked apart: each host's decoded pixels of a fixed set of images, to the byte.
 - **The system's own views** (a web page, a video) are outside mbui's drawing: only where and how large they are
   placed is checked (a Tester's `views`).

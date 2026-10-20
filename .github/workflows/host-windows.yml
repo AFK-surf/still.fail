@@ -55,18 +55,6 @@ jobs:
           "$env:USERPROFILE\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - name: kitdemo
         run: scripts/host_contract.sh windows build
-      # The runner's Windows has "Show animations in Windows" off (motion reduced: mb_host_reduce_motion), which the tape
-      # does not keep (a Tester plays motion as not reduced): turned on, as a desktop has it.
-      # 待根治：减弱动效、减弱透明、系统深色、窗口 inset 都还没进带子；确定性负责人正在让宿主把它们记进带子、由
-      # replay_frames 交还给 Tester。交还之后删掉这一步（那时带子自己记着宿主是否减弱动效）。
-      - name: The system's animations on
-        shell: pwsh
-        run: |
-          Add-Type -Namespace W -Name U -MemberDefinition '[DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint a, uint b, System.IntPtr c, uint d); [DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint a, uint b, ref bool c, uint d);'
-          $on = $false; [W.U]::SystemParametersInfo(0x1042, 0, [ref]$on, 0) | Out-Null; "client area animation before: $on"
-          [W.U]::SystemParametersInfo(0x1043, 0, [System.IntPtr]1, 3) | Out-Null
-          $on = $false; [W.U]::SystemParametersInfo(0x1042, 0, [ref]$on, 0) | Out-Null; "after: $on"
-          if (-not $on) { exit 1 }
       - name: "The host's contract: a run's tape = a Tester's frames"
         run: scripts/host_contract.sh windows record
       - name: "The text's contract: windows_controls = DirectWrite's"
