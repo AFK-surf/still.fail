@@ -8,9 +8,12 @@
 #        NAME=HOST_controls keeps the tape as the one committed (src/kitdemo/textrec_HOST_controls*.mbt)
 #   scripts/host_contract.sh HOST text [NAME]   the kept run NAME's text (HOST_controls by default; mac: mini1_controls) asked of the host's
 #        text system again (MBUI_TEXTCHECK, src/kitdemo/textcheck.mbt): each answer the same, or it fails
+#   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
+#        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
 # HOST: android (an emulator booted already, SERIAL: emulator-5554 by default; ABI=x86_64 for an x86_64 one), windows
-# (Git Bash with MSVC), web (headless Chromium, Playwright's), mac. Nothing here waits on a time: each run ends itself
+# (Git Bash with MSVC), web (headless Chromium, Playwright's), mac, ios (a simulator of scripts/ios.sh: MBUI_IOS_DEVICE,
+# ios-mbui-sf by default, which another may use too: `free` first). Nothing here waits on a time: each run ends itself
 # (DRIVE PASS, TEXTCHECK done, then the app's exit) and what is waited for is that.
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
@@ -28,7 +31,9 @@ case $H in
   android) PLATFORM=2 ;;
   windows) PLATFORM=3 ;;
   web) PLATFORM=4 ;;
-  *) echo "host_contract.sh: no host $H (android, windows, web, mac)" >&2; exit 1 ;;
+  ios) PLATFORM=1
+    export MBUI_IOS_DEVICE=${MBUI_IOS_DEVICE:-ios-mbui-sf} APP=kitdemo ;;
+  *) echo "host_contract.sh: no host $H (android, windows, web, mac, ios)" >&2; exit 1 ;;
 esac
 DRIVE=$(base64 < test/host/controls.drive | tr -d '\n\r')
 # (MBUI_DRAW_DUMP=1: the first frame also drawn as text, for what a Tester that parts there is compared with)
@@ -36,6 +41,22 @@ REC="MBUI_DRAW_LOG=1 MBUI_TEXT_RECORD=1 MBUI_DRAW_DUMP=1 MBUI_SCREEN=$PAGE MBUI_
 SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
 SERIAL=${SERIAL:-emulator-5554}
 ADB="$SDK/platform-tools/adb -s $SERIAL"
+
+# (iOS) the simulator's id and state (Booted, Shutdown), "" when there is none of that name
+ios_device() {
+  xcrun simctl list devices -j | "$PY" -c "
+import json,sys
+for ds in json.load(sys.stdin)['devices'].values():
+  for x in ds:
+    if x['name']=='$MBUI_IOS_DEVICE': print(x['udid'], x['state']); sys.exit()
+"
+}
+# (iOS) the apps running on simulator $1 (launchd's UIKitApplication:<bundle id>[…] jobs that have a pid), the system's
+# own (com.apple.*: the calendar, Spotlight, widgets, which a booted simulator runs by itself) left out
+ios_apps() {
+  xcrun simctl spawn "$1" launchctl list 2>/dev/null \
+    | awk '$1 != "-" && index($3, "UIKitApplication:") == 1 && index($3, "UIKitApplication:com.apple.") != 1 { print $3 }'
+}
 
 # One run of kitdemo on the host with the environment $1 (K=V words), its log into $2; the app's end is its own.
 run() {
@@ -53,6 +74,17 @@ run() {
       # the app's own named end (or its crash) as logcat has it; its whole log is the file it wrote (Host.log)
       $ADB logcat -v brief -m 1 -e "DRIVE (PASS|END|FAIL)|TEXTCHECK done|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
       $ADB exec-out run-as dev.mbui.demo cat files/run.log > "$2" ;;
+    ios)
+      # (the app's stderr is its log, line by line: scripts/ios.sh run, which leaves the app running)
+      # (its pid as ios.sh says it: "<bundle id>: <pid>"; the app may have ended already)
+      local pid; pid=$(BENCH=-1 ENV="$(echo "$1" | tr ' ' ';')" MBUI_IOS_LOG="$PWD/$2" bash scripts/ios.sh run | tail -1)
+      pid=${pid##*: }
+      [[ $pid =~ ^[0-9]+$ ]] || { echo "host_contract: the app did not start"; tail -20 "$2"; return 1; }
+      # the app's own named end, or its process gone without it (a crash); then its exit (the drive's and the check's
+      # own, @host.exit), so that its log is all written (scripts/logwait.py: kqueue's events, no time)
+      "$PY" scripts/logwait.py --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)" --pid $pid \
+        || { echo "host_contract: the app ($pid) ended, or hung, saying nothing of its end"; tail -20 "$2"; return 1; }
+      "$PY" scripts/logwait.py --pid $pid ;;
   esac
 }
 
@@ -67,7 +99,32 @@ case $CMD in
             && npx playwright install --with-deps chromium >/dev/null 2>&1)
         fi ;;
       android) APP=kitdemo bash scripts/android.sh build ;;
+      ios) bash scripts/ios.sh build ;;
     esac ;;
+  free)
+    # (iOS) the simulator another may use (the iOS host's own runs): booted with an app of its running, it is theirs now
+    # and this fails, waiting on nothing; shut down, these runs boot it (and `done` shuts it again)
+    read -r ID STATE <<< "$(ios_device)"
+    rm -f $O/booted-here
+    if [ "$STATE" = Booted ]; then
+      apps=$(ios_apps "$ID")
+      if [ -n "$apps" ]; then
+        echo "host_contract: $MBUI_IOS_DEVICE ($ID) is booted with an app running (another's run, scripts/ios.sh): $apps"
+        echo "host_contract: not run over it; run this again once it is done (its \`xcrun simctl shutdown $ID\`, or its app ended)"
+        exit 1
+      fi
+      echo "$MBUI_IOS_DEVICE ($ID): booted, no app running"
+    else
+      echo "$MBUI_IOS_DEVICE (${ID:-made by scripts/ios.sh}): ${STATE:-none}, booted by these runs"
+      touch $O/booted-here
+    fi ;;
+  done)
+    read -r ID STATE <<< "$(ios_device)"
+    if [ -f $O/booted-here ] && [ -n "$ID" ]; then
+      xcrun simctl shutdown "$ID" 2>/dev/null || true
+      echo "$MBUI_IOS_DEVICE ($ID): shut down"
+    fi
+    rm -f $O/booted-here ;;
   record)
     NAME=${NAME:-ci_$H}
     run "$REC" $O/run.log || true
@@ -102,5 +159,5 @@ case $CMD in
       exit 1
     fi
     echo "text contract ($H): every answer $NAME kept is the host's" ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text; ios: free, done)" >&2; exit 1 ;;
 esac

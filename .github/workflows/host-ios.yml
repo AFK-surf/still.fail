@@ -1,0 +1,61 @@
+# The host's and the text's contracts on iOS (docs/determinism.md, "What is compared, and where"; scripts/
+# host_contract.sh), on Mini1's simulator (mbui's runner there, label mbui-render; scripts/ios.sh's ios-mbui-sf):
+# kitdemo's controls page run with its scripted taps, its tape made a Tester's test and run here (every frame the
+# same), then the committed tape's text (ios_controls) asked of Core Text there again (every answer the same). When
+# the iOS host changes. The simulator is also the iOS host's own runs': booted with an app running, this fails at once.
+name: host-ios
+on:
+  pull_request:
+    paths: &paths
+      - "src/host/apple_*"
+      - "src/host/apple.h"
+      - "src/host/ios_app.m"
+      - "ios/**"
+      - "scripts/ios.sh"
+      - "scripts/mbc.py"
+      - "scripts/host_contract.sh"
+      - "scripts/textrec_test.py"
+      - "test/host/**"
+      - "src/kitdemo/textcheck.mbt"
+      - "src/kitdemo/textrec_ios_*"
+      - ".github/workflows/host-ios.yml"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: host-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    # (a machine of ours: never a fork's pull request)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mbui-render]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: The simulator free (no other run's app on it)
+        run: scripts/host_contract.sh ios free
+      - name: Install MoonBit (the latest, as the other jobs)
+        run: |
+          export MOON_HOME=$RUNNER_TEMP/moon
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "MOON_HOME=$MOON_HOME" >> $GITHUB_ENV
+          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - name: kitdemo for the simulator
+        run: scripts/host_contract.sh ios build
+      - name: "The host's contract: a run's tape = a Tester's frames"
+        run: scripts/host_contract.sh ios record
+      - name: "The text's contract: ios_controls = Core Text's"
+        run: scripts/host_contract.sh ios text
+      - name: The simulator shut down again (when these runs booted it)
+        if: always()
+        run: scripts/host_contract.sh ios done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-ios
+          path: out/host/
+          if-no-files-found: ignore

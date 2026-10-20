@@ -3,7 +3,10 @@
 // methods through UITextInput. Built by scripts/ios.sh, not by moon. Under
 // it, as big, the native views' view (apple_views.m).
 #import <UIKit/UIKit.h>
+#import <PhotosUI/PhotosUI.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <mach/mach.h>
+#import <os/log.h>
 #import "apple.h"
 #include "post.h"
 
@@ -53,6 +56,7 @@ mb_callbacks mb_cb;
 
 static MBView *the_view;
 static const char *script;
+static void say(NSString *s);
 static int frames_drawn;
 
 double mb_now_ms(void) { return CACurrentMediaTime() * 1000.0; }
@@ -117,7 +121,12 @@ static void run_script_step(int step);
   mb_text_scale = scale;
   mb_render_set_size(s.width, s.height, scale);
   self.wantFrame = NO;
-  mb_cb.frame(s.width, s.height, scale, mb_now_ms());
+  double t0 = frames_drawn == 0 ? mb_now_ms() : 0;
+  // the frame's time is the display's: when this frame will be on screen (the display link's target, on
+  // CACurrentMediaTime's clock as the touches' times are), as Android's is its vsync's, not when it happens to be built
+  mb_cb.frame(s.width, s.height, scale, l.targetTimestamp * 1000.0);
+  if (frames_drawn == 0)
+    say([NSString stringWithFormat:@"ios: first frame %.0fx%.0f @%.0fx in %.0f ms", s.width, s.height, scale, mb_now_ms() - t0]);
   frames_drawn++;
   if (script) run_script_step(frames_drawn);
   if (!self.wantFrame) l.paused = YES;
@@ -320,6 +329,16 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
   return [MBPos at:((MBRange *)r).a];
 }
 - (UITextRange *)characterRangeAtPoint:(CGPoint)p { return nil; }
+// The system's paste (the edit menu, a hardware keyboard's Cmd+V, a scripted run's): the clipboard's words put in as
+// typed, as macOS's Cmd+V and Android's KEYCODE_PASTE do (a long paste is the app's to take: the editor's paste_limit).
+- (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
+  if (action == @selector(paste:)) return self.imeActive && UIPasteboard.generalPasteboard.hasStrings;
+  return [super canPerformAction:action withSender:sender];
+}
+- (void)paste:(id)sender {
+  NSString *s = UIPasteboard.generalPasteboard.string;
+  if (s.length) send_text(0, s, 0, 0);
+}
 - (UIKeyboardType)keyboardType { return UIKeyboardTypeDefault; }
 - (UITextAutocorrectionType)autocorrectionType { return UITextAutocorrectionTypeNo; }
 - (UIReturnKeyType)returnKeyType { return UIReturnKeySend; }
@@ -330,9 +349,16 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 
 @interface MBController : UIViewController
 @property(nonatomic, strong) NSLayoutConstraint *bottom;
+@property(nonatomic) BOOL dark;
 @end
 
+static MBController *the_controller;
+
 @implementation MBController
+// the status bar's words light over the app drawn dark, dark over it drawn light (@host.set_dark)
+- (UIStatusBarStyle)preferredStatusBarStyle {
+  return self.dark ? UIStatusBarStyleLightContent : UIStatusBarStyleDarkContent;
+}
 - (void)loadView {
   UIView *root = [UIView new];
   root.backgroundColor = [UIColor colorWithRed:0.961 green:0.961 blue:0.969 alpha:1];
@@ -360,17 +386,38 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 }
 @end
 
-@interface MBAppDelegate : UIResponder <UIApplicationDelegate>
+// The app's one window, in the scene the system connects (the UIScene life cycle, which iOS 26 asks every app for:
+// the Info.plist's UIApplicationSceneManifest names MBSceneDelegate).
+@interface MBSceneDelegate : UIResponder <UIWindowSceneDelegate>
 @property(nonatomic, strong) UIWindow *window;
+@end
+
+@implementation MBSceneDelegate
+- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)opts {
+  if (![scene isKindOfClass:UIWindowScene.class]) return;
+  self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+  the_controller = [MBController new];
+  self.window.rootViewController = the_controller;
+  [self.window makeKeyAndVisible];
+  [the_view requestFrame];
+  // (a runner waits on these lines: the app up, then its first frame drawn)
+  say(@"ios: launched");
+}
+@end
+
+@interface MBAppDelegate : UIResponder <UIApplicationDelegate>
 @end
 
 @implementation MBAppDelegate
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)opts {
-  self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
-  self.window.rootViewController = [MBController new];
-  [self.window makeKeyAndVisible];
-  [the_view requestFrame];
   return YES;
+}
+- (UISceneConfiguration *)application:(UIApplication *)app
+    configurationForConnectingSceneSession:(UISceneSession *)session
+                                   options:(UISceneConnectionOptions *)opts {
+  UISceneConfiguration *c = [[UISceneConfiguration alloc] initWithName:@"Default" sessionRole:session.role];
+  c.delegateClass = MBSceneDelegate.class;
+  return c;
 }
 @end
 
@@ -383,7 +430,7 @@ static void shot(const char *name) {
   NSString *d = dir ? @(dir) : NSTemporaryDirectory();
   NSString *p = [d stringByAppendingPathComponent:[NSString stringWithFormat:@"%s.png", name]];
   int ok = mb_render_snapshot(p.UTF8String);
-  NSLog(@"SHOT %@ %s", p, ok ? "ok" : "failed");
+  say([NSString stringWithFormat:@"SHOT %@ %s", p, ok ? "ok" : "failed"]);
 }
 
 static void run_script_step(int step) {
@@ -475,7 +522,15 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   UIPasteboard.generalPasteboard.string = mb_ns_from_string(s);
 }
 
-void mb_host_log(moonbit_string_t s) { NSLog(@"%@", mb_ns_from_string(s)); }
+// The app's log: the system's (os_log, `log stream`) and stderr as it is (unbuffered: `simctl launch --stderr`, which a
+// scripted run reads line by line as the app goes: scripts/ios.sh run, still.fail's e2e).
+static void say(NSString *s) {
+  const char *c = s.UTF8String ?: "";
+  os_log(OS_LOG_DEFAULT, "%{public}s", c);
+  fprintf(stderr, "%s\n", c);
+}
+
+void mb_host_log(moonbit_string_t s) { say(mb_ns_from_string(s)); }
 
 // A URL handed to the system (@host.open_url): UIApplication, Safari or the app that takes it.
 int32_t mb_host_open_url(moonbit_string_t s) {
@@ -521,26 +576,73 @@ double mb_host_mem_bytes(void) {
   return (double)info.phys_footprint;
 }
 
-// Back (host_native.mbt `set_back`): iOS has no system back; a page's own swipe from the left edge is MoonBit's,
-// from the touches. Kept for a hardware keyboard's later.
+// Back (host_native.mbt `set_back`): iOS has no system back of its own; the left edge's swipe back is the app's, a
+// page's own (src/ui/nav.mbt: from the touches, within 20 points of the edge, as UINavigationController's), so nothing
+// is told from here. Kept for a hardware keyboard's later.
 typedef void (*mb_back_fn)(int32_t, double, double, int32_t);
 static mb_back_fn back_cb;
 static int back_on;
 void mb_host_set_back(mb_back_fn f) { back_cb = f; }
 void mb_host_back_enabled(int32_t on) { back_on = on; }
 
-// The app in front or not (@host.set_app_state): not told here yet (the app counts itself shown and in front).
-void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
+// The app in front or not (@host.set_app_state): 1 while its scene is on screen (in front, or behind the app switcher or
+// a system sheet), | 2 while it is also active; told as that changes.
+static void (*state_cb)(int32_t);
+static void tell_state(void) {
+  UIApplicationState a = UIApplication.sharedApplication.applicationState;
+  int shown = a != UIApplicationStateBackground;
+  int front = a == UIApplicationStateActive;
+  static int told = -1;
+  if (((shown ? 1 : 0) | (front ? 2 : 0)) != told) {
+    told = (shown ? 1 : 0) | (front ? 2 : 0);
+    say([NSString stringWithFormat:@"ios: %s", front ? "active" : shown ? "inactive" : "in the background"]);
+  }
+  if (!state_cb) return;
+  state_cb((shown ? 1 : 0) | (front ? 2 : 0));
+  [the_view requestFrame];
+}
+void mb_host_set_app_state(void (*f)(int32_t)) {
+  state_cb = f;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
+    for (NSNotificationName n in @[ UIApplicationDidBecomeActiveNotification, UIApplicationWillResignActiveNotification,
+                                    UIApplicationDidEnterBackgroundNotification, UIApplicationWillEnterForegroundNotification ]) {
+      [nc addObserverForName:n object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
+        // (WillEnterForeground comes before the state changes: told again once it has)
+        dispatch_async(dispatch_get_main_queue(), ^{ tell_state(); });
+      }];
+    }
+  });
+  dispatch_async(dispatch_get_main_queue(), ^{ tell_state(); });
+}
 
 // Whether the system is set to dark (@host.system_dark): the screen's interface style.
 int32_t mb_host_system_dark(void) {
   return UIScreen.mainScreen.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark ? 1 : 0;
 }
 
-// Sharing (@host.share, @host.shared_in): no share sheet here yet; nothing comes in.
+// Sharing out (@host.share): the system's share sheet over the app, the words or the file (kept in a folder of the app's
+// own in its temporary directory). Nothing comes in (shared_in ""): that is a share extension's, not made yet.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
-  (void)text; (void)name; (void)mime; (void)data;
-  return 0;
+  (void)mime;
+  if (!the_controller) return 0;
+  id item = mb_ns_from_string(text);
+  int32_t n = Moonbit_array_length(data);
+  NSString *file = mb_ns_from_string(name).lastPathComponent;
+  if (n > 0 && file.length) {
+    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"mbui-shared"];
+    [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *p = [dir stringByAppendingPathComponent:file];
+    if (![[NSData dataWithBytes:data length:n] writeToFile:p atomically:YES]) return 0;
+    item = [NSURL fileURLWithPath:p];
+  }
+  UIActivityViewController *sheet = [[UIActivityViewController alloc] initWithActivityItems:@[ item ] applicationActivities:nil];
+  sheet.popoverPresentationController.sourceView = the_view;
+  sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(the_view.bounds), CGRectGetMidY(the_view.bounds), 1, 1);
+  [the_controller presentViewController:sheet animated:YES completion:nil];
+  say([NSString stringWithFormat:@"share: %s to the system's share sheet", n > 0 ? "a file" : "words"]);
+  return 1;
 }
 moonbit_string_t mb_host_shared_in(void) { return moonbit_make_string_raw(0); }
 moonbit_bytes_t mb_host_shared_in_file(int32_t i) { (void)i; return moonbit_make_bytes(0, 0); }
@@ -555,48 +657,106 @@ moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0);
 // Turned sideways for a film (@host.set_sideways): the iPhone app does not turn yet.
 void mb_host_set_sideways(int32_t on) { (void)on; }
 
-// The app drawn dark (@host.set_dark): nothing of the host's own follows it here yet.
-void mb_host_set_dark(int32_t dark) { (void)dark; }
+// The app drawn dark or light (@host.set_dark): what shows under the status bar and the home indicator (the app's view
+// is inside the safe area) the dark page's ground or the light one's, the status bar's words over it to match.
+void mb_host_set_dark(int32_t dark) {
+  MBController *c = the_controller;
+  if (!c || c.dark == (dark != 0)) return;
+  c.dark = dark != 0;
+  c.view.backgroundColor = dark ? [UIColor colorWithRed:0x1B / 255.0 green:0x1C / 255.0 blue:0x1F / 255.0 alpha:1]
+                                : [UIColor colorWithRed:0.961 green:0.961 blue:0.969 alpha:1];
+  [c setNeedsStatusBarAppearanceUpdate];
+}
 
-// Notifications (notify.mbt): none shown here yet (UNUserNotificationCenter and APNs are a later slice's): nothing kept, nothing tapped, no push; what the
-// system allows unknown.
+// Notifications (notify.mbt): not the system's yet (UNUserNotificationCenter, and APNs for pushes, are a later
+// slice's: they want the person's leave, asked in a system alert, and APNs a signed app). What would be shown is kept
+// (one per tag, as the system's would be) and said on the log (NOTICE <tag>\t<title>\t<body>), as on macOS; a scripted
+// run taps one by its words (drive 6), which gives the app what it opens as a tap would.
+static NSMutableArray<NSArray<NSString *> *> *notices;
+static NSString *notice_opened = @"";
+
+static void notice_drop(NSString *tag) {
+  NSIndexSet *at = [notices indexesOfObjectsPassingTest:^BOOL(NSArray<NSString *> *n, NSUInteger i, BOOL *stop) {
+    return [n[0] isEqualToString:tag];
+  }];
+  [notices removeObjectsAtIndexes:at];
+}
+
 void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit_string_t title, moonbit_string_t body,
                          moonbit_string_t opens) {
   (void)channel;
-  (void)tag;
-  (void)title;
-  (void)body;
-  (void)opens;
+  if (!notices) notices = [NSMutableArray array];
+  NSString *t = mb_ns_from_string(tag);
+  notice_drop(t);
+  NSArray<NSString *> *n = @[ t, mb_ns_from_string(title), mb_ns_from_string(body), mb_ns_from_string(opens) ];
+  [notices addObject:n];
+  say([NSString stringWithFormat:@"NOTICE %@\t%@\t%@", n[0], n[1], n[2]]);
 }
 
-void mb_host_notice_cancel(moonbit_string_t tag) { (void)tag; }
+void mb_host_notice_cancel(moonbit_string_t tag) {
+  NSString *t = mb_ns_from_string(tag);
+  NSUInteger before = notices.count;
+  notice_drop(t);
+  if (notices.count < before) say([NSString stringWithFormat:@"NOTICE CANCEL %@", t]);
+}
 
+// What the system allows (unknown here), asking it (no way here), its answer (none).
 int32_t mb_host_notice_state(int32_t what) { return what == 2 ? -1 : 0; }
 
+// A notification tapped, once; no push token or push here.
 moonbit_string_t mb_host_notice_text(int32_t what) {
-  (void)what;
-  return mb_string_from_ns(@"");
+  if (what != 0) return mb_string_from_ns(@"");
+  NSString *o = notice_opened;
+  notice_opened = @"";
+  return mb_string_from_ns(o);
 }
 
-// Scripted runs' input given to the host (src/ui/drive.mbt): none of its paths here yet (the app is sent it itself).
+static int32_t notice_drive(int tap, NSString *words) {
+  NSArray<NSString *> *found = nil;
+  for (NSArray<NSString *> *n in notices) {
+    if ([n[1] containsString:words] || [n[2] containsString:words]) {
+      found = n;
+      break;
+    }
+  }
+  if (!found) return 0;
+  if (!tap) return 1;
+  notice_opened = found[3];
+  say([NSString stringWithFormat:@"NOTICE TAP %@", found[0]]);
+  [notices removeObject:found];
+  [the_view requestFrame];
+  return 1;
+}
+
+// A scripted run's input (src/ui/drive.mbt), sent as the system sends it: the keyboard's calls on the view (insertText,
+// setMarkedText, its return key, deleteBackward), the edit menu's paste (the clipboard read there), the app's picture
+// saved, a notification kept here tapped or looked for.
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
-  (void)kind;
-  (void)text;
-  return 0;
+  MBView *v = the_view;
+  NSString *s = mb_ns_from_string(text);
+  switch (kind) {
+    case 0: [v insertText:s]; break;
+    case 1: [v setMarkedText:s selectedRange:NSMakeRange(s.length, 0)]; break;
+    case 2: [v insertText:@"\n"]; break;
+    case 3: [v paste:nil]; break;
+    case 4: {
+      int ok = mb_render_snapshot(s.fileSystemRepresentation);
+      say([NSString stringWithFormat:@"SHOT %@ %s", s, ok ? "ok" : "failed"]);
+      break;
+    }
+    case 5: [v deleteBackward]; break;
+    case 6:
+    case 7: return notice_drive(kind == 6, s);
+    default: return 0;
+  }
+  [v requestFrame];
+  return 1;
 }
 
 moonbit_string_t mb_host_env(moonbit_string_t name) {
   const char *v = getenv(mb_ns_from_string(name).UTF8String);
   return mb_string_from_ns(v ? [NSString stringWithUTF8String:v] ?: @"" : @"");
 }
-
-// Files picked (pick.mbt): not on iOS yet (PHPickerViewController, UIDocumentPicker to come).
-int32_t mb_host_pick_start(int32_t kind) { return 0; }
-int32_t mb_host_pick_state(int32_t pid) { return -1; }
-int32_t mb_host_pick_count(int32_t pid) { return 0; }
-moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
-moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) { return moonbit_make_bytes(0, 0); }
-void mb_host_pick_end(int32_t pid) {}
 
 // The desktop's window and pointer (@host.window_setup, window_inset, window_drag, set_cursor): no window to size
 // or move here, no pointer to shape.
@@ -616,3 +776,153 @@ int32_t mb_host_gallery_read_state(int32_t id) { (void)id; return -1; }
 moonbit_string_t mb_host_gallery_read_rows(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
 void mb_host_gallery_read_end(int32_t id) { (void)id; }
 int32_t mb_host_pick_photo(moonbit_string_t src) { (void)src; return 0; }
+
+// ---- files picked (pick.mbt) ----
+// Pictures (kind 1) from the system's photo picker (PHPickerViewController: no leave to ask for), any file (kind 2) from
+// its document picker (UIDocumentPickerViewController, copies of them); no camera here yet (kind 0). The files are read
+// off the main thread; a pick ends with them, or with none (cancelled, unreadable: state -1).
+// MBUI_PICK_FILES="<path>|<path>…" answers every ask with those files at once, no picker (scripted runs; the
+// simulator's app reads the Mac's paths).
+
+@interface MBPicker : NSObject <PHPickerViewControllerDelegate, UIDocumentPickerDelegate>
+@property(nonatomic) int32_t pid;
+@end
+
+static NSMutableDictionary<NSNumber *, NSMutableDictionary *> *picks;
+static NSMutableDictionary<NSNumber *, MBPicker *> *pickers;
+static int32_t next_pick = 1;
+
+static void pick_done(int32_t pid, NSArray<NSString *> *names, NSArray<NSData *> *datas) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [pickers removeObjectForKey:@(pid)];
+    NSMutableDictionary *p = picks[@(pid)];
+    if (!p) return;
+    p[@"names"] = names;
+    p[@"datas"] = datas;
+    p[@"state"] = @(names.count > 0 ? 1 : -1);
+    [the_view requestFrame];
+  });
+}
+
+static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSMutableArray *names = [NSMutableArray new], *datas = [NSMutableArray new];
+    for (NSURL *u in urls) {
+      BOOL scoped = [u startAccessingSecurityScopedResource];
+      NSData *d = [NSData dataWithContentsOfURL:u options:NSDataReadingMappedIfSafe error:nil];
+      if (scoped) [u stopAccessingSecurityScopedResource];
+      if (!d || d.length > (1ull << 30)) continue;  // unreadable, or over 1 GB (as still.fail's composer refuses)
+      [names addObject:u.lastPathComponent ?: @"file"];
+      [datas addObject:d];
+    }
+    pick_done(pid, names, datas);
+  });
+}
+
+@implementation MBPicker
+- (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
+  [picker dismissViewControllerAnimated:YES completion:nil];
+  int32_t pid = self.pid;
+  if (!results.count) {
+    pick_done(pid, @[], @[]);
+    return;
+  }
+  // each picture as its own file (the photo library's original: HEIC, JPEG, PNG…), in the order picked
+  NSUInteger n = results.count;
+  NSMutableArray *names = [NSMutableArray arrayWithCapacity:n], *datas = [NSMutableArray arrayWithCapacity:n];
+  for (NSUInteger i = 0; i < n; i++) {
+    [names addObject:[NSNull null]];
+    [datas addObject:[NSNull null]];
+  }
+  dispatch_group_t g = dispatch_group_create();
+  [results enumerateObjectsUsingBlock:^(PHPickerResult *r, NSUInteger i, BOOL *stop) {
+    dispatch_group_enter(g);
+    [r.itemProvider loadFileRepresentationForTypeIdentifier:UTTypeImage.identifier
+                                          completionHandler:^(NSURL *url, NSError *error) {
+      NSData *d = url ? [NSData dataWithContentsOfURL:url options:NSDataReadingMappedIfSafe error:nil] : nil;
+      @synchronized(names) {
+        if (d) {
+          names[i] = url.lastPathComponent ?: @"photo";
+          datas[i] = d;
+        }
+      }
+      dispatch_group_leave(g);
+    }];
+  }];
+  dispatch_group_notify(g, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSMutableArray *nn = [NSMutableArray new], *dd = [NSMutableArray new];
+    for (NSUInteger i = 0; i < n; i++) {
+      if (datas[i] == [NSNull null]) continue;
+      [nn addObject:names[i]];
+      [dd addObject:datas[i]];
+    }
+    pick_done(pid, nn, dd);
+  });
+}
+- (void)documentPicker:(UIDocumentPickerViewController *)c didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+  pick_answer(self.pid, urls);
+}
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)c {
+  pick_done(self.pid, @[], @[]);
+}
+@end
+
+int32_t mb_host_pick_start(int32_t kind) {
+  if (kind != 1 && kind != 2) return 0;  // no camera here yet
+  if (!picks) picks = [NSMutableDictionary new];
+  if (!pickers) pickers = [NSMutableDictionary new];
+  int32_t pid = next_pick++;
+  picks[@(pid)] = [@{@"state" : @0} mutableCopy];
+  const char *canned = getenv("MBUI_PICK_FILES");
+  if (canned && *canned) {
+    NSMutableArray *urls = [NSMutableArray new];
+    for (NSString *path in [@(canned) componentsSeparatedByString:@"|"])
+      if (path.length) [urls addObject:[NSURL fileURLWithPath:path]];
+    pick_answer(pid, urls);
+    return pid;
+  }
+  MBPicker *d = [MBPicker new];
+  d.pid = pid;
+  pickers[@(pid)] = d;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    UIViewController *vc;
+    if (kind == 1) {
+      PHPickerConfiguration *cfg = [PHPickerConfiguration new];
+      cfg.filter = PHPickerFilter.imagesFilter;
+      cfg.selectionLimit = 0;
+      cfg.preferredAssetRepresentationMode = PHPickerConfigurationAssetRepresentationModeCurrent;
+      PHPickerViewController *p = [[PHPickerViewController alloc] initWithConfiguration:cfg];
+      p.delegate = d;
+      vc = p;
+    } else {
+      UIDocumentPickerViewController *p = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[ UTTypeItem ] asCopy:YES];
+      p.allowsMultipleSelection = YES;
+      p.delegate = d;
+      vc = p;
+    }
+    [the_controller presentViewController:vc animated:YES completion:nil];
+  });
+  return pid;
+}
+
+int32_t mb_host_pick_state(int32_t pid) {
+  NSMutableDictionary *p = picks[@(pid)];
+  return p ? [p[@"state"] intValue] : -1;
+}
+
+int32_t mb_host_pick_count(int32_t pid) { return (int32_t)[picks[@(pid)][@"names"] count]; }
+
+moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) {
+  NSArray *names = picks[@(pid)][@"names"];
+  return mb_string_from_ns(i >= 0 && i < (int32_t)names.count ? names[i] : @"");
+}
+
+moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) {
+  NSArray<NSData *> *datas = picks[@(pid)][@"datas"];
+  NSData *d = i >= 0 && i < (int32_t)datas.count ? datas[i] : nil;
+  moonbit_bytes_t b = moonbit_make_bytes((int32_t)d.length, 0);
+  if (d.length) memcpy(b, d.bytes, d.length);
+  return b;
+}
+
+void mb_host_pick_end(int32_t pid) { [picks removeObjectForKey:@(pid)]; }

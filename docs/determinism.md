@@ -149,6 +149,7 @@ Only for these, which the framework knows by itself:
   | Windows | `host-windows.yml`: windows-latest, WARP | 9 frames the same | each answer the same | `windows_controls` |
   | web | `host-web.yml`: headless Chromium (SwiftShader's WebGL2) on ubuntu-24.04 | 9 frames the same | each answer the same | `web_controls` |
   | macOS | `host-mac.yml`: Mini1 (mbui's runner, `[self-hosted, mbui-render]`; never a fork's pull request), a window | 9 frames the same (also on Studio, by hand) | each answer of `mini1_controls` the same (Mini1's own; Studio's text was the same too) | `mini1_*`, `drive_controls` (Mini1's) |
+  | iOS | `host-ios.yml`: Mini1's simulator (iOS 26.5, `ios-mbui-sf`, scripts/ios.sh; the same runner as macOS'), which the iOS host's own runs use too: booted with an app of theirs running, the job fails at once (`host_contract.sh ios free`), and it shuts the simulator again only when it booted it (`done`) | 9 frames the same | each of 147 answers the same | `ios_controls` |
 
   Each workflow runs when its host's code changes (the host's files in src/host, its scripts, these scripts, its kept
   run). The system's settings a run is drawn by (motion and transparency reduced, dark, the window's inset) are on
