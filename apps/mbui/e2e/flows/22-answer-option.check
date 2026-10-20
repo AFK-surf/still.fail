@@ -1,0 +1,3 @@
+check "the station has alice's answer, the option's words" '[ "$(sql "select count(*) from entries where author_kind=\"person\" and author=\"alice@example.test\" and text like \"%一起换 $TAG%\" and text not like \"%card:%\"")" -ge 1 ]'
+check "the answer quotes the post that asked" 'sql "select quotes from entries where author_kind=\"person\" and text like \"%一起换 $TAG%\" and text not like \"%card:%\"" | grep -q "要不要换图标 $TAG"'
+check "the card the agent posted is an options card with the recommended one" 'sql "select card from entries where author_kind=\"agent\" and text=\"要不要换图标 $TAG\"" | grep -q "\"label\":\"一起换 $TAG\",\"recommended\":true"'

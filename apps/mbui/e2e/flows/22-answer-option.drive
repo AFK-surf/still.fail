@@ -1,0 +1,19 @@
+# An agent asks with an options card (e2e/fake/claude.mjs `card:`): its options under its words, the one it recommends
+# marked; one tapped answers it (decision.answer): the viewer's message quoting the post, the card saying how it went.
+timeout 60000
+tap 端到端测试
+until =studio
+until 发消息
+wait 1000
+tap 发消息
+type 给我几个选项 {T} card:要不要换图标 {T}|先不换 {T}|一起换 {T}*|不用了 {T}!
+tap icon:arrow-up
+gone 正在发送
+timeout 120000
+until =一起换 {T}
+wait 1500
+shot 1-card
+tap =一起换 {T}
+until 选择了
+gone =先不换 {T}
+shot 2-answered

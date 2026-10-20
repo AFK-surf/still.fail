@@ -1,0 +1,17 @@
+# The test chat open while alice's other device asks for a card in it: no notice for the chat looked at (the app told
+# the core it shows it, client.focus); the card comes in the chat.
+timeout 60000
+tap 端到端测试
+until =studio
+until 发消息
+wait 1500
+log do: peer send 看着的时候 {T} card:这个不该通知 {T}|好 {T}|不好 {T}
+timeout 150000
+untiln 2 这个不该通知 {T}
+wait 5000
+nonotice 这个不该通知 {T}
+shot 1-chat
+back
+until 端到端测试
+wait 3000
+nonotice 这个不该通知 {T}
