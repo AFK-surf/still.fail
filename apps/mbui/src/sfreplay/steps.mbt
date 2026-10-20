@@ -57,15 +57,6 @@ pub fn Flow::start(
   env? : Array[(String, String)] = [],
 ) -> Flow {
   let r = @core.Replay::parse(trace)
-  // (the app started as the run's was: with the account its environment gave it, as its trace's `migrate` says)
-  run_account.val = match r.first_params("migrate") {
-    Some(Object(p)) =>
-      match p.get("accounts") {
-        Some(Array(a)) if a.length() > 0 => a[0].stringify()
-        _ => ""
-      }
-    _ => ""
-  }
   // (asks the run's timing made, with what came for them: each test says which and why)
   for text in drop {
     if r.drop(text) == 0 {
@@ -80,7 +71,8 @@ pub fn Flow::start(
   emit_start(seed, w, h, env)
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
   @ui.on_message("core", @core.receive)
-  let t = @ui.Tester::new(app, w~, h~, env~)
+  // (the app started with what the run's was: its trace's env, then what the test says of its own)
+  let t = @ui.Tester::new(app, w~, h~, env=r.env() + env)
   // (the time of day the run's: its first event that has happened here (the app's first ask, made as it started) at
   // the run's moment of it, going on with the frames' clock from there, @ui.wall_ms)
   match r.first_happened() {

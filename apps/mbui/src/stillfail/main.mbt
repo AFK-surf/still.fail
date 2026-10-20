@@ -221,6 +221,16 @@ fn main {
   if @ui.env("MBUI_CORE_TRACE") == "1" &&
     (cloud.has_prefix("http://127.0.0.1") || cloud.has_prefix("http://localhost")) {
     @core.trace_to(fn(line) { @host.log("CORETRACE " + line) })
+    // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
+    // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
+    let started : Map[String, Json] = {}
+    for name in @sfcore.started_by {
+      let v = @sfcore.env_text(name)
+      if v != "" {
+        started[name] = Json::string(v)
+      }
+    }
+    @host.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
     @ui.trace_views(fn(m) { @core.trace_note(m) })
     // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input
