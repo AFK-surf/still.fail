@@ -1686,7 +1686,8 @@ fn chat_bench(c : @ui.Ctx, key : String, rd : Reading, more : Bool, rows : Int) 
     return
   }
   rd.bench = rd.bench + 1
-  c.request_frame()
+  // every frame drawn while it runs (only in the host's bench mode: MBUI_BENCH, which the bench's script sets)
+  c.bench_frames(true)
   if rd.bench_phase == 0 {
     if rows != rd.bench_rows {
       rd.bench_rows = rows

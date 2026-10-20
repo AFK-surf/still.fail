@@ -25,4 +25,6 @@ pub(all) struct Source {
   chapter : (String, Int) -> Result[Array[@ui.Block], String]?
   /// the reader moved: book, chapter, offset
   save_place : (String, Int, Int) -> Unit
+  /// the time of day (ms since 1970): when a place was kept
+  now : () -> Double
 }

@@ -19,6 +19,19 @@ pub fn trace_to(line : (String) -> Unit) -> Unit {
 }
 
 ///|
+/// `m` kept on the trace beside the messages, stamped (`w`) with the core's clock as they are: what the app's host
+/// says of its views, a scripted run's steps (src/stillfail). Nothing while no trace is kept.
+pub fn trace_note(m : Map[String, Json]) -> Unit {
+  match tracer.val {
+    Some(line) => {
+      m["w"] = Json::number(wall_ms())
+      line(Json::object(m).stringify())
+    }
+    None => ()
+  }
+}
+
+///|
 /// Nothing kept from now on.
 pub fn trace_stop() -> Unit {
   tracer.val = None

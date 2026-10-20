@@ -225,7 +225,7 @@ fn core_save_place(book : String, chapter : Int, offset : Int) -> Unit {
   let place : Map[String, Json] = {
     "chapter": Json::number(chapter.to_double()),
     "offset": Json::number(offset.to_double()),
-    "at": Json::number(@core.wall_ms().floor()),
+    "at": Json::number((core_source.now)().floor()),
   }
   let params : Map[String, Json] = {
     "station": Json::string(station),
@@ -272,4 +272,5 @@ let core_source : @shelf.Source = {
   toc: core_toc,
   chapter: core_chapter,
   save_place: core_save_place,
+  now: fn() { @ui.wall_ms() },
 }

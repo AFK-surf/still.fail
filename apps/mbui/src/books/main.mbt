@@ -39,6 +39,7 @@ let source : @shelf.Source = {
     }
   },
   save_place: fn(id, chapter, offset) { places[id] = (chapter, offset) },
+  now: fn() { @ui.wall_ms() },
 }
 
 ///|
