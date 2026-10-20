@@ -21,8 +21,10 @@ test "an image loads at the size it is shown, fades in, and is cropped to cover"
   assert_eq((im[0], im[1], im[2], im[3]), (0.0, 0.0, 100.0, 150.0))
   assert_eq((im[4], im[5], im[6], im[7]), (0.25, 0.0, 0.5, 1.0))
   assert_true(im[8] < 1.0)
-  t.settle() |> ignore
+  // faded in from the frame it came in
+  t.run_for(@ui.image_fade_ms)
   assert_eq(t.drawn_images()[0][8], 1.0)
+  t.assert_idle()
 }
 
 ///|
@@ -89,7 +91,7 @@ test "contain letterboxes; a missing image draws only its background" {
 }
 
 ///|
-test "what is shown is settled once the images it waits on are in, as the test says when" {
+test "what is shown awaits the images it asked for until they are in, as the test says when" {
   let view = fn(c : @ui.Ctx) {
     c.column(fn() {
       c.image("a.jpg", w=Px(100.0), h=Px(100.0)) |> ignore
@@ -102,16 +104,18 @@ test "what is shown is settled once the images it waits on are in, as the test s
     t.frame()
   }
   assert_eq(t.pending(), [(1, 1), (1, 2)])
-  assert_false(t.settled())
   assert_eq(t.awaited(), ["image 1 a.jpg", "image 2 b.jpg"])
   t.finish(1, 2)
-  t.settle() |> ignore
+  t.draw()
+  assert_eq(t.pending(), [(1, 1)])
   assert_eq(t.awaited(), ["image 1 a.jpg"])
-  assert_false(t.settled())
   t.finish(1, 1, ok=false)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(t.pending(), [])
-  assert_true(t.settled())
+  assert_eq(t.awaited(), [])
+  // b.jpg fades in from the frame it came in; then nothing is left
+  t.run_for(@ui.image_fade_ms)
+  t.assert_idle()
 }
 
 ///|
@@ -129,12 +133,15 @@ test "finish_all brings what is pending in an order drawn from the seed" {
     let t = @ui.Tester::new(view, images=names.map(n => (n, 100, 100)), seed~, finish=false)
     t.frame()
     t.finish_all()
-    t.settle() |> ignore
+    t.draw()
+    // faded in from the frame they came in
+    t.run_for(@ui.image_fade_ms)
     t
   }
   let t7 = run(7)
   assert_eq(t7.pending(), [])
-  assert_true(t7.settled())
+  assert_eq(t7.awaited(), [])
+  t7.assert_idle()
   assert_eq(t7.finished_order(), run(7).finished_order())
   let orders = [1, 2, 3, 4, 5, 6, 7, 8].map(s => run(s).finished_order())
   assert_true(orders.iter().any(o => o != orders[0]))

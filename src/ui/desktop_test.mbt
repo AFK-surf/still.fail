@@ -133,6 +133,7 @@ test "desktop: a press on the app's own title row drags the window and presses n
 ///|
 test "desktop: a wheel's notch is eased in, a trackpad's at once; the mouse drags no list when told" {
   let drags = Ref(true)
+  let rest = Ref(0.0)
   let t = @ui.Tester::new(
     fn(c) {
       c.mouse_drags_lists(drags.val)
@@ -140,6 +141,7 @@ test "desktop: a wheel's notch is eased in, a trackpad's at once; the mouse drag
         c.box(h=Px(40.0), fn() { c.text("row \{i}", wrap=false) |> ignore }) |> ignore
       })
       |> ignore
+      rest.val = c.list_rest("l")
     },
     w=300.0,
     h=400.0,
@@ -149,16 +151,18 @@ test "desktop: a wheel's notch is eased in, a trackpad's at once; the mouse drag
   t.run_for(@ui.wheel_ease_ms)
   let first = t.list_offset()
   assert_true(first > 0.0 && first < 120.0)
-  t.settle() |> ignore
+  // to the list's rest: its ease come (and its scroll bar gone)
+  t.run_for(rest.val - t.time())
   assert_eq(t.list_offset(), 120.0)
+  // a trackpad's: there as it is taken
   t.wheel_phase(150.0, 200.0, 40.0, 0)
-  t.settle() |> ignore
   assert_eq(t.list_offset(), 160.0)
   drags.val = false
-  t.frame()
+  t.draw()
   t.drag(150.0, 300.0, 150.0, 100.0)
-  t.settle() |> ignore
   assert_eq(t.list_offset(), 160.0)
+  t.run_for(rest.val - t.time())
+  t.assert_idle()
 }
 
 ///|

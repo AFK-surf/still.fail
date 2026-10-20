@@ -7,6 +7,13 @@
 // (nothing lit) until a key or the pointer moves it.
 
 ///|
+/// How long a menu's panel takes to come in (ms), and to go out (a dropdown's and a context menu's): a tween each.
+pub let menu_in_ms : Double = 120.0
+
+///|
+pub let menu_out_ms : Double = 80.0
+
+///|
 /// What an entry of a menu is: an item that does something, one turned on or off (a checkbox item), one of a choice
 /// (a radio item: on or not), a line between parts, words heading a part, a submenu's item.
 pub(all) enum EntryKind {
@@ -373,7 +380,7 @@ pub fn dropdown_menu(
   }
   let by_key = c.focus_shown(trigger)
   let pid = c.id(key + "/panel")
-  let p = presence(c, key, now, enter=@motion.tween(120.0, ease=Out), exit=@motion.tween(80.0, ease=LeaveFade))
+  let p = presence(c, key, now, enter=@motion.tween(menu_in_ms, ease=Out), exit=@motion.tween(menu_out_ms, ease=LeaveFade))
   // the app's own motion: Motion's presence (its look on the panel) decides how long it is drawn
   let moved = match enter {
     Some(e) => Some(@motion.presence(c, key + "/motion", now, enter=e, exit?=exit))
@@ -449,7 +456,7 @@ pub fn context_menu(
       }
   }
   let (ax, ay) = kit.val.at.get(id).unwrap_or((0.0, 0.0))
-  let p = presence(c, key, now, enter=@motion.tween(120.0, ease=Out), exit=@motion.tween(80.0, ease=LeaveFade))
+  let p = presence(c, key, now, enter=@motion.tween(menu_in_ms, ease=Out), exit=@motion.tween(menu_out_ms, ease=LeaveFade))
   let mut chosen = None
   if p.built {
     let pid = c.id(key + "/panel")

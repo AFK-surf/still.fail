@@ -172,6 +172,13 @@ pub fn Presence::leaving(self : Presence) -> Bool {
 }
 
 ///|
+/// How long `presence` takes by default to come in (ms), and to go out: a tween each.
+pub let presence_in_ms : Double = 150.0
+
+///|
+pub let presence_out_ms : Double = 100.0
+
+///|
 /// Motion's AnimatePresence for one thing (see the file's head): `shown` comes in by `enter`, goes out by `exit`
 /// (Motion's `animate` and `exit` transitions) and is built until it is out. `initial`: shown from the start comes in
 /// too (Motion's `initial`); else it starts in.
@@ -179,8 +186,8 @@ pub fn presence(
   c : @ui.Ctx,
   key : String,
   shown : Bool,
-  enter? : @motion.Spec = @motion.tween(150.0, ease=Out),
-  exit? : @motion.Spec = @motion.tween(100.0, ease=LeaveFade),
+  enter? : @motion.Spec = @motion.tween(presence_in_ms, ease=Out),
+  exit? : @motion.Spec = @motion.tween(presence_out_ms, ease=LeaveFade),
   initial? : Bool = true,
 ) -> Presence {
   let k = "\u{2}presence/" + key

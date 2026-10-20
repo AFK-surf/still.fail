@@ -71,18 +71,8 @@
     "settle": {
       "src/effecttest/outside_test.mbt": 10,
       "src/effecttest/scheduler_test.mbt": 2,
-      "src/kit/controls_test.mbt": 4,
-      "src/kit/menus_test.mbt": 5,
-      "src/kit/overlays_test.mbt": 17,
-      "src/kit/time_test.mbt": 2,
       "src/ui/app.mbt": 1,
-      "src/ui/desktop_test.mbt": 3,
       "src/ui/drive.mbt": 1,
-      "src/ui/fx_test.mbt": 4,
-      "src/ui/hostread_test.mbt": 1,
-      "src/ui/image_test.mbt": 7,
-      "src/ui/nav_test.mbt": 6,
-      "src/ui/reader_test.mbt": 3,
       "src/ui/scroll_wbtest.mbt": 5
     },
     "flow-wait": {},
@@ -119,7 +109,6 @@
       "src/ui/frames_test.mbt": 1,
       "src/ui/hostread_test.mbt": 1,
       "src/ui/layout_wbtest.mbt": 2,
-      "src/ui/nav_test.mbt": 1,
       "src/ui/scroll_wbtest.mbt": 12,
       "src/ui/words_test.mbt": 1
     },

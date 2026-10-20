@@ -156,19 +156,21 @@ test "context menu: opened at the pointer by a right click, at its press by a lo
     }
   })
   t.right_click(100.0, 120.0)
-  t.settle() |> ignore
+  // come in (its panel grows in from where it opened)
+  t.run_for(menu_in_ms)
   let (x, y, _, _) = t.get(@ui.Menu, label="Edit").rect
   assert_true(x >= 100.0 && x < 110.0 && y >= 120.0 && y < 130.0)
   t.click(@ui.MenuItem, label="Paste")
   assert_eq(chosen.val, Some("paste"))
-  t.settle() |> ignore
+  // drawn while it goes out, gone once it has
+  t.run_for(menu_out_ms)
   assert_true(t.query(@ui.Menu) is None)
   // a finger held still
   t.touch(0, 50.0, 200.0)
   t.frame()
   t.frame(ms=600.0)
   t.touch(2, 50.0, 200.0)
-  t.settle() |> ignore
+  t.draw()
   ignore(t.get(@ui.Menu, label="Edit"))
 }
 
@@ -338,6 +340,8 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
 
 ///|
 test "dropdown menu: put by a rectangle, its own motion and a scrim; gone once its motion has played" {
+  // its motion's length, in and out (ms): the test's own
+  let motion_ms = 300.0
   let open = Ref(true)
   let t = @ui.Tester::new(fn(c) {
     open.val = dropdown_menu(
@@ -351,16 +355,19 @@ test "dropdown menu: put by a rectangle, its own motion and a scrim; gone once i
       along=End,
       offset=6.0,
       scrim=0x00000047L,
-      enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0),
-      exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0),
+      enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.tween(motion_ms)),
+      exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.tween(motion_ms)),
     ).open
   })
-  t.settle() |> ignore
+  // (put by its rectangle once laid out: a layout read back, drawn now)
+  t.draw()
   let (x, y, w, _) = t.get(@ui.Menu, label="Filter").rect
   assert_true((x + w - 240.0).abs() < 0.5)
   assert_true((y - 106.0).abs() < 0.5)
   t.press("Escape")
   assert_false(open.val)
-  t.settle() |> ignore
+  // its own motion played out: gone
+  t.run_for(motion_ms)
   assert_true(t.find("One") is None)
+  t.assert_idle()
 }

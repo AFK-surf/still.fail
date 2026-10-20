@@ -241,6 +241,7 @@ test "Android: pulled past the top it stretches, the rows drawn stretched, and g
   t.advance(100.0)
   t.touch(2, 200.0, 400.0)
   t.frame()
+  // (kept: a stretch going back is stepped frame by frame (edge_spring), its end not said: no rest to run to)
   t.settle() |> ignore
   approx(t.list_overscroll(), 0.0, 0.0)
   approx(t.list_offset(), 0.0, 0.0)
@@ -319,6 +320,7 @@ test "iOS: decelerates as UIScrollView, and pulls past the top on a rubber band"
   t.frame()
   let start = t.list_offset()
   approx(start, 12.0 * 24.0 - 6.0, 1.0e-9)
+  // (kept: a deceleration is stepped frame by frame, its end not said: no rest to run to)
   t.settle() |> ignore
   // v (0.998^t - 1) / ln 0.998 until under 0.02 px/ms
   let k = 0.998
@@ -338,6 +340,7 @@ test "iOS: decelerates as UIScrollView, and pulls past the top on a rubber band"
   approx(rubber(94.0, 844.0), 48.7, 0.1)
   r.touch(2, 200.0, 400.0)
   r.frame()
+  // (kept: a rubber band going back is stepped frame by frame, its end not said: no rest to run to)
   r.settle() |> ignore
   approx(r.row(0).unwrap().1, 0.0, 0.0)
   approx(r.list_overscroll(), 0.0, 0.0)
@@ -348,11 +351,13 @@ test "the desktop: a mouse drag coasts as before and stops at the ends, nothing 
   let t = Tester::new(rows_view(40))
   swipe(t, 300.0, 20.0, 10)
   t.frame()
+  // (kept: a coast is stepped frame by frame, its end not said: no rest to run to)
   t.settle() |> ignore
   approx(t.list_offset(), 0.0, 0.0)
   approx(t.list_overscroll(), 0.0, 0.0)
   swipe(t, 700.0, -24.0, 12)
   t.frame()
+  // (kept: a coast is stepped frame by frame, its end not said: no rest to run to)
   t.settle() |> ignore
   approx(t.list_offset(), 40.0 * 50.0 - 844.0, 1.0e-6)
   approx(t.list_overscroll(), 0.0, 0.0)

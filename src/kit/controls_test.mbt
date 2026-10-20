@@ -100,7 +100,8 @@ test "toggle group that slides: its thumb behind the pressed item, getting there
     })
     |> ignore
   })
-  t.settle() |> ignore
+  // (the thumb is placed over its item once the items are laid out: a layout read back, drawn now)
+  t.draw()
   let thumb = fn() {
     t.drawn_rects().filter(fn(r) { r.4 == 0x123456FFL }).map(fn(r) { (r.0.round(), r.1.round(), r.2.round(), r.3.round()) })
   }
@@ -114,17 +115,19 @@ test "toggle group that slides: its thumb behind the pressed item, getting there
   assert_true(under("Left"))
   t.click(@ui.Radio, label="Right")
   assert_eq(v.val, ["r"])
-  // (the thumb on its spring: until springs say when they end, drawn until it rests)
-  t.settle() |> ignore
+  // the thumb on its spring, set out from rest as the click was taken: there once its slide is over
+  t.run_for(@ui.cover_slide_ms)
   assert_true(under("Right"))
   assert_false(under("Left"))
-  // the view's choice: on its way a few frames, not yet under the words it goes to
+  // the view's choice: on its way a tenth of its slide's time, not yet under the words it goes to
   v.val = ["m"]
-  t.frame()
-  t.frame()
+  t.draw()
+  let part_way = @ui.cover_slide_ms / 10.0
+  t.run_for(part_way)
   assert_false(under("Middle"))
-  t.settle() |> ignore
+  t.run_for(@ui.cover_slide_ms - part_way)
   assert_true(under("Middle"))
+  t.assert_idle()
 }
 
 ///|
@@ -279,16 +282,19 @@ test "snap: in range, on the step from min" {
 }
 
 ///|
-test "progress: its value as a percentage and its range; not known, neither, and it keeps asking for frames" {
+test "progress: its value as a percentage and its range; not known, neither, and its band a cycle said (frames while shown)" {
   let v : Ref[Double?] = Ref(Some(30.0))
   let t = @ui.Tester::new(fn(c) { progress(c, v.val, max=60.0, label="Upload") })
   let p = t.get(@ui.ProgressBar, label="Upload")
   assert_eq(p.value, "50%")
   assert_eq(p.range, Some((0.0, 60.0, 30.0)))
   v.val = None
-  t.frame()
+  t.draw()
   assert_eq(t.get(@ui.ProgressBar, label="Upload").range, None)
-  assert_eq(t.settle(max=5, unsettled_ok=true), 5)
+  // a frame asked for each frame while it shows, said as a cycle: what never ends does not keep a test from idle
+  assert_true(t.ctx().wants_frame)
+  assert_eq(t.cycles().length(), 1)
+  t.assert_idle()
 }
 
 ///|

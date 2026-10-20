@@ -66,10 +66,12 @@ test "next_frame steps a fiber once a frame, at the frame's time" {
       }
     })
   })
-  // frames keep coming while it waits for them, and stop when it is done
-  assert_eq(t.settle(), 4)
+  // frames keep coming while it waits for them (four frames' time: a frame each 16 ms, a 60 Hz display's, as a
+  // drag's moves come), and stop when it is done
+  t.run_for(4.0 * @ui.drag_step_ms)
   assert_eq(times, [1016L, 1032L, 1048L, 1064L])
   assert_true(!t.ctx().wants_frame)
+  t.assert_idle()
 }
 
 ///|
@@ -78,8 +80,9 @@ test "while nothing waits for a frame, the window sleeps until the next timer" {
     c.effect("slow", async fn(_s) { @effect.sleep(5000) })
   })
   t.frame()
-  assert_eq(t.settle(), 0)
   // the fiber sleeps: no frames asked for, a wake at its time
+  assert_false(t.ctx().wants_frame)
+  assert_false(@ui.runtime().wants_frame())
   assert_eq(t.ctx().wake_at, 1016.0 + 5000.0)
 }
 
@@ -123,11 +126,15 @@ test "a host's callback that answers a fiber between frames asks for a frame" {
     })
   })
   t.frame()
-  assert_eq(t.settle(), 0)
-  // the host answers outside a frame: a frame is asked for, and in it the fiber goes on
+  // nothing asks for a frame while the fiber waits for the host
+  assert_false(t.ctx().wants_frame)
+  assert_false(@ui.runtime().wants_frame())
+  // the host answers outside a frame: a frame is asked for (the runtime's), and in it the fiber goes on
   (answer.val.unwrap())(Ok("hello"))
-  assert_true(t.settle() > 0)
+  assert_true(@ui.runtime().wants_frame())
+  t.draw()
   assert_eq(got.val, "hello")
+  t.assert_idle()
 }
 
 ///|

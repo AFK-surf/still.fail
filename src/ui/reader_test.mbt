@@ -87,6 +87,7 @@ test "the pager turns on a tap at either side, a drag, and the arrow keys" {
   // paginated in the first frame, once the tester's host is in place
   let cut : Ref[@ui.Pages?] = { val: None }
   let index = [0]
+  let rest = Ref(0.0)
   let t = @ui.Tester::new(
     fn(c) {
       let pages = match cut.val {
@@ -100,14 +101,15 @@ test "the pager turns on a tap at either side, a drag, and the arrow keys" {
       index[0] = c.pager("book", pages.count(), index[0], fn(i) {
         c.page(pages, i) |> ignore
       })
+      rest.val = c.pager_rest("book")
     },
     w=300.0,
     h=500.0,
   )
   t.tap(280.0, 250.0)
   assert_eq(index[0], 1)
-  // the turned-to page slid into place, its neighbours beside it
-  t.settle() |> ignore
+  // the turned-to page slid into place (its slide at rest), its neighbours beside it
+  t.run_for(rest.val - t.time())
   inspect(
     t.dump(),
     content=(
@@ -129,11 +131,11 @@ test "the pager turns on a tap at either side, a drag, and the arrow keys" {
   assert_eq(index[0], 0)
   // dragged left past a third: the next page, which slides into place
   t.drag(250.0, 250.0, 120.0, 250.0)
-  t.settle() |> ignore
+  t.run_for(rest.val - t.time())
   assert_eq(index[0], 1)
   // a short drag springs back
   t.drag(150.0, 250.0, 120.0, 250.0, steps=30)
-  t.settle() |> ignore
+  t.run_for(rest.val - t.time())
   assert_eq(index[0], 1)
   // nothing before the first page
   t.tap(20.0, 250.0)
@@ -145,6 +147,8 @@ test "the pager turns on a tap at either side, a drag, and the arrow keys" {
   assert_eq(index[0], 2)
   t.press("Left")
   assert_eq(index[0], 1)
+  t.run_for(rest.val - t.time())
+  t.assert_idle()
 }
 
 ///|

@@ -36,18 +36,20 @@ test "presence: shown comes in; not shown, built until its exit has played, then
   let t = @ui.Tester::new(fn(c) { p.val = presence(c, "x", shown.val) })
   assert_false(p.val.built)
   shown.val = true
-  t.frame()
+  t.draw()
   assert_true(p.val.built && p.val.shown)
-  t.settle() |> ignore
+  t.run_for(presence_in_ms)
   assert_eq(p.val.t, 1.0)
   shown.val = false
-  t.frame()
-  t.frame()
-  t.frame()
+  t.draw()
+  // half its exit's time
+  let mid_way = presence_out_ms / 2.0
+  t.run_for(mid_way)
   assert_true(p.val.leaving())
   assert_true(p.val.t < 1.0)
-  t.settle() |> ignore
+  t.run_for(presence_out_ms - mid_way)
   assert_false(p.val.built)
+  t.assert_idle()
 }
 
 ///|

@@ -313,6 +313,10 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
 }
 
 ///|
+/// How long an image takes to fade in once it is decoded (ms).
+pub let image_fade_ms : Double = 150.0
+
+///|
 /// Draws the image from `src` in the box (x, y, w, h), loading it at the
 /// size of the box.
 fn Ctx::draw_image(
@@ -340,7 +344,7 @@ fn Ctx::draw_image(
     return
   }
   let fade = if fade {
-    dclamp((self.now - e.ready_at) / 150.0, 0.0, 1.0)
+    dclamp((self.now - e.ready_at) / image_fade_ms, 0.0, 1.0)
   } else {
     1.0
   }

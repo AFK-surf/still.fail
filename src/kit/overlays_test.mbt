@@ -214,8 +214,7 @@ test "toasts: each goes after its time, paused under the pointer; closed, acted 
     }
   })
   list.val = [toast("a", "Saved"), toast("b", "Sent", description="To the team", action="Undo")]
-  t.frame()
-  t.settle() |> ignore
+  t.draw()
   assert_eq(t.all(@ui.Status).length(), 2)
   assert_eq(t.get(@ui.Status, label="Sent").description, "To the team")
   ignore(t.get(@ui.Region, label="通知"))
@@ -224,36 +223,47 @@ test "toasts: each goes after its time, paused under the pointer; closed, acted 
   t.move(x + w / 2.0, y + h / 2.0)
   t.frame(ms=5000.0)
   assert_eq(list.val.length(), 2)
-  // (some 300 ms went by as they came in)
+  // (none of their 3000 ms went by before the pointer came over them)
   t.move(1.0, 1.0)
   t.frame(ms=2000.0)
   assert_eq(list.val.length(), 2)
   t.frame(ms=1000.0)
   assert_eq(list.val.map(fn(x) { x.id }), [])
-  t.settle() |> ignore
+  // drawn while they go out (the frame after their time, at its moment), gone once they have
+  t.draw()
+  t.run_for(presence_out_ms)
   assert_eq(t.all(@ui.Status).length(), 0)
   // the action
   list.val = [toast("c", "Archived", action="Undo")]
-  t.frame()
-  t.settle() |> ignore
+  t.draw()
+  // come in (it rises as it does)
+  t.run_for(presence_in_ms)
   t.click(@ui.Button, label="Undo")
   assert_eq(acted.val, Some("c"))
   assert_eq(list.val.length(), 0)
   // the close button
   list.val = [toast("d", "Copied")]
-  t.frame()
-  t.settle() |> ignore
+  t.draw()
+  t.run_for(presence_in_ms)
   t.click(@ui.Button, label="关闭")
   assert_eq(list.val.length(), 0)
   // a swipe to the right
   list.val = [toast("e", "Moved")]
-  t.frame()
-  t.settle() |> ignore
+  t.draw()
+  t.run_for(presence_in_ms)
   let (x, y, w, h) = t.get(@ui.Status, label="Moved").rect
   t.drag(x + 20.0, y + h / 2.0, x + 20.0 + w / 2.0, y + h / 2.0)
   assert_eq(list.val.length(), 0)
-  t.settle() |> ignore
+  t.run_for(presence_out_ms)
   assert_true(t.query(@ui.Status, label="Moved") is None)
+  t.assert_idle()
+}
+
+///|
+/// What changed (the view's own, or an input's) drawn now, then on to when sheet `key` is at rest (sheet_rest).
+fn to_rest(t : @ui.Tester, key : String) -> Unit {
+  t.draw()
+  t.run_for(sheet_rest(key) - t.time())
 }
 
 ///|
@@ -269,7 +279,7 @@ test "sheet: up from the bottom, the page hidden; a press above it, Escape and a
       None => ()
     }
   })
-  t.settle() |> ignore
+  to_rest(t, "s")
   let (_, y, _, h) = t.get(@ui.Dialog, label="Chat info").rect
   assert_eq(y, 844.0 - 300.0)
   assert_eq(h, 300.0)
@@ -278,20 +288,18 @@ test "sheet: up from the bottom, the page hidden; a press above it, Escape and a
   assert_true(open.val)
   t.tap(100.0, 100.0)
   assert_false(open.val)
-  t.settle() |> ignore
+  to_rest(t, "s")
   assert_true(t.query(@ui.Dialog) is None)
   open.val = true
-  t.frame()
-  t.settle() |> ignore
+  to_rest(t, "s")
   t.press("Escape")
   assert_false(open.val)
-  t.settle() |> ignore
+  to_rest(t, "s")
   open.val = true
-  t.frame()
-  t.settle() |> ignore
+  to_rest(t, "s")
   // a short drag goes back; a long one closes it
   t.drag(195.0, 560.0, 195.0, 600.0)
-  t.settle() |> ignore
+  to_rest(t, "s")
   assert_true(open.val)
   t.drag(195.0, 560.0, 195.0, 700.0)
   assert_false(open.val)
@@ -305,16 +313,15 @@ test "sheet with detents: let go nearer the top it goes full; low enough it clos
   let t = @ui.Tester::new(fn(c) {
     open.val = sheet(c, "s", open.val, share=tall.val, detents=[0.55, 0.94], label="Workspaces", fn() {  }).open
   })
-  t.settle() |> ignore
+  to_rest(t, "s")
   assert_true((t.get(@ui.Dialog, label="Workspaces").rect.3 - 422.0).abs() < 1.0)
   // dragged up past the middle: full
   t.drag(195.0, 430.0, 195.0, 200.0)
-  t.settle() |> ignore
+  to_rest(t, "s")
   assert_true((t.get(@ui.Dialog, label="Workspaces").rect.3 - 844.0 * 0.94).abs() < 1.0)
   // asked another height: there
   tall.val = 0.7
-  t.frame()
-  t.settle() |> ignore
+  to_rest(t, "s")
   assert_true((t.get(@ui.Dialog, label="Workspaces").rect.3 - 844.0 * 0.7).abs() < 1.0)
   // dragged down to under 30%: closed
   t.drag(195.0, 260.0, 195.0, 700.0)
@@ -332,14 +339,15 @@ test "sheet: closed by the view, it sinks away and is gone" {
       open.val = r.open
     }
   })
-  t.settle() |> ignore
+  to_rest(t, "s")
   assert_true(shown.val)
   open.val = false
-  t.frame()
+  t.draw()
   assert_true(shown.val)
-  t.settle() |> ignore
+  t.run_for(sheet_rest("s") - t.time())
   assert_false(shown.val)
   assert_true(t.query(@ui.Dialog) is None)
+  t.assert_idle()
 }
 
 ///|
