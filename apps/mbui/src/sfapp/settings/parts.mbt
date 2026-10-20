@@ -244,8 +244,9 @@ let root_actions : @ui.Style = bar_actions.then(@ui.style(w=Full, px=S4, pt=S2, 
 let place_body : @ui.Style = page_fill.then(@ui.style(pt=S1))
 
 ///|
-/// A page's large title (Parts.kt LargeTitle): the big word, after `lead` when there is one (a workspace's mark).
-fn large_title(c : @ui.Ctx, big : String, lead? : () -> Unit) -> Unit {
+/// A page's large title (Parts.kt LargeTitle): `small`'s line over the big word when it is said, the word after `lead`
+/// when there is one (a workspace's mark). (LargeTitle's letterSpacing -0.6sp: mbui's words have no spacing.)
+fn large_title(c : @ui.Ctx, big : String, small? : String = "", lead? : () -> Unit) -> Unit {
   if wide.val {
     ignore(lead)
     match frame_core.val {
@@ -259,21 +260,28 @@ fn large_title(c : @ui.Ctx, big : String, lead? : () -> Unit) -> Unit {
     top_trailing.val = None
     return
   }
-  c.box(style=large_title_line, fn() {
-    match lead {
-      Some(f) => f()
-      None => ()
+  c.box(style=large_title_box, fn() {
+    if small != "" {
+      // Parts.kt:558 (13sp)
+      c.text(small, style=@sf.secondary) |> ignore
     }
-    // Parts.kt:559 (32sp)
-    c.text(big, style=@sf.large_title) |> ignore
+    c.box(style=title_line, fn() {
+      match lead {
+        Some(f) => f()
+        None => ()
+      }
+      // Parts.kt:559 (32sp)
+      c.text(big, style=@sf.large_title) |> ignore
+    })
+    |> ignore
   })
   |> ignore
 }
 
 ///|
-/// LargeTitle's line: 16 in, 6 under it.
+/// LargeTitle: 16 in, 6 under it; its small line over its word's.
 // kept across runs: a value (no field of it changes)
-let large_title_line : @ui.Style = title_line.then(@ui.style(px=S4, pb=S1_5))
+let large_title_box : @ui.Style = @ui.style(w=Full, px=S4, pb=S1_5)
 
 ///|
 /// A section's heading (Parts.kt SectionHeader): its title, what it holds at its end.
