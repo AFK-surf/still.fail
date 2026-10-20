@@ -100,8 +100,7 @@
     "retired-api": {},
     "app-clock": {
       "src/sfapp/bar.mbt": 1,
-      "src/sfapp/chat_fixture.mbt": 1,
-      "src/sfapp/preview.mbt": 1
+      "src/sfapp/chat_fixture.mbt": 1
     },
     "wall-clock": {
       "src/coredemo/shelf.mbt": 1,

@@ -1992,7 +1992,8 @@ fn Viewer::gestures(
   has_after : Bool,
 ) -> Unit {
   let v = self
-  let now = c.now()
+  // what the finger did, by its events' own times (how fast, how far apart), not the frames'
+  let at = c.pointer_at()
   let (px, py, _) = c.pointer()
   let strip = @motion.anim(c, "preview/strip", 0.0, global=true)
   // two fingers: a pinch, round the point between them, which moves the picture as it moves
@@ -2020,10 +2021,10 @@ fn Viewer::gestures(
       let dy = py - v.last_y
       v.moved = v.moved + dx.abs() + dy.abs()
       // its speed sideways, for a swipe let go (the latest moves count most)
-      if v.vt >= 0.0 && now > v.vt {
-        v.vx = v.vx * 0.5 + dx / (now - v.vt) * 0.5
+      if v.vt >= 0.0 && at > v.vt {
+        v.vx = v.vx * 0.5 + dx / (at - v.vt) * 0.5
       }
-      v.vt = now
+      v.vt = at
       // fitted, one finger sideways moves the strip (FilePreview.kt swipe): past the first or the last it gives only
       // a third as much
       if !v.swiping && !z.zoomed() && v.moved > 8.0 && (px - v.down_x).abs() > (py - v.down_y).abs() &&
@@ -2041,7 +2042,7 @@ fn Viewer::gestures(
     } else {
       v.held = true
       v.vx = 0.0
-      v.vt = now
+      v.vt = at
       v.down_x = px
       v.down_y = py
       if !v.pinched {
@@ -2052,7 +2053,7 @@ fn Viewer::gestures(
     v.last_y = py
   } else {
     // held still a while before it was let go: no speed left (its frames come only as it moves)
-    if v.held && now - v.vt > swipe_still_ms {
+    if v.held && at - v.vt > swipe_still_ms {
       v.vx = 0.0
     }
     // let go further sideways than its frames showed (a slow frame took the whole swipe, down and up in one or two
@@ -2064,7 +2065,7 @@ fn Viewer::gestures(
         let none = if tx > 0.0 { !has_before } else { !has_after }
         strip.snap(strip.get() + (if none { tx / 3.0 } else { tx }))
         v.moved = tx.abs() + ty.abs()
-        v.vx = tx / dmax(16.0, now - c.press_at)
+        v.vx = tx / dmax(16.0, at - c.press_at)
         v.swiping = true
         v.held = true
         pv_strip.leaving = None
@@ -2089,13 +2090,13 @@ fn Viewer::gestures(
     v.pinched = false
   }
   if c.clicked(stage) && v.moved <= 8.0 && !pinched {
-    if now - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
+    if at - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
       // the second of two: zoom (and the first's toggle undone)
       v.tap_at = -1.0e9
       v.toggle()
       z.double_tap(px, py)
     } else {
-      v.tap_at = now
+      v.tap_at = at
       v.tap_x = px
       v.tap_y = py
       v.toggle()
