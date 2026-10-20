@@ -9,7 +9,7 @@
 #                                        and android/mbui/latest.json (still.fail's AppRelease, news: the commits since
 #                                        the build the feed names now, of what the app is built from)
 #   apps/mbui/scripts/beta.sh mac        the macOS app (scripts/mac-app.sh: still.fail mbui.app, fail.still.mbui),
-#                                        signed with still.fail's identity (scripts/mac-sign.py), zipped, into
+#                                        signed with still.fail's identity (.github/mac_signing.py), zipped, into
 #                                        $RELEASE_DIR as mac/stillfail-mbui-<n>-arm64-mac.zip and mac/mbui/latest.json
 #   apps/mbui/scripts/beta.sh publish android|mac
 #                                        what `build` or `mac` made put (scripts/release-put.sh), fetched back from where
@@ -160,7 +160,7 @@ build() {
 }
 
 # The macOS app, built in WORK (warm as the APK's: moon's outputs, the compiler's, the Rust shell's target kept in
-# $C/cargo-target), signed under scripts/mac-sign.py (still.fail's identity, its signing lock held for the signing only).
+# $C/cargo-target), signed under .github/mac_signing.py (still.fail's identity, its signing lock held for the signing only).
 mac() {
   local t0=$(now) n zip name tb
   n=$(build_number)
@@ -170,7 +170,7 @@ mac() {
   CARGO_TARGET_DIR=$C/cargo-target MBUI_CORE_FRESH=1 MBUI_BUILD=$n EMBER="$REPO" bash "$WORK/scripts/mac-app.sh" build 2>&1 \
     | tee "$C/mac-build.log"
   tb=$(secs $t0)
-  MBUI_BUILD=$n EMBER="$REPO" python3 "$A/scripts/mac-sign.py" -- bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"
+  MBUI_BUILD=$n EMBER="$REPO" python3 "$REPO/.github/mac_signing.py" run -- bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"
   zip=$WORK/out/mac/stillfail-mbui-$n-arm64-mac.zip
   [ -f "$zip" ] || { echo "beta: no zip of the app" >&2; exit 1; }
   grep -q '^codesign: Authority=' "$C/mac-sign.log" || { echo "beta: the app is not signed with an identity" >&2; exit 1; }

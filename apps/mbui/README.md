@@ -47,10 +47,10 @@ on macOS `src/host/apple_core.mm` with React Native 0.81.4's Hermes framework an
 release build of `APP=stillfail`, the core's script in its Resources (the core host finds it there), its icon
 (`scripts/mac-icon.swift`: the Android icon on macOS's rounded square), an Info.plist of its own; then signs, checks
 and zips it (`out/mac/stillfail-mbui-<n>-arm64-mac.zip`). In CI it is signed with still.fail's macOS identity as its
-desktop app is (`scripts/mac-sign.py`, after `.github/release-desktop.py`): an Apple Development certificate, no
-hardened runtime, **not notarized** (still.fail has no notarization, and that certificate cannot be notarized: it
-needs a Developer ID). So Gatekeeper refuses the app downloaded from the web on first open (`spctl` says rejected):
-System Settings → Privacy & Security → Open Anyway once, or `xattr -dr com.apple.quarantine "still.fail mbui.app"`.
+desktop app is (`.github/mac_signing.py`): with AFK's Developer ID it is also notarized and stapled before it is
+zipped, so Gatekeeper opens it downloaded from the web. While the identity is still the Apple Development certificate
+(apps/desktop/package.json `build.mac.identity`), it is not notarized and Gatekeeper refuses it on first open
+(System Settings → Privacy & Security → Open Anyway once, or `xattr -dr com.apple.quarantine "still.fail mbui.app"`).
 As a bundle it has the system's notifications (mbui's mac host: UNUserNotificationCenter), its own Keychain items
 and data (`~/Library/Application Support/fail.still.mbui`).
 
