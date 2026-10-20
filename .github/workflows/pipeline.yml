@@ -585,6 +585,25 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "windows-smoke-${{ github.sha }}", path: "${{ runner.temp }}/smoke", if-no-files-found: ignore, retention-days: 7 }
 
+  # A branch: the one check main's protection requires (2026-10-20, as asked: what is red goes into main by nobody, an
+  # admin's merge too): every job a branch runs, one skipped as passing, one failed or cancelled failing it. Its list
+  # is the branch's jobs: a job added to them goes here too, or the protection does not wait for it.
+  gate:
+    needs: [plan, natives, windows-natives, check, check-linux, check-mbui, check-mbui-native, check-browser, check-android, check-android-lint, bundle, mac-build, windows-build, windows-smoke]
+    if: always() && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if echo "$RESULTS" | jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' >/dev/null; then
+            echo "::error::a branch job failed or was cancelled: main's protection keeps this branch out"
+            exit 1
+          fi
+
   # The API and the web wait for the checks of what they are made of, not the Android app's (2026-10-17, as asked: its
   # lint on GitHub's runners held a release's web back for minutes); the apps' releases (put) wait for all.
   api:
