@@ -36,7 +36,7 @@ CORE=$WORK/core-$PLATFORM
 rm -rf $CORE && mkdir -p $CORE
 # this run's mark, put in the words the flows send (their {T}; the checks' $TAG): a run's messages are its own, however
 # many runs (and platforms) the same station has had
-TAG=$(date +%H%M%S)
+TAG=${E2E_TAG:-$(date +%H%M%S)}
 # the port of the web service a flow has the agent start (47's {SVC}, the checks' $SVC): this backend's own, beside its
 # cloud's ports (a fixed one was taken by another run's service on the same machine)
 SVC=$((E2E_PORT + 7))
@@ -127,7 +127,9 @@ check() {  # check WHAT COMMAND…: a line of the flow's verdict
   if eval "$2" >/dev/null 2>&1; then echo "  ok   $1"; else echo "  FAIL $1"; FAILS="$FAILS|$1"; fi
 }
 
-flows=$(ls $D/flows/*.drive | sort)
+# (E2E_FLOWS: another directory of them: scripts/rerecord.sh's, written from the tests seen again)
+FLOWS=${E2E_FLOWS:-$D/flows}
+flows=$(ls $FLOWS/*.drive | sort)
 # iOS runs its smoke flows only (signed in, a message sent, the agent's answer): what else the app does is the same
 # MoonBit as on the other hosts, checked in the Tester (02 and 04 among them) and on macOS and Android
 [ $PLATFORM = ios ] && [ $# -eq 0 ] && set -- 01-signin 03-send-text 05-agent-reply
@@ -263,7 +265,7 @@ for f in $flows; do
   "$ROOT/scripts/e2e-local.sh" thaw >/dev/null 2>&1
   [ $PLATFORM = android ] && "$ROOT/scripts/e2e-local.sh" android-ime on >/dev/null 2>&1
   echo "  $drove the app's run ($(grep -c '^DRIVE ok' $OUT/$name.log) waits met)"
-  [ -f $D/flows/$name.check ] && . $D/flows/$name.check
+  [ -f $FLOWS/$name.check ] && . $FLOWS/$name.check
   if [ -z "$FAILS" ]; then
     passed=$((passed + 1)); echo "PASS $name" | tee -a $TABLE
   else

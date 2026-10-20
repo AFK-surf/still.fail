@@ -43,6 +43,7 @@ pub fn Flow::start(
   }
   r.shuffle(seed)
   r.attach()
+  emit_start(seed, w, h, env)
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
   @ui.on_message("core", @core.receive)
   let t = @ui.Tester::new(app, w~, h~, env~)
@@ -98,6 +99,7 @@ fn Flow::fail(self : Flow, why : String) -> Unit {
 ///|
 /// `what` is on screen now.
 pub fn Flow::see(self : Flow, what : String) -> Unit {
+  emit("until " + what)
   if self.spots(what).length() == 0 {
     self.fail("not on screen: " + what)
   }
@@ -106,6 +108,7 @@ pub fn Flow::see(self : Flow, what : String) -> Unit {
 ///|
 /// `n` or more of `what` on screen now.
 pub fn Flow::see_n(self : Flow, n : Int, what : String) -> Unit {
+  emit("untiln \{n} " + what)
   let k = self.spots(what).length()
   if k < n {
     self.fail("\{k} of \{what} on screen, not \{n}")
@@ -115,6 +118,7 @@ pub fn Flow::see_n(self : Flow, n : Int, what : String) -> Unit {
 ///|
 /// `what` is not on screen now.
 pub fn Flow::gone(self : Flow, what : String) -> Unit {
+  emit("gone " + what)
   if self.spots(what).length() > 0 {
     self.fail("still on screen: " + what)
   }
@@ -123,6 +127,7 @@ pub fn Flow::gone(self : Flow, what : String) -> Unit {
 ///|
 /// The focused field's words contain `words` (`""`: it is empty).
 pub fn Flow::field(self : Flow, words : String) -> Unit {
+  emit(if words == "" { "empty" } else { "field " + words.replace_all(old="\n", new="\\n") })
   let now = self.t.field_words()
   if (words == "" && now != "") || !now.contains(words) {
     self.fail("the field holds \{now.escape()}, not \{words.escape()}")
@@ -132,6 +137,7 @@ pub fn Flow::field(self : Flow, words : String) -> Unit {
 ///|
 /// The lowest `what` on screen (`top`: the highest) tapped, and what the core answers to it given.
 pub fn Flow::tap(self : Flow, what : String, top? : Bool = false) -> Unit {
+  emit((if top { "tap1 " } else { "tap " }) + what)
   let at = self.spots(what)
   if at.length() == 0 {
     self.fail("nothing to tap: " + what)
@@ -145,6 +151,7 @@ pub fn Flow::tap(self : Flow, what : String, top? : Bool = false) -> Unit {
 ///|
 /// A tap at (x, y) (negative: from the right, the bottom).
 pub fn Flow::tap_at(self : Flow, x : Double, y : Double) -> Unit {
+  emit("tapxy \{x.to_int()} \{y.to_int()}")
   let (w, h) = self.t.size()
   self.t.tap(if x < 0.0 { w + x } else { x }, if y < 0.0 { h + y } else { y })
   self.core()
@@ -153,6 +160,7 @@ pub fn Flow::tap_at(self : Flow, x : Double, y : Double) -> Unit {
 ///|
 /// The lowest `what` pressed for `ms` (a declared length: a long press's), then let go.
 pub fn Flow::hold(self : Flow, what : String, ms : Double) -> Unit {
+  emit("hold \{ms.to_int()} " + what)
   let at = self.spots(what)
   if at.length() == 0 {
     self.fail("nothing to hold: " + what)
@@ -169,6 +177,7 @@ pub fn Flow::hold(self : Flow, what : String, ms : Double) -> Unit {
 ///|
 /// Words committed by the input method.
 pub fn Flow::type_text(self : Flow, s : String) -> Unit {
+  emit("type " + s)
   self.t.type_text(s)
   self.t.draw()
   self.core()
@@ -177,6 +186,7 @@ pub fn Flow::type_text(self : Flow, s : String) -> Unit {
 ///|
 /// Words composed by the input method, not committed yet.
 pub fn Flow::compose(self : Flow, s : String) -> Unit {
+  emit("mark " + s)
   self.t.compose(s)
   self.t.draw()
   self.core()
@@ -185,6 +195,7 @@ pub fn Flow::compose(self : Flow, s : String) -> Unit {
 ///|
 /// `s` on the clipboard, then the system's paste.
 pub fn Flow::paste(self : Flow, s : String) -> Unit {
+  emit("paste " + s)
   self.t.paste(s)
   self.core()
 }
@@ -192,6 +203,7 @@ pub fn Flow::paste(self : Flow, s : String) -> Unit {
 ///|
 /// A key by name, with what is held before it (as a flow's `key`: esc, enter, cmd+k, shift+enter).
 pub fn Flow::key(self : Flow, name : String) -> Unit {
+  emit("key " + name)
   if !self.t.key_named(name) {
     self.fail("no such key: " + name)
   }
@@ -200,12 +212,14 @@ pub fn Flow::key(self : Flow, name : String) -> Unit {
 
 ///|
 pub fn Flow::enter(self : Flow) -> Unit {
+  emit("enter")
   self.t.enter()
   self.core()
 }
 
 ///|
 pub fn Flow::back(self : Flow) -> Unit {
+  emit("back")
   self.t.back()
   self.core()
 }
@@ -213,6 +227,7 @@ pub fn Flow::back(self : Flow) -> Unit {
 ///|
 /// `ms` on the frames' clock (a declared length: a motion's, a timer's), what the core has meanwhile given.
 pub fn Flow::run_for(self : Flow, ms : Double) -> Unit {
+  emit_wait(ms)
   self.t.run_for(ms)
   self.core()
 }
@@ -247,6 +262,7 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = [], unsettled_ok? : Stri
   }
   let sum = screen_sum(self.t)
   @core.Replay::detach()
+  emit_end()
   if why.length() > 0 {
     self.fail(why.join("; "))
   }
@@ -275,6 +291,7 @@ pub fn orders(flow : (UInt) -> String raise) -> Unit raise {
 ///|
 /// The focused field emptied (all of it chosen, then deleted), as a flow's `clear`.
 pub fn Flow::clear(self : Flow) -> Unit {
+  emit("clear")
   self.t.clear()
   self.core()
 }
@@ -299,6 +316,7 @@ pub fn Flow::run_to(self : Flow, end : Double) -> Unit {
 /// the first frame, here once the Tester has drawn Home: the same asks, matched whatever their order), in place once
 /// its push is over (@ui.nav_rest).
 pub fn Flow::open_page(self : Flow, page : @sfapp.Page) -> Unit {
+  emit("#env MBUI_OPEN_PAGE=" + page_name(page))
   @sfapp.open_page(page)
   self.t.draw()
   self.core()

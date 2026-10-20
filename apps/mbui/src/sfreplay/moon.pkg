@@ -5,3 +5,7 @@ import {
   "mbui/ui",
   "moonbitlang/core/json",
 }
+
+options(
+  targets: { "emit_js.mbt": [ "js" ], "emit_native.mbt": [ "native" ] },
+)

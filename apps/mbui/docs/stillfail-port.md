@@ -951,7 +951,13 @@ only by `run_for` a declared length. At its end every message was given, nothing
 (`diverged`) or with other params (`fuzzy`), every ask of the run's made again (`unmade`, but those the test names and
 says why), and the app idle (`assert_idle`). Each flow runs as the run had it and again with what may come at once in
 orders drawn from seeds (`Replay::shuffle`: answers to different asks in any order, an ask's own in theirs), ending on
-the same screen each time (`orders`). Only a few flows stay end to end, as smoke (the whole chain: sign-in, send and
+the same screen each time (`orders`). A flow's trace is recorded again from its test, one command: `scripts/rerecord.sh NAME…` (a test's name, or a flow
+kept in e2e/flows that it needs before it) has the test write its steps as a scripted run (FLOW_EMIT,
+src/sfreplay/emit.mbt: `tap` a `tap`, `see` an `until`, `peer` what alice's other device does), runs them against a
+local still.fail of its own under the old trace's mark and station directory, makes the run's conversation the trace
+again, says which of the app's asks are more or fewer (scripts/tracediff.py), and runs the test over it. The app
+asking one more thing (a subscription the page now makes) is one command, not a flow fetched back from history.
+Only a few flows stay end to end, as smoke (the whole chain: sign-in, send and
 the agent's answer; parts going up; the preview's native views reading through the core; the system's notice; a
 download kept on the device).
 
