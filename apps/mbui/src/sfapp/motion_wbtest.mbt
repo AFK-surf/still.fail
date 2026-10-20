@@ -128,6 +128,9 @@ test "send tapped while the composer grows goes at once, the field emptied" {
   assert_eq(text(Some(sent[0].params), "text"), "第一行\n第二行\n第三行")
   let (_, after, _, _) = t.ime()
   assert_eq(after, "")
+  // the words sent wait for their row, which this core never gives; the composer's room let go after
+  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.assert_idle()
 }
 
 ///|
@@ -154,6 +157,9 @@ test "＋'s sheet going down takes no tap: the field tapped meanwhile is the fie
   let sent = named(calls, "chat.send")
   assert_eq(sent.length(), 1)
   assert_eq(text(Some(sent[0].params), "text"), "还在下去的时候")
+  // the words sent wait for their row, which this core never gives; the composer's room let go after
+  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.assert_idle()
 }
 
 ///|
@@ -180,6 +186,9 @@ test "a quote's line for a comment, tapped while the capsule grows round it, tak
     Some(Array([q])) => assert_eq(text(Some(q), "comment"), "长出来的时候点的")
     _ => fail("no quote went")
   }
+  // the words sent wait for their row, which this core never gives; the composer's room let go after
+  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.assert_idle()
 }
 
 // What leaves is only drawn (docs/stillfail-motion.md, the rule): a sheet going down and its scrim fading, the bar

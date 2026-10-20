@@ -24,12 +24,12 @@ priv struct SendFlight {
   before : Map[String, Bool]
   /// the composer's room when sent (held a quarter of the way)
   room : Double
-  sent_at : Double
-  /// its row's key once it is in the list, when it first was (-1 not yet), and when it set off: the frame after (as
-  /// Compose's animation starts the frame after it is asked)
+  /// its row's key once it is in the list, whether it is and from which frame; how far it has come (0 … 1, linear,
+  /// told to go as its row is first laid out: as Compose's animation, it sets off the frame after)
   mut key : String
-  mut placed_at : Double
-  mut started_at : Double
+  mut placed : Bool
+  mut placed_frame : Int
+  way : @motion.Anim
 }
 
 ///|
@@ -51,10 +51,11 @@ let flight_fly : Double = 0.8
 let flight_settle : Double = 0.24
 
 ///|
-/// What is sent from the composer of chat `chat` takes off from the field (before it is emptied).
+/// What is sent from the composer of chat `chat` takes off from the field (before it is emptied). The composer's room
+/// is held as tall as it was until the words let go of it (composer_hold), said now: at most their wait for the row.
 fn flight_start(c : @ui.Ctx, chat : String, words : String, v : ChatView, room : Double) -> Unit {
   send_flight.val = None
-  if c.stable() || @ui.reduced_motion() || words == "" {
+  if @ui.reduced_motion() || words == "" {
     return
   }
   match c.field_words(field_key) {
@@ -81,12 +82,12 @@ fn flight_start(c : @ui.Ctx, chat : String, words : String, v : ChatView, room :
         field_h: h,
         before,
         room,
-        sent_at: c.now(),
         key: "",
-        placed_at: -1.0,
-        started_at: -1.0,
+        placed: false,
+        placed_frame: -1,
+        way: @motion.Anim::new(0.0),
       })
-      // (sent from a tap or a key: that input's frames draw it, flight_frame asks for the rest)
+      composer_hold(chat, room, flight_wait_ms)
     }
     None => ()
   }
@@ -104,10 +105,8 @@ fn flight_of(chat : String) -> SendFlight? {
 ///|
 /// How far it has come (0 … 1, linear), from the frame after its row was first laid out.
 fn flight_p(c : @ui.Ctx, f : SendFlight) -> Double {
-  if f.started_at < 0.0 {
-    return 0.0
-  }
-  dmin((c.now() - f.started_at) / flight_ms, 1.0)
+  ignore(c)
+  f.way.get()
 }
 
 ///|
@@ -133,26 +132,18 @@ fn flight_ground(p : Double) -> Double {
 }
 
 ///|
-/// Each frame, before the chat's list is built: a flight landed, or whose row never came, is over; one under way
-/// asks for the next frame.
+/// Each frame, before the chat's list is built: a flight landed, or whose row never came (its wait out: a frame then),
+/// is over. On its way it moves by itself (its `way`, told as it set off).
 fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
   match flight_of(chat) {
     Some(f) => {
-      if f.placed_at < 0.0 && c.now() - f.sent_at >= flight_wait_ms {
+      let waited = @kit.after(c, "flight/wait", !f.placed, flight_wait_ms)
+      if (!f.placed && waited) || (f.placed && !f.way.moving()) {
         send_flight.val = None
-        return
       }
-      // (from the frame after it was placed, timed from its placing: it ends flight_ms after, whenever frames come)
-      if f.placed_at >= 0.0 && f.started_at < 0.0 && c.now() > f.placed_at {
-        f.started_at = f.placed_at
-      }
-      if f.started_at >= 0.0 && flight_p(c, f) >= 1.0 {
-        send_flight.val = None
-        return
-      }
-      c.request_frame()
     }
-    None => ()
+    // (none: the wait starts again from nothing for the next words)
+    None => @kit.after(c, "flight/wait", false, flight_wait_ms) |> ignore
   }
 }
 
@@ -172,10 +163,14 @@ fn flight_takes(chat : String, key : String, mine : Bool) -> Bool {
 }
 
 ///|
-/// The row the words go to is in the list: they go from the next frame on.
+/// The row the words go to is in the list: they go from the next frame on, all of their way said now (and the
+/// composer's room let go a quarter of the way).
 fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
-  if f.placed_at < 0.0 {
-    f.placed_at = c.now()
+  if !f.placed {
+    f.placed = true
+    f.placed_frame = c.frame_number()
+    f.way.animate(1.0, @motion.tween(flight_ms, ease=Linear))
+    composer_hold(f.chat, f.room, flight_settle * flight_ms)
   }
 }
 
@@ -184,7 +179,7 @@ fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
 fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
   let t = @sf.theme()
   match flight_of(chat) {
-    Some(f) if f.placed_at < 0.0 => {
+    Some(f) if !f.placed => {
       let l = c.layer(fn() {
         c.box(
           w=Px(f.field_w),
@@ -212,7 +207,7 @@ fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
 /// The bubble of the row the words go to (node `i`, its words `pad` in from its corner): flown from the field to
 /// where it is, over the composer; its ground coming in.
 fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
-  if f.placed_at < 0.0 || f.placed_at == c.now() {
+  if !f.placed || f.placed_frame == c.frame_number() {
     // its first frame: not seen (the words are still drawn as typed, over the field)
     c.look(i, @ui.look(alpha=0.0))
     @motion.fly(c, i, f.from_x - 14.0, f.from_y - 8.0, px=0.0, py=0.0)
@@ -226,7 +221,7 @@ fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
 /// Whether the composer's hint is away: words sent are over it, not yet out of it.
 fn flight_hint_away(c : @ui.Ctx, chat : String) -> Bool {
   match flight_of(chat) {
-    Some(f) => f.placed_at < 0.0 || flight_up(flight_p(c, f)) < 0.5
+    Some(f) => !f.placed || flight_up(flight_p(c, f)) < 0.5
     None => false
   }
 }
