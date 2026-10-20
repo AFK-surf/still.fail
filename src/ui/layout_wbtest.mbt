@@ -809,6 +809,8 @@ test "a list's running sums are its rows' heights added up" {
         vw: 0.0,
         vh: 0.0,
         sel: false,
+        theme: Theme::light(),
+        direction: Ltr,
   }
   let mut seed = 7
   let next = fn(n : Int) -> Int {

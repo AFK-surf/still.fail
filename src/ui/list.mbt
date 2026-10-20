@@ -307,6 +307,8 @@ pub fn Ctx::list(
         vw: 0.0,
         vh: 0.0,
         sel: false,
+        theme: self.theme,
+        direction: self.direction,
       }
       self.lists[id] = s
       self.own(id)
@@ -326,6 +328,8 @@ pub fn Ctx::list(
   st.vw = self.width
   st.vh = self.height
   st.sel = desk.selecting
+  st.theme = self.theme
+  st.direction = self.direction
   // shown again (not built the frame before): what of it still moves says so again
   let back = st.built >= 0 && st.built < self.frame_no - 1
   st.built = self.frame_no
@@ -359,7 +363,10 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let saved_owner = self.owner
   let (saved_w, saved_h) = (self.width, self.height)
   let saved_sel = desk.selecting
+  let (saved_theme, saved_dir) = (self.theme, self.direction)
   desk.selecting = st.sel
+  self.theme = st.theme
+  self.direction = st.direction
   self.cur = li
   self.id_seed = st.seed
   self.owner = st.owner
@@ -378,6 +385,8 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   self.width = saved_w
   self.height = saved_h
   desk.selecting = saved_sel
+  self.theme = saved_theme
+  self.direction = saved_dir
   r
 }
 

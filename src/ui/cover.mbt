@@ -24,6 +24,9 @@ struct CoverAsk {
   to : Int
   p : Double
   look : (Ctx, Double, Double) -> Unit
+  // the theme and the direction where it was asked for: it is built after layout, theirs ended (as a list's rows)
+  theme : Theme
+  direction : Direction
 }
 
 ///|
@@ -89,7 +92,16 @@ pub fn Ctx::cover(
   if self.still() {
     s.path.put(1.0)
   }
-  self.cover_asks.push({ holder, items, from: s.from, to: s.to, p: s.path.value(self.now), look })
+  self.cover_asks.push({
+    holder,
+    items,
+    from: s.from,
+    to: s.to,
+    p: s.path.value(self.now),
+    look,
+    theme: self.theme,
+    direction: self.direction,
+  })
 }
 
 ///|
@@ -137,12 +149,17 @@ fn Ctx::covers_after_layout(self : Ctx) -> Unit {
     let bw = dmax(0.0, fw + (t.2 - fw) * p)
     let bh = dmax(0.0, fh + (t.3 - fh) * p)
     let saved = self.cur
+    let (saved_theme, saved_dir) = (self.theme, self.direction)
+    self.theme = a.theme
+    self.direction = a.direction
     self.cur = a.holder
     let i = self.alloc(kind_box)
     self.nodes[i].w = Px(bw)
     self.nodes[i].h = Px(bh)
     self.with_parent(i, fn() { (a.look)(self, bw, bh) })
     self.cur = saved
+    self.theme = saved_theme
+    self.direction = saved_dir
     self.layout(i, bx, by, bw, bh) |> ignore
   }
   self.cover_asks.clear()

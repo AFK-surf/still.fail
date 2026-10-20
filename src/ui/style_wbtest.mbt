@@ -343,3 +343,68 @@ test "census: the last frame's values by kind, sorted" {
   assert_eq(k.radius, ["12"])
   assert_eq(k.color, ["112233FF", "24272BFF", "FF0000FF"])
 }
+
+///|
+test "style: a list's rows, built as it is laid out, are built in the theme in force where the list was" {
+  let t = Tester::new(fn(c) {
+    c.with_theme(Theme::dark(), fn() {
+      c.list("rows", 2, 40.0, fn(i) {
+        c.box(style=style(w=Full, h=S10, bg=Bg), fn() { c.text("row " + i.to_string(), style=text_style(size=Sm)) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    })
+  })
+  t.draw()
+  let c = g()
+  let mut grounds = 0
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.kind == kind_box && n.bg == Theme::dark().bg {
+      grounds += 1
+    }
+    if n.kind == kind_text {
+      assert_eq(n.color, Theme::dark().fg)
+    }
+  }
+  assert_eq(grounds, 2)
+}
+
+///|
+test "style: a cover, built once its items are laid out, is built in the theme and direction where it was asked for" {
+  let seen : Ref[(Int64, Bool)] = Ref::new((0L, false))
+  let t = Tester::new(fn(c) {
+    c.with_direction(Rtl, fn() {
+      c.with_theme(Theme::dark(), fn() {
+        c.box(fn() {
+          let holder = c.layer(fn() {  })
+          let a = c.box(w=Px(80.0), h=Px(40.0), fn() {  })
+          let b = c.box(w=Px(80.0), h=Px(40.0), fn() {  })
+          c.cover("pick", holder, [a, b], 0, fn(c, _w, _h) {
+            seen.val = (c.color(Bg), c.rtl())
+            c.box(style=style(w=Full, h=Full, bg=Bg), fn() {  }) |> ignore
+          })
+        })
+        |> ignore
+      })
+    })
+  })
+  t.draw()
+  assert_eq(seen.val, (Theme::dark().bg, true))
+}
+
+///|
+test "style: a list's rows are built in the direction where the list was" {
+  let rtl : Ref[Bool] = Ref::new(false)
+  let t = Tester::new(fn(c) {
+    c.with_direction(Rtl, fn() {
+      c.list("rows", 1, 40.0, fn(_) {
+        rtl.val = c.rtl()
+        c.box(h=Px(40.0), fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+  })
+  t.draw()
+  assert_true(rtl.val)
+}

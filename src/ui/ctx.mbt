@@ -74,6 +74,10 @@ struct ListState {
   mut vh : Double
   // whether its rows' words are picked with the pointer (Ctx::selectable), as where the list was
   mut sel : Bool
+  // the theme and the direction in force where the list was (Ctx::with_theme, with_direction): its rows, built later,
+  // as it is laid out, are built in them, as what is built beside the list is
+  mut theme : Theme
+  mut direction : Direction
 }
 
 ///|
