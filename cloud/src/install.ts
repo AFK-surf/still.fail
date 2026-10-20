@@ -95,6 +95,9 @@ const APP_FILES: [RegExp, string][] = [
   // and its macOS app (apps/mbui/scripts/mac-app.sh): the same kind of feed, the zips it names
   [/^mac\/mbui\/latest\.json$/, "application/json"],
   [/^mac\/stillfail-mbui-[0-9]+-arm64-mac\.zip$/, "application/zip"],
+  // and its Windows app (apps/mbui/scripts/beta.sh win: the .exe with its DLLs and core.hbc, zipped)
+  [/^win\/mbui\/latest\.json$/, "application/json"],
+  [/^win\/stillfail-mbui-[0-9]+-x64-win\.zip$/, "application/zip"],
   // The native parts prebuilt on a development machine (scripts/native.ts prebuild: the mbui app's Windows shell and
   // engine), each named by the hash of what it is made of, for CI and the builds to fetch (native.ts never builds them
   // there).

@@ -11,18 +11,24 @@
 #   apps/mbui/scripts/beta.sh mac        the macOS app (scripts/mac-app.sh: still.fail mbui.app, fail.still.mbui),
 #                                        signed with still.fail's identity (.github/mac_signing.py), zipped, into
 #                                        $RELEASE_DIR as mac/stillfail-mbui-<n>-arm64-mac.zip and mac/mbui/latest.json
-#   apps/mbui/scripts/beta.sh publish android|mac
+#   apps/mbui/scripts/beta.sh win        the Windows app (scripts/win.sh's build, its engine, shell and core.hbc beside it),
+#                                        zipped into $RELEASE_DIR as win/stillfail-mbui-<n>-x64-win.zip and
+#                                        win/mbui/latest.json
+#   apps/mbui/scripts/beta.sh publish android|mac|win
 #                                        what `build` or `mac` made put (scripts/release-put.sh), fetched back from where
 #                                        it is served and checked (size, SHA-256), then its feed: https://app.still.fail/
 #                                        releases/latest/android-mbui (mac-mbui) is the newest from then on
-# Warm between runs (WORK, MBUI_CACHE): the build runs in a copy of apps/mbui kept outside the job's checkout (which the
+# MBUI_FRESH=1 (GitHub's runners, .github/workflows/mbui.yml): the checkout built in place (WORK=apps/mbui), what stays
+# between runs the Actions cache's (MBC_STORE, MBC_LTO_CACHE, HBC_CACHE, the core's parts in out/core), the release in
+# MBUI_CACHE ($RUNNER_TEMP's).
+# Warm between runs on a machine of its own (WORK, MBUI_CACHE): the build runs in a copy of apps/mbui kept outside the job's checkout (which the
 # other jobs' clean takes), so moonc's and the compiler's outputs, the link and Gradle's build stay; core.hbc is kept
 # by its inputs (HBC_CACHE); Gradle's daemon lives on between builds for its idle timeout (android/gradle.properties).
 set -eo pipefail
 A=$(cd "$(dirname "$0")/.." && pwd)
 REPO=$(cd "$A/../.." && pwd)
 C=${MBUI_CACHE:-$HOME/stillfail-ci/mbui}
-WORK=${WORK:-$C/work}
+if [ "${MBUI_FRESH:-}" = 1 ]; then WORK=$A; else WORK=${WORK:-$C/work}; fi
 RELEASE_DIR=${RELEASE_DIR:-$C/release}
 ORIGIN=${STILLFAIL_ORIGIN:-https://app.still.fail}
 mkdir -p "$C"
@@ -79,6 +85,7 @@ tools() {
 # apps/mbui into WORK as git has it (a file gone goes there too), by content: a file that did not change keeps its time,
 # and moon and Gradle see it as it was; the build's outputs (ignored by git) stay. Its own link to mbui made there.
 copy() {
+  [ "$WORK" != "$A" ] || return 0
   mkdir -p "$WORK"
   (cd "$A" && git ls-files -z) | python3 -c '
 import os, shutil, sys
@@ -140,7 +147,7 @@ build() {
   # build for its idle timeout (~2 GB resident); a branch's build leaves it to the runner, which ends it with the job
   local keep=
   [ "${MBUI_KEEP_DAEMON:-}" != 1 ] || keep="-u RUNNER_TRACKING_ID"
-  env $keep APP=stillfail VARIANT=release HBC_CACHE="$C/hbc" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
+  env $keep APP=stillfail VARIANT=release HBC_CACHE="${HBC_CACHE:-$C/hbc}" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
     bash "$WORK/scripts/android.sh" build 2>&1 | tee "$C/build.log" || r=$?
   [ -z "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || rm -rf "$ANDROID_USER_HOME"
   [ $r = 0 ] || exit $r
@@ -167,7 +174,10 @@ mac() {
   copy
   rm -rf "$RELEASE_DIR/mac" && mkdir -p "$RELEASE_DIR/mac/mac"
   # the core's Rust shell, linked in: cargo decides what changed (its target kept; through the job's sccache)
-  CARGO_TARGET_DIR=$C/cargo-target MBUI_CORE_FRESH=1 MBUI_BUILD=$n EMBER="$REPO" bash "$WORK/scripts/mac-app.sh" build 2>&1 \
+  # (fresh: the shell's .a as the Actions cache kept it by its sources, no cargo target to look at)
+  local fresh="CARGO_TARGET_DIR=$C/cargo-target MBUI_CORE_FRESH=1"
+  [ "${MBUI_FRESH:-}" != 1 ] || fresh=
+  env $fresh MBUI_BUILD=$n EMBER="$REPO" bash "$WORK/scripts/mac-app.sh" build 2>&1 \
     | tee "$C/mac-build.log"
   tb=$(secs $t0)
   MBUI_BUILD=$n EMBER="$REPO" python3 "$REPO/.github/mac_signing.py" run -- bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"
@@ -179,6 +189,23 @@ mac() {
   feed mac "$n" "$name" "$zip"
   summary "- macOS app 0.1.$n: $(wc -c < "$zip" | tr -d ' ') bytes, $(grep '^codesign: Authority=' "$C/mac-sign.log" | head -1 | sed 's/^codesign: //'); built in $tb s, signed and zipped in $(secs $t0) s"
   summary "- $(grep '^mac-app.sh: .*\.app' "$C/mac-build.log" | sed 's/^mac-app.sh: //')"
+}
+
+# The Windows app as win.sh built and put it (the .exe, the engine's and the shell's DLLs, core.hbc), zipped
+win() {
+  local t0=$(now) n dir zip name
+  n=$(build_number)
+  local MBUI_DIR
+  MBUI_DIR=$(sh "$A/scripts/mbui.sh")
+  . "$MBUI_DIR/scripts/env.sh"
+  dir=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build stillfail native release)
+  [ -f "$dir/stillfail.exe" ] || { echo "beta: no stillfail.exe in $dir (win.sh build, put)" >&2; exit 1; }
+  rm -rf "$RELEASE_DIR/win" && mkdir -p "$RELEASE_DIR/win/win"
+  name=win/stillfail-mbui-$n-x64-win.zip
+  zip=$RELEASE_DIR/win/$name
+  (cd "$dir" && 7z a -tzip -mx=5 "$(cygpath -w "$zip" 2>/dev/null || echo "$zip")" stillfail.exe *.dll core.hbc > /dev/null)
+  feed win "$n" "$name" "$zip"
+  summary "- Windows app 0.1.$n: $(wc -c < "$zip" | tr -d ' ') bytes, zipped in $(secs $t0) s"
 }
 
 # fetched back from where it is served (the public URL; Cloudflare's API while the cloud does not serve it yet), and
@@ -206,7 +233,8 @@ publish() {
   n=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["versionCode"])' "$dir/$part/mbui/latest.json")
   name=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["file"])' "$dir/$part/mbui/latest.json")
   cp "$dir/$name" "$C/last-$part"
-  (cd "$REPO/cloud" && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+  # (wrangler's, when Cloudflare's API cannot be used: without the token)
+  [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || (cd "$REPO/cloud" && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
   sh "$REPO/scripts/release-put.sh" --files "$dir"
   local tp=$(secs $t0)
   check_put "$name" "$C/last-$part" || { echo "beta: $name did not come back as made: the feed stays as it was" >&2; exit 1; }
@@ -219,6 +247,7 @@ case "${1:-}" in
   tools) tools ;;
   build) build ;;
   mac) mac ;;
+  win) win ;;
   publish) publish "${2:-android}" ;;
   *) sed -n '2,20p' "$0"; exit 1 ;;
 esac

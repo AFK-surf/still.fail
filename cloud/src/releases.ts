@@ -155,6 +155,7 @@ const FEEDS: Record<string, string> = {
   // still.fail mbui (apps/mbui), the test app in mbui
   "android-mbui": "android/mbui/latest.json",
   "mac-mbui": "mac/mbui/latest.json",
+  "win-mbui": "win/mbui/latest.json",
 };
 
 /**
