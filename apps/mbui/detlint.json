@@ -40,14 +40,12 @@
   ],
   "counts": {
     "frame-request": {
-      "src/sfapp/app.mbt": 3,
-      "src/sfapp/bar.mbt": 2,
+      "src/sfapp/app.mbt": 1,
       "src/sfapp/chat.mbt": 1,
       "src/sfapp/composer.mbt": 4,
       "src/sfapp/drive_reader.mbt": 4,
       "src/sfapp/drive_sheets.mbt": 1,
       "src/sfapp/keep.mbt": 3,
-      "src/sfapp/newchat.mbt": 2,
       "src/sfapp/open_file.mbt": 1,
       "src/sfapp/pick.mbt": 2,
       "src/sfapp/preview.mbt": 16,
@@ -61,7 +59,7 @@
     },
     "settle": {
       "src/sfapp/drive_wbtest.mbt": 20,
-      "src/sfapp/newchat_wbtest.mbt": 9,
+      "src/sfapp/newchat_wbtest.mbt": 5,
       "src/sfapp/play_wbtest.mbt": 11,
       "src/sfapp/preview_wbtest.mbt": 12,
       "src/sfapp/share_wbtest.mbt": 10
@@ -157,7 +155,6 @@
     "frame-count": {
       "src/sfapp/cards_wbtest.mbt": 1,
       "src/sfapp/drive_wbtest.mbt": 3,
-      "src/sfapp/newchat_wbtest.mbt": 1,
       "src/sfapp/notices_wbtest.mbt": 1
     },
     "literal-time": {
@@ -170,18 +167,17 @@
       "src/sfapp/share_wbtest.mbt": 2
     },
     "stable-mode": {
-      "src/sfapp/app.mbt": 3,
-      "src/sfapp/bar.mbt": 2,
+      "src/sfapp/app.mbt": 1,
       "src/sfapp/drive_reader.mbt": 2,
       "src/sfapp/drive_sheets.mbt": 1,
       "src/sfapp/history.mbt": 4,
-      "src/sfapp/newchat.mbt": 2,
       "src/sfapp/sheets.mbt": 1,
       "src/sfapp/station_files.mbt": 1
     },
     "retired-api": {},
     "app-clock": {
-      "src/sfapp/app.mbt": 9,
+      "src/sfapp/app.mbt": 6,
+      "src/sfapp/bar.mbt": 1,
       "src/sfapp/chat.mbt": 5,
       "src/sfapp/chat_fixture.mbt": 1,
       "src/sfapp/composer.mbt": 4,
@@ -193,7 +189,6 @@
       "src/sfapp/drive_sheets.mbt": 1,
       "src/sfapp/emit.mbt": 5,
       "src/sfapp/home.mbt": 7,
-      "src/sfapp/newchat.mbt": 4,
       "src/sfapp/pick.mbt": 1,
       "src/sfapp/play.mbt": 1,
       "src/sfapp/preview.mbt": 17,

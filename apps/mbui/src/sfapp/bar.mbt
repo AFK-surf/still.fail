@@ -157,51 +157,14 @@ fn imin(a : Int, b : Int) -> Int {
 }
 
 // ── motion ─────────────────────────────────────────────────────────────
+// Motion as data (mbui's motion_data.mbt): each number is said once, as it sets out (where to, by what, from when),
+// and where it is at a frame is a function of that frame's time; what moves says so itself (Ctx::moving), so the
+// frames come until it is at rest and none after. The bar reads where its numbers are once a frame (BarModel::sample).
 
 ///|
-/// One number on a spring (react-spring's tension and friction, mass 1), stepped a frame at a time (Bar.kt BarSpring).
-priv struct Spr {
-  mut x : Double
-  mut v : Double
-  mut to : Double
-  mut tension : Double
-  mut friction : Double
-}
-
-///|
-fn spr(start : Double, tension : Double, friction : Double) -> Spr {
-  { x: start, v: 0.0, to: start, tension, friction }
-}
-
-///|
-fn Spr::moving(self : Spr) -> Bool {
-  self.v != 0.0 || self.x != self.to
-}
-
-///|
-fn Spr::go(self : Spr, to : Double, tension : Double, friction : Double) -> Unit {
-  self.to = to
-  self.tension = tension
-  self.friction = friction
-}
-
-///|
-fn Spr::step(self : Spr, dt : Double) -> Unit {
-  let mut x = self.x
-  let mut v = self.v
-  let mut left = dt
-  while left > 0.0 {
-    let h = dmin(left, 0.004)
-    left = left - h
-    v = v + (-self.tension * (x - self.to) - self.friction * v) * h
-    x = x + v * h
-  }
-  if (x - self.to).abs() < 0.001 && v.abs() < 0.01 {
-    x = self.to
-    v = 0.0
-  }
-  self.x = x
-  self.v = v
+/// The frames' clock now (ms): when what the bar is told sets out, and where it is read.
+fn bar_now() -> Double {
+  @ui.current().now()
 }
 
 ///|
@@ -212,55 +175,165 @@ let bar_show_ms : Double = 380.0
 let bar_hide_ms : Double = 300.0
 
 ///|
+/// How long the ball takes to fade in or out, and to grow back or shrink.
+let ball_fade_ms : Double = 200.0
+
+///|
+let ball_grow_ms : Double = 250.0
+
+///|
 /// How long the notch's icon takes to swap for another.
 let icon_swap_ms : Double = 300.0
 
 ///|
-/// One number gliding to where it is sent over a time on a curve (Bar.kt Glide).
-priv struct Glide {
-  mut value : Double
-  mut target : Double
-  mut from : Double
-  mut t : Double
-  mut span : Double
-  mut curve : Int
+/// One number on a spring (react-spring's tension and friction, mass 1; Bar.kt BarSpring), its way solved
+/// (@ui.SpringPath): `x`, `v` and `to` where it is, how fast it goes and where to, as of this frame (sample).
+priv struct Spr {
+  mut path : @ui.SpringPath?
+  mut x : Double
+  mut v : Double
+  mut to : Double
+  mut tension : Double
+  mut friction : Double
+  /// at rest within it
+  rest : Double
 }
 
 ///|
-fn glide(start : Double) -> Glide {
-  { value: start, target: start, from: start, t: 0.0, span: 0.0, curve: 0 }
+fn spr(start : Double, tension : Double, friction : Double, rest? : Double = 0.001) -> Spr {
+  { path: None, x: start, v: 0.0, to: start, tension, friction, rest }
+}
+
+///|
+fn Spr::moving(self : Spr) -> Bool {
+  self.v != 0.0 || self.x != self.to
+}
+
+///|
+/// Where it is at `now` (once a frame).
+fn Spr::sample(self : Spr, now : Double) -> Unit {
+  match self.path {
+    Some(p) => {
+      let (x, v) = p.at(now)
+      self.x = x
+      self.v = v
+    }
+    None => ()
+  }
+}
+
+///|
+/// Sent to `to` now by `tension` and `friction`, from where it is, as fast as it goes; nothing new when it goes there
+/// so already.
+fn Spr::go(self : Spr, to : Double, tension : Double, friction : Double) -> Unit {
+  let same = tension == self.tension && friction == self.friction
+  match self.path {
+    Some(p) if same && p.target() == to => return
+    _ => ()
+  }
+  let now = bar_now()
+  let (x, v) = match self.path {
+    Some(p) => p.at(now)
+    None => (self.x, self.v)
+  }
+  let p = match self.path {
+    Some(p) if same => p
+    old => {
+      // (a spring of another stiffness from here: the old one's way is over)
+      match old {
+        Some(o) => o.put(x)
+        None => ()
+      }
+      let p = @ui.SpringPath::new(x, k=tension, c=friction, rest=self.rest)
+      self.path = Some(p)
+      p
+    }
+  }
+  p.go(now, to, v~)
+  self.x = x
+  self.v = v
+  self.to = to
+  self.tension = tension
+  self.friction = friction
+}
+
+///|
+/// When it is at rest (the frames' clock, ms; before now, or -1: it is).
+fn Spr::end(self : Spr) -> Double {
+  match self.path {
+    Some(p) => p.end()
+    None => -1.0
+  }
+}
+
+///|
+/// There at once, at rest.
+fn Spr::put(self : Spr, x : Double) -> Unit {
+  match self.path {
+    Some(p) => p.put(x)
+    None => ()
+  }
+  self.x = x
+  self.v = 0.0
+  self.to = x
+}
+
+///|
+/// As at the start.
+fn Spr::back(self : Spr, x : Double, tension : Double, friction : Double) -> Unit {
+  self.path = None
+  self.x = x
+  self.v = 0.0
+  self.to = x
+  self.tension = tension
+  self.friction = friction
+}
+
+///|
+/// One number gliding to where it is sent over a time on a curve (Bar.kt Glide): an @motion.Anim by `key`, `value` and
+/// `target` where it is and where to, as of this frame (sample).
+priv struct Glide {
+  key : String
+  mut value : Double
+  mut target : Double
+}
+
+///|
+fn glide(key : String, start : Double) -> Glide {
+  { key, value: start, target: start }
+}
+
+///|
+fn Glide::anim(self : Glide) -> @motion.Anim {
+  @motion.anim(@ui.current(), "bar/" + self.key, self.value, global=true)
 }
 
 ///|
 /// Sent to `target` over `ms` on `curve` (0 CSS's ease, 1 Arrive, 2 linear); nothing new when it is going there.
 fn Glide::go(self : Glide, target : Double, ms : Double, curve : Int) -> Unit {
-  if target == self.target {
-    return
+  let ease : @motion.Ease = match curve {
+    0 => Css
+    1 => Arrive
+    _ => Linear
   }
-  self.from = self.value
+  self.anim().follow(target, @motion.tween(ms, ease~))
   self.target = target
-  self.t = 0.0
-  self.span = ms / 1000.0
-  self.curve = curve
 }
 
 ///|
-fn Glide::step(self : Glide, dt : Double) -> Unit {
-  if self.value == self.target {
-    return
-  }
-  self.t = self.t + dt
-  let p = if self.span <= 0.0 { 1.0 } else { dmin(1.0, self.t / self.span) }
-  let e = match self.curve {
-    0 => @ui.bezier(0.25, 0.1, 0.25, 1.0, p)
-    1 => @ui.bezier(0.2, 0.8, 0.2, 1.0, p)
-    _ => p
-  }
-  self.value = if p >= 1.0 {
-    self.target
-  } else {
-    self.from + (self.target - self.from) * e
-  }
+/// Where it is this frame.
+fn Glide::sample(self : Glide) -> Unit {
+  let a = self.anim()
+  self.value = a.get()
+  self.target = a.target()
+}
+
+///|
+/// There at once, still.
+fn Glide::snap(self : Glide, v : Double) -> Unit {
+  self.anim().snap(v)
+  self.value = v
+  self.target = v
 }
 
 ///|
@@ -332,14 +405,9 @@ priv struct BarModel {
   ball_scale : Glide
   /// each place drawn ("bar:<place>", "row:<place>"): how lit
   tints : Map[String, Glide]
-  /// the ball: where, how fast (per second), where it is sent, how stiff across
-  mut bx : Double
-  mut by : Double
-  mut bvx : Double
-  mut bvy : Double
-  mut gx : Double
-  mut gy : Double
-  mut tension : Double
+  /// the ball: where across (stiff as the way is short) and down, on springs damped as the web's (ZETA 0.635)
+  ball_x : Spr
+  ball_y : Spr
   /// how far the ball went to the place shown last (its spring as stiff as the way is short)
   mut trip : Double
   mut active_was : String
@@ -364,22 +432,30 @@ priv struct BarModel {
 }
 
 ///|
+/// The ball's springs: down and up 300; across as stiff as it is told; damped as the web's (ZETA 0.635).
+let ball_down : Double = 300.0
+
+///|
+fn ball_damping(tension : Double) -> Double {
+  2.0 * 0.635 * tension.sqrt()
+}
+
+///|
+/// The ball at rest within this (points).
+let ball_rest_within : Double = 0.01
+
+///|
 let bar : BarModel = {
   mode: false,
   o: spr(0.0, 260.0, 17.0),
   k: spr(1.0, 300.0, 30.0),
   held: spr(0.0, 420.0, 16.0),
-  vis: glide(0.0),
-  ball_alpha: glide(1.0),
-  ball_scale: glide(1.0),
+  vis: glide("vis", 0.0),
+  ball_alpha: glide("ball-alpha", 1.0),
+  ball_scale: glide("ball-scale", 1.0),
   tints: {},
-  bx: 0.0,
-  by: 0.0,
-  bvx: 0.0,
-  bvy: 0.0,
-  gx: 0.0,
-  gy: 0.0,
-  tension: 300.0,
+  ball_x: spr(0.0, 300.0, ball_damping(300.0), rest=ball_rest_within),
+  ball_y: spr(0.0, ball_down, ball_damping(ball_down), rest=ball_rest_within),
   trip: slot_px,
   active_was: "",
   drag: -1.0,
@@ -395,42 +471,26 @@ let bar : BarModel = {
   swap: None,
   waits: false,
   icon_was: "",
-  icon_swap: glide(1.0),
+  icon_swap: glide("icon-swap", 1.0),
 }
 
 ///|
 /// As at the start (tests).
 fn bar_reset() -> Unit {
-  let back_spr = fn(s : Spr, to : Spr) {
-    s.x = to.x
-    s.v = to.v
-    s.to = to.to
-    s.tension = to.tension
-    s.friction = to.friction
-  }
-  let back_glide = fn(g : Glide, to : Glide) {
-    g.value = to.value
-    g.target = to.target
-    g.from = to.from
-    g.t = to.t
-    g.span = to.span
-    g.curve = to.curve
+  let back_glide = fn(g : Glide, to : Double) {
+    g.value = to
+    g.target = to
   }
   bar.mode = false
-  back_spr(bar.o, spr(0.0, 260.0, 17.0))
-  back_spr(bar.k, spr(1.0, 300.0, 30.0))
-  back_spr(bar.held, spr(0.0, 420.0, 16.0))
-  back_glide(bar.vis, glide(0.0))
-  back_glide(bar.ball_alpha, glide(1.0))
-  back_glide(bar.ball_scale, glide(1.0))
+  bar.o.back(0.0, 260.0, 17.0)
+  bar.k.back(1.0, 300.0, 30.0)
+  bar.held.back(0.0, 420.0, 16.0)
+  back_glide(bar.vis, 0.0)
+  back_glide(bar.ball_alpha, 1.0)
+  back_glide(bar.ball_scale, 1.0)
   bar.tints.clear()
-  bar.bx = 0.0
-  bar.by = 0.0
-  bar.bvx = 0.0
-  bar.bvy = 0.0
-  bar.gx = 0.0
-  bar.gy = 0.0
-  bar.tension = 300.0
+  bar.ball_x.back(0.0, 300.0, ball_damping(300.0))
+  bar.ball_y.back(0.0, ball_down, ball_damping(ball_down))
   bar.trip = slot_px
   bar.active_was = ""
   bar.drag = -1.0
@@ -446,7 +506,7 @@ fn bar_reset() -> Unit {
   bar.swap = None
   bar.waits = false
   bar.icon_was = ""
-  back_glide(bar.icon_swap, glide(1.0))
+  back_glide(bar.icon_swap, 1.0)
   m_face.val = ""
   bars_picked.val = None
 }
@@ -468,59 +528,18 @@ fn BarModel::k_now(self : BarModel) -> Double {
 }
 
 ///|
-fn BarModel::moving(self : BarModel) -> Bool {
-  self.o.moving() ||
-  self.k.moving() ||
-  self.held.moving() ||
-  self.vis.value != self.vis.target ||
-  self.ball_alpha.value != self.ball_alpha.target ||
-  self.ball_scale.value != self.ball_scale.target ||
-  self.icon_swap.value != self.icon_swap.target ||
-  self.bvx != 0.0 ||
-  self.bvy != 0.0 ||
-  self.bx != self.gx ||
-  self.by != self.gy ||
-  self.swap is Some(_) ||
-  self.tints.values().any(fn(g) { g.value != g.target })
-}
-
-///|
-fn BarModel::step(self : BarModel, dt : Double) -> Unit {
-  for s in [self.o, self.k, self.held] {
-    if s.moving() {
-      s.step(dt)
-    }
+/// Where everything is this frame, by what it was told before (Bar.kt: told as it is composed, it moves from there).
+fn BarModel::sample(self : BarModel) -> Unit {
+  let now = bar_now()
+  for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
+    s.sample(now)
   }
   for g in [self.vis, self.ball_alpha, self.ball_scale, self.icon_swap] {
-    g.step(dt)
+    g.sample()
   }
   for _, g in self.tints {
-    g.step(dt)
+    g.sample()
   }
-  // the ball: across as stiff as the way is short, down and up 300; damped as the web's (ZETA 0.635)
-  let cx = 2.0 * 0.635 * self.tension.sqrt()
-  let cy = 2.0 * 0.635 * 300.0.sqrt()
-  let mut nx = self.bx
-  let mut ny = self.by
-  let mut left = dt
-  while left > 0.0 {
-    let h = dmin(left, 0.004)
-    left = left - h
-    self.bvx = self.bvx + (-self.tension * (nx - self.gx) - cx * self.bvx) * h
-    nx = nx + self.bvx * h
-    self.bvy = self.bvy + (-300.0 * (ny - self.gy) - cy * self.bvy) * h
-    ny = ny + self.bvy * h
-  }
-  if (self.gx - nx).abs() < 0.01 && self.bvx.abs() < 0.01 {
-    nx = self.gx
-    self.bvx = 0.0
-  }
-  if (self.gy - ny).abs() < 0.01 && self.bvy.abs() < 0.01 {
-    ny = self.gy
-    self.bvy = 0.0
-  }
-  self.bx = nx
-  self.by = ny
   // a bar chosen: landed, the stack is where the bar is, drawn as the bar will be; it goes in this same frame
   match self.swap {
     Some(_) if !self.o.moving() && self.o.x <= 0.0 => self.swap = None
@@ -529,22 +548,17 @@ fn BarModel::step(self : BarModel, dt : Double) -> Unit {
 }
 
 ///|
-/// Everything where it is going, at once (screenshots, the first frame).
+/// Everything where it is going, at once (the first frame; reduced motion).
 fn BarModel::jump(self : BarModel) -> Unit {
-  for s in [self.o, self.k, self.held] {
-    s.x = s.to
-    s.v = 0.0
+  for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
+    s.put(s.to)
   }
   for g in [self.vis, self.ball_alpha, self.ball_scale, self.icon_swap] {
-    g.value = g.target
+    g.snap(g.target)
   }
   for _, g in self.tints {
-    g.value = g.target
+    g.snap(g.target)
   }
-  self.bx = self.gx
-  self.by = self.gy
-  self.bvx = 0.0
-  self.bvy = 0.0
   self.swap = None
 }
 
@@ -788,17 +802,23 @@ fn place_face(c : @ui.Ctx, place : String, idle : Int64, lit : Int64, v : Double
 }
 
 ///|
+/// How long a place takes to light up or go dim.
+let tint_ms : Double = 300.0
+
+///|
 /// How lit place `id` is now, sent toward `on` (300 ms, CSS's ease); it is as it is when it comes.
 fn tint_of(id : String, on : Bool) -> Double {
   let g = match bar.tints.get(id) {
     Some(g) => g
     None => {
-      let g = glide(if on { 1.0 } else { 0.0 })
+      // (as it is when it comes, whatever it was before it went)
+      let g = glide("tint/" + id, if on { 1.0 } else { 0.0 })
+      g.snap(g.value)
       bar.tints[id] = g
       g
     }
   }
-  g.go(if on { 1.0 } else { 0.0 }, 300.0, 0)
+  g.go(if on { 1.0 } else { 0.0 }, tint_ms, 0)
   g.value
 }
 
@@ -843,11 +863,9 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     _ => ()
   }
   let m = bar
-  // the frame's motion, by what the bar was told before this frame (Bar.kt: told as it is composed, stepped by its
-  // loop from the next frame on; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
-  if m.placed && !c.stable() {
-    m.step(c.frame_dt() / 1000.0)
-  }
+  // the frame's motion, by what the bar was told before this frame (Bar.kt: told as it is composed, it moves from
+  // there; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
+  m.sample()
   // told each frame: shown or not, the notch as the place has it
   m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, 1)
   if !shown {
@@ -858,7 +876,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     m.drag_y = -1.0
     m.holds = false
   }
-  m.k.to = if notched { 1.0 } else { 0.0 }
+  m.k.go(if notched { 1.0 } else { 0.0 }, 300.0, 30.0)
   let ai = match active {
     Some(a) => items.search(a).unwrap_or(-1)
     None => -1
@@ -891,20 +909,20 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   let active_key = active.unwrap_or("")
   if !sliding && active_key != m.active_was {
     m.active_was = active_key
-    m.trip = dmax(8.0, (goal_x - m.bx).abs())
+    m.trip = dmax(8.0, (goal_x - m.ball_x.x).abs())
   }
-  m.gx = goal_x
-  m.gy = goal_y
-  m.tension = if sliding { 300.0 } else { dclamp(300.0 * slot_px / m.trip, 90.0, 700.0) }
+  let mut gx = goal_x
+  let mut gy = goal_y
+  let mut tension = if sliding { 300.0 } else { dclamp(300.0 * slot_px / m.trip, 90.0, 700.0) }
   // riding a bar chosen: after the place tapped in it as it comes down (Bar.kt ride)
   match m.swap {
     Some({ key: Some(key), .. } as s) =>
       match s.sets[s.i].search(key) {
         Some(j) => {
           let (xs, y) = swap_at(s, m.o.x, w, m.k_now(), row_top)
-          m.gx = xs[j]
-          m.gy = y + s.drop * (1.0 - s.t(m.o.x))
-          m.tension = 300.0
+          gx = xs[j]
+          gy = y + s.drop * (1.0 - s.t(m.o.x))
+          tension = 300.0
         }
         None => ()
       }
@@ -913,34 +931,32 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   if m.width != w {
     // a new width (turned): there at once
     m.width = w
-    m.bx = goal_x
-    m.bvx = 0.0
+    m.ball_x.put(goal_x)
   }
-  m.held.to = if sliding { 1.0 } else { 0.0 }
+  m.ball_x.go(gx, tension, ball_damping(tension))
+  m.ball_y.go(gy, ball_down, ball_damping(ball_down))
+  m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0)
   let ball_shown = ai >= 0 ||
     sliding ||
     (match m.swap {
       Some({ key: Some(_), .. }) => true
       _ => false
     })
-  m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, 200.0, 0)
-  m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, 250.0, 0)
-  // first drawn (or a screenshot): everything where it goes, at once
-  if !m.placed || c.stable() {
+  m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, 0)
+  m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, 0)
+  // first drawn (or under reduced motion): everything where it goes, at once
+  if !m.placed || c.still() {
     m.placed = true
     m.jump()
   }
-  if m.moving() {
-    c.request_frame()
-    // for the motion log (scripts/motionplot.py): the bar going and coming, the panel (a bar chosen landing)
-    if m.vis.value != m.vis.target {
-      @motion.log_frame(c, "bar/vis", "value=\{m.vis.value} to=\{m.vis.target}")
-    }
-    if m.swap is Some(_) {
-      @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=\{m.o.to}")
-    } else if m.o.moving() {
-      @motion.log_frame(c, "bar/panel", "value=\{m.o.x} to=\{m.o.to}")
-    }
+  // for the motion log (scripts/motionplot.py): the bar going and coming, the panel (a bar chosen landing)
+  if m.vis.value != m.vis.target {
+    @motion.log_frame(c, "bar/vis", "value=\{m.vis.value} to=\{m.vis.target}")
+  }
+  if m.swap is Some(_) {
+    @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=\{m.o.to}")
+  } else if m.o.moving() {
+    @motion.log_frame(c, "bar/panel", "value=\{m.o.x} to=\{m.o.to}")
   }
   if m.vis.value <= 0.0 && !shown {
     return
@@ -1048,16 +1064,16 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
       }
       // the ball, under the places, stretched by its speed toward where it goes; its glass frosts what the bar's does
       let scale = (1.0 + 0.06 * m.held.x) * m.ball_scale.value
-      let v = if (goal_x - m.bx).abs() < 0.5 { 0.0 } else { m.bvx / 60.0 }
+      let v = if (goal_x - m.ball_x.x).abs() < 0.5 { 0.0 } else { m.ball_x.v / 60.0 }
       let stretch = dmin(max_stretch, v.abs() * 1.6)
       let bw = ball_size + stretch
       let bh = ball_size - dmin(6.0, stretch * 0.2)
-      let left = m.bx - ball_size / 2.0 - (if v < 0.0 { stretch } else { 0.0 })
+      let left = m.ball_x.x - ball_size / 2.0 - (if v < 0.0 { stretch } else { 0.0 })
       let bcx = left + bw / 2.0
       let sw = bw * scale
       let sh = bh * scale
       if m.ball_alpha.value > 0.0 {
-        let ball = at(c, bcx - sw / 2.0, m.by - sh / 2.0, sw, sh, body=fn() {
+        let ball = at(c, bcx - sw / 2.0, m.ball_y.x - sh / 2.0, sw, sh, body=fn() {
           c.box(
             w=Fill(1.0),
             h=Fill(1.0),
@@ -1193,18 +1209,16 @@ fn show_icon(c : @ui.Ctx, next : String, out : Bool) -> Double {
     if m_face.val == "" || !out {
       m_face.val = next
       bar.icon_was = ""
-      sw.value = 1.0
-      sw.target = 1.0
+      sw.snap(1.0)
     } else {
       bar.icon_was = m_face.val
       m_face.val = next
-      sw.value = 0.0
-      sw.target = 0.0
+      sw.snap(0.0)
       sw.go(1.0, icon_swap_ms, 2)
     }
   }
+  sw.sample()
   if sw.value != sw.target {
-    c.request_frame()
     @motion.log_frame(c, "bar/icon-swap", "value=\{sw.value} to=1")
   } else {
     bar.icon_was = ""
