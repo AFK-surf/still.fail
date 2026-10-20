@@ -971,7 +971,7 @@ while the card moved the list):
 | 09 paste-long | 6000 characters pasted become a text file's card (6000 字符), put up at once, sent with words | the entry's attachment, a .txt; the station keeps it whole (18000 bytes) |
 | 10 attachments | ＋ → 文件: a photo and a 9 MB file, each put up at once in 4 MB parts (three for the file), sent | the entry's two attachments; both files at the station, byte for byte |
 | 11 quote | the agent's words held still: 引用, a comment on the quote, sent | the entry's quote: the agent's words, its role, the comment · Tester 重放（src/sfreplay/flows/quote_test.mbt） |
-| 12 offline-retry | the station frozen (SIGSTOP) as a message goes: 未发送 after some 30 s; thawed, 重试 | the station has the message, once |
+| 12 offline-retry | the station frozen (SIGSTOP) as a message goes: 未发送 after some 30 s; thawed, 重试 | the station has the message, once · Tester 重放（src/sfreplay/flows/offline_retry_test.mbt） |
 | 13 delete-failed | the same, 删除 | the station never gets it, even once thawed |
 | 14 mark-read | on Home, the other device asks; the answer comes unread; the chat opened at its end | the station's reads: alice unread before, read to the end after |
 | 15 drive-lend | 文件 (MBUI_OPEN_PAGE=files): the station's home; ＋, the folder picker into the station's home, this run's e2e-<tag>, 选择此文件夹 | the station's config lends the folder (drive.roots); Tester 重放（src/sfreplay/flows/drive_lend_test.mbt）；端到端里仍留着，借出文件夹是 18、21、35、45、48、52、90、91、92、98 等的前提 |

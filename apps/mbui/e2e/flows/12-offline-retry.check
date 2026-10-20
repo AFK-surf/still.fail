@@ -1,1 +1,0 @@
-check "the station has the message, once" '[ "$(sql "select count(*) from entries where text = '"'"'断网时发出的消息 $TAG'"'"'")" = 1 ]'
