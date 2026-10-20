@@ -206,10 +206,13 @@ jobs:
       - name: Tools (mbui at mbui.rev, Rust's target, the core's packages)
         run: |
           d=$(sh apps/mbui/scripts/mbui.sh)
-          # (until the pinned mbui builds for a device, zzj3720/mbui#144: that PR's mbui)
+          # (until the pinned mbui builds for a device: the pin's mbui with zzj3720/mbui#144's change to scripts/ios.sh
+          # put on it, af11d9b's diff; neither a branch's whole mbui, which drifted from the pin as soon as the branch
+          # moved, nor af11d9b's whole ios.sh, which names files (apple_stream.m) later than the pin)
           if ! grep -q MBUI_IOS_SDK "$d/scripts/ios.sh"; then
-            git clone -q --depth 1 -b ios-device https://github.com/zzj3720/mbui.git "$RUNNER_TEMP/mbui"
-            echo "MBUI=$RUNNER_TEMP/mbui" >> "$GITHUB_ENV"
+            curl -fsSL --retry 3 https://github.com/zzj3720/mbui/commit/af11d9bef68914bb0cc823702813982e166f7eb9.diff \
+              | patch -s -p1 -d "$d" --forward
+            grep -q MBUI_IOS_SDK "$d/scripts/ios.sh"
           fi
           rustup target add aarch64-apple-ios > /dev/null
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
