@@ -78,11 +78,15 @@ function inUse(path: string): boolean {
   }
 }
 
-/** Where this machine's station stands (LocalStation.place): `workspace` is the one it is, or was, in, as `station`. */
+/**
+ * Where this machine's station stands (LocalStation.place): `workspace` is the one it is, or was, in, as `station`;
+ * `joined` the ones it joined beside it (docs/multi-workspace.md), always said, for the page to know it may join more.
+ */
 export interface Place {
   state: "off" | "running" | "removed";
   workspace?: string;
   station?: string;
+  joined: string[];
 }
 
 export class LocalStation {
@@ -141,15 +145,16 @@ export class LocalStation {
     try {
       text = readFileSync(join(this.data, "mesh", "cloud.json"), "utf8");
     } catch (error) {
-      return (error as NodeJS.ErrnoException).code === "ENOENT" ? { state: "off" } : { state: "running" };
+      return (error as NodeJS.ErrnoException).code === "ENOENT" ? { state: "off", joined: [] } : { state: "running", joined: [] };
     }
     try {
-      const state = JSON.parse(text) as { workspace?: unknown; station?: unknown; removed_at?: unknown };
+      const state = JSON.parse(text) as { workspace?: unknown; station?: unknown; removed_at?: unknown; joined?: unknown };
       const workspace = typeof state.workspace === "string" && state.workspace ? { workspace: state.workspace } : {};
       const station = typeof state.station === "string" && state.station ? { station: state.station } : {};
-      return { state: state.removed_at == null ? "running" : "removed", ...workspace, ...station };
+      const joined = Array.isArray(state.joined) ? state.joined.map((j) => j?.workspace).filter((w): w is string => typeof w === "string" && w !== "") : [];
+      return { state: state.removed_at == null ? "running" : "removed", ...workspace, ...station, joined };
     } catch {
-      return { state: "running" };
+      return { state: "running", joined: [] };
     }
   }
 
@@ -247,10 +252,13 @@ export class LocalStation {
     clearTimeout(late);
   }
 
-  /** Joins the workspace a one-time token from 「添加 station」 is for. */
+  /**
+   * Joins the workspace a one-time token from 「添加 station」 is for: beside the one it is in, when it is in one
+   * (`--stay`, as the installers enroll), never moving it out of that.
+   */
   enroll(origin: string, token: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      execFile(this.#bin, ["enroll", origin, token, "--data", this.data], { env: { ...process.env, ...this.#node } }, (error, _stdout, stderr) => {
+      execFile(this.#bin, ["enroll", origin, token, "--stay", "--data", this.data], { env: { ...process.env, ...this.#node } }, (error, _stdout, stderr) => {
         if (error) reject(new Error(stderr.trim() || error.message));
         else resolve();
       });

@@ -697,6 +697,8 @@ export interface CarriedStation {
   workspace?: string;
   /** Its key in that workspace (an app from before it says none). */
   station?: string;
+  /** The workspaces it joined beside that one: said by an app that joins a station in one to another (none before). */
+  joined?: string[];
 }
 
 export type LocalStationAction = "start" | "stop" | "restart" | "update" | "log" | "folder";
