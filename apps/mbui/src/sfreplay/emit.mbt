@@ -164,15 +164,3 @@ fn emit_answered_to(call : String, n : Int) -> Unit {
   }
 }
 
-///|
-/// A scripted run's `rest`: on until the app is at its rest (mbui's drive: a frame drawn since the step began left
-/// nothing that ends to come).
-fn emit_rest() -> Unit {
-  match script.val {
-    Some(_) => {
-      emit("rest")
-      now_next.val = true
-    }
-    None => ()
-  }
-}

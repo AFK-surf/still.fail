@@ -9,8 +9,8 @@ until =studio
 until 发消息
 tap icon:plus
 until =文件
-# the gallery's latest across the top, drawn: the app at rest (its picture decoded)
-rest
+# the gallery's latest across the top, drawn: its picture decoded (by its source, the gallery's content://)
+decoded content://media/
 shot 1-strip
 tapxy 150 -180
 timeout 120000
