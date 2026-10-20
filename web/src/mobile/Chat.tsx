@@ -39,6 +39,7 @@ import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideSh
 import { useAction } from "../action.ts";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
+import { TermText } from "../TermText.tsx";
 import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import type { ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
@@ -676,7 +677,7 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
   if (log === null) return <WaitLine />;
   return (
     <pre ref={box} className={css.mJobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
-      {log.text || t("web-mobile.chat.noOutput")}
+      {log.text ? <TermText text={log.text} runs={log.runs} /> : t("web-mobile.chat.noOutput")}
     </pre>
   );
 }

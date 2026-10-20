@@ -5,6 +5,7 @@ import * as format from "./format.ts";
 import { said } from "./format.ts";
 import { t } from "./i18n.ts";
 import type { Clock } from "./present.ts";
+import { terminal } from "./terminal.ts";
 import { arr as arrU, get as getU } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -267,13 +268,16 @@ export function longJobs(stations: [string, string | null, J[]][], c: Clock, fro
   return { groups };
 }
 
-/// A job's output as read, with its last line and when it grew in words put in (`JobLogView`).
+/// A job's output as read, as a terminal shows it (its colours in `runs`, terminal.ts), with its last line and when it
+/// grew in words put in (`JobLogView`).
 export function log(value: J, c: Clock): J {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
-  const last = strOf(value, "text").trim();
+  const shown = terminal(strOf(value, "text"));
+  const last = shown.text.trim();
   const at = msOf(value, "outputAt");
   return {
     ...value,
+    ...shown,
     ...(last !== "" ? { last } : {}),
     ...(at !== null || last !== "" ? { said: at === null ? t("core-logic.jobs.output") : t("core-logic.jobs.output_at", { ago: ago(at, c.now) }) } : {}),
   };

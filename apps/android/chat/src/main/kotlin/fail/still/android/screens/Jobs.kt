@@ -67,6 +67,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.WaitLine
+import fail.still.android.ui.termText
 import fail.still.android.ui.Waiting
 import fail.still.android.ui.DoingMark
 import fail.still.android.ui.GroupLabel
@@ -285,7 +286,14 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
                     .verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
                 if (log == null) WaitLine()
-                else Text(text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
+                else {
+                    val runs = log.runs
+                    val ink = C.ink
+                    val dark = C.dark
+                    val shown = remember(runs, ink, dark) { runs?.let { termText(it, ink, dark) } }
+                    if (shown != null) Text(shown, style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
+                    else Text(text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
+                }
             }
         }
         if (running) Row(

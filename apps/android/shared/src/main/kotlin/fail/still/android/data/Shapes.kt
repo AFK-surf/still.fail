@@ -3070,15 +3070,33 @@ data class ImageNear (
 	val count: UInt
 )
 
-/// A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a
-/// station yet to say), and, put in by the core, its last line and when in words (absent: nothing to say).
+/// Text of a command's output in one style (its SGR codes).
+@Serializable
+data class TermRun (
+	val text: String,
+	/// One of the 16 colours of the client's terminal palette for its theme by number (`0`…`15`), or `#rrggbb`;
+	/// absent: the text's colour.
+	val fg: String? = null,
+	/// As `fg`; absent: none.
+	val bg: String? = null,
+	val bold: Boolean? = null,
+	val dim: Boolean? = null,
+	val italic: Boolean? = null,
+	val underline: Boolean? = null
+)
+
+/// A job's output as it grows (the `jobLog` topic): its last lines as a terminal shows them (control sequences done
+/// or dropped, src/terminal.ts), when it last grew, its state (absent from a station yet to say), and, put in by the core,
+/// its last line and when in words (absent: nothing to say).
 @Serializable
 data class JobLogView (
 	val text: String,
 	val outputAt: Long? = null,
 	val state: String? = null,
 	val last: String? = null,
-	val said: String? = null
+	val said: String? = null,
+	/// `text` in runs of one style, as a terminal colours it; absent when none of it is styled (show `text`).
+	val runs: List<TermRun>? = null
 )
 
 /// A station that could be added to a workspace.

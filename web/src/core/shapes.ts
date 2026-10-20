@@ -3077,9 +3077,26 @@ export interface ImageNear {
 	count: number;
 }
 
+/** Text of a command's output in one style (its SGR codes). */
+export interface TermRun {
+	text: string;
+	/**
+	 * One of the 16 colours of the client's terminal palette for its theme by number (`0`…`15`), or `#rrggbb`;
+	 * absent: the text's colour.
+	 */
+	fg?: string;
+	/** As `fg`; absent: none. */
+	bg?: string;
+	bold?: boolean;
+	dim?: boolean;
+	italic?: boolean;
+	underline?: boolean;
+}
+
 /**
- * A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a
- * station yet to say), and, put in by the core, its last line and when in words (absent: nothing to say).
+ * A job's output as it grows (the `jobLog` topic): its last lines as a terminal shows them (control sequences done
+ * or dropped, src/terminal.ts), when it last grew, its state (absent from a station yet to say), and, put in by the core,
+ * its last line and when in words (absent: nothing to say).
  */
 export interface JobLogView {
 	text: string;
@@ -3087,6 +3104,8 @@ export interface JobLogView {
 	state?: string;
 	last?: string;
 	said?: string;
+	/** `text` in runs of one style, as a terminal colours it; absent when none of it is styled (show `text`). */
+	runs?: TermRun[];
 }
 
 /** A station that could be added to a workspace. */
