@@ -18,7 +18,7 @@ pub fn Tester::draw(self : Tester) -> Unit {
 
 ///|
 /// The frames owed drawn (Tester::draw's, after `n` drawn already), each at the display's next frame: what a frame left
-/// owed is drawn as the Tester stands, at its making (Tester::new) and a run's end (run_for), not left to the next input.
+/// owed is drawn as the Tester stands, at its making (Tester::new), not left to the next input.
 fn Tester::draw_owed(self : Tester, n : Int) -> Unit {
   let mut n = n
   while self.owed_now() {
@@ -83,14 +83,13 @@ pub fn rest_of(name : String) -> Double {
 
 ///|
 /// `ms` on the frames' clock, a frame at each of the display's frames, the last the first at or past `ms` (where a
-/// host would show what is so at `ms`).
+/// host would show what is so at `ms`), and none after it: what that frame leaves owed (an input's frame after, a host's
+/// event) is the next frame's, as on a host, drawn by what the test does next.
 pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
   let end = self.fake.time + ms
   while self.fake.time < end - 1.0e-9 {
     self.frame()
   }
-  // (what its last frame said starts there: drawn at that moment, as an input's frames are)
-  self.draw_owed(1)
 }
 
 ///|
