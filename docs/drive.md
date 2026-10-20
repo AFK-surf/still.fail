@@ -116,7 +116,7 @@ Helper has no grant for):
 |---|---|
 | `GET /drive` | `{roots: [{path, name, state}], manage, write, anywhere?, home?, trash?, watch, zip?}` (also in the overview as `drive`; `state` `unreadable` for a folder macOS protects until still.fail Helper has its grant) |
 | `PUT /drive/roots {roots}` | the folders pinned, by any member who may write; each new one must be there, a folder, none of the station's data |
-| `GET /drive/folders?path=` | members who may write: the folders in `path` (the home when empty), to pick one to pin |
+| `GET /drive/folders?path=` | members who may write: the folders in `path` (the home when empty), to pick one to pin; with the way there (`crumbs`, from the home or the top of its disk) and the places to start from (`places`: the home's folders, then the disks: macOS's in /Volumes, Linux's in /media/<user> and /mnt, Windows' drives `C:\` to `Z:\`) |
 | `GET /drive/list?root=&path=` | `{path, entries: [{name, dir, size, mtime, type}], truncated}`, folders first, names by number; past 50000 entries the first 50000 in that order |
 | `GET /drive/stat?root=&path=` | one entry |
 | `GET /drive/read?root=&path=&offset=&length=` | the bytes (at most 8 MB), `stillfail-total`, `stillfail-mtime`, `content-type` |
