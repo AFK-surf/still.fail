@@ -14,8 +14,18 @@ code=0
 for t in ${TARGETS:-js}; do
   echo "=== $t"
   # (native on macOS: the hosts' Objective-C linked in by mbui's own wrapper, as a test's binary is given no
-  # cc-link-flags: mbui's scripts/cc_apple.sh)
-  if [ $t = native ] && [ "$(uname)" = Darwin ]; then export MOON_CC="$MBUI_DIR/scripts/cc_apple.sh"; else unset MOON_CC; fi
+  # cc-link-flags: mbui's scripts/cc_apple.sh. Built --release as the apps are, its C split and compiled in parallel
+  # by mbui's scripts/mbc.py (moon's cc on PATH): on macos-15 the tests run in 15 s against debug's 144 s (2026-10-20).
+  # An object made of the same inputs (by content) is kept: a build over the last one's objects (mbui-check.yml's
+  # native cache) compiles only the units whose functions changed.
+  # Without ThinLTO unless MBC_LTO says (its link is 30-40 s a test; main's run has it on: mbui-check.yml).)
+  unset MOON_CC
+  mode=
+  if [ $t = native ] && [ "$(uname)" = Darwin ]; then
+    mode=--release
+    export MBC_REAL_CC="$MBUI_DIR/scripts/cc_apple.sh" MBC_LTO=${MBC_LTO:-0}
+    PATH="$(python3 "$MBUI_DIR/scripts/mbc.py" shim "$A/_build/mbc-bin"):$PATH"
+  fi
   # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
   # side: the flows in packages of their own for it, src/sfreplay/flows/*/)
   pkgs=""
@@ -27,7 +37,7 @@ for t in ${TARGETS:-js}; do
     pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"
     for g in src/sfreplay/flows/*/; do pkgs="$pkgs -p stillfail/sfreplay/flows/$(basename "$g")"; done
   fi
-  moon test --target $t $pkgs ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
+  moon test --target $t $mode $pkgs ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
 done
 exit $code
