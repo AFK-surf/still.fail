@@ -158,7 +158,7 @@ fn update_install(src : Source) -> Unit {
         @host.log("update: \{file} asked for")
         match update.source {
           Some(source) =>
-            @host.update_install((source.url)(file), text(Some(v), "sha256"), number(Some(v), "size"), name)
+            @ui.update_install((source.url)(file), text(Some(v), "sha256"), number(Some(v), "size"), name)
           None => ()
         }
       }
@@ -181,7 +181,7 @@ fn update_progress() -> String {
   if update.installing {
     return up("android-misc.updates.checking")
   }
-  let st = @host.update_state()
+  let st = @ui.update_state()
   if st == "" {
     return ""
   }
@@ -245,9 +245,6 @@ fn update_button(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let progress = update_progress()
   if progress != "" {
-    if update_busy() || update.installing {
-      c.request_frame()
-    }
     c.text(
       match progress.find(" ") {
         Some(i) => progress.view(start_offset=i + 1).to_owned()

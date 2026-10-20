@@ -919,6 +919,24 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     }
     None => ()
   }
+  // what the system's picker answered, taken in before the capsule is laid out too (the host's word that it has
+  // answered brings this frame)
+  // (taken once from where it waits: what goes up is what was picked, whichever build takes it)
+  match cui.picking {
+    Some(p) =>
+      match p.files() {
+        Some(files) => {
+          cui.picking = None
+          if cui.picking_for == d.key {
+            for f in files {
+              add_file(src, d, r.station, f.name, f.bytes, None)
+            }
+          }
+        }
+        None => ()
+      }
+    None => ()
+  }
   // files another app shared into this chat (share.mbt), up as ＋'s are
   // (taken once from where they wait: the files as they were shared, whichever build takes them)
   match shared_into.get(d.key) {
@@ -1037,24 +1055,6 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   }
   if cui.released {
     cui.outside = false
-  }
-  // what the system's picker answered
-  // (taken once from where it waits: what goes up is what was picked, whichever build takes it)
-  match cui.picking {
-    Some(p) =>
-      match p.files() {
-        Some(files) => {
-          cui.picking = None
-          if cui.picking_for == d.key {
-            for f in files {
-              add_file(src, d, r.station, f.name, f.bytes, None)
-            }
-          }
-          c.request_frame()
-        }
-        None => ()
-      }
-    None => ()
   }
   // its station files switched to go as files: up (station_files.mbt)
   for x in refs_of(d.key) {
@@ -1729,7 +1729,7 @@ fn attach_sheet(
   }
   ignore(r)
   // the gallery's recent photos (recent.mbt), read again as the sheet opens
-  recent_frame(c, src, cui.attach)
+  recent_frame(src, cui.attach)
   let tapped_tile = fn(i : Int) {
     if i == 0 {
       ask(Camera)

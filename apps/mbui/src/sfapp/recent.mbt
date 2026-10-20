@@ -22,7 +22,7 @@ priv struct Recent {
   /// the gallery's answers when last read
   mut answers : Int
   mut access : @host.GalleryAccess
-  mut reading : @host.GalleryRead?
+  mut reading : @ui.GalleryRead?
   mut photos : Array[@host.GalleryPhoto]
 }
 
@@ -72,18 +72,14 @@ fn latest_photos(photos : Array[@host.GalleryPhoto], now : Int64, n : Int) -> Ar
 }
 
 ///|
-/// How often the gallery's read is looked at until it is done (the host tells no event for it yet).
-let recent_poll_ms : Double = 50.0
-
-///|
 /// Each frame ＋'s sheet is drawn: the gallery read again as it opens and on each of the system's answers.
-fn recent_frame(c : @ui.Ctx, src : Source, open : Bool) -> Unit {
+fn recent_frame(src : Source, open : Bool) -> Unit {
   let answers = @host.gallery_answers()
   if open && (!recent.open || answers != recent.answers) {
     recent.answers = answers
     recent.access = @host.gallery_access()
     recent.reading = match recent.access {
-      Whole | Chosen => @host.gallery_read()
+      Whole | Chosen => @ui.gallery_read()
       _ => {
         recent.photos = []
         None
@@ -98,10 +94,9 @@ fn recent_frame(c : @ui.Ctx, src : Source, open : Bool) -> Unit {
           recent.reading = None
           recent.photos = latest_photos(all, ((src.now)() / 1000.0).to_int64(), recent_most)
           @host.log("recent photos: \{recent.photos.length()} of \{all.length()}")
-          c.request_frame()
         }
-        None => c.wake_in(recent_poll_ms)
-
+        // (read on the host's side: its word that it is done brings the frame that takes it)
+        None => ()
       }
     None => ()
   }

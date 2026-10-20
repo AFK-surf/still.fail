@@ -201,11 +201,6 @@ let tap_rest_ms : Double = 4000.0
 let swipe_still_ms : Double = 100.0
 
 ///|
-/// How often the host's work for the viewer is looked at until it is done (a marked image drawn, a video's frame
-/// saved): the host tells no event for them yet.
-let host_poll_ms : Double = 50.0
-
-///|
 /// Dark whatever the theme, as a viewer of pictures: its text, what is quieter, its canvas.
 let dark_text : Int64 = 0xF4F4F5FFL
 
@@ -1395,7 +1390,8 @@ fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             keep_bytes(c, marking.job_name, "image/png", png)
           }
         }
-        None => c.wake_in(host_poll_ms)
+        // (drawn on the host's side: its word that it is done brings the frame that takes it)
+        None => ()
       }
     None => ()
   }
@@ -2218,7 +2214,8 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
           say(c, pv("android-chat.video.saveFrame.failed"))
         }
       }
-      None => c.wake_in(host_poll_ms)
+      // (grabbed on the host's side: its word that it is done brings the frame that takes it)
+      None => ()
     }
   }
   let controls = c.id("preview/video-controls")
