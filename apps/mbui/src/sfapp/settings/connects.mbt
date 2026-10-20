@@ -135,6 +135,7 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
                     } else {
                       fill("android-settings.connects.offline", [("name", text(sv, "name"))])
                     },
+                    start=S6,
                   )
                 })
               }
@@ -312,7 +313,7 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
           })
         }
         blocks.append([
-          fn() { section_header(c, tr("android-settings.connect.run")) },
+          fn() { section_header(c, tr("android-settings.connect.run"), start=S6) },
           fn() {
             list_card(c, fn() {
               let label = fn(words : String) {
@@ -391,7 +392,7 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
             })
             |> ignore
           },
-          fn() { section_header(c, "Slack app") },
+          fn() { section_header(c, "Slack app", start=S6) },
           fn() {
             list_card(c, fn() {
               list_row(c, fn() {
@@ -402,7 +403,7 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
               |> ignore
             })
           },
-          fn() { section_header(c, tr("android-settings.connect.recent")) },
+          fn() { section_header(c, tr("android-settings.connect.recent"), start=S6) },
           fn() {
             list_card(c, fn() {
               let sessions = items(iv, "sessions")

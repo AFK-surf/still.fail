@@ -284,9 +284,10 @@ fn large_title(c : @ui.Ctx, big : String, small? : String = "", lead? : () -> Un
 let large_title_box : @ui.Style = @ui.style(w=Full, px=S4, pb=S1_5)
 
 ///|
-/// A section's heading (Parts.kt SectionHeader): its title, what it holds at its end.
-fn section_header(c : @ui.Ctx, title : String, trailing? : String = "", start? : Double = 24.0) -> Unit {
-  c.box(style=section_line, pl=start, fn() {
+/// A section's heading (Parts.kt SectionHeader): its title, what it holds at its end; `start` its room at its start
+/// (20; the settings pages' say 24, S6, as their SectionHeaders do).
+fn section_header(c : @ui.Ctx, title : String, trailing? : String = "", start? : @ui.Space = S5) -> Unit {
+  c.box(style=section_line.then(@ui.style(pl=start)), fn() {
     // Parts.kt:585 (15sp)
     c.text(title, style=@sf.body.then(@sf.strong).then(@sf.one_line)) |> ignore
     c.spacer()
@@ -299,10 +300,10 @@ fn section_header(c : @ui.Ctx, title : String, trailing? : String = "", start? :
 }
 
 ///|
-/// SectionHeader's line (its start said where it is used): 20 in at its end, 14 over, 6 under, its words on the
-/// line's foot.
+/// SectionHeader's line (its start said where it is used, 20 unless said): 20 in at its end, 14 over, 6 under, its
+/// words on the line's foot.
 // kept across runs: a value (no field of it changes)
-let section_line : @ui.Style = @ui.style(row=true, w=Full, pr=S5, pt=S3_5, pb=S1_5, align=AEnd, gap=S2)
+let section_line : @ui.Style = @ui.style(row=true, w=Full, pl=S5, pr=S5, pt=S3_5, pb=S1_5, align=AEnd, gap=S2)
 
 ///|
 /// A page's note under its title, in a line or two (SettingParts.kt PageNote).

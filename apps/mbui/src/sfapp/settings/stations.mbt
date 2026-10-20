@@ -502,7 +502,7 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
               |> ignore
             }
           },
-          fn() { section_header(c, tr("android-settings.stations.onIt")) },
+          fn() { section_header(c, tr("android-settings.stations.onIt"), start=S6) },
           fn() {
             list_card(c, fn() {
               let n = fn(key : String) {

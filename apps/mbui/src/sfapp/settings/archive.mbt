@@ -115,7 +115,7 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           |> ignore
         }
         Empty => place_empty(c, tr("android-misc.archive.note"))
-        Day(label) => section_header(c, label, start=20.0)
+        Day(label) => section_header(c, label)
         Item(it) => archive_row(c, core, it)
       }
     })
