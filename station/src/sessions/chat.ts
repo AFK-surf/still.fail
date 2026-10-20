@@ -47,12 +47,13 @@ export interface ChatSurface {
   workspace(): string | null;
   /// Starts receiving.
   start?(handler: Handler): Promise<void>;
-  /// Posts a message into the thread as written (Slack's mrkdwn, or Markdown in the station's chats and Feishu) and gives
+  /// Posts a message into the thread as written (Markdown, which Slack and Feishu draw too) and gives
   /// the posted message's ts. `files` are attachments already copied into the session's uploads; surfaces that cannot
   /// carry files refuse them. `card`: the question it asks (an options or text card, chat_post's), where `cards` says
   /// the platform shows them.
   post(thread: ThreadRef, message: string, files: Attachment[], card?: Json | null): Promise<string>;
-  /// The answer cards it shows (options and text; Feishu's buttons and fields): absent, none but the station's chats.
+  /// The answer cards it shows (options and text; Slack's and Feishu's buttons and fields): absent, none but the
+  /// station's chats.
   cards?: boolean;
   /// How a new session's link is said as it starts (null: it is not said: Feishu's status card has it); absent: Slack's
   /// `<url|label>`.
@@ -86,7 +87,7 @@ export async function callApi(chat: ChatSurface, method: string, params: Record<
 }
 
 /// Splits text for Slack's message size, preferring paragraph, then line boundaries. Slack messages go out as the
-/// agent wrote them, in Slack's own formatting: no converting, only splitting what is too long for one message.
+/// agent wrote them: no converting, only splitting what is too long for one message.
 /// Lengths are in characters (code points), as the Rust's.
 export function splitForSlack(text: string, limit: number): string[] {
   const chunks: string[] = [];

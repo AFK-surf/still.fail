@@ -16,7 +16,7 @@ import { slackTools } from "./slack.ts";
 export const CHAT_POST = {
   name: "chat_post",
   description:
-    "Post a message to one of your conversations: in Slack's formatting (mrkdwn) for a Slack thread, Markdown for a still.fail chat. Users always have a chat input box and can reply freely. An optional card can make a real decision easier: concrete options to pick from, or a field to write in; do not add filler options or create unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends).",
+    "Post a message to one of your conversations, in Markdown (a Slack thread and a Feishu chat draw it too; mentions and files differ: see Formatting in your instructions). Users always have a chat input box and can reply freely. An optional card can make a real decision easier: concrete options to pick from, or a field to write in; do not add filler options or create unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends).",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -316,7 +316,7 @@ export const SESSION_SEND = {
       },
       "text": {
         "type": "string",
-        "description": "The message, standing on its own: what you need or found, with what the other agent needs to act on it. Markdown; to a Slack thread, mrkdwn."
+        "description": "The message, standing on its own: what you need or found, with what the other agent needs to act on it. Markdown."
       },
       "files": {
         "type": "array",

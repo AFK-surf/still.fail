@@ -62,6 +62,11 @@ test("socket mode off drops the events, and on brings back those of the groups o
   const off = withSocketMode(manifest, false);
   assert.equal(off.settings.socket_mode_enabled, false);
   assert.equal(off.settings.event_subscriptions, undefined);
+  assert.deepEqual([off.settings.interactivity, withSocketMode(off, true).settings.interactivity], [{ is_enabled: false }, { is_enabled: true }]);
+  // An app made before cards gets them on its next save; one without Socket Mode would need a URL, so it does not.
+  const before = slackManifest("ember");
+  before.settings.interactivity = { is_enabled: false };
+  assert.deepEqual([applySettings(before, {}).settings.interactivity, applySettings(off, {}).settings.interactivity], [{ is_enabled: true }, { is_enabled: false }]);
   const on = withSocketMode(manifest, true);
   const events = strings(on.settings.event_subscriptions.bot_events);
   assert.equal(events[0], "custom_event", "events ember does not know stay");
@@ -80,6 +85,7 @@ test("the create-app link carries the manifest", () => {
   const manifest = JSON.parse(decodeURIComponent(encoded));
   assert.deepEqual(manifest, slackManifest("ember 机器人"));
   assert.equal(manifest.settings.socket_mode_enabled, true);
+  assert.deepEqual(manifest.settings.interactivity, { is_enabled: true }, "cards' buttons come over the socket");
   assert.deepEqual(slackManifest("x", null, "https://e/cb").oauth_config.redirect_urls, ["https://e/cb"]);
   // Field order as the Rust station writes it (serde_json's preserve_order).
   assert.deepEqual(Object.keys(manifest), ["display_information", "features", "oauth_config", "settings"]);

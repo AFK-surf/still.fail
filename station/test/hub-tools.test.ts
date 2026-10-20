@@ -289,14 +289,14 @@ test("a state says which message it is about, the pending card by default", asyn
   await r.close();
 });
 
-test("options are refused in a Slack thread", async () => {
+test("options are refused where the chat shows no cards", async () => {
   const r = new Rig();
   const m = message();
   await r.accept(m);
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
-  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "选哪个？", kind: "need_decision", options: [{ label: "A" }] })).includes("only in still.fail and Feishu chats"));
-  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "key？", card: { type: "text" } })).includes("only in still.fail and Feishu chats"));
+  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "选哪个？", kind: "need_decision", options: [{ label: "A" }] })).includes("cards (options, a text field) are not shown here"));
+  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "key？", card: { type: "text" } })).includes("cards (options, a text field) are not shown here"));
   await r.close();
 });
 
