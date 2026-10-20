@@ -18,6 +18,7 @@ fn fake_core(
   kept? : Json = Json::null(),
   read_only? : Bool = false,
   now? : Double = 0.0,
+  over? : (String, Topic) -> Topic = fn(_, t) { t },
 ) -> @ui.Tester {
   reset()
   let base = fixture("chat")
@@ -32,6 +33,7 @@ fn fake_core(
       }
     },
     call_bytes: fn(name, params, bytes, done) { calls.push({ name, params, bytes: Some(bytes), done }) },
+    topic: fn(name, params) { over(name, (base.topic)(name, params)) },
     now: fn() { now },
     read_only,
   }
@@ -159,10 +161,70 @@ test "a long paste goes up by the same id and name whatever the clocks say: from
     ids.push((text(p, "id"), text(p, "name")))
   }
   assert_eq(ids[0], ids[1])
-  assert_eq(ids[0].1, paste_name(long, 0))
+  // as the station takes an upload's id (hub.ts savePart: [A-Za-z0-9_-], 8 to 64 long): 32 hex digits, whatever goes
+  for id in [ids[0].0, upload_id("", 0), upload_id("drive\u{1}/\u{1}a.txt", 12345)] {
+    assert_eq(id.length(), 32)
+    assert_true(id.iter().all(fn(ch) { (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') }))
+  }
   // another paste, or the same one second in its draft, is another file
-  assert_true(paste_name(long + "y", 0) != paste_name(long, 0))
-  assert_true(paste_name(long, 1) != paste_name(long, 0))
+  assert_true(paste_name("d", long + "y", 0) != paste_name("d", long, 0))
+  assert_true(paste_name("d", long, 1) != paste_name("d", long, 0))
+}
+
+///|
+test "the same paste in the next message is another upload: the chat moved on by the message before" {
+  let long = "第一行要点\n" + String::make(6000, 'x')
+  let calls : Array[Made] = []
+  // the core's chat once the first message is in it: one more message, after the last
+  let sent = Ref(false)
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" || !sent.val {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) =>
+        match o.get("messages") {
+          Some(Array(ms)) if ms.length() > 0 =>
+            match ms[ms.length() - 1] {
+              Object(m) => {
+                let seq = match m.get("seq") {
+                  Some(Number(n, ..)) => n
+                  _ => 0.0
+                }
+                let next = m.copy()
+                next["seq"] = Json::number(seq + 1.0)
+                next["text"] = Json::string("这条带着粘贴的文字发出去了")
+                let o2 = o.copy()
+                o2["messages"] = Json::array(ms + [Json::object(next)])
+                { ..tp, value: Some(Json::object(o2)), version: tp.version + 1 }
+              }
+              _ => tp
+            }
+          _ => tp
+        }
+      _ => tp
+    }
+  })
+  let up = fn() {
+    t.tap_text("发消息")
+    t.type_text(long)
+    t.draw()
+    let parts = named(calls, "station.upload.part")
+    let p = Some(parts[parts.length() - 1].params)
+    (parts[parts.length() - 1].done)(
+      Ok({ "file": { "name": Json::string(text(p, "name")), "path": "uploads/u/p.txt", "size": 6016 } }),
+    )
+    t.draw()
+    (text(p, "id"), text(p, "name"))
+  }
+  let first = up()
+  tap_send(t)
+  assert_eq(named(calls, "chat.send").length(), 1)
+  sent.val = true
+  t.draw()
+  let second = up()
+  assert_true(first.0 != second.0)
+  assert_true(first.1 != second.1)
 }
 
 ///|
