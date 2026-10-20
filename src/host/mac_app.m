@@ -828,12 +828,13 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   }
 }
 
-double mb_host_now(void) { return settle ? settle_clock : mb_now_ms(); }
+// (settled_run, not settle: asked before the window runs too, by what the app starts first, as own_clock is)
+double mb_host_now(void) { return settled_run() ? settle_clock : mb_now_ms(); }
 
 // The time of day (host_native.mbt's wall_ms): a settled run's from a fixed day (@ui.tester_wall's), on with its
 // clock, so what it shows of it is the same each run.
 double mb_host_wall_ms(void) {
-  return settle ? 1790000000000.0 + settle_clock : [[NSDate date] timeIntervalSince1970] * 1000.0;
+  return settled_run() ? 1790000000000.0 + settle_clock : [[NSDate date] timeIntervalSince1970] * 1000.0;
 }
 
 int32_t mb_host_set_outside(mb_outside_fn f) {
@@ -917,7 +918,10 @@ int32_t mb_host_open_url(moonbit_string_t s) {
 // Whether the run is settled (above): a script's, in stable mode, not a recording's. From the environment, as it is
 // the same before the window runs (what the app starts before @ui.run asks it: own_clock) and after.
 static int settled_run(void) {
-  return getenv("MBUI_SCRIPT") && !getenv("MBUI_RECORD") && getenv("MBUI_BENCH") && atoi(getenv("MBUI_BENCH")) < 0;
+  static int known = -1;
+  if (known < 0)
+    known = getenv("MBUI_SCRIPT") && !getenv("MBUI_RECORD") && getenv("MBUI_BENCH") && atoi(getenv("MBUI_BENCH")) < 0;
+  return known;
 }
 
 // Whether the run is on its own clock (host_native.mbt's own_clock): a settled run's, asked before the window runs too.
