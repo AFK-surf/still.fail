@@ -17,6 +17,8 @@ env:
   # the compiled units by content (scripts/mbc.py's store), kept between runs by actions/cache
   MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
   HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+  # the linker's ThinLTO cache: a module whose bitcode did not change, its backend's object kept
+  MBC_LTO_CACHE: ${{ github.workspace }}/.ci/lto
 jobs:
   android:
     runs-on: ubuntu-24.04
@@ -27,6 +29,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       - uses: gradle/actions/setup-gradle@v4
+        # (written by this branch's runs too, while it is measured: main's alone, after)
+        with: { cache-read-only: false }
       - uses: ./.github/actions/setup
       - name: MoonBit
         run: |
@@ -38,6 +42,7 @@ jobs:
           path: |
             ${{ github.workspace }}/.ci/mbc-store
             ${{ github.workspace }}/.ci/hbc
+            ${{ github.workspace }}/.ci/lto
           key: mbui-fast-${{ runner.os }}-${{ github.sha }}
           restore-keys: mbui-fast-${{ runner.os }}-
       - name: mbui at mbui.rev
@@ -72,6 +77,7 @@ jobs:
           path: |
             ${{ github.workspace }}/.ci/mbc-store
             ${{ github.workspace }}/.ci/hbc
+            ${{ github.workspace }}/.ci/lto
           key: mbui-fast-${{ runner.os }}-${{ github.sha }}
           restore-keys: mbui-fast-${{ runner.os }}-
       - name: mbui at mbui.rev
