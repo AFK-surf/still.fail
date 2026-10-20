@@ -8,7 +8,7 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { unix } from "../src/platform/unix.ts";
-import { cmdPath, windows } from "../src/platform/windows.ts";
+import { cmdPath, readShim, windows } from "../src/platform/windows.ts";
 
 const src = fileURLToPath(new URL("../src", import.meta.url));
 
@@ -119,6 +119,34 @@ test("a .cmd names a path with other than ASCII in it through the variable it is
   assert.throws(() => cmdPath("C:\\Users\\张三x\\a", env), /cannot name/);
   assert.throws(() => cmdPath("C:\\Users\\张三\\数据\\a", env), /cannot name/);
   assert.throws(() => cmdPath("D:\\数据\\a", env), /cannot name/);
+});
+
+test("what an npm or pnpm shim runs is run without cmd, which cannot pass a newline", () => {
+  // As cmd-shim (npm's) and @zkochan/cmd-shim (pnpm's) write them (the runner's src/shim.rs reads the same).
+  const npmJs =
+    '@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n\r\nIF EXIST "%dp0%\\node.exe" (\r\n  SET "_prog=%dp0%\\node.exe"\r\n) ELSE (\r\n  SET "_prog=node"\r\n  SET PATHEXT=%PATHEXT:;.JS;=;%\r\n)\r\n\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\said\\cli.js" %*\r\n';
+  const npmExe = '@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n"%dp0%\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe"   %*\r\n';
+  const pnpmJs =
+    '@SETLOCAL\r\n@IF EXIST "%~dp0\\node.exe" (\r\n  "%~dp0\\node.exe"  "%~dp0\\node_modules\\x\\bin\\cli.js" %*\r\n) ELSE (\r\n  @SET PATHEXT=%PATHEXT:;.JS;=;%\r\n  node  "%~dp0\\node_modules\\x\\bin\\cli.js" %*\r\n)\r\n';
+  const pnpmExe = '@SETLOCAL\r\n@"%~dp0\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe"   %*\r\n';
+  assert.deepEqual(readShim(npmJs), { node: { beside: "node_modules\\said\\cli.js" } });
+  assert.deepEqual(readShim(pnpmJs), { node: { beside: "node_modules\\x\\bin\\cli.js" } });
+  const claude = { program: { beside: "node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe" } };
+  assert.deepEqual(readShim(npmExe), claude);
+  assert.deepEqual(readShim(pnpmExe), claude);
+  // Vite+'s hands on to another.
+  assert.deepEqual(readShim('@echo off\r\n"C:\\Users\\a\\.vite-plus\\npm\\said.cmd" %*\r\nexit /b %ERRORLEVEL%\r\n'), {
+    program: { at: "C:\\Users\\a\\.vite-plus\\npm\\said.cmd" },
+  });
+  // Anything else is cmd's: what the station writes for a script (Git's sh, through a variable) among them.
+  for (const other of [
+    "@echo said %*\r\n",
+    '@echo off\r\nset X=1\r\n"%~dp0\\said.exe" %*\r\n',
+    '@"%~dp0\\said.exe" --flag %*\r\n',
+    '@"%USERPROFILE%\\Git\\bin\\sh.exe" "%~dp0said" %*\r\n',
+    '@"%USERPROFILE%\\bin\\said.exe" %*\r\n',
+  ])
+    assert.equal(readShim(other), null, other);
 });
 
 test("a .cmd so written runs what is at such a path", { skip: process.platform !== "win32" && "cmd is Windows'" }, () => {

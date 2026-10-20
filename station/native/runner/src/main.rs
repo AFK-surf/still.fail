@@ -20,6 +20,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use serde_json::{Value, json};
 
+mod shim;
 #[cfg_attr(unix, path = "sys/unix.rs")]
 #[cfg_attr(windows, path = "sys/windows.rs")]
 mod sys;

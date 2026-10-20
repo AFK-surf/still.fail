@@ -44,6 +44,7 @@ use windows_sys::Win32::System::Threading::{
 };
 
 use super::Signal;
+use crate::shim::{self, Named, Runs};
 
 /// The exit code of an agent this runner ended (what a signal's death is elsewhere).
 const ENDED: u32 = 1;
@@ -571,9 +572,9 @@ fn resolve(program: &str) -> PathBuf {
 }
 
 /// What a `.cmd` shim runs, when it is one whose arguments can go around cmd (which cannot pass a newline, and which
-/// Rust then refuses: an agent's instructions have them): npm's (cmd-shim: `"%_prog%" "%dp0%\…\cli.js" %*`, Node
-/// beside it or on PATH) as Node and the script; one that only hands on to another `.cmd` (Vite+'s) as what that one
-/// runs. None for anything else, which cmd runs.
+/// Rust then refuses: an agent's instructions have them), as `shim::read` tells: npm's and pnpm's for a script as Node
+/// and the script; theirs for a binary (Claude Code's npm package's is `claude.exe`) as the binary; one that only
+/// hands on to another `.cmd` (Vite+'s) as what that one runs. None for anything else, which cmd runs.
 pub fn unshim(path: &Path) -> Option<(PathBuf, Vec<String>)> {
     let mut path = path.to_path_buf();
     for _ in 0..4 {
@@ -583,28 +584,24 @@ pub fn unshim(path: &Path) -> Option<(PathBuf, Vec<String>)> {
         let text = fs::read(&path).ok().filter(|t| t.len() < 16 * 1024)?;
         let text = String::from_utf8_lossy(&text);
         let dir = path.parent()?.to_path_buf();
-        // npm's: the script, relative to the shim's directory.
-        if let Some(at) = text.find("\"%_prog%\"") {
-            let rest = &text[at + "\"%_prog%\"".len()..];
-            let open = rest.find("\"%dp0%\\")? + "\"%dp0%\\".len();
-            let close = rest[open..].find('"')? + open;
-            if !rest[close + 1..].trim_start().starts_with("%*") {
-                return None;
+        let at = |named: Named| match named {
+            Named::Beside(rel) => dir.join(rel),
+            Named::At(path) => PathBuf::from(path),
+        };
+        match shim::read(&text)? {
+            Runs::Node(script) => {
+                let node = dir.join("node.exe");
+                let node = if node.is_file() { node } else { resolve("node") };
+                return Some((node, vec![at(script).to_string_lossy().into_owned()]));
             }
-            let script = dir.join(&rest[open..close]);
-            let node = dir.join("node.exe");
-            let node = if node.is_file() { node } else { resolve("node") };
-            return Some((node, vec![script.to_string_lossy().into_owned()]));
+            Runs::Program(program) => {
+                let program = at(program);
+                if program.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")) {
+                    return Some((program, Vec::new()));
+                }
+                path = program;
+            }
         }
-        // One that only hands on: `"<another>.cmd" %*` (and an @echo off, an exit with its code).
-        let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.eq_ignore_ascii_case("@echo off") && !l.to_ascii_lowercase().starts_with("exit /b")).collect();
-        let [line] = lines.as_slice() else { return None };
-        let rest = line.strip_prefix('"')?;
-        let close = rest.find('"')?;
-        if rest[close + 1..].trim() != "%*" {
-            return None;
-        }
-        path = PathBuf::from(&rest[..close]);
     }
     None
 }
