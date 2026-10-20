@@ -1,4 +1,0 @@
-check "the next picture came from the core's imageNear" 'grep -q "preview: stepped to e2e-photo2.png" $OUT/$name.log'
-check "the marks were drawn on the picture by the host" 'grep -q "marks: .*drawn\|marks: 1 drawn" $OUT/$name.log'
-check "the marked picture was kept on the device (a PNG)" 'f=$(kept_file "$(sed -n "s/^kept \(e2e-photo-标注-[0-9]*\.png\): .*/\1/p" $OUT/$name.log | head -1)") && head -c 4 "$f" | xxd -p | grep -q "^89504e47"'
-check "the message carries the marked picture and the note's quote" 'entry_attachments "标注过的图片 $TAG" | grep -q "e2e-photo-标注-" && entry_quotes "标注过的图片 $TAG" | grep -q "这里要对齐 $TAG" && entry_quotes "标注过的图片 $TAG" | grep -q "标注 1"'

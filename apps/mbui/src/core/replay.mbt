@@ -61,6 +61,9 @@ pub struct Replay {
   priv skipped : Array[String]
   /// what the run's app was started with (its trace's `{"env":…}`: src/stillfail's CORETRACE env)
   priv run_env : Array[(String, String)]
+  /// what the run's host answered that its text recording kept (`{"textrec":…}`: TEXTREC lines, mbui's hostrec.mbt):
+  /// a word's bounds, a picture's sizes; one a line
+  priv run_text : Array[String]
   /// where what the run's host said of its views goes (Replay::host)
   priv mut host_said : ((String) -> Unit)?
 }
@@ -87,6 +90,7 @@ let reports : Array[String] = ["client.focus", "chat.place", "draft.put"]
 pub fn Replay::parse(log : String) -> Replay {
   let evs : Array[Ev] = []
   let run_env : Array[(String, String)] = []
+  let run_text : Array[String] = []
   for v in log.split("\n") {
     let line = v.to_owned()
     let start = match line.find("CORETRACE ") {
@@ -129,7 +133,14 @@ pub fn Replay::parse(log : String) -> Replay {
               run_env.push((k, s))
             }
           }
-        } else if m.contains("view") || m.contains("still") || m.contains("info") {
+        } else if m.get("textrec") is Some(rec) {
+          run_text.push(rec.stringify())
+        } else if m.contains("view") ||
+          m.contains("still") ||
+          m.contains("info") ||
+          m.contains("site") ||
+          m.contains("sitebody") ||
+          m.contains("sitestate") {
           let (wall, has_wall) = match m.get("w") {
             Some(Number(d, ..)) => (d, true)
             _ => (0.0, false)
@@ -210,6 +221,7 @@ pub fn Replay::parse(log : String) -> Replay {
     host_said: None,
     skipped: [],
     run_env,
+    run_text,
   }
   r.advance()
   r
@@ -421,7 +433,7 @@ pub fn step_of(line : String) -> String? {
 /// The steps a test says as a scripted run's (src/sfreplay/emit.mbt).
 let said_steps : Array[String] = [
   "tap", "tap1", "tapxy", "hold", "type", "clear", "key", "enter", "back", "drag", "dragon", "hover", "mark", "notice",
-  "paste", "resize", "rightclick", "wheel", "log", "until", "untiln", "gone", "noticed", "nonotice", "field", "empty",
+  "paste", "pasten", "resize", "rightclick", "wheel", "log", "until", "untiln", "gone", "noticed", "nonotice", "field", "empty",
 ]
 
 ///|
@@ -479,6 +491,25 @@ pub fn Replay::sent_bytes(self : Replay, name : String, key : String, value : St
     if e.out && e.msg is Object(m) && name_of(m) == name {
       match m.get("params") {
         Some(Object(p)) if p.get(key) == Some(Json::string(value)) => return e.bytes
+        _ => ()
+      }
+    }
+  }
+  None
+}
+
+///|
+/// The bytes the run sent beside its first call `name` whose params' `key` begins with `prefix` (a picture the run's
+/// app named as it made it, its time of day in its name: `e2e-photo-标注-`), as Replay::sent_bytes gives them.
+pub fn Replay::sent_bytes_from(self : Replay, name : String, key : String, prefix : String) -> Bytes? {
+  for e in self.evs {
+    if e.out && e.msg is Object(m) && name_of(m) == name {
+      match m.get("params") {
+        Some(Object(p)) =>
+          match p.get(key) {
+            Some(String(v)) if v.has_prefix(prefix) => return e.bytes
+            _ => ()
+          }
         _ => ()
       }
     }
@@ -563,6 +594,17 @@ pub fn Replay::step_at(self : Replay, line : String) -> Double? {
   match self.step_index(line) {
     Some(i) => Some(self.due_at(i))
     None => None
+  }
+}
+
+///|
+/// The time of day in the run as it took the step `line` (its clock, `w`), when the trace has the step with it: a
+/// replay's time of day set to it as the step is taken, so what the app names by the time (a picture marked, saved)
+/// is named as the run's was.
+pub fn Replay::step_wall(self : Replay, line : String) -> Double? {
+  match self.step_index(line) {
+    Some(i) if self.evs[i].has_wall => Some(self.evs[i].wall)
+    _ => None
   }
 }
 
@@ -762,8 +804,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
   }
   if found < 0 {
     self.diverged.push(text)
-    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too)
-    if kind == "call" {
+    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too; not
+    // a report (where the list is, a draft): the run's app makes those as its own frames have it, maybe not at all)
+    if kind == "call" && !reports.contains(name_of(m)) {
       self.asked.push(name_of(m))
     }
     return
@@ -903,6 +946,25 @@ fn canon(j : Json) -> String {
 }
 
 ///|
+/// How many of the run's calls `call` have had their answer (an `ok` or an `error`: a stream's end) given here: what a
+/// scripted run's `answered CALL` lines count (the k-th answer from the start).
+pub fn Replay::answers_given(self : Replay, call : String) -> Int {
+  let asked : Map[Int, Bool] = {}
+  let mut n = 0
+  for e in self.evs {
+    guard e.msg is Object(m) && m.get("id") is Some(Number(id, ..)) else { continue }
+    if e.out {
+      if kind_of(m) == "call" && name_of(m) == call {
+        asked[id.to_int()] = true
+      }
+    } else if e.done && !e.host && asked.contains(id.to_int()) && (m.contains("ok") || m.contains("error")) {
+      n += 1
+    }
+  }
+  n
+}
+
+///|
 /// When the answer to the run's latest call `call` given so far was given here (the clock, Replay::clock): what a
 /// test times a motion the answer starts from, as the tape has it at this pace, not as the app says it. None while
 /// none is given.
@@ -1009,4 +1071,15 @@ pub fn Replay::first_happened(self : Replay) -> (Double, Double)? {
 /// What the run's app was started with, as its trace keeps it (`{"env":…}`): for a replay's to be started the same.
 pub fn Replay::env(self : Replay) -> Array[(String, String)] {
   self.run_env
+}
+
+///|
+/// What the run's host answered that its text recording kept (TEXTREC lines, one a line), for a Tester to answer the
+/// same (Tester::new's `text`); None when the run kept none.
+pub fn Replay::text(self : Replay) -> String? {
+  if self.run_text.is_empty() {
+    None
+  } else {
+    Some(self.run_text.join("\n"))
+  }
 }

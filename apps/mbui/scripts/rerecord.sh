@@ -91,6 +91,10 @@ fi
 echo "rerecord: the scripts written ($TMP)"; ls "$TMP"/*.drive | sed 's/^/  /'
 # (each step once the app is settled, as the Tester's steps are taken: what came of the last one in, its page loaded;
 # until drive's named events take its place)
+# (the host's answers kept too (MBUI_TEXT_RECORD=1: its fonts' measures, a word's bounds, a picture's sizes), for the
+# replay's page laid out as the run's was: what the app tells the core of where the list is (client.focus's end,
+# chat.place) the same; TEXT_RECORD=0 leaves them out)
+[ "${TEXT_RECORD:-1}" = 0 ] || export MBUI_TEXT_RECORD=1
 export E2E_STATION=${station:-${E2E_STATION:-}} E2E_TAG=$tag E2E_FLOWS=$TMP MBUI_CORE_TRACE=1 MBUI_CORE_TRACE_BYTES=$MAX_BYTES
 [ -n "$E2E_STATION" ] || unset E2E_STATION
 bash scripts/e2e-local.sh down > /dev/null 2>&1

@@ -19,6 +19,7 @@
 #   scripts/e2e-local.sh peer ARGS  e2e/peer.ts as alice's other device (send TEXT, create, chats, …)
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
+#   scripts/e2e-local.sh android-installer    until the system's installer is the emulator's top activity, then back
 #   scripts/e2e-local.sh reads      how far alice has read the test chat, as the station has it
 #   scripts/e2e-local.sh pins       whether alice keeps the test chat pinned (PINS 1 or 0)
 #   scripts/e2e-local.sh wait-chat WORDS   until the test station has a chat whose first words begin with WORDS
@@ -266,6 +267,19 @@ android_ime() {
   fi
 }
 
+# until the system's installer is in front on the emulator (an update handed to it asks the person to confirm), as
+# the activity manager says (its top resumed activity the package installer's); its page kept ($RUN/installer.png),
+# then declined (back: the app in front again, its run going on)
+android_installer() {
+  local adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb -s emulator-${EMU_PORT:-5586}"
+  rm -f $RUN/installer.png
+  wait_for '$adb shell dumpsys activity activities < /dev/null | grep -i "topResumedActivity\|mResumedActivity" | grep -qi packageinstaller' 60 ||
+    { say "the system's installer never came in front"; return 1; }
+  $adb exec-out screencap -p < /dev/null > $RUN/installer.png
+  $adb shell input keyevent KEYCODE_BACK < /dev/null
+  say "the system's installer was in front (its page kept), declined"
+}
+
 # how far alice has read the test chat, as the station keeps it (reads), against its last entry
 reads() {
   local t=$(python3 -c "import json; print(json.load(open('$WORK/peer/chat.json'))['thread'])")
@@ -441,6 +455,7 @@ case "${1:-all}" in
   pins) pins ;;
   wait-chat) shift; wait_chat "$@" ;;
   android-ime) shift; android_ime "$@" ;;
+  android-installer) android_installer ;;
   freeze) freeze ;;
   thaw) thaw ;;
   drive-seed) shift; drive_seed "$@" ;;
