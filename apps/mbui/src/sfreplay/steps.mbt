@@ -507,6 +507,9 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   }
   let sum = screen_sum(self.t)
   @core.Replay::detach()
+  // (what the app asked as the flow ended (a page gone at its slide's end, its player's place told): the script
+  // written waits for its answers too, so the run keeps them)
+  emit_answered(self.r.take_asked())
   emit_end()
   step_hook.val = None
   if why.length() > 0 {
