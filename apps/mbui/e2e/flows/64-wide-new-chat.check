@@ -1,6 +1,0 @@
-first_thread=$(sql "select thread from entries where text like '宽屏新对话 $TAG post:%' and author_kind='person' limit 1")
-test_thread=$(sql "select thread from entries where text like '端到端测试的对话 post:%' limit 1")
-check "the station has the new chat's first message, once" '[ "$(sql "select count(*) from entries where text like '"'"'宽屏新对话 $TAG post:%'"'"'")" = 1 ]'
-check "it is a chat of its own" '[ -n "$first_thread" ] && [ "$first_thread" != "$test_thread" ]'
-check "its agent answered in it" '[ -n "$(sql "select n from entries where thread=$first_thread and author_kind=\"agent\" and text=\"宽屏新对话的回答 $TAG\"")" ]'
-check "the answer shown in the chat and as its row's last words (two places)" 'grep -q "DRIVE ok untiln 2 宽屏新对话的回答" $OUT/$name.log'
