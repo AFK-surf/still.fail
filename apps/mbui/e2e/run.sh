@@ -171,7 +171,8 @@ step_line() { python3 -c 'import json, sys; print("CORETRACE " + json.dumps({"st
 # runs a flow in the app; its log as it goes, `log do:` acted on. A flow's `#env K=V` lines are put in the app's
 # environment for that run (MBUI_OPEN_PAGE=files: the drive's 文件 pushed over Home)
 run_flow() {
-  local name=$1 log=$OUT/$name.log script=$OUT/$name.drive
+  local name=$1
+  local log=$OUT/$name.log script=$OUT/$name.drive
   # {T} this run's tag; {SVC} the service port; {FILES} where the files to attach are (on Android the app's own copy of them); {PKG} the app
   local files=$FILES; [ $PLATFORM = android ] && files=/data/data/$E2E_PKG/files/e2e
   sed "s/{T}/$TAG/g; s/{SVC}/$SVC/g; s|{FILES}|$files|g; s/{PKG}/${E2E_PKG:-}/g" $2 > $script
