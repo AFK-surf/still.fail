@@ -69,7 +69,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
       runtime === "claude" ? line.includes('"usage"')
       : runtime === "dsh" ? line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')
       : runtime === "grok" ? line.startsWith('{"type":"stillfail/usage"')
-      : runtime === "cursor" ? line.includes('"type":"usage"')
+      : runtime === "cursor" || runtime === "devin" ? line.includes('"type":"usage"')
       : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
     if (!wanted) continue;
     let r: unknown;
@@ -91,15 +91,15 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
         input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
         output: n(get(usage, "output")),
       });
-    } else if (runtime === "cursor") {
+    } else if (runtime === "cursor" || runtime === "devin") {
       // What the station's driver kept of each Cursor turn (agents/cursor-bridge.mjs): the SDK's counts, input apart
-      // from the cache's.
+      // from the cache's; of each Devin turn the same (agents/devin.ts).
       const usage = get(r, "usage");
       const id = str(get(r, "run"));
       if (str(get(r, "type")) !== "usage" || usage === undefined || usage === null || id === null) continue;
       const time = get(r, "time");
       out.push({
-        id: `cursor:${id}`, at: typeof time === "number" ? time : 0, model: str(get(r, "model")), subagent, fast: false,
+        id: `${runtime}:${id}`, at: typeof time === "number" ? time : 0, model: str(get(r, "model")), subagent, fast: false,
         input: n(get(usage, "inputTokens")), cacheRead: n(get(usage, "cacheReadTokens")), cacheWrite: n(get(usage, "cacheWriteTokens")), cacheWriteLong: 0,
         output: n(get(usage, "outputTokens")),
       });
@@ -610,10 +610,10 @@ export class UsageCounter {
       }
     }
     // DeepSeek Harness: each runtime session's own file, looked for in every profile's home (dsh.ts); Grok Build: what the
-    // station kept of its turns beside each one's transcript (grok.ts); Cursor: its transcript, the station's own
-    // (cursor.ts).
+    // station kept of its turns beside each one's transcript (grok.ts); Cursor and Devin: their transcripts, the
+    // station's own (cursor.ts, devin.ts).
     for (const s of sessions) {
-      if ((s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor") || (wanted !== null && !wanted.has(s.key))) continue;
+      if ((s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin") || (wanted !== null && !wanted.has(s.key))) continue;
       const runtime = s.runtime;
       const turns: { of: UsageTurn[] | null } = { of: null };
       for (const id of store.runtimeSessions(s.key)) {

@@ -1,5 +1,5 @@
 // The workspace's profiles in one list (the `profiles` view, docs/station-share.md), grouped by the kind of account
-// (Claude's subscriptions, ChatGPT's, SuperGrok's, Cursor's, keys), one row an account: the same
+// (Claude's subscriptions, ChatGPT's, SuperGrok's, Cursor's, Devin's, keys), one row an account: the same
 // subscription (by its runtime and the address signed in) or the same key (by its provider and key), whether shared
 // between stations or signed in on several of them each, is one row; its stations are its members, each with what it
 // is there (the one that has it and lends it, one borrowing it, one signed in on its own). Made from what the stations'
@@ -28,12 +28,12 @@ function account(p: J): string | null {
 }
 
 /// The kinds of account the list is grouped by, in their order: a vendor's subscription (Claude's, ChatGPT's, SuperGrok's,
-/// Cursor's), then keys and the rest.
-export const GROUPS = ["claude", "chatgpt", "grok", "cursor", "key"] as const;
+/// Cursor's, Devin's), then keys and the rest.
+export const GROUPS = ["claude", "chatgpt", "grok", "cursor", "devin", "key"] as const;
 
 export function group(p: J): (typeof GROUPS)[number] {
   if (p.access?.kind !== "subscription") return "key";
-  return p.runtime === "codex" ? "chatgpt" : p.runtime === "grok" ? "grok" : p.runtime === "cursor" ? "cursor" : "claude";
+  return p.runtime === "codex" ? "chatgpt" : p.runtime === "grok" ? "grok" : p.runtime === "cursor" ? "cursor" : p.runtime === "devin" ? "devin" : "claude";
 }
 
 /// A kind of account in words: Claude 订阅.

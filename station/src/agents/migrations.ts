@@ -64,6 +64,7 @@ export const NOTES: [number, string][] = [
   [57, "A fifth runtime, Cursor (runtime cursor, on a Cursor account): chat_create takes runtime \"cursor\"."],
   [58, "The login tool takes station: log another station of the workspace in (a command you run there with station_task wants a login) the same way, its card with \"station\": the key its answer gives, rather than posting a link the command printed."],
   [59, "The station no longer guesses that a login waits for a code its page gives: where the screen says so (copy the code and paste it below, enter the verification code), call login {id, paste: true} before posting its card, and the card gets a field where the person enters it. Never type that code yourself."],
+  [60, "A sixth runtime, Devin (runtime devin, on a Devin account): chat_create takes runtime \"devin\"."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

@@ -114,6 +114,7 @@
   "core-logic.footprint.elsewhere.dsh": "本机的 DeepSeek Harness",
   "core-logic.footprint.elsewhere.grok": "本机的 Grok Build",
   "core-logic.footprint.elsewhere.cursor": "本机的 Cursor",
+  "core-logic.footprint.elsewhere.devin": "本机的 Devin",
   "core-logic.footprint.elsewhere.note": "agent 也会使用这些内容，不计入上方总数，也不在此清理",
   "core-logic.footprint.elsewhere.npm": "npm 缓存",
   "core-logic.footprint.elsewhere.playwright": "Playwright 浏览器",

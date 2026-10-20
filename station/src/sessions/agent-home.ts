@@ -176,10 +176,11 @@ export function linkAgentHome(agentHome: string, profiles: ProfileHome[]) {
 /// One place for each runtime's transcripts, shared by every profile that runs it: a session is the station's, not an
 /// account's, so any account can take it on (another, when one's quota is used up) with all it had. Each profile home's
 /// transcript directory (Claude Code's projects/, Codex's sessions/, DeepSeek Harness's dsh-sessions/ as dsh.ts sets
-/// it, Grok Build's grok/sessions/, Cursor's cursor/sessions/ as cursor.ts keeps it) is a link there. A real directory in its place is
+/// it, Grok Build's grok/sessions/, Cursor's cursor/sessions/ as cursor.ts keeps it, Devin's devin/sessions/ as devin.ts
+/// keeps it) is a link there. A real directory in its place is
 /// left alone, with a warning (the profile then keeps its own).
 /// Where in a profile home a runtime keeps its transcripts.
-export const transcriptDir = (runtime: string) => (runtime === "claude" ? "projects" : runtime === "codex" ? "sessions" : runtime === "grok" ? "grok/sessions" : runtime === "cursor" ? "cursor/sessions" : "dsh-sessions");
+export const transcriptDir = (runtime: string) => (runtime === "claude" ? "projects" : runtime === "codex" ? "sessions" : runtime === "grok" ? "grok/sessions" : runtime === "cursor" ? "cursor/sessions" : runtime === "devin" ? "devin/sessions" : "dsh-sessions");
 
 export function linkTranscripts(dataDir: string, profiles: ProfileHome[]) {
   for (const { id, runtimes, home } of profiles) {

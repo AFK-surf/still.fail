@@ -8,7 +8,8 @@
 //   by the installer this release carries, told what the new one must hash to, run apart from the station; only a
 //   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the clone). With `autoUpdate: true` it does so by itself once the
 //   station has been quiet a while (never back from the beta, and a version it already went for, not again).
-// - Claude Code and Codex: `--version`, and the latest their npm packages say; updated the way each was installed.
+// - Claude Code and Codex: `--version`, and the latest their npm packages say (Devin: its installer's manifest); updated
+//   the way each was installed.
 //   Cursor is no command: its SDK's package, in the station's own npm prefix (agents/cursor.ts), its version the package's.
 //   Running agents go on with what they started with; the next process starts the new one.
 // - Software wired in after (`add`): the packages of the modules the station installs itself (modules/packages.ts),
@@ -48,7 +49,7 @@ import { platform as machine } from "../platform/index.ts";
 import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
 import { SDK_PACKAGE, sdkPrefix, sdkVersion } from "../agents/cursor.ts";
 import {
-  type Env, type How, type Kind, KINDS, NotFinished, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, isNpmInstall, kindCommand,
+  DEVIN_MANIFEST, type Env, type How, type Kind, KINDS, NotFinished, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, isNpmInstall, kindCommand,
   kindName, kindPackage, linkBesideNpm, pinNpmVersion, run, runLines,
 } from "./runtimes.ts";
 import {
@@ -125,6 +126,8 @@ export type UpdatesOptions = {
   env?: Env;
   /// Where the runtimes' latest versions are read: npm's registry.
   registry?: string;
+  /// Where the Devin CLI's latest version is read: its installer's manifest (runtimes.ts DEVIN_MANIFEST).
+  devinManifest?: string;
   /// Where Claude Code's builds are said (its installer's downloads, for how much of one is in).
   claudeReleases?: string;
   /// How many turns run now (the hub's), for what a drain waits on and an automatic update waits for.
@@ -204,12 +207,13 @@ export class Updates {
   private origin: () => string | null | undefined;
   private env: Env;
   private registry: string;
+  private devinManifest: string;
   private claudeReleases: string;
   private timing: Timing;
   private trusted: Map<string, string> | undefined;
   /// The channel the running release came from: as it says (CHANNEL), else the channel it started on.
   readonly installed: Channel;
-  private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty(), dsh: empty(), grok: empty(), cursor: empty() };
+  private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty(), dsh: empty(), grok: empty(), cursor: empty(), devin: empty() };
   private checkedAt: number | null = null;
   private checking: Promise<void> | null = null;
   private listeners = new Set<() => void>();
@@ -237,6 +241,7 @@ export class Updates {
     this.origin = o.origin;
     this.env = o.env ?? process.env;
     this.registry = o.registry ?? "https://registry.npmjs.org";
+    this.devinManifest = o.devinManifest ?? DEVIN_MANIFEST;
     this.claudeReleases = o.claudeReleases ?? "https://downloads.claude.ai/claude-code-releases";
     this.timing = { ...TIMING, ...o.timing };
     this.trusted = o.trusted;
@@ -484,7 +489,8 @@ export class Updates {
     }
     let latest: string | null = null;
     try {
-      const said = await fetchJson(`${this.registry}/${kindPackage(kind)}/latest`);
+      // Devin's builds are its installer's, said in its manifest; the others' npm packages.
+      const said = await fetchJson(kind === "devin" ? this.devinManifest : `${this.registry}/${kindPackage(kind)}/latest`);
       latest = typeof said?.version === "string" ? said.version : null;
     } catch (e) {
       log.warn("updates", "the runtime's latest version not read", { runtime: kind, error: (e as Error).message });

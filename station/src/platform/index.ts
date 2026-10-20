@@ -129,6 +129,8 @@ export type Platform = {
   // Updates.
   /// How Claude Code is installed where it is not.
   claudeInstall: How;
+  /// How the Devin CLI is installed where it is not (its own installer, into ~/.local/bin).
+  devinInstall: How;
   /// The kind of the installer a release carries for this machine: bin/install.<lang>.<this> (scripts/installers.ts).
   installerExt: "sh" | "ps1";
   /// Starts `script` (the installer the running release carries, docs/release-signing.md) apart from the station, run

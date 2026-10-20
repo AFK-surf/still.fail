@@ -842,7 +842,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean, head: @Composab
     val api = app.api(station)
     val job = p.login
     val active = job != null && job.state in SIGNING_IN
-    val provider = if (p.access.kind == "opencode-go") "OpenCode" else when (p.runtime) { "claude" -> "Claude"; "grok" -> "Grok"; "cursor" -> "Cursor"; else -> "ChatGPT" }
+    val provider = if (p.access.kind == "opencode-go") "OpenCode" else when (p.runtime) { "claude" -> "Claude"; "grok" -> "Grok"; "cursor" -> "Cursor"; "devin" -> "Devin"; else -> "ChatGPT" }
     val busy = app.isDoing("profile.login", "station" to station, "id" to p.id)
     var manual by remember { mutableStateOf(false) }
     var previous by remember { mutableStateOf(job?.state) }
@@ -925,8 +925,8 @@ private fun Step(n: Int, words: String) {
 }
 
 /**
- * What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude), copy the
- * code and open the page (Codex, Grok), or only open the page and confirm there (Cursor).
+ * What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude, Devin), copy
+ * the code and open the page (Codex, Grok), or only open the page and confirm there (Cursor).
  */
 @Composable
 private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) -> Unit) {
@@ -969,7 +969,7 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
         // Two steps, each said once: what to do on the page (its button under it), then the code it gives, pasted beside
         // what sends it.
         job.state == "needs_code" && url != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Step(1, t("android-settings.login.step1Short", "app" to BuildConfig.APP_NAME))
+            Step(1, if (provider == "Devin") t("android-settings.login.step1ShortDevin", "app" to BuildConfig.APP_NAME) else t("android-settings.login.step1Short", "app" to BuildConfig.APP_NAME))
             Button(t("android-settings.login.openPage"), primary = code.isBlank(), modifier = Modifier.padding(start = 30.dp)) { open(url) }
             Step(2, t("android-settings.login.step2Short"))
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
@@ -1067,8 +1067,8 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     // The sign-in made its profile: on to it.
     LaunchedEffect(pending?.created) { pending?.created?.let { go(it, t("android-settings.profile.addedLogin")) } }
     // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
-    val runtime = d?.signIn?.runtime ?: d?.tile?.runtime?.takeIf { it == "codex" || it == "grok" || it == "cursor" } ?: "claude"
-    val provider = d?.signIn?.provider ?: when (runtime) { "claude" -> "Claude"; "grok" -> "Grok"; "cursor" -> "Cursor"; else -> "ChatGPT" }
+    val runtime = d?.signIn?.runtime ?: d?.tile?.runtime?.takeIf { it == "codex" || it == "grok" || it == "cursor" || it == "devin" } ?: "claude"
+    val provider = d?.signIn?.provider ?: when (runtime) { "claude" -> "Claude"; "grok" -> "Grok"; "cursor" -> "Cursor"; "devin" -> "Devin"; else -> "ChatGPT" }
     val access = d?.signIn?.access
     // A plan's sign-in starts when it is chosen; leaving before it made its profile leaves nothing behind. A station without
     // the runtime it signs in with installs it first (core `install`): the sign-in starts after.

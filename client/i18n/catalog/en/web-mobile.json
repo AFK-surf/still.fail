@@ -712,6 +712,7 @@
   "web-mobile.home.searchMore": "Show more",
   "web-mobile.home.searchAll": "All results",
   "web-mobile.profiles.step1Short": "On the page, sign in with the Claude account {name} should use and agree",
+  "web-mobile.profiles.step1ShortDevin": "On the page, sign in with the Devin account {name} should use",
   "web-mobile.profiles.step2Short": "Paste the code the page shows here",
   "web-mobile.profiles.finishShort": "Finish",
   "web-mobile.profiles.manualShort": "Sign in on the machine"

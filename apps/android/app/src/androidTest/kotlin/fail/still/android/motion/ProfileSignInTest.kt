@@ -1,6 +1,6 @@
 // A subscription's sign-in on its Profile page (Profiles.kt SignIn, LoginSteps), on the fake core: signed in (重新登录),
 // signed out (登录), a device code to approve (Grok), a page only to confirm, with no code (Cursor) and a code to paste back
-// (Claude). Pictures: motion/signin-{signed-in,needed,grok-code,cursor-confirm,claude-code}-{light,dark}.
+// (Claude, Devin). Pictures: motion/signin-{signed-in,needed,grok-code,cursor-confirm,claude-code,devin-code}-{light,dark}.
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
@@ -36,7 +36,7 @@ class ProfileSignInTest {
 
     private fun job(runtime: String, state: String) = LoginJob(
         profile = "p1", runtime = runtime, state = state,
-        url = when (runtime) { "grok" -> "https://accounts.x.ai/device"; "cursor" -> "https://cursor.com/loginDeepControl?challenge=x&uuid=y&mode=login"; else -> "https://claude.ai/oauth/authorize?code=true" },
+        url = when (runtime) { "grok" -> "https://accounts.x.ai/device"; "cursor" -> "https://cursor.com/loginDeepControl?challenge=x&uuid=y&mode=login"; "devin" -> "https://app.devin.ai/auth/cli/continue?state=x"; else -> "https://claude.ai/oauth/authorize?code=true" },
         userCode = if (state == "needs_approval" && runtime != "cursor") "QXRT-7KMB" else null, startedAt = Fixtures.NOW, expiresAt = Fixtures.NOW + 600_000,
     )
 
@@ -90,6 +90,16 @@ class ProfileSignInTest {
     @Test fun claudeCodeDark() = claudeCode(true)
     private fun claudeCode(dark: Boolean) {
         shot(profile("claude", "login", job("claude", "needs_code")), "claude-code", dark)
+        rule.onAllNodesWithText("打开授权页面", substring = true)[0].assertIsDisplayed()
+        rule.onNodeWithText("完成").assertIsDisplayed()
+        rule.onNodeWithText("取消登录").assertIsDisplayed()
+    }
+
+    @Test fun devinCodeLight() = devinCode(false)
+    @Test fun devinCodeDark() = devinCode(true)
+    private fun devinCode(dark: Boolean) {
+        shot(profile("devin", "login", job("devin", "needs_code")), "devin-code", dark)
+        rule.onNodeWithText("Devin 账号登录", substring = true).assertIsDisplayed()
         rule.onAllNodesWithText("打开授权页面", substring = true)[0].assertIsDisplayed()
         rule.onNodeWithText("完成").assertIsDisplayed()
         rule.onNodeWithText("取消登录").assertIsDisplayed()

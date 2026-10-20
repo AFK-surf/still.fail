@@ -548,7 +548,7 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
 }
 
 /** Who a profile signs in to: OpenCode for OpenCode Go, else its runtime's vendor. */
-const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.runtime === "claude" ? "Claude" : profile.runtime === "grok" ? "Grok" : profile.runtime === "cursor" ? "Cursor" : "ChatGPT");
+const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.runtime === "claude" ? "Claude" : profile.runtime === "grok" ? "Grok" : profile.runtime === "cursor" ? "Cursor" : profile.runtime === "devin" ? "Devin" : "ChatGPT");
 
 /**
  * A device sign-in (Codex's, Grok's, OpenCode's): the code comes first and is copied as the login page opens, so it is pasted
@@ -573,7 +573,7 @@ function DeviceCode({ url, code, provider }: { url: string; code: string | null;
   );
 }
 
-/** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude), the link
+/** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude, Devin), the link
  * and the one-time code to enter (Codex), or the link alone, to confirm there (Cursor). */
 export function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: {
   job: LoginJob | null; provider: string; code: string; setCode(code: string): void; send(): void; sending: boolean; sendError: string | null;
@@ -584,11 +584,11 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
       {job.state === "needs_code" && job.url && (
         <ol className={controlsCss.steps}>
           <li>
-            <span>{t("web-pages.profiles.step1", { name: NAME })}</span>
+            <span>{provider === "Devin" ? t("web-pages.profiles.step1Devin", { name: NAME }) : t("web-pages.profiles.step1", { name: NAME })}</span>
             <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.profiles.openAuth")}</a>
           </li>
           <li>
-            <span>{t("web-pages.profiles.step2")}</span>
+            <span>{provider === "Devin" ? t("web-pages.profiles.step2Devin") : t("web-pages.profiles.step2")}</span>
             <div className={additionsCss.inputRow}>
               <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder={t("web-pages.profiles.pasteCode")} aria-label={t("web-pages.profiles.code")}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && code.trim() && !sending) send(); }} />

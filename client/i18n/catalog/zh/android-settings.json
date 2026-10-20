@@ -209,6 +209,7 @@
   "android-settings.login.signIn": "登录",
   "android-settings.login.signInTo": "登录 {provider}",
   "android-settings.login.step1Short": "在打开的页面用 {app} 要使用的 Claude 账号登录，并同意授权",
+  "android-settings.login.step1ShortDevin": "在打开的页面用 {app} 要使用的 Devin 账号登录",
   "android-settings.login.step2Short": "把页面上显示的授权码粘贴到这里",
   "android-settings.login.finishShort": "完成",
   "android-settings.login.manualShort": "在机器上手动登录",

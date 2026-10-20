@@ -206,6 +206,8 @@ export async function checkQuota(profile: Profile, env: Env, codexRateLimits: Co
     if (profile.runtime === "grok") return await grokQuota(profile, env, lang);
     // Cursor's API says no allowance of an account's plan to a key.
     if (profile.runtime === "cursor") return quota("unsupported", [], tr(lang, "station.quota.cursorUnsupported"));
+    // Nor does the Devin CLI say its account's quota to a program (only its own /usage shows it).
+    if (profile.runtime === "devin") return quota("unsupported", [], tr(lang, "station.quota.devinUnsupported"));
     if (profile.runtime === "claude") return await claudeWithRefresh(env, profile.machine === true ? null : profile.home, urls, lang);
     if (!codexRateLimits) throw new Error("no codex app-server to ask");
     return codexQuota(await codexRateLimits(profile), lang);

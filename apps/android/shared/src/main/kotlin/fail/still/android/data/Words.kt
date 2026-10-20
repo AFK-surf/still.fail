@@ -3,7 +3,7 @@
 package fail.still.android.data
 
 
-val RUNTIME_LABEL = mapOf("claude" to "Claude Code", "codex" to "Codex", "dsh" to "DeepSeek Harness", "grok" to "Grok Build", "cursor" to "Cursor")
+val RUNTIME_LABEL = mapOf("claude" to "Claude Code", "codex" to "Codex", "dsh" to "DeepSeek Harness", "grok" to "Grok Build", "cursor" to "Cursor", "devin" to "Devin")
 
 /** How a connect's conversations become sessions, in words (web/src/format.ts → MODE). */
 val MODE_LABEL get() = mapOf("multi-session" to t("android-misc.mode.multi"), "single-session" to t("android-misc.mode.single"))

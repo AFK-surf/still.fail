@@ -105,6 +105,25 @@ test("cursor_is_offered_last_and_sets_no_effort", () => {
   assert.equal(machineMeta({ runtime: "cursor", cwd: "/tmp/x" }, 0).meta, "Cursor · /tmp/x");
 });
 
+test("devin_is_offered_after_cursor_each_model_at_its_own_thinking_levels", () => {
+  const overview = {
+    profiles: [
+      { id: "dev", runtimes: ["devin"], models: ["swe-2", "kimi-k2-6"], access: { kind: "subscription" }, check: { modelEfforts: { devin: { "swe-2": ["medium", "high", "max"], "kimi-k2-6": [] } } } },
+      { id: "old", runtimes: ["devin"], models: ["claude-opus-5-5"], access: { kind: "subscription" } },
+    ],
+  };
+  const list = models(overview, 0);
+  const swe = list.find((m: J) => m.model === "swe-2");
+  assert.deepEqual([swe.runtimes, swe.efforts.devin, swe.maker], [["devin"], ["medium", "high", "max"], { id: "devin", name: "Cognition" }]);
+  assert.deepEqual(list.find((m: J) => m.model === "kimi-k2-6").efforts.devin, []);
+  // Where the station says nothing of a model's levels, the runtime's.
+  assert.deepEqual(list.find((m: J) => m.model === "claude-opus-5-5").efforts.devin, ["low", "medium", "high", "xhigh", "max"]);
+  const options = [{ model: "swe-2", runtimes: ["devin"], efforts: { devin: ["medium", "high", "max"] }, accounts: {} }];
+  const r = resolve(options, { runtime: "devin", model: "swe-2", fast: true, effort: "high" });
+  assert.deepEqual([r.runtime, r.fast, r.effort], ["devin", null, "high"]);
+  assert.equal(machineMeta({ runtime: "devin", cwd: "/tmp/x" }, 0).meta, "Devin · /tmp/x");
+});
+
 test("model_efforts_follow_the_account_and_survive_resolving_saved_choices", () => {
   const overview = {
     profiles: [

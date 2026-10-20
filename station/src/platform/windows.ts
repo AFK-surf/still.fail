@@ -461,6 +461,11 @@ export const windows: Platform = {
     program: "powershell",
     args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "irm https://claude.ai/install.ps1 | iex"],
   },
+  /// The Devin CLI's own installer on Windows, as its documentation gives it.
+  devinInstall: {
+    program: "powershell",
+    args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "irm https://cli.devin.ai/install.ps1 | iex"],
+  },
   installerExt: "ps1",
   startInstaller,
   /// Vite+'s command is a shim of its own (codex.cmd, codex.exe) beside vp.exe; npm's a .cmd in its global prefix,

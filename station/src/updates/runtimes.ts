@@ -1,6 +1,6 @@
-// Claude Code, Codex, DeepSeek Harness and Grok Build on this machine (Cursor's SDK: updates.ts readCursor) (the Rust station's updates.rs): where the station's PATH finds
-// them, how each is updated the way it was installed (`claude update`, npm, Homebrew, Vite+, Codex's standalone
-// installer) or installed when it is not there, and running those commands.
+// Claude Code, Codex, DeepSeek Harness, Grok Build and Devin on this machine (Cursor's SDK: updates.ts readCursor) (the Rust station's updates.rs): where the station's PATH finds
+// them, how each is updated the way it was installed (`claude update`, `devin update`, npm, Homebrew, Vite+, Codex's
+// standalone installer) or installed when it is not there, and running those commands.
 import { existsSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -19,8 +19,12 @@ export const RUNTIMES: Exclude<Kind, "station">[] = RUNTIME_KINDS;
 
 export const kindName = (k: Kind) => (k === "station" ? "Station" : runtimeLabel(k));
 export const kindCommand = (k: Kind) => (k === "station" ? "stillfail-station" : k);
-/// Where the latest is said: the npm registry's latest of the runtime's package.
+/// Where the latest is said: the npm registry's latest of the runtime's package (none for Devin: its manifest says it,
+/// DEVIN_MANIFEST).
 export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-code" : k === "codex" ? "@openai/codex" : k === "dsh" ? "@deepseek-ai/dsh" : k === "grok" ? "@xai-official/grok" : k === "cursor" ? "@cursor/sdk" : "");
+
+/// Where the Devin CLI's installer reads the latest build ({version, platforms}).
+export const DEVIN_MANIFEST = "https://static.devin.ai/cli/current/manifest.json";
 
 /// How an update is done: a program and its arguments.
 export type How = { program: string; args: string[] };
@@ -66,6 +70,9 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
   const realPath = found.real.split(platform.paths.separator).join("/");
   const name = kindName(kind);
   if (kind === "station") return new Unable("");
+  // The Devin CLI's installer keeps its versions under its data directory (devin/cli/_versions), the command a link to
+  // the current one: `devin update` fetches and switches it.
+  if (kind === "devin") return realPath.includes("/devin/cli/_versions/") ? { program: found.onPath, args: ["update"] } : new Unable("station.updates.devinElsewhere", { path: realPath });
   // A package manager's shim of this machine's kind (Windows: Vite+'s beside vp.exe, npm's .cmd in its prefix).
   const shim = platform.shimUpdate(found, kindPackage(kind), env);
   if (shim === "no-npm") return new Unable("station.updates.noNpm", { name });
@@ -138,10 +145,11 @@ CODEX_HOME="$1" CODEX_INSTALL_DIR="$2" CODEX_NON_INTERACTIVE=1 sh -c "$installer
 
 /// How a runtime the machine has not is installed, or why it cannot be from here: Claude Code by its own installer
 /// (into ~/.local/bin, on the station's PATH as install.ts sets it), Codex by npm, else Homebrew, DeepSeek Harness and
-/// Grok Build by npm.
+/// Grok Build by npm, Devin by its own installer (into ~/.local/bin too).
 export function howToInstall(kind: Kind, env: Env): How | Unable {
   if (kind === "station") return new Unable("");
   if (kind === "claude") return platform.claudeInstall;
+  if (kind === "devin") return platform.devinInstall;
   const npm = findCommand("npm", env);
   // DeepSeek Harness is an npm package (it runs on the Node npm is of: 22.19 or newer).
   if (kind === "dsh" || kind === "grok") return npm ? { program: npm.onPath, args: ["install", "-g", `${kindPackage(kind)}@latest`] } : new Unable("station.updates.noNpm", { name: kindName(kind) });

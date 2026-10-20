@@ -662,6 +662,8 @@
   "web-pages.profiles.signingIn": "正在登录 {provider}",
   "web-pages.profiles.signingInNote": "请在 15 分钟内完成，超时将自动取消",
   "web-pages.profiles.step1": "打开授权页面，用 {name} 要使用的 Claude 账号登录并同意授权",
+  "web-pages.profiles.step1Devin": "打开授权页面，用 {name} 要使用的 Devin 账号登录",
+  "web-pages.profiles.step2Devin": "登录后页面会显示授权码，将其复制到此处：",
   "web-pages.profiles.step2": "同意后页面会显示授权码，将其复制到此处：",
   "web-pages.profiles.subscriptionNote": "登录在运行 {name} 的机器上完成，你只需在浏览器中授权。登录成功后才会添加此 Profile。",
   "web-pages.profiles.subscriptionSignIn": "{provider} 订阅登录",
