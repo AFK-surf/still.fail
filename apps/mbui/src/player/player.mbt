@@ -692,7 +692,12 @@ fn Player::controls(
     })
     |> ignore
     p.timeline(c, s, on)
-    c.box(style=keys_row, fn() {
+    // the speed last on the row (the audio's, no subtitle): in the bar's bottom right corner, as far from its right
+    // edge as from its foot (docs/ui-panels.md; Android's SpeedKey, Player.kt:505, sits 6 from the right and 11 from
+    // the foot: it keeps no such rule here)
+    let speed_last = audio && !p.subtitle
+    let speed_inset = bar_foot + (key_size - speed_h) / 2.0
+    c.box(style=keys_row, pr?=if speed_last { Some(speed_inset - bar_side) } else { None }, fn() {
       if list.length() > 1 &&
         key_button(c, p.key + "/prev", "skip-back", on && prev is Some(_)) {
         match prev {
@@ -738,24 +743,20 @@ fn Player::controls(
         }
         p.wake()
       }
-      // in the bar's bottom right corner (the audio's): as far from its right edge as from its foot, concentric with it
-      let speed_inset = bar_foot + (key_size - speed_h) / 2.0
-      c.box(pr=speed_inset - bar_side, fn() {
-        c.box(
-          h=Px(speed_h),
-          min_w=44.0,
-          radius=@ui.concentric(bar_radius, speed_inset),
-          padx=8.0,
-          bg=if p.speed != 1.0 { 0xFFFFFF24L } else { 0xFFFFFF0FL },
-          align=ACenter,
-          justify=JCenter,
-          id=if on { sid } else { 0 },
-          fn() {
-            c.text(speed_label(p.speed), size=12.0, weight=600, color=ink, wrap=false) |> ignore
-          },
-        )
-        |> ignore
-      })
+      // Android's SpeedKey (Player.kt:505): 30 high, 44 at least; in the corner concentric with the bar, else Smooth(10)
+      c.box(
+        h=Px(speed_h),
+        min_w=44.0,
+        radius=if speed_last { @ui.concentric(bar_radius, speed_inset) } else { speed_corner },
+        padx=8.0,
+        bg=if p.speed != 1.0 { 0xFFFFFF24L } else { 0xFFFFFF0FL },
+        align=ACenter,
+        justify=JCenter,
+        id=if on { sid } else { 0 },
+        fn() {
+          c.text(speed_label(p.speed), size=12.0, weight=600, color=ink, wrap=false) |> ignore
+        },
+      )
       |> ignore
       if p.subtitle &&
         key_button(c, p.key + "/captions", "captions", on, lit=p.subs_on) {
@@ -897,6 +898,10 @@ let key_size : Double = 40.0
 
 ///|
 let speed_h : Double = 30.0
+
+///|
+/// The speed key's corner away from the bar's (Player.kt SpeedKey: Smooth(10)).
+let speed_corner : Double = 10.0
 
 ///|
 /// A round key on the controls (Player.kt Key): 40, a 20 icon; `lit`, a soft light behind it while what it turns on is
