@@ -90,6 +90,8 @@ struct FakeHost {
   /// what) (view_text), and the frames grabbed, by view, oldest first (view_still)
   view_texts : Map[(Int, Int), String]
   view_stills : Map[Int, Array[Bytes]]
+  /// how each view stood as the run recorded the host's saying it (view_info: its state and ten numbers)
+  view_infos : Map[Int, (Int, FixedArray[Double])]
 }
 
 ///|
@@ -670,6 +672,13 @@ fn h_view_control(id : Int, op : Int, value : Double) -> Unit {
 ///|
 fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
   match fake.val {
+    // as the run recorded the host's saying it (Tester::view_said)
+    Some(f) if f.view_infos.get(id) is Some((state, at)) => {
+      for i in 0..<10 {
+        out[i] = at[i]
+      }
+      state
+    }
     // a test that says when views are ready: not yet, until it does
     Some(f) if !f.auto_finish && f.view_ready.get(id).unwrap_or(0) != 1 => {
       for i in 0..<10 {
@@ -697,7 +706,11 @@ fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
       ignore(id)
       1
     }
-    None => @host.view_info(id, out)
+    None => {
+      let state = @host.view_info(id, out)
+      view_info_told(id, state, out)
+      state
+    }
   }
 }
 
@@ -793,9 +806,8 @@ fn h_view_still(id : Int) -> Bytes {
     }
     None => {
       let b = @host.view_still(id)
-      match views_tracer.val {
-        Some(t) => t({ "still": Json::object({ "view": Json::number(id.to_double()) }), "b": Json::string(hex_of(b)) })
-        None => ()
+      if views_tracer.val is Some(_) || taping() {
+        view_say({ "still": Json::object({ "view": Json::number(id.to_double()) }), "b": Json::string(hex_of(b)) })
       }
       b
     }
@@ -812,9 +824,9 @@ let views_tracer : Ref[((Map[String, Json]) -> Unit)?] = Ref::new(None)
 let views_told_text : Map[(Int, Int), String] = {}
 
 ///|
-/// What a real host says of its native views from now on given to `line`, a JSON object a time, as it changes: a
-/// video's frames' times and a grab's state (`{"view":{"view":N,"what":W,"text":T}}`) and a frame grabbed, its bytes
-/// in hex (`{"still":{"view":N},"b":HEX}`): what a run keeps beside its other messages (its own clock added), for a
+/// What a real host says of its native views from now on given to `line`, a JSON object a time, as it changes: how a
+/// view stands (`{"info":{"view":N,"state":S,"at":[view_info's ten numbers]}}`), a video's frames' times and a grab's
+/// state (`{"view":{"view":N,"what":W,"text":T}}`) and a frame grabbed, its bytes in hex (`{"still":{"view":N},"b":HEX}`): what a run keeps beside its other messages (its own clock added), for a
 /// Tester to be told again (Tester::view_said). Under a Tester, nothing.
 pub fn trace_views(line : (Map[String, Json]) -> Unit) -> Unit {
   views_tracer.val = Some(line)
@@ -822,18 +834,53 @@ pub fn trace_views(line : (Map[String, Json]) -> Unit) -> Unit {
 
 ///|
 fn view_told(id : Int, what : Int, text : String) -> Unit {
-  guard views_tracer.val is Some(t) else { return }
+  guard views_tracer.val is Some(_) || taping() else { return }
   if views_told_text.get((id, what)) == Some(text) {
     return
   }
   views_told_text[(id, what)] = text
-  t({
+  view_say({
     "view": Json::object({
       "view": Json::number(id.to_double()),
       "what": Json::number(what.to_double()),
       "text": Json::string(text),
     }),
   })
+}
+
+///|
+/// What was last told of each view's state (view_info: its state and numbers), so that it is told as it changes.
+let views_told_info : Map[Int, String] = {}
+
+///|
+fn view_info_told(id : Int, state : Int, out : FixedArray[Double]) -> Unit {
+  guard views_tracer.val is Some(_) || taping() else { return }
+  let at = Json::array(Array::makei(10, fn(i) { Json::number(out[i]) }))
+  let key = "\{state} " + at.stringify()
+  if views_told_info.get(id) == Some(key) {
+    return
+  }
+  views_told_info[id] = key
+  view_say({
+    "info": Json::object({
+      "view": Json::number(id.to_double()),
+      "state": Json::number(state.to_double()),
+      "at": at,
+    }),
+  })
+}
+
+///|
+/// What the host said of a view, told: to the app's tracer (@ui.trace_views), and on a run's tape (VIEWSAID lines in
+/// their place among its frames: what Tester::replay_frames and a screen's Tester say again, Tester::view_said).
+fn view_say(m : Map[String, Json]) -> Unit {
+  if taping() {
+    tape_line("VIEWSAID " + Json::object(m).stringify())
+  }
+  match views_tracer.val {
+    Some(t) => t(m)
+    None => ()
+  }
 }
 
 ///|

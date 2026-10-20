@@ -282,3 +282,23 @@ test "a video's frames' times and a frame grabbed are what the run said the host
   assert_eq(v.grabbed(), Some(b""))
   assert_false(t.view_said("{\"in\":{\"id\":1}}"))
 }
+
+///|
+test "how a view stands is what the run said the host said: still opening, then ready at its length" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let t = @ui.Tester::new(fn(c) {
+    let v = once(cell, fn() {
+      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+    })
+    c.native(v, h=Px(220.0)) |> ignore
+  })
+  let v = cell.val.unwrap()
+  assert_true(t.view_said("{\"info\":{\"view\":1,\"state\":0,\"at\":[-1,0,0,0,0,0,0,0,0,0]}}"))
+  t.draw()
+  assert_eq(v.state(), 0)
+  assert_true(t.view_said("{\"info\":{\"view\":1,\"state\":1,\"at\":[4000,1500,0,1920,1080,1,1,0,0,0]}}"))
+  t.draw()
+  assert_eq(v.state(), 1)
+  assert_eq(v.duration(), 4000.0)
+  assert_eq(v.natural(), (1920.0, 1080.0))
+}

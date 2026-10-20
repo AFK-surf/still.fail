@@ -51,8 +51,9 @@ fn replay_env(f : FakeHost, line : String) -> Unit {
 }
 
 ///|
-/// The settings a run began with (its ENV lines before its first DRAWHASH) set on the fake host before a Tester draws
-/// its first frame (Tester::new's `run`), so the frames replayed are the run's, one for one.
+/// The settings a run began with (its ENV lines before its first DRAWHASH), and what its host said of its views by then
+/// (VIEWSAID: hostcall.mbt's view_say), set on the fake host before a Tester draws its first frame (Tester::new's
+/// `run`), so the frames replayed are the run's, one for one.
 fn env_before_frames(f : FakeHost, run : String) -> Unit {
   for v in run.split("\n") {
     let line = v.to_owned()
@@ -61,6 +62,10 @@ fn env_before_frames(f : FakeHost, run : String) -> Unit {
     }
     if line.find("ENV ") is Some(_) {
       replay_env(f, line)
+    }
+    match line.find("VIEWSAID ") {
+      Some(i) => ignore(fake_view_said(f, line.view(start_offset=i + 9).to_owned()))
+      None => ()
     }
   }
 }
