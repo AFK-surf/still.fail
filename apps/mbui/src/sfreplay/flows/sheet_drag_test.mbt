@@ -36,8 +36,9 @@ test "32-sheet-drag" {
     f.tap("=取消")
     f.run_for(@ui.nav_rise_ms)
     f.see("端到端测试")
-    // the bar's ball and panel step their springs a frame at a time, asking each frame for the next
-    f.end(unsettled_ok="sfapp/bar.mbt:934 底栏的球和面板按帧步进弹簧、自己要帧（等 app 迁移）")
+    // the bottom bar's springs and tweens to their declared end
+    f.run_to(@sfapp.bar_rest())
+    f.end()
   })
 }
 

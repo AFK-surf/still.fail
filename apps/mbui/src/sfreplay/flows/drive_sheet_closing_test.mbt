@@ -6,10 +6,8 @@
 test "52-drive-sheet-closing" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace_drive_sheet_closing, seed~)
-    // 文件 pushed over Home from the start, as src/stillfail does for the run's MBUI_OPEN_PAGE=files
-    @sfapp.open_page(@sfapp.Page::Files)
-    f.t.draw()
-    f.run_to(@ui.nav_rest())
+    // 文件 over Home from the start, as the run's MBUI_OPEN_PAGE=files had it
+    f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-084126")
     f.run_for(@ui.nav_push_ms)
     f.see("说明.txt")

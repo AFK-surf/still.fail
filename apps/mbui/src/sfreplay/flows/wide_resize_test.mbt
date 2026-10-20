@@ -20,6 +20,8 @@ test "66-wide-resize" {
     f.run_for(@sfapp.flight_ms)
     f.see("窗口变窄后发出 082939")
     f.gone("正在发送")
+    // the bottom bar's own motion (gone under the page pushed, its ball) to its declared end
+    f.run_to(@sfapp.bar_rest())
     f.end()
   })
 }
