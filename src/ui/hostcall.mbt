@@ -504,7 +504,9 @@ fn h_image_load(src : String, max_px : Int) -> Int {
 }
 
 ///|
-fn h_image_load_bytes(data : Bytes, max_px : Int) -> Int {
+/// Bytes handed over for `src` (Ctx::image_bytes, add_image) decoded: its wait on outside named by `src` too, as a
+/// picture loaded by its source is ("image N (B bytes) SRC": a scripted run's `decoded SRC`).
+fn h_image_load_bytes(data : Bytes, max_px : Int, src : String) -> Int {
   let head : Json = [
     Json::string(bytes_name(data)),
     Json::number(data.length().to_double()),
@@ -525,7 +527,7 @@ fn h_image_load_bytes(data : Bytes, max_px : Int) -> Int {
       id
     }
   }
-  outside_start(1, id, "image \{id} (\{data.length()} bytes)")
+  outside_start(1, id, "image \{id} (\{data.length()} bytes) \{src}")
   id
 }
 

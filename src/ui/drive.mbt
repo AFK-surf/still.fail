@@ -45,7 +45,8 @@
 //   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
 //                               value) answered since the last step that acted (or the run began), and a frame
 //                               drawn after it, within the timeout
-//   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") decoded
+//   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") decoded,
+//                               from its address or from bytes handed over for it (Ctx::image_bytes, add_image)
 //   ready VIEW                  a native view ready: by its kind's name (video, audio, web, site), pdf (a PDF's page
 //                               drawn), its kind's number (1 video or audio, 2 web, 3 site), #ID its id
 //   now STEP                    STEP as soon as it is due, the app settled or not (below): what is looked at or done
@@ -935,7 +936,7 @@ fn outside_named(cmd : String, arg : String, what : String) -> Bool {
   match cmd {
     // "core: NAME (call N)", a subscription's "core: KEY"
     "answered" => what.has_prefix("core: " + arg + " (call ") || what == "core: " + arg
-    // "image N SRC", "image N (PDF D, page P)"
+    // "image N SRC", "image N (B bytes) SRC" (bytes handed over for SRC), "image N (PDF D, page P)"
     "decoded" => what.has_prefix("image ") && (what.has_suffix(arg) || (arg == "PDF" && what.contains("(PDF ")))
     _ =>
       if arg == "pdf" {

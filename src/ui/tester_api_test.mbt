@@ -226,6 +226,22 @@ test "a scripted run waits for a picture decoded by its name, and a frame drawn 
 }
 
 ///|
+test "a scripted run waits for a picture decoded from bytes handed over for it, by its name" {
+  // (the bytes as a core's answer brings them: a key of the app's, under which the node shows them)
+  let t = @ui.Tester::new(fn(c) {
+    c.image_bytes("core:files/e2e-photo.jpg", b"\xFF\xD8\xFF\xE0 not a whole JPEG")
+    c.image("core:files/e2e-photo.jpg", w=Px(100.0), h=Px(100.0)) |> ignore
+  })
+  let log = t.drive("decoded e2e-photo.jpg\nexit")
+  assert_true(log.iter().any(fn(l) { l.has_prefix("DRIVE ok decoded e2e-photo.jpg") }), msg=log.join("\n"))
+  let rt = @ui.runtime()
+  assert_true(
+    rt.outside_ended_since(0).iter().any(fn(w) { w.contains("bytes) core:files/e2e-photo.jpg") }),
+    msg=rt.outside_ended_since(0).join("; "),
+  )
+}
+
+///|
 test "a scripted run that waits for a call never answered fails within its timeout, saying what is awaited" {
   let t = @ui.Tester::new(fn(c) { c.text("page", wrap=false) |> ignore })
   let log = t.drive("timeout 200\nanswered drive.read\nexit")

@@ -121,7 +121,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   }
   if good is None && !pending && !failed {
     let id = match image_data.get(src) {
-      Some(d) => h_image_load_bytes(d, want)
+      Some(d) => h_image_load_bytes(d, want, src)
       None =>
         if src.has_prefix("pdf:") {
           pdf_page_load(src, want)
