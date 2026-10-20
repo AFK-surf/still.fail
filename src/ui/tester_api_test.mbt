@@ -263,6 +263,28 @@ test "a scripted run tells each line of its script as it begins, as written" {
 }
 
 ///|
+test "a scripted run's answered lines each wait for an answer of their own: two lines, two answers" {
+  // the core answers x.get once in the second frame and again in the fortieth
+  let frames = Ref::new(0)
+  let t = @ui.Tester::new(fn(c) {
+    frames.val += 1
+    if frames.val == 2 || frames.val == 40 {
+      let rt = @ui.runtime()
+      rt.outside_end(rt.outside_start("core: x.get (call \{frames.val})"))
+      @ui.log("answered at \{frames.val}")
+    }
+    c.text("page", wrap=false) |> ignore
+  })
+  let log = t.drive("answered x.get\nanswered x.get\nexit")
+  let at = fn(p : String) { log.search_by(fn(l) { l.has_prefix(p) }).unwrap_or(-1) }
+  let oks = log.iter().filter(fn(l) { l.has_prefix("DRIVE ok answered x.get") }).count()
+  assert_eq(oks, 2, msg=log.join("\n"))
+  // the second line passed once the second answer came, not on the first again
+  let second = log.mapi(fn(i, l) { (i, l) }).filter(fn(p) { p.1.has_prefix("DRIVE ok answered x.get") })[1].0
+  assert_true(at("answered at 40") >= 0 && at("answered at 40") < second, msg=log.join("\n"))
+}
+
+///|
 test "a scripted run that waits for a call never answered fails within its timeout, saying what is awaited" {
   let t = @ui.Tester::new(fn(c) { c.text("page", wrap=false) |> ignore })
   let log = t.drive("timeout 200\nanswered drive.read\nexit")

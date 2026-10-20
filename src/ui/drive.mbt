@@ -44,7 +44,8 @@
 //                               step set off (a share sheet, a download): a check beside the run looks at it
 //   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
 //                               value) answered since the last step that acted (or the run began), and a frame
-//                               drawn after it, within the timeout
+//                               drawn after it, within the timeout; each such line an answer of its own: two
+//                               `answered CALL` after one step wait for two answers, not one twice
 //   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") decoded,
 //                               from its address or from bytes handed over for it (Ctx::image_bytes, add_image)
 //   ready VIEW                  a native view ready: by its kind's name (video, audio, web, site), pdf (a PDF's page
@@ -83,6 +84,8 @@ priv struct Driver {
   // answered, decoded, ready: how many waits on outside had ended as the last step that acted did (or the run began:
   // Runtime::outside_ended), and the frame the step saw its own end in (-1: not yet)
   mut mark : Int
+  // how many answers of each call (`answered CALL`) the steps since the last that acted have waited on already
+  answers_taken : Map[String, Int]
   mut seen_frame : Int
   dir : String
 }
@@ -133,6 +136,7 @@ fn drive_start(script : String, dir : String) -> Unit {
     gms: 0.0,
     shot_at: -1.0,
     mark: runtime().outside_ended(),
+    answers_taken: {},
     seen_frame: -1,
     dir,
   })
@@ -450,6 +454,7 @@ fn drive_steps(c : Ctx) -> Unit {
     let acted = fn() {
       next()
       d.mark = runtime().outside_ended()
+      d.answers_taken.clear()
     }
     match cmd {
       "" => next()
@@ -489,13 +494,18 @@ fn drive_steps(c : Ctx) -> Unit {
         }
       }
       "answered" | "decoded" | "ready" => {
-        // what it names ended since the step began, and a frame drawn after the one that saw it
+        // what it names ended since the step began (an answer: one no earlier line took), and a frame drawn after the
+        // one that saw it
+        let taken = if cmd == "answered" { d.answers_taken.get(arg).unwrap_or(0) } else { 0 }
         if d.seen_frame < 0 &&
-          runtime().outside_ended_since(d.mark).iter().any(fn(w) { outside_named(cmd, arg, w) }) {
+          runtime().outside_ended_since(d.mark).iter().filter(fn(w) { outside_named(cmd, arg, w) }).count() > taken {
           d.seen_frame = c.frame_no
         }
         if d.seen_frame >= 0 && c.frame_no > d.seen_frame {
           h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+          if cmd == "answered" {
+            d.answers_taken[arg] = taken + 1
+          }
           next()
         } else if waited > d.timeout {
           drive_fail(c, d, "not so after \{d.timeout.to_int()} ms (awaiting \{runtime().awaiting()} from outside)")
