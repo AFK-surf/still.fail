@@ -199,6 +199,8 @@ fn main_page(
     Place(p) => wide_place(c, src, w, p)
     // 文件: the stations' folders, under its bar (the phone's place has the bottom bar's room)
     Files => files_page(c, src, w)
+    // a station's screen is over the whole window (app.mbt signed_in), not in the pane
+    Screen(_) => ()
     _ => page_view(c, src, w, all, invited, page)
   }
 }

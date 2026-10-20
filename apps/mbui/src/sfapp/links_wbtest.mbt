@@ -164,14 +164,16 @@ test "an item's link from another app (an App Link): its chat alone over its wor
 }
 
 ///|
-test "a screen's link: its viewer not here yet, said so in place of it" {
+test "a screen's link: its viewer over the chat (back comes back to it)" {
   let calls : Array[Made] = []
   let t = links_core(calls, "chat")
   open_link("https://app.still.fail/w/ws1/s/st1/screen/main")
   t.frame()
-  assert_true(t.find("无法打开此链接") is Some(_))
+  assert_true(t.find("无法打开此链接") is None)
   assert_eq(t.opened().length(), 0)
-  assert_eq(app.nav.depth(), 2)
+  assert_eq(app.nav.depth(), 3)
+  guard app.nav.top() is Screen(at) else { fail("no viewer on top") }
+  assert_eq(at.screen, "main")
 }
 
 ///|

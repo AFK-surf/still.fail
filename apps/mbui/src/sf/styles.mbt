@@ -19,6 +19,10 @@ pub let body : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg)
 pub let card_title : @ui.TextStyle = @ui.text_style(size=Lg, leading=L6, color=Fg)
 
 ///|
+/// A file's or a link's card's second line under its name (11/16, muted, on one line).
+pub let card_line : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false)
+
+///|
 /// A message's words (15/24.75).
 pub let message : @ui.TextStyle = @ui.text_style(size=Lg, leading=message_line, color=Fg)
 

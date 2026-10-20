@@ -348,6 +348,8 @@ fn fixture_file_png(name : String) -> Bytes {
   let (w, h, a, b) = match name {
     "home-after.png" => (60, 130, (0xF5, 0xF3, 0xEF), (0xE5, 0x70, 0x4A))
     "compare.png" => (160, 90, (0x5B, 0x7B, 0xB2), (0xF2, 0xB0, 0x1E))
+    // a screen's preview (chat-screens): a frame of a tab, 16:10
+    "peek.png" => (160, 100, (0xFF, 0xFF, 0xFF), (0x5B, 0x7B, 0xB2))
     _ => (120, 80, (0x2F, 0x8F, 0x5B), (0xE8, 0xE4, 0xDC))
   }
   let rgba = FixedArray::make(w * h * 4, b'\x00')
@@ -384,6 +386,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             with_md_message(rich_chat(f.older))
           } else if f.mode == "chat-viz" {
             with_viz_message(rich_chat(f.older))
+          } else if f.mode == "chat-screens" {
+            with_message(rich_chat(f.older), screens_answer)
           } else {
             rich_chat(f.older)
           }
@@ -1102,6 +1106,12 @@ let fixture_viz_html : String =
 
 ///|
 fn with_md_message(v : Json) -> Json {
+  with_message(v, md_answer)
+}
+
+///|
+/// The chat with an agent's answer of `words` at its end.
+fn with_message(v : Json, words : String) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
@@ -1110,7 +1120,7 @@ fn with_md_message(v : Json) -> Json {
         _ => []
       }
       all.push(
-        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), md_answer, "1 分钟前", {
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), words, "1 分钟前", {
           "ending": "all_done",
         }),
       )
@@ -1119,4 +1129,67 @@ fn with_md_message(v : Json) -> Json {
     }
     _ => v
   }
+}
+
+// ── links to a station's screens and its 共享调试 (MBUI_FIXTURE=chat-screens) ──
+
+///|
+/// An agent's answer with links to Studio's screens and its 共享调试 (screen_links.mbt): the desktop's card, a tab's
+/// with its preview (the link's own words its title), a tab gone, 共享调试 bare in a sentence (its title) and alone
+/// (its card), and a link to anywhere else.
+let screens_answer : String =
+  #|登录页改好了，Studio 的桌面开着：
+  #|
+  #|https://still.fail/w/ws1/s/st1/screen/desktop
+  #|
+  #|预览在它的浏览器里：
+  #|
+  #|[发布清单预览](https://still.fail/w/ws1/s/st1/screen/browser%3AT1)
+  #|
+  #|之前那个标签页已经关了：
+  #|
+  #|https://still.fail/w/ws1/s/st1/screen/browser%3AT0
+  #|
+  #|要在手机上试，先打开 https://still.fail/w/ws1/s/st1/adb ；设计稿在 https://example.com/login-v2 。
+  #|
+  #|https://still.fail/w/ws1/s/st1/adb
+
+///|
+/// The core's cards of Studio's screens and its 共享调试 (`screenCard`, `adbCard`): the desktop someone looks at, a
+/// tab it previews (1280 × 800), a tab it no longer has; this phone's adb not shared.
+fn fixture_link_card(name : String, params : Map[String, Json]) -> Json? {
+  if name == "adbCard" {
+    return Some({ "title": "共享调试", "line": "未共享", "sharing": false, "lendable": true })
+  }
+  let screen = match params.get("screen") {
+    Some(String(s)) => s
+    _ => ""
+  }
+  let card = fn(kind : String, title : String, line : String, gone : Bool, peek : Bool, w : Int, h : Int) -> Json {
+    {
+      "kind": Json::string(kind),
+      "title": Json::string(title),
+      "line": Json::string(line),
+      "link": Json::string("/w/ws1/s/st1/screen/" + screen),
+      "gone": Json::boolean(gone),
+      "peek": Json::boolean(peek),
+      "width": Json::number(w.to_double()),
+      "height": Json::number(h.to_double()),
+    }
+  }
+  match screen {
+    "desktop" => Some(card("desktop", "桌面", "Ana 正在查看", false, false, 3024, 1964))
+    "browser:T1" => Some(card("browser", "发布清单 - localhost:5173", "林 正在查看", false, true, 1280, 800))
+    "browser:T0" => Some(card("browser", "浏览器标签页", "此屏幕已不存在", true, false, 0, 0))
+    _ => Some(card("desktop", "桌面", "远程屏幕", false, false, 0, 0))
+  }
+}
+
+///|
+/// A screen's preview (`screen.view` with `peek`): one frame, the made-up tab's picture, as the station sends its
+/// first.
+fn fixture_peek(on_value : (Json, Bytes?) -> Unit) -> Int {
+  fix_later(0.0, fn() { on_value({ "frame": { "ts": 1 } }, Some(fixture_file_png("peek.png"))) })
+  fix_stream_ids.val += 1
+  fix_stream_ids.val
 }
