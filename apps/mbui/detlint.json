@@ -280,17 +280,14 @@
     },
     "style-exact": {},
     "build-effect": {
-      "src/player/player.mbt": 2,
+      "src/player/player.mbt": 1,
       "src/sfapp/app.mbt": 1,
       "src/sfapp/chat.mbt": 2,
       "src/sfapp/composer.mbt": 1,
-      "src/sfapp/drive.mbt": 1,
-      "src/sfapp/drive_reader.mbt": 2,
       "src/sfapp/drive_sheets.mbt": 1,
       "src/sfapp/keep.mbt": 1,
       "src/sfapp/preview.mbt": 3,
       "src/sfapp/service.mbt": 1,
-      "src/sfapp/settings/lock_wait.mbt": 1,
       "src/sfapp/settings/memory.mbt": 2,
       "src/sfapp/station_files.mbt": 1
     },
