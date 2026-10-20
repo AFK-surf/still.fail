@@ -10,13 +10,13 @@ test "64-wide-new-chat" {
     f.key("cmd+n")
     f.see("想让 agent 做什么？")
     f.tap("做任何事")
-    f.type_text("宽屏新对话 085029 post:宽屏新对话的回答 085029")
+    f.type_text("宽屏新对话 085912 post:宽屏新对话的回答 085912")
     f.enter()
     f.run_for(@sfapp.flight_ms)
-    f.see("宽屏新对话 085029")
+    f.see("宽屏新对话 085912")
     f.gone("想让 agent 做什么？")
     // its agent's answer in the chat
-    f.see("=宽屏新对话的回答 085029")
+    f.see("=宽屏新对话的回答 085912")
     // the agent's avatar lingering after its messages: a wake at the linger's end, its look on a motion meanwhile
     f.end(unsettled_ok="sfapp/chat.mbt:685 agent 头像在消息后停留，靠定时唤醒和动画收尾（等 app 迁移）")
   })
