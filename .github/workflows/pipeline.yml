@@ -58,6 +58,7 @@ jobs:
       natives: ${{ steps.natives.outputs.natives }}
       windows_natives: ${{ steps.plan.outputs.windows_natives }}
       mbui: ${{ steps.plan.outputs.mbui }}
+      mbui_native: ${{ steps.plan.outputs.mbui_native }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true }
@@ -124,6 +125,15 @@ jobs:
           # The mbui app's own tests (check-mbui): for a change to it, or to the mbui it pins (apps/mbui/mbui.rev).
           mbui=false
           if has '^apps/mbui/'; then mbui=true; fi
+          # The same tests on native, on Mini1 (check-mbui-native): only where native can differ from js, a change to the
+          # hosts, the FFI (*_native.mbt, C and Objective-C), the packages' link options (moon.pkg) or the mbui it pins;
+          # on main, for any change to the app (a failure there seen, not holding anyone up). Mini1's runner is one.
+          mbui_native=false
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            mbui_native=$mbui
+          elif has '^apps/mbui/(mbui\.rev$|src/host/|scripts/test\.sh$|(.*/)?moon\.pkg$|.*_native\.mbt$|.*\.(c|h|m|mm|cpp)$)' || has '^\.github/workflows/pipeline\.yml$'; then
+            mbui_native=true
+          fi
           {
             echo "range=$range"
             echo "parts=${static[*]}"
@@ -139,8 +149,9 @@ jobs:
             echo "windows=$windows"
             echo "windows_natives=$windows_natives"
             echo "mbui=$mbui"
+            echo "mbui_native=$mbui_native"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay mbui=$mbui mbui_native=$mbui_native"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
@@ -321,8 +332,7 @@ jobs:
           echo "$MOON_HOME/bin" >> $GITHUB_PATH
       - name: The mbui app's check (detlint, then js and native type-checked)
         run: moon version && bash apps/mbui/scripts/check.sh
-      # (native too once its tests link: a test's binary is not given the Apple frameworks mbui's host needs, as only
-      # an app's main package is; on GitHub's macOS they fail to link)
+      # (native: check-mbui-native, on Mini1)
       - name: The mbui app's tests and the flows seen again (js)
         run: |
           set -o pipefail
@@ -343,6 +353,30 @@ jobs:
             echo '```'
             [ -z "$why" ] || { echo '```'; printf '%s\n' "$why" | cut -c1-300; echo '```'; }
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The mbui app's tests on native, on macOS (mini1-6, label mbui: its own runner on Mini1), as they run on js above:
+  # a test's binary links mbui's hosts' Objective-C through mbui's scripts/cc_apple.sh (MOON_CC; a test package is
+  # given no cc-link-flags). Only where native can differ from js (plan's mbui_native): the hosts, the FFI, the link
+  # options, the pinned mbui; on main, any change to the app. ~15 minutes on a busy Mini1 (2026-10-20).
+  check-mbui-native:
+    needs: plan
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.mbui_native == 'true' }}
+    runs-on: mbui
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mac
+      - name: Tools (MoonBit, mbui)
+        run: bash apps/mbui/scripts/beta.sh tools
+      - name: The mbui app's tests and the flows seen again (native)
+        run: |
+          set -o pipefail
+          TARGETS=native LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-native.log"
+      - name: What failed
+        if: failure()
+        run: |
+          failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-native.log" | sed 's/^\[stillfail\] test //; s/ failed.*//' | sort -u)
+          echo "::error title=check-mbui-native failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
 
   # The web in Chrome (scripts/check.sh's browser part: its stories measured, the message list's motion watched), shared
   # out between five of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
@@ -826,7 +860,7 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-browser, check-mbui, check-android, check-android-lint, api, static, station, modules, android, desktop, desktop-win, desktop-web, put]
+    needs: [plan, natives, check, check-linux, check-browser, check-mbui, check-mbui-native, check-android, check-android-lint, api, static, station, modules, android, desktop, desktop-win, desktop-web, put]
     if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.check-android-lint.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 10
