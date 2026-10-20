@@ -4,6 +4,8 @@
 #import <CoreGraphics/CoreGraphics.h>
 
 int mb_atlas_size = 2048;
+// the numbers of an instance (src/ui/scene.mbt)
+#define MB_INST 28
 
 static id<MTLDevice> dev;
 static id<MTLCommandQueue> queue;
@@ -34,7 +36,8 @@ static double last_gpu = -1;
 static NSString *shader_src = @
 "#include <metal_stdlib>\n"
 "using namespace metal;\n"
-"struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; };\n"
+"// scene.mbt's 28 numbers: clip and rc the rounded rect it is cut to (its rect x0 y0 x1 y1, its corners' radii)\n"
+"struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; float4 rc; };\n"
 "struct U { float2 vp; float scale; float pad; };\n"
 "// glass: where a point's backdrop is in the blurred copy (uv = p * map.xy + map.zw, kept in uvc), a liquid group's\n"
 "// bounds, shapes and corners, how many\n"
@@ -89,19 +92,35 @@ static NSString *shader_src = @
 "  return bd.sample(s, uv).rgb;\n"
 "}\n"
 "static float luma(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }\n"
+"// how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise), its edge\n"
+"// covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it\n"
+"static float clip_cover(float2 p, float4 c, float4 r, float scale) {\n"
+"  float2 hs = (c.zw - c.xy) * 0.5;\n"
+"  float2 m = c.xy + hs;\n"
+"  float rr = p.x < m.x ? (p.y < m.y ? r.x : r.w) : (p.y < m.y ? r.y : r.z);\n"
+"  rr = min(rr, min(hs.x, hs.y));\n"
+"  float2 q = abs(p - m) - hs + rr;\n"
+"  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
+"  return clamp(0.5 - d * scale, 0.0, 1.0);\n"
+"}\n"
 "fragment float4 fmain(VOut in [[stage_in]], const device Inst* inst [[buffer(0)]],\n"
 "    constant U& u [[buffer(1)]], constant G& g [[buffer(2)]], texture2d<float> atlas [[texture(0)]],\n"
 "    texture2d<float> img [[texture(1)]], texture2d<float> bd [[texture(2)]]) {\n"
 "  Inst I = inst[in.iid];\n"
 "  float2 p = in.p;\n"
-"  if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard_fragment();\n"
+"  // cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
+"  float cover = 1.0;\n"
+"  if (max(max(I.rc.x, I.rc.y), max(I.rc.z, I.rc.w)) > 0.0) {\n"
+"    cover = clip_cover(p, I.clip, I.rc, u.scale);\n"
+"    if (cover <= 0.0) discard_fragment();\n"
+"  } else if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard_fragment();\n"
 "  int kind = int(I.p.y + 0.5);\n"
 "  float4 col = I.color;\n"
 "  if (kind == 1 || kind == 3 || kind == 7) {\n"
 "    constexpr sampler s(filter::linear, coord::pixel);\n"
 "    float2 uv = I.c2.xy + (p - I.rect.xy) / I.rect.zw * I.c2.zw;\n"
 "    float4 t = atlas.sample(s, uv);\n"
-"    if (kind == 1) return float4(col.rgb, 1.0) * (t.a * col.a);\n"
+"    if (kind == 1) return (float4(col.rgb, 1.0) * (t.a * col.a)) * cover;\n"
 "    if (kind == 7) {\n"
 "      // inked by how light what is under its glass is, looked at round the glass's middle\n"
 "      float2 c = I.pad.yz; float r = I.pad.w * 0.5;\n"
@@ -109,9 +128,9 @@ static NSString *shader_src = @
 "                 luma(backdrop(bd, g, c - float2(r, 0.0))) + luma(backdrop(bd, g, c + float2(0.0, r))) +\n"
 "                 luma(backdrop(bd, g, c - float2(0.0, r)))) / 5.0;\n"
 "      float3 ink = mix(float3(1.0), float3(0.11, 0.11, 0.12), smoothstep(0.42, 0.6, l));\n"
-"      return float4(ink, 1.0) * (t.a * col.a);\n"
+"      return (float4(ink, 1.0) * (t.a * col.a)) * cover;\n"
 "    }\n"
-"    return t * col.a;\n"
+"    return (t * col.a) * cover;\n"
 "  }\n"
 "  if (kind == 6) {\n"
 "    // liquid: one shape of the group's, merged; what is under it bent along the bezel, the colours split a little\n"
@@ -141,7 +160,7 @@ static NSString *shader_src = @
 "    // the edge shaded, more on the side away from the light, so the shape reads over a light ground too\n"
 "    c *= 1.0 - I.c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));\n"
 "    c = c + (1.0 - c) * clamp(spec, 0.0, 1.0);\n"
-"    return float4(c, 1.0) * (a * I.c2.w);\n"
+"    return (float4(c, 1.0) * (a * I.c2.w)) * cover;\n"
 "  }\n"
 "  float2 hs = I.rect.zw * 0.5;\n"
 "  float2 c = I.rect.xy + hs;\n"
@@ -149,11 +168,11 @@ static NSString *shader_src = @
 "  float2 q = abs(p - c) - hs + r;\n"
 "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n"
 "  if (kind == 0 || kind == 5) d = notch_cut(d, p, I.rect, I.pad);\n"
-"  if (kind == 9) { if (d > 0.0) discard_fragment(); return float4(0.0); }\n"
+"  if (kind == 9) { if (d > 0.0) discard_fragment(); return (float4(0.0)) * cover; }\n"
 "  if (kind == 4) {\n"
 "    constexpr sampler si(filter::linear, address::clamp_to_edge);\n"
 "    float2 uv = I.c2.xy + clamp((p - I.rect.xy) / I.rect.zw, 0.0, 1.0) * I.c2.zw;\n"
-"    return img.sample(si, uv) * (col.a * clamp(0.5 - d * u.scale, 0.0, 1.0));\n"
+"    return (img.sample(si, uv) * (col.a * clamp(0.5 - d * u.scale, 0.0, 1.0))) * cover;\n"
 "  }\n"
 "  if (kind == 2) {\n"
 "    float b = max(I.p.w, 0.5);\n"
@@ -164,7 +183,7 @@ static NSString *shader_src = @
 "      float db = length(max(qb, 0.0)) + min(max(qb.x, qb.y), 0.0) - r;\n"
 "      a *= clamp(0.5 + db * u.scale, 0.0, 1.0);\n"
 "    }\n"
-"    return float4(col.rgb, 1.0) * col.a * a;\n"
+"    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
 "  }\n"
 "  float a = clamp(0.5 - d * u.scale, 0.0, 1.0);\n"
 "  if (kind == 5) {\n"
@@ -181,7 +200,7 @@ static NSString *shader_src = @
 "      g3 = mix(g3, float3(1.0), I.c2.y * lit);\n"
 "      g3 = mix(g3, float3(1.0), I.c2.z * back);\n"
 "    }\n"
-"    return float4(g3, 1.0) * (a * I.c2.w);\n"
+"    return (float4(g3, 1.0) * (a * I.c2.w)) * cover;\n"
 "  }\n"
 "  float4 fill = float4(col.rgb, 1.0) * col.a;\n"
 "  float bw = I.p.z;\n"
@@ -190,7 +209,7 @@ static NSString *shader_src = @
 "    float4 bc = float4(I.c2.rgb, 1.0) * I.c2.a;\n"
 "    fill = mix(bc, fill, inner);\n"
 "  }\n"
-"  return fill * a;\n"
+"  return (fill * a) * cover;\n"
 "}\n"
 "// The backdrop's passes: a.xy the source's texel, a.z 1 halving (dual Kawase's down), 2 a Gaussian along b.zw of\n"
 "// deviation a.w (texels); b.xy the last texel's centre of what the source holds\n"
@@ -342,14 +361,14 @@ static void post_pass(id<MTLCommandBuffer> cb, id<MTLTexture> src, int sw, int s
 // Frosted glass of the same capture further on (glass.mbt shares_capture) is under it too.
 static int capture(id<MTLCommandBuffer> cb, id<MTLTexture> target, const float *f, int32_t start, int32_t end,
                    int32_t count) {
-  const float *a = f + start * 24;
+  const float *a = f + start * MB_INST;
   float blur = a[7];
   int kind = (int)(a[5] + 0.5f);
   float margin = 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
   float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
   int n = 0;
   for (int32_t i = start; i < end; i++) {
-    const float *b = f + i * 24;
+    const float *b = f + i * MB_INST;
     // what of it shows: its clip
     float bx0 = fmaxf(b[0], b[16]), by0 = fmaxf(b[1], b[17]);
     float bx1 = fminf(b[0] + b[2], b[18]), by1 = fminf(b[1] + b[3], b[19]);
@@ -365,7 +384,7 @@ static int capture(id<MTLCommandBuffer> cb, id<MTLTexture> target, const float *
   }
   if (kind == 5) {
     for (int32_t i = end; i < count; i++) {
-      const float *b = f + i * 24;
+      const float *b = f + i * MB_INST;
       if (b[20] != a[20]) continue;
       x0 = fminf(x0, fmaxf(b[0], b[16])); y0 = fminf(y0, fmaxf(b[1], b[17]));
       x1 = fmaxf(x1, fminf(b[0] + b[2], b[18])); y1 = fmaxf(y1, fminf(b[1] + b[3], b[19]));
@@ -450,10 +469,10 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {
-    int tid = (int)f[start * 24 + 20];
-    int hole = (int)(f[start * 24 + 5] + 0.5f) == 9;
+    int tid = (int)f[start * MB_INST + 20];
+    int hole = (int)(f[start * MB_INST + 5] + 0.5f) == 9;
     int32_t end = start + 1;
-    while (end < count && (int)f[end * 24 + 20] == tid && ((int)(f[end * 24 + 5] + 0.5f) == 9) == hole) end++;
+    while (end < count && (int)f[end * MB_INST + 20] == tid && ((int)(f[end * MB_INST + 5] + 0.5f) == 9) == hole) end++;
     if (tid < 0) {
       if (tid != bound) {
         [enc endEncoding];
@@ -464,7 +483,7 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
       [enc setRenderPipelineState:p];
       // liquid: the group as one shape, drawn once
       if (shows) {
-        int liquid = (int)(f[start * 24 + 5] + 0.5f) == 6;
+        int liquid = (int)(f[start * MB_INST + 5] + 0.5f) == 6;
         [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
                 instanceCount:liquid ? 1 : end - start baseInstance:start];
       }
@@ -485,14 +504,14 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
 // kept for snapshots.
 static id<MTLBuffer> upload(const double *inst, int32_t count, double r, double g, double b) {
   buf_i = (buf_i + 1) % 3;
-  size_t need = (size_t)(count > 0 ? count : 1) * 24 * sizeof(float);
+  size_t need = (size_t)(count > 0 ? count : 1) * MB_INST * sizeof(float);
   if (buf_cap[buf_i] < need) {
     size_t cap = need * 2;
     bufs[buf_i] = [dev newBufferWithLength:cap options:MTLResourceStorageModeShared];
     buf_cap[buf_i] = cap;
   }
   float *f = (float *)bufs[buf_i].contents;
-  int32_t n = count * 24;
+  int32_t n = count * MB_INST;
   for (int32_t i = 0; i < n; i++) f[i] = (float)inst[i];
   // keep a copy for snapshots
   if (last_cap < need) {
@@ -531,7 +550,7 @@ int mb_render_snapshot(const char *path) {
   td.storageMode = MTLStorageModeShared;
 #endif
   id<MTLTexture> tex = [dev newTextureWithDescriptor:td];
-  id<MTLBuffer> buf = [dev newBufferWithBytes:last_inst length:(last_count > 0 ? last_count : 1) * 24 * sizeof(float) options:MTLResourceStorageModeShared];
+  id<MTLBuffer> buf = [dev newBufferWithBytes:last_inst length:(last_count > 0 ? last_count : 1) * MB_INST * sizeof(float) options:MTLResourceStorageModeShared];
   id<MTLCommandBuffer> cb = [queue commandBuffer];
   encode(cb, tex, rpipe_off, buf, last_count, last_bg[0], last_bg[1], last_bg[2]);
 #if TARGET_OS_OSX

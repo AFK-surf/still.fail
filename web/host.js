@@ -14,7 +14,9 @@
   let canvas, gl, prog, post, vao, instBuf, atlasTex, ta;
   const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
-  let f32 = new Float32Array(24 * 4096);
+  // the numbers of an instance (src/ui/scene.mbt)
+  const INST = 28;
+  let f32 = new Float32Array(INST * 4096);
   let pending = false;
   window.__logs = [];
 
@@ -108,10 +110,12 @@
   layout(location=3) in vec4 a_c2;
   layout(location=4) in vec4 a_clip;
   layout(location=5) in vec4 a_pad;
+  layout(location=6) in vec4 a_rc;
   uniform vec2 u_vp;
   uniform vec4 u_gb;
   out vec2 v_pos;
   flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;
+  flat out vec4 v_rc;
   void main() {
     int vid = gl_VertexID;
     vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);
@@ -120,12 +124,13 @@
     vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);
     if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);
     gl_Position = vec4(pos.x / u_vp.x * 2.0 - 1.0, 1.0 - pos.y / u_vp.y * 2.0, 0.0, 1.0);
-    v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad;
+    v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc;
   }`;
   const FS = `#version 300 es
   precision highp float;
   in vec2 v_pos;
   flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;
+  flat in vec4 v_rc;
   uniform float u_scale;
   uniform sampler2D u_atlas;
   uniform sampler2D u_img;
@@ -170,9 +175,19 @@
     return texture(u_bd, clamp(p * u_map.xy + u_map.zw, u_uvc.xy, u_uvc.zw)).rgb;
   }
   float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
-  void main() {
-    vec2 p = v_pos;
-    if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;
+  // how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise), its edge
+  // covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it
+  float clip_cover(vec2 p, vec4 c, vec4 r, float scale) {
+    vec2 hs = (c.zw - c.xy) * 0.5;
+    vec2 m = c.xy + hs;
+    float rr = p.x < m.x ? (p.y < m.y ? r.x : r.w) : (p.y < m.y ? r.y : r.z);
+    rr = min(rr, min(hs.x, hs.y));
+    vec2 q = abs(p - m) - hs + rr;
+    float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
+    return clamp(0.5 - d * scale, 0.0, 1.0);
+  }
+  // what it shows at p, as if uncut
+  void shade(vec2 p) {
     int kind = int(v_p.y + 0.5);
     if (kind == 9) { o = vec4(0.0); return; }
     vec4 col = v_color;
@@ -268,6 +283,17 @@
       fill = mix(bc, fill, inner);
     }
     o = fill * a;
+  }
+  // cut to its clip: a rect's, hard; a rounded one's, covered as edges are
+  void main() {
+    vec2 p = v_pos;
+    float cover = 1.0;
+    if (max(max(v_rc.x, v_rc.y), max(v_rc.z, v_rc.w)) > 0.0) {
+      cover = clip_cover(p, v_clip, v_rc, u_scale);
+      if (cover <= 0.0) discard;
+    } else if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;
+    shade(p);
+    o *= cover;
   }`;
   // glass's passes over its copy of what is under it
   const PVS = `#version 300 es
@@ -340,11 +366,11 @@
     gl.bindVertexArray(vao);
     instBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 7; i++) {
       const loc = i;
-      // instance layout: rect, p, color, c2, clip, pad (vec4 each)
+      // instance layout: rect, p, color, c2, clip, pad, the clip's corners' radii (vec4 each)
       gl.enableVertexAttribArray(loc);
-      gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, 96, i * 16);
+      gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, INST * 4, i * 16);
       gl.vertexAttribDivisor(loc, 1);
     }
     atlasTex = gl.createTexture();
@@ -403,13 +429,13 @@
   // what the run [start, end) of glass sees, frosted glass of the same capture further on (glass.mbt
   // shares_capture) too; false when none of it shows
   function capture(start, end, count) {
-    const a = start * 24;
+    const a = start * INST;
     const blur = f32[a + 7], kind = Math.round(f32[a + 5]);
     const margin = 3 * blur + (kind === 6 ? f32[a + 21] * (1 + f32[a + 22]) + f32[a + 23] : 0) + 2;
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     gn = 0;
     for (let i = start; i < end; i++) {
-      const b = i * 24;
+      const b = i * INST;
       let bx0 = Math.max(f32[b], f32[b + 16]), by0 = Math.max(f32[b + 1], f32[b + 17]);
       let bx1 = Math.min(f32[b] + f32[b + 2], f32[b + 18]), by1 = Math.min(f32[b + 1] + f32[b + 3], f32[b + 19]);
       if (kind === 6) {
@@ -424,7 +450,7 @@
       x0 = Math.min(x0, bx0); y0 = Math.min(y0, by0); x1 = Math.max(x1, bx1); y1 = Math.max(y1, by1);
     }
     for (let i = end; kind === 5 && i < count; i++) {
-      const b = i * 24;
+      const b = i * INST;
       if (f32[b + 20] !== f32[a + 20]) continue;
       x0 = Math.min(x0, Math.max(f32[b], f32[b + 16])); y0 = Math.min(y0, Math.max(f32[b + 1], f32[b + 17]));
       x1 = Math.max(x1, Math.min(f32[b] + f32[b + 2], f32[b + 18])); y1 = Math.max(y1, Math.min(f32[b + 1] + f32[b + 3], f32[b + 19]));
@@ -492,7 +518,7 @@
   }
 
   H.present = (buf, n, r, g, b) => {
-    const len = n * 24;
+    const len = n * INST;
     if (f32.length < len) f32 = new Float32Array(len * 2);
     for (let i = 0; i < len; i++) f32[i] = buf[i];
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -509,13 +535,13 @@
     // one draw per run of instances showing the same image (slot 20), or sharing one capture of glass (negative);
     // WebGL has no base instance, so the attributes start at the run instead
     // (and per run of holes, kind 9: written transparent with no blending, where a native view shows)
-    const hole = (i) => Math.round(f32[i * 24 + 5]) === 9;
+    const hole = (i) => Math.round(f32[i * INST + 5]) === 9;
     let start = 0, bound = 0, shows = false;
     while (start < n) {
-      const tid = f32[start * 24 + 20] | 0;
+      const tid = f32[start * INST + 20] | 0;
       const h = hole(start);
       let end = start + 1;
-      while (end < n && (f32[end * 24 + 20] | 0) === tid && hole(end) === h) end++;
+      while (end < n && (f32[end * INST + 20] | 0) === tid && hole(end) === h) end++;
       if (tid < 0) {
         if (tid !== bound) {
           shows = capture(start, end, n);
@@ -523,9 +549,9 @@
           mainState();
         }
         if (shows) {
-          for (let i = 0; i < 6; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 96, start * 96 + i * 16);
+          for (let i = 0; i < 7; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
           // liquid: the group as one shape, drawn once
-          gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, Math.round(f32[start * 24 + 5]) === 6 ? 1 : end - start);
+          gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, Math.round(f32[start * INST + 5]) === 6 ? 1 : end - start);
         }
         start = end;
         continue;
@@ -533,7 +559,7 @@
       const im = tid ? images.get(tid) : null;
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
-      for (let i = 0; i < 6; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 96, start * 96 + i * 16);
+      for (let i = 0; i < 7; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
       if (h) gl.disable(gl.BLEND);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - start);
       if (h) gl.enable(gl.BLEND);

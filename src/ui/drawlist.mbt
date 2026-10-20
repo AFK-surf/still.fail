@@ -8,7 +8,7 @@
 // places and image ids are each renderer's own.
 //
 // The format, a line each, numbers as MoonBit writes doubles (exact), in this order:
-//   mbui-dl 2
+//   mbui-dl 3                     (3: an instance's 28 numbers, its clip's corners' radii 24-27; 2 had 24)
 //   window W H SCALE              the window in points, its device pixels a point
 //   clear R G B                   what is under everything (0-1), as this frame was presented
 //   glyph N SIZE WEIGHT STYLE CLUSTER "TEXT"
@@ -22,8 +22,10 @@
 //                                 (Tester::drawlist_images)
 //   bytes N BASE64                those bytes, when the list is to carry them (Tester::drawlist(bytes=true)): a list a
 //                                 renderer draws by itself, with no files beside it
-//   i N0 … N23                    an instance (scene.mbt: its 24 numbers), in drawing order, but a glyph's 12 its
-//                                 glyph's N (13 0) and an image's 20 its image's N
+//   i N0 … N27                    an instance (scene.mbt: its 28 numbers), in drawing order, but a glyph's 12 its
+//                                 glyph's N (13 0) and an image's 20 its image's N; 16-19 and 24-27 the rounded
+//                                 rect it is cut to (its rect, its corners' radii: top left, top right, bottom right,
+//                                 bottom left)
 
 ///|
 /// What the last frame drew, as a draw list (the file's head); `bytes`: with the pictures handed over as bytes in it.
@@ -176,7 +178,7 @@ fn glyph_names() -> Map[Int, ((Double, Int, Int), Int, String)] {
 ///|
 fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
   let sb = StringBuilder()
-  sb.write_string("mbui-dl 2\n")
+  sb.write_string("mbui-dl 3\n")
   sb.write_string("window")
   dl_num(sb, c.width)
   dl_num(sb, c.height)

@@ -721,7 +721,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
   if !words_sel.is_empty() {
     self.paint_selection(i, lay, ox, oy, alpha)
   }
-  let k = clip_stack.length() - 4
+  let k = clip_top()
   let cx0 = clip_stack[k]
   let cy0 = clip_stack[k + 1]
   let cx1 = clip_stack[k + 2]
@@ -783,11 +783,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
         )
       }
       if id != 0 {
-        self.next_hit_ids.push(id)
-        self.next_hit_rects.push(dmax(x0, cx0))
-        self.next_hit_rects.push(dmax(top, cy0))
-        self.next_hit_rects.push(dmin(x1, cx1))
-        self.next_hit_rects.push(dmin(top + lay.line_h[l], cy1))
+        self.push_hit(id, dmax(x0, cx0), dmax(top, cy0), dmin(x1, cx1), dmin(top + lay.line_h[l], cy1))
       }
     }
   }

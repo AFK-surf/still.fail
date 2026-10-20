@@ -22,6 +22,19 @@ grep -a '^DLFRAMES' $O/print.txt || true
 awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' $O/print.txt > $O/controls.dl
 [ -s $O/controls.dl ] || { echo "render_check: no draw list"; exit 1; }
 MBUI_DL=$PWD/$O/controls.dl MBUI_DL_PNG=$PWD/$O/render.png ./_build/native/release/build/render/render.exe
+# a rounded clip: a box filled by what it cuts drawn offscreen as the box filled itself, to the byte
+for k in clip-cut clip-box; do
+  MBUI_DL_PRINT=$k moon test --target js src/kitdemo/dl_print_wbtest.mbt 2>/dev/null |
+    awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/$k.dl
+  [ -s $O/$k.dl ] || { echo "render_check: no $k draw list"; exit 1; }
+  MBUI_DL=$PWD/$O/$k.dl MBUI_DL_PNG=$PWD/$O/$k.png ./_build/native/release/build/render/render.exe
+done
+if cmp -s $O/clip-cut.png $O/clip-box.png; then
+  echo "render_check: what a rounded clip cuts is the box's own rounded ground, to the byte ($(md5 -q $O/clip-cut.png))"
+else
+  echo "render_check: what a rounded clip cuts is not the box's own rounded ground ($(md5 -q $O/clip-cut.png) / $(md5 -q $O/clip-box.png))"
+  exit 1
+fi
 if cmp -s $O/render.png $O/host.png; then
   echo "render_check: the draw list drawn offscreen is the host's picture, to the byte ($(md5 -q $O/render.png))"
 else

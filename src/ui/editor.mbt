@@ -372,10 +372,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     Some(t) => t
     None => return
   }
-  clip_stack.push(n.x)
-  clip_stack.push(n.y)
-  clip_stack.push(n.x + n.fw)
-  clip_stack.push(n.y + n.fh)
+  push_clip(n.x, n.y, n.x + n.fw, n.y + n.fh)
   let focused = self.focus == n.id
   let ml = st.marked.length()
   // selection
@@ -447,9 +444,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
       )
     }
   }
-  for _ in 0..<4 {
-    clip_stack.pop() |> ignore
-  }
+  pop_clip()
 }
 
 ///|

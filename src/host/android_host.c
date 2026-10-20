@@ -235,6 +235,9 @@ static int image_new(void) {
 // ---------------------------------------------------------------------------
 // Renderer: the same instances and shader as Metal and WebGL2.
 
+// the numbers of an instance (src/ui/scene.mbt)
+#define MB_INST 28
+
 static const char *VS =
     "#version 300 es\n"
     "layout(location=0) in vec4 a_rect;\n"
@@ -243,10 +246,12 @@ static const char *VS =
     "layout(location=3) in vec4 a_c2;\n"
     "layout(location=4) in vec4 a_clip;\n"
     "layout(location=5) in vec4 a_pad;\n"
+    "layout(location=6) in vec4 a_rc;\n"
     "uniform vec2 u_vp;\n"
     "uniform vec4 u_gb;\n"
     "out vec2 v_pos;\n"
     "flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;\n"
+    "flat out vec4 v_rc;\n"
     "void main() {\n"
     "  int vid = gl_VertexID;\n"
     "  vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);\n"
@@ -255,7 +260,7 @@ static const char *VS =
     "  vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);\n"
     "  if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);\n"
     "  gl_Position = vec4(pos.x / u_vp.x * 2.0 - 1.0, 1.0 - pos.y / u_vp.y * 2.0, 0.0, 1.0);\n"
-    "  v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad;\n"
+    "  v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc;\n"
     "}\n";
 
 static const char *FS =
@@ -263,6 +268,7 @@ static const char *FS =
     "precision highp float;\n"
     "in vec2 v_pos;\n"
     "flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;\n"
+    "flat in vec4 v_rc;\n"
     "uniform float u_scale;\n"
     "uniform sampler2D u_atlas;\n"
     "uniform sampler2D u_img;\n"
@@ -307,9 +313,19 @@ static const char *FS =
     "  return texture(u_bd, clamp(p * u_map.xy + u_map.zw, u_uvc.xy, u_uvc.zw)).rgb;\n"
     "}\n"
     "float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }\n"
-    "void main() {\n"
-    "  vec2 p = v_pos;\n"
-    "  if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;\n"
+    "// how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise), its edge\n"
+    "// covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it\n"
+    "float clip_cover(vec2 p, vec4 c, vec4 r, float scale) {\n"
+    "  vec2 hs = (c.zw - c.xy) * 0.5;\n"
+    "  vec2 m = c.xy + hs;\n"
+    "  float rr = p.x < m.x ? (p.y < m.y ? r.x : r.w) : (p.y < m.y ? r.y : r.z);\n"
+    "  rr = min(rr, min(hs.x, hs.y));\n"
+    "  vec2 q = abs(p - m) - hs + rr;\n"
+    "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
+    "  return clamp(0.5 - d * scale, 0.0, 1.0);\n"
+    "}\n"
+    "// what it shows at p, as if uncut\n"
+    "void shade(vec2 p) {\n"
     "  int kind = int(v_p.y + 0.5);\n"
     "  if (kind == 9) { o = vec4(0.0); return; }\n"
     "  vec4 col = v_color;\n"
@@ -405,6 +421,17 @@ static const char *FS =
     "    fill = mix(bc, fill, inner);\n"
     "  }\n"
     "  o = fill * a;\n"
+    "}\n"
+    "// cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
+    "void main() {\n"
+    "  vec2 p = v_pos;\n"
+    "  float cover = 1.0;\n"
+    "  if (max(max(v_rc.x, v_rc.y), max(v_rc.z, v_rc.w)) > 0.0) {\n"
+    "    cover = clip_cover(p, v_clip, v_rc, u_scale);\n"
+    "    if (cover <= 0.0) discard;\n"
+    "  } else if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;\n"
+    "  shade(p);\n"
+    "  o *= cover;\n"
     "}\n";
 
 // glass's passes over its copy of what is under it
@@ -507,9 +534,9 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   glBindVertexArray(vao);
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < 7; i++) {
     glEnableVertexAttribArray(i);
-    glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 96, (void *)(intptr_t)(i * 16));
+    glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(i * 16));
     glVertexAttribDivisor(i, 1);
   }
   glGenTextures(1, &atlas);
@@ -595,14 +622,14 @@ static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int 
 // what the run [start, end) of glass sees, frosted glass of the same capture further on (glass.mbt shares_capture)
 // too; 0 when none of it shows
 static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
-  const float *a = f + start * 24;
+  const float *a = f + start * MB_INST;
   float blur = a[7];
   int kind = (int)(a[5] + 0.5f);
   float margin = 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
   float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
   gn = 0;
   for (int32_t i = start; i < end; i++) {
-    const float *b = f + i * 24;
+    const float *b = f + i * MB_INST;
     float bx0 = b[0] > b[16] ? b[0] : b[16], by0 = b[1] > b[17] ? b[1] : b[17];
     float bx1 = b[0] + b[2] < b[18] ? b[0] + b[2] : b[18], by1 = b[1] + b[3] < b[19] ? b[1] + b[3] : b[19];
     if (kind == 6) {
@@ -619,7 +646,7 @@ static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
     if (by1 > y1) y1 = by1;
   }
   for (int32_t i = end; kind == 5 && i < count; i++) {
-    const float *b = f + i * 24;
+    const float *b = f + i * MB_INST;
     if (b[20] != a[20]) continue;
     float bx0 = b[0] > b[16] ? b[0] : b[16], by0 = b[1] > b[17] ? b[1] : b[17];
     float bx1 = b[0] + b[2] < b[18] ? b[0] + b[2] : b[18], by1 = b[1] + b[3] < b[19] ? b[1] + b[3] : b[19];
@@ -712,7 +739,7 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   }
   glViewport(0, vy0, fb_w, vhp);
   if (count <= 0) return;
-  size_t n = (size_t)count * 24;
+  size_t n = (size_t)count * MB_INST;
   if (fcap < n) {
     fcap = n * 2;
     fbuf = realloc(fbuf, fcap * sizeof(float));
@@ -734,10 +761,10 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {
-    int tid = (int)fbuf[start * 24 + 20];
-    int hole = (int)(fbuf[start * 24 + 5] + 0.5f) == 9;
+    int tid = (int)fbuf[start * MB_INST + 20];
+    int hole = (int)(fbuf[start * MB_INST + 5] + 0.5f) == 9;
     int32_t end = start + 1;
-    while (end < count && (int)fbuf[end * 24 + 20] == tid && ((int)(fbuf[end * 24 + 5] + 0.5f) == 9) == hole) end++;
+    while (end < count && (int)fbuf[end * MB_INST + 20] == tid && ((int)(fbuf[end * MB_INST + 5] + 0.5f) == 9) == hole) end++;
     if (tid < 0) {
       if (tid != bound) {
         shows = capture(fbuf, start, end, count);
@@ -745,10 +772,10 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
         main_state();
       }
       if (shows) {
-        for (int i = 0; i < 6; i++)
-          glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 96, (void *)(intptr_t)(start * 96 + i * 16));
+        for (int i = 0; i < 7; i++)
+          glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
         // liquid: the group as one shape, drawn once
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (int)(fbuf[start * 24 + 5] + 0.5f) == 6 ? 1 : end - start);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (int)(fbuf[start * MB_INST + 5] + 0.5f) == 6 ? 1 : end - start);
       }
       start = end;
       continue;
@@ -757,8 +784,8 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
     if (t) {  // 0: lost with the context, decoding again
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, t);
-      for (int i = 0; i < 6; i++)
-        glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 96, (void *)(intptr_t)(start * 96 + i * 16));
+      for (int i = 0; i < 7; i++)
+        glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
       if (hole) glDisable(GL_BLEND);
       glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);
       if (hole) glEnable(GL_BLEND);

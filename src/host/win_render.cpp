@@ -67,6 +67,9 @@ static float *last_inst;
 static size_t last_cap;
 static float last_bg[3];
 
+// the numbers of an instance (src/ui/scene.mbt)
+#define MB_INST 28
+
 static const char *shader_src =
     "cbuffer U : register(b0) { float2 vp; float scale; float pad; };\n"
     "// glass (src/ui/glass.mbt): where a point is in the blurred copy under it (uv = p * gmap.xy + gmap.zw, kept in guvc),\n"
@@ -77,11 +80,11 @@ static const char *shader_src =
     "Texture2D bd : register(t2);\n"
     "SamplerState samp : register(s0);\n"
     "struct VIn { float4 rect : INST0; float4 p : INST1; float4 color : INST2; float4 c2 : INST3;\n"
-    "  float4 clip : INST4; float4 pd : INST5; uint vid : SV_VertexID; };\n"
+    "  float4 clip : INST4; float4 pd : INST5; float4 rc : INST6; uint vid : SV_VertexID; };\n"
     "struct VOut { float4 pos : SV_Position; float2 p : POS;\n"
     "  nointerpolation float4 rect : INST0; nointerpolation float4 prm : INST1;\n"
     "  nointerpolation float4 color : INST2; nointerpolation float4 c2 : INST3;\n"
-    "  nointerpolation float4 clip : INST4; nointerpolation float4 pd : INST5; };\n"
+    "  nointerpolation float4 clip : INST4; nointerpolation float4 pd : INST5; nointerpolation float4 rc : INST6; };\n"
     "VOut vmain(VIn I) {\n"
     "  uint vid = I.vid;\n"
     "  float2 corner = float2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0,\n"
@@ -92,7 +95,7 @@ static const char *shader_src =
     "  if (kind == 6) pos = lerp(ggb.xy, ggb.zw, corner);\n"
     "  VOut o;\n"
     "  o.pos = float4(pos.x / vp.x * 2.0 - 1.0, 1.0 - pos.y / vp.y * 2.0, 0.0, 1.0);\n"
-    "  o.p = pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd;\n"
+    "  o.p = pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd; o.rc = I.rc;\n"
     "  return o;\n"
     "}\n"
     "float sd_rr(float2 p, float4 r, float rad) {\n"
@@ -128,25 +131,41 @@ static const char *shader_src =
     "  return bd.SampleLevel(samp, clamp(p * gmap.xy + gmap.zw, guvc.xy, guvc.zw), 0).rgb;\n"
     "}\n"
     "float luma(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }\n"
+    "// how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise), its edge\n"
+    "// covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it\n"
+    "float clip_cover(float2 p, float4 c, float4 r, float sc) {\n"
+    "  float2 hs = (c.zw - c.xy) * 0.5;\n"
+    "  float2 m = c.xy + hs;\n"
+    "  float rr = p.x < m.x ? (p.y < m.y ? r.x : r.w) : (p.y < m.y ? r.y : r.z);\n"
+    "  rr = min(rr, min(hs.x, hs.y));\n"
+    "  float2 q = abs(p - m) - hs + rr;\n"
+    "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
+    "  return saturate(0.5 - d * sc);\n"
+    "}\n"
     "float4 fmain(VOut I) : SV_Target {\n"
     "  float2 p = I.p;\n"
-    "  if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard;\n"
+    "  // cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
+    "  float cover = 1.0;\n"
+    "  if (max(max(I.rc.x, I.rc.y), max(I.rc.z, I.rc.w)) > 0.0) {\n"
+    "    cover = clip_cover(p, I.clip, I.rc, scale);\n"
+    "    if (cover <= 0.0) discard;\n"
+    "  } else if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard;\n"
     "  int kind = int(I.prm.y + 0.5);\n"
-    "  if (kind == 9) return float4(0.0, 0.0, 0.0, 0.0);\n"
+    "  if (kind == 9) return (float4(0.0, 0.0, 0.0, 0.0)) * cover;\n"
     "  float4 col = I.color;\n"
     "  if (kind == 1 || kind == 3 || kind == 7) {\n"
     "    float2 uv = (I.c2.xy + (p - I.rect.xy) / I.rect.zw * I.c2.zw) / 2048.0;\n"
     "    float4 t = atlas.SampleLevel(samp, uv, 0);\n"
-    "    if (kind == 1) return float4(col.rgb, 1.0) * (t.a * col.a);\n"
+    "    if (kind == 1) return (float4(col.rgb, 1.0) * (t.a * col.a)) * cover;\n"
     "    if (kind == 7) {\n"
     "      // inked by how light what is under its glass is, looked at round the glass's middle\n"
     "      float2 c = I.pd.yz; float r = I.pd.w * 0.5;\n"
     "      float l = (luma(backdrop(c)) + luma(backdrop(c + float2(r, 0.0))) + luma(backdrop(c - float2(r, 0.0))) +\n"
     "                 luma(backdrop(c + float2(0.0, r))) + luma(backdrop(c - float2(0.0, r)))) / 5.0;\n"
     "      float3 ink = lerp(float3(1.0, 1.0, 1.0), float3(0.11, 0.11, 0.12), smoothstep(0.42, 0.6, l));\n"
-    "      return float4(ink, 1.0) * (t.a * col.a);\n"
+    "      return (float4(ink, 1.0) * (t.a * col.a)) * cover;\n"
     "    }\n"
-    "    return t * col.a;\n"
+    "    return (t * col.a) * cover;\n"
     "  }\n"
     "  if (kind == 6) {\n"
     "    // liquid: one shape of the group's, merged; what is under it bent along the bezel, the colours split a little\n"
@@ -175,7 +194,7 @@ static const char *shader_src =
     "    // the edge shaded, more on the side away from the light, so the shape reads over a light ground too\n"
     "    c *= 1.0 - I.c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));\n"
     "    c = c + (1.0 - c) * saturate(spec);\n"
-    "    return float4(c, 1.0) * (a * I.c2.w);\n"
+    "    return (float4(c, 1.0) * (a * I.c2.w)) * cover;\n"
     "  }\n"
     "  float2 hs = I.rect.zw * 0.5;\n"
     "  float2 c = I.rect.xy + hs;\n"
@@ -185,7 +204,7 @@ static const char *shader_src =
     "  if (kind == 0 || kind == 5) d = notch_cut(d, p, I.rect, I.pd);\n"
     "  if (kind == 4) {\n"
     "    float2 uv = I.c2.xy + saturate((p - I.rect.xy) / I.rect.zw) * I.c2.zw;\n"
-    "    return img.SampleLevel(samp, uv, 0) * (col.a * saturate(0.5 - d * scale));\n"
+    "    return (img.SampleLevel(samp, uv, 0) * (col.a * saturate(0.5 - d * scale))) * cover;\n"
     "  }\n"
     "  if (kind == 2) {\n"
     "    float b = max(I.prm.w, 0.5);\n"
@@ -196,7 +215,7 @@ static const char *shader_src =
     "      float db = length(max(qb, 0.0)) + min(max(qb.x, qb.y), 0.0) - r;\n"
     "      a *= saturate(0.5 + db * scale);\n"
     "    }\n"
-    "    return float4(col.rgb, 1.0) * col.a * a;\n"
+    "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
     "  }\n"
     "  float a = clamp(0.5 - d * scale, 0.0, 1.0);\n"
     "  if (kind == 5) {\n"
@@ -214,7 +233,7 @@ static const char *shader_src =
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.y * lit);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.z * back);\n"
     "    }\n"
-    "    return float4(g3, 1.0) * (a * I.c2.w);\n"
+    "    return (float4(g3, 1.0) * (a * I.c2.w)) * cover;\n"
     "  }\n"
     "  float4 fill = float4(col.rgb, 1.0) * col.a;\n"
     "  float bw = I.prm.z;\n"
@@ -223,7 +242,7 @@ static const char *shader_src =
     "    float4 bc = float4(I.c2.rgb, 1.0) * I.c2.a;\n"
     "    fill = lerp(bc, fill, inner);\n"
     "  }\n"
-    "  return fill * a;\n"
+    "  return (fill * a) * cover;\n"
     "}\n";
 
 // glass's passes over its copy of what is under it
@@ -372,10 +391,11 @@ static void make_pipeline(void) {
   ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0");
   dev->CreateVertexShader(vcode->GetBufferPointer(), vcode->GetBufferSize(), NULL, &vs);
   dev->CreatePixelShader(pcode->GetBufferPointer(), pcode->GetBufferSize(), NULL, &ps);
-  D3D11_INPUT_ELEMENT_DESC el[6];
-  for (UINT i = 0; i < 6; i++)
+  // the instance's seven float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii
+  D3D11_INPUT_ELEMENT_DESC el[7];
+  for (UINT i = 0; i < 7; i++)
     el[i] = {"INST", i, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, i * 16, D3D11_INPUT_PER_INSTANCE_DATA, 1};
-  dev->CreateInputLayout(el, 6, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
+  dev->CreateInputLayout(el, 7, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
   vcode->Release();
   pcode->Release();
   ID3DBlob *pv = compile("vpost", "vs_4_0", post_src), *pp = compile("fpost", "ps_4_0", post_src);
@@ -508,14 +528,14 @@ static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int 
 // further on (glass.mbt shares_capture) too; 0 when none of it shows
 static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *f, int32_t start, int32_t end,
                    int32_t count) {
-  const float *a = f + start * 24;
+  const float *a = f + start * MB_INST;
   float blur = a[7];
   int kind = (int)(a[5] + 0.5f);
   float margin = 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
   float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
   int n = 0;
   for (int32_t i = start; i < end; i++) {
-    const float *b = f + i * 24;
+    const float *b = f + i * MB_INST;
     float bx0 = b[0] > b[16] ? b[0] : b[16], by0 = b[1] > b[17] ? b[1] : b[17];
     float bx1 = b[0] + b[2] < b[18] ? b[0] + b[2] : b[18], by1 = b[1] + b[3] < b[19] ? b[1] + b[3] : b[19];
     if (kind == 6) {
@@ -532,7 +552,7 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
     if (by1 > y1) y1 = by1;
   }
   for (int32_t i = end; kind == 5 && i < count; i++) {
-    const float *b = f + i * 24;
+    const float *b = f + i * MB_INST;
     if (b[20] != a[20]) continue;
     float bx0 = b[0] > b[16] ? b[0] : b[16], by0 = b[1] > b[17] ? b[1] : b[17];
     float bx1 = b[0] + b[2] < b[18] ? b[0] + b[2] : b[18], by1 = b[1] + b[3] < b[19] ? b[1] + b[3] : b[19];
@@ -593,7 +613,7 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
 // the main pipeline's state, at the start and after the passes
 static void main_state(ID3D11RenderTargetView *target, int pw, int ph) {
   D3D11_VIEWPORT vp = {0, 0, (float)pw, (float)ph, 0, 1};
-  UINT stride = 24 * sizeof(float), off = 0;
+  UINT stride = MB_INST * sizeof(float), off = 0;
   ctx->OMSetRenderTargets(1, &target, NULL);
   ctx->RSSetViewports(1, &vp);
   ctx->RSSetState(raster);
@@ -628,9 +648,9 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {
-    int tid = (int)f[start * 24 + 20];
+    int tid = (int)f[start * MB_INST + 20];
     int32_t end = start + 1;
-    while (end < count && (int)f[end * 24 + 20] == tid) end++;
+    while (end < count && (int)f[end * MB_INST + 20] == tid) end++;
     if (tid < 0) {
       if (tid != bound) {
         shows = capture(target, pw, ph, f, start, end, count);
@@ -638,14 +658,14 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
         main_state(target, pw, ph);
       }
       // liquid: the group as one shape, drawn once
-      if (shows) ctx->DrawInstanced(6, (int)(f[start * 24 + 5] + 0.5f) == 6 ? 1 : (UINT)(end - start), 0, (UINT)start);
+      if (shows) ctx->DrawInstanced(6, (int)(f[start * MB_INST + 5] + 0.5f) == 6 ? 1 : (UINT)(end - start), 0, (UINT)start);
       start = end;
       continue;
     }
     // holes for native views (kind 9) apart, written without blending: transparent there
-    int hole = (int)(f[start * 24 + 5] + 0.5f) == 9;
+    int hole = (int)(f[start * MB_INST + 5] + 0.5f) == 9;
     end = start + 1;
-    while (end < count && (int)f[end * 24 + 20] == tid && ((int)(f[end * 24 + 5] + 0.5f) == 9) == hole) end++;
+    while (end < count && (int)f[end * MB_INST + 20] == tid && ((int)(f[end * MB_INST + 5] + 0.5f) == 9) == hole) end++;
     ID3D11ShaderResourceView *t = tid ? (ID3D11ShaderResourceView *)mb_image_srv(tid) : atlas_srv;
     ctx->PSSetShaderResources(1, 1, t ? &t : &atlas_srv);
     if (hole) ctx->OMSetBlendState(NULL, NULL, 0xffffffff);
@@ -658,7 +678,7 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
 // The frame's instances into the vertex buffer and kept (a snapshot draws them again), then drawn into the target.
 static int submit(const double *inst, int32_t count, double r, double g, double b) {
   if (!rtv) return 0;
-  size_t need = (size_t)(count > 0 ? count : 1) * 24 * sizeof(float);
+  size_t need = (size_t)(count > 0 ? count : 1) * MB_INST * sizeof(float);
   if (vbuf_cap < need) {
     if (vbuf) vbuf->Release();
     vbuf_cap = need * 2;
@@ -669,7 +689,7 @@ static int submit(const double *inst, int32_t count, double r, double g, double 
   D3D11_MAPPED_SUBRESOURCE m;
   if (FAILED(ctx->Map(vbuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) return 0;
   float *f = (float *)m.pData;
-  int32_t n = count * 24;
+  int32_t n = count * MB_INST;
   if (last_cap < need) {
     last_cap = need * 2;
     last_inst = (float *)realloc(last_inst, last_cap);

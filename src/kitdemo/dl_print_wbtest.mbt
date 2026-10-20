@@ -59,3 +59,41 @@ test "the controls page's draw list printed when asked (MBUI_DL_PRINT=1: scripts
     println("DLEND")
   }
 }
+
+///|
+/// A box 80 by 40 at (20, 20), rounded 12: cutting a red box that fills it (`cut`), or red itself. Drawn, the two are
+/// the same picture to the byte (scripts/render_offscreen.sh, render_check.sh): what a rounded clip cuts covers its
+/// corners as the box's own rounded ground does.
+fn rounded_clip(cut : Bool) -> @ui.Tester {
+  let red = 0xFF3B30FFL
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(pad=20.0, align=AStart, fn() {
+        if cut {
+          c.box(w=Px(80.0), h=Px(40.0), radius=12.0, clip=true, fn() {
+            c.box(w=Fill(1.0), h=Fill(1.0), bg=red, fn() { () }) |> ignore
+          })
+          |> ignore
+        } else {
+          c.box(w=Px(80.0), h=Px(40.0), radius=12.0, bg=red, fn() { () }) |> ignore
+        }
+      })
+      |> ignore
+    },
+    w=120.0,
+    h=80.0,
+    scale=2.0,
+  )
+  t.draw()
+  t
+}
+
+///|
+test "a rounded clip's draw lists printed when asked (MBUI_DL_PRINT=clip-cut or clip-box: scripts/render_offscreen.sh)" {
+  let which = node_env("MBUI_DL_PRINT")
+  if which == "clip-cut" || which == "clip-box" {
+    println("DLBEGIN")
+    println(rounded_clip(which == "clip-cut").drawlist())
+    println("DLEND")
+  }
+}

@@ -433,7 +433,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
     None => (n.x, n.y, n.fw, n.fh)
   }
   // seen within the node and the clip it is painted in
-  let k = clip_stack.length() - 4
+  let k = clip_top()
   let x0 = dmax(n.x, clip_stack[k])
   let y0 = dmax(n.y, clip_stack[k + 1])
   let x1 = dmin(n.x + n.fw, clip_stack[k + 2])

@@ -345,6 +345,7 @@ fn Ctx::secondary_press(self : Ctx, x : Double, y : Double) -> Unit {
       x < self.hit_rects[r + 2] &&
       y >= self.hit_rects[r + 1] &&
       y < self.hit_rects[r + 3] &&
+      in_round_clip(self.hit_clips, k, x, y) &&
       !under.contains(self.hit_ids[k]) {
       under.push(self.hit_ids[k])
     }

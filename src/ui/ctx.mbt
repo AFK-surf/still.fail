@@ -138,6 +138,10 @@ pub struct Ctx {
   mut hit_rects : Array[Double]
   mut next_hit_ids : Array[Int]
   mut next_hit_rects : Array[Double]
+  // what cut each hit target where it was drawn, 8 numbers each (scene.mbt clip_stack): a press in a corner its
+  // rounded clip cut away misses it
+  mut hit_clips : Array[Double]
+  mut next_hit_clips : Array[Double]
   mut scroll_ids : Array[Int]
   mut scroll_rects : Array[Double]
   mut next_scroll_ids : Array[Int]
@@ -277,6 +281,8 @@ fn Ctx::new() -> Ctx {
     hit_rects: [],
     next_hit_ids: [],
     next_hit_rects: [],
+    hit_clips: [],
+    next_hit_clips: [],
     scroll_ids: [],
     scroll_rects: [],
     next_scroll_ids: [],
@@ -349,7 +355,7 @@ fn Ctx::new() -> Ctx {
     dismissals: Map::new(),
     layer_return: Map::new(),
     press_down: None,
-    inst: FixedArray::make(24 * 4096, 0.0),
+    inst: FixedArray::make(inst_size * 4096, 0.0),
     ninst: 0,
     ime_sig: "",
     t_build: 0.0,
@@ -709,15 +715,71 @@ pub fn Ctx::present_ms(self : Ctx) -> Double {
 
 ///|
 fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
+  let clips = if physical_equal(rects, g().hit_rects) { g().hit_clips } else { [] }
   let mut k = ids.length() - 1
   while k >= 0 {
     let r = k * 4
-    if x >= rects[r] && x < rects[r + 2] && y >= rects[r + 1] && y < rects[r + 3] {
+    if x >= rects[r] &&
+      x < rects[r + 2] &&
+      y >= rects[r + 1] &&
+      y < rects[r + 3] &&
+      in_round_clip(clips, k, x, y) {
       return ids[k]
     }
     k = k - 1
   }
   0
+}
+
+///|
+/// Whether (x, y), in hit target `k`'s rect, is within the rounded corners of what cut it (`clips`, Ctx::hit_clips):
+/// a corner as round as the renderers cut it (its radius at most half the clip's shorter side).
+fn in_round_clip(clips : Array[Double], k : Int, x : Double, y : Double) -> Bool {
+  let b = k * 8
+  if b + 8 > clips.length() {
+    return true
+  }
+  let (x0, y0, x1, y1) = (clips[b], clips[b + 1], clips[b + 2], clips[b + 3])
+  let cap = dmax(dmin(x1 - x0, y1 - y0) / 2.0, 0.0)
+  let outside = fn(r : Double, cx : Double, cy : Double, sx : Double, sy : Double) {
+    let r = dmin(r, cap)
+    if r <= 0.0 {
+      return false
+    }
+    // within its corner's square: further than r from the curve's middle
+    let ox = cx + sx * r
+    let oy = cy + sy * r
+    let dx = x - ox
+    let dy = y - oy
+    dx * sx < 0.0 && dy * sy < 0.0 && dx * dx + dy * dy > r * r
+  }
+  !(
+    outside(clips[b + 4], x0, y0, 1.0, 1.0) ||
+    outside(clips[b + 5], x1, y0, -1.0, 1.0) ||
+    outside(clips[b + 6], x1, y1, -1.0, -1.0) ||
+    outside(clips[b + 7], x0, y1, 1.0, -1.0)
+  )
+}
+
+///|
+/// A hit target drawn now: `id` where (x0 y0 x1 y1) shows (cut already to the clip's rect), and the clip itself.
+fn Ctx::push_hit(
+  self : Ctx,
+  id : Int,
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+) -> Unit {
+  self.next_hit_ids.push(id)
+  self.next_hit_rects.push(x0)
+  self.next_hit_rects.push(y0)
+  self.next_hit_rects.push(x1)
+  self.next_hit_rects.push(y1)
+  let k = clip_top()
+  for j in 0..<clip_n {
+    self.next_hit_clips.push(clip_stack[k + j])
+  }
 }
 
 ///|

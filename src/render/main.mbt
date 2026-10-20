@@ -10,6 +10,10 @@
 // not the one the list was made by (its kept text is another's).
 
 ///|
+/// The numbers of an instance (src/ui/scene.mbt).
+let inst_size = 28
+
+///|
 priv struct Dl {
   mut w : Double
   mut h : Double
@@ -21,6 +25,8 @@ priv struct Dl {
   images : Map[Int, (Int, String, Int)]
   carried : Map[Int, String]
   inst : Array[Array[String]]
+  /// the format's version (the head's): this renderer draws mbui-dl 3
+  mut version : Int
 }
 
 ///|
@@ -92,6 +98,7 @@ fn parse(text : String) -> Dl {
     images: Map([]),
     carried: Map([]),
     inst: [],
+    version: 0,
   }
   for v in text.split("\n") {
     let line = v.to_owned()
@@ -126,7 +133,9 @@ fn parse(text : String) -> Dl {
         dl.images[num(t[1]).to_int()] = (num(t[2]).to_int(), src, bytes)
       }
       "bytes" if t.length() >= 3 => dl.carried[num(t[1]).to_int()] = t[2]
-      "i" if t.length() == 25 => dl.inst.push(t)
+      "mbui-dl" if t.length() >= 2 => dl.version = num(t[1]).to_int()
+      // i N0 … N27
+      "i" if t.length() == inst_size + 1 => dl.inst.push(t)
       _ => ()
     }
   }
@@ -146,6 +155,10 @@ fn main {
     return
   }
   let dl = parse(read_text(path))
+  if dl.version != 3 {
+    say("mbui-render: \{path}: mbui-dl \{dl.version}, not 3 (scene.mbt's instances, \{inst_size} numbers each)")
+    return
+  }
   if dl.w <= 0.0 || dl.inst.is_empty() {
     say("mbui-render: \{path}: no window or nothing drawn")
     return
@@ -198,29 +211,29 @@ fn main {
   })
   // the instances, with this renderer's places and ids
   let n = dl.inst.length()
-  let inst = FixedArray::make(n * 24, 0.0)
+  let inst = FixedArray::make(n * inst_size, 0.0)
   let mut resized = 0
   for k, t in dl.inst {
-    for j in 0..<24 {
-      inst[k * 24 + j] = num(t[j + 1])
+    for j in 0..<inst_size {
+      inst[k * inst_size + j] = num(t[j + 1])
     }
-    let kind = inst[k * 24 + 5]
+    let kind = inst[k * inst_size + 5]
     if kind == 1.0 || kind == 3.0 || kind == 7.0 {
-      match places.get(inst[k * 24 + 12].to_int()) {
+      match places.get(inst[k * inst_size + 12].to_int()) {
         Some((u, v, gw, gh)) => {
-          if gw != inst[k * 24 + 14] || gh != inst[k * 24 + 15] {
+          if gw != inst[k * inst_size + 14] || gh != inst[k * inst_size + 15] {
             resized = resized + 1
           }
-          inst[k * 24 + 12] = u
-          inst[k * 24 + 13] = v
-          inst[k * 24 + 14] = gw
-          inst[k * 24 + 15] = gh
+          inst[k * inst_size + 12] = u
+          inst[k * inst_size + 13] = v
+          inst[k * inst_size + 14] = gw
+          inst[k * inst_size + 15] = gh
         }
         None => unknown = unknown + 1
       }
     } else if kind == 4.0 {
-      match ids.get(inst[k * 24 + 20].to_int()) {
-        Some(mine) => inst[k * 24 + 20] = mine.to_double()
+      match ids.get(inst[k * inst_size + 20].to_int()) {
+        Some(mine) => inst[k * inst_size + 20] = mine.to_double()
         None => ()
       }
     }

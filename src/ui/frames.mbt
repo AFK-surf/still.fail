@@ -76,7 +76,12 @@ fn drawn_hash() -> Int64 {
   let named = image_numbers(c)
   for k in 0..<c.ninst {
     for j in 0..<inst_size {
-      h = hash_mix(h, (inst_named(c, named, k, j) * 64.0).round().to_int64())
+      let x = inst_named(c, named, k, j)
+      // (a clip's corners' radii only where it has them: a picture with no rounded clip hashed as before they were kept)
+      if j >= 24 && x == 0.0 {
+        continue
+      }
+      h = hash_mix(h, (x * 64.0).round().to_int64())
     }
   }
   let sb = StringBuilder()

@@ -2,10 +2,10 @@
 // bent at its rim (liquid). The scene says where the glass is; the renderers
 // copy what is drawn below it when they reach it, blur it, and draw on.
 //
-// A glass instance (scene.mbt's 24 numbers):
+// A glass instance (scene.mbt's 28 numbers):
 //   0-3 rect · 4 radius · 5 kind (5 frosted, 6 liquid) · 6 saturation
 //   7 blur (the Gaussian's deviation, logical px: CSS blur()'s)
-//   8-11 tint rgba (over the frost) · 16-19 clip
+//   8-11 tint rgba (over the frost) · 16-19, 24-27 clip (rect, corners)
 //   frosted: 12-14 the rim's hairline, its lit top-left, its back (white's
 //            alpha, Bar.kt rim) · 15 opacity · 21-23 a notch in its top
 //            edge (its box's notch_*: the circle's middle below the top,

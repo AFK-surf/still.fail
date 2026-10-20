@@ -111,7 +111,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
 ///|
 /// One frame without a window, for benchmarks (src/bench): `view` built,
 /// laid out and painted at time `t` (ms) as a window's frame is, into
-/// `c.inst` (`c.ninst` instances of 24 numbers); nothing is presented and
+/// `c.inst` (`c.ninst` instances of 28 numbers); nothing is presented and
 /// no frame is asked for. `c.t_build`, `t_layout` and `t_paint` time it.
 pub fn frame_offscreen(
   view : (Ctx) -> Unit,
@@ -206,6 +206,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.ninst = 0
   c.next_hit_ids.clear()
   c.next_hit_rects.clear()
+  c.next_hit_clips.clear()
   c.next_scroll_ids.clear()
   c.next_scroll_rects.clear()
   c.glass_frame()
@@ -230,6 +231,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let hr = c.hit_rects
   c.hit_rects = c.next_hit_rects
   c.next_hit_rects = hr
+  let hc = c.hit_clips
+  c.hit_clips = c.next_hit_clips
+  c.next_hit_clips = hc
   let si = c.scroll_ids
   c.scroll_ids = c.next_scroll_ids
   c.next_scroll_ids = si
