@@ -1578,7 +1578,7 @@ fn activity(
       }
       // (stopped at the most it waits)
       if waited >= now {
-        c.every(clock_tick_ms) |> ignore
+        c.every(clock_tick_ms, elapsed=dmax(waited - since, 0.0)) |> ignore
       }
       elapsed(waited - since) +
       (match most {
@@ -1589,7 +1589,7 @@ fn activity(
     None =>
       match a.since {
         Some(s) => {
-          c.every(clock_tick_ms) |> ignore
+          c.every(clock_tick_ms, elapsed=dmax(now - s, 0.0)) |> ignore
           elapsed(now - s)
         }
         None => ""
