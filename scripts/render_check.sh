@@ -23,6 +23,12 @@ awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' $O/print.txt > $O/controls.dl
 [ -s $O/controls.dl ] || { echo "render_check: no draw list"; exit 1; }
 MBUI_DL=$PWD/$O/controls.dl MBUI_DL_PNG=$PWD/$O/render.png ./_build/native/release/build/render/render.exe
 # a rounded clip: a box filled by what it cuts drawn offscreen as the box filled itself, to the byte
+# lines (src/kitdemo/dl_print_wbtest.mbt lines_shown) drawn as they are: no reference, checked (scripts/lines_check.py)
+MBUI_DL_PRINT=lines moon test --target js src/kitdemo/dl_print_wbtest.mbt 2>/dev/null |
+  awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/lines.dl
+[ -s $O/lines.dl ] || { echo "render_check: no lines draw list"; exit 1; }
+MBUI_DL=$PWD/$O/lines.dl MBUI_DL_PNG=$PWD/$O/lines.png ./_build/native/release/build/render/render.exe
+python3 "$D/lines_check.py" $O/lines.png
 for k in clip-cut clip-box; do
   MBUI_DL_PRINT=$k moon test --target js src/kitdemo/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/$k.dl

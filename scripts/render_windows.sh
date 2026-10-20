@@ -22,6 +22,9 @@ case "${1:-run}" in
     for n in 1 2; do
       MBUI_DL="$(cygpath -w "$PWD/$O/controls.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/controls-$n.png")" ./$EXE
     done
+    # lines drawn as they are (no reference: checked); Windows' python is `python`
+    MBUI_DL="$(cygpath -w "$PWD/$O/lines.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/lines.png")" ./$EXE
+    "$(command -v python || command -v python3)" "$D/lines_check.py" $O/lines.png
     md5sum $O/controls-1.png $O/controls-2.png
     if ! cmp -s $O/controls-1.png $O/controls-2.png; then
       echo "render_windows: the two runs' pictures differ"

@@ -266,6 +266,14 @@
     int kind = int(v_p.y + 0.5);
     if (kind == 9) { o = vec4(0.0); return; }
     vec4 col = v_color;
+    if (kind == 10) {
+      // a piece of a line (scene.mbt): from c2.xy to c2.zw (shares of its rect), p.x half its width, its ends round
+      vec2 a = v_rect.xy + v_c2.xy * v_rect.zw, ab = v_rect.xy + v_c2.zw * v_rect.zw - a;
+      float h = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-8), 0.0, 1.0);
+      float d = length(p - a - ab * h) - v_p.x;
+      o = vec4(col.rgb, 1.0) * col.a * clamp(0.5 - d * u_scale, 0.0, 1.0);
+      return;
+    }
     if (kind == 1 || kind == 3 || kind == 7) {
       vec2 uv = (v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw) / ${ATLAS}.0;
       vec4 t = texture(u_atlas, uv);

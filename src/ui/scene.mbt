@@ -13,7 +13,10 @@
 // outside its box, which is 13 above it), 3 color glyph, 4 image (12-15 its
 // uv rect, 0-1), 5 frosted glass, 6 liquid glass, 7 a glyph in liquid glass
 // inked by what is under it (glass.mbt), 9 a hole where a native view shows
-// (written transparent, without blending: native.mbt).
+// (written transparent, without blending: native.mbt), 10 a piece of a line
+// (line.mbt: 4 half its width; 12-15 its ends, x0 y0 x1 y1 as shares of its
+// rect, so that what moves or scales the rect takes its ends along; its ends
+// round).
 
 ///|
 let inst_size = 32
@@ -438,6 +441,9 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     self.next_scroll_rects.push(dmax(n.y, cy0))
     self.next_scroll_rects.push(dmin(n.x + n.fw, cx1))
     self.next_scroll_rects.push(dmin(n.y + n.fh, cy1))
+  }
+  if n.lines.length() > 0 {
+    self.paint_lines(n, alpha)
   }
   if n.kind == kind_text {
     match n.tl {

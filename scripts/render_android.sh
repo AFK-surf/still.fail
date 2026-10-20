@@ -30,22 +30,29 @@ case "${1:-run}" in
     $ADB shell input keyevent KEYCODE_WAKEUP
     $ADB shell wm dismiss-keyguard
     F=/data/user/0/$APP_ID/files
-    for n in 1 2; do
+    # draw list $O/$1.dl drawn by the app into $2
+    draw() {
       $ADB shell am force-stop $APP_ID
       $ADB shell run-as $APP_ID mkdir -p files
-      $ADB shell run-as $APP_ID rm -f files/controls.png
-      $ADB exec-in "run-as $APP_ID sh -c 'cat > files/controls.dl'" < $O/controls.dl
+      $ADB shell run-as $APP_ID rm -f files/$1.png
+      $ADB exec-in "run-as $APP_ID sh -c 'cat > files/$1.dl'" < $O/$1.dl
       $ADB logcat -c
-      $ADB shell am start -n $APP_ID/dev.mbui.MainActivity --es env "'MBUI_DL=$F/controls.dl;MBUI_DL_PNG=$F/controls.png'" >/dev/null
+      $ADB shell am start -n $APP_ID/dev.mbui.MainActivity --es env "'MBUI_DL=$F/$1.dl;MBUI_DL_PNG=$F/$1.png'" >/dev/null
       # the renderer's own line once the picture is written (or the app's end)
       said=$($ADB logcat -v brief -e 'mbui-render: |FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
-      echo "run $n: $said"
+      echo "$1: $said"
       case "$said" in
         *"mbui-render: "*"instances"*) ;;
         *) $ADB logcat -d -t 200 | tail -60; exit 1 ;;
       esac
-      $ADB exec-out run-as $APP_ID cat files/controls.png > $O/controls-$n.png
+      $ADB exec-out run-as $APP_ID cat files/$1.png > $2
+    }
+    for n in 1 2; do
+      draw controls $O/controls-$n.png
     done
+    # lines drawn as they are (no reference: checked)
+    draw lines $O/lines.png
+    python3 "$D/lines_check.py" $O/lines.png
     $ADB shell am force-stop $APP_ID
     md5sum $O/controls-1.png $O/controls-2.png
     if ! cmp -s $O/controls-1.png $O/controls-2.png; then

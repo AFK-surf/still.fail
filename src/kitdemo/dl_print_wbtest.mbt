@@ -97,3 +97,60 @@ test "a rounded clip's draw lists printed when asked (MBUI_DL_PRINT=clip-cut or 
     println("DLEND")
   }
 }
+
+///|
+/// Lines (Ctx::lines, scene.mbt's kind 10) in a window 160 by 160 at scale 2, on white (scripts/lines_check.py reads its
+/// picture): in its top 40 a line from (20, 20) to (100, 20) 8 wide, and 40 under it a box 88 by 8 rounded 4 at (16,
+/// 56), the same shape drawn as a rounded rect; under them, in a box from (0, 80), a line from (20, 10) to (60, 50) 6
+/// wide, an arc about (120, 40) of radius 20 from 0 through 3π/2 3 wide, and a line from (20, 70) to (140, 70) 4 wide
+/// drawn half its length.
+fn lines_shown() -> @ui.Tester {
+  let red = 0xFF3B30FFL
+  let blue = 0x1559C4FFL
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFFFFFFFFL, align=AStart, fn() {
+        c.lines([@ui.line([(20.0, 20.0), (100.0, 20.0)], width=8.0, color=red)], w=Px(160.0), h=Px(40.0)) |> ignore
+        c.box(w=Px(160.0), h=Px(40.0), pl=16.0, pt=16.0, align=AStart, fn() {
+          c.box(w=Px(88.0), h=Px(8.0), radius=4.0, bg=red, fn() { () }) |> ignore
+        })
+        |> ignore
+        c.lines(
+          [
+            @ui.line([(20.0, 10.0), (60.0, 50.0)], width=6.0, color=blue),
+            @ui.line(@ui.arc(120.0, 40.0, 20.0, from=0.0, sweep=3.0 * 3.141592653589793 / 2.0), width=3.0, color=blue),
+            @ui.line([(20.0, 70.0), (140.0, 70.0)], width=4.0, color=blue, upto=0.5),
+          ],
+          w=Px(160.0),
+          h=Px(80.0),
+        )
+        |> ignore
+      })
+      |> ignore
+    },
+    w=160.0,
+    h=160.0,
+    scale=2.0,
+  )
+  t.draw()
+  t
+}
+
+///|
+test "lines' draw list printed when asked (MBUI_DL_PRINT=lines: scripts/render_dl.sh)" {
+  if node_env("MBUI_DL_PRINT") == "lines" {
+    println("DLBEGIN")
+    println(lines_shown().drawlist())
+    println("DLEND")
+  }
+}
+
+///|
+test "lines are drawn where they are said to be" {
+  let t = lines_shown()
+  let got = t.drawn_lines()
+  assert_eq(got[0], (20.0, 20.0, 100.0, 20.0, 8.0, 0xFF3B30FFL))
+  assert_eq(got[1], (20.0, 90.0, 60.0, 130.0, 6.0, 0x1559C4FFL))
+  // the half line last: from (20, 150) to (80, 150)
+  assert_eq(got[got.length() - 1], (20.0, 150.0, 80.0, 150.0, 4.0, 0x1559C4FFL))
+}

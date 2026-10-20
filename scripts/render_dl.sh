@@ -8,6 +8,11 @@ render_dl() {
   MBUI_DL_PRINT=1 moon test --target js src/kitdemo/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$out"
   [ -s "$out" ] || { echo "render_dl: no draw list"; return 1; }
+  # and lines' (src/kitdemo/dl_print_wbtest.mbt lines_shown) beside it, lines.dl: no reference, its picture checked by
+  # scripts/lines_check.py
+  MBUI_DL_PRINT=lines moon test --target js src/kitdemo/dl_print_wbtest.mbt 2>/dev/null |
+    awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/lines.dl"
+  [ -s "$(dirname "$out")/lines.dl" ] || { echo "render_dl: no lines draw list"; return 1; }
 }
 
 # The picture against its reference, on the machine the references were made on: goldens/render/$1.txt's lines

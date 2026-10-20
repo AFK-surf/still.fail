@@ -156,6 +156,8 @@ struct Node {
   mut full_max : Double
   // rich text: its runs, and as laid out (in rl_max)
   mut rich : Rich?
+  // lines drawn over its ground (Ctx::lines: line.mbt)
+  mut lines : Array[Line]
   mut rl : RichLayout?
   mut rl_max : Double
   // list rows: index of the item this child shows
@@ -260,6 +262,7 @@ fn Node::new() -> Node {
     full: None,
     full_max: 0.0,
     rich: None,
+    lines: [],
     rl: None,
     rl_max: 0.0,
     item: -1,
@@ -308,6 +311,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.blocks = false
   self.sideways = false
   self.rich = None
+  self.lines = []
   self.item = -1
 }
 

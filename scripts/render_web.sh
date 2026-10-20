@@ -28,6 +28,9 @@ case "${1:-run}" in
     for n in 1 2; do
       node scripts/render_web.mjs $S $O/controls.dl $O/controls-$n.png | tee $O/run-$n.txt
     done
+    # lines drawn as they are (no reference: checked)
+    node scripts/render_web.mjs $S $O/lines.dl $O/lines.png >/dev/null
+    python3 "$D/lines_check.py" $O/lines.png
     md5sum $O/controls-1.png $O/controls-2.png
     if ! cmp -s $O/controls-1.png $O/controls-2.png; then
       echo "render_web: the two runs' pictures differ"
