@@ -62,6 +62,9 @@ jobs:
         run: |
           mkdir -p out/node && (cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i pngjs >/dev/null)
           scripts/textdiff.sh mac
+      - name: "A Tester's draw list drawn offscreen (mbui-render) against the host's own picture of it (scripts/render_check.sh); its md5, to compare machines"
+        continue-on-error: true
+        run: scripts/render_check.sh
       - name: iOS simulator app
         run: scripts/ios.sh build
       - uses: actions/upload-artifact@v4
@@ -71,6 +74,7 @@ jobs:
           path: |
             out/shots/
             out/textdiff/
+            out/render-check/
           if-no-files-found: ignore
 
   android:

@@ -6,6 +6,7 @@ import {
 
 options(
   "is-main": true,
+  targets: { "dl_print_wbtest.mbt": [ "js" ] },
   link: {
     "js": { "format": "iife" },
     "native": {

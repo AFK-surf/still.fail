@@ -272,7 +272,10 @@ fn h_atlas_generation() -> Int {
 fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   match fake.val {
     Some(f) => f.instances = count
-    None => @host.present(buf, count, 0.961, 0.961, 0.969)
+    None => {
+      let (r, gg, b) = g().clear
+      @host.present(buf, count, r, gg, b)
+    }
   }
 }
 

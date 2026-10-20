@@ -163,6 +163,8 @@ pub struct Ctx {
   movers : Map[Int, &Moving]
   mut mover_ids : Int
   mut cycling : Bool
+  /// what is under everything the frame draws (0-1: what the host clears to as it presents it)
+  clear : (Double, Double, Double)
   /// covers by their ids, and those asked for this frame (cover.mbt)
   covers : Map[Int, CoverState]
   cover_asks : Array[CoverAsk]
@@ -278,6 +280,7 @@ fn Ctx::new() -> Ctx {
     movers: Map([]),
     mover_ids: 0,
     cycling: false,
+    clear: (0.961, 0.961, 0.969),
     covers: Map::new(),
     cover_asks: [],
     owner: 0,
