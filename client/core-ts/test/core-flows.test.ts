@@ -667,6 +667,8 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   // A chat made there is asked for with it, and the scope's next new chat starts there too.
   const made = await ask(host, again, ui, 8, "newChat.create", { station: "ws/st" });
   assert.ok(String(made.key).startsWith(PENDING_PREFIX), JSON.stringify(made));
+  // named as the core names what it makes (localId), not from the clock: a replay gets the recorded key again
+  assert.match(String(made.key), /^new:chat-[0-9a-f]{18}$/);
   await host.settle();
   const last = stationPosted(host, "/sessions").at(-1);
   assert.deepEqual([last?.model, last?.profile], ["claude-opus-5-5", "p2"]);
