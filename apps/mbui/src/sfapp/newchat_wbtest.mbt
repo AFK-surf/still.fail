@@ -30,13 +30,13 @@ test "the bar: drawn up, the panel of the other bar; let go on its first place, 
   t.draw()
   let (xs, y) = bar_places_at()
   t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
-  t.settle(unsettled_ok=true) |> ignore
+  // the panel on its way open, to where it rests
+  t.run_for(bar.o.end() - t.time())
   // let go over the rows before the panel was all the way open: it stays open
   if app.nav.top() == Home {
     assert_true(bar.mode)
     // the row of the other bar: its first place
     t.tap(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
-    t.settle(unsettled_ok=true) |> ignore
   }
   assert_true(app.nav.top() == Decisions)
   assert_true(t.find("奏") is Some(_))
@@ -172,12 +172,9 @@ test "the notch's icon swaps with a short scale and fade while it stays open; cl
   let face = Ref::new("ling")
   let out = Ref::new(true)
   let p = Ref::new(1.0)
-  // as the bar has it: stepped by what it was told before this frame, then told
+  // as the bar has it: where it is by what it was told before this frame, then told
   let t = @ui.Tester::new(
-    fn(c) {
-      bar.step(c.frame_dt() / 1000.0)
-      p.val = show_icon(c, face.val, out.val)
-    },
+    fn(c) { p.val = show_icon(c, face.val, out.val) },
     w=390.0,
     h=844.0,
   )
@@ -210,14 +207,15 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
   t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
   // let go over the rows before the panel was all the way open, it stays open: its row tapped
   if bar.swap is None {
-    t.settle(unsettled_ok=true) |> ignore
+    t.run_for(bar.o.end() - t.time())
     t.tap_once(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
   }
-  // chosen: the bar in view at once, the stack sliding down
+  // chosen: the bar in view at once, the stack sliding down, a frame at a time to where it lands
   assert_true(app.nav.top() == Decisions)
   let mut seen = false
   let mut last = -1.0
-  for _ in 0..<40 {
+  let lands = bar.o.end()
+  while t.time() < lands {
     t.frame()
     match bar.swap {
       Some(s) => {
@@ -232,7 +230,6 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
     }
   }
   assert_true(seen)
-  t.settle(unsettled_ok=true) |> ignore
   assert_true(bar.swap is None)
   match bars_picked.val {
     Some((_, cur)) => assert_eq(cur, 1)

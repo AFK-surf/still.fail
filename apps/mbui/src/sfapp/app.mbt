@@ -48,8 +48,7 @@ priv struct App {
   /// the filter's menu, and when it was opened
   mut menu : Bool
   mut menu_at : Double
-  /// a place switched to on the bar: when, from which side (1 from the right, -1 the left, 0 from no side)
-  mut switch_at : Double
+  /// a place switched to on the bar: from which side (1 from the right, -1 the left, 0 from no side)
   mut switch_way : Int
   /// a row held: its id, since when (the time shows while it is)
   mut held : Int
@@ -66,7 +65,6 @@ let app : App = {
   filters: {},
   menu: false,
   menu_at: 0.0,
-  switch_at: -1.0e9,
   switch_way: 0,
   held: 0,
   held_at: 0.0,
@@ -158,7 +156,6 @@ fn reset() -> Unit {
   sheet_host.accounts = false
   bar_reset()
   fresh.became = None
-  fresh.became_at = -1.0
   fresh.made = ""
   fresh.made_sig = ""
   fresh.sent = false
@@ -173,7 +170,6 @@ fn reset() -> Unit {
   new_fix.d_effort = "high"
   new_fix.d_profile = ""
   new_fix.made = 0
-  app.switch_at = -1.0e9
   app.switch_way = 0
   app.menu = false
   app.menu_at = 0.0
@@ -475,14 +471,7 @@ fn page_view(
 ) -> Unit {
   // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side)
   let root = app.nav.depth() == 1
-  let since = c.now() - app.switch_at
-  let span = if app.switch_way == 0 { switch_fade_ms } else { switch_side_ms }
-  let e = if root && since < span && !c.stable() {
-    c.request_frame()
-    @ui.bezier(0.2, 0.8, 0.2, 1.0, dclamp(since / span, 0.0, 1.0))
-  } else {
-    1.0
-  }
+  let e = if root { place_switch(c).get() } else { 1.0 }
   c.box(
     w=Fill(1.0),
     h=Fill(1.0),
@@ -551,7 +540,10 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
   } else {
     -1
   }
-  app.switch_at = c.now()
+  // it comes in from here (Arrive)
+  let fade = place_switch(c)
+  fade.snap(0.0)
+  fade.animate(1.0, @motion.tween(if app.switch_way == 0 { switch_fade_ms } else { switch_side_ms }, ease=Arrive))
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
@@ -645,6 +637,12 @@ let switch_fade_ms : Double = 180.0
 
 ///|
 let switch_side_ms : Double = 220.0
+
+///|
+/// How far a place switched to on the bar has come in (0 … 1).
+fn place_switch(c : @ui.Ctx) -> @motion.Anim {
+  @motion.anim(c, "place/switch", 1.0, global=true)
+}
 
 ///|
 /// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@host.system_dark)
@@ -943,21 +941,6 @@ fn dmax(a : Double, b : Double) -> Double {
   } else {
     b
   }
-}
-
-///|
-/// How far something opened at `at` has come in (0 … 1, eased out over `ms`): all the way at once in screenshots.
-fn opening(c : @ui.Ctx, at : Double, ms : Double) -> Double {
-  if c.stable() {
-    return 1.0
-  }
-  let p = (c.now() - at) / ms
-  if p >= 1.0 {
-    return 1.0
-  }
-  c.request_frame()
-  let q = 1.0 - (if p < 0.0 { 0.0 } else { p })
-  1.0 - q * q * q
 }
 
 ///|
