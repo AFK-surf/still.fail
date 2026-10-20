@@ -88,6 +88,8 @@ priv struct Reading {
   /// the jump button: shown since when (or hidden since when), and which
   mut jump : Bool
   mut jump_at : Double
+  /// the bell to what waits to be decided: shown
+  mut ask : Bool
   /// a scripted scroll through it (MBUI_CHAT_BENCH): frames so far, their times
   mut bench : Int
   /// 0: bringing in the pages before (up to 3000 messages), 1: measuring
@@ -131,6 +133,7 @@ fn reading_of(key : String) -> Reading {
         top_seq: -1.0,
         at_end: true,
         jump: false,
+        ask: false,
         jump_at: -1.0e9,
         bench: 0,
         bench_phase: 0,
@@ -618,6 +621,8 @@ fn messages(
       None => false
     }
     jump_to_latest(c, src, r, v, rd, away || v.newer)
+    // what waits to be decided and does not show: a bell over the way to the end (Chat.kt JumpToAsk)
+    rd.ask = jump_to_ask(c, r, v, list, info, away || v.newer)
     // the avatar flying out of an activity to its message and back, over the list
     emit_flyer(c, ek, em, v)
     chat_bench(c, key, rd, v.more, n)
@@ -955,6 +960,91 @@ fn jump_to_latest(
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// Which of the chat's asks the bell went to last, by chat (it goes to the next one each time, round again).
+let ask_turns : Map[String, Int] = {}
+
+///|
+/// How long the bell rises over the way to the end as that comes, and goes back down.
+let ask_lift_ms : Double = 200.0
+
+///|
+/// The way to what waits to be decided in the chat (Chat.kt JumpToAsk, web Chat.tsx useAsksShown): its asks whose
+/// posts are not all in view (one not loaded counts as not in view), a bell (no words) floating where the way to the
+/// end goes, over it while that shows; tapped, the list goes to an ask's post (as a notification's does: go_to), then
+/// the next one's, round again. It comes and goes as the way to the end does. None in an archived chat.
+fn jump_to_ask(
+  c : @ui.Ctx,
+  r : ChatRef,
+  v : ChatView,
+  list : Array[Entry],
+  info : @ui.ListInfo?,
+  to_end : Bool,
+) -> Bool {
+  let t = @sf.theme()
+  let asks = if v.archived || v.thread is None { [] } else { v.asks }
+  let in_view = asks.length() > 0 &&
+    asks.iter().all(fn(seq) {
+      let mut at = -1
+      for i, e in list {
+        match e {
+          Said(m) if m.seq == seq => {
+            at = i
+            break
+          }
+          _ => ()
+        }
+      }
+      match info {
+        Some(i) => at >= 0 && at >= i.first && at <= i.last
+        None => false
+      }
+    })
+  let shown = asks.length() > 0 && !in_view
+  let look = match
+    @motion.presence(
+      c,
+      "chat-ask",
+      shown,
+      enter=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css)),
+      exit=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css)),
+    ) {
+    Some(l) => l
+    None => return shown
+  }
+  let lift = @motion.animate(c, "chat-ask/lift", if to_end { 44.0 } else { 0.0 }, spec=@motion.tween(ask_lift_ms, ease=Standard))
+  let id = c.id("chat-ask")
+  if c.clicked(id) && shown {
+    let k = r.station + "\u{1}" + r.session
+    let turn = ask_turns.get(k).unwrap_or(0)
+    go_to(r, asks[turn % asks.length()])
+    ask_turns[k] = turn + 1
+  }
+  c.layer(align=AEnd, fn() {
+    c.spacer()
+    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=composer_room_of(c) + 2.0 + lift, fn() {
+      let bell = c.box(
+        w=Px(36.0),
+        h=Px(36.0),
+        radius=18.0,
+        align=ACenter,
+        justify=JCenter,
+        glass=@sf.glass_floating(),
+        shadow=2.0,
+        shadow_color=0x0000004DL,
+        shadow_y=0.5,
+        id~,
+        fn() { @sf.icon(c, "bell", size=18.0, color=t.p.text) |> ignore },
+      )
+      c.look(bell, look)
+      @motion.leaving(c, bell, shown)
+    })
+    |> ignore
+  })
+  |> ignore
+  shown
 }
 
 ///|

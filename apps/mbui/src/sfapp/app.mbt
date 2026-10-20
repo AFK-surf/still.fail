@@ -236,6 +236,7 @@ fn reset() -> Unit {
   close_now()
   @settings.reset()
   go_tos.clear()
+  ask_turns.clear()
   flash_held.val = false
   notices_reset()
   wide_reset()

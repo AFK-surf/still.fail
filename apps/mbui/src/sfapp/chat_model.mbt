@@ -389,6 +389,8 @@ pub(all) struct ChatView {
   archive_offered : Bool
   pending : Bool
   key : String
+  /// what waits to be decided in it (the core's `asks`), by the post each is about
+  asks : Array[Double]
 }
 
 ///|
@@ -428,6 +430,7 @@ pub fn chat_view(v : Json) -> ChatView {
     archived: flag(s, "archived"),
     archivable: flag(s, "archivable"),
     archive_offered: flag(s, "archiveOffered"),
+    asks: items(s, "asks").map(fn(a) { number(Some(a), "seq") }),
     pending: flag(s, "pending"),
     key: text(s, "key"),
   }
