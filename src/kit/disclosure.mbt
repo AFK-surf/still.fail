@@ -40,7 +40,7 @@ pub fn collapsible(
     unfolding(c, key, now, label, body)
   })
   |> ignore
-  { value: now, response: r.changed_to(told(c, now != open)) }
+  { value: now, response: r.changed_to(now != open) }
 }
 
 ///|
@@ -60,10 +60,8 @@ fn unfolding(c : @ui.Ctx, key : String, open : Bool, label : String, body : () -
   // all the way open: as tall as it is (it may grow); on its way, cut to its share of its height
   let h : @ui.Size = match full {
     Some(fh) if k < 1.0 => Px(fh * k)
-    None if k < 1.0 => {
-      c.request_frame()
-      Px(0.0)
-    }
+    // (not yet laid out: its first frame, at 0 of its way; its presence moving draws the next)
+    None if k < 1.0 => Px(0.0)
     _ => Auto
   }
   c.box(h~, clip=true, fn() {
@@ -172,7 +170,7 @@ pub fn accordion(
   })
   c.semantics(gi, Group, label~)
   let changed = now.length() != value.length() || now.iter().any(fn(v) { !value.contains(v) })
-  { value: now, response: { ..@ui.Response::none(), id, changed: told(c, changed) } }
+  { value: now, response: { ..@ui.Response::none(), id, changed: changed } }
 }
 
 ///|
@@ -243,7 +241,7 @@ pub fn tabs(
     c.semantics(pi, TabPanel, label=shown)
   })
   |> ignore
-  { value: now, response: { ..@ui.Response::none(), id, changed: told(c, now != value) } }
+  { value: now, response: { ..@ui.Response::none(), id, changed: now != value } }
 }
 
 ///|

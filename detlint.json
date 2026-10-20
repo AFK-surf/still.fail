@@ -45,13 +45,6 @@
   ],
   "counts": {
     "frame-request": {
-      "src/kit/dialog.mbt": 1,
-      "src/kit/disclosure.mbt": 1,
-      "src/kit/form.mbt": 1,
-      "src/kit/look.mbt": 1,
-      "src/kit/menu.mbt": 1,
-      "src/kit/popover.mbt": 1,
-      "src/kitdemo/foundation.mbt": 1,
       "src/textdiff/main.mbt": 1,
       "src/ui/code_field.mbt": 1,
       "src/ui/desktop.mbt": 3,
@@ -115,17 +108,10 @@
     "stable-mode": {},
     "retired-api": {},
     "app-clock": {
-      "src/effectdemo/demo.mbt": 1,
-      "src/kit/menu.mbt": 2,
-      "src/kit/popover.mbt": 2,
-      "src/kit/progress.mbt": 1,
-      "src/kit/sheet.mbt": 1,
-      "src/kit/time.mbt": 2
+      "src/kit/sheet.mbt": 1
     },
     "wall-clock": {},
-    "poll": {
-      "src/kitdemo/foundation.mbt": 1
-    },
+    "poll": {},
     "host-read": {
       "src/textdiff/main.mbt": 1
     },
@@ -139,14 +125,14 @@
       "src/effectdemo/demo.mbt": 3,
       "src/kit/button.mbt": 9,
       "src/kit/checkbox.mbt": 8,
-      "src/kit/dialog.mbt": 21,
+      "src/kit/dialog.mbt": 20,
       "src/kit/disclosure.mbt": 13,
       "src/kit/field.mbt": 7,
       "src/kit/form.mbt": 4,
       "src/kit/look.mbt": 3,
-      "src/kit/menu.mbt": 34,
+      "src/kit/menu.mbt": 33,
       "src/kit/password.mbt": 3,
-      "src/kit/popover.mbt": 12,
+      "src/kit/popover.mbt": 11,
       "src/kit/progress.mbt": 8,
       "src/kit/radio.mbt": 6,
       "src/kit/select.mbt": 13,
@@ -226,7 +212,9 @@
     "literal-time": {},
     "stable-mode": {},
     "retired-api": {},
-    "app-clock": {},
+    "app-clock": {
+      "src/effectdemo/demo.mbt": 1
+    },
     "wall-clock": {},
     "poll": {},
     "host-read": {},

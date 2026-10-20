@@ -80,37 +80,30 @@ fn foundation(c : @ui.Ctx) -> Unit {
       |> ignore
     })
     |> ignore
-    // a layer put below it, kept in the window (its size the last frame's)
-    match c.rect_of(anchor) {
-      Some(r) =>
-        c.overlay("layer", anchor~, fn() {
-          let body = c.id("layer-body")
-          let (w, h) = match c.rect_of(body) {
-            Some((_, _, w, h)) => (w, h)
-            None => (180.0, 60.0)
-          }
-          let (x, y, _) = c.place(r, w, h, along=Start)
-          c.box(
-            tx=x,
-            ty=y,
-            pad=12.0,
-            gap=4.0,
-            bg=t.surface,
-            radius=t.radius_lg,
-            border=1.0,
-            border_color=t.border,
-            shadow=24.0,
-            shadow_color=t.shadow,
-            id=body,
-            fn() {
-              c.text("Over the page", weight=600, wrap=false) |> ignore
-              c.text("Put by its anchor", size=t.font_sm, color=t.muted, wrap=false) |> ignore
-            },
-          )
-          |> ignore
-        })
-        |> ignore
-      None => c.request_frame()
-    }
+    // a layer put below it, kept in the window (by its size and its anchor's place as laid out)
+    c.overlay("layer", anchor~, fn() {
+      let body = c.id("layer-body")
+      let i = c.box(
+        pad=12.0,
+        gap=4.0,
+        bg=t.surface,
+        radius=t.radius_lg,
+        border=1.0,
+        border_color=t.border,
+        shadow=24.0,
+        shadow_color=t.shadow,
+        id=body,
+        fn() {
+          c.text("Over the page", weight=600, wrap=false) |> ignore
+          c.text("Put by its anchor", size=t.font_sm, color=t.muted, wrap=false) |> ignore
+        },
+      )
+      c.place_by_size(i, fn(w, h) {
+        let r = c.laid_out(anchor).unwrap_or((0.0, 0.0, 0.0, 0.0))
+        let (x, y, _) = c.place(r, w, h, along=Start)
+        (x, y)
+      })
+    })
+    |> ignore
   })
 }

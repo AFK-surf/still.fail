@@ -462,6 +462,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         ch = true
       }
       if (r & 2) != 0 ||
+        cn.place is Some(_) ||
         cn.tx != cn.otx ||
         cn.ty != cn.oty ||
         cn.slide != cn.oslide {
@@ -528,11 +529,25 @@ fn Ctx::layout(
 }
 
 ///|
+/// A node placed by its own size (Ctx::place_by_size): its offset worked out from the size it is laid out at.
+fn Node::by_size(self : Node, w : Double, h : Double) -> Unit {
+  match self.place {
+    Some(p) => {
+      let (tx, ty) = p(w, h)
+      self.tx = tx
+      self.ty = ty
+    }
+    None => ()
+  }
+}
+
+///|
 /// Places a subtree laid out as before under its parent's new origin
 /// (px, py): what commit would make of it, without its leaves' layouts.
 fn Ctx::replace(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   let n = self.nodes[i]
   let f = n.fl
+  n.by_size(f.width, f.height)
   n.x = px + f.left + n.tx + n.slide * f.width
   n.y = py + f.top + n.ty
   let mut c = n.first
@@ -553,6 +568,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
   let n = self.nodes[i]
   let f = n.fl
   if n.same && f.laid_out_at() != gen {
+    n.by_size(f.width, f.height)
     let x = px + f.left + n.tx + n.slide * f.width
     let y = py + f.top + n.ty
     n.otx = n.tx
@@ -571,6 +587,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
     self.place_pager_slot(i)
   }
   commit_counts[0] = commit_counts[0] + 1
+  n.by_size(f.width, f.height)
   n.otx = n.tx
   n.oty = n.ty
   n.oslide = n.slide

@@ -127,7 +127,7 @@ pub fn slider(
   c.semantics(i, Slider, id~, label~, value=shown, range=(min, max, now), disabled~, actions=pick(disabled, [], [
     Increment, Decrement,
   ]))
-  { value: now, response: r.changed_to(told(c, now != value)) }
+  { value: now, response: r.changed_to(now != value) }
 }
 
 ///|

@@ -40,5 +40,5 @@ pub fn password_field(
     })
     c.semantics(i, Button, id=bid, label~, pressed=shows, disabled~, actions=pick(disabled, [], [Activate]))
   })
-  { text: words, visible: shows, toggle: r.changed_to(told(c, shows != visible)) }
+  { text: words, visible: shows, toggle: r.changed_to(shows != visible) }
 }

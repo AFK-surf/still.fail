@@ -44,7 +44,7 @@ pub fn checkbox(
   }
   let i = c.box(id=if disabled { 0 } else { id }, fn() { look(c, st) })
   c.semantics(i, Checkbox, id~, label~, check=now, disabled~, actions=pick(disabled, [], [Activate]))
-  { value: now, response: r.changed_to(told(c, now != checked)) }
+  { value: now, response: r.changed_to(now != checked) }
 }
 
 ///|

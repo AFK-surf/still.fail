@@ -71,6 +71,7 @@ fn reset_globals() -> Unit {
   sideways_log.val = -1
   text_rec.val = -1
   text_said.clear()
+  timers_reset()
   reset_drawing()
   let left = leaked_state()
   if left.length() > 0 {
@@ -101,6 +102,7 @@ fn leaked_state() -> Array[String] {
   check("sideways", sideways.length())
   check("words", words_marks.length() + words_kept.length() + words_sel.length())
   check("list_counts", list_counts.length())
+  check("timers", helds.length() + marks_at.length())
   check("drawing", dr.entries.length() + dr.overlay.length() + dr.carry.length())
   check("messages", fake_posted.length())
   out

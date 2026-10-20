@@ -152,6 +152,7 @@ pub fn World::new(seed : Int, fixed~ : Bool) -> World {
 /// One frame: the runtime runs up to the frame's time, then the screen is built.
 pub fn World::step(self : World, ms? : Int = 16) -> Unit {
   self.t.frame(ms=ms.to_double())
+  // det-ok(app-clock): a check that the core's clock is the Tester's; nothing is worked out from it
   if self.rt.now().to_double() != self.t.time() {
     abort("the screen's clock and the core's parted")
   }

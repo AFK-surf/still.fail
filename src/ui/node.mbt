@@ -93,6 +93,8 @@ struct Node {
   mut clip : Bool
   mut tx : Double
   mut ty : Double
+  // its offset (as tx, ty) worked out as it is laid out, from its own size (Ctx::place_by_size): in place of tx, ty
+  mut place : ((Double, Double) -> (Double, Double))?
   // moved sideways by this share of its own width (a page sliding in)
   mut slide : Double
   mut opacity : Double
@@ -216,6 +218,7 @@ fn Node::new() -> Node {
     clip: false,
     tx: 0.0,
     ty: 0.0,
+    place: None,
     slide: 0.0,
     opacity: 1.0,
     glass: None,
@@ -327,6 +330,7 @@ fn Node::reset_look(self : Node) -> Unit {
   self.clip = false
   self.tx = 0.0
   self.ty = 0.0
+  self.place = None
   self.opacity = 1.0
   self.glass = None
   self.glass_group = false

@@ -6,30 +6,18 @@
 // (Motion's animate, a spring or a tween: @motion.Spec).
 
 ///|
-/// A delay kept by its id: how long its condition has held, when it was last seen holding (-1 not), the frame it
-/// was last asked.
-priv struct Wait {
-  mut held : Double
-  mut last : Double
-  mut used : Int
-}
-
-///|
 /// What the components keep from frame to frame outside the Ctx, made anew when a Tester starts.
 priv struct KitState {
-  waits : Map[Int, Wait]
   /// what opens by itself (a tooltip, a hover card), by its id: open last frame
   opens : Map[Int, Bool]
   /// a tooltip kept shut until the pointer leaves its trigger (pressed, or Escape)
   shut : Map[Int, Bool]
-  /// when a tooltip last closed (-1 never): one opened soon after skips its delay
-  mut tip_closed : Double
   /// toasts as drawn (toast.mbt), by their viewport's id
   toasts : Map[Int, Kept]
   /// a menu's panel's open submenu (its entry's index, menu.mbt), by the panel's id
   subs : Map[Int, Int]
-  /// what was typed to find an entry by its first letters, and when, by the panel's id
-  typed : Map[Int, (String, Double)]
+  /// what was typed to find an entry by its first letters, by the panel's id (when: Ctx::mark, by that id)
+  typed : Map[Int, String]
   /// where a context menu opened, by its id; which of a menubar's menus is open (-1 none), by its id
   at : Map[Int, (Double, Double)]
   bars : Map[Int, Int]
@@ -47,10 +35,8 @@ priv struct KitState {
 ///|
 fn KitState::new() -> KitState {
   {
-    waits: {},
     opens: {},
     shut: {},
-    tip_closed: -1.0,
     toasts: {},
     subs: {},
     typed: {},
@@ -97,10 +83,11 @@ fn install() -> Unit {
 }
 
 ///|
-/// Whether `on` has held for `ms` (by the Ctx's clock), asked each frame: a frame is asked for when it will have.
+/// Whether `on` has held for `ms`, asked each frame: the framework's wait (Ctx::held), a wake when it will have.
 /// Not on, it starts again from nothing, unless `keep`: then it waits where it was (a toast's time, paused while the
-/// pointer is over it). `key` in the scope it is asked in. `later`: what is shown does not wait for it (Ctx::settled:
-/// a toast going away after its time); by default it does (a menu opening once the pointer rests).
+/// pointer is over it). `key` in the scope it is asked in. `later`: what is shown does not wait for it (a toast going
+/// away after its time); by default it does (a menu opening once the pointer rests).
+#callsite(autofill(loc))
 pub fn after(
   c : @ui.Ctx,
   key : String,
@@ -108,53 +95,9 @@ pub fn after(
   ms : Double,
   keep? : Bool = false,
   later? : Bool = false,
+  loc~ : SourceLoc,
 ) -> Bool {
-  install()
-  let id = c.id("\u{2}after/" + key)
-  let w = match kit.val.waits.get(id) {
-    Some(w) => w
-    None => {
-      if !on {
-        return false
-      }
-      let w = { held: 0.0, last: -1.0, used: 0 }
-      kit.val.waits[id] = w
-      w
-    }
-  }
-  w.used = c.frame_number()
-  sweep(c)
-  if !on {
-    w.last = -1.0
-    if !keep {
-      w.held = 0.0
-    }
-    return false
-  }
-  if w.last >= 0.0 {
-    w.held = w.held + (c.now() - w.last)
-  }
-  w.last = c.now()
-  if w.held >= ms {
-    true
-  } else {
-    c.wake_in(ms - w.held, later~)
-    false
-  }
-}
-
-///|
-/// Forgets the delays not asked for a while (a widget gone).
-fn sweep(c : @ui.Ctx) -> Unit {
-  let frame = c.frame_number()
-  if frame % 120 != 0 {
-    return
-  }
-  let old : Array[Int] = []
-  kit.val.waits.each(fn(id, w) { if frame - w.used > 120 { old.push(id) } })
-  for id in old {
-    kit.val.waits.remove(id)
-  }
+  c.held(key, on, ms, keep~, later~, loc~)
 }
 
 ///|

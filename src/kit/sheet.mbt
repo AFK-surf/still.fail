@@ -222,7 +222,6 @@ pub fn sheet(
     s.fade.animate(0.0, scrim_fade())
   }
   s.was_open = now
-  ignore(told(c, now != open))
   { open: now, shown: true, dragged }
 }
 

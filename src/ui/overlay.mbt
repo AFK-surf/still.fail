@@ -424,6 +424,35 @@ pub(all) enum Along {
 } derive(Eq, Show, Debug)
 
 ///|
+/// Node `i` (built this frame) offset by what `at` makes of the size it is laid out at, as it is laid out, in place of
+/// its tx and ty: what goes where its own size says (a menu by its trigger, a dialog in the middle of the window) is
+/// there in the first frame it is drawn, and follows its size as that changes, in the same frame. `at` runs in the
+/// direction where it was said (Ctx::place's start and end).
+pub fn Ctx::place_by_size(self : Ctx, i : Int, at : (Double, Double) -> (Double, Double)) -> Unit {
+  let dir = self.direction
+  self.nodes[i].place = Some(fn(w, h) {
+    let was = self.direction
+    self.direction = dir
+    let r = at(w, h)
+    self.direction = was
+    r
+  })
+}
+
+///|
+/// Where the thing with `id` is laid out this frame (x, y, w, h), asked while a frame is laid out (in what
+/// Ctx::place_by_size is given): what was laid out before it (the page, under a layer over it), else None.
+pub fn Ctx::laid_out(self : Ctx, id : Int) -> (Double, Double, Double, Double)? {
+  for k in 0..<self.count {
+    let n = self.nodes[k]
+    if n.id == id {
+      return Some((n.x, n.y, n.fw, n.fh))
+    }
+  }
+  None
+}
+
+///|
 /// Where content `w` by `h` goes by an anchor (x, y, w, h, in the window), Radix's Popper: on `side`, `offset` away,
 /// lined up `along` it (moved `along_offset` further), kept `padding` inside the window (`flip`: to the other side when
 /// it does not fit on its own and fits better there; moved along the side to stay in). Its top left, and the side it

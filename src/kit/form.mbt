@@ -169,7 +169,6 @@ pub fn form(
   let mut submitted = false
   if pressed || entered {
     st.tried = true
-    c.request_frame()
     match fields.search_by(fn(f) { errors.get(f.name).unwrap_or("") != "" }) {
       Some(k) => c.focus_on(c.id(key + "/" + fields[k].name), visible=true)
       None => submitted = true

@@ -57,7 +57,7 @@ pub fn dialog(
       now = false
     }
   }
-  { value: now, response: { ..@ui.Response::none(), id: c.id(key), changed: told(c, now != open) } }
+  { value: now, response: { ..@ui.Response::none(), id: c.id(key), changed: now != open } }
 }
 
 ///|
@@ -112,13 +112,12 @@ pub fn alert_dialog(
       now = false
     }
   }
-  ignore(told(c, now != open))
   { open: now, confirmed }
 }
 
 ///|
-/// The panel of layer `key` in the middle of the window (by its size last frame; the first, unseen, a frame is asked
-/// for), coming up from 8 below as it comes in, named for the semantics tree.
+/// The panel of layer `key` in the middle of the window (by its size as it is laid out), coming up from 8 below as it
+/// comes in, named for the semantics tree.
 fn centered(
   c : @ui.Ctx,
   key : String,
@@ -131,23 +130,16 @@ fn centered(
 ) -> Unit {
   let pid = c.id(key + "/panel")
   let (ww, wh) = c.window_size()
-  let (x, y, seen) = match c.rect_of(pid) {
-    Some((_, _, pw, ph)) if pw > 0.0 => ((ww - pw) / 2.0, (wh - ph) / 2.0, true)
-    _ => (0.0, 0.0, false)
-  }
-  if !seen {
-    c.request_frame()
-  }
   let k = if t > 1.0 { 1.0 } else if t < 0.0 { 0.0 } else { t }
   let i = c.box(
     id=pid,
-    tx=x,
-    ty=y + (1.0 - k) * 8.0,
-    // never quite nothing: what is not drawn is not where anything is (its size unknown, its place never found)
-    opacity=if seen { dmax(k, 0.003) } else { 0.003 },
+    // never quite nothing: what is not drawn is not where anything is
+    opacity=dmax(k, 0.003),
     max_w=ww - 32.0,
     body,
   )
+  // in the middle by its size as laid out (its first frame too)
+  c.place_by_size(i, fn(pw, ph) { ((ww - pw) / 2.0, (wh - ph) / 2.0 + (1.0 - k) * 8.0) })
   c.semantics(i, role, label=title, description~, modal~)
 }
 

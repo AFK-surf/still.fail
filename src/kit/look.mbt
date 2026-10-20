@@ -106,16 +106,6 @@ fn dmax(a : Double, b : Double) -> Double {
 }
 
 ///|
-/// `yes` (a widget's value changed as it was built): a frame again, so that what the view builds from the value it
-/// keeps shows it.
-fn told(c : @ui.Ctx, yes : Bool) -> Bool {
-  if yes {
-    c.request_frame()
-  }
-  yes
-}
-
-///|
 /// A chevron down (or, `up`, up) in `color`, on the middle of the words beside it (the glyphs sit low and high).
 fn chevron(c : @ui.Ctx, up : Bool, color : Int64) -> Unit {
   let t = c.theme()

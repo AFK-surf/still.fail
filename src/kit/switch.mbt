@@ -44,7 +44,7 @@ pub fn switch(
     [],
     [Activate],
   ))
-  { value: on, response: r.changed_to(told(c, on != checked)) }
+  { value: on, response: r.changed_to(on != checked) }
 }
 
 ///|

@@ -165,17 +165,9 @@ fn menu_panel(
     typeahead(c, pid, entries, ids, live)
   }
   let (ww, wh) = c.window_size()
-  let (pw, ph, seen) = match c.rect_of(pid) {
-    Some((_, _, w, h)) if w > 0.0 => (w, h, true)
-    _ => (min_w, 0.0, false)
-  }
-  if !seen {
-    c.request_frame()
-  }
-  let (x, y, _) = c.place(anchor, pw, ph, side~, along~, offset~)
   let k = if t > 1.0 { 1.0 } else if t < 0.0 { 0.0 } else { t }
   c.focusable(pid, keys=0)
-  let i = c.box(id=pid, tx=x, ty=y - (1.0 - k) * 4.0, opacity=if seen { dmax(k, 0.003) } else { 0.003 }, max_h=wh - 16.0, max_w=ww - 16.0, fn() {
+  let i = c.box(id=pid, opacity=dmax(k, 0.003), max_h=wh - 16.0, max_w=ww - 16.0, fn() {
     look(c, min_w, fn() {
       c.roving(key + "/items", orientation=Vertical, wrap=false, fn() {
         for n, e in entries {
@@ -267,6 +259,11 @@ fn menu_panel(
       })
     })
   })
+  // by its trigger, by its size as laid out (its first frame too)
+  c.place_by_size(i, fn(pw, ph) {
+    let (x, y, _) = c.place(anchor, pw, ph, side~, along~, offset~)
+    (x, y - (1.0 - k) * 4.0)
+  })
   c.semantics(i, if listbox { Listbox } else { Menu }, id=pid, label~)
   // the app's own coming and going (a scale, a fade: Motion's), in place of the default's
   match motion {
@@ -278,11 +275,15 @@ fn menu_panel(
 }
 
 ///|
+/// How long letters typed one after another find an entry together (Radix's typeahead: a second).
+pub let typeahead_ms : Double = 1000.0
+
+///|
 /// Letters typed with the focus in panel `pid`: the focus to the first live entry after it whose words start with
 /// what was typed in the last second.
 fn typeahead(c : @ui.Ctx, pid : Int, entries : Array[Entry], ids : Array[Int], live : (Int) -> Bool) -> Unit {
   let mut typed = match kit.val.typed.get(pid) {
-    Some((s, at)) if c.now() - at < 1000.0 => s
+    Some(s) if c.within(pid, typeahead_ms) => s
     _ => ""
   }
   let mut any = false
@@ -295,7 +296,8 @@ fn typeahead(c : @ui.Ctx, pid : Int, entries : Array[Entry], ids : Array[Int], l
   if !any {
     return
   }
-  kit.val.typed[pid] = (typed, c.now())
+  kit.val.typed[pid] = typed
+  c.mark(pid)
   let n = entries.length()
   let mut at = -1
   for k, id in ids {
@@ -421,7 +423,6 @@ pub fn dropdown_menu(
       now = false
     }
   }
-  ignore(told(c, now != open))
   { open: now, chosen }
 }
 
@@ -468,7 +469,6 @@ pub fn context_menu(
       now = false
     }
   }
-  ignore(told(c, now != kit.val.opens.get(id).unwrap_or(false)))
   kit.val.opens[id] = now
   { open: now, chosen }
 }
@@ -575,7 +575,6 @@ pub fn menubar(
       }
     }
   }
-  ignore(told(c, open != was))
   kit.val.bars[id] = open
   chosen
 }

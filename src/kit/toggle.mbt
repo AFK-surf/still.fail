@@ -59,7 +59,7 @@ pub fn toggle(
   }
   let i = c.box(id=if disabled { 0 } else { id }, fn() { look(c, st) })
   c.semantics(i, Button, id~, label~, pressed=on, disabled~, actions=pick(disabled, [], [Activate]))
-  { value: on, response: r.changed_to(told(c, on != pressed)) }
+  { value: on, response: r.changed_to(on != pressed) }
 }
 
 ///|
@@ -186,7 +186,7 @@ pub fn toggle_group(
   })
   c.semantics(gi, Group, label~, disabled~)
   let changed = now.length() != value.length() || now.iter().any(fn(v) { !value.contains(v) })
-  { value: now, response: { ..any, id, changed: told(c, changed) } }
+  { value: now, response: { ..any, id, changed: changed } }
 }
 
 ///|

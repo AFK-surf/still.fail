@@ -115,9 +115,8 @@ pub fn select(
       None => if o.dismissed is Some(_) { open = false }
     }
   }
-  ignore(told(c, open != kit.val.opens.get(id).unwrap_or(false)))
   kit.val.opens[id] = open
-  { value: now, response: r.changed_to(told(c, now != value)) }
+  { value: now, response: r.changed_to(now != value) }
 }
 
 ///|
@@ -295,7 +294,6 @@ pub fn navigation_menu(
       None => open = -1
     }
   }
-  ignore(told(c, open != was))
   kit.val.bars[id] = open
   kit.val.opens[cid] = open >= 0 && by_key
   followed

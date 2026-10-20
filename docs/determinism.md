@@ -46,6 +46,9 @@ of a test (src/ui/motion_data.mbt).
 - What follows another's layout is placed in the same layout, never chased by a motion: a segmented choice's thumb is
   laid out over its item (`Ctx::cover`), so a page sliding in or a window resized moves it with the item, in the same
   frame. Only another item chosen is a motion, between the items' places as laid out at each frame.
+  What goes where its own size says (a menu by its trigger, a dialog in the middle of the window, a layer by its
+  anchor) is placed as it is laid out, from the size it is laid out at (`Ctx::place_by_size`; the anchor's place this
+  frame: `Ctx::laid_out`): there in its first frame, not measured in one frame and placed in the next.
 - What never ends while shown (a spinner, a band of unknown progress, a breath) is a cycle: its phase is a function
   of the frames' clock (`Ctx::cycle`), drawn a frame each frame while something shown reads it.
 - What changes every so often while shown (a run's time said each second) is periodic: `Ctx::every(period)` gives the
@@ -75,7 +78,9 @@ Only for these, which the framework knows by itself:
 
 - **an input** was handed to the app (and the frame after, for what it changed late in its frame);
 - **a motion said** is not at rest yet, or **a cycle** is read by what is shown;
-- **a time** comes: a timer's deadline on the frames' clock (`wake_in`, effect.mb's timers);
+- **a time** comes: a timer's deadline on the frames' clock (`wake_in`, effect.mb's timers; a view's wait by a length
+  it declares, `Ctx::held`: the framework reads its clock, the view only says how long; how long ago something
+  happened, `Ctx::mark` and `Ctx::within`);
 - **the outside** answers: a ticket ended by its event, never polled with frames; a message posted (src/ui/messages.mbt:
   the first since a frame took the last asks for one frame, which takes all that came, in their order);
 - **layout read back** into the build: a value the build read from the last layout changed (at most a few frames).

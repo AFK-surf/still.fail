@@ -2,11 +2,10 @@
 // along it). And an avatar (Radix's Avatar): a picture, or its fallback (initials) while it has none.
 
 ///|
-/// What a progress bar's look is given: how far (0 … 1), or None not known; the time. What runs while it is not
-/// known is a cycle of the look's own (Ctx::cycle: its phase, and frames while it is shown), not this time.
+/// What a progress bar's look is given: how far (0 … 1), or None not known. What runs while it is not known is a
+/// cycle of the look's own (Ctx::cycle: its phase, and frames while it is shown).
 pub(all) struct ProgressState {
   t : Double?
-  now : Double
 }
 
 ///|
@@ -23,10 +22,9 @@ pub fn progress(
     Some(v) => Some(if max <= 0.0 { 0.0 } else if v <= 0.0 { 0.0 } else if v >= max { 1.0 } else { v / max })
     None => None
   }
-  // (a band runs while it is not known: the look's cycle, Ctx::cycle; where nothing moves, a screenshot or motion
-  // reduced, it stands where the look puts it)
-  let still = c.still()
-  let i = c.box(w~, fn() { look(c, { t, now: if still { 0.0 } else { c.now() } }) })
+  // (a band runs while it is not known: the look's cycle, Ctx::cycle; motion reduced, it stands where the look puts
+  // it)
+  let i = c.box(w~, fn() { look(c, { t, }) })
   match (value, t) {
     (Some(v), Some(k)) =>
       c.semantics(i, ProgressBar, label~, value="\{(k * 100.0).round().to_int()}%", range=(0.0, max, v))

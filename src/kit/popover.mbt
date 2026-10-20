@@ -41,7 +41,7 @@ pub fn popover(
       now = false
     }
   }
-  { value: now, response: { ..@ui.Response::none(), id: c.id(key), changed: told(c, now != open) } }
+  { value: now, response: { ..@ui.Response::none(), id: c.id(key), changed: now != open } }
 }
 
 ///|
@@ -84,10 +84,13 @@ pub fn hover_card(
     ignore(after(c, key + "/in", false, open_delay))
     ignore(after(c, key + "/out", false, close_delay))
   }
-  ignore(told(c, open != was))
   kit.val.opens[id] = open
   open
 }
+
+///|
+/// What marks a tooltip closing (Ctx::mark): one opened soon after any closed skips its delay.
+let tip_closed : Int = @ui.stable_hash("kit/tooltip closed").to_int()
 
 ///|
 /// `key`'s tooltip (see the file's head) for the trigger `trigger` (its id), saying `text`: shown once a mouse has
@@ -120,7 +123,7 @@ pub fn tooltip(
     kit.val.shut.remove(id)
   }
   let shut = kit.val.shut.contains(id)
-  let soon = kit.val.tip_closed >= 0.0 && c.now() - kit.val.tip_closed < skip
+  let soon = c.within(tip_closed, skip)
   let rested = after(c, key + "/in", hovered, if soon { 0.0 } else { delay })
   let mut open = !shut && (focused || rested || (was && hovered))
   let p = presence(c, key, open, enter=@motion.tween(100.0, ease=Out))
@@ -134,9 +137,8 @@ pub fn tooltip(
     }
   }
   if was && !open {
-    kit.val.tip_closed = c.now()
+    c.mark(tip_closed)
   }
-  ignore(told(c, open != was))
   kit.val.opens[id] = open
   open
 }
@@ -154,8 +156,8 @@ fn pointer_in(c : @ui.Ctx, id : Int) -> Bool {
 }
 
 ///|
-/// Layer `key`'s content by the trigger `anchor` (Ctx::place, by its size last frame; the first, unseen, a frame is
-/// asked for), coming in from its side, named for the semantics tree.
+/// Layer `key`'s content by the trigger `anchor` (Ctx::place, by its size as it is laid out), coming in from its side,
+/// named for the semantics tree.
 fn beside(
   c : @ui.Ctx,
   key : String,
@@ -171,25 +173,24 @@ fn beside(
 ) -> Unit {
   let pid = c.id(key + "/panel")
   let ar = c.rect_of(anchor).unwrap_or((0.0, 0.0, 0.0, 0.0))
-  let (pw, ph, seen) = match c.rect_of(pid) {
-    Some((_, _, w, h)) if w > 0.0 => (w, h, true)
-    _ => (0.0, 0.0, false)
+  // the side it went on as laid out last frame (its first: the side asked for); its place is worked out as it is laid
+  // out, from its size then
+  let went = match c.rect_of(pid) {
+    Some((_, _, w, h)) if w > 0.0 => c.place(ar, w, h, side~, along~, offset~).2
+    _ => side
   }
-  if !seen {
-    c.request_frame()
-  }
-  let (x, y, went) = c.place(ar, pw, ph, side~, along~, offset~)
   let k = if t > 1.0 { 1.0 } else if t < 0.0 { 0.0 } else { t }
-  // from 4 towards its trigger
-  let back = (1.0 - k) * 4.0
-  let (dx, dy) = match went {
-    Top => (0.0, back)
-    Bottom => (0.0, -back)
-    Left => (back, 0.0)
-    Right => (-back, 0.0)
-  }
-  let i = c.box(id=pid, tx=x + dx, ty=y + dy, opacity=if seen { dmax(k, 0.003) } else { 0.003 }, fn() {
-    look(c, { side: went, t }, body)
+  let i = c.box(id=pid, opacity=dmax(k, 0.003), fn() { look(c, { side: went, t }, body) })
+  c.place_by_size(i, fn(pw, ph) {
+    let (x, y, went) = c.place(ar, pw, ph, side~, along~, offset~)
+    // from 4 towards its trigger
+    let back = (1.0 - k) * 4.0
+    match went {
+      Top => (x, y + back)
+      Bottom => (x, y - back)
+      Left => (x + back, y)
+      Right => (x - back, y)
+    }
   })
   c.semantics(i, role, label~)
 }
